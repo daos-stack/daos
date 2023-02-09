@@ -385,8 +385,12 @@ class Mpirun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("mpirun"))
-        super().__init__("/run/mpirun/*", "mpirun", job, path, subprocess)
+        # use an update-alternatives variant if available
+        exe = find_executable("mpirun." + mpi_type)
+        if not exe:
+            find_executable("mpirun")
+        path = os.path.dirname(exe)
+        super().__init__("/run/mpirun/*", os.path.basename(exe), job, path, subprocess)
 
         mca_default = None
         if mpi_type == "openmpi":

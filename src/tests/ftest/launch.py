@@ -17,6 +17,7 @@ import re
 import site
 import sys
 import time
+import distro
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -25,6 +26,10 @@ import time
 from ClusterShell.NodeSet import NodeSet
 
 # When SRE-439 is fixed we should be able to include these import statements here
+# Actually, you cannot.  If you add this here, this will cause Avocado to open
+# and read the per-user config which we hope to actually [over-]write later in
+# Launch().set_config(), but that write will be a NOOP because the config will
+# already have been read and cached.
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing, CoreFileException
@@ -258,6 +263,14 @@ class AvocadoInfo():
 
         """
         default_base_dir = os.path.join("~", "avocado", "job-results")
+        logger.info("default_base_dir = %s", default_base_dir)
+        datadir_paths_logs_dir = self.get_setting("datadir.paths", "logs_dir", default_base_dir)
+        logger.info("datadir.paths = %s ", datadir_paths_logs_dir)
+        time.sleep(2)
+        datadir_paths_logs_dir = self.get_setting("datadir.paths", "logs_dir", default_base_dir)
+        logger.info("datadir.paths = %s ", datadir_paths_logs_dir)
+        if datadir_paths_logs_dir != '/var/tmp/ftest/avocado/job-results':
+            sys.exit(-1)
         return os.path.expanduser(self.get_setting("datadir.paths", "logs_dir", default_base_dir))
 
     def get_directory(self, directory, create=True):
@@ -1991,7 +2004,10 @@ class Launch():
         daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
         certs_dir = os.path.join(daos_test_log_dir, "daosCA")
         certgen_dir = os.path.abspath(
-            os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
+            # TODO: this really should not be in /usr/lib64 even on EL/SUSE
+            os.path.join("..", "..", "..", "..", "..",
+                         "lib" if distro.linux_distribution()[0].lower() == 'ubuntu' else "lib64",
+                         "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
             run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
@@ -2865,7 +2881,7 @@ def main():
         "\t\ta 'class: dcpm' first storage tier."
     ]
     parser = ArgumentParser(
-        prog="launcher.py",
+        prog="launch.py",
         formatter_class=RawDescriptionHelpFormatter,
         description="\n".join(description))
     parser.add_argument(
@@ -3042,6 +3058,7 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
+        args.overwrite_config = True
 
     # Perform the steps defined by the arguments specified
     try:

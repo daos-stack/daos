@@ -15,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@bmurrell/test-on-ubuntu') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -849,7 +849,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -871,7 +871,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -893,7 +893,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -915,7 +915,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1062,7 +1062,7 @@ pipeline {
                 job_step_update(
                     storagePrepTest(
                         inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi')))
+                        inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
             }
             post {
                 cleanup {
@@ -1089,7 +1089,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1112,7 +1112,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1135,7 +1135,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1158,7 +1158,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {

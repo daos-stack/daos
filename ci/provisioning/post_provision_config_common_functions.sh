@@ -161,6 +161,8 @@ pr_repos() {
         return 0
     fi
 
+    env
+
     echo "$COMMIT_MESSAGE" |
              sed -ne '/^PR-repos: */s/^[^:]*: *//Ip' \
                   -e "/^PR-repos-$DISTRO: */s/^[^:]*: *//Ip" | tr '\n' ' '

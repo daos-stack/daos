@@ -1,6 +1,5 @@
-usr/lib64
-usr/lib64/python3.8
-usr/lib64/python3.8/site-packages
-usr/lib64/python3.8/site-packages/pydaos
-usr/lib64/python3.8/site-packages/storage_estimator
-usr/lib64/python3.8/site-packages/pydaos/raw
+usr/lib
+usr/lib/python3.8
+usr/lib/python3.8/pydaos
+usr/lib/python3.8/storage_estimator
+usr/lib/python3.8/pydaos/raw
