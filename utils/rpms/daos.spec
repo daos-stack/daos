@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -70,7 +70,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
+BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -551,6 +551,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Feb 13 2023 Li Wei <wei.g.li@intel.com> 2.3.103-3
+- Update raft to 0.9.2-1.403.g3d20556
+
 * Wed Feb 08 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-2
 - Change ipmctl requirement from v2 to v3
 
