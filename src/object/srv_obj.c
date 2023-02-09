@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2722,6 +2722,7 @@ obj_restore_enum_args(crt_rpc_t *rpc, struct dss_enum_arg *des,
 
 	if (des->kds != NULL)
 		memset(des->kds, 0, des->kds_cap * sizeof(daos_key_desc_t));
+	des->kds_len = 0;
 
 	if (oeo->oeo_sgl.sg_iovs == NULL)
 		return 0;
@@ -2866,7 +2867,8 @@ re_pack:
 		if (rc == -DER_AGAIN) {
 			anchors[0] = anchors[1];
 			obj_restore_enum_args(rpc, enum_arg, &saved_arg);
-
+			if (opc == DAOS_OBJ_RPC_ENUMERATE)
+				fill_oid(oei->oei_oid, enum_arg);
 			goto re_pack;
 		}
 	}
@@ -2880,6 +2882,7 @@ re_pack:
 		enum_arg->kds_len = 0;
 		enum_arg->kds[0].kd_key_len = 0;
 		enum_arg->kds_cap = 4;
+		fill_oid(oei->oei_oid, enum_arg);
 		goto re_pack;
 	} else if (enum_arg->size_query) {
 		D_DEBUG(DB_IO, DF_UOID "query size by kds %d total %zd\n",
