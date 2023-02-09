@@ -14,6 +14,14 @@ pool:
   mode: 146
   name: daos_server
   control_method: dmg
+pool_qty_1:
+  size: "50%"
+pool_qty_2:
+  size: "25%"
+pool_qty_3:
+  size: "16%"
+pool_qty_10:
+  size: "5%"
 container:
   type: POSIX
   control_method: daos
@@ -32,9 +40,9 @@ ior:
     obj_class:
       - "SX"
   ior_test_sequence:
-    # - [scmsize percent, nvmesize percent, transfersize, blocksize, PASS/FAIL(Expected) ]
+    # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #  The values are set to be in the multiples of 10.
     #  Values are appx GB.
-    - [20, 30, 1000000, 500000000, PASS]          # [30%, 30%, 1M, 512M, PASS]
-    - [20, 30, 1000000, 3000000000, FAIL]         # [20%, 30%, 1M, 3G, FAIL]
-    - [60, 90, 1000000000, 8000000000, PASS]   # [60%, 90%, 1G, 8G, PASS]
+    - ["NA", "NA", 1000000, 500000000, PASS]          # [30%, 30%, 1M, 512M, PASS]
+    - ["NA", "NA", 1000000, 3000000000, FAIL]         # [20%, 30%, 1M, 3G, FAIL]
+    - ["NA", "NA", 1000000000, 8000000000, PASS]   # [60%, 90%, 1G, 8G, PASS]

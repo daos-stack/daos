@@ -165,11 +165,8 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                self.pool.append(self.get_pool(create=False))
-                # Split total SCM and NVME size for creating multiple pools.
-                self.pool[-1].scm_size.value = "{}{}".format(int(test[0]) / num_pool,"%")
-                self.pool[-1].nvme_size.value = "{}{}".format(int(test[1]) / num_pool,"%")
-                self.pool[-1].create()
+                self.pool(self.get_pool(namespace="/run/pool_qty_{}".format(num_pool),
+                          properties="reclaim:disabled"))
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
 
