@@ -3,7 +3,10 @@
 cd daos || exit 1
 
 echo ::group::Check for corefiles
+
 echo BASE_DISTRO=${BASE_DISTRO}
+echo -n core_pattern ; cat /proc/sys/kernel/core_pattern
+
 if [ "$BASE_DISTRO" == "ubuntu" ]
 then
     # "apport" corefile repo
