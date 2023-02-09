@@ -114,10 +114,9 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
 					    rpt->rt_coh_uuid, arg->cont_uuid,
 					    arg->tgt_id, rpt->rt_rebuild_ver,
-					    rpt->rt_stable_epoch, arg->oids,
-					    arg->ephs, arg->punched_ephs, arg->shards,
-					    arg->count, rpt->rt_new_layout_ver,
-					    rpt->rt_rebuild_op);
+					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -574,9 +573,9 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
 	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_stable_epoch, rpt->rt_rebuild_op,
-			  &arg->oid, &arg->epoch, &arg->punched_epoch, &arg->shard, 1,
-			  arg->tgt_index, rpt->rt_new_layout_ver);
+			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
 	rpt_put(rpt);
 	D_FREE(arg);
 }
