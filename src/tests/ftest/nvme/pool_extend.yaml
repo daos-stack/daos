@@ -36,9 +36,9 @@ pool:
 pool_qty_1:
   size: "50%"
 pool_qty_2:
-  size: "50%"
+  size: "25%"
 pool_qty_3:
-  size: "50%"
+  size: "16%"
 container:
   type: POSIX
   control_method: daos
