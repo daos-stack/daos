@@ -74,9 +74,12 @@ class NvmePoolExclude(OSAUtils):
             for test in range(0, rf_num):
                 ior_test_seq = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')[test]
                 threads = []
-                threads.append(threading.Thread(target=self.run_ior_thread,
-                                                kwargs={"action": "Write",
+                threads.append(threading.Thread(target=self.ior_thread,
+                                                kwargs={"pool": self.pool,
+                                                        "flags": self.ior_w_flags,
                                                         "oclass": oclass,
+                                                        "single_cont_read": True,
+                                                        "fail_on_warning": True,
                                                         "test": ior_test_seq}))
                 # Launch the IOR threads
                 for thrd in threads:
@@ -104,7 +107,7 @@ class NvmePoolExclude(OSAUtils):
                 for thrd in threads:
                     thrd.join()
                     if not self.out_queue.empty():
-                        self.assert_on_exception()
+                        self.assert_on_exception(self.out_queue)
                 # Verify the data after pool exclude
                 self.run_ior_thread("Read", oclass, ior_test_seq)
                 display_string = "Pool{} space at the End".format(val)
