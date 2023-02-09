@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,6 +53,12 @@ agg_rate_ctl(void *arg)
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		return -1;
+
+	/* If the container is discarding the object mostly due to rebuild failure
+	 * reclaim, let's abort the aggregation to let discard proceed.
+	 */
+	if (cont->sc_discarding)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
