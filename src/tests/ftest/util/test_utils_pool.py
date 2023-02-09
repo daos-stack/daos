@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1014,8 +1014,10 @@ class TestPool(TestDaosApiBase):
         """
         daos_space = self.get_pool_daos_space()
         pool_percent = {
-            'scm': round(float(daos_space["s_free"][0]) / float(daos_space["s_total"][0]) * 100, 4),
-            'nvme': round(float(daos_space["s_free"][1]) / float(daos_space["s_total"][1]) * 100, 4)
+            'scm': round(float(daos_space["s_total"][0] - daos_space["s_free"][0])
+                         / float(daos_space["s_total"][0]) * 100, 4),
+            'nvme': round(float(daos_space["s_total"][1] - daos_space["s_free"][1])
+                          / float(daos_space["s_total"][1]) * 100, 4)
         }
         return pool_percent
 

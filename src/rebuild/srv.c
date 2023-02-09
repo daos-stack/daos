@@ -428,7 +428,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     &dms);
+					     rpt->rt_rebuild_gen, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -1855,15 +1855,17 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
 						 eph, 0, &id_list, rebuild_op, 0);
 		} else {
-			D_ASSERT(rebuild_op == RB_OP_REINT);
+			daos_rebuild_opc_t new_op = rebuild_op;
+
+			D_ASSERT(new_op == RB_OP_REINT);
 			/* For new target, let's turn to EXTEND command to match
 			 * the original action.
 			 */
 			if (tgt->ta_comp.co_fseq <= 1)
-				rebuild_op = RB_OP_EXTEND;
+				new_op = RB_OP_EXTEND;
 
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
-						 eph, 0, &id_list, rebuild_op, 0);
+						 eph, 0, &id_list, new_op, 0);
 		}
 		if (rc) {
 			D_ERROR(DF_UUID" schedule op %d ver %d failed: "
@@ -2018,7 +2020,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	/* destroy the migrate_tls of 0-xstream */
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM)
-		ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver);
+		ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	d_list_del_init(&rpt->rt_list);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.

@@ -128,6 +128,24 @@ func Test_Convert_SmdDevice(t *testing.T) {
 	}
 }
 
+func Test_NvmeController_Update(t *testing.T) {
+	mockCtrlrs := MockNvmeControllers(5)
+
+	// Verify in-place update.
+	test.AssertEqual(t, mockCtrlrs[1].SmdDevices[0].UUID, test.MockUUID(1), "unexpected uuid")
+	c1 := MockNvmeController(1)
+	c1.SmdDevices[0].UUID = test.MockUUID(10)
+	mockCtrlrs.Update(*c1)
+	test.AssertEqual(t, len(mockCtrlrs), 5, "expected 5")
+	test.AssertEqual(t, mockCtrlrs[1].SmdDevices[0].UUID, test.MockUUID(10), "unexpected uuid")
+
+	// Verify multiple new controllers are added.
+	c2 := MockNvmeController(6)
+	c3 := MockNvmeController(9)
+	mockCtrlrs.Update(*c2, *c3)
+	test.AssertEqual(t, len(mockCtrlrs), 7, "expected 7")
+}
+
 func Test_filterBdevScanResponse(t *testing.T) {
 	const (
 		vmdAddr1         = "0000:5d:05.5"

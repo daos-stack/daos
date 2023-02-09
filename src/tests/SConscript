@@ -1,12 +1,12 @@
 """Build tests"""
 
 
-def build_dts_library(env, prereqs, dc_credit):
+def build_dts_library(env, dc_credit):
     """Build libdts library"""
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    denv.require('argobots', 'protobufc')
 
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
 
@@ -25,7 +25,7 @@ def build_tests(prereqs, env):
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
+    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'isal')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
@@ -70,6 +70,7 @@ def build_tests(prereqs, env):
     # ftest
     SConscript('ftest/SConscript')
 
+
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'dc_credit')
@@ -77,7 +78,7 @@ def scons():
     if not prereqs.test_requested():
         return
 
-    build_dts_library(env, prereqs, dc_credit)
+    build_dts_library(env, dc_credit)
 
     denv = base_env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
@@ -107,6 +108,7 @@ def scons():
     denv.d_program('simple_array', 'simple_array.c', LIBS=libs_client)
     denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)
     denv.d_program('simple_dfs', 'simple_dfs.c', LIBS=libs_client)
+
 
 if __name__ == "SCons.Script":
     scons()
