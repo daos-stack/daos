@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1287,7 +1287,10 @@ class TestWithServers(TestWithoutServers):
         self.log.info("--- SERVER INFORMATION ---")
         for manager in self.server_managers:
             manager.get_host_log_files()
-            manager.dmg.storage_query_list_devices()
+            try:
+                manager.dmg.storage_query_list_devices()
+            except CommandFailure:
+                pass
 
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.

@@ -1136,9 +1136,9 @@ class DaosServerManager(SubprocessManager):
 
         # Get a list of engine pids from all of the hosts
         host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine")
+        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
         for data in result.output:
-            if data.returncode == 0:
+            if data.passed:
                 # Search each individual line of output independently to ensure a pid match
                 for line in data.stdout:
                     match = re.findall(r'(^[0-9]+)', line)
@@ -1157,7 +1157,7 @@ class DaosServerManager(SubprocessManager):
             # Determine which of those log files actually do exist on this host
             # This matches the engine pid to the engine log file name
             command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
-            result = run_remote(self.log, host, command)
+            result = run_remote(self.log, host, command, False)
             for data in result.output:
                 for line in data.stdout:
                     match = re.findall(fr"^({'|'.join(file_search)})", line)
