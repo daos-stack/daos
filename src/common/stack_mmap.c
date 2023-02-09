@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,7 +93,7 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	mmap_stack_desc_t *desc;
 
 	D_ASSERT(sp->sp_nb_sizes != 0 && (!d_list_empty(&sp->sp_stack_size_list) ||
-		 			  sp->sp_nb_sizes == 1));
+					  sp->sp_nb_sizes == 1));
 	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
 					stack_list)) != NULL) {
 		D_DEBUG(DB_MEM,
