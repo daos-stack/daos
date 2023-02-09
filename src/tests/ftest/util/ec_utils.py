@@ -99,7 +99,7 @@ class ErasureCodeIor(ServerFillUp):
         self.server_count = len(self.hostlist_servers) * engine_count
         # Create the Pool
         kwargs = {
-            "scm": self.params.get("scm" , "/run/create_pool_max_size/*", False),
+            "scm": self.params.get("scm", "/run/create_pool_max_size/*", False),
             "nvme": self.params.get("nvme", "/run/create_pool_max_size/*", False),
             "percentage": self.params.get("percentage", "/run/create_pool_max_size/*", 96)
         }
