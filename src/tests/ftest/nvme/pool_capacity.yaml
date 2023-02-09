@@ -9,14 +9,7 @@ server_config:
     0:
       nr_xs_helpers: 1
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
 pool:
   mode: 146
   name: daos_server
