@@ -9,6 +9,11 @@
 
 #include "daos_uns.h"
 
+#if 0
+#undef DFUSE_TRA_DEBUG
+#define DFUSE_TRA_DEBUG DFUSE_TRA_INFO
+#endif
+
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT  1024
 
@@ -78,6 +83,8 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 
 	DFUSE_TRA_DEBUG(hdl, "Fetching new entries at offset %#lx", offset);
 
+	D_ASSERT(oh->doh_rd);
+
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &count,
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
@@ -107,6 +114,8 @@ _handle_init(struct dfuse_cont *dfc)
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
 		return NULL;
+
+	DFUSE_TRA_DEBUG(dfc, "New handle is %p", hdl);
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
@@ -159,11 +168,19 @@ unlock:
 static struct dfuse_readdir_hdl *
 _handle_make_unique(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
 {
+	struct dfuse_readdir_hdl *new;
+
 	if (!oh->doh_rd->dre_caching)
 		return oh->doh_rd;
 
+	/* drop() will free memory and init() will allocate it but the callers of this function
+	 * will compare pointers to determine success so allocate-before-free to prevent pointer
+	 * reuse and later confusion.
+	 * TODO: Improve prototype of this function to avoid this possibility.
+	 */
+	new = _handle_init(oh->doh_ie->ie_dfs);
 	dfuse_dre_drop(fs_handle, oh);
-	return _handle_init(oh->doh_ie->ie_dfs);
+	return new;
 }
 
 static int
@@ -333,11 +350,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		oh->doh_kreaddir_started = true;
 	}
 
-	DFUSE_TRA_INFO(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
-		       hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
+			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
-	DFUSE_TRA_INFO(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
-		       oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_DEBUG(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
+			oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
 	/* If the offset is unexpected for this directory handle then seek, first ensuring the
 	 * readdir handle is unique.
@@ -426,8 +443,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				to_seek = true;
 		}
 		if (to_seek)
-			DFUSE_TRA_INFO(oh, "seeking, %#lx %d %#lx", offset, hdl->drh_dre_last_index,
-				       hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+			DFUSE_TRA_DEBUG(oh, "seeking, %#lx %d %#lx", offset,
+					hdl->drh_dre_last_index,
+					hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 	}
 
 	if (to_seek) {
@@ -442,6 +460,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		new_hdl = _handle_make_unique(fs_handle, oh);
 		if (new_hdl == hdl) {
 			dfuse_readdir_reset(hdl);
+		} else if (new_hdl == NULL) {
+			D_GOTO(reply, rc = ENOMEM);
 		} else {
 			hdl        = new_hdl;
 			oh->doh_rd = new_hdl;
