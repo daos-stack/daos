@@ -1102,7 +1102,8 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at,
 {
 	struct evt_trace *trace;
 
-	D_ASSERT(at >= 0 && at < tcx->tc_order);
+	D_ASSERTF(at >= 0 && at < tcx->tc_order, "at=%d, tcx->tc_order=%d, level=%d\n", at,
+		  tcx->tc_order, level);
 
 	V_TRACE(DB_TRACE, "set trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
