@@ -72,11 +72,12 @@ class NvmePoolExclude(OSAUtils):
             rf = ''.join(self.container.properties.value.split(":"))
             rf_num = int(re.search(r"rd_fac([0-9]+)", rf).group(1))
             for test in range(0, rf_num):
+                ior_test_seq = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')[test]
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
                                                         "oclass": oclass,
-                                                        "test": test}))
+                                                        "test": ior_test_seq}))
                 # Launch the IOR threads
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
@@ -105,7 +106,7 @@ class NvmePoolExclude(OSAUtils):
                     if not self.out_queue.empty():
                         self.assert_on_exception()
                 # Verify the data after pool exclude
-                self.run_ior_thread("Read", oclass, test)
+                self.run_ior_thread("Read", oclass, ior_test_seq)
                 display_string = "Pool{} space at the End".format(val)
                 self.pool.display_pool_daos_space(display_string)
                 kwargs = {"pool": self.pool.uuid,
