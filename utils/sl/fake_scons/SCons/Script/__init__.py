@@ -334,6 +334,10 @@ class DefaultEnvironment():
         """Fake Preprocess"""
         return
 
+    def require(self, env, *kw, headers_only=False):
+        """Fake require"""
+        return
+
 
 class Variables():
     """Fake variables"""
