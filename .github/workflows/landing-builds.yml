@@ -127,6 +127,7 @@ jobs:
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
+        if: always()
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
       - name: Fetch results
@@ -304,6 +305,7 @@ jobs:
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
       - name: Check for corefiles
+        if: always()
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
 
