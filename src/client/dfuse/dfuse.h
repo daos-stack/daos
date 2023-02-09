@@ -24,6 +24,8 @@
 
 #include "dfuse_common.h"
 
+#define DRC_MAGIC 0xdf055001
+
 struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
@@ -127,8 +129,11 @@ struct dfuse_readdir_entry {
  * and will be used by other open handles on the same directory doing subsequent readdir calls
  */
 struct dfuse_readdir_c {
-	/* List of entries */
+	/* List of entries: For now has to be at start due to list handling */
 	d_list_t    drc_list;
+
+	uint64_t    drc_magic;
+
 	struct stat drc_stbuf;
 	off_t       drc_offset;
 	off_t       drc_next_offset;
