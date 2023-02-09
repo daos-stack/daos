@@ -123,6 +123,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             self.fail(
                 "#({0}.A){1} failed, "
                 "please make sure the server equipped with PMem modules".format(step, cmd))
+        time.sleep(5)
 
     def daos_server_scm_prepare_ns(self, step, engines_per_socket=1):
         """Perform daos_server scm prepare --scm-ns-per-socket.
@@ -147,6 +148,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "#({0}.B){1} failed, "
                 "please make sure the server equipped with {2} PMem "
                 "modules.".format(step, cmd, engines_per_socket))
+        time.sleep(5)
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -196,12 +198,14 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         # (1) Scm reset and prepare --scm-ns-per-socket
         step = 1
         self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
-        self.daos_server_scm_reset(step)
         engines_per_socket = self.params.get(
             "engines_per_socket", "/run/server_config/*", default=1)
-        reboot_after_format = self.params.get(
-            "reboot_after_format", "/run/server_config/*", default=False)
-        self.daos_server_scm_prepare_ns(step, engines_per_socket)
+        self.daos_server_scm_reset(step)
+        self.host_reboot(self.hostlist_servers)
+        self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
+        self.host_reboot(self.hostlist_servers)
+        self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
+
         cmd = "/usr/bin/ls -l /dev/pmem*"
         results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
         retry = 0
@@ -218,8 +222,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             self.fail(
                 "#PMem did not show after scm prepare --scm-ns-per-socket and {0} "
                 "retries".format(max_retry))
-        if reboot_after_format:
-            self.host_reboot(self.hostlist_servers)
 
         # (2) Start server
         step += 1
