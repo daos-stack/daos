@@ -272,7 +272,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   samirrav@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off
@@ -331,7 +331,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   root@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off
@@ -709,7 +709,7 @@ DFuse needs 'r' and 't' permissions to run: read for accessing the data, 't' to 
 properties to know the container type. For older layout versions (containers created by DAOS v2.0.x
 and before), 'a' permission is also required to read the ACLs to know the container owner.
 
-Write permission for the container is optional; however, without it the container will be read-only.
+Write permission 'w' for the container is optional; however, without it the container will be read-only.
 
 ### Stopping DFuse
 

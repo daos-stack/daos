@@ -8,14 +8,7 @@ server_config:
   engines:
     0:
       log_mask: INFO
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 16
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 8G
   nvme_size: 100G
@@ -36,7 +29,7 @@ ior:
   test_file: testFile
   repetitions: 1
   iorflags:
-    flags: "-v -w -r"
+    flags: "-v -w -r -R"
   transfer_size: '1M'
   block_size: '100M'
   write_x: 2

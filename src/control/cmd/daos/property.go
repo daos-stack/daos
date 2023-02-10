@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,7 +116,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return labelNotSetStr
+				return ""
 			}
 			return strValStringer(e, name)
 		},
@@ -635,9 +635,8 @@ var contDeprProps = map[string]string{
 // below.
 
 const (
-	maxNameLen     = 20 // arbitrary; came from C code
-	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
+	maxNameLen  = 20 // arbitrary; came from C code
+	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error

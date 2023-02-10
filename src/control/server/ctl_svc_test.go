@@ -24,8 +24,13 @@ import (
 
 // mockControlService takes cfgs for tuneable scm and sys provider behavior but
 // default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
-func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *system.MockSysConfig) *ControlService {
+func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *system.MockSysConfig, notStarted ...bool) *ControlService {
 	t.Helper()
+
+	started := true
+	if len(notStarted) > 0 && notStarted[0] {
+		started = false
+	}
 
 	if cfg == nil {
 		cfg = config.DefaultServer().WithEngines(
@@ -52,9 +57,11 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		srvCfg: cfg,
 	}
 
-	for _, ec := range cfg.Engines {
+	for idx, ec := range cfg.Engines {
 		trc := new(engine.TestRunnerConfig)
-		trc.Running.SetTrue()
+		if started {
+			trc.Running.SetTrue()
+		}
 		runner := engine.NewTestRunner(trc, ec)
 
 		sp := storage.MockProvider(log, 0, &ec.Storage, sp,
@@ -62,9 +69,11 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			bdev.NewMockProvider(log, bmbc))
 		ei := NewEngineInstance(log, sp, nil, runner)
 		ei.setSuperblock(&Superblock{
-			Rank: ranklist.NewRankPtr(ec.Rank.Uint32()),
+			Rank: ranklist.NewRankPtr(uint32(idx)),
 		})
-		ei.ready.SetTrue()
+		if started {
+			ei.ready.SetTrue()
+		}
 		if err := cs.harness.AddInstance(ei); err != nil {
 			t.Fatal(err)
 		}

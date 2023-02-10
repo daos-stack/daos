@@ -29,15 +29,19 @@ class PoolCreateTests(PoolTestBase):
             Verify that DAOS is ready to accept requests with in 2 minutes.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_performance
+        :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         self.add_pool_qty(quantity, create=False)
+        # for multiple pool creation cases, enabling and disabling
+        # logmask setting to DEBUG explicitly to save run time..
+        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         self.check_pool_creation(30)
+        self.dmg.server_set_logmasks(raise_exception=False)
 
         # Verify DAOS can be restarted in less than 2 minutes
         try:

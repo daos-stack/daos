@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -610,21 +610,8 @@ int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static int
 set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	char	uuid_str[37] = {0};
-	char	dmg_cmd[DTS_CFG_MAX];
-	int	rc;
-
-	/* build and invoke dmg cmd to set DAOS_PROP_PO_RECLAIM property */
-	uuid_unparse(arg->pool.pool_uuid, uuid_str);
-	dts_create_config(dmg_cmd, "dmg pool set-prop %s --name=reclaim --value=%s",
-			  uuid_str, (char *)strategy);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
-
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
-
-	return rc;
+	return dmg_pool_set_prop(arg->dmg_config, "reclaim",
+				 strategy, arg->pool.pool_uuid);
 }
 
 /**
@@ -3164,10 +3151,10 @@ tgt_idx_change_retry(void **state)
 		assert_rc_equal(rc, 0);
 
 		/** exclude target of the replica */
-		print_message("rank 0 excluding target rank %u ...\n", rank);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, rank);
-		assert_int_equal(rc, 0);
+		print_message("rank 0 excluding rank %u ...\n", rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, rank, -1);
+		assert_success(rc);
 
 		/** progress the async IO (not must) */
 		insert_test(&req, 1000);
@@ -3222,9 +3209,10 @@ tgt_idx_change_retry(void **state)
 	}
 
 	if (arg->myrank == 0) {
-		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, rank);
+		print_message("rank 0 adding rank %u ...\n", rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  rank, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
@@ -3242,6 +3230,7 @@ fetch_replica_unavail(void **state)
 	uint32_t		 size = 64;
 	d_rank_t		 rank = 2;
 	char			*buf;
+	int			 rc = 0;
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -3262,8 +3251,9 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/** exclude the target of this obj's replicas */
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, rank, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3280,12 +3270,12 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  rank, -1);
+		assert_success(rc);
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
-
 	}
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);
@@ -3468,12 +3458,24 @@ io_obj_key_query(void **state)
 	rc = daos_tx_open(arg->coh, &th, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
 	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
 

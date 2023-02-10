@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,6 @@ from general_utils import DaosTestError, run_command
 
 
 class PosixSimul(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Tests a posix container with simul.
 
     From : https://github.com/LLNL/simul
@@ -65,6 +64,7 @@ class PosixSimul(DfuseTestBase):
         Test #39: link to one file, individual mode.
         Test #40: link to a file per process, individual mode.
         Test #41: fcntl locking, individual mode.
+
     :avocado: recursive
     """
 

@@ -70,7 +70,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		Name:          "test0",
 		NetInterfaces: common.NewStringSet("test0"),
 		DeviceClass:   hardware.Ether,
-		Providers:     common.NewStringSet("ofi+tcp"),
+		Providers:     testFabricProviderSet("ofi+tcp"),
 	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
@@ -232,7 +232,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("test0"),
 					DeviceClass:   hardware.Ether,
-					Providers:     common.NewStringSet("ofi+tcp"),
+					Providers:     testFabricProviderSet("ofi+tcp"),
 				}),
 			},
 		}),

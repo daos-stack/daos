@@ -213,6 +213,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -311,6 +312,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -342,6 +344,7 @@ puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -391,6 +394,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -414,6 +418,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
@@ -423,6 +428,7 @@ teardowns
 testcase
 testcases
 testdata
+testFile
 testname
 testrunner
 tgt
@@ -469,6 +475,7 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs

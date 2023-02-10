@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,7 +42,6 @@ class DbenchCommand(ExecutableCommand):
 
     def get_param_names(self):
         """Overriding the original get_param_names."""
-
         param_names = super().get_param_names()
 
         # move key=num_of_procs to the end
