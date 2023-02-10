@@ -17,20 +17,10 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: DEBUG
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["0000:00:00.0"]
+      log_mask: INFO
+      storage: auto
       targets: 16
       env_vars:
-        - SWIM_PROTOCOL_PERIOD_LEN=2000
-        - SWIM_SUSPECT_TIMEOUT=19000
-        - SWIM_PING_TIMEOUT=1900
         - DD_MASK=io,rebuild
     1:
       pinned_numa_node: 1
@@ -38,20 +28,10 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: DEBUG
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["0000:00:00.1"]
+      log_mask: INFO
+      storage: auto
       targets: 16
       env_vars:
-        - SWIM_PROTOCOL_PERIOD_LEN=2000
-        - SWIM_SUSPECT_TIMEOUT=19000
-        - SWIM_PING_TIMEOUT=1900
         - DD_MASK=io,rebuild
 
 pool_size_ratio_80:

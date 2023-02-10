@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,7 +35,8 @@ class ServerRankFailure(IorTestBase):
             pool (TestPool): Pool to run IOR.
             container (TestContainer): Container to run IOR.
             namespace (str): IOR namespace.
-            timeout (int): Mpirun timeout value in sec. Defaults to None, in which case infinite.
+            timeout (int, optional): Mpirun timeout value in sec.
+                Defaults to None, in which case infinite.
         """
         # Update the object class depending on the test case.
         ior_cmd = IorCommand(namespace=namespace)
@@ -183,7 +184,6 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
-        # Limit retries???
         for disabled_rank in disabled_ranks:
             while True:
                 try:
