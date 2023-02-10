@@ -126,7 +126,7 @@ def _run_command(env, target, sources, daos_libs, command):
 
 
 def _static_library(env, *args, **kwargs):
-    """build SharedLibrary with relative RPATH"""
+    """Build SharedLibrary with relative RPATH"""
     libname = _get_libname(*args, **kwargs)
     if 'hide_syms' in kwargs:
         # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
@@ -150,7 +150,7 @@ def _static_library(env, *args, **kwargs):
 
 
 def _library(env, *args, **kwargs):
-    """build SharedLibrary with relative RPATH"""
+    """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
@@ -164,7 +164,7 @@ def _library(env, *args, **kwargs):
 
 
 def _program(env, *args, **kwargs):
-    """build Program with relative RPATH"""
+    """Build Program with relative RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
@@ -177,7 +177,7 @@ def _program(env, *args, **kwargs):
 
 
 def _test_program(env, *args, **kwargs):
-    """build Program with fixed RPATH"""
+    """Build Program with fixed RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
@@ -190,7 +190,7 @@ def _test_program(env, *args, **kwargs):
 
 
 def _find_mpicc(env):
-    """find mpicc"""
+    """Find mpicc"""
     mpicc = WhereIs('mpicc')
     if not mpicc:
         return False

@@ -183,8 +183,8 @@ estimate_space_key(struct umem_instance *umm, daos_key_t *key)
 
 	/* Key record */
 	size = vos_krec_size(&rbund);
-	/* Assume one more key tree node created */
-	size += umem_slab_usize(umm, VOS_SLAB_KEY_NODE);
+	/* Add ample space assuming one tree node is added.  We could refine this later */
+	size += 1024;
 
 	return size;
 }
@@ -208,9 +208,9 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	int			 i, j;
 
 	/* Object record */
-	scm = umem_slab_usize(umm, VOS_SLAB_OBJ_DF);
+	scm = D_ALIGNUP(sizeof(struct vos_obj_df), 32);
 	/* Assume one more object tree node created */
-	scm += umem_slab_usize(umm, VOS_SLAB_OBJ_NODE);
+	scm += 1024;
 
 	/* Dkey */
 	scm += estimate_space_key(umm, dkey);
@@ -237,7 +237,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 					nvme += vos_byte2blkcnt(iod->iod_size);
 			}
 			/* Assume one more SV tree node created */
-			scm += umem_slab_usize(umm, VOS_SLAB_SV_NODE);
+			scm += 256;
 			continue;
 		}
 
@@ -256,11 +256,11 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			else if (size != 0)
 				nvme += vos_byte2blkcnt(size);
 			/* EVT desc */
-			scm += umem_slab_usize(umm, VOS_SLAB_EVT_DESC);
+			scm += 256;
 			/* Checksum */
 			scm += recx_csum_len(recx, recx_csum, iod->iod_size);
 			/* Assume one more evtree node created */
-			scm += umem_slab_usize(umm, VOS_SLAB_EVT_NODE);
+			scm += 1024;
 		}
 	}
 
