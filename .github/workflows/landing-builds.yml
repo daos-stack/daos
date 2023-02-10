@@ -123,7 +123,11 @@ jobs:
                             --tag build-image
       - name: Build and Test
         timeout-minutes: 60
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        run: |
+             ulimit -c unlimited
+             sudo echo core \> /proc/sys/kernel/core_pattern
+             sudo echo 1 \> /proc/sys/kernel/core_uses_pid
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
@@ -301,7 +305,11 @@ jobs:
                             --build-arg COMPILER=gcc
       - name: Run NLT
         timeout-minutes: 60
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+        run: |
+             ulimit -c unlimited
+             sudo echo core \> /proc/sys/kernel/core_pattern
+             sudo echo 1 \> /proc/sys/kernel/core_uses_pid
+             docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
       - name: Check for corefiles
