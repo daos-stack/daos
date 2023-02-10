@@ -6,6 +6,12 @@ daos (2.2.0-9) unstable; urgency=medium
 
  -- Michael Hennecke <michael.hennecke@intel.com> Fri, 10 Feb 2023 16:40:00 -0100
 
+daos (2.2.0-8) unstable; urgency=medium
+  [ Michael Hennecke ]
+  * NOOP, to keep version in sync with RPM version
+
+ -- Michael Hennecke <michael.hennecke@intel.com> Fri, 10 Feb 2023 16:40:00 -0100
+
 daos (2.2.0-7) unstable; urgency=medium
   [ Joseph Moore ]
   * Update Mercury version to 2.2.0-6
