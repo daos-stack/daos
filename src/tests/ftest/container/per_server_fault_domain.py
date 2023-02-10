@@ -252,9 +252,7 @@ class PerServerFaultDomainTest(IorTestBase):
         # Create the list of non-service ranks. Assume there are 5 service ranks and rank
         # numbering is consecutive.
         non_svc_ranks = []
-        host_count = len(self.hostlist_servers)
-        engines_per_host = self.params.get("engines_per_host", "/run/server_config/*")
-        rank_count = host_count * engines_per_host
+        rank_count = self.server_managers[0].engines
         self.log.info("Rank count = %s", rank_count)
         for rank in range(rank_count):
             if rank not in self.pool.svc_ranks:
