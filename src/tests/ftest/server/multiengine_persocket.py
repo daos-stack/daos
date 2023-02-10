@@ -174,7 +174,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 time.sleep(1)
         if time.time() - start >= ping_timeout:
             self.fail("#{0} reboot failed, did not come back after {1} seconds",
-                hosts, ping_timeout)
+                      hosts, ping_timeout)
         time.sleep(5)
         self.log.info("===Server %s is up after reboot. \n", hosts)
 
