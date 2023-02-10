@@ -9,11 +9,6 @@
 
 #include "daos_uns.h"
 
-#if 0
-#undef DFUSE_TRA_DEBUG
-#define DFUSE_TRA_DEBUG DFUSE_TRA_INFO
-#endif
-
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT  1024
 
@@ -42,8 +37,6 @@ void
 dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	uint32_t open_count = atomic_load_relaxed(&ie->ie_open_count);
-
-	/* TODO: Reset cache time for directory */
 
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
@@ -115,8 +108,6 @@ _handle_init(struct dfuse_cont *dfc)
 	if (hdl == NULL)
 		return NULL;
 
-	DFUSE_TRA_DEBUG(dfc, "New handle is %p", hdl);
-
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
 	if (dfc->dfc_dentry_timeout > 0)
@@ -124,7 +115,7 @@ _handle_init(struct dfuse_cont *dfc)
 	return hdl;
 }
 
-/* Drop a ref on a readdir handle and release if required. */
+/* Drop a ref on a readdir handle and release if required. Handle will no longer be usable */
 void
 dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
 {
@@ -139,6 +130,10 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	hdl = oh->doh_rd;
 
+	oh->doh_rd       = NULL;
+	oh->doh_rd_nextc = NULL;
+
+	/* Lock is protect oh->doh_ie->ie_rd_hdl between readdir/closedir calls */
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
@@ -150,38 +145,17 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
 
 	/* Check for common */
-	if (oh->doh_rd == oh->doh_ie->ie_rd_hdl)
+	if (hdl == oh->doh_ie->ie_rd_hdl)
 		oh->doh_ie->ie_rd_hdl = NULL;
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_ASSERT(drc->drc_magic == DRC_MAGIC);
+		drc->drc_magic = DRC_MAGIC - 1;
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
-	oh->doh_rd = NULL;
 unlock:
 	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
-}
-
-/* Ensure a readdir handle is unique.  Handles are only shared if caching so it's enough to check
- * this bit.
- */
-static struct dfuse_readdir_hdl *
-_handle_make_unique(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
-{
-	struct dfuse_readdir_hdl *new;
-
-	if (!oh->doh_rd->dre_caching)
-		return oh->doh_rd;
-
-	/* drop() will free memory and init() will allocate it but the callers of this function
-	 * will compare pointers to determine success so allocate-before-free to prevent pointer
-	 * reuse and later confusion.
-	 * TODO: Improve prototype of this function to avoid this possibility.
-	 */
-	new = _handle_init(oh->doh_ie->ie_dfs);
-	dfuse_dre_drop(fs_handle, oh);
-	return new;
 }
 
 static int
@@ -460,24 +434,22 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	}
 
 	if (to_seek) {
-		struct dfuse_readdir_hdl *new_hdl;
-		uint32_t                  num;
+		uint32_t num;
 
 		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
 
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
-		new_hdl = _handle_make_unique(fs_handle, oh);
-		if (new_hdl == hdl) {
-			dfuse_readdir_reset(hdl);
-		} else if (new_hdl == NULL) {
-			D_GOTO(reply, rc = ENOMEM);
-		} else {
-			hdl              = new_hdl;
-			oh->doh_rd       = new_hdl;
-			oh->doh_rd_nextc = NULL;
+		if (oh->doh_rd->dre_caching) {
+			dfuse_dre_drop(fs_handle, oh);
+			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+			if (oh->doh_rd == NULL)
+				D_GOTO(out_reset, rc = ENOMEM);
+			hdl = oh->doh_rd;
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+		} else {
+			dfuse_readdir_reset(hdl);
 		}
 
 		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx(%d) to %#lx (index %d)",
