@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -640,7 +640,6 @@ class TestWithServers(TestWithoutServers):
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
-
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -1762,14 +1761,15 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=(daos_command or self.get_daos_command()))
+        container = TestContainer(
+            pool, daos_command=(daos_command or self.get_daos_command()),
+            label_generator=self.label_generator)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
 
         # Set passed params
-        for name, value in kwargs.items():
-            getattr(container, name).update(value, name=name)
+        container.update_params(**kwargs)
 
         if create:
             container.create()

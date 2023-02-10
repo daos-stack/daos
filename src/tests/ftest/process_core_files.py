@@ -109,7 +109,9 @@ class CoreFileProcessing():
                     exe_name = self._get_exe_name(os.path.join(core_dir, core_name))
                     self._create_stacktrace(core_dir, core_name, exe_name)
                     if test in CORE_FILES_IGNORE and exe_name in CORE_FILES_IGNORE[test]:
-                        self.log.info('core file name configured for ignore, skipping')
+                        self.log.debug(
+                            'Excluding the %s core file (%s) detected while running %s from '
+                            'the processed core count', core_name, exe_name, test)
                     else:
                         corefiles_processed += 1
                     self.log.debug(
@@ -259,8 +261,7 @@ class CoreFileProcessing():
             rpm_version = output.stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
-                + ["daos-client-" + rpm_version, "daos-server-" + rpm_version,
-                   "daos-tests-" + rpm_version])
+                + ["daos-" + rpm_version, "daos-*-" + rpm_version])
         # else:
         #     # We're not using the yum API to install packages
         #     # See the comments below.

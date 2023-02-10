@@ -31,6 +31,7 @@ struct migrate_pool_tls {
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
 	unsigned int		mpt_version;
+	unsigned int		mpt_generation;
 
 	/* Link to the migrate_pool_tls list */
 	d_list_t		mpt_list;

@@ -12,7 +12,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     denv.Append(CCFLAGS=['-Wframe-larger-than=131072'])
     # rebuild
