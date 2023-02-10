@@ -16,7 +16,6 @@ from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
 from general_utils import check_pool_files, DaosTestError
-from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
