@@ -577,7 +577,7 @@ class Launch():
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
+        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
         self.logdir = None
         self.logfile = None
         self.tests = []
