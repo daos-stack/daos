@@ -8,8 +8,10 @@ import time
 import random
 import base64
 import traceback
+import re
 
-from general_utils import run_pcmd, get_random_bytes
+from general_utils import get_random_bytes
+from run_utils import run_remote, run_local
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
@@ -118,12 +120,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sub_command_class.sub_command_class.force.value = True
         self.log.info(
             "===(%s.A)Starting daos_server scm reset: %s", step, str(cmd))
-        results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
-        if results[0]['exit_status']:
+        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
+        if not results.passed:
             self.fail(
                 "#({0}.A){1} failed, "
                 "please make sure the server equipped with PMem modules".format(step, cmd))
-        time.sleep(5)
 
     def daos_server_scm_prepare_ns(self, step, engines_per_socket=1):
         """Perform daos_server scm prepare --scm-ns-per-socket.
@@ -142,13 +143,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         self.log.info(
             "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
-        results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
-        if results[0]['exit_status']:
+        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
+        if not results.passed:
             self.fail(
                 "#({0}.B){1} failed, "
                 "please make sure the server equipped with {2} PMem "
                 "modules.".format(step, cmd, engines_per_socket))
-        time.sleep(5)
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -158,9 +158,25 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         reboot_waittime = self.params.get("reboot_waittime", "/run/server_config/*", default=210)
         cmd = "sudo shutdown -r now"
-        run_pcmd(hosts, cmd, timeout=210)
+        run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("===Server %s rebooting... \n", hosts)
         time.sleep(reboot_waittime)
+        ping_timeout = 600
+        start = time.time()
+        ping_status = None
+        while ping_status is None and (time.time() - start) < ping_timeout:
+            ping_result = run_local(self.log, ["ping", "-c 1", str(hosts)], check=False).stdout
+            self.log.info("===>ping_result= %s", ping_result)
+            ping_status = re.search("1 received", ping_result)
+            if (time.time() - start) < 120:
+                time.sleep(5)
+            else:
+                time.sleep(1)
+        if time.time() - start >= ping_timeout:
+            self.fail("#{0} reboot failed, did not come back after {1} seconds",
+                hosts, ping_timeout)
+        time.sleep(5)
+        self.log.info("===Server %s is up after reboot. \n", hosts)
 
     def cleanup(self):
         """Servers clean up after test complete."""
@@ -172,7 +188,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "/usr/bin/ls -l /dev/pmem*",
             'lsblk|grep -E "NAME|pmem"']
         for cmd in cleanup_cmds:
-            run_pcmd(self.hostlist_servers, cmd, timeout=90)
+            run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
 
     def test_multiengines_per_socket(self):
         """Test ID: DAOS-12076.
@@ -207,15 +223,15 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
 
         cmd = "/usr/bin/ls -l /dev/pmem*"
-        results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
+        results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
         retry = 0
         max_retry = 3
-        while results[0]['exit_status'] != 0 and retry < max_retry:
+        while not results.passed and retry < max_retry:
             retry += 1
             self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
                           "daos_server_scm_prepare_ns", step, retry)
             time.sleep(15)
-            results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
+            results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
 
         if retry > max_retry:
             self.cleanup()
@@ -231,9 +247,9 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "sudo cp /etc/daos/daos_server.yml_4 /etc/daos/daos_server.yml",
             "sudo systemctl start daos_server.service"]
         for cmd in start_server_cmds:
-            results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
+            results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
         # Check for server start status
-        if results[0]['exit_status']:
+        if not results.passed:
             self.fail("#Fail on {0}".format(cmd))
 
         # (3) Start agent
@@ -243,24 +259,24 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "sudo systemctl start daos_agent.service",
             "dmg storage scan",
             "dmg network scan",
-            "dmg storage format"]
+            "dmg storage format",
+            "dmg storage query usage",
+            "dmg storage query list-devices",
+            "dmg system query"]
         for cmd in start_agent_cmds:
-            results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
+            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
             # Check for agent start status
-            if results[0]['exit_status'] and "sudo systemctl" in cmd:
+            if not results.passed and "sudo systemctl" in cmd:
                 self.fail("#Fail on {0}".format(cmd))
-        time.sleep(15)
-
         # (4) Dmg system query
         step += 1
         self.log.info("===(%s)===Dmg system query", step)
         # Delay is needed for multi ranks to show
-        time.sleep(5)
         query_cmds = [
             "dmg system query",
             "dmg system query -v"]
         for cmd in query_cmds:
-            results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
+            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
 
         # (5) Pool create
         step += 1
@@ -312,5 +328,5 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         step += 1
         self.log.info("===(%s)===Cleanup", step)
         cmd = "dmg system query -v"
-        results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
+        results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
         self.cleanup()
