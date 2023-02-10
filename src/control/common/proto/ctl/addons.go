@@ -51,39 +51,3 @@ func (vls *LedState) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
-
-//func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
-//	if sd == nil {
-//		return nil, errors.New("tried to marshal nil Member")
-//	}
-//
-//	type toJSON SmdDevice
-//	return json.Marshal(&struct {
-//		Roles uint32 `json:"roles"`
-//		*toJSON
-//	}{
-//		Roles:  0,
-//		toJSON: (*toJSON)(sd),
-//	})
-//}
-//
-//func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
-//	if string(data) == "null" {
-//		return nil
-//	}
-//
-//	type fromJSON SmdDevice
-//	from := &struct {
-//		// Conversion from JSON ignores roles string input.
-//		RolesStr string `json:"roles"`
-//		*fromJSON
-//	}{
-//		fromJSON: (*fromJSON)(sd),
-//	}
-//
-//	if err := json.Unmarshal(data, from); err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}

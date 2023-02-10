@@ -65,7 +65,6 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
 		for _, sd := range listDevsResp.Devices {
-			svc.log.Debugf("Device %s: roles: %d", sd.Uuid, sd.RoleBits)
 			rResp.Devices = append(rResp.Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 				Details: sd,
 			})

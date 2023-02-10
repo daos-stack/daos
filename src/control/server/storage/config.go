@@ -737,14 +737,7 @@ func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 
 // toString returns a comma separated list of option names that have been set.
 func (obs OptionBits) toString(optStr2Flag optFlagMap) string {
-	opts := common.NewStringSet()
-	for str, flag := range optStr2Flag {
-		if obs&flag == flag {
-			opts.Add(str)
-		}
-	}
-
-	return strings.Join(opts.ToSlice(), ",")
+	return strings.Join(obs.toStrings(optStr2Flag), ",")
 }
 
 // fromStrings generates bitset referenced by the function receiver from the option names provided.
@@ -799,27 +792,20 @@ func (bdr *BdevRoles) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // MarshalJSON represents roles as user readable string.
 func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + bdr.toString(roleOptFlags) + `"`), nil
+	return []byte(`"` + bdr.String() + `"`), nil
 }
 
 // UnmarshalJSON decodes user readable roles string into bitmask.
 func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
 	str := strings.Trim(strings.ToLower(string(data)), "\"")
-
-	//	mask, err := strconv.Atoi(str)
-	//	if err == nil {
-	//		bdr.OptionBits = OptionBits(mask)
-	//		return nil
-	//	}
-
 	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
 }
 
 func (bdr *BdevRoles) String() string {
 	if bdr == nil {
-		return "0"
+		return "none"
 	}
-	return fmt.Sprintf("%d", bdr.OptionBits)
+	return bdr.toString(roleOptFlags)
 }
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
