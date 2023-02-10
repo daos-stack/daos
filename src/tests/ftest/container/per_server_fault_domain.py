@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import defaultdict
+import random
 from ior_test_base import IorTestBase
 
 
@@ -78,18 +78,6 @@ class PerServerFaultDomainTest(IorTestBase):
             status, expected_status,
             "Container status isn't {} with {}!".format(expected_status, properties))
 
-    def create_rank_to_ip(self):
-        """Create and return rank to IP address dictionary.
-        """
-        system_query_out = self.get_dmg_command().system_query(verbose=True)
-        rank_to_ip = {}
-        for member in system_query_out["response"]["members"]:
-            ip_addr = member["addr"].split(":")[0]
-            rank = member["rank"]
-            rank_to_ip[rank] = ip_addr
-
-        return rank_to_ip
-
     def test_rf1_healthy(self):
         """Jira ID: DAOS-11200
 
@@ -109,22 +97,10 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_healthy
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
-        system_query_out = self.get_dmg_command().system_query(verbose=True)
-        ip_to_ranks = defaultdict(list)
-        ips = []
-        for member in system_query_out["response"]["members"]:
-            ip_addr = member["addr"].split(":")[0]
-            rank = member["rank"]
-            ip_to_ranks[ip_addr].append(rank)
-            ips.append(ip_addr)
-
-        # Use the first set of ranks (arbitrary). Convert them to string.
-        ranks_to_stop = ""
-        for rank in ip_to_ranks[ips[0]]:
-            if ranks_to_stop == "":
-                ranks_to_stop = str(rank)
-            else:
-                ranks_to_stop += "," + str(rank)
+        random_host = random.choice(list(set(self.server_managers[0].ranks.values())))
+        ranks_to_stop = ",".join(
+            [str(rank) for rank, host in self.server_managers[0].ranks.items()
+             if host == random_host])
         self.log.info("Ranks to stop = %s", ranks_to_stop)
 
         properties = self.params.get("rf_1", "/run/cont_property/*")
@@ -153,13 +129,12 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_unclean
         """
         # 1. Determine the ranks to stop; two ranks in different node.
-        rank_to_ip = self.create_rank_to_ip()
-
+        rank_to_host = self.server_managers[0].ranks
         rank_a = 0
         rank_b = None
         for rank in range(8):
             if rank != rank_a:
-                if rank_to_ip[rank] != rank_to_ip[rank_a]:
+                if rank_to_host[rank] != rank_to_host[rank_a]:
                     rank_b = rank
                     break
         ranks_to_stop = f"{str(rank_a)},{str(rank_b)}"
@@ -206,16 +181,16 @@ class PerServerFaultDomainTest(IorTestBase):
                 non_svc_ranks.append(rank)
         self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
-        # Create rank to IP dictionary.
-        rank_to_ip = self.create_rank_to_ip()
+        # Prepare rank to host dictionary.
+        rank_to_host = self.server_managers[0].ranks
 
         # Select first element in the list and find the other rank that's on the same
-        # node using rank to IP dictionary.
+        # node using rank to host dictionary.
         stop_rank_1 = non_svc_ranks[0]
         stop_rank_2 = None
         for rank in range(8):
             if rank != stop_rank_1:
-                if rank_to_ip[rank] == rank_to_ip[stop_rank_1]:
+                if rank_to_host[rank] == rank_to_host[stop_rank_1]:
                     stop_rank_2 = rank
                     break
         self.log.info("Stop rank 1 = %s; 2 = %s", stop_rank_1, stop_rank_2)
@@ -233,7 +208,7 @@ class PerServerFaultDomainTest(IorTestBase):
         stop_rank_4 = None
         for rank in range(8):
             if rank != stop_rank_3:
-                if rank_to_ip[rank] == rank_to_ip[stop_rank_3]:
+                if rank_to_host[rank] == rank_to_host[stop_rank_3]:
                     stop_rank_4 = rank
                     break
         self.log.info("Stop rank 3 = %s; 4 = %s", stop_rank_3, stop_rank_4)
@@ -286,26 +261,27 @@ class PerServerFaultDomainTest(IorTestBase):
                 non_svc_ranks.append(rank)
         self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
-        # Create rank to IP dictionary.
-        rank_to_ip = self.create_rank_to_ip()
+        # Prepare rank to host dictionary.
+        rank_to_host = self.server_managers[0].ranks
 
-        # Prepare IP set, which contains the IP of selected ranks to stop.
-        stop_rank_ip = set()
+        # Prepare host set, which contains the host of selected ranks to stop.
+        stop_rank_host = set()
 
         # Select first element in the list (arbitrary).
         non_svc_rank = non_svc_ranks[0]
-        stop_rank_ip.add(rank_to_ip[non_svc_rank])
+        stop_rank_host.add(rank_to_host[non_svc_rank])
         ranks_to_stop = []
         ranks_to_stop.append(non_svc_rank)
 
-        # Iterate ranks and select the other two using rank to IP dictionary and IP set.
+        # Iterate ranks and select the other two using rank to host dictionary and the
+        # host set.
         for rank in range(8):
             if rank not in ranks_to_stop:
-                ip_addr = rank_to_ip[rank]
-                if ip_addr not in stop_rank_ip:
+                host = rank_to_host[rank]
+                if host not in stop_rank_host:
                     # Rank on different node found.
                     ranks_to_stop.append(rank)
-                    stop_rank_ip.add(ip_addr)
+                    stop_rank_host.add(host)
                     if len(ranks_to_stop) == 3:
                         break
         self.log.info("Stop rank list = %s", ranks_to_stop)
