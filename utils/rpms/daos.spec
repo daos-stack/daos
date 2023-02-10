@@ -15,7 +15,7 @@
 
 Name:         daos
 Version:      2.2.0
-Release:      8%{?relval}%{?dist}
+Release:      9%{?relval}%{?dist}
 Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 22.01.1
+BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -149,14 +149,14 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.1
+Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl >= 02.00.00.3733
+Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 %else
-Requires: ipmctl > 02.00.00.3816
+Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
@@ -559,6 +559,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 10 2023 Michael Hennecke <michael.hennecke@intel.com> 2.2.0-9
+- Change ipmctl requirement from v2 to v3
+- Change spdk requirement from 22.01.1 to 22.01.2
+
 * Fri Feb  3 2023 Brian J. Murrell <brian.murrell@intel.com> 2.2.0-8
 - Add BR: libuuid-devel
 - Remove some historic, now superfluous BRs for SUSE
@@ -847,7 +851,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
 - Update libfabric to v1.12.0
 - Disable grdcopy/gdrapi linkage in libfabric
-
 
 * Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3

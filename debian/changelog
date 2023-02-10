@@ -1,3 +1,11 @@
+daos (2.2.0-9) unstable; urgency=medium
+  [ Michael Hennecke ]
+  * Change ipmctl requirement from v2 to v3
+  * Change libfabric requirement from 1.14.0-1 to 1.15.1-1
+  * Change spdk requirement from 22.01.1 to 22.01.2
+
+ -- Michael Hennecke <michael.hennecke@intel.com> Fri, 10 Feb 2023 16:40:00 -0100
+
 daos (2.2.0-7) unstable; urgency=medium
   [ Joseph Moore ]
   * Update Mercury version to 2.2.0-6
