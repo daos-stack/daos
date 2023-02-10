@@ -114,10 +114,9 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
 					    rpt->rt_coh_uuid, arg->cont_uuid,
 					    arg->tgt_id, rpt->rt_rebuild_ver,
-					    rpt->rt_stable_epoch, arg->oids,
-					    arg->ephs, arg->punched_ephs, arg->shards,
-					    arg->count, rpt->rt_new_layout_ver,
-					    rpt->rt_rebuild_op);
+					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -574,9 +573,9 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
 	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_stable_epoch, rpt->rt_rebuild_op,
-			  &arg->oid, &arg->epoch, &arg->punched_epoch, &arg->shard, 1,
-			  arg->tgt_index, rpt->rt_new_layout_ver);
+			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
 	rpt_put(rpt);
 	D_FREE(arg);
 }
@@ -787,6 +786,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct ds_cont_child		*cont_child = NULL;
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -823,6 +823,18 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+		if (rc != 0) {
+			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
+			vos_cont_close(coh);
+			return rc;
+		}
+		cont_child->sc_discarding = 1;
+	}
+
 	epoch.oe_value = rpt->rt_stable_epoch;
 	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
@@ -847,6 +859,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 	vos_cont_close(coh);
+
+	if (cont_child != NULL) {
+		cont_child->sc_discarding = 0;
+		ds_cont_child_put(cont_child);
+	}
 
 	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",

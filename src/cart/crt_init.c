@@ -682,12 +682,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				domain_env = tmp;
 		}
 
-		if (domain_env == NULL) {
-			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface_env);
-			domain_env = interface_env;
-		}
-
-
 		if (opt && opt->cio_port)
 			port_str = opt->cio_port;
 		else {
