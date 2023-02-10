@@ -1628,7 +1628,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 
 	/** check if SB info exists */
 	if (iods[MAGIC_IDX].iod_size == 0) {
-		D_DEBUG(DB_ALL, "SB does not exist.\n");
+		D_ERROR("SB does not exist.\n");
 		D_GOTO(err, rc = ENOENT);
 	}
 
