@@ -33,8 +33,7 @@
 struct chunk {
 	uint64_t ch_off;
 	uint64_t ch_size;
-	d_list_t ch_prep_link;
-	d_list_t ch_flush_link;
+	d_list_t ch_link;
 };
 
 struct test_arg {
@@ -57,58 +56,92 @@ reset_arg(struct test_arg *arg)
 }
 
 static void
-add_expected(struct test_arg *arg, uint64_t offset, uint64_t size)
+touch_mem(struct test_arg *arg, uint64_t tx_id, uint64_t offset, uint64_t size)
 {
-	struct chunk *chunk      = &arg->ta_chunks[arg->ta_chunk_nr++];
+	struct chunk *prep       = &arg->ta_chunks[arg->ta_chunk_nr++];
+	struct chunk *flush      = &arg->ta_chunks[arg->ta_chunk_nr++];
 	d_list_t     *prep_list  = &arg->ta_prep_list;
 	d_list_t     *flush_list = &arg->ta_flush_list;
+	int           rc;
 
-	chunk->ch_off  = offset;
-	chunk->ch_size = size;
-	d_list_add_tail(&chunk->ch_prep_link, prep_list);
-	d_list_add_tail(&chunk->ch_flush_link, flush_list);
+	rc = umem_cache_touch(&arg->ta_store, tx_id, offset, size);
+	assert_int_equal(rc, 0);
+
+	prep->ch_off  = offset;
+	prep->ch_size = size;
+	d_list_add_tail(&prep->ch_link, prep_list);
+
+	flush->ch_off  = offset + UMEM_CACHE_PAGE_SZ;
+	flush->ch_size = size;
+	d_list_add_tail(&flush->ch_link, flush_list);
+}
+
+static void
+find_expected(struct test_arg *arg, const char *type, d_list_t *list, uint64_t start_region,
+	      uint64_t end_region)
+{
+	struct chunk *chunk;
+	struct chunk *new_chunk;
+	struct chunk *temp;
+	uint64_t      end_chunk;
+	bool          found = false;
+
+	d_list_for_each_entry_safe(chunk, temp, list, ch_link) {
+		end_chunk = chunk->ch_off + chunk->ch_size;
+
+		if (end_region <= chunk->ch_off || start_region >= end_chunk)
+			continue;
+
+		found = true;
+		if (start_region <= chunk->ch_off && end_region >= end_chunk) {
+			d_list_del(&chunk->ch_link);
+			continue;
+		}
+
+		/** 3 possible cases
+		 *  1. Chunk is covered at start
+		 *  2. Chunk is covered at end
+		 *  3. Chunk is covered in middle
+		 */
+		if (start_region > chunk->ch_off) {
+			if (end_region < end_chunk) {
+				/** Case 3 */
+				new_chunk          = &arg->ta_chunks[arg->ta_chunk_nr++];
+				new_chunk->ch_off  = end_region;
+				new_chunk->ch_size = end_chunk - new_chunk->ch_off;
+				d_list_add(&chunk->ch_link, list);
+				/** Fall through to case 1 */
+			}
+			/** Case 1 */
+			chunk->ch_size = start_region - chunk->ch_off;
+		} else if (end_region < end_chunk) {
+			/** Case 2 */
+			chunk->ch_off  = end_region;
+			chunk->ch_size = end_chunk - chunk->ch_off;
+		} else {
+			assert_true(0);
+		}
+	}
+
+	if (!found) {
+		fail_msg("Unexpected %s: off=" DF_U64 ", size=" DF_U64 "\n", type, start_region,
+			 end_region);
+		assert_true(0);
+	}
 }
 
 static void
 check_io_region(struct test_arg *arg, struct umem_store_region *region)
 {
-	struct chunk *chunk;
-	d_list_t     *list;
-
-	list = &arg->ta_prep_list;
-
-	d_list_for_each_entry(chunk, list, ch_prep_link) {
-		if (region->sr_addr == chunk->ch_off && region->sr_size == chunk->ch_size) {
-			d_list_del(&chunk->ch_prep_link);
-			return;
-		}
-	}
-
-	fail_msg("Unexpected region: off=" DF_U64 ", size=" DF_U64 "\n", region->sr_addr,
-		 region->sr_size);
-
-	assert(0);
+	find_expected(arg, "io_region", &arg->ta_prep_list, region->sr_addr,
+		      region->sr_addr + region->sr_size);
 }
 
 static void
 check_iov(struct test_arg *arg, d_iov_t *iov)
 {
-	struct chunk *chunk;
-	d_list_t     *list;
-
-	list = &arg->ta_flush_list;
-
-	d_list_for_each_entry(chunk, list, ch_flush_link) {
-		if (iov->iov_buf == (void *)(UMEM_CACHE_PAGE_SZ + chunk->ch_off) &&
-		    iov->iov_len == chunk->ch_size) {
-			d_list_del(&chunk->ch_flush_link);
-			return;
-		}
-	}
-
-	fail_msg("Unexpected iov: buf=%p, size=" DF_U64 "\n", iov->iov_buf, iov->iov_len);
-
-	assert(0);
+	find_expected(arg, "io_region", &arg->ta_flush_list, (uint64_t)iov->iov_buf,
+		      (uint64_t)iov->iov_buf + iov->iov_len);
 }
 
 static void
@@ -396,34 +429,19 @@ test_page_cache(void **state)
 	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), 3);
 	assert_rc_equal(rc, 0);
 
+	reset_arg(arg);
 	/** touch multiple chunks */
-	rc = umem_cache_touch(&arg->ta_store, 1, 0, UMEM_CACHE_CHUNK_SZ + 1);
-	assert_rc_equal(rc, 0);
+	touch_mem(arg, 1, 0, UMEM_CACHE_CHUNK_SZ + 1);
 
 	/** Span page boundary */
-	rc = umem_cache_touch(&arg->ta_store, 2, UMEM_CACHE_PAGE_SZ - 1, UMEM_CACHE_CHUNK_SZ);
-	assert_rc_equal(rc, 0);
+	touch_mem(arg, 2, UMEM_CACHE_PAGE_SZ - 1, UMEM_CACHE_CHUNK_SZ);
 
 	/** Touch the last page, different tx id */
-	rc = umem_cache_touch(&arg->ta_store, 3, 2 * UMEM_CACHE_PAGE_SZ + 1, 10);
-	assert_rc_equal(rc, 0);
+	touch_mem(arg, 3, 2 * UMEM_CACHE_PAGE_SZ + 1, 10);
 
 	/** Touch many chunks on last page */
-	rc = umem_cache_touch(&arg->ta_store, 3,
-			      2 * UMEM_CACHE_PAGE_SZ + (UMEM_CACHE_CHUNK_SZ * 2) + 1,
-			      UMEM_CACHE_CHUNK_SZ * 80);
-	assert_rc_equal(rc, 0);
-
-	reset_arg(arg);
-	add_expected(arg, 0, UMEM_CACHE_CHUNK_SZ * 2);
-	add_expected(arg, UMEM_CACHE_PAGE_SZ - UMEM_CACHE_CHUNK_SZ, UMEM_CACHE_CHUNK_SZ);
-	add_expected(arg, UMEM_CACHE_PAGE_SZ, UMEM_CACHE_CHUNK_SZ);
-	add_expected(arg, 2 * UMEM_CACHE_PAGE_SZ, UMEM_CACHE_CHUNK_SZ);
-	/** Size won't span more than one 64-bit mask worth of chunks */
-	add_expected(arg, 2 * UMEM_CACHE_PAGE_SZ + UMEM_CACHE_CHUNK_SZ * 2,
-		     UMEM_CACHE_CHUNK_SZ * 62);
-	add_expected(arg, 2 * UMEM_CACHE_PAGE_SZ + UMEM_CACHE_CHUNK_SZ * 64,
-		     UMEM_CACHE_CHUNK_SZ * 19);
+	touch_mem(arg, 3, 2 * UMEM_CACHE_PAGE_SZ + (UMEM_CACHE_CHUNK_SZ * 2) + 1,
+		  UMEM_CACHE_CHUNK_SZ * 80);
 
 	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
 	assert_rc_equal(rc, 0);
@@ -437,18 +455,104 @@ test_page_cache(void **state)
 	assert_int_equal(id, 3);
 
 	/* Ok, do another round */
-	rc = umem_cache_touch(&arg->ta_store, 4, 10, 40);
-	assert_rc_equal(rc, 0);
+	touch_mem(arg, 4, 10, 40);
 
-	rc = umem_cache_touch(&arg->ta_store, 5, 80, 40);
-	assert_rc_equal(rc, 0);
-
-	reset_arg(arg);
-	add_expected(arg, 0, UMEM_CACHE_CHUNK_SZ);
+	touch_mem(arg, 5, 80, 40);
 
 	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, 5);
+	check_lists_empty(arg);
+
+	umem_cache_free(&arg->ta_store);
+}
+
+#define LARGE_NUM_PAGES  103
+#define LARGE_CACHE_SIZE (LARGE_NUM_PAGES * UMEM_CACHE_PAGE_SZ)
+static void
+test_many_pages(void **state)
+{
+	struct test_arg   *arg = *state;
+	struct umem_cache *cache;
+	uint64_t           id = 0;
+	uint64_t           offset;
+	int                rc;
+	uint64_t           tx_id;
+
+	arg->ta_store.stor_size = LARGE_CACHE_SIZE;
+	arg->ta_store.stor_ops  = &stor_ops;
+
+	/** In case prior test failed */
+	umem_cache_free(&arg->ta_store);
+
+	rc = umem_cache_alloc(&arg->ta_store, 0);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
+
+	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
+	assert_rc_equal(rc, 0);
+
+	/** Touch all pages, more than can fit in a single set */
+	reset_arg(arg);
+	tx_id = 1;
+	for (offset = 0; offset < LARGE_CACHE_SIZE; offset += UMEM_CACHE_PAGE_SZ) {
+		touch_mem(arg, tx_id, offset, 10);
+
+		tx_id++;
+
+		touch_mem(arg, tx_id, offset + UMEM_CACHE_PAGE_SZ - 20, 10);
+	}
+
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, LARGE_NUM_PAGES + 1);
+	check_lists_empty(arg);
+
+	umem_cache_free(&arg->ta_store);
+}
+
+static void
+test_many_writes(void **state)
+{
+	struct test_arg   *arg = *state;
+	struct umem_cache *cache;
+	uint64_t           id = 0;
+	uint64_t           offset;
+	int                rc;
+	uint64_t           tx_id;
+
+	arg->ta_store.stor_size = LARGE_CACHE_SIZE;
+	arg->ta_store.stor_ops  = &stor_ops;
+
+	/** In case prior test failed */
+	umem_cache_free(&arg->ta_store);
+
+	rc = umem_cache_alloc(&arg->ta_store, 0);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
+
+	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
+	assert_rc_equal(rc, 0);
+
+	/** Touch all pages, more than can fit in a single set */
+	reset_arg(arg);
+	offset = 1;
+	for (tx_id = 1; tx_id < 3800; tx_id++) {
+		touch_mem(arg, tx_id, offset, 10);
+		offset += UMEM_CACHE_CHUNK_SZ * 3 + 1;
+	}
+
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, tx_id - 1);
 	check_lists_empty(arg);
 
 	umem_cache_free(&arg->ta_store);
@@ -463,6 +567,8 @@ main(int argc, char **argv)
 	    {"UMEM003: Test alloc pmem", test_alloc, setup_pmem, teardown_pmem},
 	    {"UMEM004: Test alloc vmem", test_alloc, setup_vmem, teardown_vmem},
 	    {"UMEM005: Test page cache", test_page_cache, NULL, NULL},
+	    {"UMEM006: Test page cache many pages", test_many_pages, NULL, NULL},
+	    {"UMEM007: Test page cache many writes", test_many_writes, NULL, NULL},
 	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);
