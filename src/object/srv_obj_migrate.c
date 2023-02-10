@@ -2516,7 +2516,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_handle_t		 oh  = DAOS_HDL_INVAL;
 	uint32_t		 minimum_nr;
-	uint32_t		 orig_flags;
+	uint32_t		 enum_flags;
 	uint32_t		 num;
 	int			 rc1;
 	int			 rc = 0;
@@ -2558,12 +2558,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 			     DIOF_FOR_MIGRATION;
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
 	} else {
 		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 	}
 
@@ -2598,9 +2598,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	}
 
 	while (!tls->mpt_fini) {
-		uint32_t enum_flags;
-
-		enum_flags = orig_flags;
 		memset(buf, 0, buf_len);
 		memset(kds, 0, KDS_NUM * sizeof(*kds));
 		iov.iov_len = 0;
@@ -2615,7 +2612,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			p_csum->iov_len = 0;
 
 		daos_anchor_set_flags(&dkey_anchor, enum_flags);
-retry:
 		num = KDS_NUM;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
@@ -2662,7 +2658,6 @@ retry:
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
-				daos_anchor_set_flags(&dkey_anchor, enum_flags);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
@@ -2675,7 +2670,7 @@ retry:
 				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
 			}
-			D_GOTO(retry, rc);
+			continue;
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
@@ -2705,8 +2700,8 @@ retry:
 			break;
 		}
 
-		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64" > "DF_U64"\n",
-			  sgl.sg_iovs[0].iov_len, buf_len);
+		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64"/"DF_U64" > "DF_U64"\n",
+			  sgl.sg_iovs[0].iov_buf_len, sgl.sg_iovs[0].iov_len, buf_len);
 		rc = dc_obj_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 					migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
@@ -2724,6 +2719,9 @@ retry:
 
 		if (daos_anchor_is_eof(&dkey_anchor))
 			break;
+
+		/* Restore leader flag to always try the leader first */
+		enum_flags |= DIOF_TO_LEADER;
 	}
 
 	if (buf != NULL && buf != stack_buf)

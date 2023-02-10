@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -342,8 +342,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
-        "ofi+tcp": [
-            "SWIM_PING_TIMEOUT=10"],
+        "ofi+tcp": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [

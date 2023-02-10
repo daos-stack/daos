@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1366,6 +1366,35 @@ def percent_change(val1, val2):
     return 0.0
 
 
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+    """Get the journalctl command to capture all unit/identifier activity from since to until.
+
+    Args:
+        since (str): show log entries from this date.
+        until (str, optional): show log entries up to this date id specified. Defaults to None.
+        system (bool, optional): show messages from system services and the kernel. Defaults to
+            False which will show all messages that the user can see.
+        units (str/list, optional): show messages for the specified systemd unit(s). Defaults to
+            None.
+        identifiers (str/list, optional): show messages for the specified syslog identifier(s).
+            Defaults to None.
+
+    Returns:
+        str: journalctl command to capture all unit activity
+
+    """
+    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    if system:
+        command.append("--system")
+    for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
+        for item in values if isinstance(values, (list, tuple)) else [values]:
+            command.append("--{}={}".format(key, item))
+    command.append("--since=\"{}\"".format(since))
+    if until:
+        command.append("--until=\"{}\"".format(until))
+    return " ".join(command)
+
+
 def get_journalctl(hosts, since, until, journalctl_type):
     """Run the journalctl on the hosts.
 
@@ -1381,12 +1410,9 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
-               "--until=\"{}\"".format(journalctl_type, since, until))
+    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
     err = "Error gathering system log events"
-    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
-
-    return results
+    return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
 
 def get_avocado_config_value(section, key):

@@ -36,7 +36,7 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
+	updateInUseBdevs(context.Context, []storage.NvmeController) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.

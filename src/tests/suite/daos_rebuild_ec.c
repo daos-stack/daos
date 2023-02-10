@@ -744,7 +744,11 @@ rebuild_multiple_group_ec_object(void **state)
 	daos_recx_t	recx;
 	d_rank_t	rank = 0;
 	uint32_t	tgt_idx;
+	daos_iod_t	iod;
+	d_iov_t		sg_iov;
+	d_sg_list_t	sgl;
 	int		size = 4 * CELL_SIZE;
+	int		rc;
 
 	if (!test_runable(arg, 8))
 		return;
@@ -755,13 +759,30 @@ rebuild_multiple_group_ec_object(void **state)
 	verify_data = (char *)malloc(size);
 	make_buffer(data, 'a', size);
 	make_buffer(verify_data, 'a', size);
+
+	d_iov_set(&sg_iov, data, size);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
 		recx.rx_nr = size;
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		rc = daos_obj_update(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
 	}
 
 	rank = get_rank_by_oid_shard(arg, oid, 17);
@@ -769,6 +790,8 @@ rebuild_multiple_group_ec_object(void **state)
 	rebuild_single_pool_target(arg, rank, tgt_idx, false);
 
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
@@ -776,6 +799,21 @@ rebuild_multiple_group_ec_object(void **state)
 		memset(data, 0, size);
 		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+		assert_memory_equal(data, verify_data, size);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		d_iov_set(&sg_iov, data, size);
+		sgl.sg_nr	= 1;
+		sgl.sg_nr_out	= 0;
+		sgl.sg_iovs	= &sg_iov;
+		d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+		iod.iod_nr	= 1;
+		iod.iod_size	= size;
+		iod.iod_recxs	= NULL;
+		iod.iod_type	= DAOS_IOD_SINGLE;
+
+		rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
 		assert_memory_equal(data, verify_data, size);
 	}
 

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@ from run_utils import run_remote
 
 
 class RootContainerTest(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
