@@ -282,8 +282,7 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-
-#define UMM_SLABS_CNT	7
+#define UMM_SLABS_CNT 13
 
 /** attributes to initialize an unified memory class */
 struct umem_attr {

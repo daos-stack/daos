@@ -3160,7 +3160,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	struct daos_prop_entry	*def_ent;
 	char			*def_lbl;
 	struct daos_prop_entry	*old_ent;
-	char			*old_lbl;
+	char			*old_lbl = NULL;
 	d_iov_t			 key;
 	d_iov_t			 val;
 	uuid_t			 match_cuuid;
@@ -3191,10 +3191,11 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 
 	/* If specified label matches existing label, nothing more to do */
 	old_ent = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
-	D_ASSERT(old_ent != NULL);
-	old_lbl = old_ent->dpe_str;
-	if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
-		return 0;
+	if (old_ent) {
+		old_lbl = old_ent->dpe_str;
+		if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
+			return 0;
+	}
 
 	/* Insert new label into cs_uuids KVS, fail if already in use */
 	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
@@ -3223,6 +3224,9 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		DP_UUID(cont->c_uuid), in_lbl);
 
 	/* Remove old label from cs_uuids KVS, if applicable */
+	if (old_lbl == NULL)
+		return 0;
+
 	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
