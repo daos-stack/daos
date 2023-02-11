@@ -391,6 +391,8 @@ chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret)
 {
 	int	rc = 0;
 
+	ABT_mutex_lock(cpr->cpr_mutex);
+
 	if (!cpr->cpr_started) {
 		rc = ds_pool_start_with_svc(cpr->cpr_uuid);
 		if (rc == 0)
@@ -407,11 +409,13 @@ chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret)
 			       DF_UUIDF" after check: "DF_RC"\n",
 			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
 			/* Failed to post handle pool start, have to stop it. */
-			chk_pool_shutdown(cpr);
+			chk_pool_shutdown(cpr, true);
 		} else {
 			cpr->cpr_start_post = 1;
 		}
 	}
+
+	ABT_mutex_unlock(cpr->cpr_mutex);
 
 	if (ret != NULL)
 		*ret = rc;
@@ -469,7 +473,7 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 		    cpr->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED)
 			chk_pool_start_svc(cpr, &rc);
 		else if (cpr->cpr_started)
-			chk_pool_shutdown(cpr);
+			chk_pool_shutdown(cpr, false);
 
 		/* Drop the reference that is held when create in chk_pool_alloc(). */
 		chk_pool_put(cpr);
