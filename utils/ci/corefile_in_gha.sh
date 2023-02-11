@@ -23,7 +23,7 @@ then
     echo "no corefile in $COREFILE_DIR."
     exit 0
 fi
-for i in "$COREFILE_DIR/core*" ; do
+for i in $COREFILE_DIR/core* ; do
     ls -ltr "$i"
     file "$i"
 done
