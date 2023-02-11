@@ -125,11 +125,13 @@ jobs:
         timeout-minutes: 60
         run: |
              ulimit -c unlimited
-             sudo echo core \> /proc/sys/kernel/core_pattern
-             sudo echo 1 \> /proc/sys/kernel/core_uses_pid
+             sudo echo core > /proc/sys/kernel/core_pattern
+             sudo echo 1 > /proc/sys/kernel/core_uses_pid
+             sudo apt-get update
+             sudo apt-get gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image
-              ./daos/utils/ci/run_in_gha.sh
+                        --env COMPILER --env DEPS_JOBS --user root:root build-image
+                        ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
         run: docker run --env BASE_DISTRO --user root:root
@@ -307,11 +309,13 @@ jobs:
         timeout-minutes: 60
         run: |
              ulimit -c unlimited
-             sudo echo core \> /proc/sys/kernel/core_pattern
-             sudo echo 1 \> /proc/sys/kernel/core_uses_pid
+             sudo echo core > /proc/sys/kernel/core_pattern
+             sudo echo 1 > /proc/sys/kernel/core_uses_pid
+             sudo apt-get update
+             sudo apt-get gdb
              docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                        build-image ./daos/utils/node_local_test.py --no-root
+                        --memcheck no --test cont_copy
       - name: Check for corefiles
         if: always()
         run: docker run --env BASE_DISTRO --user root:root

@@ -20,7 +20,7 @@ fi
 
 if [ $(find "$COREFILE_DIR" -maxdepth 1 -type f | grep core | wc -l) == 0 ]
 then
-    echo "no corefile in $COREFILE_DIR."
+    echo "no corefile in $COREFILE_DIR"
     exit 0
 fi
 for i in $COREFILE_DIR/core* ; do
