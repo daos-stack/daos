@@ -125,8 +125,8 @@ jobs:
         timeout-minutes: 60
         run: |
              ulimit -c unlimited
-             sudo echo core > /proc/sys/kernel/core_pattern
-             sudo echo 1 > /proc/sys/kernel/core_uses_pid
+             sudo bash -c 'echo core > /proc/sys/kernel/core_pattern'
+             sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
              sudo apt-get update
              sudo apt-get gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
@@ -309,7 +309,8 @@ jobs:
         timeout-minutes: 60
         run: |
              ulimit -c unlimited
-             sudo echo core > /proc/sys/kernel/core_pattern
+             sudo bash -c 'echo core > /proc/sys/kernel/core_pattern'
+             sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
              sudo echo 1 > /proc/sys/kernel/core_uses_pid
              sudo apt-get update
              sudo apt-get gdb
