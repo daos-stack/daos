@@ -136,6 +136,8 @@ const (
 	PoolSelfHealingAutoExclude = C.DAOS_SELF_HEAL_AUTO_EXCLUDE
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
+	// PoolSelfHealingAutoReint sets the self-healing strategy to auto-reint.
+	PoolSelfHealingAutoReint = C.DAOS_SELF_HEAL_AUTO_REINT
 )
 
 const (
