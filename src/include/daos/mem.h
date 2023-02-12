@@ -151,9 +151,6 @@ int   umempobj_get_heapusage(struct umem_pool *pool,
 			     daos_size_t *cur_allocated);
 void  umempobj_log_fraginfo(struct umem_pool *pool);
 
-/* persistent object slab descriptions */
-#define UMM_SLABS_CNT  7
-
 struct umem_slab_desc {
 	size_t		unit_size;
 	unsigned	class_id;
@@ -466,7 +463,7 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-#define UMM_SLABS_CNT	7
+#define UMM_SLABS_CNT 13
 
 /** attributes to initialize an unified memory class */
 struct umem_attr {
