@@ -427,7 +427,7 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 };
 
 int
-dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
+dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 {
 	void *src, *dst;
 	ptrdiff_t off;
@@ -435,6 +435,9 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
 	daos_size_t size;
 	int pos, num, val;
 	int rc = 0;
+	dav_obj_t         *dav_hdl = arg;
+	void              *base    = dav_hdl->do_base;
+	struct umem_store *store   = dav_hdl->do_store;
 
 	switch (act->ac_opc) {
 	case UMEM_ACT_COPY:
@@ -482,6 +485,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
 			act->ac_op_bits.addr / PAGESIZE, act->ac_op_bits.addr % PAGESIZE,
 			act->ac_op_bits.pos, act->ac_op_bits.num);
 		off = act->ac_op_bits.addr;
+		size = sizeof(uint64_t);
 		p = (uint64_t *)(base + off);
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
@@ -496,5 +500,9 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
 		D_ASSERT(0);
 		break;
 	}
+
+	if (rc == 0)
+		rc = umem_cache_touch(store, tx_id, off, size);
+
 	return rc;
 }

@@ -1746,11 +1746,11 @@ touch_page(struct umem_store *store, struct umem_page *page, uint64_t wr_tx, ume
 		d_list_add_tail(&page->pg_link, &cache->ca_pgs_dirty);
 	}
 
-	if (page->pg_last_inflight == wr_tx)
+	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, page->pg_last_inflight) <= 0 ||
+	    wr_tx == -1ULL)
 		return;
 
-	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, page->pg_last_inflight) > 0)
-		page->pg_last_inflight = wr_tx;
+	page->pg_last_inflight = wr_tx;
 }
 
 int
@@ -1975,7 +1975,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			chkpt_data->cd_max_tx                                           = 0;
 
 			while (chkpt_data->cd_nr_pages < MAX_PAGES_PER_SET &&
-			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_SET &&
+			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_PAGE &&
 			       (page = d_list_pop_entry(&cache->ca_pgs_copying, struct umem_page,
 							pg_link)) != NULL) {
 				D_ASSERT(chkpt_data != NULL);

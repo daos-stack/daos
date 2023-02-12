@@ -76,7 +76,7 @@ struct bio_nvme_data {
 	d_list_t		 bd_bdevs;
 	uint64_t		 bd_scan_age;
 	/* Path to input SPDK JSON NVMe config file */
-	const char		*bd_nvme_conf;
+	char			*bd_nvme_conf;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 	unsigned int		 bd_nvme_roles;
@@ -302,10 +302,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		bio_numa_node = (unsigned int)numa_node;
 
 	nvme_glb.bd_mem_size = mem_size;
-	nvme_glb.bd_nvme_conf = nvme_conf;
+	D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
 
 	rc = bio_spdk_env_init();
 	if (rc) {
+		D_ERROR("Failed to init SPDK environment\n");
+		D_FREE(nvme_glb.bd_nvme_conf);
 		nvme_glb.bd_nvme_conf = NULL;
 		goto free_cond;
 	}
@@ -344,6 +346,7 @@ bio_nvme_fini(void)
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
+	D_FREE(nvme_glb.bd_nvme_conf);
 }
 
 static inline bool
