@@ -1185,28 +1185,21 @@ eq_ut_setup(void **state)
 	rc = daos_hhash_init();
 	if (rc != 0) {
 		print_error("Failed daos_hhash_init: %d\n", rc);
-		goto out_debug;
+		return rc;
 	}
 
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		print_error("Failed daos_eq_lib_init: %d\n", rc);
-		goto out_hhash;
+		return rc;
 	}
 
 	rc = daos_eq_create(&my_eqh);
 	if (rc != 0) {
 		print_error("Failed daos_eq_create: %d\n", rc);
-		goto out_lib;
+		return rc;
 	}
 
-	return rc;
-out_lib:
-	daos_eq_lib_fini();
-out_hhash:
-	daos_hhash_fini();
-out_debug:
-	daos_debug_fini();
 	return rc;
 }
 
