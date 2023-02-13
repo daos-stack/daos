@@ -137,12 +137,13 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	hdl->p_ops.base = hdl;
 
 	hdl->do_store = store;
-	D_ASSERT(hdl->do_store->stor_priv != NULL);
-	rc = umem_cache_alloc(store, 0);
-	if (rc != 0) {
-		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
-		err = rc;
-		goto out1;
+	if (hdl->do_store->stor_priv != NULL) {
+		rc = umem_cache_alloc(store, 0);
+		if (rc != 0) {
+			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+			err = rc;
+			goto out1;
+		}
 	}
 
 	D_STRNDUP(hdl->do_path, path, strlen(path));
