@@ -133,22 +133,32 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
-        cmd = DaosServerCommand()
-        cmd.sudo = False
-        cmd.debug.value = False
-        cmd.set_sub_command("scm")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.scm_ns_per_socket.value = engines_per_socket
-        cmd.sub_command_class.sub_command_class.force.value = True
-
-        self.log.info(
-            "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
-        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
-        if not results.passed:
+        result = DaosServerCommandRunner().scm_prepare(
+            scm_ns_per_socket=engines_per_socket, force=True)
+        if 0 not in result or len(result) > 0:
             self.fail(
-                "#({0}.B){1} failed, "
-                "please make sure the server equipped with {2} PMem "
+                "#({0}.B){1} failed, please make sure the server equipped with {2} PMem "
                 "modules.".format(step, cmd, engines_per_socket))
+
+    def ping_verify(self, host, expect_pass=True):
+        ping_timeout = 600
+        start = time.time()
+        ping_status = None
+        while ping_status is None and (time.time() - start) < ping_timeout:
+            ping_result = run_local(self.log, ["ping", "-c 1", str(host)], check=False).stdout
+            self.log.info("===>ping_result= %s", ping_result)
+            if expect_pass:
+                ping_status = re.search("1 received", ping_result)
+            else:
+                ping_status = re.search("0 received", ping_result)
+            if (time.time() - start) < 120:
+                time.sleep(20)
+            else:
+                time.sleep(1)
+        if time.time() - start >= ping_timeout:
+            self.fail(
+                "#{0} reboot failed, did not come back after {1} seconds".format,
+                host, ping_timeout)
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -160,22 +170,13 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd = "sudo shutdown -r now"
         run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("===Server %s rebooting... \n", hosts)
-        time.sleep(reboot_waittime)
-        ping_timeout = 600
-        start = time.time()
-        ping_status = None
-        while ping_status is None and (time.time() - start) < ping_timeout:
-            ping_result = run_local(self.log, ["ping", "-c 1", str(hosts)], check=False).stdout
-            self.log.info("===>ping_result= %s", ping_result)
-            ping_status = re.search("1 received", ping_result)
-            if (time.time() - start) < 120:
-                time.sleep(5)
-            else:
-                time.sleep(1)
-        if time.time() - start >= ping_timeout:
-            self.fail("#{0} reboot failed, did not come back after {1} seconds",
-                      hosts, ping_timeout)
-        time.sleep(5)
+
+        ping_verify(hosts[0], expect_pass=False)
+        foreach host in hosts:
+            ping_verify(host, expect_pass=True)
+        cmd = "sudo uname"
+        if execute_cluster_cmds(hosts, cmd) > 0:
+            return 1
         self.log.info("===Server %s is up after reboot. \n", hosts)
 
     def cleanup(self):
@@ -249,8 +250,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         for cmd in start_server_cmds:
             results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
         # Check for server start status
-        if not results.passed:
-            self.fail("#Fail on {0}".format(cmd))
+            if not results.passed:
+                self.fail("#Fail on {0}".format(cmd))
 
         # (3) Start agent
         step += 1
