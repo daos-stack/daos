@@ -428,7 +428,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     &dms);
+					     rpt->rt_rebuild_gen, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -2020,7 +2020,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	/* destroy the migrate_tls of 0-xstream */
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM)
-		ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver);
+		ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	d_list_del_init(&rpt->rt_list);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
