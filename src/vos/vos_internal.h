@@ -1285,30 +1285,52 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
-/* Slab allocation */
-enum {
-	VOS_SLAB_OBJ_NODE	= 0,
-	VOS_SLAB_KEY_NODE	= 1,
-	VOS_SLAB_SV_NODE	= 2,
-	VOS_SLAB_EVT_NODE	= 3,
-	VOS_SLAB_EVT_DESC	= 4,
-	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_EVT_NODE_SM	= 6,
-	VOS_SLAB_MAX		= 7
+/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
+static const int        slab_map[] = {
+    0,                  /* 32 bytes */
+    1,                  /* 64 bytes */
+    2,                  /* 96 bytes */
+    3,                  /* 128 bytes */
+    4,                  /* 160 bytes */
+    5,                  /* 192 bytes */
+    6,                  /* 224 bytes */
+    -1,                 /* 256 bytes */
+    7,                  /* 288 bytes */
+    -1, -1, 8,          /* 384 bytes */
+    9,                  /* 416 bytes */
+    -1, -1, -1, -1, 10, /* 576 bytes */
+    -1, -1, 11,         /* 672 bytes */
+    -1, -1, 12,         /* 768 bytes */
 };
-D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
 static inline umem_off_t
-vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+vos_slab_alloc(struct umem_instance *umm, int size)
 {
-	/* evtree unit tests may skip slab register in vos_pool_open() */
-	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
-		  size == umem_slab_usize(umm, slab_id),
-		  "registered: %d, id: %d, size: %d != %zu\n",
-		  umem_slab_registered(umm, slab_id),
-		  slab_id, size, umem_slab_usize(umm, slab_id));
+	int aligned_size = D_ALIGNUP(size, 32);
+	int slab_idx;
+	int slab;
 
-	return umem_alloc_verb(umm, slab_id, UMEM_FLAG_ZERO, size);
+	slab_idx = (aligned_size >> 5) - 1;
+	if (slab_idx >= ARRAY_SIZE(slab_map))
+		goto no_slab_alloc;
+
+	if (slab_map[slab_idx] == -1) {
+		D_DEBUG(DB_MGMT, "No slab %d for allocation of size %d, idx=%d\n", aligned_size,
+			size, slab_idx);
+		goto no_slab_alloc;
+	}
+
+	slab = slab_map[slab_idx];
+
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab) || aligned_size == umem_slab_usize(umm, slab),
+		  "registered: %d, id: %d, size: %d != %zu\n", umem_slab_registered(umm, slab),
+		  slab, aligned_size, umem_slab_usize(umm, slab));
+
+	return umem_alloc_verb(umm, slab, UMEM_FLAG_ZERO, aligned_size);
+
+no_slab_alloc:
+	return umem_zalloc(umm, size);
 }
 
 /* vos_space.c */

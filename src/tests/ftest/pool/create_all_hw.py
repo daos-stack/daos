@@ -249,12 +249,12 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
                 self.smd_avail_bytes, tier_bytes[1][1], self.delta_bytes))
 
         self.log.info("Checking size of the second pool with the size of the first pool")
-        scm_delta_bytes = self.ranks_size * self.max_scm_metadata_bytes + self.delta_bytes
+        scm_delta_bytes = self.ranks_count * self.max_scm_metadata_bytes + self.delta_bytes
         self.assertLessEqual(
             abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
             "Invalid SCM size: want={}, got={}, delta={}".format(
                 tier_bytes[0][0], tier_bytes[1][0], self.delta_bytes))
-        smd_delta_bytes = self.ranks_size * max(1, self.engine_target_size - 1)
+        smd_delta_bytes = self.ranks_count * max(1, self.engine_target_size - 1)
         smd_delta_bytes *= self.smd_cluster_bytes
         smd_delta_bytes += self.delta_bytes
         self.assertLessEqual(

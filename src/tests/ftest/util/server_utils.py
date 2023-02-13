@@ -420,9 +420,6 @@ class DaosServerManager(SubprocessManager):
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
 
-        # Sanity check for md on ssd enablement
-        self.search_log("MD on SSD")
-
     def get_detected_engine_count(self, sub_process):
         """Get the number of detected joined engines.
 
@@ -1139,9 +1136,9 @@ class DaosServerManager(SubprocessManager):
 
         # Get a list of engine pids from all of the hosts
         host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine")
+        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
         for data in result.output:
-            if data.returncode == 0:
+            if data.passed:
                 # Search each individual line of output independently to ensure a pid match
                 for line in data.stdout:
                     match = re.findall(r'(^[0-9]+)', line)
@@ -1159,9 +1156,10 @@ class DaosServerManager(SubprocessManager):
                     file_search.append(".".join([log_file, pid]))
             # Determine which of those log files actually do exist on this host
             # This matches the engine pid to the engine log file name
-            result = run_remote(self.log, host, f"ls -1 {' '.join(file_search)}")
+            command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
+            result = run_remote(self.log, host, command, False)
             for data in result.output:
-                for line in data.stdout if data.returncode == 0 else []:
+                for line in data.stdout:
                     match = re.findall(fr"^({'|'.join(file_search)})", line)
                     if match:
                         host_log_files[host].append(match[0])
@@ -1195,7 +1193,7 @@ class DaosServerManager(SubprocessManager):
             result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
             for data in result.output:
                 if data.returncode == 0:
-                    matches = re.findall(fr'{pattern}', data.stdout)
+                    matches = re.findall(fr'{pattern}', '\n'.join(data.stdout))
                     log_file_matches += len(matches)
             self.log.debug("Found %s matches on %s", log_file_matches, host)
             matches += log_file_matches
