@@ -13,7 +13,7 @@ then
     # used ...
     # COREFILE_DIR="/var/crash/"
     # trying to set corefile repo in current dir
-    COREFILE_DIR="./"
+    COREFILE_DIR=$(pwd)
 else
     COREFILE_DIR="/var/lib/systemd/coredump/"
 fi
@@ -27,5 +27,11 @@ for i in $COREFILE_DIR/core* ; do
     ls -ltr "$i"
     file "$i"
 done
+
+for i in $(sudo find / -type f -name core.*) ; do
+    ls -ltr "$i"
+    file "$i"
+done
+
 echo ::endgroup::
 
