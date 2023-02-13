@@ -15,7 +15,7 @@ def scons():
 
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+#    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
     denv = env.Clone()
 

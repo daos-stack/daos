@@ -135,6 +135,7 @@ struct dfuse_readdir_c {
 	uint64_t    drc_magic;
 
 	struct stat drc_stbuf;
+	d_list_t   *drc_rlink;
 	off_t       drc_offset;
 	off_t       drc_next_offset;
 	/* Name of this entry */

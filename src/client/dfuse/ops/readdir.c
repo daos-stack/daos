@@ -151,6 +151,8 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_ASSERT(drc->drc_magic == DRC_MAGIC);
 		drc->drc_magic = DRC_MAGIC - 1;
+		if (drc->drc_rlink)
+			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
@@ -181,14 +183,6 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
-		entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
-		if (S_ISDIR(ie->ie_stat.st_mode))
-			entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
-		else
-			entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
-	}
-
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs    = parent->ie_dfs;
 
@@ -202,9 +196,6 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 		entry->attr.st_ino  = ie->ie_stat.st_ino;
 		ie->ie_root         = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 	}
-
-	entry->generation = 1;
-	entry->ino        = entry->attr.st_ino;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -252,6 +243,21 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 		dfuse_ie_close(fs_handle, ie);
 out:
 	return rc;
+}
+
+static void
+set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
+{
+	entry->generation = 1;
+	entry->ino        = entry->attr.st_ino;
+
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
+		entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
+		if (S_ISDIR(ie->ie_stat.st_mode))
+			entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+		else
+			entry->entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+	}
 }
 
 static inline void
@@ -395,8 +401,26 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			DFUSE_TRA_DEBUG(oh, "drc %p prev %p next %p", drc, drc->drc_list.prev,
 					drc->drc_list.next);
 
-			written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
-				      drc->drc_name, &drc->drc_stbuf, drc->drc_next_offset);
+			if (plus) {
+				struct fuse_entry_param   entry = {0};
+				struct dfuse_inode_entry *ie;
+
+				entry.attr = drc->drc_stbuf;
+
+				d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+				ie = container_of(drc->drc_rlink, struct dfuse_inode_entry, ie_htl);
+
+				set_entry_params(&entry, ie);
+
+				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
+					       drc->drc_name, &entry, drc->drc_next_offset);
+				if (written > size - buff_offset)
+					d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
+
+			} else {
+				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
+					      drc->drc_name, &drc->drc_stbuf, drc->drc_next_offset);
+			}
 
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
@@ -572,8 +596,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			if (plus) {
 				struct fuse_entry_param entry = {0};
+				struct dfuse_inode_entry *ie;
 				d_list_t               *rlink;
 
+				/* TODO: Do timeouts need to be set here? */
 				entry.attr = *stbuf;
 
 				rc = create_entry(fs_handle, oh->doh_ie, &entry, obj, dre->dre_name,
@@ -581,10 +607,25 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				if (rc != 0)
 					D_GOTO(reply, rc);
 
+				ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+				/* If saving this in the cache then take an extra ref for the
+				 * entry on the list, as well as saving rlink
+				 */
+				if (drc) {
+					d_hash_rec_addref(&fs_handle->dpi_iet, rlink);
+					drc->drc_rlink = rlink;
+				}
+
+				set_entry_params(&entry, ie);
+
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
-				if (written > size - buff_offset)
+				if (written > size - buff_offset) {
 					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+					if (drc)
+						d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+				}
 			} else {
 				dfs_release(obj);
 

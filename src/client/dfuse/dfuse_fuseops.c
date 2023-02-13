@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,8 +88,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
-#if 0
 	conn->want |= FUSE_CAP_READDIRPLUS;
+#if 0
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 #endif
 
