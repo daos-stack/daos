@@ -193,6 +193,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
 			rc = 0;
 		}
+		ie->ie_root = true;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -449,7 +450,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 					ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-					if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+					if (ie->ie_root) {
 						entry.attr = ie->ie_stat;
 					} else {
 						entry.attr = stbuf;
@@ -655,7 +656,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 				ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-				if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+				if (ie->ie_root) {
 					entry.attr = ie->ie_stat;
 				} else {
 					entry.attr = stbuf;
