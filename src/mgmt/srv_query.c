@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -365,6 +365,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NEW;
 		else
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
+
+		resp->devices[i]->role_bits = dev_info->bdi_dev_roles;
 
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);

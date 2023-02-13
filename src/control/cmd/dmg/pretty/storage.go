@@ -196,9 +196,14 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n", dev.UUID, dev.TrAddr); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw), "Targets:%+v Rank:%d State:%s LED:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.LedState); err != nil {
 
+	var hasSysXS string
+	if dev.HasSysXS {
+		hasSysXS = "SysXS "
+	}
+	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw),
+		"Roles:%s %sTargets:%+v Rank:%d State:%s LED:%s\n", dev.Roles.String(), hasSysXS,
+		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.LedState); err != nil {
 		return err
 	}
 

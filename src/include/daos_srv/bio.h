@@ -354,6 +354,7 @@ struct bio_dev_info {
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
 	uint32_t		bdi_dev_type;	/* reserved */
+	uint32_t		bdi_dev_roles;	/* reserved */
 };
 
 static inline void
