@@ -1683,8 +1683,8 @@ migrate_one_ult(void *arg)
 	while (tls->mpt_inflight_size + data_size >=
 	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
 	       && !tls->mpt_fini) {
-		D_INFO("mrone %p wait "DF_U64"/"DF_U64"\n", mrone, tls->mpt_inflight_size,
-			tls->mpt_inflight_max_size);
+		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
