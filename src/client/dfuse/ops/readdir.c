@@ -422,7 +422,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					/* Handle the case where the cache was populated by
 					 * a readdir call but is being read by a readdirplus
 					 * call so the extra data needs to be loaded by the
-					 * second reader, not the first
+					 * second reader, not the first.
+					 *
+					 * TODO: This will set cache times but will not account
+					 * for time elapsed since the cache was populated.
 					 */
 
 					rc = dfs_lookupx(
@@ -685,6 +688,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
 					      dre->dre_name, &stbuf, dre->dre_next_offset);
+
+				if (drc) {
+					drc->drc_stbuf.st_mode = stbuf.st_mode;
+					drc->drc_stbuf.st_ino  = stbuf.st_ino;
+				}
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full, rolling back");
