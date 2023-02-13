@@ -60,8 +60,8 @@ jobs:
              sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
              sudo apt-get update
              sudo apt-get install gdb
-             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-                        --env COMPILER --env DEPS_JOBS --user root:root build-image
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
