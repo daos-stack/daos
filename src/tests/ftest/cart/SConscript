@@ -1,6 +1,5 @@
-#!python
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -24,16 +23,14 @@ IV_TESTS = ['iv_client.c', 'iv_server.c']
 # CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 SWIM_TESTS = ['test_swim.c', 'test_swim_net.c', 'test_swim_emu.c']
 HLC_TESTS = ['test_hlc_net.c']
-TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
-                       'no_pmix_group_version.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c', 'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
 
 
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs')
-    Import('cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     ##############################
     # Create test programs
@@ -43,7 +40,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     tenv.AppendUnique(LIBS=['daos', 'daos_common'])
     tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
-    prereqs.require(tenv, 'crypto', 'mercury')
+    tenv.require('crypto', 'mercury', 'protobufc')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
