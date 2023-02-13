@@ -41,13 +41,14 @@ class HarnessCoreFilesTest(TestWithServers):
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
+        command = 'sudo /bin/bash -c \'' + open('scripts/get_core_file_pattern.sh').read() + '\''
         try:
-            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
+            results = run_local(self.log, command, check=True)
         except RunException:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
-        core_file = "{}/core.gdb.harness.advanced".format(core_path)
 
+        core_file = "{}/core.gdb.harness.advanced".format(core_path)
         self.log.debug("Creating %s", core_file)
         try:
             with open(core_file, "w", encoding="utf-8") as local_core_file:

@@ -2,6 +2,8 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
+%define coredump_conf 50-daos_server.conf
+%define limits_conf 80-daos.conf
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
@@ -15,7 +17,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -323,13 +325,22 @@ mv test.cov{,-build}
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
+# ld configuration
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+# sysctl changes
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
+# systemd units
 mkdir -p %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
+# systemd-coredump overrides
+mkdir -p %{buildroot}/usr/lib/systemd/coredump.conf.d/
+install -m 644 utils/rpms/%{coredump_conf} %{buildroot}/usr/lib/systemd/coredump.conf.d/
+# limits
+mkdir -p %{buildroot}/etc/security/limits.d/
+install -m 644 utils/rpms/%{limits_conf} %{buildroot}/etc/security/limits.d/
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
@@ -431,6 +442,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
+/usr/lib/systemd/coredump.conf.d/*
+%config(noreplace) /etc/security/limits.d/*
 
 %files admin
 %doc README.md
@@ -468,6 +481,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
+/usr/lib/systemd/coredump.conf.d/*
+%config(noreplace) /etc/security/limits.d/*
 
 %files client-tests
 %doc README.md
@@ -552,6 +567,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 24 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-7
+- Install a systemd-coredump configuration file to allow for 64GB
+  core files
+- Set /etc/security/limits.d/ and core_pattern to allow core dumps
+  to be created
+
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556
 

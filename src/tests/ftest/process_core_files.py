@@ -252,7 +252,8 @@ class CoreFileProcessing():
                          "python36", "openmpi3", "gcc"])
                 elif self.is_el() and self.distro_info.version == "8":
                     dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
+                        ["--enablerepo=*-debuginfo", "libpmemobj", "libpmem", "libgcc", "python3",
+                         "openmpi", "gcc"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
@@ -346,7 +347,7 @@ class CoreFileProcessing():
         """
         package_info = None
         try:
-            # Eventually use python libraries for this rather than exec()ing out to rpm
+            # TODO: use python libraries for this rather than exec()ing out to rpm
             output = run_local(
                 self.log,
                 " ".join(
@@ -384,6 +385,10 @@ class CoreFileProcessing():
             self.log.error("Unable to find local core file pattern")
             self.log.debug("Stacktrace", exc_info=True)
             return 1
+        if results.stdout.startswith('|'):
+            # can't find files to remove from |'d to core processors, such as systemd-coredump
+            # but the handling of those should be filtering out gdb core files for us
+            return 0
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
 
         self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
