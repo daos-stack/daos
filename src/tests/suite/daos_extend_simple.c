@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
+#include <daos_fs.h>
 
 #define KEY_NR		10
 #define OBJ_NR		10
@@ -221,6 +222,138 @@ extend_objects(void **state)
 	}
 }
 
+static void
+extend_read_check(dfs_t *dfs_mt, dfs_obj_t *dir)
+{
+	char		*buf = NULL;
+	char		*verify_buf = NULL;
+	daos_size_t	buf_size = 512 * 1024;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	d_iov_t		verify_iov;
+	int		i;
+
+	buf = malloc(buf_size);
+	verify_buf = malloc(buf_size);
+	assert_non_null(buf);
+	assert_non_null(verify_buf);
+	d_iov_set(&iov, buf, buf_size);
+	d_iov_set(&verify_iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+
+	for (i = 0; i < 20; i++) {
+		char filename[32];
+		daos_size_t read_size = buf_size;
+		dfs_obj_t *obj;
+		int rc;
+
+		sprintf(filename, "file%d", i);
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR, OC_EC_2P1GX, 1048576, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		memset(verify_buf, 'a' + i, buf_size);
+		rc = dfs_read(dfs_mt, obj, &sgl, 0, &read_size, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal((int)read_size, buf_size);
+		assert_memory_equal(buf, verify_buf, read_size);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+	free(buf);
+	free(verify_buf);
+}
+
+static void
+extend_write(dfs_t *dfs_mt, dfs_obj_t *dir)
+{
+	char		*buf = NULL;
+	daos_size_t	buf_size = 512 * 1024;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	int		i;
+
+	buf = malloc(buf_size);
+	assert_non_null(buf);
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+
+	for (i = 0; i < 20; i++) {
+		char filename[32];
+		dfs_obj_t *obj;
+		int rc;
+
+		sprintf(filename, "file%d", i);
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_EC_2P1GX, 1048576, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		memset(buf, 'a' + i, buf_size);
+		rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+	free(buf);
+}
+
+void
+dfs_extend_fail_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		str[37];
+	dfs_attr_t attr = {};
+	int		rc;
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_EC_2P1GX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	extend_write(dfs_mt, dir);
+	/* extend failure */
+	print_message("first extend will fail then exclude\n");
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+	extend_single_pool_rank(arg, 3);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	extend_read_check(dfs_mt, dir);
+
+	/* retry extend */
+	print_message("retry extend\n");
+	arg->no_rebuild_version_change = 1;
+	extend_single_pool_rank(arg, 3);
+	arg->no_rebuild_version_change = 0;
+	extend_read_check(dfs_mt, dir);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 int
 extend_small_sub_setup(void **state)
 {
@@ -250,6 +383,8 @@ static const struct CMUnitTest extend_tests[] = {
 	 extend_large_rec, extend_small_sub_setup, test_teardown},
 	{"EXTEND5: extend multiple objects",
 	 extend_objects, extend_small_sub_setup, test_teardown},
+	{"EXTEND6: extend failure cancel and retry",
+	 dfs_extend_fail_retry, extend_small_sub_setup, test_teardown},
 };
 
 int
