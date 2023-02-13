@@ -148,7 +148,7 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
-        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_1_1_7\"+g" ${NVME_CONF}
+        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
@@ -227,6 +227,7 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_common"
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test_bmem"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"

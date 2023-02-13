@@ -166,7 +166,7 @@ struct ilog_entry {
 	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 408
+#define ILOG_PRIV_SIZE 600
 /* Information about ilog entries */
 struct ilog_info {
 	/** Status of ilog entry */
