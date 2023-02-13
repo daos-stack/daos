@@ -1174,6 +1174,7 @@ eq_ut_setup(void **state)
 	int rc;
 
 	setenv("OFI_INTERFACE", "lo", 1);
+	setenv("D_PROVIDER", "ofi+tcp", 1);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
