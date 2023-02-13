@@ -36,6 +36,6 @@ server_config:
 
 pool:
   control_method: dmg
-  size: 60%
+  size: 0.3%
   quantity: 200
   set_logmasks: False
