@@ -133,12 +133,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
-        result = DaosServerCommandRunner().scm_prepare(
+        result = DaosServerCommand().scm_prepare(
             scm_ns_per_socket=engines_per_socket, force=True)
         if 0 not in result or len(result) > 0:
             self.fail(
-                "#({0}.B){1} failed, please make sure the server equipped with {2} PMem "
-                "modules.".format(step, cmd, engines_per_socket))
+                "#({0}.B)daos_server scm_prepare failed, please make sure the server equipped "
+                "with {1} PMem modules.".format(step, engines_per_socket))
 
     def ping_verify(self, host, expect_pass=True):
         ping_timeout = 600
