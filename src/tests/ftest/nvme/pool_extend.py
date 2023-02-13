@@ -54,7 +54,7 @@ class NvmePoolExtend(OSAUtils):
         # Create the pools
         pools = []
         for index in range(0, num_pool):
-            pools.append(self.get_pool(namespace="/run/pool_qty_{}".format(num_pool),
+            pools.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
                          properties="reclaim:disabled"))
 
         # On each pool (max 3), extend the ranks
