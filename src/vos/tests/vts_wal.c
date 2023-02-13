@@ -46,7 +46,7 @@ struct io_test_flag {
 
 static struct io_test_flag io_test_flags[] = {
 	{ .tf_str = "default", .tf_bits = 0, },
-	{ .tf_str = "ZC", .tf_bits = TF_ZERO_COPY, },
+	{ .tf_str = "ZC", .tf_bits = TF_ZERO_COPY, }, /* atomic_copy */
 	{ .tf_str = "extent", .tf_bits = TF_REC_EXT, },
 	{ .tf_str = "ZC + extent", .tf_bits = TF_ZERO_COPY | TF_REC_EXT, },
 	{ .tf_str = NULL, },
@@ -332,23 +332,38 @@ wal_tst_01(void **state)
 static void
 wal_pool_refill(struct vos_test_ctx *tcx)
 {
-	daos_handle_t	poh, coh;
-	int		rc;
+	daos_handle_t		poh, coh;
+	vos_pool_info_t		pool_info1 = { 0 }, pool_info2 = { 0 };
+	int			rc;
 
 	rc = vos_cont_close(tcx->tc_co_hdl);
 	assert_rc_equal(rc, 0);
 	tcx->tc_step = TCX_CO_CREATE;
-
 	poh = tcx->tc_po_hdl;
+
+	/* Query pool usage */
+	rc = vos_pool_query(poh, &pool_info1);
+	assert_rc_equal(rc, 0);
+
+	/* Close pool: Flush meta & WAL header, close meta & WAL blobs */
 	rc = vos_pool_close(poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_step = TCX_NONE;
 
+	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	poh = DAOS_HDL_INVAL;
 	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_po_hdl = poh;
 	tcx->tc_step = TCX_CO_CREATE;
+
+	/* Query pool info */
+	rc = vos_pool_query(poh, &pool_info2);
+	assert_rc_equal(rc, 0);
+
+	/* Compare pool info */
+	rc = compare_pool_info(&pool_info1, &pool_info2);
+	assert_rc_equal(rc, 0);
 
 	rc = vos_cont_open(poh, tcx->tc_co_uuid, &coh);
 	assert_rc_equal(rc, 0);
@@ -358,11 +373,10 @@ wal_pool_refill(struct vos_test_ctx *tcx)
 
 /* Basic I/O test */
 static void
-wal_io_verify(void **state)
+wal_kv_basic(void **state)
 {
 	struct io_test_args	*arg = *state;
 	daos_unit_oid_t		 oid;
-	vos_pool_info_t		 pool_info1 = { 0 }, pool_info2 = { 0 };
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
 	char			 akey_sv_s[UPDATE_AKEY_SIZE] = { 0 };
 	char			 akey_ev_s[UPDATE_AKEY_SIZE] = { 0 };
@@ -373,7 +387,7 @@ wal_io_verify(void **state)
 	char			*buf_s[2], *buf_l[2];
 	char			*buf_v;
 	unsigned int		 small_sz = 16, large_sz = 8192;
-	int			 i, rc;
+	int			 i;
 
 	oid = dts_unit_oid_gen(0, 0);
 
@@ -404,20 +418,8 @@ wal_io_verify(void **state)
 	update_value(arg, oid, epoch++, 0, dkey, akey_sv_l, DAOS_IOD_SINGLE, large_sz,
 		     &recx, buf_l[1]);
 
-	/* Qeury pool usage */
-	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info1);
-	assert_rc_equal(rc, 0);
-
 	/* Re-open pool and repaly WAL */
 	wal_pool_refill(&arg->ctx);
-
-	/* Qeury pool usage after replay */
-	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info2);
-	assert_rc_equal(rc, 0);
-
-	/* Compare pool info before and after replay */
-	rc = compare_pool_info(&pool_info1, &pool_info2);
-	assert_rc_equal(rc, 0);
 
 	/* Verify all values */
 	epoch = epc_lo;
@@ -441,6 +443,83 @@ wal_io_verify(void **state)
 		D_FREE(buf_s[i]);
 		D_FREE(buf_l[i]);
 	}
+	D_FREE(buf_v);
+}
+
+static void
+wal_kv_large(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct vos_test_ctx	*tcx = &arg->ctx;
+	struct umem_instance	*umm;
+	daos_unit_oid_t		 oid;
+	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char			 akey_sv[4][UPDATE_AKEY_SIZE] = { 0 };
+	char			 akey_ev[4][UPDATE_AKEY_SIZE] = { 0 };
+	daos_epoch_t		 epc_lo = 100, epoch;
+	daos_recx_t		 recx = {.rx_idx = 0, .rx_nr = 1};
+	char			*bufs[4][2];
+	char			*buf_v;
+	unsigned int		 sizes[4] = { 1024, 2048, 4096, 8192 };
+	unsigned int		 large_sz = 8192;
+	int			 i, j, rc;
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+
+	for (i = 0; i < 4; i++) {
+		dts_key_gen(akey_sv[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
+		dts_key_gen(akey_ev[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+		for (j = 0; j < 2; j++) {
+			D_ALLOC(bufs[i][j], sizes[i]);
+			assert_non_null(bufs[i][j]);
+		}
+	}
+	D_ALLOC(buf_v, large_sz);
+	assert_non_null(buf_v);
+
+	/* Update small EV/SV, large EV/SV (located on data blob) */
+	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
+	rc = umem_tx_begin(umm, vos_txd_get());
+	assert_rc_equal(rc, 0);
+
+	epoch = epc_lo;
+	oid = arg->oid;
+	for (i = 0; i < 4; i++) {
+		update_value(arg, oid, epoch++, 0, dkey, akey_ev[i], DAOS_IOD_ARRAY,
+			     sizes[i], &recx, bufs[i][0]);
+		update_value(arg, oid, epoch++, 0, dkey, akey_sv[i], DAOS_IOD_SINGLE,
+			     sizes[i], &recx, bufs[i][1]);
+	}
+
+	rc = umem_tx_end(umm, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Re-open pool and repaly WAL */
+	wal_pool_refill(&arg->ctx);
+
+	/* Verify all values */
+	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
+	rc = umem_tx_begin(umm, vos_txd_get());
+	assert_rc_equal(rc, 0);
+
+	epoch = epc_lo;
+	for (i = 0; i < 4; i++) {
+		fetch_value(arg, oid, epoch++, 0, dkey, akey_ev[i], DAOS_IOD_ARRAY,
+			    sizes[i], &recx, buf_v);
+		assert_memory_equal(buf_v, bufs[i][0], sizes[i]);
+
+		fetch_value(arg, oid, epoch++, 0, dkey, akey_sv[i], DAOS_IOD_SINGLE,
+			    sizes[i], &recx, buf_v);
+		assert_memory_equal(buf_v, bufs[i][1], sizes[i]);
+	}
+
+	rc = umem_tx_end(umm, 0);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 4; i++)
+		for (j = 0; j < 2; j++)
+			D_FREE(bufs[i][j]);
 	D_FREE(buf_v);
 }
 
@@ -1034,21 +1113,26 @@ static const struct CMUnitTest wal_tests[] = {
 	  wal_tst_01, NULL, NULL },
 };
 
+static const struct CMUnitTest wal_kv_basic_tests[] = {
+	{ "WAL10: Basic SV/EV small/large update/fetch/verify",
+	  wal_kv_basic, NULL, NULL },
+	{ "WAL11: Basic SV/EV large TX update/fetch/verify",
+	  wal_kv_large, NULL, NULL },
+};
+
 static const struct CMUnitTest wal_io_tests[] = {
-	{ "WAL10: Basic SV/EV small/large udate/fetch/verify",
-	  wal_io_verify, NULL, NULL },
-	{ "WAL11: Update/fetch/verify test",
+	{ "WAL20: Update/fetch/verify test",
 	  wal_io_multiple_refills, NULL, NULL },
-	{ "WAL12: 10K update/fetch/verify test",
+	{ "WAL21: 10K update/fetch/verify test",
 	  wal_io_multiple_updates, NULL, NULL },
-	{ "WAL13: Objects Update(overwrite)/fetch test",
+	{ "WAL22: Objects Update(overwrite)/fetch test",
 	  wal_io_multiple_objects_ovwr, NULL, NULL },
-	{ "WAL14: Objects Update/fetch test",
+	{ "WAL23: Objects Update/fetch test",
 	  wal_io_multiple_objects, NULL, NULL },
 };
 
 static const struct CMUnitTest wal_io_int_tests[] = {
-	{ "WAL20: Key query punch with subsequent update",
+	{ "WAL24: Key query punch with subsequent update",
 	  wal_io_query_key_punch_update, NULL, NULL },
 };
 
@@ -1058,12 +1142,10 @@ run_wal_tests(const char *cfg)
 	char		 test_name[DTS_CFG_MAX];
 	const char	*akey = "hashed";
 	const char	*dkey = "hashed";
-	unsigned int	 val = 0;
 	int		 i, rc;
 
-	d_getenv_int("DAOS_MD_ON_SSD_MODE", &val);
-	if (val == 0) {
-		print_message("DAOS_MD_ON_SSD_MODE isn't enabled, skip all tests.\n");
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		print_message("MD_ON_SSD mode isn't enabled, skip all tests.\n");
 		return 0;
 	}
 
@@ -1071,6 +1153,12 @@ run_wal_tests(const char *cfg)
 	D_PRINT("Running %s\n", test_name);
 	rc = cmocka_run_group_tests_name(test_name, wal_tests, setup_wal_test,
 					   teardown_wal_test);
+
+	dts_create_config(test_name, "WAL Basic SV/EV update/fetch/verify tests %s", cfg);
+	D_PRINT("Running %s\n", test_name);
+	otype = 0;
+	rc += cmocka_run_group_tests_name(test_name, wal_kv_basic_tests,
+						  setup_wal_io, teardown_io);
 
 	for (i = 0; i < (sizeof(type_list) / sizeof(int)); i++) {
 		otype = type_list[i];
