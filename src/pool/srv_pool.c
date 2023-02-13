@@ -5732,12 +5732,14 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
-		/* Extend the current pool map */
-		rc = pool_map_extend(map, map_version, map_buf);
-		pool_buf_free(map_buf);
-		map_buf = NULL;
-		if (rc != 0)
-			D_GOTO(out_map, rc);
+		if (map_buf != NULL) {
+			/* Extend the current pool map */
+			rc = pool_map_extend(map, map_version, map_buf);
+			pool_buf_free(map_buf);
+			map_buf = NULL;
+			if (rc != 0)
+				D_GOTO(out_map, rc);
+		}
 
 		/* Get a list of all the targets being added */
 		rc = pool_map_find_targets_on_ranks(map, extend_rank_list, tgts);
@@ -5983,7 +5985,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	switch (opc) {
 	case POOL_EXCLUDE:
-		op = RB_OP_FAIL;
+		op = RB_OP_EXCLUDE;
 		break;
 	case POOL_DRAIN:
 		op = RB_OP_DRAIN;

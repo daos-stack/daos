@@ -435,7 +435,7 @@ find_rebuild_shards(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 
 retry:
 	switch (rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 		rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
 					 *tgts, *shards, max_shards_size);
 		break;
@@ -701,7 +701,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 	case RB_OP_DRAIN:
 	case RB_OP_REINT:
 	case RB_OP_EXTEND:
