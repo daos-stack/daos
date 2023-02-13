@@ -25,7 +25,7 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
 		struct duns_attr_t dattr = {};
 
-		if (inode->ie_root) {
+		if (inode->ie_stat.st_ino == inode->ie_dfs->dfs_ino) {
 			DFUSE_TRA_WARNING(inode, "Attempt to set duns attr on container root");
 			D_GOTO(err, rc = EINVAL);
 		}

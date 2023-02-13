@@ -162,8 +162,8 @@ unlock:
 
 static int
 create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *parent,
-	     struct fuse_entry_param *entry, dfs_obj_t *obj, char *name, char *attr,
-	     daos_size_t attr_len, d_list_t **rlinkp)
+	     struct stat *stbuf, dfs_obj_t *obj, char *name, char *attr, daos_size_t attr_len,
+	     d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry *ie;
 	d_list_t                 *rlink;
@@ -179,7 +179,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	dfuse_ie_init(ie);
 	ie->ie_obj  = obj;
-	ie->ie_stat = entry->attr;
+	ie->ie_stat = *stbuf;
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
@@ -187,20 +187,18 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 	ie->ie_dfs    = parent->ie_dfs;
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
+		/* Check for UNS entry point, this will allocate a new inode number if successful */
 		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
 			rc = 0;
 		}
-		entry->attr.st_mode = ie->ie_stat.st_mode;
-		entry->attr.st_ino  = ie->ie_stat.st_ino;
-		ie->ie_root         = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry->ino, ie->ie_stat.st_mode);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", stbuf->st_ino, ie->ie_stat.st_mode);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
@@ -217,8 +215,8 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_DEBUG(inode, "Maybe updating parent inode %#lx dfs_ino %#lx", entry->ino,
-				ie->ie_dfs->dfs_ino);
+		DFUSE_TRA_DEBUG(inode, "Maybe updating parent inode %#lx dfs_ino %#lx",
+				stbuf->st_ino, ie->ie_dfs->dfs_ino);
 
 		/** update the chunk size and oclass of inode entry */
 		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
@@ -405,10 +403,61 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				struct fuse_entry_param   entry = {0};
 				struct dfuse_inode_entry *ie;
 
-				entry.attr = drc->drc_stbuf;
+				if (drc->drc_rlink) {
+					entry.attr = drc->drc_stbuf;
 
-				d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
-				ie = container_of(drc->drc_rlink, struct dfuse_inode_entry, ie_htl);
+					d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+					ie = container_of(drc->drc_rlink, struct dfuse_inode_entry,
+							  ie_htl);
+				} else {
+					char          out[DUNS_MAX_XATTR_LEN];
+					char         *outp = &out[0];
+					daos_size_t   attr_len;
+					struct stat   stbuf = {0};
+					dfs_obj_t    *obj;
+					d_list_t     *rlink;
+					daos_obj_id_t oid;
+
+					/* Handle the case where the cache was populated by
+					 * a readdir call but is being read by a readdirplus
+					 * call so the extra data needs to be loaded by the
+					 * second reader, not the first
+					 */
+
+					rc = dfs_lookupx(
+					    oh->doh_dfs, oh->doh_ie->ie_obj, drc->drc_name,
+					    O_RDWR | O_NOFOLLOW, &obj, &stbuf.st_mode, &stbuf, 1,
+					    &duns_xattr_name, (void **)&outp, &attr_len);
+
+					if (rc != 0) {
+						DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+						D_GOTO(reply, 0);
+					}
+					/* Check oid is the same! */
+
+					dfs_obj2id(obj, &oid);
+
+					dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid,
+							    &stbuf.st_ino);
+
+					rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj,
+							  drc->drc_name, out, attr_len, &rlink);
+					if (rc != 0) {
+						/* TODO: dfs_release() */
+						D_GOTO(reply, rc);
+					}
+
+					ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+					if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+						entry.attr = ie->ie_stat;
+					} else {
+						entry.attr = stbuf;
+					}
+					drc->drc_stbuf = entry.attr;
+					d_hash_rec_addref(&fs_handle->dpi_iet, rlink);
+					drc->drc_rlink = rlink;
+				}
 
 				set_entry_params(&entry, ie);
 
@@ -544,8 +593,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		/* Populate dir */
 		for (i = hdl->drh_dre_index; i < hdl->drh_dre_last_index; i++) {
 			struct dfuse_readdir_entry *dre    = &hdl->drh_dre[i];
-			struct stat                 _stbuf = {0};
-			struct stat                *stbuf  = &_stbuf;
+			struct stat                 stbuf  = {0};
 			daos_obj_id_t               oid;
 			dfs_obj_t                  *obj;
 			size_t                      written;
@@ -560,7 +608,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					D_GOTO(reply, rc = ENOMEM);
 				}
 				drc->drc_magic = DRC_MAGIC;
-				stbuf          = &drc->drc_stbuf;
 				strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
 				drc->drc_offset      = offset;
 				drc->drc_next_offset = dre->dre_next_offset;
@@ -576,11 +623,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
-						 O_RDWR | O_NOFOLLOW, &obj, &stbuf->st_mode, stbuf,
+						 O_RDWR | O_NOFOLLOW, &obj, &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name, (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
-						    O_RDONLY | O_NOFOLLOW, &obj, &stbuf->st_mode,
+						    O_RDONLY | O_NOFOLLOW, &obj, &stbuf.st_mode,
 						    NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
@@ -592,27 +639,33 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			dfs_obj2id(obj, &oid);
 
-			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf->st_ino);
+			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
 
 			if (plus) {
 				struct fuse_entry_param entry = {0};
 				struct dfuse_inode_entry *ie;
 				d_list_t               *rlink;
 
-				/* TODO: Do timeouts need to be set here? */
-				entry.attr = *stbuf;
-
-				rc = create_entry(fs_handle, oh->doh_ie, &entry, obj, dre->dre_name,
+				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
 						  out, attr_len, &rlink);
-				if (rc != 0)
+				if (rc != 0) {
+					/* TODO: dfs_release() */
 					D_GOTO(reply, rc);
+				}
 
 				ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+				if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+					entry.attr = ie->ie_stat;
+				} else {
+					entry.attr = stbuf;
+				}
 
 				/* If saving this in the cache then take an extra ref for the
 				 * entry on the list, as well as saving rlink
 				 */
 				if (drc) {
+					drc->drc_stbuf = entry.attr;
 					d_hash_rec_addref(&fs_handle->dpi_iet, rlink);
 					drc->drc_rlink = rlink;
 				}
@@ -630,7 +683,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				dfs_release(obj);
 
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
-					      dre->dre_name, stbuf, dre->dre_next_offset);
+					      dre->dre_name, &stbuf, dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full, rolling back");

@@ -1028,7 +1028,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 		}
 	}
 
-	if (ie->ie_root) {
+	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 		struct dfuse_cont *dfc = ie->ie_dfs;
 		struct dfuse_pool *dfp = dfc->dfs_dfp;
 
@@ -1167,8 +1167,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
-	ie->ie_dfs = dfs;
-	ie->ie_root = true;
+	ie->ie_dfs    = dfs;
 	ie->ie_parent = 1;
 	dfuse_ie_init(ie);
 

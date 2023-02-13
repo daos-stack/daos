@@ -27,8 +27,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
-
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
@@ -145,9 +143,8 @@ out_err:
 
 /* Check for and set a unified namespace entry point.
  *
- * This function will check for and configure a inode as
- * a new entry point of possible, and modify the inode
- * as required.
+ * This function will check for and configure a inode as a new entry point of possible, and modify
+ * the inode as required.
  *
  * On failure it will return error.
  *
