@@ -389,6 +389,16 @@ public class DaosFile {
             fileOffset, len);
   }
 
+  /**
+   * same as {@link #read(ByteBuf, long, long, long)}, but asynchronously. See {@link IODfsDesc} for more
+   * parameters for async read.
+   *
+   * @param desc    desc for request, buffer and event
+   * @param offset  file offset
+   * @param len     expected length in bytes read from file to buffer
+   * @throws IOException
+   * {@link DaosIOException}
+   */
   public void readAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
     desc.encode(offset, len);
@@ -422,6 +432,15 @@ public class DaosFile {
             fileOffset, len);
   }
 
+  /**
+   * same as {@link #write(ByteBuf, long, long, long)}, but asynchronously. See {@link IODfsDesc} for more
+   * parameters for async read.
+   *
+   * @param desc    desc for request, buffer and event
+   * @param offset  file offset
+   * @param len     length in bytes of data to write
+   * @throws IOException
+   */
   public void writeAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
     desc.encode(offset, len);
