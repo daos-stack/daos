@@ -33,6 +33,7 @@ import xattr
 import junit_xml
 import tabulate
 import yaml
+import resource
 
 
 class NLTestFail(Exception):
@@ -4782,6 +4783,9 @@ def main():
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    # set core limit to unlimited
+    setrlimit(RLIMIT_CORE, (-1, -1))
 
     if args.mode:
         mode_list = args.mode

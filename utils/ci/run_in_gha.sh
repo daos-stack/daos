@@ -81,5 +81,6 @@ echo ::group::Setting up daos_server_helper
 echo ::endgroup::
 
 echo ::group::Container copy test
+ulimit -c unlimited
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
