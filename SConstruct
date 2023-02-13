@@ -457,9 +457,6 @@ def scons():
     if os.path.exists(env_script):
         load_local(env_script, deps_env)
 
-    # This used to be set in prereqs so move it here but it may be best to remove entirely.
-    SetOption('implicit_cache', True)
-
     # Perform this check early before loading PreReqs as if this header is missing then we want
     # to exit before building any dependencies.
     if not GetOption('help'):
