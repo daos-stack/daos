@@ -450,7 +450,7 @@ class DaosServerCommand(YamlCommand):
                     helper-log-file (str, optional): log file location for debug from daos_admin.
                     ignore_config (bool, optional): ignore parameters set in config file.
                     socket (str, optional): perform PMem namespace operations on this socket.
-                    scm_ns_per_socket (int, optioanl): num of PMem namespaces to create per socket.
+                    scm_ns_per_socket (int, optional): num of PMem namespaces to create per socket.
                     force (bool, optional): Perform SCM operations without waiting for confirmation.
                 Raises:
                     CommandFailure: if the daos_server scm prepare command fails.

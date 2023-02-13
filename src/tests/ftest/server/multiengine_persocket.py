@@ -171,11 +171,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("===Server %s rebooting... \n", hosts)
 
-        ping_verify(hosts[0], expect_pass=False)
-        foreach host in hosts:
-            ping_verify(host, expect_pass=True)
+        self.ping_verify(hosts[0], expect_pass=False)
+        for host in hosts:
+            self.ping_verify(host, expect_pass=True)
         cmd = "sudo uname"
-        if execute_cluster_cmds(hosts, cmd) > 0:
+        if not run_remote(self.log, hosts, cmd, timeout=600).passed:
             return 1
         self.log.info("===Server %s is up after reboot. \n", hosts)
 
