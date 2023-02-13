@@ -33,7 +33,7 @@ import xattr
 import junit_xml
 import tabulate
 import yaml
-import resource
+from resource import *
 
 
 class NLTestFail(Exception):
