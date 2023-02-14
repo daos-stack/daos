@@ -145,8 +145,9 @@ out_err:
 
 /* Check for and set a unified namespace entry point.
  *
- * This function will check for and configure a inode as a new entry point of possible, and modify
- * the inode as required.
+ * This function will check for and configure a inode as
+ * a new entry point of possible, and modify the inode
+ * as required.
  *
  * On failure it will return error.
  *

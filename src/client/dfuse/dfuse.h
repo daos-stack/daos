@@ -36,7 +36,6 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
-
 	pthread_spinlock_t   di_lock;
 };
 
@@ -595,13 +594,13 @@ struct dfuse_inode_entry {
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
 	 */
-	struct stat              ie_stat;
+	struct stat               ie_stat;
 
-	dfs_obj_t               *ie_obj;
+	dfs_obj_t                *ie_obj;
 
 	/** DAOS object ID of the dfs object.  Used for uniquely identifying files */
 
-	daos_obj_id_t            ie_oid;
+	daos_obj_id_t             ie_oid;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
@@ -609,7 +608,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char                     ie_name[NAME_MAX + 1];
+	char                      ie_name[NAME_MAX + 1];
 
 	/** The parent inode of this entry.
 	 *
@@ -617,34 +616,34 @@ struct dfuse_inode_entry {
 	 * be incorrect at any point after that.  The inode does not hold
 	 * a reference on the parent so the inode may not be valid.
 	 */
-	fuse_ino_t               ie_parent;
+	fuse_ino_t                ie_parent;
 
-	struct dfuse_cont       *ie_dfs;
+	struct dfuse_cont        *ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
 	 * locking.
 	 */
-	d_list_t                 ie_htl;
+	d_list_t                  ie_htl;
 
 	/* Time of last kernel cache update.
 	 */
-	struct timespec          ie_cache_last_update;
+	struct timespec           ie_cache_last_update;
 
 	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t                   ie_start_off;
-	size_t                   ie_end_off;
+	size_t                    ie_start_off;
+	size_t                    ie_end_off;
 
 	/** Reference counting for the inode Used by the hash table callbacks */
-	ATOMIC uint32_t          ie_ref;
+	ATOMIC uint32_t           ie_ref;
 
 	/* Number of open file descriptors for this inode */
-	ATOMIC uint32_t          ie_open_count;
+	ATOMIC uint32_t           ie_open_count;
 
-	ATOMIC uint32_t          ie_open_write_count;
+	ATOMIC uint32_t           ie_open_write_count;
 
 	/* Number of file open file descriptors using IL */
-	ATOMIC uint32_t          ie_il_count;
+	ATOMIC uint32_t           ie_il_count;
 
 	/* Readdir handle, if shared
 	 * TODO: Verify the locking on this, the code will assert on concurrent readdir however we
@@ -653,16 +652,16 @@ struct dfuse_inode_entry {
 	struct dfuse_readdir_hdl *ie_rd_hdl;
 
 	/** Number of active readdir operations */
-	ATOMIC uint32_t          ie_readir_number;
+	ATOMIC uint32_t           ie_readir_number;
 
 	/** file was truncated from 0 to a certain size */
-	bool                     ie_truncated;
+	bool                      ie_truncated;
 
 	/** file is the root of a container */
 	bool                      ie_root;
 
 	/** File has been unlinked from daos */
-	bool                     ie_unlinked;
+	bool                      ie_unlinked;
 };
 
 extern char *duns_xattr_name;

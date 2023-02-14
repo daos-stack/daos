@@ -596,8 +596,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 		/* Populate dir */
 		for (i = hdl->drh_dre_index; i < hdl->drh_dre_last_index; i++) {
-			struct dfuse_readdir_entry *dre    = &hdl->drh_dre[i];
-			struct stat                 stbuf  = {0};
+			struct dfuse_readdir_entry *dre   = &hdl->drh_dre[i];
+			struct stat                 stbuf = {0};
 			daos_obj_id_t               oid;
 			dfs_obj_t                  *obj;
 			size_t                      written;
