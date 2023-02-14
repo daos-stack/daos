@@ -285,7 +285,7 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 		return;
 
 	/* Cap VOS aggregation upper bound to EC aggregation HAE */
-	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundry);
+	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundary);
 }
 
 #define MAX_SNAPSHOT_LOCAL	16

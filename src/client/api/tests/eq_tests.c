@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1195,6 +1195,7 @@ main(int argc, char **argv)
 	d_register_alt_assert(mock_assert);
 
 	setenv("OFI_INTERFACE", "lo", 1);
+	setenv("D_PROVIDER", "ofi+tcp", 1);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
