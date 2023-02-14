@@ -1241,15 +1241,15 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_AGG_BOUNDRY_MOVED))
 		return true;
 
-	/* agg_eph_boundry advanced, possibly cause epoch of EC data recovery
+	/* agg_eph_boundary advanced, possibly cause epoch of EC data recovery
 	 * cannot get corresponding parity/data exts, need to retry the degraded
 	 * fetch from beginning. For ORF_EC_RECOV_SNAP case, need not retry as
-	 * that flag was only set when (snapshot_epoch < sc_ec_agg_eph_boundry).
+	 * that flag was only set when (snapshot_epoch < sc_ec_agg_eph_boundary).
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
 	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
-	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry) {
-		orwo->orw_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundry;
+	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundary) {
+		orwo->orw_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
 		return true;
 	}
 
@@ -1386,7 +1386,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			D_DEBUG(DB_IO, DF_UOID" "DF_X64"<"DF_X64
 				" ec_recov needs redo, "DF_RC".\n",
 				DP_UOID(orw->orw_oid), orw->orw_epoch,
-				ioc->ioc_coc->sc_ec_agg_eph_boundry,
+				ioc->ioc_coc->sc_ec_agg_eph_boundary,
 				DP_RC(rc));
 			goto out;
 		}
@@ -1454,7 +1454,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
 				daos_recx_ep_list_set(parity_list, iods_nr,
-						      ioc->ioc_coc->sc_ec_agg_eph_boundry, 0);
+						      ioc->ioc_coc->sc_ec_agg_eph_boundary, 0);
 				daos_recx_ep_list_merge(parity_list, iods_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = iods_nr;
@@ -1501,7 +1501,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			 * Or, will recovery from max{parity_epoch, vos_epoch_
 			 * boundary}.
 			 */
-			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundry;
+			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
 			if (ioc->ioc_fetch_snap &&
 			    orw->orw_epoch < vos_agg_epoch) {
 				recov_epoch = orw->orw_epoch;

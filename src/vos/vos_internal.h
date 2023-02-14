@@ -914,6 +914,8 @@ struct vos_iterator {
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
+	uint64_t                 it_seq;
+	struct vos_iter_anchors *it_anchors;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
