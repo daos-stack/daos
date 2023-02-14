@@ -55,10 +55,13 @@ A-key: "DFS_CHUNK_SIZE"
 single-value (uint64_t): Default chunk size for files in this container
 
 A-key: "DFS_OBJ_CLASS"
-single-value (uint16_t): Default object class for files in this container
+single-value (uint16_t): Default object class for all objects in this container
 
 A-key: "DFS_DIR_OBJ_CLASS"
 single-value (uint16_t): Default object class for directories in this container
+
+A-key: "DFS_FILE_OBJ_CLASS"
+single-value (uint16_t): Default object class for files in this container
 
 A-key: "DFS_MODE"
 single-value (uint16_t): Consistency mode of this container (Relaxed vs Balanced)
@@ -228,14 +231,14 @@ value can be:
 
 If a hint is set to single, depending on the container redundancy factor, the oclass would be (same
 for files and dirs in this case):
- - S1 if rf == 0
- - RP_2G1 if rf == 1
- - RP_3G1 if rf == 2
+ - S1 if rd\_fac == 0
+ - RP\_2G1 if rd\_fac == 1
+ - RP\_3G1 if rd\_fac == 2
 
 Otherwise if the hint is set to max, for directories, it would be the same as single except the
 group would be X for max sharding (SX, RP_2GX, etc.). For files on the other hand, we use EC for
 redundancy instead of replication in this case (n depends on the number of fault domains in the
 pool):
- - SX if rf == 0
- - EC_nP1GX if rf == 1
- - EC_nP2GX if rf == 2
+ - SX if rd\_fac == 0
+ - EC\_nP1GX if rd\_fac == 1
+ - EC\_nP2GX if rd\_fac == 2

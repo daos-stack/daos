@@ -745,6 +745,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	d_rank_t	rank = 2;
 	int		rank_nr = 1;
 	int		i;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -760,15 +761,17 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+			      arg->group, rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
@@ -814,6 +817,7 @@ rebuild_large_object(void **state)
 	d_rank_t	rank = 2;
 	int		i;
 	int		j;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -830,15 +834,17 @@ rebuild_large_object(void **state)
 	}
 
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
@@ -1211,6 +1217,67 @@ rebuild_with_dfs_open_create_punch(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static int
+rebuild_wait_reset_fail_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	print_message("wait 300 seconds for rebuild/reclaim/retry....");
+	sleep(60);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+
+	return 0;
+}
+
+static void
+rebuild_many_objects_with_failure(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	*oids;
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	D_ALLOC_ARRAY(oids, 8000);
+	for (i = 0; i < 8000; i++) {
+		char buffer[256];
+		daos_recx_t recx;
+		struct ioreq req;
+
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		memset(buffer, 'a', 256);
+		recx.rx_idx = 0;
+		recx.rx_nr = 256;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer, 256, &req);
+
+		ioreq_fini(&req);
+	}
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 50,
+				      0, NULL);
+	}
+
+	arg->rebuild_cb = rebuild_wait_reset_fail_cb;
+
+	rebuild_single_pool_target(arg, 3, -1, false);
+
+	for (i = 0; i < 8000; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	D_FREE(oids);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1255,6 +1322,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
 	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD22: rebuild lot of objects with failure",
+	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
 };
 
 int

@@ -5,9 +5,12 @@
 import os
 import sys
 from os.path import join
+import random
+import string
 import subprocess  # nosec
 
-BUILD_FILES = ['site_scons',
+BUILD_FILES = ['site_scons/prereq_tools',
+               'site_scons/components',
                'utils/build.config',
                'SConstruct',
                '.github/workflows/landing-builds.yml',
@@ -19,14 +22,19 @@ COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
 
 def set_output(key, value):
-    """ Set a key-value pair in GitHub actions metadata"""
+    """Set a key-value pair in GitHub actions metadata"""
+    env_file = os.getenv('GITHUB_OUTPUT')
+    if not env_file:
+        print(f'::set-output name={key}::{value}')
+        return
 
-    print('::set-output name={}::{}'.format(key, value))
+    delim = ''.join(random.choices(string.ascii_uppercase, k=7))  # nosec
+    with open(env_file, 'a') as file:
+        file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
 def main():
     """Parse git history to load caches for GHA"""
-
     # Try and use the right hash key.  For chained PRs on release branches this won't be correct
     # however most of the time it should be right, and the build should still work on cache miss
     # although it will take longer.
@@ -63,12 +71,12 @@ def main():
     if base_distro:
         docker_distro = os.getenv('DOCKER_BASE', base_distro)
 
-        dockerfile = 'utils/docker/Dockerfile.{}'.format(docker_distro)
+        dockerfile = f'utils/docker/Dockerfile.{docker_distro}'
         assert os.path.exists(dockerfile)
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
+        install_script = join('utils', 'scripts', f'install-{install_helper}.sh')
 
         assert os.path.exists(install_script)
         cmd.append(dockerfile)
@@ -94,30 +102,29 @@ def main():
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = 'bc-{}-{}-{}-{}-{}'.format(target_branch,
-                                         base_distro, build_hash, commit_hash, '{hash}')
+        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}-{{hash}}'
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, commit_hash)
+        restore = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}'
         set_output('restore', restore)
 
-        restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
+        restore_prev = 'bc-{target_branch}-{base_distro}-{build_hash}'
         set_output('restore_prev', restore_prev)
 
     else:
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, '{hash}')
+        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{{hash}}'
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
+        restore = f'bc-{target_branch}-{base_distro}-{build_hash}'
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, lines[0])
+            restore_prev = f'bc-{target_branch}-{base_distro}-{lines[0]}'
         else:
-            restore_prev = 'bc-{}-{}-'.format(target_branch, base_distro)
+            restore_prev = f'bc-{target_branch}-{base_distro}-'
         set_output('restore_prev', restore_prev)
 
 

@@ -250,7 +250,7 @@ need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow
 	}
 
 	/* For other cases, let's ignore all future pool map changes for current rebuild. */
-	if (tgt->ta_comp.co_in_ver > allow_version)
+	if (allow_version != 0 && tgt->ta_comp.co_in_ver > allow_version)
 		return true;
 
 	return false;
@@ -287,8 +287,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
 			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
-				DP_OID(md->omd_id),
-				DP_TARGET(spare_tgt),
+				DP_OID(md->omd_id), DP_TARGET(spare_tgt),
 				md->omd_ver);
 			spare_avail = false;
 			goto next_fail;
@@ -300,10 +299,9 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * and try next spare in the placement.
 		 */
 		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq) {
-			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u"
-				" shard f_seq %u\n", spare_tgt->ta_comp.co_id,
-				spare_tgt->ta_comp.co_fseq,
-				f_shard->fs_fseq);
+			D_WARN("spare tgt %u co fs_seq %u shard f_seq %u\n",
+			       spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_fseq,
+			       f_shard->fs_fseq);
 			return; /* try next spare */
 		}
 		/*
@@ -491,7 +489,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
 			new_shards[grp_idx].po_rebuilding = 1;
 
-		if (f_shard->fs_status == PO_COMP_ST_UP)
+		if (f_shard->fs_status == PO_COMP_ST_UP || f_shard->fs_status == PO_COMP_ST_NEW)
 			new_shards[grp_idx].po_reintegrating = 1;
 	}
 
@@ -509,23 +507,3 @@ out:
 	return rc;
 }
 
-bool
-is_pool_adding(struct pool_domain *dom)
-{
-	uint32_t child_nr;
-
-	while (dom->do_children &&
-	       dom->do_comp.co_status != PO_COMP_ST_NEW) {
-		child_nr = dom->do_child_nr;
-		dom = &dom->do_children[child_nr - 1];
-	}
-
-	if (dom->do_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	child_nr = dom->do_target_nr;
-	if (dom->do_targets[child_nr - 1].ta_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	return false;
-}

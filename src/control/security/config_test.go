@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func InsecureTC() *TransportConfig {
@@ -42,6 +44,7 @@ func ServerTC() *TransportConfig {
 			PrivateKeyPath:  "testdata/certs/server.key",
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
@@ -55,6 +58,7 @@ func AgentTC() *TransportConfig {
 			PrivateKeyPath:  "testdata/certs/agent.key",
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
@@ -66,7 +70,7 @@ func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 	if err := os.Chmod(conf.CertificatePath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(conf.PrivateKeyPath, MaxKeyPerm); err != nil {
+	if err := os.Chmod(conf.PrivateKeyPath, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -237,6 +241,62 @@ func TestPublicKey(t *testing.T) {
 		t.Run(tc.testname, func(t *testing.T) {
 			key, err := tc.config.PublicKey()
 			tc.Validate(t, key, err)
+		})
+	}
+}
+
+func TestSecurity_DefaultTransportConfigs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		genTransportConfig func() *TransportConfig
+		expResult          *TransportConfig
+	}{
+		"admin": {
+			genTransportConfig: DefaultClientTransportConfig,
+			expResult: &TransportConfig{
+				CertificateConfig: CertificateConfig{
+					ServerName:      defaultServer,
+					CARootPath:      defaultCACert,
+					CertificatePath: defaultAdminCert,
+					PrivateKeyPath:  defaultAdminKey,
+					maxKeyPerms:     MaxGroupKeyPerm,
+				},
+			},
+		},
+		"agent": {
+			genTransportConfig: DefaultAgentTransportConfig,
+			expResult: &TransportConfig{
+				CertificateConfig: CertificateConfig{
+					ServerName:      defaultServer,
+					CARootPath:      defaultCACert,
+					CertificatePath: defaultAgentCert,
+					PrivateKeyPath:  defaultAgentKey,
+					maxKeyPerms:     MaxUserOnlyKeyPerm,
+				},
+			},
+		},
+		"server": {
+			genTransportConfig: DefaultServerTransportConfig,
+			expResult: &TransportConfig{
+				CertificateConfig: CertificateConfig{
+					ServerName:      defaultServer,
+					CARootPath:      defaultCACert,
+					ClientCertDir:   defaultClientCertDir,
+					CertificatePath: defaultServerCert,
+					PrivateKeyPath:  defaultServerKey,
+					maxKeyPerms:     MaxUserOnlyKeyPerm,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.genTransportConfig()
+
+			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(
+				TransportConfig{},
+				CertificateConfig{},
+			)); diff != "" {
+				t.Fatalf("(want-, got+)\n %s", diff)
+			}
 		})
 	}
 }

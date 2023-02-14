@@ -115,7 +115,7 @@ and the DAOS Server occur over the management network, via the gRPC protocol.
 Management requests can be made to operate over resources local to specific
 storage nodes or to operate over the distributed DAOS system.
 When issuing `dmg` commands that operate over the DAOS system, requests are
-directed to the management service leader which is capable of handling them.
+directed to the management service (MS) leader which is capable of handling them.
 The control API is responsible for working out which `daos_server` instance
 is the MS leader and issuing the request, `dmg` uses the control API.
 The `dmg` tool requires the hostlist of all hosts in the DAOS system to be

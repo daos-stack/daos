@@ -20,6 +20,8 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -82,6 +84,39 @@ func TestControl_PoolDestroy(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
+		"ErrPoolNotFound on first try is not retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
+				},
+			},
+			expErr: system.ErrPoolUUIDNotFound(test.MockPoolUUID()),
+		},
+		"ErrPoolNotFound on retry is treated as success": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TimedOut, nil),
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
 				},
 			},
@@ -392,6 +427,16 @@ func TestControl_PoolCreate(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create DataPlaneNotStarted error is retried": {
+			req: &PoolCreateReq{TotalBytes: 10},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
@@ -1587,11 +1632,13 @@ func TestControl_ListPools(t *testing.T) {
 }
 
 func TestControl_GetMaxPoolSize(t *testing.T) {
+	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
-		ScmBytes  uint64
-		NvmeBytes uint64
-		Error     error
-		Debug     string
+		ScmBytes   uint64
+		NvmeBytes  uint64
+		Error      error
+		QueryError error
+		Debug      string
 	}
 
 	for name, tc := range map[string]struct {
@@ -1996,6 +2043,13 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("host storage response"),
 			},
 		},
+		"query fails (system not ready)": {
+			HostsConfigArray: []MockHostStorageConfig{},
+			ExpectedOutput: ExpectedOutput{
+				QueryError: system.ErrRaftUnavail,
+				Error:      system.ErrRaftUnavail,
+			},
+		},
 		"No SCM storage": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
@@ -2053,7 +2107,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  new(storage.NvmeDevState),
+								NvmeState:  &devStateFaulty,
 							},
 							Rank: 0,
 						},
@@ -2219,8 +2273,19 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := &MockInvokerConfig{
-				UnaryResponse: &UnaryResponse{
-					Responses: []*HostResponse{},
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "foo",
+								Message: &mgmtpb.SystemQueryResp{},
+								Error:   tc.ExpectedOutput.QueryError,
+							},
+						},
+					},
+					{
+						Responses: []*HostResponse{},
+					},
 				},
 			}
 			for _, hostStorageConfig := range tc.HostsConfigArray {
@@ -2236,7 +2301,8 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						Message: storageScanResp,
 					}
 				}
-				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses, hostResponse)
+				scanResp := mockInvokerConfig.UnaryResponseSet[1]
+				scanResp.Responses = append(scanResp.Responses, hostResponse)
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 

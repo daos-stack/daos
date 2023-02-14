@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,17 +20,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
-)
-
-const (
-	vmdAddr         = "0000:5d:05.5"
-	vmdBackingAddr1 = "5d0505:01:00.0"
-	vmdBackingAddr2 = "5d0505:03:00.0"
 )
 
 func addrListFromStrings(addrs ...string) *hardware.PCIAddressSet {
@@ -65,20 +59,11 @@ func defCmpOpts() []cmp.Option {
 	}
 }
 
-func convertTypes(in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, out)
-}
-
 func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	native := storage.MockNvmeController(varIdx...)
 
 	s := new(storage.NvmeController)
-	if err := convertTypes(native, s); err != nil {
+	if err := convert.Types(native, s); err != nil {
 		panic(err)
 	}
 

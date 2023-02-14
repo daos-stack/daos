@@ -1,13 +1,11 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
-from avocado import fail_on
 from collections import defaultdict
+from ClusterShell.NodeSet import NodeSet
+from avocado import fail_on
 from apricot import TestWithServers
 from exception_utils import CommandFailure
 
@@ -34,7 +32,6 @@ def cleanup_output(output):
 
 
 class ControlTestBase(TestWithServers):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Defines common methods for control tests.
     :avocado: recursive
     """

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,6 +100,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	      bool for_refresh);
 
 /**
+ * Load participants information for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -129,13 +141,14 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param dtis	[IN]	The array for DTX identifiers to be set.
+ * \param count [IN]	The count of DTXs to be set.
  * \param flags [IN]	The flags for the DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -195,9 +208,10 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  * Cleanup local DTX when local modification failed.
  *
  * \param dth	[IN]	The DTX handle.
+ * \param unpin	[IN]	unpin the DTX entry or not.
  */
 void
-vos_dtx_cleanup(struct dtx_handle *dth);
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
 
 /**
  * Reset DTX related cached information in VOS.
@@ -1021,6 +1035,21 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * When the callback executes code that may yield, in some cases, it needs to
+ * verify the value or key it is operating on still exists before continuing.
+ * This function will revalidate from the object layer down.   This is only
+ * supported in conjunction with recursive vos_iterate from VOS_ITER_OBJ.
+ *
+ * \param[in]	ih	The iterator handle
+ *
+ * \return		0 if iterator value is valid
+ *			VOS_ITER_* level that needs probe
+ *			<0 on error
+ */
+int
+vos_iter_validate(daos_handle_t ih);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
@@ -1216,6 +1245,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
 };
 
 /*
@@ -1239,19 +1269,22 @@ enum scrub_status {
 };
 
 struct scrub_ctx_metrics {
-	struct d_tm_node_t *scm_pool_ult_wait_time;
-	struct d_tm_node_t *scm_start;
-	struct d_tm_node_t *scm_end;
-	struct d_tm_node_t *scm_last_duration;
-	struct d_tm_node_t *scm_csum_calcs;
-	struct d_tm_node_t *scm_csum_calcs_last;
-	struct d_tm_node_t *scm_csum_calcs_total;
-	struct d_tm_node_t *scm_bytes_scrubbed;
-	struct d_tm_node_t *scm_bytes_scrubbed_last;
-	struct d_tm_node_t *scm_bytes_scrubbed_total;
-	struct d_tm_node_t *scm_corruption;
-	struct d_tm_node_t *scm_corruption_total;
-	struct d_tm_node_t *scm_scrub_count;
+	struct d_tm_node_t	*scm_next_csum_scrub;
+	struct d_tm_node_t	*scm_next_tree_scrub;
+	struct d_tm_node_t	*scm_busy_time;
+	struct d_tm_node_t	*scm_start;
+	struct d_tm_node_t	*scm_last_duration;
+	struct d_tm_node_t	*scm_csum_calcs;
+	struct d_tm_node_t	*scm_csum_calcs_last;
+	struct d_tm_node_t	*scm_csum_calcs_total;
+	struct d_tm_node_t	*scm_bytes_scrubbed;
+	struct d_tm_node_t	*scm_bytes_scrubbed_last;
+	struct d_tm_node_t	*scm_bytes_scrubbed_total;
+	struct d_tm_node_t	*scm_corruption;
+	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_scrub_count;
+	struct timespec		 scm_busy_start;
+
 };
 
 /* Scrub the pool */
@@ -1307,8 +1340,9 @@ struct scrub_ctx {
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
 
-	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	enum scrub_status        sc_status;
+	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
+	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
 };
 
 /*

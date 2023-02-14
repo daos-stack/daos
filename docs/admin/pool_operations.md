@@ -104,6 +104,13 @@ The capacity of the pool can be specified in three different ways:
     So in the first example above, specifying `--scm-size=256GB`
     would fail as 256 GB is smaller than the minimum 256 GiB.
 
+!!! warning
+    Concurrent creation of pools using **size percentage** could lead to
+    `ENOSPACE` errors.  Indeed, these operations are not atomic and the overall
+    available size retrieved in the first step could be different from the size
+    actually available when the second step will be performed (i.e. allocation
+    of space for the pool).
+
 Examples:
 
 To create a pool labeled `tank`:
@@ -293,7 +300,7 @@ $ dmg pool get-prop tank
 Pool 8a05bf3a-a088-4a77-bb9f-df989fce7cc8 properties:
 Name                            Value
 ----                            -----
-EC cell size (ec_cell_sz)       1.0 MiB
+EC cell size (ec_cell_sz)       64 kiB
 Pool label (label)              tank
 Reclaim strategy (reclaim)      lazy
 Self-healing policy (self_heal) exclude
@@ -318,7 +325,7 @@ $ dmg pool get-prop tank2
 Pool 1f265216-5877-4302-ad29-aa0f90df3f86 properties:
 Name                            Value
 ----                            -----
-EC cell size (ec_cell_sz)       1.0 MiB
+EC cell size (ec_cell_sz)       64 kiB
 Pool label (label)              tank2
 Reclaim strategy (reclaim)      disabled
 Self-healing policy (self_heal) exclude
@@ -373,7 +380,7 @@ When setting this property, specifying the percentage symbol is optional:
 This property defines the default erasure code cell size inherited to DAOS
 containers. The EC cell size can be between 1kiB and 1GiB,
 although it should typically be set to a value between 32kiB and 1MiB.
-The default is 1MiB.
+The default in DAOS 2.0 was 1MiB. The default in DAOS 2.2 is 64kiB.
 When setting this property, the cell size can be specified in Bytes
 (as a number with no suffix), with a base-10 suffix like `k` or `MB`,
 or with a base-2 suffix like `ki` or `MiB`.
@@ -385,10 +392,13 @@ to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
 default. If specified during a pool create operation, this property overrides
 any `--nsvc` options. This property cannot yet be changed afterward.
 
+See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
+erasure coding at the container level.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://docs.daos.io/v2.2/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.4/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
@@ -404,7 +414,7 @@ Access-controlled client pool accesses include:
 * Deleting containers in the pool.
 
 This is reflected in the set of supported
-[pool permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
+[pool permissions](https://docs.daos.io/v2.4/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -427,7 +437,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
-The ACL file format is detailed in [here](https://docs.daos.io/v2.2/overview/security/#acl-file).
+The ACL file format is detailed in [here](https://docs.daos.io/v2.4/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -686,7 +696,7 @@ $ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.4/overview/security/#principal).
 
 Because this is an administrative action, it does not require the administrator
 to have any privileges assigned in the container ACL.
