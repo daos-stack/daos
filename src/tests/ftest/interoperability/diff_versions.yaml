@@ -13,7 +13,6 @@ server_config:
         - DD_MASK=mgmt,md,dsms,any
         - D_LOG_FLUSH=DEBUG
 pool:
-  control_method: dmg
   scm_size: 5G
   name: daos_server
 container:
@@ -23,7 +22,6 @@ container:
 attrtests:
   num_attributes: 20
 dfuse:
-  mount_dir: "/tmp/daos_dfuse1/"
   disable_caching: True
 ior:
   ior_timeout: 180
