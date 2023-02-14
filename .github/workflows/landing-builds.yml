@@ -130,12 +130,17 @@ jobs:
              sudo apt-get update
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --init --ulimit core=-1 \
                         --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
+      - name: Print dmesg
+        if: always()
+        run: docker run --env BASE_DISTRO --user root:root
+             build-image dmesg
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -314,12 +319,17 @@ jobs:
              sudo apt-get update
              sudo apt-get install gdb
              docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root \
+                        --init --ulimit core=-1 \
                         build-image ./daos/utils/node_local_test.py --no-root \
                         --memcheck no --test cont_copy
       - name: Check for corefiles
         if: always()
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
+      - name: Print dmesg
+        if: always()
+        run: docker run --env BASE_DISTRO --user root:root
+             build-image dmesg
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
