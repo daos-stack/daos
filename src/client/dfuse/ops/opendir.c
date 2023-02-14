@@ -25,6 +25,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	fi_out.fh = (uint64_t)oh;
 
 	/* Disable kernel caching for testing */
+#if 0
 #if HAVE_CACHE_READDIR
 	/* If caching is enabled then always set the bit to enable caching as it might get
 	 * populated, however only set the bit to use the cache based on last use.
@@ -36,7 +37,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 			fi_out.keep_cache = 1;
 	}
 #endif
-
+#endif
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
