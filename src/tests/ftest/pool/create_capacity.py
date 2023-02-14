@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,7 +39,7 @@ class PoolCreateTests(PoolTestBase):
         quantity = self.params.get("quantity", "/run/pool/*", 1)
 
         # for multiple pool creation cases, enabling and disabling
-        # logmask setting to DEBUG explicitly to save run time..
+        # log mask setting to DEBUG explicitly to save run time..
         self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         pools = [add_pool(self, create=False)]
 

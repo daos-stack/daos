@@ -49,7 +49,7 @@ class PoolTestBase(TestWithServers):
                     max_duration, exceeding_duration))
 
     def time_pool_create(self, number, pool):
-        """Time how long it takes to crate a pool.
+        """Time how long it takes to create a pool.
 
         Args:
             number (int): pool number in the list
