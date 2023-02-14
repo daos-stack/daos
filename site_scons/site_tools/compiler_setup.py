@@ -104,7 +104,7 @@ def _check_flag_helper(context, compiler, ext, flag):
         flags = ["-Werror", test_flag]
     else:
         flags = ["-Werror", flag]
-    context.Message(f'Checking {compiler} {flag}')
+    context.Message(f'Checking {compiler} {flag} ')
     context.env.Replace(CCFLAGS=flags)
     ret = context.TryCompile("""
 int main() {
