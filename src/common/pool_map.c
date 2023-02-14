@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1481,6 +1481,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	struct d_fd_tree	tree = {0};
 	struct d_fd_node	node = {0};
 	bool			updated = false;
+	bool			found_new_dom = false;
 	int			i = 0;
 
 	if (map != NULL) {
@@ -1531,13 +1532,12 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 				struct pool_domain	*current;
 				int			already_in_map;
 
-				already_in_map = pool_map_find_domain(map,
-								      dom_type,
+				already_in_map = pool_map_find_domain(map, dom_type,
 								      map_comp.co_id,
 								      &current);
 				if (already_in_map > 0) {
-					D_DEBUG(DB_TRACE, "domain %d already in map\n",
-						map_comp.co_id);
+					D_DEBUG(DB_TRACE, "domain %d/%u already in map\n",
+						map_comp.co_id, current->do_comp.co_status);
 					map_comp.co_status = current->do_comp.co_status;
 					map_comp.co_index = current->do_comp.co_index;
 				} else if (dom_type == PO_COMP_TP_GRP) {
@@ -1560,7 +1560,10 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 				found_dom = pool_map_find_node_by_rank(map, rank);
 				if (found_dom) {
-					D_DEBUG(DB_TRACE, "rank %u already in map\n", rank);
+					if (found_dom->do_comp.co_status == PO_COMP_ST_NEW)
+						found_new_dom = true;
+					D_DEBUG(DB_TRACE, "rank/status %u/%u already in map\n",
+						rank, found_dom->do_comp.co_status);
 					continue;
 				}
 			}
@@ -1592,8 +1595,19 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 	ordered_ranks->rl_nr = i;
 
-	if (rc == 0 && !updated)
-		return -DER_ALREADY;
+	if (rc == 0) {
+		/* Those ranks already exists in the pool map, but some of them are new, so
+		 * still need extend the pool, though does not need update the pool map
+		 */
+		if (!updated && found_new_dom)
+			return -DER_EXIST;
+
+		/* Those ranks already exists in the pool map, and they are not new, then return
+		 * EALREADY
+		 */
+		if (!updated && !found_new_dom)
+			return -DER_ALREADY;
+	}
 
 	return rc;
 }
@@ -1631,8 +1645,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains,
 					 domains, ordered_ranks);
-	if (rc != 0)
+	if (rc != 0) {
+		/* Do not need update the pool map anymore */
+		if (rc == -DER_EXIST)
+			rc = 0;
 		D_GOTO(out_map_buf, rc);
+	}
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
@@ -2069,7 +2087,8 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 		struct pool_component *comp = &domain->do_targets[i].ta_comp;
 
 		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
-					  comp->co_status == PO_COMP_ST_UP)) {
+					  comp->co_status == PO_COMP_ST_UP ||
+					  comp->co_status == PO_COMP_ST_DRAIN)) {
 			comp->co_status = PO_COMP_ST_UPIN;
 			domain->do_comp.co_status = PO_COMP_ST_UPIN;
 			return 1;
