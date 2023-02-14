@@ -16,7 +16,7 @@ def scons():
     # rdb-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     denv.AppendUnique(CPPPATH=[Dir('raft/include').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('raft/src')])
