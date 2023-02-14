@@ -66,10 +66,10 @@ jobs:
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
-        run: ./daos/utils/ci/corefile_in_gha.sh
+        run: bash ls -latr /tmp/core.*
       - name: Print dmesg
         if: always()
-        run: dmesg
+        run: sudo dmesg
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
