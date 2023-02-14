@@ -12,8 +12,9 @@ then
     # on GHA internal runners running 'ubuntu|alma|rocky', "apport" seems to be
     # used ...
     # COREFILE_DIR="/var/crash/"
-    # trying to set corefile repo in current dir
-    COREFILE_DIR=$(pwd)
+    # or trying to set corefile repo in current dir
+    # COREFILE_DIR=$(pwd)
+    COREFILE_DIR=/tmp/
 else
     COREFILE_DIR="/var/lib/systemd/coredump/"
 fi
@@ -28,10 +29,10 @@ for i in $COREFILE_DIR/core* ; do
     file "$i"
 done
 
-for i in $(sudo find / -type f -name core.*) ; do
-    ls -ltr "$i"
-    file "$i"
-done
+#for i in $(sudo find / -type f -name core.*) ; do
+#    ls -ltr "$i"
+#    file "$i"
+#done
 
 echo ::endgroup::
 

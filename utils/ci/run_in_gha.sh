@@ -82,5 +82,7 @@ echo ::endgroup::
 
 echo ::group::Container copy test
 ulimit -c unlimited
+echo /tmp/core > /proc/sys/kernel/core_pattern
+echo 1 > /proc/sys/kernel/core_uses_pid
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
