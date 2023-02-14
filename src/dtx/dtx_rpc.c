@@ -112,8 +112,6 @@ D_CASSERT(sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_rank) +
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_tag) ==
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_key));
 
-uint32_t dtx_rpc_helper_thd;
-
 static void
 dtx_req_cb(const struct crt_cb_info *cb_info)
 {
@@ -370,8 +368,8 @@ dtx_req_wait(struct dtx_req_args *dra)
 		  "ABT_future_wait failed for opc %x, length = %d: rc = %d.\n",
 		  dra->dra_opc, dra->dra_length, rc);
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
-		dra->dra_opc, dra->dra_future, rc);
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
+		 dra->dra_opc, dra->dra_future, rc);
 
 	ABT_future_free(&dra->dra_future);
 	return dra->dra_result;
@@ -701,8 +699,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 	my_tgtid = dss_get_module_info()->dmi_tgt_id;
 
 	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-	if (dss_has_enough_helper() &&
-	    (dtes[0]->dte_mbs->dm_tgt_cnt - 1) * count >= dtx_rpc_helper_thd) {
+	if (dss_has_enough_helper()) {
 		struct dtx_helper_args	*dha = NULL;
 
 		D_ALLOC_PTR(dha);

@@ -642,7 +642,7 @@ dtx_batched_commit(void *arg)
 	while (1) {
 		struct ds_cont_child	*cont;
 		struct dtx_stat		 stat = { 0 };
-		int			 sleep_time = 10; /* ms */
+		int			 sleep_time = 50; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
 			goto check;
@@ -700,7 +700,6 @@ dtx_batched_commit(void *arg)
 		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
 		    DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
-			sleep_time = 0;
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);
@@ -1538,6 +1537,9 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	int			 cnt;
 	int			 rc = 0;
 
+	D_DEBUG(DB_MD, DF_CONT": flushing DTX when close\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+
 	dtx_stat(cont, &stat);
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
@@ -1568,9 +1570,8 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	}
 
 out:
-	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO, DF_CONT": flushed DTX when close, rc = %d\n",
+		 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), rc);
 }
 
 /* Per VOS container DTX re-index ULT ***************************************/
