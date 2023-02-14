@@ -211,7 +211,6 @@ Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
-Requires: protobuf-c-devel
 Requires: fio
 Requires: git
 Requires: dbench
