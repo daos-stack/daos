@@ -480,6 +480,59 @@ dfs_extend_fetch(void **state)
 	dfs_extend_internal(state, EXTEND_FETCH);
 }
 
+void
+dfs_extend_fail_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		str[37];
+	dfs_attr_t attr = {};
+	int		rc;
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_EC_2P1GX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	extend_write(dfs_mt, dir);
+	/* extend failure */
+	print_message("first extend will fail then exclude\n");
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+	extend_single_pool_rank(arg, 3);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	extend_read_check(dfs_mt, dir);
+
+	print_message("retry extend\n");
+	/* retry extend */
+	extend_single_pool_rank(arg, 3);
+	extend_read_check(dfs_mt, dir);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 int
 extend_small_sub_setup(void **state)
 {
@@ -517,6 +570,8 @@ static const struct CMUnitTest extend_tests[] = {
 	 dfs_extend_enumerate, extend_small_sub_setup, test_teardown},
 	{"EXTEND9: read object during extend",
 	 dfs_extend_fetch, extend_small_sub_setup, test_teardown},
+	{"EXTEND10: extend failure cancel and retry",
+	 dfs_extend_fail_retry, extend_small_sub_setup, test_teardown},
 };
 
 int
