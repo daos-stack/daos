@@ -40,6 +40,12 @@ bs_state_query(void *arg)
 	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
 }
 
+static inline enum dss_xs_type
+init_xs_type()
+{
+	return bio_nvme_configured(SMD_DEV_TYPE_META) ?  DSS_XS_SYS : DSS_XS_VOS;
+}
+
 static inline int
 tgt2xs_type(int tgt_id)
 {
@@ -308,7 +314,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
-	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -374,7 +381,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
 		led_info.duration = 0;
-		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS,
+		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+				     init_xs_type(),
 				     0, 0);
 		if (rc != 0) {
 			if (rc == -DER_NOSYS) {
@@ -629,7 +637,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	led_info.duration = 0;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
 		if (rc == -DER_NOSYS) {
@@ -684,7 +693,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	/* Manage the VMD LED state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		if (rc == -DER_NOSYS) {
 			resp->device->led_state = CTL__LED_STATE__NA;
@@ -753,8 +763,8 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
-	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL, DSS_XS_SYS, 0,
-			     0);
+	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
