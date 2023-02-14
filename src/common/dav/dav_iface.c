@@ -137,7 +137,9 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	hdl->p_ops.base = hdl;
 
 	hdl->do_store = store;
-	if (hdl->do_store->stor_priv != NULL) {
+	if (hdl->do_store->stor_priv == NULL) {
+		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
+	} else {
 		rc = umem_cache_alloc(store, 0);
 		if (rc != 0) {
 			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
