@@ -250,13 +250,14 @@ set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
 	entry->generation = 1;
 	entry->ino        = entry->attr.st_ino;
 
-	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
-		entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
-		if (S_ISDIR(ie->ie_stat.st_mode))
-			entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
-		else
-			entry->entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
-	}
+	if ((atomic_load_relaxed(&ie->ie_il_count)) != 0)
+		return;
+	entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
+
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry->entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
 }
 
 static inline void
@@ -424,8 +425,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					 * call so the extra data needs to be loaded by the
 					 * second reader, not the first.
 					 *
-					 * TODO: This will set cache times but will not account
-					 * for time elapsed since the cache was populated.
+					 * It seems fuse always does the first read with readdirplus
+					 * and then subsequent ones without so for now I've not been
+					 * able to trigger this code.
 					 */
 
 					rc = dfs_lookupx(
@@ -447,7 +449,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj,
 							  drc->drc_name, out, attr_len, &rlink);
 					if (rc != 0) {
-						/* TODO: dfs_release() */
 						D_GOTO(reply, rc);
 					}
 
@@ -553,10 +554,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		large_fetch = false;
 	}
 
-	/* TODO: Check for EOD when using the cache, we do not want to call dfs_iterate for each
-	 * handle.
-	 */
-
 	if (offset == 0)
 		offset = OFFSET_BASE;
 
@@ -653,7 +650,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
 						  out, attr_len, &rlink);
 				if (rc != 0) {
-					/* TODO: dfs_release() */
 					D_GOTO(reply, rc);
 				}
 
@@ -710,7 +706,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			buff_offset += written;
 			added++;
 			offset++;
-			/* TODO: Check this */
 			oh->doh_rd_offset = dre->dre_next_offset;
 
 			if (dre->dre_next_offset == READDIR_EOD) {
@@ -756,7 +751,6 @@ reply:
 	return 0;
 
 out_reset:
-	/* TODO: Work through this and make unique */
 	dfuse_readdir_reset(hdl);
 	D_ASSERT(rc != 0);
 	return rc;
