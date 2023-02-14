@@ -7,6 +7,7 @@ import time
 
 from pool_test_base import PoolTestBase
 from server_utils import ServerFailed
+from test_utils_pool import add_pool, get_size_params
 
 
 class PoolCreateTests(PoolTestBase):
@@ -36,11 +37,22 @@ class PoolCreateTests(PoolTestBase):
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
-        self.add_pool_qty(quantity, create=False)
+
         # for multiple pool creation cases, enabling and disabling
         # logmask setting to DEBUG explicitly to save run time..
         self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
-        self.check_pool_creation(30)
+        pools = [add_pool(self, create=False)]
+
+        # Create the first pool
+        durations = [self.time_pool_create(1, pools[0])]
+
+        # Add additional pools of the same size as the first pool
+        params = get_size_params(pools[0].dmg.result)
+        for _ in range(quantity - 1):
+            pools.append(add_pool(self, create=False, **params))
+
+        # Create the remaining pools
+        self.check_pool_creation(pools[1:], 30, 2, durations)
         self.dmg.server_set_logmasks(raise_exception=False)
 
         # Verify DAOS can be restarted in less than 2 minutes
@@ -55,18 +67,15 @@ class PoolCreateTests(PoolTestBase):
         except ServerFailed as error:
             self.fail(error)
 
-        duration = float(time.time()) - start
-        self.assertLessEqual(
-            duration, 120,
-            "DAOS not ready to accept requests with in 2 minutes")
-
-        self.dmg.timeout = 360
+        if float(time.time()) - start > 120:
+            self.fail("DAOS not ready to accept requests with in 2 minutes after restart")
 
         # Verify all the pools exists after the restart
+        self.dmg.timeout = 360
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []
-        for pool in self.pool:
+        for pool in pools:
             pool_uuid = pool.uuid.lower()
             if pool_uuid not in detected_pools:
                 missing_pools.append(pool_uuid)
@@ -75,6 +84,5 @@ class PoolCreateTests(PoolTestBase):
                 "The following created pools were not detected in the pool "
                 "list after rebooting the servers:\n  [{}]: {}".format(
                     len(missing_pools), ", ".join(missing_pools)))
-        self.assertEqual(
-            len(self.pool), len(detected_pools),
-            "Additional pools detected after rebooting the servers")
+        if len(pools) != len(detected_pools):
+            self.fail("Incorrect number of pools detected after rebooting the servers")

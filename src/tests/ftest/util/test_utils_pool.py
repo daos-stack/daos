@@ -90,6 +90,34 @@ def remove_pool(test, pool):
     return error_list
 
 
+def get_size_params(create_response):
+    """Get the TestPool params that can be used to create a pool of the same size.
+
+    Useful for creating multiple pools of equal --size=X% as each subsequent 'dmg pool create
+    --size=X%' results in a smaller pool each time due to using a percentage of the available free
+    space.
+
+    Args:
+        create_response (dict): json output from a dmg pool create for the pool whose size is being
+            replicated.
+
+    Raises:
+        TestFail: If there is an error obtaining the pool size from the dmg result
+
+    Returns:
+        dict: size params argument for an add_pool() method
+
+    """
+    params = {"size": None, "tier_ratio": None}
+    try:
+        # Use the same scm  and nvme sizes as the first pool
+        params["scm_size"] = create_response["response"]["tier_bytes"][0]
+        params["nvme_size"] = create_response["response"]["tier_bytes"][1]
+    except (KeyError, IndexError) as error:
+        raise TestFail("Error determining scm/nvme pool size for duplicate pools") from error
+    return params
+
+
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""

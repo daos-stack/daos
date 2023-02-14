@@ -51,7 +51,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
-            PoolTestBase.check_pool_creation(self, 60)
+            PoolTestBase.check_pool_creation(self.pool, self, 60)
             self.pool[-1].connect()
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],

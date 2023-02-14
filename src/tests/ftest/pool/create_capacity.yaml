@@ -36,7 +36,6 @@ server_config:
 
 pool:
   control_method: dmg
-  scm_size: 256MiB
-  nvme_size: 4Gib
+  size: 0.3%
   quantity: 200
   set_logmasks: False
