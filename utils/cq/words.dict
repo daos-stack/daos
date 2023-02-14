@@ -177,7 +177,6 @@ filesystem
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs

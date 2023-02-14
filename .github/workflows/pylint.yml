@@ -3,6 +3,11 @@ name: Pylint
 # Always run on Pull Requests as then this check can be marked as required.  It takes less than
 # two minutes to run and we can probably decrease this over time.
 on:
+  push:
+    branches:
+      - master
+      - 'release/*'
+      - 'feature/*'
   pull_request:
 
 jobs:
