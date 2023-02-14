@@ -2596,7 +2596,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_hdl			*hdl = NULL;
 	uint32_t			nhandles;
 	int				skip_update = 0;
-	int				rc, rc2;
+	int				rc;
 	daos_prop_t		       *prop = NULL;
 	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
@@ -2778,14 +2778,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	/*
-	 * Transfer the pool map to the client before adding the pool handle,
-	 * so that we don't need to worry about rolling back the transaction
-	 * when the transfer fails. The client has already been authenticated
-	 * and authorized at this point. If an error occurs after the transfer
-	 * completes, then we simply return the error and the client will throw
-	 * its pool_buf away.
-	 */
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
@@ -2881,11 +2873,10 @@ out_map_version:
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-	if (transfer_map) {
-		rc2 = ds_pool_transfer_map_buf(map_buf, map_version, rpc, in->pci_map_bulk,
-					       &out->pco_map_buf_size);
-		if (rc == 0)
-			rc = rc2;
+	if (rc == 0 && transfer_map) {
+		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, in->pci_map_bulk,
+					      &out->pco_map_buf_size);
+		/** TODO: roll back tx if transfer fails? */
 	}
 	D_FREE(map_buf);
 	D_FREE(hdl);
