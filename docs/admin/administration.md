@@ -521,7 +521,7 @@ faulty device reaction will have been triggered (all targets on the SSD will be 
 The SSD will remain evicted until device replacement occurs.
 
 If an NVMe SSD is faulty, the status LED on the VMD device will be set to an ON state,
-epresented by a solidly ON amber light.
+represented by a solidly ON amber light.
 This LED activity visually indicates a fault and that the device needs to be replaced and is no
 longer in use by DAOS.
 The LED of the VMD device will remain in this state until replaced by a new device.
