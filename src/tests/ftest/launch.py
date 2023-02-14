@@ -712,7 +712,7 @@ class Launch():
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
+        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
         self.logdir = None
         self.logfile = None
         self.tests = []
@@ -843,19 +843,29 @@ class Launch():
         self._write_details_json()
 
         if self.job and self.result:
-            # Generate a results.xml for the this run
+            # Generate a results.xml for this run
+            results_xml_path = os.path.join(self.logdir, "results.xml")
             try:
+                logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.xml file: %s", str(error))
+            else:
+                if not os.path.exists(results_xml_path):
+                    logger.error("results.xml does not exist: %s", results_xml_path)
 
-            # Generate a results.html for the this run
+            # Generate a results.html for this run
+            results_html_path = os.path.join(self.logdir, "results.html")
             try:
+                logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.html file: %s", str(error))
+            else:
+                if not os.path.exists(results_html_path):
+                    logger.error("results.html does not exist: %s", results_html_path)
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
