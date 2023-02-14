@@ -40,8 +40,8 @@ container:
   control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
 ior_flags_common: &ior_flags_common
-  write_flags: "-w -F -k -G 1"
-  read_flags: "-F -r -R -k -G 1"
+  write_flags: "-w -F -k -G 1"
+  read_flags: "-F -r -R -k -G 1"
   api: DFS
   ior_test_sequence:
     #   - [scm_size, nvme_size, transfersize, blocksize]
@@ -55,7 +55,7 @@ ior:
     np: 48
   test_file: /testFile
   repetitions: 10
-  dfs_destroy: false
+  dfs_destroy: False
   iorflags: !mux
     rp_2g8:
       <<: *ior_flags_common
