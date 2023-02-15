@@ -61,6 +61,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -577,7 +579,7 @@ class Launch():
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
+        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
         self.logdir = None
         self.logfile = None
         self.tests = []
@@ -648,8 +650,19 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.WARN)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -659,12 +672,29 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.ERROR)
+
+    @staticmethod
+    def __set_test_status(test_result, fail_class, fail_reason, exc_info=None, status=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+            status (str, optional): TestResult status to set. Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -674,15 +704,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Additional errors only update the test result fail reason with a fail counter
+
+        if test_result.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -709,19 +739,29 @@ class Launch():
         self._write_details_json()
 
         if self.job and self.result:
-            # Generate a results.xml for the this run
+            # Generate a results.xml for this run
+            results_xml_path = os.path.join(self.logdir, "results.xml")
             try:
+                logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.xml file: %s", str(error))
+            else:
+                if not os.path.exists(results_xml_path):
+                    logger.error("results.xml does not exist: %s", results_xml_path)
 
-            # Generate a results.html for the this run
+            # Generate a results.html for this run
+            results_html_path = os.path.join(self.logdir, "results.html")
             try:
+                logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.html file: %s", str(error))
+            else:
+                if not os.path.exists(results_html_path):
+                    logger.error("results.html does not exist: %s", results_html_path)
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -2098,6 +2138,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2335,6 +2376,57 @@ class Launch():
         else:
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
+
+    def _cleanup_procs(self, test):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+        hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.debug("Looking for running processes: %s", proc_pattern)
+        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
+        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
+        if pgrep_result.passed_hosts:
+            any_found = True
+            logger.debug("Killing running processes: %s", proc_pattern)
+            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
+            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
+            if pkill_result.failed_hosts:
+                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Running processes found on {pgrep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            any_found = True
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        return 4096 if any_found else 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
@@ -2643,7 +2735,8 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True,
+                                                                          test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
@@ -2784,6 +2877,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
