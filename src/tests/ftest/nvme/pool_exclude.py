@@ -76,13 +76,17 @@ class NvmePoolExclude(OSAUtils):
             dict: A dictionary containing job_id(str), result(CmdResult) and log(str) keys.
 
         """
-        thread_result = {"job_id": job_id, "result": None, "log": log}
-        try:
-            thread_result["result"] = run_ior(
-                test, manager, log, hosts, path, slots, group, pool, container,
-                processes, ppn, intercept, plugin_path, dfuse, display_space,
-                fail_on_warning, namespace, ior_params)
-        except Exception as error:
+        thread_result = {
+            "job_id": job_id,
+            "result": None,
+            "log": log
+        }
+        try:
+            thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+                                              pool, container, processes, ppn, intercept,
+                                              plugin_path, dfuse, display_space, fail_on_warning,
+                                              namespace, ior_params)
+        except Exception as error:
             thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
         thread_queue.put(thread_result)
 
