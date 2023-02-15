@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.101
-Release:       6%{?relval}%{?dist}
+Version:       2.3.103
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -91,8 +91,6 @@ BuildRequires: Lmod
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libcurl4-mini
-BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
@@ -102,14 +100,9 @@ BuildRequires: python3-distro
 BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
-%if 0%{?is_opensuse}
-%else
-# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
-# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
-BuildRequires: libcurl4
 %endif
 %endif
-%endif
+BuildRequires: libuuid-devel
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
@@ -203,7 +196,7 @@ This is the package is a metapackage to install all of the test packages
 
 %package tests-internal
 Summary: The entire internal DAOS test suite
-Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
@@ -413,6 +406,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libchk.so
 %{_libdir}/daos_srv/libcont.so
+%{_libdir}/daos_srv/libddb.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
 %{_libdir}/daos_srv/libobj.so
@@ -561,6 +555,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
+- Bump version to 2.3.103
+
+* Wed Jan 25 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.102-1
+- Bump version to 2.3.102
+
+* Tue Jan 24 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.101-7
+- Fix daos-tests-internal requirement for daos-tests
+
 * Fri Jan 6 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-6
 - Don't need to O: cart any more
 - Add %%doc to all packages

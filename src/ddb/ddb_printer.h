@@ -9,6 +9,7 @@
 
 #include "ddb_vos.h"
 
+int ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len);
 void ddb_print_cont(struct ddb_ctx *ctx, struct ddb_cont *cont);
 void ddb_print_obj(struct ddb_ctx *ctx, struct ddb_obj *obj, uint32_t indent);
 void ddb_print_key(struct ddb_ctx *ctx, struct ddb_key *key, uint32_t indent);

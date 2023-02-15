@@ -32,7 +32,6 @@ def cleanup_output(output):
 
 
 class ControlTestBase(TestWithServers):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Defines common methods for control tests.
     :avocado: recursive
     """

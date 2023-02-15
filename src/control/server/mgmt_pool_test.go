@@ -608,7 +608,13 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(wantReq, gotReq, test.DefaultCmpOpts()...); diff != "" {
+	cmpOpts := append(test.DefaultCmpOpts(),
+		// Ensure stable ordering of properties to avoid intermittent failures.
+		protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
+			return a.Number < b.Number
+		}),
+	)
+	if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
 	}
 }

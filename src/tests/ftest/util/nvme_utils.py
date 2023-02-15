@@ -44,7 +44,6 @@ def get_device_ids(dmg, servers):
 
 
 class ServerFillUp(IorTestBase):
-    # pylint: disable=too-many-ancestors,too-many-instance-attributes
     """Class to fill up the servers based on pool percentage given.
 
     It will get the drives listed in yaml file and find the maximum capacity of

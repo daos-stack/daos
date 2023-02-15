@@ -94,6 +94,15 @@ def generate(env):
     if 'GOCACHE' in os.environ:
         env['ENV']['GOCACHE'] = os.environ['GOCACHE']
 
+    # Multiple go jobs can be running at once in scons via the -j option, there is no way to reserve
+    # a number of scons job slots for a single command so if jobs is 1 then use that else use a
+    # small number to allow progress without overloading the system.
+    jobs = GetOption('num_jobs')
+    if jobs == 1:
+        env["ENV"]["GOMAXPROCS"] = '1'
+    else:
+        env["ENV"]["GOMAXPROCS"] = '5'
+
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 

@@ -12,14 +12,7 @@ server_config:
     0:
       targets: 1
       nr_xs_helpers: 1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 # Run only checksum tests
 daos_tests:
   num_clients: 1

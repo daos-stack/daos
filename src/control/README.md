@@ -12,8 +12,8 @@ DAOS Data Plane (Engine) processes that run on the same host.
 
 ## Code Organization
 
-The control directory contains a "cmd" subdirectory for server, agent, and dmg
-applications. These applications import the control API
+The control directory contains a "cmd" subdirectory for server, agent, ddb, and
+dmg applications. These applications import the control API
 (`src/control/lib/control`) or server packages along with peripheral shared
 packages common, drpc, fault, logging, and security where necessary to provide
 the given features.

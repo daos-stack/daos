@@ -1,14 +1,13 @@
-'''
-  (C) Copyright 2019-2022 Intel Corporation.
+"""
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 
 from fio_test_base import FioBase
 
 
 class FioSmall(FioBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs Fio with in small config.
 
     :avocado: recursive

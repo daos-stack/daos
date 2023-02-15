@@ -625,7 +625,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 setting if defined. Defaults to None.
             kwargs (dict): Parameters for the command.
         """
-
         if self.json is None:
             raise CommandFailure(
                 f"The {self.command} command doesn't have json option defined!")
