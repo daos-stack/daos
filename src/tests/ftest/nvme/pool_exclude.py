@@ -118,7 +118,7 @@ class NvmePoolExclude(OSAUtils):
             pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
-        job_manager = get_job_manager_command(self, subprocess=False, timeout=120)
+        job_manager = get_job_manager(self, subprocess=None, timeout=120)
         thread_queue = Queue()
         for val in range(0, num_pool):
             self.pool = pool[val]
@@ -157,7 +157,7 @@ class NvmePoolExclude(OSAUtils):
                     }
                 }
                 kwargs.update(ior_kwargs)
-                threads.append(threading.Thread(target=thread_run_ior, kwargs=kwargs))
+                threads.append(threading.Thread(target=self.thread_run_ior, kwargs=kwargs))
 
                 # Launch the IOR threads
                 for thrd in threads:
@@ -188,7 +188,8 @@ class NvmePoolExclude(OSAUtils):
                 errors = 0
                 while not thread_queue.empty():
                     result = thread_queue.get()
-                    self.log.debug("Results from thread %s (log %s)", result["job_id"], result["log"])
+                    self.log.debug("Results from thread %s (log %s)", result["job_id"],
+                                   result["log"])
                     self.log.debug(result["result"])
                     if result["result"].exit_status != 0:
                         errors += 1
@@ -199,9 +200,9 @@ class NvmePoolExclude(OSAUtils):
                 kwargs["ior_params"]["flags"] = self.ior_r_flags
                 kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
                 try:
-                    thread_run_ior(kwargs=kwargs)
+                    self.thread_run_ior(kwargs=kwargs)
                 except Exception as error:
-                    self.fail("Error in ior read %s.".format(error))
+                    self.fail("Error in ior read {}.".format(error))
 
                 display_string = "Pool{} space at the End".format(val)
                 self.pool.display_pool_daos_space(display_string)
