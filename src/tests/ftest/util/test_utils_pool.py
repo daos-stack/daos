@@ -149,9 +149,9 @@ def time_pool_create(log, number, pool):
         float: number of seconds elapsed during pool create
 
     """
-    start = float(time.time())
+    start = time()
     pool.create()
-    duration = float(time.time()) - start
+    duration = time() - start
     log.info("Pool %s creation: %s seconds", number, duration)
     return duration
 
@@ -1311,8 +1311,8 @@ class TestPool(TestDaosApiBase):
             interval (int): Interval (sec) to call pool query to check the rebuild status.
                 Defaults to 1.
         """
-        start = float(time())
+        start = time()
         self.wait_for_rebuild_to_start(interval=interval)
         self.wait_for_rebuild_to_end(interval=interval)
-        duration = float(time()) - start
+        duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)

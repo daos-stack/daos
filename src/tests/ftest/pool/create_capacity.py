@@ -33,7 +33,7 @@ class PoolCreateTests(TestWithServers):
             Create 200 pools on all of the servers.
             Perform an orderly system shutdown via cmd line (dmg).
             Restart the system via cmd line tool (dmg).
-            Verify that DAOS is ready to accept requests with in 2 minutes.
+            Verify that DAOS is ready to accept requests within 2 minutes.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
@@ -73,7 +73,7 @@ class PoolCreateTests(TestWithServers):
             self.fail(error)
 
         if float(time.time()) - start > 120:
-            self.fail("DAOS not ready to accept requests with in 2 minutes after restart")
+            self.fail("DAOS not ready to accept requests within 2 minutes after restart")
 
         # Verify all the pools exists after the restart
         self.get_dmg_command().timeout = 360
