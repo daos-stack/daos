@@ -108,7 +108,7 @@ racer_oid_gen(int random)
 	oid.lo	|= oclass;
 	oid.hi	= oclass;
 	rc = daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
-	assert(rc == 0);
+	assert_success(rc);
 
 	return oid;
 }
