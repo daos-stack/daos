@@ -69,7 +69,8 @@ jobs:
         run: sudo bash -c 'ls -latr /tmp/core.*'
       - name: Analyze corefiles
         if: always()
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+        run: |
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
                         --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/corefile_in_gha.sh
