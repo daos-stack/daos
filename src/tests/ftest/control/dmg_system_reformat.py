@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,7 +44,7 @@ class DmgSystemReformatTest(TestWithServers):
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        pools.append(add_pool(self, create=False, **get_size_params(pool[0])))
+        pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
         try:
             pools[-1].create()
         except TestFail as error:
