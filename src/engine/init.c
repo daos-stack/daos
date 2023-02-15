@@ -1297,12 +1297,12 @@ main(int argc, char **argv)
 		}
 
 		/* trigger dump of all Argobots ULTs stacks with internal
-		 * synchro (timeout of 10s)
+		 * synchro (timeout of 20s)
 		 */
 		if (sig == SIGUSR2) {
 			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
 			ABT_info_trigger_print_all_thread_stacks(abt_infos,
-								 10.0, NULL,
+								 20.0, NULL,
 								 NULL);
 			continue;
 		}
