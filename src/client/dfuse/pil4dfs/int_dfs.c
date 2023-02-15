@@ -817,7 +817,7 @@ compose_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 
 	if (dirfd >= FD_DIR_BASE) {
 		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s",
-				  dir_list[dirfd - FD_DIR_BASE].path, rel_path);
+				   dir_list[dirfd - FD_DIR_BASE].path, rel_path);
 		if (len_str >= MAX_FILE_NAME_LEN) {
 			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
 			exit(1);
@@ -837,7 +837,7 @@ compose_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 		bytes_read = readlink(path_fd_dir, full_path, MAX_FILE_NAME_LEN);
 		if (bytes_read >= MAX_FILE_NAME_LEN) {
 			printf("Error in compose_path_with_dirfd(). path %s is too long.\nQuit\n",
-			full_path);
+			       full_path);
 			exit(1);
 		} else if (bytes_read < 0) {
 			printf("readlink() failed in compose_path_with_dirfd(%d). %s\nQuit\n",
@@ -1457,7 +1457,8 @@ statfs(const char *pathname, struct statfs *sfs)
 	return rc;
 }
 int statfs64(const char *pathname, struct statfs64 *sfs) __attribute__ ((alias("statfs")));
-int __statfs(const char *pathname, struct statfs *sfs) __attribute__ ((alias("statfs")));
+int __statfs(const char *pathname, struct statfs *sfs) __attribute__ ((alias("statfs"), leaf,
+	     nonnull, nothrow));
 
 int
 statvfs(const char *pathname, struct statvfs *svfs)
@@ -1965,7 +1966,7 @@ isatty(int fd)
 		return real_isatty(fd);
 	}
 }
-int __isatty(int fd) __attribute__ ((alias("isatty")));
+int __isatty(int fd) __attribute__ ((alias("isatty"), leaf, nothrow));
 
 int
 access(const char *path, int mode)
@@ -2666,18 +2667,11 @@ new_fcntl(int fd, int cmd, ...)
 	return real_fcntl(fd, cmd);
 }
 
-
-struct dfuse_user_reply {
-	uid_t uid;
-	gid_t gid;
-};
-
 int
 ioctl(int fd, unsigned long request, ...)
 {
 	va_list arg;
 	void *param;
-	struct dfuse_user_reply *reply;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -2801,7 +2795,7 @@ dup2(int oldfd, int newfd)
 	}
 	return -1;
 }
-int __dup2(int oldfd, int newfd) __attribute__ ((alias("dup2")));
+int __dup2(int oldfd, int newfd) __attribute__ ((alias("dup2"), leaf, nothrow));
 /**
  *int
  *dup3(int oldfd, int newfd, int flags)
