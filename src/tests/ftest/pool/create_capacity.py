@@ -7,7 +7,7 @@ import time
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from test_utils_pool import add_pool, get_size_params, check_pool_creation
+from test_utils_pool import add_pool, get_size_params, check_pool_creation, time_pool_create
 
 
 class PoolCreateTests(TestWithServers):
@@ -50,7 +50,7 @@ class PoolCreateTests(TestWithServers):
         pools = [add_pool(self, create=False)]
 
         # Create the first pool
-        durations = [self.time_pool_create(1, pools[0])]
+        durations = [time_pool_create(self.log, 1, pools[0])]
 
         # Add additional pools of the same size as the first pool
         for _ in range(quantity - 1):
