@@ -31,8 +31,7 @@ class NvmePoolExclude(OSAUtils):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = self.get_daos_command()
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -82,12 +81,12 @@ class NvmePoolExclude(OSAUtils):
             "log": log
         }
         try:
-            thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+            thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
                                               pool, container, processes, ppn, intercept,
                                               plugin_path, dfuse, display_space, fail_on_warning,
                                               namespace, ior_params)
         except Exception as error:
-            thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
+            thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
         thread_queue.put(thread_result)
 
     def run_nvme_pool_exclude(self, num_pool, oclass=None):
@@ -193,16 +192,15 @@ class NvmePoolExclude(OSAUtils):
                     self.log.debug(result["result"])
                     if result["result"].exit_status != 0:
                         errors += 1
-                if errors:
-                     self.fail("Errors running {} threads".format(errors))
+                if errors:
+                    self.fail("Errors running {} threads".format(errors))
 
                 # Verify the data after pool exclude
-                ior_kwargs["ior_params"]["flags"] = self.ior_r_flags
-                ior_kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
-                kwargs.update(ior_kwargs)
-                try:
-                    thread_run_ior(kwargs=kwargs)
-                except Exception as error:
+                kwargs["ior_params"]["flags"] = self.ior_r_flags
+                kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
+                try:
+                    thread_run_ior(kwargs=kwargs)
+                except Exception as error:
                     self.fail("Error in ior read %s.".format(error))
 
                 display_string = "Pool{} space at the End".format(val)
