@@ -660,6 +660,20 @@ class TestPool(TestDaosApiBase):
                             self.pool_query_timeout.value, self.identifier)) from error
 
     @fail_on(CommandFailure)
+    def query_targets(self, *args, **kwargs):
+        """Call dmg pool query-targets.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_query_targets
+            kwargs (dict, optional): named arguments to DmgCommand.pool_query_targets
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
     def reintegrate(self, rank, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
 
@@ -968,6 +982,31 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_space_per_target(self, ranks, target_idx):
+        """Get space usage per rank, per target using dmg pool query-targets.
+
+        Args:
+            ranks (list): List of ranks to be queried
+            target_idx (str): Comma-separated list of target idx(s) to be queried
+
+        Returns:
+            dict: space per rank, per target
+                E.g. {<rank>: {<target>: {scm: {total: X, free: Y, used: Z}, nvme: {...}}}}
+
+        """
+        rank_target_tier_space = {}
+        for rank in ranks:
+            rank_target_tier_space[rank] = {}
+            rank_result = self.query_targets(rank=rank, target_idx=target_idx)
+            for target, target_info in enumerate(rank_result['response']['Infos']):
+                rank_target_tier_space[rank][target] = {}
+                for tier in target_info['Space']:
+                    rank_target_tier_space[rank][target][tier['media_type']] = {
+                        'total': tier['total'],
+                        'free': tier['free'],
+                        'used': tier['total'] - tier['free']}
+        return rank_target_tier_space
 
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.

@@ -10,6 +10,8 @@ import yaml
 
 from ClusterShell.NodeSet import NodeSet
 
+from data_utils import list_unique, list_flatten, dict_extract_values
+
 
 class YamlException(BaseException):
     """Base exception for this module."""
@@ -66,73 +68,6 @@ def get_yaml_data(yaml_file):
             except yaml.YAMLError as error:
                 raise YamlException(f"Error reading {yaml_file}") from error
     return yaml_data
-
-
-def find_values(obj, keys, key=None, val_type=str):
-    """Find dictionary values of a certain type specified with certain keys.
-
-    Args:
-        obj (obj): a python object; initially the dictionary to search
-        keys (list): list of keys to find their matching list values
-        key (str, optional): key to check for a match. Defaults to None.
-        val_type (object, optional): object type to allow when finding values. A list of object
-            types can be used to filter on multiple object types. If a value found is not of type
-            val_type it will not be included in the returned dictionary.
-
-    Returns:
-        dict: a dictionary of each matching key and its value
-
-    """
-    def add_matches(found):
-        """Add found matches to the match dictionary entry of the same key.
-
-        If a match does not already exist for this key add all the found values.
-        When a match already exists for a key, append the existing match with
-        any new found values.
-
-        For example:
-            Match       Found           Updated Match
-            ---------   ------------    -------------
-            None        [A, B]          [A, B]
-            [A, B]      [C]             [A, B, C]
-            [A, B, C]   [A, B, C, D]    [A, B, C, D]
-
-        Args:
-            found (dict): dictionary of matches found for each key
-        """
-        for found_key in found:
-            if found_key not in matches:
-                # Simply add the new value found for this key
-                matches[found_key] = found[found_key]
-
-            else:
-                is_list = isinstance(matches[found_key], list)
-                if not is_list:
-                    matches[found_key] = [matches[found_key]]
-                if isinstance(found[found_key], list):
-                    for found_item in found[found_key]:
-                        if found_item not in matches[found_key]:
-                            matches[found_key].append(found_item)
-                elif found[found_key] not in matches[found_key]:
-                    matches[found_key].append(found[found_key])
-
-                if not is_list and len(matches[found_key]) == 1:
-                    matches[found_key] = matches[found_key][0]
-
-    matches = {}
-    if isinstance(obj, val_type) and isinstance(key, str) and key in keys:
-        # Match found
-        matches[key] = obj
-    elif isinstance(obj, dict):
-        # Recursively look for matches in each dictionary entry
-        for obj_key, obj_val in list(obj.items()):
-            add_matches(find_values(obj_val, keys, obj_key, val_type))
-    elif isinstance(obj, list):
-        # Recursively look for matches in each list entry
-        for item in obj:
-            add_matches(find_values(item, keys, None, val_type))
-
-    return matches
 
 
 class YamlUpdater():
@@ -224,7 +159,14 @@ class YamlUpdater():
         yaml_data = get_yaml_data(yaml_file)
         self.log.debug("Detected yaml data: %s", yaml_data)
         placeholder_keys = list(self.YAML_KEYS.keys())
-        placeholder_data = find_values(yaml_data, placeholder_keys, val_type=(list, int, dict, str))
+        placeholder_data = {}
+        for key in placeholder_keys:
+            # Get the unique values with lists flattened
+            values = list_unique(list_flatten(
+                dict_extract_values(yaml_data, [key], (list, int, dict, str))))
+            if values:
+                # Use single value if list only contains 1 element
+                placeholder_data[key] = values if len(values) > 1 else values[0]
 
         # Generate a list of values that can be used as replacements
         replacement_data = OrderedDict()
