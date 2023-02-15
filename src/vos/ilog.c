@@ -18,6 +18,8 @@
 #include "vos_ts.h"
 #include "ilog.h"
 
+/* Only for test. */
+
 #define ILOG_TREE_ORDER 11
 
 enum {
