@@ -2591,6 +2591,10 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
+	/** On re-probe, the tree order may have changed */
+	if (tcx->tc_root->tr_order != tcx->tc_order)
+		tcx->tc_order = tcx->tc_root->tr_order;
+
 	D_INIT_LIST_HEAD(&data_loss_list);
 
 	evt_tcx_reset_trace(tcx);
