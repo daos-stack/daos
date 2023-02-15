@@ -142,6 +142,18 @@ jobs:
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
                         --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/corefile_in_gha.sh
+      - name: Archive corefiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: corefiles
+          path: /tmp/core.*
+      - name: Archive tarfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: tarfiles
+          path: /tmp/*_daos.tgz
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -332,6 +344,18 @@ jobs:
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
                         --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/corefile_in_gha.sh
+      - name: Archive corefiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: corefiles
+          path: /tmp/core.*
+      - name: Archive tarfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: tarfiles
+          path: /tmp/*_daos.tgz
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)

@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 cd daos
 
@@ -98,5 +98,10 @@ disass ABT_thread_create
 quit
 eof
 done
+echo ::endgroup::
+
+echo ::group::Tar /opt/daos et /home/daos/daos
+tar czf /tmp/opt_daos.tgz /opt/daos
+tar czf /tmp/home_daos.tgz .
 echo ::endgroup::
 
