@@ -68,25 +68,6 @@ umemstor_load_meta(struct umem_store *store, dav_obj_t *hdl)
 	return rc;
 }
 
-static int _wal_reserv(struct umem_store *store, uint64_t *id)
-{
-	static uint64_t dav_wal_id;
-
-	*id = ++dav_wal_id;
-	return 0;
-}
-
-static int _wal_submit(struct umem_store *store, struct umem_wal_tx *wal_tx,
-		       void *data_iod)
-{
-	return 0;
-}
-
-struct umem_store_ops _store_ops = {
-	.so_wal_reserv = _wal_reserv,
-	.so_wal_submit = _wal_submit,
-};
-
 /*
  * get_uuid_lo -- (internal) evaluates XOR sum of least significant
  * 8 bytes with most significant 8 bytes.
@@ -155,12 +136,9 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	hdl->do_size = sz;
 	hdl->p_ops.base = hdl;
 
-	/* REVISIT */
 	hdl->do_store = store;
 	if (hdl->do_store->stor_priv == NULL) {
-		D_ERROR("meta context not defined. WAL commit disabled for %s\n",
-			path);
-		hdl->do_store->stor_ops = &_store_ops;
+		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
 	} else {
 		rc = umem_cache_alloc(store, 0);
 		if (rc != 0) {
