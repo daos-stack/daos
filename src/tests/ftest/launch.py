@@ -52,6 +52,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
@@ -3051,10 +3052,6 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--slurm_setup",
-        action="store_true",
-        help="setup any slurm partitions required by the tests")
-    parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
         default=str(get_local_host()),
@@ -3062,9 +3059,9 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "-u", "--user_create",
+        "-ss", "--slurm_setup",
         action="store_true",
-        help="create additional users defined by each test's yaml file")
+        help="setup any slurm partitions required by the tests")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3094,6 +3091,10 @@ def main():
              "server placeholders in each test's yaml file.  If the "
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
+    parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
     parser.add_argument(
         "-v", "--verbose",
         action="count",
@@ -3125,6 +3126,14 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
+
+        # Limit repeated testing in CI
+        if args.repeat > MAX_CI_REPETITIONS:
+            logger.warning(
+                "The requested number of times to repeat the test(s) exceeds the CI limitation. "
+                "The --repeat argument has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
 
     # Perform the steps defined by the arguments specified
     try:
