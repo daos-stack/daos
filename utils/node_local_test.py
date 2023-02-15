@@ -937,7 +937,7 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool', 'create', '--label', 'NLT', '--scm-size', f'{size}M'])
+        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()

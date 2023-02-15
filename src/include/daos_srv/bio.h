@@ -354,6 +354,7 @@ struct bio_dev_info {
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
 	uint32_t		bdi_dev_type;	/* reserved */
+	uint32_t		bdi_dev_roles;	/* reserved */
 };
 
 static inline void
@@ -719,12 +720,12 @@ bio_yield(struct umem_instance *umm)
  * Used for querying the BIO health information from the control plane command.
  *
  * \param dev_state	[OUT]	BIO device health state
- * \param xs		[IN]	xstream context
+ * \param dev_uuid	[IN]	uuid of device
  * \param st		[IN]	smd dev type
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_stats *dev_state, enum smd_dev_type st,
+int bio_get_dev_state(struct nvme_stats *dev_state, uuid_t dev_uuid,
 		      struct bio_xs_context *xs);
 
 /*
@@ -732,11 +733,11 @@ int bio_get_dev_state(struct nvme_stats *dev_state, enum smd_dev_type st,
  * Used for daos_test validation in the daos_mgmt_get_bs_state() C API.
  *
  * \param dev_state	[OUT]	BIO blobstore state
- * \param st		[IN]	smd dev type
+ * \param dev_id	[IN]	UUID of device
  * \param xs		[IN]	xstream context
  *
  */
-void bio_get_bs_state(int *blobstore_state, enum smd_dev_type st, struct bio_xs_context *xs);
+void bio_get_bs_state(int *blobstore_state, uuid_t dev_uuid, struct bio_xs_context *xs);
 
 
 /*
@@ -744,11 +745,11 @@ void bio_get_bs_state(int *blobstore_state, enum smd_dev_type st, struct bio_xs_
  * state transition.
  *
  * \param xs		[IN]	xstream context
- * \param st		[IN]	smd dev type
+ * \param dev_id	[IN]	uuid of device
  *
  * \return			Zero on success, negative value on error
  */
-int bio_dev_set_faulty(struct bio_xs_context *xs, enum smd_dev_type st);
+int bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_id);
 
 /* Function to increment data CSUM media error. */
 void bio_log_data_csum_err(struct bio_xs_context *xs);
@@ -1015,18 +1016,6 @@ int bio_wal_replay(struct bio_meta_context *mc,
 int bio_wal_flush_header(struct bio_meta_context *mc);
 
 /*
- * Acquire highest committed transaction ID before checkpointing
- *
- * \param[in]	mc		BIO meta context
- * \param[out]	tx_id		Highest committed transaction ID
- *
- * \return			Zero:		Success;
- *				-DER_ALREADY:	Nothing to be checkpointed;
- *				Negative value:	Error;
- */
-int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
-
-/*
  * After checkpointing, set highest checkpointed transaction ID, reclaim WAL space
  *
  * \param[in]	mc		BIO meta context
@@ -1034,7 +1023,7 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
+int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id);
 
 /*
  * Query meta capacity & meta block size & meta blob header blocks.

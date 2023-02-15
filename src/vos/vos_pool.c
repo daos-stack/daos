@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -152,11 +152,31 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 	return bio_wal_reserve(store->stor_priv, tx_id);
 }
 
+static void
+vos_wal_on_commit(struct umem_store *store, uint64_t id)
+{
+	struct chkpt_ctx *ctx = store->chkpt_ctx;
+
+	if (ctx == NULL)
+		return; /** Checkpointing not active */
+
+	ctx->cc_commit_id = id;
+
+	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0)
+		ctx->cc_wake_fn(ctx);
+}
+
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
+	int rc;
+
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+
+	vos_wal_on_commit(store, wal_tx->utx_id);
+
+	return rc;
 }
 
 static inline int
@@ -175,25 +195,95 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 	return bio_wal_id_cmp(store->stor_priv, id1, id2);
 }
 
+static void
+chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
+{
+	struct chkpt_ctx *ctx = arg;
+
+	if (store->stor_ops->so_wal_id_cmp(store, chkpt_tx, ctx->cc_commit_id) <= 0) {
+		/** Sometimes we may need to yield here to make progress such as when we need
+		 *  more DMA buffers to prepare entries.
+		 */
+		if (!ctx->cc_is_idle_fn())
+			ctx->cc_yield_fn(ctx);
+		goto done;
+	}
+
+	ctx->cc_wait_id = chkpt_tx;
+	ctx->cc_wait_fn(ctx);
+done:
+	*committed_tx = ctx->cc_commit_id;
+}
+
 struct umem_store_ops vos_store_ops = {
-	.so_read	= vos_meta_readv,
-	.so_write	= vos_meta_writev,
-	.so_flush_prep	= vos_meta_flush_prep,
-	.so_flush_copy	= vos_meta_flush_copy,
-	.so_flush_post	= vos_meta_flush_post,
-	.so_wal_reserv	= vos_wal_reserve,
-	.so_wal_submit	= vos_wal_commit,
-	.so_wal_replay	= vos_wal_replay,
-	.so_wal_id_cmp	= vos_wal_id_cmp,
+    .so_read       = vos_meta_readv,
+    .so_write      = vos_meta_writev,
+    .so_flush_prep = vos_meta_flush_prep,
+    .so_flush_copy = vos_meta_flush_copy,
+    .so_flush_post = vos_meta_flush_post,
+    .so_wal_reserv = vos_wal_reserve,
+    .so_wal_submit = vos_wal_commit,
+    .so_wal_replay = vos_wal_replay,
+    .so_wal_id_cmp = vos_wal_id_cmp,
 };
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
-int
-vos_pool_settings_init(void)
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh)
 {
-	return umempobj_settings_init();
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	/** TODO: Revisit. */
+	return bio_nvme_configured(SMD_DEV_TYPE_META);
+}
+
+int
+vos_pool_checkpoint(struct chkpt_ctx *ctx)
+{
+	struct vos_pool      *pool;
+	uint64_t              tx_id;
+	struct umem_instance *umm;
+	struct umem_store    *store;
+	struct bio_wal_info   wal_info;
+	int                   rc;
+
+	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	umm   = vos_pool2umm(pool);
+	store = &umm->umm_pool->up_store;
+
+	bio_wal_query(store->stor_priv, &wal_info);
+	tx_id = wal_info.wi_commit_id;
+	if (tx_id == wal_info.wi_ckp_id) {
+		D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n", DP_UUID(pool->vp_id));
+		return 0;
+	}
+
+	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
+	       DP_UUID(pool->vp_id), tx_id);
+	ctx->cc_commit_id = tx_id;
+
+	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
+
+	if (rc == 0)
+		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
+
+	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
+	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
+
+	return rc;
+}
+
+int
+vos_pool_settings_init(bool md_on_ssd)
+{
+	return umempobj_settings_init(md_on_ssd);
 }
 
 static inline enum bio_mc_flags
@@ -769,89 +859,24 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 }
 
 static int
-set_slab_prop(int id, struct umem_slab_desc *slab)
-{
-	struct daos_tree_overhead	ovhd = { 0 };
-	int				tclass, *size, rc;
-
-	if (id == VOS_SLAB_OBJ_DF) {
-		slab->unit_size = sizeof(struct vos_obj_df);
-		goto done;
-	}
-
-	size = &ovhd.to_leaf_overhead.no_size;
-
-	switch (id) {
-	case VOS_SLAB_OBJ_NODE:
-		tclass = VOS_TC_OBJECT;
-		break;
-	case VOS_SLAB_KEY_NODE:
-		tclass = VOS_TC_DKEY;
-		break;
-	case VOS_SLAB_SV_NODE:
-		tclass = VOS_TC_SV;
-		break;
-	case VOS_SLAB_EVT_NODE:
-		tclass = VOS_TC_ARRAY;
-		break;
-	case VOS_SLAB_EVT_NODE_SM:
-		tclass = VOS_TC_ARRAY;
-		size = &ovhd.to_int_node_size;
-		break;
-	case VOS_SLAB_EVT_DESC:
-		tclass = VOS_TC_ARRAY;
-		size = &ovhd.to_record_msize;
-		break;
-	default:
-		D_ERROR("Invalid slab ID: %d\n", id);
-		return -DER_INVAL;
-	}
-
-	rc = vos_tree_get_overhead(0, tclass, 0, &ovhd);
-	if (rc)
-		return rc;
-
-	slab->unit_size = *size;
-done:
-	D_ASSERT(slab->unit_size > 0);
-	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
-
-	return 0;
-}
-
-static int
 vos_register_slabs(struct umem_attr *uma)
 {
-	struct umem_slab_desc		*slab;
-	int				 i, rc, j;
-	bool				 skip_set;
+	struct umem_slab_desc *slab;
+	int                           i, rc;
+	int                           defined;
+	int                           used = 0;
+
+	for (i = 0; i < ARRAY_SIZE(slab_map); i++) {
+		if (slab_map[i] != -1)
+			used |= (1 << i);
+	}
 
 	D_ASSERT(uma->uma_pool != NULL);
-	for (i = 0; i < VOS_SLAB_MAX; i++) {
+	for (i = 0; i < UMM_SLABS_CNT; i++) {
+		D_ASSERT(used != 0);
+		defined               = __builtin_ctz(used);
 		slab = &uma->uma_slabs[i];
-
-		D_ASSERT(slab->class_id == 0);
-		rc = set_slab_prop(i, slab);
-		if (rc) {
-			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
-			return rc;
-		}
-
-		skip_set = false;
-		for (j = 0; j < i; j++) {
-			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
-				/** PMDK will fail to register a new slab of the same size
-				 *  so reuse the class id
-				 */
-				slab->class_id = uma->uma_slabs[j].class_id;
-				skip_set = true;
-				D_ASSERT(slab->class_id != 0);
-				break;
-			}
-		}
-
-		if (skip_set)
-			continue;
+		slab->unit_size       = (defined + 1) * 32;
 
 		rc = umempobj_set_slab_desc(uma->uma_pool, slab);
 		if (rc) {
@@ -861,7 +886,11 @@ vos_register_slabs(struct umem_attr *uma)
 			return rc;
 		}
 		D_ASSERT(slab->class_id != 0);
+		D_DEBUG(DB_MGMT, "slab registered with size %zu\n", slab->unit_size);
+
+		used &= ~(1 << defined);
 	}
+	D_ASSERT(used == 0);
 
 	return 0;
 }

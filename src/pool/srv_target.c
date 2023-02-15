@@ -352,6 +352,10 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_flush;
 
+	rc = ds_start_chkpt_ult(child);
+	if (rc != 0)
+		goto out_scrub;
+
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	/* Load all containers */
@@ -364,6 +368,8 @@ pool_child_add_one(void *varg)
 out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
+	ds_stop_chkpt_ult(child);
+out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_flush:
 	stop_flush_ult(child);
@@ -397,6 +403,7 @@ pool_child_delete_one(void *uuid)
 
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
+	ds_stop_chkpt_ult(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
@@ -888,7 +895,7 @@ ds_pool_stop(uuid_t uuid)
 	pool_fetch_hdls_ult_abort(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
-	ds_migrate_stop(pool, -1);
+	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));

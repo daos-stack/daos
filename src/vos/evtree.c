@@ -1411,8 +1411,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	umem_off_t		 nd_off;
 	bool			 leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf),
-			leaf ? VOS_SLAB_EVT_NODE : VOS_SLAB_EVT_NODE_SM);
+	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -3152,8 +3151,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 						"for checksum", csum_buf_size);
 			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		} else {
-			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size,
-							VOS_SLAB_EVT_DESC);
+			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size);
 		}
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;

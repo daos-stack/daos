@@ -385,22 +385,22 @@ get_trans_blk(struct bio_sglist *bsgl, unsigned int idx, unsigned int blk_sz,
 	      struct wal_trans_blk *tb)
 {
 	struct bio_iov	*biov;
-	unsigned int	 iov_blks;
+	unsigned int	 iov_blks, blk_off = idx;
 
 	D_ASSERT(bsgl->bs_nr_out == 1 || bsgl->bs_nr_out == 2);
 	biov = &bsgl->bs_iovs[0];
 	iov_blks = (bio_iov2len(biov) + blk_sz - 1) / blk_sz;
 
-	if (idx >= iov_blks) {
+	if (blk_off >= iov_blks) {
 		D_ASSERT(bsgl->bs_nr_out == 2);
 
-		idx -= iov_blks;
+		blk_off -= iov_blks;
 		biov = &bsgl->bs_iovs[1];
 		iov_blks = (bio_iov2len(biov) + blk_sz - 1) / blk_sz;
-		D_ASSERT(idx < iov_blks);
+		D_ASSERT(blk_off < iov_blks);
 	}
 
-	tb->tb_buf = biov->bi_buf + (idx * blk_sz);
+	tb->tb_buf = biov->bi_buf + (blk_off * blk_sz);
 	tb->tb_idx = idx;
 	tb->tb_off = 0;
 }
@@ -618,7 +618,8 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			entry.te_len = act->ac_move.size;
 			entry.te_data = 0;
 			place_entry(&entry_blk, &entry);
-			place_payload(bsgl, bd, &payload_blk, act->ac_move.src, sizeof(uint64_t));
+			place_payload(bsgl, bd, &payload_blk, (uint64_t)&act->ac_move.src,
+				      sizeof(uint64_t));
 			break;
 		case UMEM_ACT_SET:
 			entry.te_off = act->ac_set.addr;
@@ -754,6 +755,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 		D_ASSERT(si->si_tx_failed == 0);
 
 		si->si_commit_id = wal_tx->td_id;
+
 		si->si_commit_blks = wal_tx->td_blks;
 	}
 
@@ -1654,25 +1656,6 @@ out:
 	return rc;
 }
 
-int
-bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id)
-{
-	struct wal_super_info	*si = &mc->mc_wal_info;
-
-	D_ASSERT(wal_id_cmp(si, si->si_ckp_id, si->si_commit_id) <= 0);
-	if (wal_id_cmp(si, si->si_ckp_id, si->si_commit_id) == 0)
-		return -DER_ALREADY;
-
-	/*
-	 * Caller doesn't have to checkpoint to this highest committed ID, instead,
-	 * it could pick reasonable amount of pages for checkpointing in the committed
-	 * ID order, so that the WAL space will be gradually reclaimed in a more
-	 * prompt way.
-	 */
-	*tx_id = si->si_commit_id;
-	return 0;
-}
-
 static inline uint64_t
 off2lba_blk(uint64_t off)
 {
@@ -1680,7 +1663,7 @@ off2lba_blk(uint64_t off)
 }
 
 int
-bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id)
+bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_trans_head	*hdr;

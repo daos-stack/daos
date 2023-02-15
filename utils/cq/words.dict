@@ -162,6 +162,7 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
@@ -428,6 +429,7 @@ teardowns
 testcase
 testcases
 testdata
+testFile
 testname
 testrunner
 tgt

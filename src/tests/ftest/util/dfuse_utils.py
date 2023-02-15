@@ -23,9 +23,9 @@ class DfuseCommand(ExecutableCommand):
         super().__init__(namespace, command, path)
 
         # dfuse options
-        self.pool = FormattedParameter("--pool {}")
-        self.cont = FormattedParameter("--container {}")
-        self.mount_dir = FormattedParameter("--mountpoint {}")
+        self.mount_dir = BasicParameter(None, position=0)
+        self.pool = BasicParameter(None, position=1)
+        self.cont = BasicParameter(None, position=2)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)

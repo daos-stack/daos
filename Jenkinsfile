@@ -38,19 +38,48 @@ void job_status_write() {
                   echo "${job_status_text}" >> ${dirName}jenkins_result"""
 }
 
+// groovylint-disable Instanceof
 // groovylint-disable-next-line MethodParameterTypeRequired
 void job_status_update(String name=env.STAGE_NAME,
                        // groovylint-disable-next-line NoDef
                        def value=currentBuild.currentResult) {
     String key = name.replace(' ', '_')
     key = key.replaceAll('[ .]', '_')
+    if (job_status_internal.containsKey(key)) {
+        // groovylint-disable-next-line VariableTypeRequired, NoDef
+        def myStage = job_status_internal[key]
+        if (myStage instanceof Map) {
+            if (value instanceof Map) {
+                value.each { resultKey, data -> myStage[resultKey] = data }
+                return
+            }
+            // Update result with single value
+            myStage['result'] = value
+            return
+        }
+    }
+    // pass through value
     job_status_internal[key] = value
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_step_update(def value) {
     // Wrapper around a pipeline step to obtain a status.
+    if (value == null) {
+        // groovylint-disable-next-line ParameterReassignment
+        value = currentBuild.currentResult
+    }
     job_status_update(env.STAGE_NAME, value)
+}
+
+Map nlt_test() {
+    // groovylint-disable-next-line NoJavaUtilDate
+    Date startDate = new Date()
+    sh label: 'Fault injection testing using NLT',
+       script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
+    int runTime = durationSeconds(startDate)
+    Map runData = ['nlttest_time': runTime]
+    return runData
 }
 
 // For master, this is just some wildly high number
@@ -141,6 +170,11 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestNvme',
+               defaultValue: 'auto',
+               description: 'The launch.py --nvme argument to use for the Functional test ' +
+                            'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
+                            '0000:81:00.0, etc.)')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -425,7 +459,7 @@ pipeline {
                         }
                     }
                     steps {
-                        pythonBanditCheck()
+                        job_step_update(pythonBanditCheck())
                     }
                     post {
                         always {
@@ -465,7 +499,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        job_step_update(buildRpm())
                     }
                     post {
                         success {
@@ -502,7 +536,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        job_step_update(buildRpm())
                     }
                     post {
                         success {
@@ -539,7 +573,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        job_step_update(buildRpm())
                     }
                     post {
                         success {
@@ -580,12 +614,13 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: true,
-                                   stash_files: 'ci/test_files_to_stash.txt',
-                                   build_deps: 'no',
-                                   stash_opt: true,
-                                   scons_args: sconsFaultsArgs() +
-                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
@@ -621,12 +656,13 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: true,
-                                   stash_files: 'ci/test_files_to_stash.txt',
-                                   build_deps: 'yes',
-                                   stash_opt: true,
-                                   scons_args: sconsFaultsArgs() +
-                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'yes',
+                                       stash_opt: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
@@ -659,10 +695,11 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: true,
-                                   scons_args: sconsFaultsArgs() +
-                                               ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                   build_deps: 'no'
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'no'))
                     }
                     post {
                         unsuccessful {
@@ -694,10 +731,11 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        unitTest timeout_time: 60,
-                                 unstash_opt: true,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
                     }
                     post {
                         always {
@@ -715,12 +753,13 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: prRepos(),
-                                 test_script: 'ci/unit/test_nlt.sh',
-                                 unstash_opt: true,
-                                 unstash_tests: false,
-                                 inst_rpms: unitPackages()
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     inst_repos: prRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages()))
                     }
                     post {
                         always {
@@ -750,11 +789,12 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        unitTest timeout_time: 60,
-                                 unstash_opt: true,
-                                 ignore_failure: true,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
                     }
                     post {
                         always {
@@ -778,11 +818,12 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        unitTest timeout_time: 60,
-                                 unstash_opt: true,
-                                 ignore_failure: true,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
                     }
                     post {
                         always {
@@ -810,9 +851,11 @@ pipeline {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -830,9 +873,11 @@ pipeline {
                         label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                    inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                    test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -850,9 +895,11 @@ pipeline {
                         label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -870,9 +917,11 @@ pipeline {
                         label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -897,14 +946,15 @@ pipeline {
                         }
                     }
                     steps {
-                        runTest script: 'export DAOS_PKG_VERSION=' +
-                                        daosPackagesVersion(next_version) + '\n' +
-                                        'utils/scripts/helpers/scan_daos_maldet.sh',
-                                junit_files: 'maldetect_el8.xml',
-                                failure_artifacts: env.STAGE_NAME,
-                                ignore_failure: true,
-                                description: env.STAGE_NAME,
-                                context: 'test/' + env.STAGE_NAME
+                        job_step_update(
+                            runTest(script: 'export DAOS_PKG_VERSION=' +
+                                            daosPackagesVersion(next_version) + '\n' +
+                                            'utils/scripts/helpers/scan_daos_maldet.sh',
+                                    junit_files: 'maldetect_el8.xml',
+                                    failure_artifacts: env.STAGE_NAME,
+                                    ignore_failure: true,
+                                    description: env.STAGE_NAME,
+                                    context: 'test/' + env.STAGE_NAME))
                     }
                     post {
                         always {
@@ -933,14 +983,15 @@ pipeline {
                         }
                     }
                     steps {
-                        runTest script: 'export DAOS_PKG_VERSION=' +
-                                        daosPackagesVersion(next_version) + '\n' +
-                                        'utils/scripts/helpers/scan_daos_maldet.sh',
-                              junit_files: 'maldetect_leap15.xml',
-                              failure_artifacts: env.STAGE_NAME,
-                              ignore_failure: true,
-                              description: env.STAGE_NAME,
-                              context: 'test/' + env.STAGE_NAME
+                        job_step_update(
+                            runTest(script: 'export DAOS_PKG_VERSION=' +
+                                            daosPackagesVersion(next_version) + '\n' +
+                                            'utils/scripts/helpers/scan_daos_maldet.sh',
+                                junit_files: 'maldetect_leap15.xml',
+                                failure_artifacts: env.STAGE_NAME,
+                                ignore_failure: true,
+                                description: env.STAGE_NAME,
+                                context: 'test/' + env.STAGE_NAME))
                     }
                     post {
                         always {
@@ -969,11 +1020,11 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: true,
-                                   scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                   build_deps: 'no'
-                        sh label: 'Fault injection testing using NLT',
-                           script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                       build_deps: 'no'))
+                        job_step_update(nlt_test())
                     }
                     post {
                         always {
@@ -1013,9 +1064,10 @@ pipeline {
                 label params.CI_STORAGE_PREP_LABEL
             }
             steps {
-                storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version,
-                                                              'client-tests-openmpir')
+                job_step_update(
+                    storagePrepTest(
+                        inst_repos: daosRepos(),
+                        inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi')))
             }
             post {
                 cleanup {
@@ -1039,9 +1091,11 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1060,9 +1114,11 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1081,9 +1137,11 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1102,9 +1160,11 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1138,14 +1198,16 @@ pipeline {
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
-                                                               'func-vm-cov',
-                                                               'func-hw-medium-cov',
-                                                               'func-hw-large-cov'],
-                                            coverage_healthy: [methodCoverage: 0,
-                                                               conditionalCoverage: 0,
-                                                               statementCoverage: 0],
-                                            ignore_failure: true
+                        job_step_update(
+                            cloverReportPublish(
+                                coverage_stashes: ['el8-covc-unit-cov',
+                                                   'func-vm-cov',
+                                                   'func-hw-medium-cov',
+                                                   'func-hw-large-cov'],
+                                coverage_healthy: [methodCoverage: 0,
+                                                   conditionalCoverage: 0,
+                                                   statementCoverage: 0],
+                                ignore_failure: true))
                     }
                     post {
                         cleanup {

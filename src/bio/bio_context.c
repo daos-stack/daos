@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -273,6 +273,24 @@ bio_bs_hold(struct bio_blobstore *bbs)
 out:
 	ABT_mutex_unlock(bbs->bb_mutex);
 	return rc;
+}
+
+struct bio_xs_blobstore *
+bio_xs_blobstore_by_devid(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid)
+{
+	enum smd_dev_type	 st;
+	struct bio_xs_blobstore *bxb = NULL;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (!bxb)
+			continue;
+
+		if (uuid_compare(bxb->bxb_blobstore->bb_dev->bb_uuid, dev_uuid) == 0)
+			return bxb;
+	}
+
+	return NULL;
 }
 
 /**
@@ -642,8 +660,8 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 		return 0;
 
 	D_ASSERT(meta_sz > 0);
-	if (meta_sz <= default_cluster_sz()) {
-		D_ERROR("Meta blob size("DF_U64") is not greater than minimal size(%u)\n",
+	if (meta_sz < default_cluster_sz()) {
+		D_ERROR("Meta blob size("DF_U64") is less than minimal size(%u)\n",
 			meta_sz, default_cluster_sz());
 		rc = -DER_INVAL;
 		goto delete_data;

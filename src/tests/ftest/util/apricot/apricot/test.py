@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -640,7 +640,6 @@ class TestWithServers(TestWithoutServers):
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
-
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -905,6 +904,8 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "after restarting all servers")
+        else:
+            self._list_server_manager_info()
         self.log.info("-" * 100)
         return errors
 
@@ -1215,6 +1216,9 @@ class TestWithServers(TestWithoutServers):
                 "All %s groups(s) of servers currently running",
                 len(self.server_managers))
 
+        # List active server log files and storage devices
+        self._list_server_manager_info()
+
         return force_agent_start
 
     def check_running(self, name, manager_list, prepare_dmg=False,
@@ -1275,6 +1279,17 @@ class TestWithServers(TestWithoutServers):
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
             manager.start()
+
+    def _list_server_manager_info(self):
+        """Display information about the running servers."""
+        self.log.info("-" * 100)
+        self.log.info("--- SERVER INFORMATION ---")
+        for manager in self.server_managers:
+            manager.get_host_log_files()
+            try:
+                manager.dmg.storage_query_list_devices()
+            except CommandFailure:
+                pass
 
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.
@@ -1762,14 +1777,15 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=(daos_command or self.get_daos_command()))
+        container = TestContainer(
+            pool, daos_command=(daos_command or self.get_daos_command()),
+            label_generator=self.label_generator)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
 
         # Set passed params
-        for name, value in kwargs.items():
-            getattr(container, name).update(value, name=name)
+        container.update_params(**kwargs)
 
         if create:
             container.create()

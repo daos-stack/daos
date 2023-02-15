@@ -508,6 +508,19 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	D_FREE(oiod->oiod_siods);
 }
 
+static inline struct obj_shard_iod *
+obj_shard_iod_get(struct obj_io_desc *oiod, uint32_t tgt)
+{
+	int i;
+
+	for (i = 0; i < oiod->oiod_nr; i++) {
+		if (oiod->oiod_siods[i].siod_tgt_idx == tgt)
+			return &oiod->oiod_siods[i];
+	}
+
+	return NULL;
+}
+
 /* translate the queried VOS shadow list to daos extents */
 static inline void
 obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,

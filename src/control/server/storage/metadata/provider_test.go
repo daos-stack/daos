@@ -76,12 +76,31 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			},
 			expErr: errors.New("mock GetFsType"),
 		},
+		"GetFsType returns nosuid flag": {
+			req: pathReq,
+			sysCfg: &system.MockSysConfig{
+				GetFsTypeRes: &system.FsType{
+					Name:   system.FsTypeExt4,
+					NoSUID: true,
+				},
+			},
+			expErr: FaultBadFilesystem(&system.FsType{
+				Name:   system.FsTypeExt4,
+				NoSUID: true,
+			}),
+		},
 		"GetFsType returns nfs": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeStr: system.FsTypeNfs,
+				GetFsTypeRes: &system.FsType{Name: system.FsTypeNfs},
 			},
-			expErr: FaultBadFilesystem(system.FsTypeNfs),
+			expErr: FaultBadFilesystem(&system.FsType{Name: system.FsTypeNfs}),
+		},
+		"GetFsType returns unknown": {
+			req: pathReq,
+			sysCfg: &system.MockSysConfig{
+				GetFsTypeRes: &system.FsType{Name: system.FsTypeUnknown},
+			},
 		},
 		"GetFsType skipped with device": {
 			req: deviceReq,
@@ -92,7 +111,7 @@ func TestMetadata_Provider_Format(t *testing.T) {
 		"GetFsType retries with parent if dir doesn't exist": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				GetFsTypeStr: system.FsTypeExt4,
+				GetFsTypeRes: &system.FsType{Name: system.FsTypeExt4},
 				GetFsTypeErr: []error{os.ErrNotExist, os.ErrNotExist, nil},
 			},
 		},
@@ -181,7 +200,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 		"path only doesn't attempt device format": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
-				MkfsErr: errors.New("mkfs was called!"),
+				MkfsErr:      errors.New("mkfs was called!"),
+				GetFsTypeRes: &system.FsType{Name: system.FsTypeExt4},
 			},
 			mountCfg: &storage.MockMountProviderConfig{
 				MountErr: errors.New("mount was called!"),

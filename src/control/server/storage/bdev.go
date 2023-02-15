@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ import "C"
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
+	sysXSTgtID     = 1024
 )
 
 // JSON config file constants.
@@ -245,6 +247,8 @@ type SmdDevice struct {
 	ClusterSize uint64        `json:"cluster_size"`
 	Health      *NvmeHealth   `json:"health"`
 	TrAddr      string        `json:"tr_addr"`
+	Roles       BdevRoles     `json:"roles"`
+	HasSysXS    bool          `json:"has_sys_xs"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -252,6 +256,63 @@ func (sd *SmdDevice) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("%+v", *sd)
+}
+
+// MarshalJSON handles the special case where native SmdDevice converts BdevRoles to bitmask in
+// proto SmdDevice type. Native BdevRoles type en/decodes to/from human readable JSON strings.
+func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+	if sd == nil {
+		return nil, errors.New("tried to marshal nil SmdDevice")
+	}
+
+	type toJSON SmdDevice
+	return json.Marshal(&struct {
+		RoleBits uint32 `json:"role_bits"`
+		*toJSON
+	}{
+		RoleBits: uint32(sd.Roles.OptionBits),
+		toJSON:   (*toJSON)(sd),
+	})
+}
+
+// UnmarshalJSON handles the special case where proto SmdDevice converts BdevRoles bitmask to
+// native BdevRoles type. Native BdevRoles type en/decodes to/from human readable JSON strings.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	type fromJSON SmdDevice
+	from := &struct {
+		RoleBits uint32 `json:"role_bits"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	if from.Roles.IsEmpty() && from.RoleBits != 0 {
+		sd.Roles.OptionBits = OptionBits(from.RoleBits)
+	}
+
+	seen := make(map[int32]bool)
+	newTgts := make([]int32, 0, len(sd.TargetIDs))
+	for _, i := range sd.TargetIDs {
+		if !seen[i] {
+			if i == sysXSTgtID {
+				sd.HasSysXS = true
+			} else {
+				newTgts = append(newTgts, i)
+			}
+			seen[i] = true
+		}
+	}
+	sd.TargetIDs = newTgts
+
+	return nil
 }
 
 // NvmeController represents a NVMe device controller which includes health
@@ -269,16 +330,15 @@ type NvmeController struct {
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
-func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
-	for idx := range nc.SmdDevices {
-		if smdDev.UUID == nc.SmdDevices[idx].UUID {
-			nc.SmdDevices[idx] = smdDev
-
+func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
+	for _, exstDev := range nc.SmdDevices {
+		if newDev.UUID == exstDev.UUID {
+			*exstDev = *newDev
 			return
 		}
 	}
 
-	nc.SmdDevices = append(nc.SmdDevices, smdDev)
+	nc.SmdDevices = append(nc.SmdDevices, newDev)
 }
 
 // Capacity returns the cumulative total bytes of all namespace sizes.
@@ -352,23 +412,25 @@ func (ncs NvmeControllers) Summary() string {
 }
 
 // Update adds or updates slice of NVMe Controllers.
-func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
+func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
+	if ncs == nil {
+		return
+	}
+
 	for _, ctrlr := range ctrlrs {
 		replaced := false
-
-		for idx, existing := range ncs {
+		for _, existing := range *ncs {
 			if ctrlr.PciAddr == existing.PciAddr {
-				ncs[idx] = ctrlr
+				*existing = ctrlr
 				replaced = true
-				continue
+				break
 			}
 		}
 		if !replaced {
-			ncs = append(ncs, ctrlr)
+			newCtrlr := ctrlr
+			*ncs = append(*ncs, &newCtrlr)
 		}
 	}
-
-	return ncs
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
@@ -428,7 +490,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
-		DeviceRoles    BdevDeviceRoles // NVMe SSD role assignments
+		DeviceRoles    BdevRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.

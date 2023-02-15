@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,7 +87,7 @@ struct wal_super_info {
 	uint64_t		si_commit_id;	/* Last committed ID */
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
 	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
-	uint64_t		si_unused_id;	/* Next unused ID */
+	uint64_t                si_unused_id;   /* Next unused ID */
 	d_list_t		si_pending_list;/* Pending transactions */
 	ABT_cond		si_rsrv_wq;	/* FIFO waitqueue for WAL ID reserving */
 	ABT_mutex		si_mutex;	/* For si_rsrv_wq */

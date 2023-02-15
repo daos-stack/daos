@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -633,6 +633,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		b_info->bdi_dev_roles = d_bdev->bb_roles;
 		if (!d_bdev->bb_removed)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		if (d_bdev->bb_faulty)
@@ -716,7 +717,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
 		opts->finished = true;
-		return;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);

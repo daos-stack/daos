@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -914,6 +914,8 @@ struct vos_iterator {
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
+	uint64_t                 it_seq;
+	struct vos_iter_anchors *it_anchors;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -1284,30 +1286,52 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
-/* Slab allocation */
-enum {
-	VOS_SLAB_OBJ_NODE	= 0,
-	VOS_SLAB_KEY_NODE	= 1,
-	VOS_SLAB_SV_NODE	= 2,
-	VOS_SLAB_EVT_NODE	= 3,
-	VOS_SLAB_EVT_DESC	= 4,
-	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_EVT_NODE_SM	= 6,
-	VOS_SLAB_MAX		= 7
+/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
+static const int        slab_map[] = {
+    0,                  /* 32 bytes */
+    1,                  /* 64 bytes */
+    2,                  /* 96 bytes */
+    3,                  /* 128 bytes */
+    4,                  /* 160 bytes */
+    5,                  /* 192 bytes */
+    6,                  /* 224 bytes */
+    -1,                 /* 256 bytes */
+    7,                  /* 288 bytes */
+    -1, -1, 8,          /* 384 bytes */
+    9,                  /* 416 bytes */
+    -1, -1, -1, -1, 10, /* 576 bytes */
+    -1, -1, 11,         /* 672 bytes */
+    -1, -1, 12,         /* 768 bytes */
 };
-D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
 static inline umem_off_t
-vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+vos_slab_alloc(struct umem_instance *umm, int size)
 {
-	/* evtree unit tests may skip slab register in vos_pool_open() */
-	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
-		  size == umem_slab_usize(umm, slab_id),
-		  "registered: %d, id: %d, size: %d != %zu\n",
-		  umem_slab_registered(umm, slab_id),
-		  slab_id, size, umem_slab_usize(umm, slab_id));
+	int aligned_size = D_ALIGNUP(size, 32);
+	int slab_idx;
+	int slab;
 
-	return umem_alloc_verb(umm, slab_id, UMEM_FLAG_ZERO, size);
+	slab_idx = (aligned_size >> 5) - 1;
+	if (slab_idx >= ARRAY_SIZE(slab_map))
+		goto no_slab_alloc;
+
+	if (slab_map[slab_idx] == -1) {
+		D_DEBUG(DB_MGMT, "No slab %d for allocation of size %d, idx=%d\n", aligned_size,
+			size, slab_idx);
+		goto no_slab_alloc;
+	}
+
+	slab = slab_map[slab_idx];
+
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab) || aligned_size == umem_slab_usize(umm, slab),
+		  "registered: %d, id: %d, size: %d != %zu\n", umem_slab_registered(umm, slab),
+		  slab, aligned_size, umem_slab_usize(umm, slab));
+
+	return umem_alloc_verb(umm, slab, UMEM_FLAG_ZERO, aligned_size);
+
+no_slab_alloc:
+	return umem_zalloc(umm, size);
 }
 
 /* vos_space.c */
@@ -1397,8 +1421,14 @@ void
 vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 		   struct vos_akey_data *ad);
 
+/** Init VOS pool settings
+ *
+ *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
+ *
+ *  \return		Zero on Success, Error otherwise
+ */
 int
-vos_pool_settings_init(void);
+vos_pool_settings_init(bool md_on_ssd);
 
 /** Raise a RAS event on incompatible durable format
  *
@@ -1531,13 +1561,18 @@ vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
 	return 0;
 }
 
+static inline struct bio_meta_context *
+vos_pool2mc(struct vos_pool *vp)
+{
+	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
+	return (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
+}
+
 static inline struct bio_io_context *
 vos_data_ioctxt(struct vos_pool *vp)
 {
-	struct bio_meta_context	*mc;
+	struct bio_meta_context	*mc = vos_pool2mc(vp);
 
-	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
-	mc = (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
 	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
 		return bio_mc2ioc(mc, SMD_DEV_TYPE_DATA);
 
@@ -1545,4 +1580,29 @@ vos_data_ioctxt(struct vos_pool *vp)
 	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
 	return vp->vp_dummy_ioctxt;
 }
+
+/*
+ * When a local transaction includes data write to NVMe, we submit data write and WAL
+ * write in parallel to reduce one NVMe I/O latency, and the WAL replay on recovery
+ * relies on the data csum stored in WAL to verify the data integrity.
+ *
+ * To ensure the data integrity check on replay not being interfered by aggregation or
+ * container destroy (which could delete/change the committed NVMe extent), we need to
+ * explicitly flush WAL header before aggregation or container destroy, so that WAL
+ * replay will be able to tell that the transactions (can be potentially interfered)
+ * are already committed, and skip data integriy check over them.
+ */
+static inline int
+vos_flush_wal_header(struct vos_pool *vp)
+{
+	struct bio_meta_context *mc = vos_pool2mc(vp);
+
+	/* When both md-on-ssd and data blob are present */
+	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_WAL) != NULL &&
+	    bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
+		return bio_wal_flush_header(mc);
+
+	return 0;
+}
+
 #endif /* __VOS_INTERNAL_H__ */

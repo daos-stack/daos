@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,7 @@
 struct dev_state_msg_arg {
 	struct bio_xs_context		*xs;
 	struct nvme_stats		 devstate;
-	enum smd_dev_type		 dev_type;
+	uuid_t				 dev_uuid;
 	ABT_eventual			 eventual;
 };
 
@@ -68,8 +68,8 @@ bio_get_dev_state_internal(void *msg_arg)
 	struct bio_xs_blobstore		 *bxb;
 
 	D_ASSERT(dsm != NULL);
-	bxb = bio_xs_context2xs_blobstore(dsm->xs, dsm->dev_type);
-
+	bxb = bio_xs_blobstore_by_devid(dsm->xs, dsm->dev_uuid);
+	D_ASSERT(bxb != NULL);
 	dsm->devstate = bxb->bxb_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(bxb->bxb_blobstore->bb_bs, &dsm->devstate);
 	ABT_eventual_set(dsm->eventual, NULL, 0);
@@ -84,7 +84,8 @@ bio_dev_set_faulty_internal(void *msg_arg)
 
 	D_ASSERT(dsm != NULL);
 
-	bxb = bio_xs_context2xs_blobstore(dsm->xs, dsm->dev_type);
+	bxb = bio_xs_blobstore_by_devid(dsm->xs, dsm->dev_uuid);
+	D_ASSERT(bxb != NULL);
 	rc = bio_bs_state_set(bxb->bxb_blobstore, BIO_BS_STATE_FAULTY);
 	if (rc)
 		D_ERROR("BIO FAULTY state set failed, rc=%d\n", rc);
@@ -123,21 +124,23 @@ bio_log_data_csum_err(struct bio_xs_context *bxc)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct nvme_stats *state, enum smd_dev_type st,
+bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
 		  struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
 	struct bio_xs_blobstore		*bxb;
 
+	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
+	if (!bxb)
+		return -DER_ENOENT;
+
 	rc = ABT_eventual_create(0, &dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
-	dsm.dev_type = st;
-
-	bxb = bio_xs_context2xs_blobstore(xs, st);
+	uuid_copy(dsm.dev_uuid, dev_uuid);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_get_dev_state_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, NULL);
@@ -157,12 +160,13 @@ bio_get_dev_state(struct nvme_stats *state, enum smd_dev_type st,
  * Copy out the internal BIO blobstore device state.
  */
 void
-bio_get_bs_state(int *bs_state, enum smd_dev_type st, struct bio_xs_context *xs)
+bio_get_bs_state(int *bs_state, uuid_t dev_uuid, struct bio_xs_context *xs)
 {
-	struct bio_xs_blobstore		*bxb;
+	struct bio_xs_blobstore *bxb;
 
-	bxb = bio_xs_context2xs_blobstore(xs, st);
-	*bs_state = bxb->bxb_blobstore->bb_state;
+	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
+	if (bxb)
+		*bs_state = bxb->bxb_blobstore->bb_state;
 
 	return;
 }
@@ -172,21 +176,23 @@ bio_get_bs_state(int *bs_state, enum smd_dev_type st, struct bio_xs_context *xs)
  * state transition. Called from the device owner xstream.
  */
 int
-bio_dev_set_faulty(struct bio_xs_context *xs, enum smd_dev_type st)
+bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 {
 	struct dev_state_msg_arg	dsm = { 0 };
 	int				rc;
 	int				*dsm_rc;
 	struct bio_xs_blobstore		*bxb;
 
+	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
+	if (!bxb)
+		return -DER_ENOENT;
+
 	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
-	dsm.dev_type = st;
-
-	bxb = bio_xs_context2xs_blobstore(xs, st);
+	uuid_copy(dsm.dev_uuid, dev_uuid);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_dev_set_faulty_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, (void **)&dsm_rc);

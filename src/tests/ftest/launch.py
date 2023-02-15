@@ -61,6 +61,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -116,7 +118,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -577,7 +580,7 @@ class Launch():
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
+        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
         self.logdir = None
         self.logfile = None
         self.tests = []
@@ -648,8 +651,19 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.WARN)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -659,12 +673,29 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.ERROR)
+
+    @staticmethod
+    def __set_test_status(test_result, fail_class, fail_reason, exc_info=None, status=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+            status (str, optional): TestResult status to set. Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -674,15 +705,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Additional errors only update the test result fail reason with a fail counter
+
+        if test_result.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -709,19 +740,29 @@ class Launch():
         self._write_details_json()
 
         if self.job and self.result:
-            # Generate a results.xml for the this run
+            # Generate a results.xml for this run
+            results_xml_path = os.path.join(self.logdir, "results.xml")
             try:
+                logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.xml file: %s", str(error))
+            else:
+                if not os.path.exists(results_xml_path):
+                    logger.error("results.xml does not exist: %s", results_xml_path)
 
-            # Generate a results.html for the this run
+            # Generate a results.html for this run
+            results_html_path = os.path.join(self.logdir, "results.html")
             try:
+                logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
                 logger.warning("Unable to create results.html file: %s", str(error))
+            else:
+                if not os.path.exists(results_html_path):
+                    logger.error("results.html does not exist: %s", results_html_path)
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -1389,6 +1430,12 @@ class Launch():
         #                             'filter' in the device description. If generating automatic
         #                             storage extra files, use a 'class: dcpm' first storage tier.
         #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
         #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
         #                             found to exist on all server hosts. If a 'filter' is specified
         #                             use it to find devices with the 'filter' in the device
@@ -1427,6 +1474,13 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_0_type = "ram"
+                scm_size = 100
+                max_nvme_tiers = 5
+
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
@@ -1435,7 +1489,8 @@ class Launch():
 
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
-            common_extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
+            common_extra_yaml = [
+                updater.update(extra, yaml_dir) or extra for extra in args.extra_yaml]
             for test in self.tests:
                 test.extra_yaml.extend(common_extra_yaml)
 
@@ -1448,8 +1503,7 @@ class Launch():
             if new_yaml_file:
                 if args.verbose > 0:
                     # Optionally display a diff of the yaml file
-                    command = ["diff", "-y", test.yaml_file, new_yaml_file]
-                    run_local(logger, command, check=False)
+                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}", check=False)
                 test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
@@ -1841,7 +1895,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, " ".join(["df", "-h", path]), check=False)
+            run_local(logger, f"df -h {path}", check=False)
         except RunException:
             pass
 
@@ -1984,8 +2038,8 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
-            run_local(logger, " ".join([command, daos_test_log_dir]))
+            run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
+            run_local(logger, f"{command} {daos_test_log_dir}")
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2055,10 +2109,9 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
+                    run_local(logger, f"mkdir -p {latest_crash_dir}", check=True)
                     for crash_file in crash_files:
-                        run_local(
-                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
+                        run_local(logger, f"mv {crash_file} {latest_crash_dir}", check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
@@ -2099,6 +2152,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2336,6 +2390,57 @@ class Launch():
         else:
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
+
+    def _cleanup_procs(self, test):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+        hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.debug("Looking for running processes: %s", proc_pattern)
+        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
+        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
+        if pgrep_result.passed_hosts:
+            any_found = True
+            logger.debug("Killing running processes: %s", proc_pattern)
+            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
+            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
+            if pkill_result.failed_hosts:
+                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Running processes found on {pgrep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            any_found = True
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        return 4096 if any_found else 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
@@ -2644,7 +2749,8 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True,
+                                                                          test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
@@ -2785,6 +2891,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
@@ -2839,6 +2946,11 @@ def main():
         "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
         "\t\twith the 'filter' in the device description. If generating automatic storage extra",
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
         "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
@@ -2922,7 +3034,8 @@ def main():
         action="store",
         help="Detect available disk options for replacing the devices specified in the server "
              "storage yaml configuration file. Supported options include:  auto[:filter], "
-             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",

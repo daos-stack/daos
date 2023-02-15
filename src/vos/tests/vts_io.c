@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2930,6 +2930,8 @@ io_allocbuf_failure(void **state)
 	int			 fake_ctxt;
 	daos_size_t		 buf_len = (40UL << 20); /* 40MB, larger than DMA chunk size */
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);

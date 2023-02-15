@@ -16,6 +16,7 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
+#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/sys_db.h>
@@ -1182,7 +1183,6 @@ enum {
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
-	XD_INIT_NVME,
 	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1218,9 +1218,6 @@ dss_srv_fini(bool force)
 	case XD_INIT_SYS_DB:
 		dss_sys_db_fini();
 		/* fall through */
-	case XD_INIT_NVME:
-		bio_nvme_fini();
-		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
 		/* fall through */
@@ -1248,8 +1245,8 @@ static int
 dss_sys_db_init()
 {
 	int	 rc;
-	/* walkaround*/
-	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+	char	*lmm_db_path = NULL;
+	char	*nvme_conf_path = NULL;
 
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = vos_db_init(dss_storage_path);
@@ -1261,18 +1258,29 @@ dss_sys_db_init()
 		return rc;
 	}
 
-	if (lmm_db_path == NULL) {
-		D_ERROR("DAOS_LMM_DB_PATH need be configured\n");
+	if (dss_nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
 		return -DER_INVAL;
+	}
+
+	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_FREE(nvme_conf_path);
+	if (lmm_db_path == NULL) {
+		return -DER_NOMEM;
 	}
 
 	rc = lmm_db_init(lmm_db_path);
 	if (rc)
-		return rc;
+		goto out;
 
 	rc = smd_init(lmm_db_get());
 	if (rc)
 		lmm_db_fini();
+out:
+	D_FREE(lmm_db_path);
 
 	return rc;
 }
@@ -1325,12 +1333,6 @@ dss_srv_init(void)
 	if (!xstream_data.xd_dtc)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
-
-	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-	xstream_data.xd_init_step = XD_INIT_NVME;
 
 	rc = dss_sys_db_init();
 	if (rc != 0)

@@ -1048,6 +1048,21 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * When the callback executes code that may yield, in some cases, it needs to
+ * verify the value or key it is operating on still exists before continuing.
+ * This function will revalidate from the object layer down.   This is only
+ * supported in conjunction with recursive vos_iterate from VOS_ITER_OBJ.
+ *
+ * \param[in]	ih	The iterator handle
+ *
+ * \return		0 if iterator value is valid
+ *			VOS_ITER_* level that needs probe
+ *			<0 on error
+ */
+int
+vos_iter_validate(daos_handle_t ih);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
@@ -1230,6 +1245,49 @@ int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
+struct chkpt_ctx;
+typedef bool (*cc_is_idle_fn_t)();
+typedef int (*cc_yield_fn_t)(struct chkpt_ctx *);
+typedef int (*cc_wait_fn_t)(struct chkpt_ctx *);
+typedef void (*cc_wake_fn_t)(struct chkpt_ctx *);
+
+/* Scrub the pool */
+struct chkpt_ctx {
+	struct dss_module_info *cc_dmi;
+
+	/**
+	 * Pool
+	 **/
+	uuid_t                  cc_pool_uuid;
+	daos_handle_t           cc_vos_pool_hdl;
+	struct ds_pool         *cc_pool; /* Used to get properties */
+
+	/* Schedule controlling function pointers and arg */
+	cc_is_idle_fn_t         cc_is_idle_fn;
+	cc_yield_fn_t           cc_yield_fn;
+	cc_wait_fn_t            cc_wait_fn;
+	cc_wake_fn_t            cc_wake_fn;
+	uint64_t                cc_commit_id;
+	uint64_t                cc_wait_id;
+	void                   *cc_sched_arg;
+	void                   *cc_eventual;
+};
+
+/**
+ * Returns true if checkpointing is needed for the pool
+ *
+ * \param[in]	poh	Pool open handle
+ */
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh);
+
+/** Checkpoint the VOS pool
+ *
+ * \param[in] ctx	Checkpoint context
+ */
+int
+vos_pool_checkpoint(struct chkpt_ctx *ctx);
+
 /**
  * The following declarations are for checksum scrubbing functions. The function
  * types provide an interface for injecting dependencies into the
@@ -1243,6 +1301,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
 };
 
 /*
@@ -1266,19 +1325,22 @@ enum scrub_status {
 };
 
 struct scrub_ctx_metrics {
-	struct d_tm_node_t *scm_pool_ult_wait_time;
-	struct d_tm_node_t *scm_start;
-	struct d_tm_node_t *scm_end;
-	struct d_tm_node_t *scm_last_duration;
-	struct d_tm_node_t *scm_csum_calcs;
-	struct d_tm_node_t *scm_csum_calcs_last;
-	struct d_tm_node_t *scm_csum_calcs_total;
-	struct d_tm_node_t *scm_bytes_scrubbed;
-	struct d_tm_node_t *scm_bytes_scrubbed_last;
-	struct d_tm_node_t *scm_bytes_scrubbed_total;
-	struct d_tm_node_t *scm_corruption;
-	struct d_tm_node_t *scm_corruption_total;
-	struct d_tm_node_t *scm_scrub_count;
+	struct d_tm_node_t	*scm_next_csum_scrub;
+	struct d_tm_node_t	*scm_next_tree_scrub;
+	struct d_tm_node_t	*scm_busy_time;
+	struct d_tm_node_t	*scm_start;
+	struct d_tm_node_t	*scm_last_duration;
+	struct d_tm_node_t	*scm_csum_calcs;
+	struct d_tm_node_t	*scm_csum_calcs_last;
+	struct d_tm_node_t	*scm_csum_calcs_total;
+	struct d_tm_node_t	*scm_bytes_scrubbed;
+	struct d_tm_node_t	*scm_bytes_scrubbed_last;
+	struct d_tm_node_t	*scm_bytes_scrubbed_total;
+	struct d_tm_node_t	*scm_corruption;
+	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_scrub_count;
+	struct timespec		 scm_busy_start;
+
 };
 
 /* Scrub the pool */
@@ -1334,8 +1396,9 @@ struct scrub_ctx {
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
 
-	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	enum scrub_status        sc_status;
+	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
+	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
 };
 
 /**
