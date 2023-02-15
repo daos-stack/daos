@@ -913,7 +913,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     def set_prop(self, *args, **kwargs):
         """Set container properties by calling daos container set-prop.
 
-        See DaosCommand.container_get_prop for arguments.
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
 
         Returns:
             str: JSON output of daos container set-prop.
@@ -932,7 +934,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     def get_prop(self, *args, **kwargs):
         """Get container properties by calling daos container get-prop.
 
-        See DaosCommand.container_get_prop for arguments.
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
 
         Returns:
             str: JSON output of daos container get-prop
