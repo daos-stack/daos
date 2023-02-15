@@ -85,7 +85,7 @@ class PoolCreateTests(PoolTestBase):
         self.dmg.exit_status_exception = False
 
         # Create the first of three pools which should succeed.
-        pools = [add_pool(self, namespace="/run/pool_2/*", create=False, params=params[0])]
+        pools = [add_pool(self, namespace="/run/pool_2/*", create=False, **params[0])]
         self.log.info("Creating")
         pools[0].create()
         self.assertTrue(
@@ -98,7 +98,7 @@ class PoolCreateTests(PoolTestBase):
         for index in range(1, 3):
             params[index].update(size_params)
             pools.append(
-                add_pool(self, namespace="/run/pool_2/*", create=False, params=params[index]))
+                add_pool(self, namespace="/run/pool_2/*", create=False, **params[index]))
 
         for index in range(100):
             # Create the second of three pools which should fail due to not enough space.
