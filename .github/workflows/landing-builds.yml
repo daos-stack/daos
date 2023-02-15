@@ -135,7 +135,7 @@ jobs:
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
-        run: sudo bash ls -latr /tmp/core.*
+        run: sudo bash -c 'ls -latr /tmp/core.*'
       - name: Print dmesg
         if: always()
         run: sudo dmesg
@@ -322,7 +322,7 @@ jobs:
                         --memcheck no --test cont_copy
       - name: Check for corefiles
         if: always()
-        run: sudo bash ls -latr /tmp/core.*
+        run: sudo bash -c 'ls -latr /tmp/core.*'
       - name: Print dmesg
         if: always()
         run: sudo dmesg
