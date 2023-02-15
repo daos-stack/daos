@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023, Lei Huang
+ * Copyright (c) 2021, Lei Huang.
  * Use of this source code is governed by a MIT license.
  */
 
@@ -83,8 +83,10 @@ static char lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
 static char path_ld[512] = "";
-static char path_libc[512] = "";
-static char path_libpthread[512] = "";
+static char *path_libc;
+static char *path_libpthread;
+
+#define MAP_SIZE_SMALL	(32768)
 
 /*
  * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so
@@ -93,26 +95,35 @@ static char path_libpthread[512] = "";
 static void
 determine_lib_path(void)
 {
-	int	i, pid, size_read;
-	char	read_buff_map[32768], path_file_map[64], *pPos = NULL, *pStart = NULL, *pEnd = NULL;
+	int	i, size_read, rc;
+	char	*read_buff_map = NULL;
+	char	*pPos = NULL, *pStart = NULL, *pEnd = NULL;
 	char	lib_ver_str[32], lib_dir_str[256];
 	FILE	*fp;
 
-	pid = getpid();
-	snprintf(path_file_map, sizeof(path_file_map), "/proc/%d/maps", pid);
-	fp = fopen(path_file_map, "rb");
-	assert(fp != NULL);
+	read_buff_map = malloc(MAP_SIZE_SMALL);
+	if (read_buff_map == NULL) {
+		printf("Failed allocate memory for read_buff_map.\nQuit\n");
+		exit(1);
+	}
+	fp = fopen("/proc/self/maps", "rb");
+	if (fp == NULL)	{
+		printf("Fail to open file: /proc/self/maps\nQuit\n");
+		exit(1);
+	}
 
-	size_read = fread(read_buff_map, 1, sizeof(read_buff_map)-1, fp);
+	size_read = fread(read_buff_map, 1, MAP_SIZE_SMALL, fp);
 	fclose(fp);
 	if (size_read < 0) {
-		printf("Error to read %s\nQuit\n", path_file_map);
+		printf("Error to read /proc/self/maps\nQuit\n");
 		exit(1);
 	}
 
 	pPos = strstr(read_buff_map, "/ld-2.");
 	if (pPos == NULL) {
+		free(read_buff_map);
 		found_libc = 0;
+		printf("Warning: Failed to find ld.so.\n");
 		return;
 	}
 	for (i = 0; i < 16; i++) {
@@ -143,9 +154,17 @@ determine_lib_path(void)
 	memcpy(lib_dir_str, pStart, pPos-pStart);
 	lib_dir_str[pPos-pStart] = 0;
 
-	snprintf(path_libc, sizeof(path_libc), "%s/libc-%s.so", lib_dir_str, lib_ver_str);
-	snprintf(path_libpthread, sizeof(path_libpthread), "%s/libpthread-%s.so", lib_dir_str,
-		 lib_ver_str);
+	free(read_buff_map);
+	rc = asprintf(&path_libc, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
+	if (rc < 0) {
+		printf("Failed to allocate memory for path_libc.\n");
+		exit(1);
+	}
+	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
+	if (rc < 0) {
+		printf("Failed to allocate memory for path_libpthread.\n");
+		exit(1);
+	}
 }
 
 /*
@@ -347,7 +366,7 @@ get_position_of_next_line(const char buff[], const int pos_start, const int max_
 }
 
 /**
- * The max size of read "/proc/%pid/maps". This size set here should be sufficient
+ * The max size of read "/proc/self/maps". This size set here should be sufficient
  * for normal applications.
  */
 #define MAX_MAP_SIZE	(524288)
@@ -359,16 +378,21 @@ static void
 get_module_maps(void)
 {
 	FILE		*fIn;
-	char		szName[64], szBuf[MAX_MAP_SIZE], szLibName[256];
+	char		*szBuf = NULL, szLibName[512];
 	int		iPos, iPos_Save, ReadItem;
 	long int	FileSize;
 	uint64_t	addr_B, addr_E;
 
-	snprintf(szName, sizeof(szName), "/proc/%d/maps", getpid());
+	szBuf = malloc(MAX_MAP_SIZE);
+	if (szBuf == NULL) {
+		printf("Failed allocate memory for szBuf in get_module_maps().\nQuit\n");
+		exit(1);
+	}
+
 	/* non-seekable file. fread is needed!!! */
-	fIn = fopen(szName, "rb");
+	fIn = fopen("/proc/self/maps", "rb");
 	if (fIn == NULL)	{
-		printf("Fail to open file: %s\nQuit\n", szName);
+		printf("Fail to open file: /proc/self/maps\nQuit\n");
 		exit(1);
 	}
 
@@ -434,6 +458,7 @@ get_module_maps(void)
 			break;
 		}
 	}
+	free(szBuf);
 }
 
 /*
@@ -753,6 +778,9 @@ int install_hook(void)
 
 	cs_close(&handle);
 
+	free(path_libc);
+	free(path_libpthread);
+
 	return num_hook_installed;
 }
 
@@ -776,9 +804,9 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	char	module_name_local[MAX_LEN_PATH_NAME];
 
 	/* make sure module_name[] and func_name[] are not too long. */
-	if (strlen(module_name) >= MAX_LEN_PATH_NAME)
+	if (strnlen(module_name, MAX_LEN_PATH_NAME + 1) >= MAX_LEN_PATH_NAME)
 		return REGISTER_MODULE_NAME_TOO_LONG;
-	if (strlen(func_name) >= MAX_LEN_FUNC_NAME)
+	if (strnlen(func_name, MAX_LEN_PATH_NAME + 1) >= MAX_LEN_FUNC_NAME)
 		return REGISTER_FUNC_NAME_TOO_LONG;
 
 	/* Do initialization work at the very first time. */

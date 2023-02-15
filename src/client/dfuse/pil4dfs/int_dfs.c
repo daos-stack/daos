@@ -1,3 +1,9 @@
+/**
+ * (C) Copyright 2016-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
 #include <stdio.h>
 #include <assert.h>
 #include <dirent.h>
@@ -64,7 +70,7 @@ struct DIRSTATUS {
 	int		fd_dup_next;
 	int		open_flag;
 	daos_anchor_t	anchor;
-	char		path[MAX_FILE_NAME_LEN];
+	char		*path;
 	struct dirent	ents[READ_DIR_BATCH_SIZE];
 };
 
@@ -124,7 +130,12 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	struct dir_hdl	*hdl = hdl_obj(rlink);
 
 	rc = dfs_release(hdl->oh);
-	assert(rc == 0);
+	if (rc == ENOMEM)
+		rc = dfs_release(hdl->oh);
+	if (rc) {
+		printf("Error: dfs_release() failed: (%s)", strerror(rc));
+		exit(1);
+	}
 	free(hdl);
 }
 
@@ -348,12 +359,12 @@ static int query_fd_forward_dest(int fd_src);
 static int new_close_common(int (*real_close)(int fd), int fd);
 
 /* standarlize and determine whether a path is a target path or not */
-static int
+static void
 parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *item_name,
 	   char *parent_dir, char full_path[])
 {
 	char full_path_loc[MAX_FILE_NAME_LEN+4];
-	int pos, len, rc = 0;
+	int pos, len;
 	mode_t mode;
 
 	/* absolute path */
@@ -394,7 +405,6 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				*parent = NULL;
 				parent_dir[0] = '/';
 				parent_dir[1] = '\0';
-				return 0;
 			}
 			/* Need to look up the parent directory */
 			full_path_loc[pos] = 0;
@@ -402,19 +412,16 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			*parent = lookup_insert_dir(parent_dir, &mode);
 			if (*parent == NULL) {
 				/* parent dir does not exist or something wrong */
-				printf("Dir %s does not exist or error to query. %s\n",
+				printf("Error: Dir %s does not exist or error to query. %s\n",
 				       full_path_loc, strerror(errno));
-				rc = 1;
+				exit(1);
 			}
 		}
 	} else {
 		*is_target_path = 0;
 		*parent = NULL;
 		item_name[0] = '\0';
-		return 0;
 	}
-
-	return rc;
 }
 
 static void
@@ -626,7 +633,8 @@ free_fd(int idx)
 static void
 free_dirfd(int idx)
 {
-	int		i, fd_dup_pre, fd_dup_next, ready_to_release = 0, rc;
+	int		i, fd_dup_pre, fd_dup_next, rc;
+	bool		ready_to_release = false;
 	dfs_obj_t	*dir_obj = NULL;
 
 	pthread_mutex_lock(&lock_dirfd);
@@ -663,7 +671,7 @@ free_dirfd(int idx)
 			dir_list[fd_dup_next].fd_dup_pre = fd_dup_pre;
 	}
 	if ((fd_dup_pre == -1) && (fd_dup_next == -1))
-		ready_to_release = 1;
+		ready_to_release = true;
 
 	pthread_mutex_unlock(&lock_dirfd);
 
@@ -801,6 +809,49 @@ close_all_duped_fd(void)
  *	return -1;
  * }
  */
+
+static void
+compose_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
+{
+	int len_str;
+
+	if (dirfd >= FD_DIR_BASE) {
+		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s",
+				  dir_list[dirfd - FD_DIR_BASE].path, rel_path);
+		if (len_str >= MAX_FILE_NAME_LEN) {
+			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
+			exit(1);
+		}
+	} else if (dirfd == AT_FDCWD) {
+		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s", cur_dir, rel_path);
+		if (len_str >= MAX_FILE_NAME_LEN) {
+			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
+			exit(1);
+		}
+	} else {
+		char path_fd_dir[32];
+		ssize_t bytes_read;
+
+		/* 32 bytes should be more than enough */
+		snprintf(path_fd_dir, 32, "/proc/self/fd/%d", dirfd);
+		bytes_read = readlink(path_fd_dir, full_path, MAX_FILE_NAME_LEN);
+		if (bytes_read >= MAX_FILE_NAME_LEN) {
+			printf("Error in compose_path_with_dirfd(). path %s is too long.\nQuit\n",
+			full_path);
+			exit(1);
+		} else if (bytes_read < 0) {
+			printf("readlink() failed in compose_path_with_dirfd(%d). %s\nQuit\n",
+			       dirfd, strerror(errno));
+			exit(1);
+		}
+		len_str = snprintf(full_path + bytes_read, MAX_FILE_NAME_LEN, "/%s", rel_path);
+		if ((len_str + (int)bytes_read) >= MAX_FILE_NAME_LEN) {
+			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
+			exit(1);
+		}
+	}
+}
+
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *szCallerName,
 	    const char *pathname, int oflags, ...)
@@ -825,63 +876,65 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (is_target_path) {
-		/* file/dir should be handled by our FS */
-		if (oflags & O_CREAT) {
-			rc = dfs_open(dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0,
-				      NULL, &file_obj);
-			mode_query = S_IFREG;
-		} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-			rc = dfs_lookup(dfs, "/", oflags, &file_obj, &mode_query, NULL);
-		} else {
-			rc = dfs_lookup_rel(dfs, parent, item_name, oflags, &file_obj, &mode_query,
-					    NULL);
-		}
 
-		if (rc) {
-			printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s rc = %d\n",
-			       pathname, rc);
-			errno = rc;
-			return (-1);
-		}
-		if (S_ISDIR(mode_query)) {
-			idx_dirfd = find_next_available_dirfd();
-			assert(idx_dirfd >= 0);
-
-			dir_list[idx_dirfd].fd = idx_dirfd + FD_DIR_BASE;
-			dir_list[idx_dirfd].offset = 0;
-			dir_list[idx_dirfd].fd_dup_pre = -1;
-			dir_list[idx_dirfd].fd_dup_next = -1;
-			dir_list[idx_dirfd].ref_count = 1;
-			dir_list[idx_dirfd].dir_obj = file_obj;
-			dir_list[idx_dirfd].num_ents = 0;
-			memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
-			sprintf(dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
-
-			return (idx_dirfd+FD_DIR_BASE);
-		}
-
-		idx_fd = find_next_available_fd();
-		assert(idx_fd >= 0);
-		file_list[idx_fd].file_obj = file_obj;
-		file_list[idx_fd].parent = parent;
-		file_list[idx_fd].ref_count = 1;
-		file_list[idx_fd].fd_dup_pre = -1;
-		file_list[idx_fd].fd_dup_next = -1;
-		file_list[idx_fd].st_ino = FAKE_ST_INO(full_path);
-		file_list[idx_fd].open_flag = oflags;
-		/* NEED to set at the end of file if O_APPEND!!!!!!!! */
-		file_list[idx_fd].offset = 0;
-		strcpy(file_list[idx_fd].item_name, item_name);
-		return (idx_fd + FD_FILE_BASE);
+	if (!is_target_path) {
+		if (two_args)
+			return real_open(pathname, oflags);
+		else
+			return real_open(pathname, oflags, mode);
 	}
 
-	if (two_args)
-		rc = real_open(pathname, oflags);
-	else
-		rc = real_open(pathname, oflags, mode);
+	/* file/dir should be handled by our FS */
+	if (oflags & O_CREAT) {
+		rc = dfs_open(dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0,
+			      NULL, &file_obj);
+		mode_query = S_IFREG;
+	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		rc = dfs_lookup(dfs, "/", oflags, &file_obj, &mode_query, NULL);
+	} else {
+		rc = dfs_lookup_rel(dfs, parent, item_name, oflags, &file_obj, &mode_query, NULL);
+	}
 
-	return rc;
+	if (rc) {
+		printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s rc = %d\n",
+		       pathname, rc);
+		errno = rc;
+		return (-1);
+	}
+	if (S_ISDIR(mode_query)) {
+		idx_dirfd = find_next_available_dirfd();
+		assert(idx_dirfd >= 0);
+
+		dir_list[idx_dirfd].fd = idx_dirfd + FD_DIR_BASE;
+		dir_list[idx_dirfd].offset = 0;
+		dir_list[idx_dirfd].fd_dup_pre = -1;
+		dir_list[idx_dirfd].fd_dup_next = -1;
+		dir_list[idx_dirfd].ref_count = 1;
+		dir_list[idx_dirfd].dir_obj = file_obj;
+		dir_list[idx_dirfd].num_ents = 0;
+		memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
+		rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
+		if (rc < 0) {
+			printf("Failed to allocate memory for dir_list[idx_dirfd].path\nQuit\n");
+			exit(1);
+		}
+
+		return (idx_dirfd+FD_DIR_BASE);
+	}
+
+	idx_fd = find_next_available_fd();
+	assert(idx_fd >= 0);
+	file_list[idx_fd].file_obj = file_obj;
+	file_list[idx_fd].parent = parent;
+	file_list[idx_fd].ref_count = 1;
+	file_list[idx_fd].fd_dup_pre = -1;
+	file_list[idx_fd].fd_dup_next = -1;
+	file_list[idx_fd].st_ino = FAKE_ST_INO(full_path);
+	file_list[idx_fd].open_flag = oflags;
+	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
+	file_list[idx_fd].offset = 0;
+	strcpy(file_list[idx_fd].item_name, item_name);
+	return (idx_fd + FD_FILE_BASE);
 }
 
 /* When the open() in ld.so is called, new_open_ld() will be executed. */
@@ -1219,19 +1272,15 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 static int
 new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (path[0] == '/')
-		/* absolute path, dirfd is ignored */
+		/* Absolute path, dirfd is ignored */
 		return new_xstat(1, path, stat_buf);
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
 		return new_xstat(1, full_path, stat_buf);
-	} else if (dirfd == AT_FDCWD) {
-		sprintf(full_path, "%s/%s", cur_dir, path);
-		return new_xstat(1, full_path, stat_buf);
-	}
 
 	return real_fxstatat(ver, dirfd, path, stat_buf, flags);
 }
@@ -1265,7 +1314,7 @@ copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
 int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 	struct stat stat_buf;
 	int rc;
 
@@ -1276,20 +1325,15 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	if (!inited)
 		return real_statx(dirfd, path, flags, mask, statx_buf);
 
+	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {
-		/* absolute path, dirfd is ignored */
 		rc = new_xstat(1, path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
-		rc = new_xstat(1, full_path, &stat_buf);
-		copy_stat_to_statx(&stat_buf, statx_buf);
-		return rc;
-	} else if (dirfd == AT_FDCWD) {
-		sprintf(full_path, "%s/%s", cur_dir, path);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0) {
 		rc = new_xstat(1, full_path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
@@ -1500,7 +1544,13 @@ opendir(const char *path)
 	dir_list[idx_dirfd].dir_obj = dir_obj;
 	dir_list[idx_dirfd].num_ents = 0;
 	memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
-	sprintf(dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
+	rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
+	if (rc < 0) {
+		printf("Failed to allocate memory for dir_list[idx_dirfd].path\n"
+		       "Quit\n");
+		exit(1);
+	}
+
 /**
  *	ent_list = dir_list[idx_dirfd].ents;
  *
@@ -1536,11 +1586,11 @@ fdopendir(int fd)
 }
 
 int
-openat(int dirfd, const char *pathname, int oflags, ...)
+openat(int dirfd, const char *path, int oflags, ...)
 {
 	unsigned int mode;
 	int two_args = 1;
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_openat == NULL)	{
 		real_openat = dlsym(RTLD_NEXT, "openat");
@@ -1559,51 +1609,52 @@ openat(int dirfd, const char *pathname, int oflags, ...)
 	if (!inited)
 		goto out;
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, pathname);
+	/* Absolute path, dirfd is ignored */
+	if (path[0] == '/') {
 		if (two_args)
-			return open_common(real_open_libc, "new_openat", full_path, oflags);
+			return open_common(real_open_libc, "new_openat", path, oflags);
 		else
-			return open_common(real_open_libc, "new_openat", full_path, oflags, mode);
-	} else if (dirfd == AT_FDCWD) {
-		if (strncmp(pathname, fs_root, len_fs_root) == 0)	{
-			if (two_args)
-				return open_common(real_open_libc, "new_openat", pathname, oflags);
-			else
-				return open_common(real_open_libc, "new_openat", pathname, oflags,
-						   mode);
-		}
+			return open_common(real_open_libc, "new_openat", path, oflags, mode);
+	}
+
+	/* Relative path */
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0) {
+		if (two_args)
+			return open_common(real_open_libc, "new_openat", path, oflags);
+		else
+			return open_common(real_open_libc, "new_openat", path, oflags,
+					   mode);
 	}
 
 out:
 	if (two_args)
-		return real_openat(dirfd, pathname, oflags);
+		return real_openat(dirfd, path, oflags);
 	else
-		return real_openat(dirfd, pathname, oflags, mode);
+		return real_openat(dirfd, path, oflags, mode);
 }
 int openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__ ((alias("openat")));
 
 int
-__openat_2(int dirfd, const char *pathname, int oflags)
+__openat_2(int dirfd, const char *path, int oflags)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_openat_2 == NULL)	{
 		real_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
 		assert(real_openat_2 != NULL);
 	}
 	if (!inited)
-		return real_openat_2(dirfd, pathname, oflags);
+		return real_openat_2(dirfd, path, oflags);
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, pathname);
+	if (path[0] == '/')
 		return open_common(real_open_libc, "__openat_2", full_path, oflags);
-	} else if (dirfd == AT_FDCWD) {
-		if (strncmp(pathname, fs_root, len_fs_root) == 0)
-			return open_common(real_open_libc, "__openat_2", pathname, oflags);
-	}
 
-	return real_openat(dirfd, pathname, oflags);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
+		return open_common(real_open_libc, "__openat_2", full_path, oflags);
+
+	return real_openat(dirfd, path, oflags);
 }
 
 int
@@ -1773,7 +1824,7 @@ mkdir(const char *path, mode_t mode)
 
 int mkdirat(int dirfd, const char *path, mode_t mode)
 {
-	int rc;
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_mkdirat == NULL)	{
 		real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
@@ -1782,16 +1833,14 @@ int mkdirat(int dirfd, const char *path, mode_t mode)
 	if (!inited)
 		return real_mkdirat(dirfd, path, mode);
 
-	if (dirfd < FD_DIR_BASE)
-		return real_mkdirat(dirfd, path, mode);
+	if (path[0] == '/')
+		return mkdir(path, mode);
 
-	rc = dfs_mkdir(dfs, dir_list[dirfd - FD_DIR_BASE].dir_obj, path, mode, 0);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	} else {
-		return 0;
-	}
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
+		return mkdir(full_path, mode);
+
+	return real_mkdirat(dirfd, path, mode);
 }
 
 int rmdir(const char *path)
@@ -1951,7 +2000,7 @@ access(const char *path, int mode)
 int
 faccessat(int dirfd, const char *path, int mode, int flags)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_faccessat == NULL)	{
 		real_faccessat = dlsym(RTLD_NEXT, "faccessat");
@@ -1960,18 +2009,13 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	if (!inited)
 		return real_faccessat(dirfd, path, mode, flags);
 
-	if (path[0] == '/') {
-		/* absolute path, dirfd is ignored */
+	/* absolute path, dirfd is ignored */
+	if (path[0] == '/')
 		return access(path, mode);
-	}
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
 		return access(full_path, mode);
-	} else if (dirfd == AT_FDCWD) {
-		sprintf(full_path, "%s/%s", cur_dir, path);
-		return access(full_path, mode);
-	}
 
 	return real_access(path, mode);
 }
@@ -2059,7 +2103,7 @@ new_unlink(const char *path)
 int
 unlinkat(int dirfd, const char *path, int flags)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_unlinkat == NULL)	{
 		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
@@ -2073,13 +2117,9 @@ unlinkat(int dirfd, const char *path, int flags)
 		return new_unlink(path);
 	}
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
 		return new_unlink(full_path);
-	} else if (dirfd == AT_FDCWD) {
-		sprintf(full_path, "%s/%s", cur_dir, path);
-		return new_unlink(full_path);
-	}
 
 	return real_unlinkat(dirfd, path, flags);
 }
@@ -2160,7 +2200,7 @@ truncate(const char *path, off_t length)
 	}
 	if (!S_ISREG(mode)) {
 		printf("truncate(): %s is not a regular file.\n", path);
-		errno = ENOTDIR;
+		errno = EISDIR;
 		return (-1);
 	}
 	rc = dfs_punch(dfs, file_obj, length, DFS_MAX_FSIZE);
@@ -2235,6 +2275,8 @@ fchmod(int fd, mode_t mode)
 int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
+	char full_path[MAX_FILE_NAME_LEN];
+
 	if (real_fchmodat == NULL)	{
 		real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
 		assert(real_fchmodat != NULL);
@@ -2243,28 +2285,14 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	if (!inited)
 		return real_fchmodat(dirfd, path, mode, flag);
 
-/**	if (path[0] == '/')	{
- *	}
- */
-	if (dirfd == AT_FDCWD)	{
-		if (strncmp(cur_dir, fs_root, len_fs_root) != 0)
-			return real_fchmodat(dirfd, path, mode, flag);
-	} else if (dirfd < FD_FILE_BASE) {
-		return real_fchmodat(dirfd, path, mode, flag);
-	} else if (dirfd < FD_DIR_BASE) {
-		errno = EINVAL;
-		return (-1);
-	}
+	if (path[0] == '/')
+		return chmod(path, mode);
 
-	/* Need more work!!! */
-/**
- *	rc = dfs_chmod(dfs, dir_list[dirfd-FD_DIR_BASE].dir_obj, path, mode);
- *	if (rc) {
- *		errno = rc;
- *		return (-1);
- *	}
- */
-	return 0;
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
+		return chmod(path, mode);
+
+	return real_fchmodat(dirfd, path, mode, flag);
 }
 
 int
@@ -2455,7 +2483,7 @@ new_utimens_timespec(const char *path, const struct timespec times[2])
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	char full_path[MAX_FILE_NAME_LEN+4];
+	char full_path[MAX_FILE_NAME_LEN];
 
 	if (real_utimensat == NULL)	{
 		real_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -2469,20 +2497,15 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 		return -1;
 	}
 
-	if (path[0] == '/') {
-		/* absolute path, dirfd is ignored */
+	/* absolute path, dirfd is ignored */
+	if (path[0] == '/')
 		return new_utimens_timespec(path, times);
-	}
 
-	if (dirfd >= FD_DIR_BASE) {
-		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
+	compose_path_with_dirfd(dirfd, full_path, path);
+	if (strncmp(full_path, fs_root, len_fs_root) == 0)
 		return new_utimens_timespec(full_path, times);
-	} else if (dirfd == AT_FDCWD) {
-		sprintf(full_path, "%s/%s", cur_dir, path);
-		return new_utimens_timespec(full_path, times);
-	}
 
-	return utimensat(dirfd, path, times, flags);
+	return real_utimensat(dirfd, path, times, flags);
 }
 
 int
@@ -2584,7 +2607,7 @@ new_fcntl(int fd, int cmd, ...)
 			if (fd_save >= FD_DIR_BASE)	{
 				if (fd_save == DUMMY_FD_DIR)	{
 					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in "
-						"fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
+					       "fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
 					return (-1);
 				}
 
@@ -2670,16 +2693,9 @@ ioctl(int fd, unsigned long request, ...)
 	if (fd < FD_FILE_BASE)
 		return real_ioctl(fd, request, param);
 
-	if (request == 0xffffffff8008a3ca) {
-		/* DFUSE_IOCTL_DFUSE_USER */
-		reply = (struct dfuse_user_reply *)param;
-		reply->uid = getuid();
-		reply->gid = getgid();
-		return 0;
-	}
-
 	printf("Not implemented yet for ioctl().\n");
 	errno = ENOTSUP;
+
 	return -1;
 }
 
@@ -3073,7 +3089,7 @@ init_dfs(void)
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	assert(rc == 0);
 
-	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 6, NULL,
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_dir_hash);
 }
 

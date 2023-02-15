@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Lei Huang.
+ * Use of this source code is governed by a MIT license.
+ */
+
 #ifndef __HOOK_INT
 #define __HOOK_INT
 
@@ -8,7 +13,7 @@
 #define MAX_PATCH	(48)
 
 /* The max length of shared objects' path */
-#define MAX_LEN_PATH_NAME	(256)
+#define MAX_LEN_PATH_NAME	(512)
 
 /* The max length of names of the functions to intercept */
 #define MAX_LEN_FUNC_NAME	(128)

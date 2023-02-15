@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Lei Huang.
+ * Use of this source code is governed by a MIT license.
+ */
+
 #ifndef __HOOK
 #define __HOOK
 

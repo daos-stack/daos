@@ -15,6 +15,7 @@ arch=$(uname -i)
 dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
+    capstone-devel \
     clang \
     clang-tools-extra \
     cmake \
@@ -62,8 +63,7 @@ dnf --nodocs install \
     systemd \
     valgrind-devel \
     which \
-    yasm \
-    capstone-devel
+    yasm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
