@@ -656,10 +656,10 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
 ```
 
-To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI
-addresses:
+To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
+adding custom timeout of 5 minutes for LED identification (time to flash LED for):
 ```bash
-$ dmg -l boro-11 storage led identify 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
+$ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
 boro-11
 ---------
@@ -678,21 +678,18 @@ Mappings of Device-UUIDs to PCI address can be found in the output of the
 An error will be returned if the Device-UUID or PCI address of a non-VMD enabled SSD is specified
 in the command.
 
-After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
-state, representing a quick, 4Hz blinking amber light.
-The device will quickly blink by default for 2 minutes and then return to the default "OFF" state.
 Upon issuing a device identify command with specified device IDs and optional custom timeout value,
 an admin now can quickly identify a device in question.
-The timeout value will be 2 minutes if unspecified on the commandline and any value specified
-should be in units of a minute.
-The status LED on the VMD device will be set to an IDENTIFY state, represented by a quick, 4Hz
-blinking amber light.
-The device will quickly blink until the timeout value is reached, after which the LED state will
-return to the default OFF state.
+After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
+state, representing a quick, 4Hz blinking amber light.
+The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
+no value is specified on the command line, after which the LED state will return to the previous
+state (faulty "ON" or default "OFF").
 
 - Check LED state of SSDs:
 
-To verify the LED state of SSDs the following command can be used in a similar way to the identify command:
+To verify the LED state of SSDs the following command can be used in a similar way to the identify
+command:
 ```bash
 $ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
