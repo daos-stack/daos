@@ -122,7 +122,7 @@ The status LED on the VMD device has four states: OFF, FAULT, REBUILD, and IDENT
 
 #### Locate a Healthy Device
 Upon issuing a device identify command with a specified device ID and optional custom timeout value, an admin now can quickly identify a device in question.
-The timeout value will be 2 minutes if unspecified on the commandline, any value specifieed should be in units of a minute.
+The timeout value will be 2 minutes if unspecified on the commandline, any value specified should be in units of a minute.
 The status LED on the VMD device would be set to an IDENTIFY state, represented by a quick, 4Hz blinking amber light.
 The device will quickly blink until the timeout value is reached, after which returning to the default OFF state.
 

@@ -683,7 +683,7 @@ state, representing a quick, 4Hz blinking amber light.
 The device will quickly blink by default for 2 minutes and then return to the default "OFF" state.
 Upon issuing a device identify command with specified device IDs and optional custom timeout value,
 an admin now can quickly identify a device in question.
-The timeout value will be 2 minutes if unspecified on the commandline and any value specifieed
+The timeout value will be 2 minutes if unspecified on the commandline and any value specified
 should be in units of a minute.
 The status LED on the VMD device will be set to an IDENTIFY state, represented by a quick, 4Hz
 blinking amber light.
