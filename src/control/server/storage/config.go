@@ -222,7 +222,7 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 // WithBdevDeviceRoles sets the role assignments for the bdev tier.
 func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
-	tc.Bdev.DeviceRoles = BdevDeviceRoles{OptionBits(bits)}
+	tc.Bdev.DeviceRoles = BdevRoles{OptionBits(bits)}
 	return tc
 }
 
@@ -739,13 +739,22 @@ func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
 	return opts.ToSlice()
 }
 
+// toString returns a comma separated list of option names that have been set.
+func (obs OptionBits) toString(optStr2Flag optFlagMap) string {
+	return strings.Join(obs.toStrings(optStr2Flag), ",")
+}
+
 // fromStrings generates bitset referenced by the function receiver from the option names provided.
 func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error {
 	if obs == nil {
 		return errors.New("fromStrings() called on nil OptionBits")
 	}
 
+	*obs = 0
 	for _, opt := range opts {
+		if len(opt) == 0 {
+			continue
+		}
 		flag, exists := optStr2Flag[opt]
 		if !exists {
 			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
@@ -767,16 +776,16 @@ var roleOptFlags = optFlagMap{
 	bdevRoleWALName:  BdevRoleWAL,
 }
 
-// BdevDeviceRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).
-type BdevDeviceRoles struct {
+// BdevRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).
+type BdevRoles struct {
 	OptionBits
 }
 
-func (bdr BdevDeviceRoles) MarshalYAML() (interface{}, error) {
+func (bdr BdevRoles) MarshalYAML() (interface{}, error) {
 	return bdr.toStrings(roleOptFlags), nil
 }
 
-func (bdr *BdevDeviceRoles) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (bdr *BdevRoles) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var opts []string
 	if err := unmarshal(&opts); err != nil {
 		return err
@@ -785,11 +794,22 @@ func (bdr *BdevDeviceRoles) UnmarshalYAML(unmarshal func(interface{}) error) err
 	return bdr.fromStrings(roleOptFlags, opts...)
 }
 
-func (bdr *BdevDeviceRoles) String() string {
+// MarshalJSON represents roles as user readable string.
+func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + bdr.String() + `"`), nil
+}
+
+// UnmarshalJSON decodes user readable roles string into bitmask.
+func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
+	str := strings.Trim(strings.ToLower(string(data)), "\"")
+	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
+}
+
+func (bdr *BdevRoles) String() string {
 	if bdr == nil {
-		return "0"
+		return "none"
 	}
-	return fmt.Sprintf("%d", bdr.OptionBits)
+	return bdr.toString(roleOptFlags)
 }
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
@@ -798,7 +818,7 @@ type BdevConfig struct {
 	DeviceCount   int             `yaml:"bdev_number,omitempty"`
 	FileSize      int             `yaml:"bdev_size,omitempty"`
 	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
-	DeviceRoles   BdevDeviceRoles `yaml:"bdev_roles,omitempty"`
+	DeviceRoles   BdevRoles       `yaml:"bdev_roles,omitempty"`
 	NumaNodeIndex uint            `yaml:"-"`
 }
 

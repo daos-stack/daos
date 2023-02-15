@@ -66,11 +66,11 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 	} while (0)
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
-#define VOS_OBJ_ORDER		20	/* Order of object tree */
-#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
-#define VOS_EVT_ORDER		23	/* evtree order */
-#define DTX_BTREE_ORDER	23	/* Order for DTX tree */
+#define VOS_OBJ_ORDER           15      /* Order of object tree */
+#define VOS_KTR_ORDER           20      /* Order of d/a-key tree */
+#define VOS_SVT_ORDER           5       /* Order of single value tree */
+#define VOS_EVT_ORDER           15      /* Order of evtree */
+#define DTX_BTREE_ORDER         23      /* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
 extern struct dss_module_key vos_module_key;
@@ -914,6 +914,8 @@ struct vos_iterator {
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
+	uint64_t                 it_seq;
+	struct vos_iter_anchors *it_anchors;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -1287,20 +1289,22 @@ extern daos_epoch_t	vos_start_epoch;
 
 /** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
 static const int        slab_map[] = {
-    0,                  /* 32 bytes */
-    1,                  /* 64 bytes */
-    2,                  /* 96 bytes */
-    3,                  /* 128 bytes */
-    4,                  /* 160 bytes */
-    5,                  /* 192 bytes */
-    6,                  /* 224 bytes */
-    -1,                 /* 256 bytes */
-    7,                  /* 288 bytes */
-    -1, -1, 8,          /* 384 bytes */
-    9,                  /* 416 bytes */
-    -1, -1, -1, -1, 10, /* 576 bytes */
-    -1, -1, 11,         /* 672 bytes */
-    -1, -1, 12,         /* 768 bytes */
+    0,          /* 32 bytes */
+    1,          /* 64 bytes */
+    2,          /* 96 bytes */
+    3,          /* 128 bytes */
+    4,          /* 160 bytes */
+    5,          /* 192 bytes */
+    6,          /* 224 bytes */
+    7,          /* 256 bytes */
+    8,          /* 288 bytes */
+    -1, 9,      /* 352 bytes */
+    10,         /* 384 bytes */
+    11,         /* 416 bytes */
+    -1, -1, 12, /* 512 bytes */
+    -1, 13,     /* 576 bytes (2.2 compatibility only) */
+    -1, -1, 14, /* 672 bytes (2.2 compatibility only) */
+    -1, -1, 15, /* 768 bytes (2.2 compatibility only) */
 };
 
 static inline umem_off_t
@@ -1560,13 +1564,18 @@ vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
 	return 0;
 }
 
+static inline struct bio_meta_context *
+vos_pool2mc(struct vos_pool *vp)
+{
+	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
+	return (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
+}
+
 static inline struct bio_io_context *
 vos_data_ioctxt(struct vos_pool *vp)
 {
-	struct bio_meta_context	*mc;
+	struct bio_meta_context	*mc = vos_pool2mc(vp);
 
-	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
-	mc = (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
 	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
 		return bio_mc2ioc(mc, SMD_DEV_TYPE_DATA);
 
@@ -1574,4 +1583,29 @@ vos_data_ioctxt(struct vos_pool *vp)
 	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
 	return vp->vp_dummy_ioctxt;
 }
+
+/*
+ * When a local transaction includes data write to NVMe, we submit data write and WAL
+ * write in parallel to reduce one NVMe I/O latency, and the WAL replay on recovery
+ * relies on the data csum stored in WAL to verify the data integrity.
+ *
+ * To ensure the data integrity check on replay not being interfered by aggregation or
+ * container destroy (which could delete/change the committed NVMe extent), we need to
+ * explicitly flush WAL header before aggregation or container destroy, so that WAL
+ * replay will be able to tell that the transactions (can be potentially interfered)
+ * are already committed, and skip data integriy check over them.
+ */
+static inline int
+vos_flush_wal_header(struct vos_pool *vp)
+{
+	struct bio_meta_context *mc = vos_pool2mc(vp);
+
+	/* When both md-on-ssd and data blob are present */
+	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_WAL) != NULL &&
+	    bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
+		return bio_wal_flush_header(mc);
+
+	return 0;
+}
+
 #endif /* __VOS_INTERNAL_H__ */

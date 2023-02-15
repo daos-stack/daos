@@ -117,9 +117,12 @@ vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_h
 
 	vos_iod2bsgl(store, iod, bsgl);
 
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
-	if (rc)
+	rc = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	if (rc) {
+		D_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR,
+			 "Failed to prepare DMA buffer. "DF_RC"\n", DP_RC(rc));
 		goto free;
+	}
 
 	fh->cookie = (uint64_t)biod;
 	return 0;
@@ -249,6 +252,7 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	uint64_t              tx_id;
 	struct umem_instance *umm;
 	struct umem_store    *store;
+	struct bio_wal_info   wal_info;
 	int                   rc;
 
 	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
@@ -257,15 +261,11 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
 
-	rc = bio_wal_ckp_start(store->stor_priv, &tx_id);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY) {
-			D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n",
-				DP_UUID(pool->vp_id));
-			rc = 0;
-		}
-
-		return rc;
+	bio_wal_query(store->stor_priv, &wal_info);
+	tx_id = wal_info.wi_commit_id;
+	if (tx_id == wal_info.wi_ckp_id) {
+		D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n", DP_UUID(pool->vp_id));
+		return 0;
 	}
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
@@ -275,7 +275,7 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
 
 	if (rc == 0)
-		rc = bio_wal_ckp_end(store->stor_priv, tx_id);
+		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
 
 	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
 	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));

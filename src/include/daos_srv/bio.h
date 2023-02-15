@@ -354,6 +354,7 @@ struct bio_dev_info {
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
 	uint32_t		bdi_dev_type;	/* reserved */
+	uint32_t		bdi_dev_roles;	/* reserved */
 };
 
 static inline void
@@ -638,6 +639,15 @@ enum bio_chunk_type {
  */
 int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		 unsigned int bulk_perm);
+
+/**
+ * Non-blocking version, instead of "wait & retry" internally when DMA buffer is
+ * under pressure, it'll immediately return -DER_AGAIN to the caller.
+ *
+ * BIO_IOD_TYPE_FETCH is not supported.
+ */
+int bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		     unsigned int bulk_perm);
 
 /*
  * Post operation after the RDMA transfer or local copy done for the io
@@ -1015,18 +1025,6 @@ int bio_wal_replay(struct bio_meta_context *mc,
 int bio_wal_flush_header(struct bio_meta_context *mc);
 
 /*
- * Acquire highest committed transaction ID before checkpointing
- *
- * \param[in]	mc		BIO meta context
- * \param[out]	tx_id		Highest committed transaction ID
- *
- * \return			Zero:		Success;
- *				-DER_ALREADY:	Nothing to be checkpointed;
- *				Negative value:	Error;
- */
-int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
-
-/*
  * After checkpointing, set highest checkpointed transaction ID, reclaim WAL space
  *
  * \param[in]	mc		BIO meta context
@@ -1034,7 +1032,7 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
+int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id);
 
 /*
  * Query meta capacity & meta block size & meta blob header blocks.

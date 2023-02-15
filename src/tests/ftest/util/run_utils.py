@@ -37,6 +37,16 @@ class RemoteCommandResult():
             self.stdout = stdout
             self.timeout = timeout
 
+        @property
+        def passed(self):
+            """Did the command pass.
+
+            Returns:
+                bool: if the command was successful
+
+            """
+            return self.returncode == 0
+
     def __init__(self, command, task):
         """Create a RemoteCommandResult object.
 
@@ -65,7 +75,7 @@ class RemoteCommandResult():
             bool: if the command was successful on each host
 
         """
-        all_zero = all(data.returncode == 0 for data in self.output)
+        all_zero = all(data.passed for data in self.output)
         return all_zero and not self.timeout
 
     @property
@@ -152,14 +162,24 @@ class RemoteCommandResult():
 
         """
         for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.stdout:
-                    log.debug("    %s", line)
+            log_result_data(log, data)
+
+
+def log_result_data(log, data):
+    """Log a single command result data entry.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        data (ResultData): command result common to a set of hosts
+    """
+    if data.timeout:
+        log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
+    elif len(data.stdout) == 1:
+        log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
+    else:
+        log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
+        for line in data.stdout:
+            log.debug("    %s", line)
 
 
 def get_switch_user(user="root"):
@@ -328,6 +348,11 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     results = RemoteCommandResult(command, task)
     if verbose:
         results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
     return results
 
 

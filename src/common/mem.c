@@ -1580,10 +1580,35 @@ umem_tx_publish(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act)
 	return rc;
 }
 
+struct umem_page_info {
+	/** Back pointer to page */
+	struct umem_page *pi_page;
+	/** Page flags */
+	uint64_t          pi_waiting : 1, /** Page is copied, but waiting for commit */
+	    pi_copying               : 1; /** Page is being copied. Blocks writes. */
+	/** Highest transaction ID checkpointed.  This is set before the page is copied. The
+	 *  checkpoint will not be executed until the last committed ID is greater than or
+	 *  equal to this value.  If that's not the case immediately, the waiting flag is set
+	 *  along with this field.
+	 */
+	uint64_t pi_last_checkpoint;
+	/** Highest transaction ID of writes to the page */
+	uint64_t pi_last_inflight;
+	/** link chain on global dirty list, LRU list, or free info list */
+	d_list_t pi_link;
+	/** page memory address */
+	uint8_t *pi_addr;
+	/** Information about inflight checkpoint */
+	void    *pi_chkpt_data;
+	/** bitmap for each dirty 16K unit */
+	uint64_t pi_bmap[UMEM_CACHE_BMAP_SZ];
+};
+
 int
 umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 {
 	struct umem_cache *cache;
+	struct umem_page_info *pinfo;
 	uint64_t           num_pages;
 	int                rc = 0;
 	int                idx;
@@ -1597,7 +1622,10 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 		return -DER_NOTSUPPORTED;
 	}
 
-	D_ALLOC(cache, sizeof(*cache) + num_pages * sizeof(cache->ca_pages[0]));
+	max_mapped = num_pages;
+
+	D_ALLOC(cache, sizeof(*cache) + sizeof(cache->ca_pages[0]) * num_pages +
+			   sizeof(cache->ca_pages[0].pg_info[0]) * max_mapped);
 	if (cache == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
@@ -1612,9 +1640,17 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_copying);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_lru);
+	D_INIT_LIST_HEAD(&cache->ca_pi_free);
 
 	for (idx = 0; idx < num_pages; idx++)
 		cache->ca_pages[idx].pg_id = idx;
+
+	pinfo = (struct umem_page_info *)&cache->ca_pages[idx];
+
+	for (idx = 0; idx < max_mapped; idx++) {
+		d_list_add_tail(&pinfo->pi_link, &cache->ca_pi_free);
+		pinfo++;
+	}
 
 	store->cache = cache;
 
@@ -1659,6 +1695,7 @@ umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_ad
 {
 	struct umem_cache *cache = store->cache;
 	struct umem_page *page;
+	struct umem_page_info *pinfo;
 	struct umem_page *end_page;
 	uint64_t          current_addr = (uint64_t)start_addr;
 
@@ -1673,11 +1710,16 @@ umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_ad
 		  num_pages, cache->ca_num_pages);
 
 	while (page != end_page) {
-		D_ASSERT(page->pg_addr == NULL);
-		page->pg_addr = (void *)current_addr;
+		D_ASSERT(page->pg_info == NULL);
+
+		pinfo = d_list_pop_entry(&cache->ca_pi_free, struct umem_page_info, pi_link);
+		D_ASSERT(pinfo != NULL);
+		page->pg_info  = pinfo;
+		pinfo->pi_page = page;
+		pinfo->pi_addr = (void *)current_addr;
 		current_addr += UMEM_CACHE_PAGE_SZ;
 
-		d_list_add_tail(&page->pg_link, &cache->ca_pgs_lru);
+		d_list_add_tail(&pinfo->pi_link, &cache->ca_pgs_lru);
 		page++;
 	}
 
@@ -1722,8 +1764,8 @@ umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size)
 #define UMEM_CHUNK_IDX_MASK  (UMEM_CHUNK_IDX_BITS - 1)
 
 static inline void
-touch_page(struct umem_store *store, struct umem_page *page, uint64_t wr_tx, umem_off_t first_byte,
-	   umem_off_t last_byte)
+touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_tx,
+	   umem_off_t first_byte, umem_off_t last_byte)
 {
 	struct umem_cache *cache = store->cache;
 	uint64_t start_bit = (first_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_CHUNK_SZ_SHIFT;
@@ -1735,57 +1777,65 @@ touch_page(struct umem_store *store, struct umem_page *page, uint64_t wr_tx, ume
 	for (bit_nr = start_bit; bit_nr <= end_bit; bit_nr++) {
 		idx = bit_nr >> UMEM_CHUNK_IDX_SHIFT; /** uint64_t index */
 		bit = bit_nr & UMEM_CHUNK_IDX_MASK;
-		page->pg_bmap[idx] |= 1ULL << bit;
+		pinfo->pi_bmap[idx] |= 1ULL << bit;
 	}
 
-	if (!page->pg_waiting && page->pg_last_checkpoint == page->pg_last_inflight) {
+	if (!pinfo->pi_waiting && pinfo->pi_last_checkpoint == pinfo->pi_last_inflight) {
 		/** Keep the page in the waiting list if it's waiting for a transaction to
 		 *  be committed to the WAL before it can be flushed.
 		 */
-		d_list_del(&page->pg_link);
-		d_list_add_tail(&page->pg_link, &cache->ca_pgs_dirty);
+		d_list_del(&pinfo->pi_link);
+		d_list_add_tail(&pinfo->pi_link, &cache->ca_pgs_dirty);
 	}
 
-	if (page->pg_last_inflight == wr_tx)
+	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) <= 0 ||
+	    wr_tx == -1ULL)
 		return;
 
-	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, page->pg_last_inflight) > 0)
-		page->pg_last_inflight = wr_tx;
+	pinfo->pi_last_inflight = wr_tx;
+}
+
+static inline struct umem_page_info *
+off2pinfo(struct umem_cache *cache, umem_off_t addr)
+{
+	struct umem_page *page = umem_cache_off2page(cache, addr);
+
+	return page->pg_info;
 }
 
 int
 umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size)
 {
 	struct umem_cache *cache     = store->cache;
-	struct umem_page  *page;
+	struct umem_page_info *pinfo;
 	umem_off_t        end_addr  = addr + size - 1;
-	struct umem_page  *end_page;
+	struct umem_page_info *end_pinfo;
 	umem_off_t        start_addr;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
 
-	page     = umem_cache_off2page(cache, addr);
-	end_page = umem_cache_off2page(cache, end_addr);
+	D_ASSERTF(size <= UMEM_CACHE_PAGE_SZ, "size=" DF_U64 "\n", size);
+	pinfo     = off2pinfo(cache, addr);
+	end_pinfo = off2pinfo(cache, end_addr);
 
-	if (page->pg_copying)
+	if (pinfo->pi_copying)
 		return -DER_CHKPT_BUSY;
 
-	if (page != end_page) {
+	if (pinfo != end_pinfo) {
 		/** Eventually, we can just assert equal here.  But until we have a guarantee that
 		 * no allocation will span a page boundary, we have to handle this case.  We should
 		 * never have to span multiple pages though.
 		 */
-		if (end_page->pg_copying)
+		if (end_pinfo->pi_copying)
 			return -DER_CHKPT_BUSY;
-		D_ASSERT((page + 1) == end_page);
 		start_addr = end_addr & ~UMEM_CACHE_PAGE_SZ_MASK;
 
-		touch_page(store, end_page, wr_tx, start_addr, end_addr);
+		touch_page(store, end_pinfo, wr_tx, start_addr, end_addr);
 		end_addr = start_addr - 1;
 	}
 
-	touch_page(store, page, wr_tx, addr, end_addr);
+	touch_page(store, pinfo, wr_tx, addr, end_addr);
 
 	return 0;
 }
@@ -1815,7 +1865,7 @@ struct umem_checkpoint_data {
 	/** Handle for the underlying I/O operations */
 	daos_handle_t            cd_fh;
 	/** Pointer to pages in set */
-	struct umem_page        *cd_pages[MAX_PAGES_PER_SET];
+	struct umem_page_info   *cd_pages[MAX_PAGES_PER_SET];
 	/** Highest transaction ID for pages in set */
 	uint64_t                 cd_max_tx;
 	/** Number of pages included in the set */
@@ -1823,28 +1873,28 @@ struct umem_checkpoint_data {
 };
 
 static void
-page2chkpt(struct umem_store *store, struct umem_page *page,
+page2chkpt(struct umem_store *store, struct umem_page_info *pinfo,
 	   struct umem_checkpoint_data *chkpt_data)
 {
-	uint64_t *bits = &page->pg_bmap[0];
+	uint64_t              *bits      = &pinfo->pi_bmap[0];
 	struct umem_store_iod *store_iod = &chkpt_data->cd_store_iod;
 	d_sg_list_t           *sgl       = &chkpt_data->cd_sg_list;
 	uint64_t               bmap;
 	int       i;
 	uint64_t               first_bit_shift;
-	uint64_t  offset    = (uint64_t)page->pg_id << UMEM_CACHE_PAGE_SZ_SHIFT;
+	uint64_t               offset = (uint64_t)pinfo->pi_page->pg_id << UMEM_CACHE_PAGE_SZ_SHIFT;
 	uint64_t               map_offset;
-	uint8_t  *page_addr = page->pg_addr;
+	uint8_t               *page_addr = pinfo->pi_addr;
 	int                    nr        = sgl->sg_nr_out;
 	int                    count;
 	uint64_t               mask;
 	uint64_t               bit;
 
-	page->pg_chkpt_data = chkpt_data;
-	chkpt_data->cd_pages[chkpt_data->cd_nr_pages++] = page;
-	if (store->stor_ops->so_wal_id_cmp(store, chkpt_data->cd_max_tx, page->pg_last_inflight) <
+	pinfo->pi_chkpt_data                            = chkpt_data;
+	chkpt_data->cd_pages[chkpt_data->cd_nr_pages++] = pinfo;
+	if (store->stor_ops->so_wal_id_cmp(store, chkpt_data->cd_max_tx, pinfo->pi_last_inflight) <
 	    0)
-		chkpt_data->cd_max_tx = page->pg_last_inflight;
+		chkpt_data->cd_max_tx = pinfo->pi_last_inflight;
 
 	for (i = 0; i < UMEM_CACHE_BMAP_SZ; i++) {
 		if (bits[i] == 0)
@@ -1888,7 +1938,7 @@ next_bmap:
 	 *  creation for the pages in the set. As it stands, we must set the copying
 	 *  bit here to avoid changes to the page.
 	 */
-	page->pg_copying = 1;
+	pinfo->pi_copying = 1;
 }
 
 /** This is O(n) but the list is tiny so let's keep it simple */
@@ -1914,7 +1964,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		      uint64_t *out_id)
 {
 	struct umem_cache           *cache    = store->cache;
-	struct umem_page            *page     = NULL;
+	struct umem_page_info       *pinfo    = NULL;
 	struct umem_checkpoint_data *chkpt_data_all;
 	struct umem_checkpoint_data *chkpt_data;
 	uint64_t                     committed_tx = 0;
@@ -1952,13 +2002,13 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	/** First mark all pages in the new list so they won't be moved by an I/O thread.  This
 	 *  will enable us to continue the algorithm in relative isolation from I/O threads.
 	 */
-	d_list_for_each_entry(page, &cache->ca_pgs_copying, pg_link) {
+	d_list_for_each_entry(pinfo, &cache->ca_pgs_copying, pi_link) {
 		/** Mark all pages in copying list first.  Marking them as waiting will prevent
 		 *  them from being moved to another list by an I/O operation.
 		 */
-		page->pg_waiting = 1;
-		if (store->stor_ops->so_wal_id_cmp(store, page->pg_last_inflight, chkpt_id) > 0)
-			chkpt_id = page->pg_last_inflight;
+		pinfo->pi_waiting = 1;
+		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, chkpt_id) > 0)
+			chkpt_id = pinfo->pi_last_inflight;
 	}
 
 	do {
@@ -1975,11 +2025,11 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			chkpt_data->cd_max_tx                                           = 0;
 
 			while (chkpt_data->cd_nr_pages < MAX_PAGES_PER_SET &&
-			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_SET &&
-			       (page = d_list_pop_entry(&cache->ca_pgs_copying, struct umem_page,
-							pg_link)) != NULL) {
+			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_PAGE &&
+			       (pinfo = d_list_pop_entry(&cache->ca_pgs_copying,
+							 struct umem_page_info, pi_link)) != NULL) {
 				D_ASSERT(chkpt_data != NULL);
-				page2chkpt(store, page, chkpt_data);
+				page2chkpt(store, pinfo, chkpt_data);
 			}
 
 			rc = store->stor_ops->so_flush_prep(store, &chkpt_data->cd_store_iod,
@@ -1987,17 +2037,17 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			if (rc != 0) {
 				/** Just put the pages back and break the loop */
 				for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
-					page             = chkpt_data->cd_pages[i];
-					page->pg_copying = 0;
-					d_list_add(&page->pg_link, &cache->ca_pgs_copying);
+					pinfo             = chkpt_data->cd_pages[i];
+					pinfo->pi_copying = 0;
+					d_list_add(&pinfo->pi_link, &cache->ca_pgs_copying);
 				}
 				d_list_add(&chkpt_data->cd_link, &free_list);
 				break;
 			}
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
-				page                     = chkpt_data->cd_pages[i];
-				page->pg_last_checkpoint = page->pg_last_inflight;
+				pinfo                     = chkpt_data->cd_pages[i];
+				pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 			}
 
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
@@ -2006,9 +2056,9 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			D_ASSERT(rc == 0);
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
-				page             = chkpt_data->cd_pages[i];
-				page->pg_copying = 0;
-				memset(&page->pg_bmap[0], 0, sizeof(page->pg_bmap));
+				pinfo             = chkpt_data->cd_pages[i];
+				pinfo->pi_copying = 0;
+				memset(&pinfo->pi_bmap[0], 0, sizeof(pinfo->pi_bmap));
 			}
 
 			chkpt_insert_sorted(store, chkpt_data, &waiting_list);
@@ -2030,12 +2080,12 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		rc         = store->stor_ops->so_flush_post(chkpt_data->cd_fh, 0);
 		D_ASSERT(rc == 0);
 		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
-			page = chkpt_data->cd_pages[i];
-			if (page->pg_last_inflight != page->pg_last_checkpoint)
-				d_list_add_tail(&page->pg_link, &cache->ca_pgs_dirty);
+			pinfo = chkpt_data->cd_pages[i];
+			if (pinfo->pi_last_inflight != pinfo->pi_last_checkpoint)
+				d_list_add_tail(&pinfo->pi_link, &cache->ca_pgs_dirty);
 			else
-				d_list_add_tail(&page->pg_link, &cache->ca_pgs_lru);
-			page->pg_waiting = 0;
+				d_list_add_tail(&pinfo->pi_link, &cache->ca_pgs_lru);
+			pinfo->pi_waiting = 0;
 		}
 		inflight--;
 		d_list_add(&chkpt_data->cd_link, &free_list);

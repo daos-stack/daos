@@ -19,7 +19,8 @@ import java.nio.ByteBuffer;
  */
 public class BufferAllocator {
 
-  private static final ByteBufAllocator bufAllocatorObj = new PooledByteBufAllocator(true);
+  // DEFAULT allocator prefer direct buffer
+  private static final PooledByteBufAllocator bufAllocatorObj = PooledByteBufAllocator.DEFAULT;
 
   static {
     if (!PlatformDependent.hasUnsafe()) {
@@ -50,5 +51,14 @@ public class BufferAllocator {
    */
   public static ByteBuf directNettyBuf(int size) {
     return bufAllocatorObj.buffer(size);
+  }
+
+  /**
+   * trim pooled buffer not being frequently allocated since last trim from cache in current thread
+   *
+   * @return true if any buffer trimmed. false otherwise
+   */
+  public static boolean trimThreadLocalCache() {
+    return bufAllocatorObj.trimCurrentThreadCache();
   }
 }

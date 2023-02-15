@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2469,6 +2469,7 @@ static int
 aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *epr)
 {
 	struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
+	int			 rc;
 
 	switch (agg_mode) {
 	default:
@@ -2555,7 +2556,12 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 		break;
 	}
 
-	return 0;
+	rc = vos_flush_wal_header(cont->vc_pool);
+	if (rc)
+		D_ERROR(DF_CONT": Failed to flush WAL header. "DF_RC"\n",
+			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), DP_RC(rc));
+
+	return rc;
 }
 
 static void

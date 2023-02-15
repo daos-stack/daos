@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -223,7 +223,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(tc.devList...),
 					FileSize:   tc.fileSizeGB,
 					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
-					DeviceRoles: storage.BdevDeviceRoles{
+					DeviceRoles: storage.BdevRoles{
 						storage.OptionBits(tc.devRoles),
 					},
 				},

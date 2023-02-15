@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1267,6 +1267,12 @@ iod_fifo_in(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 	/* No prior waiters */
 	if (!bdb || bdb->bdb_queued_iods == 0)
 		return;
+	/*
+	 * Non-blocking prep request is usually from high priority job like checkpointing,
+	 * so we allow it jump the queue.
+	 */
+	if (biod->bd_non_blocking)
+		return;
 
 	biod->bd_in_fifo = 1;
 	bdb->bdb_queued_iods++;
@@ -1375,6 +1381,11 @@ retry:
 			goto out;
 		}
 
+		if (biod->bd_non_blocking) {
+			rc = -DER_AGAIN;
+			goto out;
+		}
+
 		retry_cnt++;
 		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n", biod, retry_cnt);
 
@@ -1394,8 +1405,8 @@ out:
 }
 
 int
-bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
-	     unsigned int bulk_perm)
+iod_prep_internal(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		  unsigned int bulk_perm)
 {
 	struct bio_bulk_args	 bulk_arg;
 	struct bio_dma_buffer	*bdb;
@@ -1455,6 +1466,24 @@ failed:
 	iod_release_buffer(biod);
 	dma_drop_iod(bdb);
 	return rc;
+}
+
+int
+bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+	     unsigned int bulk_perm)
+{
+	return iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
+}
+
+int
+bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		 unsigned int bulk_perm)
+{
+	if (type == BIO_IOD_TYPE_FETCH)
+		return -DER_NOTSUPPORTED;
+
+	biod->bd_non_blocking = 1;
+	return iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
 }
 
 int

@@ -82,7 +82,7 @@ daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
 
-		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
