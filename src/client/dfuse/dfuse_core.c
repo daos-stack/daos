@@ -989,8 +989,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 	if (rc != 0)
 		D_GOTO(err_pt, rc);
 
-	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
-	atomic_store_relaxed(&fs_handle->dpi_eqt_idx, 0);
+	atomic_init(&fs_handle->dpi_ino_next, 2);
+	atomic_init(&fs_handle->dpi_eqt_idx, 0);
 
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];

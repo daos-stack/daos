@@ -219,7 +219,7 @@ struct dfuse_pool {
 	/** Hash table entry in dpi_pool_table */
 	d_list_t            dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint32_t         dfp_ref;
+	ATOMIC uint32_t     dfp_ref;
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table dfp_cont_table;

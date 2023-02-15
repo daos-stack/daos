@@ -32,4 +32,5 @@ dfuse:
 dfuse_vm:
   mount_dir: "/tmp/daos_dfuse"
   cores: '0-3'
+  eq-count: 2
   thread_count: 8
