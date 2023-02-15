@@ -553,12 +553,9 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_co:1,
-			ia_reprobe_obj:1,
-			ia_reprobe_dkey:1,
-			ia_reprobe_akey:1,
-			ia_reprobe_sv:1,
-			ia_reprobe_ev:1;
+	unsigned int    ia_reprobe_co : 1, ia_reprobe_obj : 1, ia_reprobe_dkey : 1,
+	    ia_reprobe_akey : 1, ia_reprobe_sv : 1, ia_reprobe_ev : 1;
+	unsigned int ia_probe_level;
 };
 
 /* Ignores DTX as they are transient records */
