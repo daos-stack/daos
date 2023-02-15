@@ -567,16 +567,14 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    def __init__(self, name, mode):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
-            repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
         self.name = name
-        self.repeat = repeat
         self.mode = mode
 
         self.avocado = AvocadoInfo()
@@ -585,6 +583,7 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.repeat = 1
         self.local_host = get_local_host()
 
         # Results tracking settings
@@ -639,8 +638,7 @@ class Launch():
         if test_result:
             test_result.end()
 
-    @staticmethod
-    def _pass_test(test_result, message=None):
+    def _pass_test(self, test_result, message=None):
         """Set the test result as passed.
 
         Args:
@@ -649,7 +647,7 @@ class Launch():
         """
         if message is not None:
             logger.debug(message)
-        test_result.status = TestResult.PASS
+        self.__set_test_status(test_result, TestResult.PASS, None, None)
 
     def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as warned.
@@ -661,7 +659,7 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.warning(fail_reason)
-        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.WARN)
+        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
 
     def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
@@ -673,22 +671,28 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
-        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.ERROR)
+        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
 
     @staticmethod
-    def __set_test_status(test_result, fail_class, fail_reason, exc_info=None, status=None):
+    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
         """Set the test result.
 
         Args:
             test_result (TestResult): the test result to mark as failed
+            status (str): TestResult status to set.
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
-            status (str, optional): TestResult status to set. Defaults to None.
         """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
         if not test_result:
+            return
+
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if test_result.status is None:
+                test_result.status = status
             return
 
         if test_result.fail_count == 0 \
@@ -807,6 +811,16 @@ class Launch():
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
+        # Set the number of times to repeat execution of each test
+        if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            self._warn_test(setup_result, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
+
         # Record the command line arguments
         logger.debug("Arguments:")
         for key in sorted(args.__dict__.keys()):
@@ -878,9 +892,10 @@ class Launch():
 
         try:
             self.setup_fuse_config(args.test_servers | args.test_clients)
-        except LaunchException as error:
+        except LaunchException:
             # Warn but don't fail
-            logger.warning(error)
+            message = "Issue detected setting up the fuse configuration"
+            self._warn_test(setup_result, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -3111,7 +3126,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
+    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
@@ -3126,14 +3141,6 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
-
-        # Limit repeated testing in CI
-        if args.repeat > MAX_CI_REPETITIONS:
-            logger.warning(
-                "The requested number of times to repeat the test(s) exceeds the CI limitation. "
-                "The --repeat argument has been reduced from %s to %s.",
-                args.repeat, MAX_CI_REPETITIONS)
-            args.repeat = MAX_CI_REPETITIONS
 
     # Perform the steps defined by the arguments specified
     try:
