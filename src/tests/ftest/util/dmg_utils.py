@@ -965,11 +965,15 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
 
-    def system_clear_exclude(self, ranks):
+    def system_clear_exclude(self, ranks, rank_hosts):
         """Clear exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
             ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
 
         Raises:
             CommandFailure: if the dmg system clear-exclude command fails.
@@ -978,7 +982,8 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_json_result(("system", "clear-exclude"), ranks=ranks)
+        return self._get_json_result(
+            ("system", "clear-exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
@@ -1063,11 +1068,15 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("system", "erase"))
 
-    def system_exclude(self, ranks):
+    def system_exclude(self, ranks, rank_hosts):
         """Exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
 
         Args:
             ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
 
         Raises:
             CommandFailure: if the dmg system exclude command fails.
@@ -1076,7 +1085,8 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_json_result(("system", "exclude"), ranks=ranks)
+        return self._get_json_result(
+            ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_start(self, ranks=None):
         """Start the system.

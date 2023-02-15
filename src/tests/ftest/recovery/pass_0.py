@@ -105,7 +105,7 @@ class Pass0Test(TestWithServers):
         dmg_command.system_stop(ranks="1")
 
         # 2. Set rank 1 to AdminExcluded state.
-        dmg_command.system_exclude(ranks="1")
+        dmg_command.system_exclude(ranks="1", rank_hosts=None)
 
         # 3. Verify that the rank 1 state is AdminExluded.
         query_out = dmg_command.system_query()
@@ -131,7 +131,7 @@ class Pass0Test(TestWithServers):
             errors.append(msg)
 
         # 5. Disable AdminExcluded of rank 1.
-        dmg_command.system_clear_exclude(ranks="1")
+        dmg_command.system_clear_exclude(ranks="1", rank_hosts=None)
 
         # 6. Verify that the rank 1 state is Excluded.
         query_out = dmg_command.system_query()
