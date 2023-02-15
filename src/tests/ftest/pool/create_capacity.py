@@ -5,12 +5,12 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from pool_test_base import PoolTestBase
+from apricot import TestWithServers
 from server_utils import ServerFailed
-from test_utils_pool import add_pool, get_size_params
+from test_utils_pool import add_pool, get_size_params, check_pool_creation
 
 
-class PoolCreateTests(PoolTestBase):
+class PoolCreateTests(TestWithServers):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Pool create tests.
 
@@ -19,6 +19,12 @@ class PoolCreateTests(PoolTestBase):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+        super().setUp()
 
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
@@ -40,20 +46,19 @@ class PoolCreateTests(PoolTestBase):
 
         # for multiple pool creation cases, enabling and disabling
         # log mask setting to DEBUG explicitly to save run time..
-        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
         pools = [add_pool(self, create=False)]
 
         # Create the first pool
         durations = [self.time_pool_create(1, pools[0])]
 
         # Add additional pools of the same size as the first pool
-        params = get_size_params(pools[0].dmg.result)
         for _ in range(quantity - 1):
-            pools.append(add_pool(self, create=False, **params))
+            pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
 
         # Create the remaining pools
-        self.check_pool_creation(pools[1:], 30, 2, durations)
-        self.dmg.server_set_logmasks(raise_exception=False)
+        check_pool_creation(self, pools[1:], 30, 2, durations)
+        self.get_dmg_command().server_set_logmasks(raise_exception=False)
 
         # Verify DAOS can be restarted in less than 2 minutes
         try:
@@ -71,7 +76,7 @@ class PoolCreateTests(PoolTestBase):
             self.fail("DAOS not ready to accept requests with in 2 minutes after restart")
 
         # Verify all the pools exists after the restart
-        self.dmg.timeout = 360
+        self.get_dmg_command().timeout = 360
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []

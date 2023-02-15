@@ -3,11 +3,11 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from pool_test_base import PoolTestBase
-from test_utils_pool import add_pool, get_size_params
+from apricot import TestWithServers
+from test_utils_pool import add_pool, get_size_params, check_pool_creation
 
 
-class PoolCreateTests(PoolTestBase):
+class PoolCreateTests(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Pool create tests.
 
@@ -16,6 +16,12 @@ class PoolCreateTests(PoolTestBase):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+        super().setUp()
 
     def test_create_max_pool_scm_only(self):
         """JIRA ID: DAOS-5114 / SRS-1.
@@ -34,7 +40,7 @@ class PoolCreateTests(PoolTestBase):
         data = self.server_managers[0].get_available_storage()
         params = {"scm_size": int(float(data["scm"]) * 0.9)}
         pool = add_pool(self, namespace="/run/pool_1/*", create=False, **params)
-        self.check_pool_creation([pool], 60)
+        check_pool_creation(self, [pool], 60)
 
     def test_create_max_pool(self):
         """JIRA ID: DAOS-5114 / SRS-3.
@@ -51,7 +57,7 @@ class PoolCreateTests(PoolTestBase):
         """
         # Create 1 pool using 90% of the available capacity
         pool = add_pool(self, namespace="/run/pool_2/*", create=False)
-        self.check_pool_creation([pool], 120)
+        check_pool_creation(self, [pool], 120)
 
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
@@ -82,7 +88,7 @@ class PoolCreateTests(PoolTestBase):
         )
 
         # Disable failing the test if a pool create fails
-        self.dmg.exit_status_exception = False
+        self.get_dmg_command().exit_status_exception = False
 
         # Create the first of three pools which should succeed.
         pools = [add_pool(self, namespace="/run/pool_2/*", create=False, **params[0])]
@@ -94,7 +100,7 @@ class PoolCreateTests(PoolTestBase):
         )
 
         # Setup the 2nd and 3rd pools using the same pool size as the first pool
-        size_params = get_size_params(pools[0].dmg.result)
+        size_params = get_size_params(pools[0])
         for index in range(1, 3):
             params[index].update(size_params)
             pools.append(

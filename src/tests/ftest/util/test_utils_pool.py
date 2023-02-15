@@ -90,7 +90,7 @@ def remove_pool(test, pool):
     return error_list
 
 
-def get_size_params(create_response):
+def get_size_params(pool):
     """Get the TestPool params that can be used to create a pool of the same size.
 
     Useful for creating multiple pools of equal --size=X% as each subsequent 'dmg pool create
@@ -98,24 +98,62 @@ def get_size_params(create_response):
     space.
 
     Args:
-        create_response (dict): json output from a dmg pool create for the pool whose size is being
-            replicated.
-
-    Raises:
-        TestFail: If there is an error obtaining the pool size from the dmg result
+        pool (TestPool): pool whose size is being replicated.
 
     Returns:
         dict: size params argument for an add_pool() method
 
     """
-    params = {"size": None, "tier_ratio": None}
-    try:
-        # Use the same scm  and nvme sizes as the first pool
-        params["scm_size"] = create_response["response"]["tier_bytes"][0]
-        params["nvme_size"] = create_response["response"]["tier_bytes"][1]
-    except (KeyError, IndexError) as error:
-        raise TestFail("Error determining scm/nvme pool size for duplicate pools") from error
-    return params
+    return {"size": None,
+            "tier_ratio": None,
+            "scm_size": pool.scm_per_rank,
+            "nvme_size": pool.nvme_per_rank}
+
+
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+    """Check the duration of each pool creation meets the requirement.
+
+    Args:
+        test (Test): the test to fail if the pool creation exceeds the max duration
+        pools (list): list of TestPool objects to create
+        max_duration (int): max pool creation duration allowed in seconds
+        offset (int, optional): pool index offset. Defaults to 1.
+        durations (list, optional): list of other pool create durations to include in the check.
+            Defaults to None.
+    """
+    if durations is None:
+        durations = []
+    for index, pool in enumerate(pools):
+        durations.append(time_pool_create(test.log, index + offset, pool))
+
+    exceeding_duration = 0
+    for index, duration in enumerate(durations):
+        if duration > max_duration:
+            exceeding_duration += 1
+
+    if exceeding_duration:
+        test.fail(
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))
+
+
+def time_pool_create(log, number, pool):
+    """Time how long it takes to create a pool.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        number (int): pool number in the list
+        pool (TestPool): pool to create
+
+    Returns:
+        float: number of seconds elapsed during pool create
+
+    """
+    start = float(time.time())
+    pool.create()
+    duration = float(time.time()) - start
+    log.info("Pool %s creation: %s seconds", number, duration)
+    return duration
 
 
 class TestPool(TestDaosApiBase):
