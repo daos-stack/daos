@@ -2579,6 +2579,35 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 /* Currently we only maintain compatibility between 2 versions */
 #define NUM_POOL_VERSIONS	2
 
+static int
+get_pool_connectable(struct rdb_tx *tx, struct pool_svc *svc, uint32_t *out)
+{
+	int				rc;
+	d_iov_t				value;
+
+	/* Check if pool is being destroyed and not accepting connections */
+	d_iov_set(&value, out, sizeof(*out));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
+	return rc;
+}
+
+static int
+get_pool_hdl_flags(struct rdb_tx *tx, struct pool_svc *svc, uuid_t hdl_uuid, uint64_t *flags)
+{
+	int		rc;
+	d_iov_t		key;
+	d_iov_t		value;
+
+	d_iov_set(&key, hdl_uuid, sizeof(uuid_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+	if (rc == 0) {
+		/* found it */
+		*flags = ((struct pool_hdl *)value.iov_buf)->ph_flags;
+	}
+	return rc;
+}
+
 static void
 ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -2607,6 +2636,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
+	bool				lock_held = false;
+	uint64_t			ph_flags;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2627,40 +2658,31 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
-	ABT_rwlock_wrlock(svc->ps_lock);
+	/*** Phase 1 holding ps_lock for reading ***/
+	ABT_rwlock_rdlock(svc->ps_lock);
+	lock_held = true;
 
-	/* Check if pool is being destroyed and not accepting connections */
-	d_iov_set(&value, &connectable, sizeof(connectable));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root,
-			   &ds_pool_prop_connectable, &value);
+	/* Phase 1 check if pool is being destroyed and not accepting connections */
+	rc = get_pool_connectable(&tx, svc, &connectable);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
-	D_DEBUG(DB_MD, DF_UUID": connectable=%u\n",
-		DP_UUID(in->pci_op.pi_uuid), connectable);
+		goto out_lock;
 	if (!connectable) {
 		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
 			DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_lock, rc = -DER_BUSY);
 	}
 
-	/* Check existing pool handles. */
-	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, NULL, 0);
-	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+	/* Phase 1 check existing pool handles. */
+	rc = get_pool_hdl_flags(&tx, svc, in->pci_op.pi_hdl, &ph_flags);
 	if (rc == 0) {
 		/* found it */
-		if (((struct pool_hdl *)value.iov_buf)->ph_flags == in->pci_flags) {
-			/*
-			 * The handle already exists; only do the pool map
-			 * transfer.
-			 */
-			skip_update = 1;
-		} else {
+		if (ph_flags!= in->pci_flags) {
 			/* The existing one does not match the new one. */
 			D_ERROR(DF_UUID": found conflicting pool handle\n",
 				DP_UUID(in->pci_op.pi_uuid));
 			D_GOTO(out_lock, rc = -DER_EXIST);
 		}
+		/* check for matching flags (aka skip_update) in phase 2 */
 	} else if (rc != -DER_NONEXIST) {
 		D_GOTO(out_lock, rc);
 	}
@@ -2791,10 +2813,50 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
+
+	/*** End of phase 1 (ps_lock for reading) ***/
+	ABT_rwlock_unlock(svc->ps_lock);
+	lock_held = false;
+
 	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
 				      in->pci_map_bulk, &out->pco_map_buf_size);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
+
+
+	/*** Phase 2 (ps_lock for writing/update) ***/
+	ABT_rwlock_wrlock(svc->ps_lock);
+	lock_held = true;
+
+	/* Phase 2 check if pool is being destroyed and not accepting connections */
+	rc = get_pool_connectable(&tx, svc, &connectable);
+	if (rc != 0)
+		goto out_lock;
+	if (!connectable) {
+		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
+			DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_map_version, rc = -DER_BUSY);
+	}
+
+	/* Phase 2 check existing pool handles. (similar/roughly repeated from Phase 1) */
+	rc = get_pool_hdl_flags(&tx, svc, in->pci_op.pi_hdl, &ph_flags);
+	if (rc == 0) {
+		/* found it */
+		if (ph_flags == in->pci_flags) {
+			/*
+			 * The handle already exists; only do the pool map
+			 * transfer.
+			 */
+			skip_update = 1;
+		} else {
+			/* The existing one does not match the new one. */
+			D_ERROR(DF_UUID": found conflicting pool handle\n",
+				DP_UUID(in->pci_op.pi_uuid));
+			D_GOTO(out_map_version, rc = -DER_EXIST);
+		}
+	} else if (rc != -DER_NONEXIST) {
+		D_GOTO(out_map_version, rc);
+	}
 
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
@@ -2887,7 +2949,8 @@ out_map_version:
 		D_FREE(hdl);
 	D_FREE(machine);
 out_lock:
-	ABT_rwlock_unlock(svc->ps_lock);
+	if (lock_held)
+		ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (prop)
 		daos_prop_free(prop);
