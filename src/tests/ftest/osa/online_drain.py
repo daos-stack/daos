@@ -11,7 +11,6 @@ from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import add_pool
-from apricot import skipForTicket
 
 
 class OSAOnlineDrain(OSAUtils):
