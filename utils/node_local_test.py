@@ -3616,7 +3616,7 @@ def run_in_fg(server, conf, args):
         # can be modified later.
         cont_attrs = {}
         cont_attrs['dfuse-data-cache'] = '1d'
-        cont_attrs['dfuse-attr-time'] = '0'
+        cont_attrs['dfuse-attr-time'] = '60m'
         cont_attrs['dfuse-dentry-time'] = '60m'
         cont_attrs['dfuse-ndentry-time'] = '60m'
         cont_attrs['dfuse-direct-io-disable'] = False
