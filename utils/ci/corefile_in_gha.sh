@@ -27,6 +27,12 @@ fi
 for i in $COREFILE_DIR/core* ; do
     ls -ltr "$i"
     file "$i"
+    gdb /opt/daos/bin/daos_engine "$i" <<eof
+set pagination off
+bt full
+disass ABT_thread_create
+quit
+eof
 done
 
 #for i in $(sudo find / -type f -name core.*) ; do

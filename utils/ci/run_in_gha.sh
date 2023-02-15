@@ -86,3 +86,17 @@ ulimit -c unlimited
 #echo 1 > /proc/sys/kernel/core_uses_pid
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
+
+echo ::group::Check for corefiles
+for i in /tmp//core* ; do
+    ls -ltr "$i"
+    file "$i"
+    gdb /opt/daos/bin/daos_engine "$i" <<eof
+set pagination off
+bt full
+disass ABT_thread_create
+quit
+eof
+done
+echo ::endgroup::
+
