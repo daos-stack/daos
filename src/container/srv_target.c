@@ -285,7 +285,7 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 		return;
 
 	/* Cap VOS aggregation upper bound to EC aggregation HAE */
-	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundry);
+	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundary);
 }
 
 #define MAX_SNAPSHOT_LOCAL	16
@@ -501,7 +501,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, VOS_AGG_FL_FORCE_SCAN);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
