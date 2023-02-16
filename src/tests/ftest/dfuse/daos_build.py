@@ -124,7 +124,7 @@ class DaosBuild(DfuseTestBase):
         cont_attrs = {}
 
         # How long to cache things for, if caching is enabled.  Set to longer than test run-time.
-        cache_time = '6h'
+        cache_time = '2d'
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
         build_time = 10
@@ -151,14 +151,14 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
-            build_time = 120
+            build_time = 60 * 2
             cont_attrs['dfuse-data-cache'] = True
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time = 180
+            build_time = 60 * 5
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
