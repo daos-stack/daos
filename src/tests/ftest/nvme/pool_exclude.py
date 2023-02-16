@@ -39,13 +39,14 @@ class NvmePoolExclude(OSAUtils):
         self.cont_list = []
         self.dmg_command.exit_status_exception = True
 
-    def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group, pool,
+    def thread_run_ior(self, thread_queue, job_id, test, manager, log, hosts, path, slots, group, pool,
                        container, processes, ppn, intercept, plugin_path, dfuse, display_space,
                        fail_on_warning, namespace, ior_params):
+        # pylint: disable=too-many-arguments
         """Start an IOR thread with thread queue for failure analysis.
 
         Args:
-            thread_queue (Queue): Thread queue.
+            thread_queue (Queue): Thread queue object.
             job_id (str): Job identifier.
             test (Test): avocado Test object
             manager (JobManager): command to manage the multi-host execution of ior
@@ -86,6 +87,7 @@ class NvmePoolExclude(OSAUtils):
                                               plugin_path, dfuse, display_space, fail_on_warning,
                                               namespace, ior_params)
         except Exception as error:
+        # pylint: disable=broad-exception-caught
             thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
         thread_queue.put(thread_result)
 
@@ -200,8 +202,9 @@ class NvmePoolExclude(OSAUtils):
                 kwargs["ior_params"]["flags"] = self.ior_r_flags
                 kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
                 try:
-                    self.thread_run_ior(kwargs=kwargs)
+                    self.thread_run_ior(kwargs)
                 except Exception as error:
+                # pylint: disable=broad-exception-caught
                     self.fail("Error in ior read {}.".format(error))
 
                 display_string = "Pool{} space at the End".format(val)
