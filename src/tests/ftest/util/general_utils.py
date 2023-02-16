@@ -1,14 +1,12 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
 from logging import getLogger
-import grp
 import os
-import pwd
 import re
 import random
 import string
@@ -22,7 +20,10 @@ from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from ClusterShell.NodeSet import NodeSet
+
+from user_utils import get_chown_command, get_primary_group
+from run_utils import get_clush_command
 
 
 class DaosTestError(Exception):
@@ -892,70 +893,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     return result
 
 
-def get_partition_hosts(partition, reservation=None):
-    """Get a list of hosts in the specified slurm partition and reservation.
-
-    Args:
-        partition (str): name of the partition
-        reservation (str): name of reservation
-
-    Returns:
-        list: list of hosts in the specified partition
-
-    """
-    log = getLogger()
-    hosts = []
-    if partition is not None:
-        # Get the partition name information
-        cmd = "scontrol show partition {}".format(partition)
-        try:
-            result = process.run(cmd, timeout=10)
-        except process.CmdError as error:
-            log.warning(
-                "Unable to obtain hosts from the %s slurm "
-                "partition: %s", partition, error)
-            result = None
-
-        if result:
-            # Get the list of hosts from the partition information
-            output = result.stdout_text
-            try:
-                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
-            except (NodeSetParseError, IndexError):
-                log.warning(
-                    "Unable to obtain hosts from the %s slurm partition "
-                    "output: %s", partition, output)
-                hosts = []
-            if hosts and reservation is not None:
-                # Get the list of hosts from the reservation information
-                cmd = "scontrol show reservation {}".format(reservation)
-                try:
-                    result = process.run(cmd, timeout=10)
-                except process.CmdError as error:
-                    log.warning(
-                        "Unable to obtain hosts from the %s slurm "
-                        "reservation: %s", reservation, error)
-                    result = None
-                    hosts = []
-                if result:
-                    # Get the list of hosts from the reservation information
-                    output = result.stdout_text
-                    try:
-                        reservation_hosts = list(
-                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
-                    except (NodeSetParseError, IndexError):
-                        log.warning(
-                            "Unable to obtain hosts from the %s slurm "
-                            "reservation output: %s", reservation, output)
-                        reservation_hosts = []
-                    is_subset = set(reservation_hosts).issubset(set(hosts))
-                    if reservation_hosts and is_subset:
-                        hosts = reservation_hosts
-                    else:
-                        hosts = []
-    return hosts
-
-
 def get_log_file(name):
     """Get the full log file name and path.
 
@@ -1115,7 +1052,7 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     manager_class = get_module_class(name, "job_manager_utils")
     if name in ["Mpirun", "Orterun"]:
         manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
-    elif name == "Systemctl":
+    elif name in ["Systemctl", "Clush"]:
         manager = manager_class(job)
     else:
         manager = manager_class(job, subprocess=subprocess)
@@ -1213,8 +1150,8 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
 
     """
     return run_command(
-        "{} chown {}:{} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), owner, group, filename),
+        "{} {} {}".format(
+            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -1302,30 +1239,6 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     return result
 
 
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (object): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        str: the clush command
-
-    """
-    command = ["clush", "-w", convert_string(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return " ".join(command)
-
-
 def get_default_config_file(name):
     """Get the default config file.
 
@@ -1344,7 +1257,7 @@ def get_file_listing(hosts, files):
     """Get the file listing from multiple hosts.
 
     Args:
-        hosts (object): hosts with which to use the clush command
+        hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
 
     Returns:
@@ -1452,24 +1365,33 @@ def percent_change(val1, val2):
     return 0.0
 
 
-def get_primary_group(user=None):
-    """Get the name of the user's primary group.
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+    """Get the journalctl command to capture all unit/identifier activity from since to until.
 
     Args:
-        user (str, optional): the user account name. Defaults to None, which uses the current user.
+        since (str): show log entries from this date.
+        until (str, optional): show log entries up to this date id specified. Defaults to None.
+        system (bool, optional): show messages from system services and the kernel. Defaults to
+            False which will show all messages that the user can see.
+        units (str/list, optional): show messages for the specified systemd unit(s). Defaults to
+            None.
+        identifiers (str/list, optional): show messages for the specified syslog identifier(s).
+            Defaults to None.
 
     Returns:
-        str: the primary group name
+        str: journalctl command to capture all unit activity
 
     """
-    if user is None:
-        user = getuser()
-    try:
-        gid = pwd.getpwnam(user).pw_gid
-        return grp.getgrgid(gid).gr_name
-    except KeyError:
-        # User may not exist on this host, e.g. daos_server, so just return the user name
-        return user
+    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    if system:
+        command.append("--system")
+    for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
+        for item in values if isinstance(values, (list, tuple)) else [values]:
+            command.append("--{}={}".format(key, item))
+    command.append("--since=\"{}\"".format(since))
+    if until:
+        command.append("--until=\"{}\"".format(until))
+    return " ".join(command)
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
@@ -1487,12 +1409,9 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
-               "--until=\"{}\"".format(journalctl_type, since, until))
+    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
     err = "Error gathering system log events"
-    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
-
-    return results
+    return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
 
 def get_avocado_config_value(section, key):

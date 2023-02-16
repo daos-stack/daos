@@ -26,6 +26,8 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+
+/** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_prop_, redun_fac);
@@ -36,16 +38,17 @@ RDB_STRING_KEY(ds_pool_prop_, policy);
 RDB_STRING_KEY(ds_pool_prop_, global_version);
 RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
 RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
-RDB_STRING_KEY(ds_pool_prop_, scrub_sched);
+RDB_STRING_KEY(ds_pool_prop_, scrub_mode);
 RDB_STRING_KEY(ds_pool_prop_, scrub_freq);
 RDB_STRING_KEY(ds_pool_prop_, scrub_thresh);
 RDB_STRING_KEY(ds_pool_prop_, svc_redun_fac);
+RDB_STRING_KEY(ds_pool_prop_, obj_version);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_PO_LABEL,
-		.dpe_str	= "pool_label_not_set",
+		.dpe_str	= DAOS_PROP_PO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SPACE_RB,
 		.dpe_val	= 0,
@@ -92,17 +95,20 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_MODE,
-		.dpe_val	= DAOS_SCRUB_MODE_OFF,
+		.dpe_val	= DAOS_PROP_PO_SCRUB_MODE_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_FREQ,
-		.dpe_val	= 604800, /* 1 week in seconds */
+		.dpe_val	= DAOS_PROP_PO_SCRUB_FREQ_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_THRESH,
-		.dpe_val	= 0,
+		.dpe_val	= DAOS_PROP_PO_SCRUB_THRESH_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SVC_REDUN_FAC,
 		.dpe_val	= DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT,
-	}
+	}, {
+		.dpe_type	= DAOS_PROP_PO_OBJ_VERSION,
+		.dpe_val	= DS_POOL_OBJ_VERSION,
+	},
 };
 
 daos_prop_t pool_prop_default = {

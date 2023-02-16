@@ -49,31 +49,35 @@ class DmvrObjLargePosix(DataMoverTestBase):
             self.test_id + " (cont1 to cont2)",
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool1))
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params("DAOS", "/", pool1, cont2_uuid, flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool1, cont2_label, flags=mdtest_flags[1])
 
     def test_dm_obj_large_posix_dcp(self):
         """Jira ID: DAOS-6892
+
         Test Description:
             Clone a large POSIX container to another POSIX container using dcp.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_dcp,mdtest
-        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_dcp
+        :avocado: tags=DmvrObjLargePosix,test_dm_obj_large_posix_dcp
         """
         self.run_dm_obj_large_posix("DCP")
 
     def test_dm_obj_large_posix_cont_clone(self):
         """Jira ID: DAOS-6892
+
         Test Description:
             Clone a large POSIX container to another POSIX container using
             daos cont clone.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,daos_cont_clone,mdtest
-        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_cont_clone
+        :avocado: tags=DmvrObjLargePosix,test_dm_obj_large_posix_cont_clone
         """
         self.run_dm_obj_large_posix("CONT_CLONE")

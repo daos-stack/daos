@@ -7,6 +7,7 @@ BW
 Broadwell
 CGO
 Cilk
+CompletedProcess
 DArray
 DDict
 DFS
@@ -15,6 +16,7 @@ EL
 EOF
 FPP
 FS
+FileHandler
 GHA
 Gopath
 Haswell
@@ -22,6 +24,7 @@ IOF
 IOR
 ISA
 KVM
+Launchable
 Lustre
 MPI
 Makefile
@@ -58,16 +61,19 @@ UCX
 UNS
 Uncomment
 VMD
+XUnitResult
 acl
 akey
 akeys
 allocator
+allowlist
 amongst
 api
 arg
 argobots
 argparse
 args
+ascii
 async
 attachinfo
 attr
@@ -95,6 +101,7 @@ chdir
 checksum
 chgrp
 chmod
+chown
 chowned
 clush
 cmd
@@ -139,6 +146,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -170,6 +178,7 @@ findcmd
 fini
 fio
 fnctl
+formattable
 fpp
 fs
 fstab
@@ -180,9 +189,12 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
+groupname
 grp
 hackery
 hfi
@@ -190,6 +202,7 @@ hostfile
 hostlist
 hostname
 hostnames
+hugepage
 hugepages
 hwloc
 ib
@@ -200,6 +213,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -235,11 +249,13 @@ localhost
 logdir
 logfile
 logfiles
+logmasks
 lseek
 lspci
 lua
 lustre
 macsio
+makecache
 malloc
 mca
 mdtest
@@ -271,6 +287,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -286,13 +303,16 @@ opcode
 openmpi
 orterun
 os
+oStrictHostKeyChecking
 outdata
+outputdir
 params
 patchelf
 pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -320,9 +340,11 @@ proc
 procs
 protoc
 ps
+puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -335,6 +357,7 @@ recurse
 redistributions
 refactor
 repo
+returncode
 rf
 rmdir
 romio
@@ -344,6 +367,7 @@ rpc
 rpms
 rsvc
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -356,6 +380,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
@@ -364,10 +389,12 @@ src
 srun
 ssd
 ssds
+stacktrace
 statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -382,6 +409,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
@@ -390,6 +418,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
@@ -399,6 +428,7 @@ teardowns
 testcase
 testcases
 testdata
+testFile
 testname
 testrunner
 tgt
@@ -424,10 +454,13 @@ unittest
 unlink
 unlinked
 unlinking
+unmangle
 unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
@@ -442,11 +475,13 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs
 xfer
 xfersize
 xml
+xunit
 yaml
 yamllint

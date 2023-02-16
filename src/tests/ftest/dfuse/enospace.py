@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +11,6 @@ from dfuse_test_base import DfuseTestBase
 
 
 class Enospace(DfuseTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Dfuse ENOSPC File base class.
 
     :avocado: recursive

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -292,18 +291,6 @@ class CartTest(TestWithoutServers):
                     os.unlink(file_path)
 
         return env
-
-    def get_srv_cnt(self, host):
-        """Get server count for 'host' test yaml parameter.
-
-        Args:
-            host (str): test yaml parameter name
-
-        Returns:
-            int: length of the 'host' test yaml parameter
-
-        """
-        return len(self.params.get("{}".format(host), "/run/hosts/*/", []))
 
     @staticmethod
     def get_yaml_list_elem(param, index):

@@ -22,6 +22,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -90,7 +91,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 //
 // MemberResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+func drespToMemberResult(rank ranklist.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
 	if err != nil {
 		return system.NewMemberResult(rank,
 			errors.WithMessagef(err, "rank %s dRPC failed", &rank),
@@ -200,7 +201,7 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	return resp, nil
 }
 
-func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.SmdDevice, error) {
+func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevice, error) {
 	smdDev := new(storage.SmdDevice)
 	if err := convert.Types(smd, smdDev); err != nil {
 		return nil, errors.Wrap(err, "convert smd")
@@ -217,33 +218,28 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.
 	return smdDev, nil
 }
 
-func updateCtrlrHealth(pbStats *ctlpb.BioHealthResp, ctrlr *storage.NvmeController) error {
-	ctrlr.HealthStats = new(storage.NvmeHealth)
-	if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
-		return errors.Wrap(err, "convert health stats")
-	}
-
-	return nil
-}
-
 // updateInUseBdevs updates-in-place the input list of controllers with new NVMe health stats and
 // SMD metadata info.
 //
 // Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
 // data in ctrlrMap using PCI address key.
-func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) (err error) {
-	defer func() {
-		err = errors.Wrapf(err, "instance %d", ei.Index())
-	}()
+func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController) ([]storage.NvmeController, error) {
+	ctrlrMap := make(map[string]*storage.NvmeController)
+	for idx, ctrlr := range ctrlrs {
+		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
+			return nil, errors.Errorf("duplicate entries for controller %s",
+				ctrlr.PciAddr)
+		}
 
-	// Clear SMD info for controllers in ctrlrMap, populate smd info from scratch.
-	for _, ctrlr := range ctrlrMap {
-		ctrlr.SmdDevices = []*storage.SmdDevice{}
+		// Clear SMD info for controllers to remove stale stats.
+		ctrlrs[idx].SmdDevices = []*storage.SmdDevice{}
+		// Update controllers in input slice through map by reference.
+		ctrlrMap[ctrlr.PciAddr] = &ctrlrs[idx]
 	}
 
 	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
-		return errors.Wrapf(err, "list smd devices")
+		return nil, errors.Wrapf(err, "list smd devices")
 	}
 	ei.log.Debugf("engine %d: smdDevs %+v", ei.Index(), smdDevs)
 
@@ -260,15 +256,15 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 		smdDev, err := ei.getSmdDetails(smd)
 		if err != nil {
-			return errors.Wrapf(err, "%s: collect smd info", msg)
+			return nil, errors.Wrapf(err, "%s: collect smd info", msg)
 		}
 
 		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
 		if err != nil {
-			// Only log error if error indicates non-existent health and the SMD entity
-			// has abnormal state.
+			// Log the error if it indicates non-existent health and the SMD entity has
+			// an abnormal state. Otherwise it is expected that health may be missing.
 			status, ok := errors.Cause(err).(daos.Status)
-			if ok && status == daos.Nonexistent && !smdDev.NvmeState.IsNormal() {
+			if ok && status == daos.Nonexistent && smdDev.NvmeState != storage.NvmeStateNormal {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
 					msg, smdDev.NvmeState.String())
 			} else {
@@ -292,15 +288,14 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		if hasUpdatedHealth[ctrlr.PciAddr] {
 			continue
 		}
-
-		if err := updateCtrlrHealth(pbStats, ctrlr); err != nil {
-			ei.log.Errorf("%s: update ctrlr health: %s", err.Error())
+		ctrlr.HealthStats = new(storage.NvmeHealth)
+		if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
+			ei.log.Errorf("%s: update ctrlr health: %s", msg, err.Error())
 			continue
 		}
-		hasUpdatedHealth[ctrlr.PciAddr] = true
-
 		ei.log.Debugf("%s: ctrlr health updated", msg)
+		hasUpdatedHealth[ctrlr.PciAddr] = true
 	}
 
-	return nil
+	return ctrlrs, nil
 }

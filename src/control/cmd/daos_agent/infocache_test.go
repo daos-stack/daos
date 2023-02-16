@@ -22,6 +22,16 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	providers := []*hardware.FabricProvider{}
+	for _, p := range prov {
+		providers = append(providers, &hardware.FabricProvider{
+			Name: p,
+		})
+	}
+	return hardware.NewFabricProviderSet(providers...)
+}
+
 func TestAgent_newAttachInfoCache(t *testing.T) {
 	for name, tc := range map[string]struct {
 		enabled bool
@@ -212,28 +222,28 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			lfc: newLocalFabricCache(nil, true),
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
 					NUMANode:      1,
 					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test1"),
 					NUMANode:      0,
 					DeviceClass:   hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
 					NUMANode:      0,
 					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "lo",
 					NetInterfaces: common.NewStringSet("lo"),
 					NUMANode:      0,
@@ -249,7 +259,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "lo",
 							NetDevClass: hardware.Loopback,
 							hw: &hardware.FabricInterface{
-								Providers:     common.NewStringSet("ofi+sockets"),
+								Providers:     testFabricProviderSet("ofi+sockets"),
 								Name:          "lo",
 								NetInterfaces: common.NewStringSet("lo"),
 								NUMANode:      0,
@@ -261,7 +271,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test1",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers:     common.NewStringSet("ofi+verbs"),
+								Providers:     testFabricProviderSet("ofi+verbs"),
 								Name:          "test1",
 								NetInterfaces: common.NewStringSet("os_test1"),
 								NUMANode:      0,
@@ -273,7 +283,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test2",
 							NetDevClass: hardware.Ether,
 							hw: &hardware.FabricInterface{
-								Providers:     common.NewStringSet("ofi+sockets"),
+								Providers:     testFabricProviderSet("ofi+sockets"),
 								Name:          "test2",
 								NetInterfaces: common.NewStringSet("os_test2"),
 								NUMANode:      0,
@@ -287,7 +297,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test0",
 							NetDevClass: hardware.Ether,
 							hw: &hardware.FabricInterface{
-								Providers:     common.NewStringSet("ofi+sockets"),
+								Providers:     testFabricProviderSet("ofi+sockets"),
 								Name:          "test0",
 								NetInterfaces: common.NewStringSet("os_test0"),
 								NUMANode:      1,
@@ -296,6 +306,17 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 						},
 					},
 				},
+			},
+		},
+		"ignores passed down": {
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
+			input:     hardware.NewFabricInterfaceSet(),
+			expCached: true,
+			expResult: &NUMAFabric{
+				numaMap:      map[int][]*FabricInterface{},
+				ignoreIfaces: common.NewStringSet("test1"),
 			},
 		},
 	} {
@@ -316,7 +337,12 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			}
 
 			if tc.expCached {
-				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
+				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap,
+					cmp.AllowUnexported(FabricInterface{}, hardware.FabricProviderSet{}),
+				); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
+				if diff := cmp.Diff(tc.expResult.ignoreIfaces, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
@@ -328,9 +354,10 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 
 func TestAgent_localFabricCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
-		lfc       *localFabricCache
-		input     *NUMAFabric
-		expCached bool
+		lfc        *localFabricCache
+		input      *NUMAFabric
+		expCached  bool
+		expIgnored common.StringSet
 	}{
 		"nil": {},
 		"nil NUMAFabric": {
@@ -367,6 +394,23 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 			},
 			expCached: true,
 		},
+		"ignores passed down": {
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
+			input: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "test1",
+							NetDevClass: hardware.Infiniband,
+						},
+					},
+				},
+			},
+			expCached:  true,
+			expIgnored: common.NewStringSet("test1"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -374,6 +418,9 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 
 			if tc.lfc != nil {
 				tc.lfc.log = log
+			}
+			if tc.input != nil {
+				tc.input.log = log
 			}
 
 			tc.lfc.Cache(context.TODO(), tc.input)
@@ -392,6 +439,9 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
+				if diff := cmp.Diff(tc.expIgnored, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
 				t.Fatalf("expected nothing cached, got: %+v", tc.lfc.localNUMAFabric.numaMap)
 			}
@@ -407,13 +457,13 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 					NetInterfaces: common.NewStringSet("test1"),
 					DeviceClass:   hardware.Infiniband,
 					Name:          "test1_alias",
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 				})[0],
 				fabricInterfacesFromHardware(&hardware.FabricInterface{
 					NetInterfaces: common.NewStringSet("test2"),
 					DeviceClass:   hardware.Ether,
 					Name:          "test2_alias",
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 				})[0],
 			},
 			1: {
@@ -421,32 +471,32 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 					NetInterfaces: common.NewStringSet("test3"),
 					DeviceClass:   hardware.Infiniband,
 					Name:          "test3_alias",
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 				})[0],
 				fabricInterfacesFromHardware(&hardware.FabricInterface{
 					NetInterfaces: common.NewStringSet("test4"),
 					DeviceClass:   hardware.Infiniband,
 					Name:          "test4_alias",
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 				})[0],
 				fabricInterfacesFromHardware(&hardware.FabricInterface{
 					NetInterfaces: common.NewStringSet("test5"),
 					DeviceClass:   hardware.Ether,
 					Name:          "test5_alias",
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 				})[0],
 			},
 			2: {
 				fabricInterfacesFromHardware(&hardware.FabricInterface{
 					NetInterfaces: common.NewStringSet("test6"),
 					DeviceClass:   hardware.Ether,
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 				})[0],
 				fabricInterfacesFromHardware(&hardware.FabricInterface{
 					NetInterfaces: common.NewStringSet("test7"),
 					DeviceClass:   hardware.Ether,
 					Name:          "test7_alias",
-					Providers:     common.NewStringSet("ofi+sockets", "ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+sockets", "ofi+verbs"),
 				})[0],
 			},
 		},

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +11,6 @@ from job_manager_utils import get_job_manager
 
 
 class MdtestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base mdtest class.
 
     :avocado: recursive
@@ -47,6 +45,7 @@ class MdtestBase(DfuseTestBase):
 
     def execute_mdtest(self, out_queue=None):
         """Runner method for Mdtest.
+
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
         """
@@ -68,6 +67,9 @@ class MdtestBase(DfuseTestBase):
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes, out_queue=out_queue)
 
+        if self.subprocess:
+            return
+
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:
             self.container = None
@@ -80,7 +82,6 @@ class MdtestBase(DfuseTestBase):
             JobManager: the object for the mpi job manager command
 
         """
-        # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
             manager = get_job_manager(

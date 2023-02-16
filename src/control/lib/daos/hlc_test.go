@@ -17,6 +17,10 @@ import (
 
 func TestDaos_HLC(t *testing.T) {
 	now := time.Now().Truncate(0)
+	zeroTime, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", daos.ZeroHLCDate)
+	if err != nil {
+		panic(err)
+	}
 
 	for name, tc := range map[string]struct {
 		in      int64
@@ -24,7 +28,7 @@ func TestDaos_HLC(t *testing.T) {
 	}{
 		"zero": {
 			in:      0,
-			expDate: "2021-01-01 00:00:00 +0000 UTC", // HLC epoch is 2021-01-01
+			expDate: zeroTime.Local().String(),
 		},
 		"now": {
 			in:      now.UnixNano(),

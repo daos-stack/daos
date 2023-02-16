@@ -14,15 +14,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func TestIOEngineInstance_MountScmDevice(t *testing.T) {
@@ -57,7 +59,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		cfg    *storage.Config
-		msCfg  *scm.MockSysConfig
+		msCfg  *system.MockSysConfig
 		expErr error
 	}{
 		"empty config": {
@@ -65,14 +67,14 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 		},
 		"IsMounted fails": {
 			cfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedErr: errors.New("failed to check mount"),
 			},
 			expErr: errors.New("failed to check mount"),
 		},
 		"already mounted": {
 			cfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedBool: true,
 			},
 		},
@@ -81,7 +83,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 		},
 		"mount ramdisk fails": {
 			cfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expErr: errors.New("mount failed"),
@@ -91,7 +93,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 		},
 		"mount dcpm fails": {
 			cfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expErr: errors.New("mount failed"),
@@ -120,7 +122,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 
 			ec := engine.MockConfig().WithStorage(tc.cfg.Tiers...)
 			runner := engine.NewRunner(log, ec)
-			sys := scm.NewMockSysProvider(log, tc.msCfg)
+			sys := system.NewMockSysProvider(log, tc.msCfg)
 			scm := scm.NewMockProvider(log, nil, tc.msCfg)
 			provider := storage.MockProvider(log, 0, tc.cfg, sys, scm, nil)
 			instance := NewEngineInstance(log, provider, nil, runner)
@@ -153,7 +155,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		engineCfg      *engine.Config
 		mbCfg          *scm.MockBackendConfig
-		msCfg          *scm.MockSysConfig
+		msCfg          *system.MockSysConfig
 		expNeedsFormat bool
 		expErr         error
 	}{
@@ -162,14 +164,14 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		},
 		"check ramdisk fails (IsMounted fails)": {
 			engineCfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedErr: errors.New("failed to check mount"),
 			},
 			expErr: errors.New("failed to check mount"),
 		},
 		"check ramdisk (mounted)": {
 			engineCfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedBool: true,
 			},
 			expNeedsFormat: false,
@@ -180,35 +182,35 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		},
 		"check ramdisk (unmounted, mountpoint doesn't exist)": {
 			engineCfg: ramCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedErr: os.ErrNotExist,
 			},
 			expNeedsFormat: true,
 		},
 		"check dcpm (mounted)": {
 			engineCfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedBool: true,
 			},
 			expNeedsFormat: false,
 		},
 		"check dcpm (unmounted, unformatted)": {
 			engineCfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				GetfsStr: "none",
 			},
 			expNeedsFormat: true,
 		},
 		"check dcpm (unmounted, formatted)": {
 			engineCfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				GetfsStr: "ext4",
 			},
 			expNeedsFormat: false,
 		},
 		"check dcpm (unmounted, formatted, mountpoint doesn't exist)": {
 			engineCfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedErr: os.ErrNotExist,
 				GetfsStr:     "ext4",
 			},
@@ -216,7 +218,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		},
 		"check dcpm fails (IsMounted fails)": {
 			engineCfg: dcpmCfg,
-			msCfg: &scm.MockSysConfig{
+			msCfg: &system.MockSysConfig{
 				IsMountedErr: errors.New("failed to check mount"),
 			},
 			expErr: errors.New("failed to check mount"),
@@ -239,7 +241,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 
 			runner := engine.NewRunner(log, tc.engineCfg)
 			mp := storage.NewProvider(log, 0, &tc.engineCfg.Storage,
-				scm.NewMockSysProvider(log, tc.msCfg),
+				system.NewMockSysProvider(log, tc.msCfg),
 				scm.NewMockProvider(log, tc.mbCfg, tc.msCfg),
 				nil)
 			instance := NewEngineInstance(log, mp, nil, runner)
@@ -336,10 +338,10 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 				fs = "ext4"
 			}
 
-			msc := scm.MockSysConfig{GetfsStr: fs}
+			msc := system.MockSysConfig{GetfsStr: fs}
 			mbc := scm.MockBackendConfig{}
 			mp := storage.NewProvider(log, 0, &dcpmCfg.Storage,
-				scm.NewMockSysProvider(log, &msc),
+				system.NewMockSysProvider(log, &msc),
 				scm.NewMockProvider(log, &mbc, &msc),
 				nil)
 			engine := NewEngineInstance(log, mp, nil, runner)
@@ -348,7 +350,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			if tc.hasSB {
 				engine.setSuperblock(&Superblock{
-					Rank: system.NewRankPtr(0), ValidRank: true,
+					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
 			}
 

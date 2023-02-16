@@ -59,6 +59,7 @@ const (
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+	StoragePathAccessDenied
 )
 
 // SCM fault codes
@@ -99,6 +100,7 @@ const (
 const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
+	SystemPoolLocked
 )
 
 // client fault codes
@@ -125,6 +127,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePageMem
@@ -169,6 +172,7 @@ const (
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
+	ServerConfigEngineNUMAImbalance
 )
 
 // SPDK library bindings codes

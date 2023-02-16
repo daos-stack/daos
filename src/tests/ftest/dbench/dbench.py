@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +8,7 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
 from dbench_utils import Dbench
+
 
 class DbenchTest(DfuseTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
@@ -32,7 +32,7 @@ class DbenchTest(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=dbench,dfuse
+        :avocado: tags=dbench,dfuse,test_dbench
         """
 
         self.add_pool(connect=False)

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -140,7 +139,7 @@ class ContSecurityTestBase(TestWithServers):
         for line in result.stdout_text.splitlines():
             if not line.startswith("A:"):
                 continue
-            elif line.startswith("A::"):
+            if line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:
                     cont_permission_list.append(line)

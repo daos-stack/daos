@@ -1,5 +1,5 @@
 """Build common libraries"""
-import daos_build
+
 
 COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
@@ -33,7 +33,7 @@ def build_daos_common(denv, client, prereqs):
         prereqs.require(benv, 'argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    common = daos_build.library(benv, libname, COMMON_FILES + stack_mmap_files, LIBS=common_libs)
+    common = benv.d_library(libname, COMMON_FILES + stack_mmap_files, LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 
@@ -44,8 +44,8 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
-    daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(env)
+    base_env.d_add_build_rpath()
+    env.d_add_build_rpath()
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -82,7 +82,7 @@ def scons():
     prereqs.require(tlibenv, 'isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
 
-    tests_lib = daos_build.library(tlibenv, 'daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
+    tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()

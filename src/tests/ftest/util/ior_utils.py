@@ -1,18 +1,17 @@
-#!/usr/bin/python
 """
 (C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import re
 import uuid
-import time
 from enum import IntEnum
 
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
-from command_utils import ExecutableCommand
-from general_utils import get_subprocess_stdout
+from command_utils import SubProcessCommand
+from general_utils import get_log_file
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
@@ -65,7 +64,7 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         fail_on_warning)
 
 
-class IorCommand(ExecutableCommand):
+class IorCommand(SubProcessCommand):
     # pylint: disable=too-many-instance-attributes
     """Defines a object for executing an IOR command.
 
@@ -76,7 +75,7 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
         >>> server_manager = self.server_manager[0]
-        >>> env = self.ior_cmd.get_environment(server_manager, self.client_log)
+        >>> env = self.ior_cmd.get_default_env(server_manager, self.client_log)
         >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
         >>> mpirun.assign_processes(len(self.hostlist_clients))
         >>> mpirun.assign_environment(env)
@@ -89,7 +88,7 @@ class IorCommand(ExecutableCommand):
         Args:
             namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
         """
-        super().__init__(namespace, "ior")
+        super().__init__(namespace, "ior", timeout=60)
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -166,13 +165,8 @@ class IorCommand(ExecutableCommand):
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
-
-        # Attributes used to determine command success when run as a subprocess
-        # See self.check_ior_subprocess_status() for details.
-        self.pattern = None
-        self.pattern_count = 1
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -195,7 +189,7 @@ class IorCommand(ExecutableCommand):
 
         Args:
             group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -211,12 +205,15 @@ class IorCommand(ExecutableCommand):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             display (bool, optional): print updated params. Defaults to True.
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_pool.update(
-                pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+            try:
+                dfs_pool = pool.pool.get_uuid_str()
+            except AttributeError:
+                dfs_pool = pool
+            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -281,8 +278,9 @@ class IorCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
         env["FI_PSM2_DISCONNECT"] = "1"
 
         # ior POSIX api does not require the below options.
@@ -294,8 +292,7 @@ class IorCommand(ExecutableCommand):
                 env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
                                                                 self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
-                    env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                        self.dfs_oclass.value
+                    env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
         return env
 
     @staticmethod
@@ -342,67 +339,6 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=30):
-        """Verify the status of the command started as a subprocess.
-
-        Continually search the subprocess output for a pattern (self.pattern)
-        until the expected number of patterns (self.pattern_count) have been
-        found (typically one per host) or the timeout (pattern_timeout)
-        is reached or the process has stopped.
-
-        Args:
-            sub_process (process.SubProcess): subprocess used to run the command
-            command (str): ior command being looked for
-            pattern_timeout: (int): check pattern until this timeout limit is
-                                    reached.
-        Returns:
-            bool: whether or not the command progress has been detected
-
-        """
-        complete = True
-        self.log.info(
-            "Checking status of the %s command in %s with a %s second timeout",
-            command, sub_process, pattern_timeout)
-
-        if self.pattern is not None:
-            detected = 0
-            complete = False
-            timed_out = False
-            start = time.time()
-
-            # Search for patterns in the subprocess output until:
-            #   - the expected number of pattern matches are detected (success)
-            #   - the time out is reached (failure)
-            #   - the subprocess is no longer running (failure)
-            while not complete and not timed_out and sub_process.poll() is None:
-                output = get_subprocess_stdout(sub_process)
-                detected = len(re.findall(self.pattern, output))
-                complete = detected == self.pattern_count
-                timed_out = time.time() - start > pattern_timeout
-
-            # Summarize results
-            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
-                detected, self.pattern_count, self.pattern,
-                time.time() - start, pattern_timeout)
-
-            if not complete:
-                # Report the error / timeout
-                self.log.info(
-                    "%s detected - %s:\n%s",
-                    "Time out" if timed_out else "Error",
-                    msg,
-                    get_subprocess_stdout(sub_process))
-
-                # Stop the timed out process
-                if timed_out:
-                    self.stop()
-            else:
-                # Report the successful start
-                self.log.info(
-                    "%s subprocess startup detected - %s", command, msg)
-
-        return complete
-
 
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""
@@ -412,33 +348,33 @@ class IorMetrics(IntEnum):
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
     # blksiz    xsize aggs(MiB)   API RefNum
-    Operation = 0
-    Max_MiB = 1
-    Min_MiB = 2
-    Mean_MiB = 3
-    StdDev_MiB = 4
-    Max_OPs = 5
-    Min_OPs = 6
-    Mean_OPs = 7
-    StdDev_OPs = 8
-    Mean_seconds = 9
-    Stonewall_seconds = 10
-    Stonewall_MiB = 11
-    Test_No = 12
-    Num_Tasks = 13
-    tPN = 14
-    reps = 15
-    fPP = 16
-    reord = 17
-    reordoff = 18
-    reordrand = 19
-    seed = 20
-    segcnt = 21
-    blksiz = 22
-    xsize = 23
-    aggs_MiB = 24
+    OPERATION = 0
+    MAX_MIB = 1
+    MIN_MIB = 2
+    MEAN_MIB = 3
+    STDDEV_MIB = 4
+    MAX_OPS = 5
+    MIN_OPS = 6
+    MEAN_OPS = 7
+    STDDEV_OPS = 8
+    MEAN_SECONDS = 9
+    STONEWALL_SECONDS = 10
+    STONEWALL_MIB = 11
+    TEST_NO = 12
+    NUM_TASKS = 13
+    TPN = 14
+    REPS = 15
+    FPP = 16
+    REORD = 17
+    REORDOFF = 18
+    REORDRAND = 19
+    SEED = 20
+    SEGCNT = 21
+    BLKSIZ = 22
+    XSIZE = 23
+    AGGS_MIB = 24
     API = 25
-    RefNum = 26
+    REFNUM = 26
 
 
 class Ior:
@@ -473,20 +409,6 @@ class Ior:
 
         """
         return self.manager.job
-
-    @staticmethod
-    def display_pool_space(pool):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
-
-        Args:
-            pool (TestPool): The pool for which to display space.
-        """
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False):
@@ -549,7 +471,7 @@ class Ior:
 
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             result = self.manager.run()
 
         except CommandFailure as error:
@@ -557,7 +479,7 @@ class Ior:
 
         finally:
             if not self.manager.run_as_subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         if error_message:
             raise CommandFailure(error_message)
@@ -583,6 +505,6 @@ class Ior:
                 error_message = "IOR Failed: {}".format(error)
             finally:
                 if pool:
-                    self.display_pool_space(pool)
+                    pool.display_space()
             if error_message:
                 raise CommandFailure(error_message)

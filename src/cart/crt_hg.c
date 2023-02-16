@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,100 +11,100 @@
 #include "crt_internal.h"
 
 /*
- * na_dict table should be in the same order of enum crt_na_type, the last one
+ * na_dict table should be in the same order of enum crt_provider_t, the last one
  * is terminator with NULL nad_str.
  */
 struct crt_na_dict crt_na_dict[] = {
 	{
-		.nad_type	= CRT_NA_SM,
+		.nad_type	= CRT_PROV_SM,
 		.nad_str	= "sm",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_SOCKETS,
+		.nad_type	= CRT_PROV_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
 		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_VERBS_RXM,
+		.nad_type	= CRT_PROV_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_GNI,
+		.nad_type	= CRT_PROV_OFI_GNI,
 		.nad_str	= "ofi+gni",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_PSM2,
+		.nad_type	= CRT_PROV_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_TCP_RXM,
+		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_CXI,
+		.nad_type	= CRT_PROV_OFI_CXI,
 		.nad_str	= "ofi+cxi",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC,
+		.nad_type	= CRT_PROV_UCX_RC,
 		.nad_str	= "ucx+rc_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD,
+		.nad_type	= CRT_PROV_UCX_UD,
 		.nad_str	= "ucx+ud_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD,
+		.nad_type	= CRT_PROV_UCX_RC_UD,
 		.nad_str	= "ucx+rc_v,ud_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_O,
+		.nad_type	= CRT_PROV_UCX_RC_O,
 		.nad_str	= "ucx+rc",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD_O,
+		.nad_type	= CRT_PROV_UCX_UD_O,
 		.nad_str	= "ucx+ud",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD_O,
+		.nad_type	= CRT_PROV_UCX_RC_UD_O,
 		.nad_str	= "ucx+rc,ud",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_X,
+		.nad_type	= CRT_PROV_UCX_RC_X,
 		.nad_str	= "ucx+rc_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD_X,
+		.nad_type	= CRT_PROV_UCX_UD_X,
 		.nad_str	= "ucx+ud_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD_X,
+		.nad_type	= CRT_PROV_UCX_RC_UD_X,
 		.nad_str	= "ucx+rc_x,ud_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_DC_X,
+		.nad_type	= CRT_PROV_UCX_DC_X,
 		.nad_str	= "ucx+dc_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_TCP,
+		.nad_type	= CRT_PROV_UCX_TCP,
 		.nad_str	= "ucx+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
@@ -114,7 +114,7 @@ struct crt_na_dict crt_na_dict[] = {
 };
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 {
 	char	copy_uri[CRT_ADDR_STR_MAX_LEN];
 	char	*provider_str;
@@ -141,7 +141,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	}
 
 	if (prov)
-		*prov = crt_prov_str_to_na_type(provider_str);
+		*prov = crt_prov_str_to_prov(provider_str);
 
 	if (addr)
 		strncpy(addr, addr_str + 2, CRT_ADDR_STR_MAX_LEN - 1);
@@ -149,19 +149,19 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	return 0;
 }
 
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str)
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_NA_COUNT; i++) {
+	for (i = 0; i < CRT_PROV_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
-	return CRT_NA_UNKNOWN;
+	return CRT_PROV_UNKNOWN;
 }
 
 /**
@@ -390,6 +390,11 @@ crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
 	D_ASSERT(hg_class != NULL);
 	D_ASSERT(str_size != NULL);
 
+	if (!crt_is_service()) {
+		D_ERROR("Should only be called on servers\n");
+		return -DER_INVAL;
+	}
+
 	hg_ret = HG_Addr_self(hg_class, &self_addr);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_self() failed, hg_ret: %d.\n", hg_ret);
@@ -468,25 +473,38 @@ out:
  * be returned during multi-provider support implementation
  */
 static struct crt_prov_gdata *
-crt_get_prov_gdata(int provider)
+crt_get_prov_gdata(bool primary, int provider)
 {
-	return &crt_gdata.cg_prov_gdata[provider];
+	int	i;
+
+	if (primary)
+		return &crt_gdata.cg_prov_gdata_primary;
+
+	for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
+		if (provider == crt_gdata.cg_secondary_provs[i])
+			return &crt_gdata.cg_prov_gdata_secondary[i];
+	}
+
+	D_ASSERTF(0, "Unable to lookup provider %d on primary=%d\n",
+		  provider, primary);
+
+	return NULL;
 }
 
 static int
-crt_provider_ctx0_port_get(int provider)
+crt_provider_ctx0_port_get(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	return prov_data->cpg_na_ofi_config.noc_port;
+	return prov_data->cpg_na_config.noc_port;
 }
 
 static char*
-crt_provider_domain_get(int provider)
+crt_provider_domain_get(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	return prov_data->cpg_na_ofi_config.noc_domain;
+	return prov_data->cpg_na_config.noc_domain;
 }
 
 char *
@@ -496,20 +514,20 @@ crt_provider_name_get(int provider)
 }
 
 static char*
-crt_provider_ip_str_get(int provider)
+crt_provider_ip_str_get(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	if (provider == CRT_NA_OFI_CXI)
+	if (provider == CRT_PROV_OFI_CXI)
 		return NULL;
 	else
-		return prov_data->cpg_na_ofi_config.noc_ip_str;
+		return prov_data->cpg_na_config.noc_ip_str;
 }
 
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_NA_OFI_PSM2)
+	if (provider == CRT_PROV_OFI_PSM2)
 		return false;
 
 	return true;
@@ -528,63 +546,85 @@ crt_provider_is_port_based(int provider)
 }
 
 bool
-crt_provider_is_sep(int provider)
+crt_provider_is_sep(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	return prov_data->cpg_sep_mode;
 }
 
 void
-crt_provider_set_sep(int provider, bool enable)
+crt_provider_set_sep(bool primary, int provider, bool enable)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	prov_data->cpg_sep_mode = (enable) ? 1 : 0;
 }
 
 int
-crt_provider_get_cur_ctx_num(int provider)
+crt_provider_get_cur_ctx_num(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	return prov_data->cpg_ctx_num;
 }
 
 int
-crt_provider_get_max_ctx_num(int provider)
+crt_provider_get_max_ctx_num(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	return prov_data->cpg_ctx_max_num;
 }
 
-void
-crt_provider_inc_cur_ctx_num(int provider)
+struct crt_na_config*
+crt_provider_get_na_config(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	prov_data->cpg_ctx_num++;
+	return &prov_data->cpg_na_config;
 }
 
 void
-crt_provider_dec_cur_ctx_num(int provider)
+crt_provider_put_ctx_idx(bool primary, int provider, int idx)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	prov_data->cpg_ctx_num--;
+	if (prov_data->cpg_used_idx[idx] == false) {
+		D_WARN("Put context on free idx=%d:%d\n", provider, idx);
+	} else {
+		prov_data->cpg_used_idx[idx] = false;
+		prov_data->cpg_ctx_num--;
+	}
+}
+
+int
+crt_provider_get_ctx_idx(bool primary, int provider)
+{
+	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
+	int			i;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (prov_data->cpg_used_idx[i] == false) {
+			prov_data->cpg_used_idx[i] = true;
+			prov_data->cpg_ctx_num++;
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 d_list_t
-*crt_provider_get_ctx_list(int provider)
+*crt_provider_get_ctx_list(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	return &prov_data->cpg_ctx_list;
 }
 
 static int
-crt_get_info_string(int provider, char **string, int ctx_idx)
+crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 {
 	char	*provider_str;
 	int	 start_port;
@@ -592,32 +632,48 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 	char	*ip_str;
 
 	provider_str = crt_provider_name_get(provider);
-	start_port = crt_provider_ctx0_port_get(provider);
-	domain_str = crt_provider_domain_get(provider);
-	ip_str = crt_provider_ip_str_get(provider);
+	start_port = crt_provider_ctx0_port_get(primary, provider);
+	domain_str = crt_provider_domain_get(primary, provider);
+	ip_str = crt_provider_ip_str_get(primary, provider);
 
-	if (provider == CRT_NA_SM) {
+	if (provider == CRT_PROV_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
 		D_GOTO(out, 0);
 	}
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s:%d",
-				   provider_str, domain_str,
-				   start_port + ctx_idx);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str,
-				   start_port + ctx_idx);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, domain_str, start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://:%d",
+					   provider_str, start_port + ctx_idx);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s:%d",
+					   provider_str, domain_str, ip_str,
+					   start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, ip_str,
+					   start_port + ctx_idx);
+		}
 	} else {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s",
-				   provider_str, domain_str);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s",
-				   provider_str, domain_str, ip_str);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s",
+					   provider_str, domain_str);
+			else
+				D_ASPRINTF(*string, "%s://", provider_str);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s",
+					   provider_str, domain_str, ip_str);
+			else
+				D_ASPRINTF(*string, "%s://%s", provider_str, ip_str);
+		}
 	}
 
 out:
@@ -705,7 +761,7 @@ crt_sep_hg_class_set(int provider, hg_class_t *class)
 }
 
 static int
-crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
+crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class)
 {
 	char			*info_string = NULL;
 	struct hg_init_info	init_info = HG_INIT_INFO_INITIALIZER;
@@ -715,19 +771,21 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	struct crt_prov_gdata	*prov_data;
 	int			rc = DER_SUCCESS;
 
-	prov_data = crt_get_prov_gdata(provider);
-	rc = crt_get_info_string(provider, &info_string, idx);
+	prov_data = crt_get_prov_gdata(primary, provider);
+	rc = crt_get_info_string(primary, provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
 	if (crt_provider_is_block_mode(provider))
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
 
-	if (crt_provider_is_sep(provider))
+	if (crt_provider_is_sep(primary, provider))
 		init_info.na_init_info.max_contexts =
-					crt_provider_get_max_ctx_num(provider);
+					crt_provider_get_max_ctx_num(primary, provider);
 	else
 		init_info.na_init_info.max_contexts = 1;
 
@@ -737,7 +795,6 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	if (prov_data->cpg_max_unexp_size > 0)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
-	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -751,14 +808,13 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 			HG_Finalize(hg_class);
 			D_GOTO(out, rc);
 		}
+
+		D_DEBUG(DB_NET, "New ctx (idx:%d), address: %s.\n", idx, addr_str);
+
+		/* If address for this provider isn't filled yet*/
+		if (prov_data->cpg_addr[0] == '\0')
+			strncpy(prov_data->cpg_addr, addr_str, str_size);
 	}
-
-	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
-		idx, addr_str);
-
-	/* TODO: Need to store per provider addr for multi-provider support */
-	if (idx == 0)
-		strncpy(prov_data->cpg_addr, addr_str, str_size);
 
 	rc = crt_hg_reg_rpcid(hg_class);
 	if (rc != 0) {
@@ -777,7 +833,7 @@ out:
 }
 
 int
-crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
+crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary)
 {
 	struct crt_context	*crt_ctx;
 	hg_class_t		*hg_class = NULL;
@@ -790,13 +846,13 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
 	hg_ctx->chc_provider = provider;
-	sep_mode = crt_provider_is_sep(provider);
+	sep_mode = crt_provider_is_sep(true, provider);
 
 	/* In SEP mode all contexts share same hg_class*/
 	if (sep_mode) {
 		/* Only initialize class for context0 */
 		if (idx == 0) {
-			rc = crt_hg_class_init(provider, idx, &hg_class);
+			rc = crt_hg_class_init(provider, idx, primary, &hg_class);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -805,7 +861,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 			hg_class = crt_sep_hg_class_get(provider);
 		}
 	} else {
-		rc = crt_hg_class_init(provider, idx, &hg_class);
+		rc = crt_hg_class_init(provider, idx, primary, &hg_class);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -863,7 +919,14 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
+			D_ERROR("Could not destroy HG context, hg_ret: %d %s.\n", hg_ret,
+				HG_Error_to_string(hg_ret));
+
+			/* TODO: Fix mercury handle leak under valgrind and remove this */
+			if (D_ON_VALGRIND && hg_ret == HG_BUSY) {
+				D_ERROR("Ignoring error to allow completion under valgrind\n");
+				D_GOTO(out, rc = 0);
+			}
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 		hg_ctx->chc_hgctx = NULL;
@@ -1079,7 +1142,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
-	if (crt_provider_is_sep(hg_ctx->chc_provider)) {
+	if (crt_provider_is_sep(true, hg_ctx->chc_provider)) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {
@@ -1449,22 +1512,21 @@ int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		   crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
 {
-	void		**buf_ptrs = NULL;
-	void		*buf_ptrs_stack[CRT_HG_IOVN_STACK];
-	hg_size_t	*buf_sizes = NULL;
-	hg_size_t	buf_sizes_stack[CRT_HG_IOVN_STACK];
-	hg_uint8_t	flags;
-	hg_bulk_t	hg_bulk_hdl;
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0, i;
-	bool		allocate = false;
+	void      **buf_ptrs                           = NULL;
+	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
+	hg_size_t  *buf_sizes                          = NULL;
+	hg_size_t   buf_sizes_stack[CRT_HG_IOVN_STACK] = {0};
+	hg_uint8_t  flags;
+	hg_bulk_t   hg_bulk_hdl;
+	hg_return_t hg_ret;
+	int         rc       = 0, i;
+	bool        allocate = false;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
 	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE :
-					     HG_BULK_READ_ONLY;
+	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;

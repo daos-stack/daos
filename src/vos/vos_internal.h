@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,6 +132,7 @@ enum {
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
 extern unsigned int vos_agg_nvme_thresh;
+extern bool vos_dkey_punch_propagate;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -191,8 +192,8 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	int			vp_opened:30;
-	int			vp_dying:1;
+	uint32_t                 vp_opened : 30;
+	uint32_t                 vp_dying  : 1;
 	/** exclusive handle (see VOS_POF_EXCL) */
 	int			vp_excl:1;
 	/** caller specifies pool is small (for sys space reservation) */
@@ -911,6 +912,8 @@ struct vos_iterator {
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
+	uint64_t                 it_seq;
+	struct vos_iter_anchors *it_anchors;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -1288,31 +1291,52 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
-/* Slab allocation */
-enum {
-	VOS_SLAB_OBJ_NODE	= 0,
-	VOS_SLAB_KEY_NODE	= 1,
-	VOS_SLAB_SV_NODE	= 2,
-	VOS_SLAB_EVT_NODE	= 3,
-	VOS_SLAB_EVT_DESC	= 4,
-	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_EVT_NODE_SM	= 6,
-	VOS_SLAB_MAX		= 7
+/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
+static const int        slab_map[] = {
+    0,                  /* 32 bytes */
+    1,                  /* 64 bytes */
+    2,                  /* 96 bytes */
+    3,                  /* 128 bytes */
+    4,                  /* 160 bytes */
+    5,                  /* 192 bytes */
+    6,                  /* 224 bytes */
+    -1,                 /* 256 bytes */
+    7,                  /* 288 bytes */
+    -1, -1, 8,          /* 384 bytes */
+    9,                  /* 416 bytes */
+    -1, -1, -1, -1, 10, /* 576 bytes */
+    -1, -1, 11,         /* 672 bytes */
+    -1, -1, 12,         /* 768 bytes */
 };
-D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
 static inline umem_off_t
-vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+vos_slab_alloc(struct umem_instance *umm, int size)
 {
-	/* evtree unit tests may skip slab register in vos_pool_open() */
-	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
-		  size == umem_slab_usize(umm, slab_id),
-		  "registered: %d, id: %d, size: %d != %zu\n",
-		  umem_slab_registered(umm, slab_id),
-		  slab_id, size, umem_slab_usize(umm, slab_id));
+	int aligned_size = D_ALIGNUP(size, 32);
+	int slab_idx;
+	int slab;
 
-	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
-					POBJ_FLAG_ZERO, size);
+	slab_idx = (aligned_size >> 5) - 1;
+	if (slab_idx >= ARRAY_SIZE(slab_map))
+		goto no_slab_alloc;
+
+	if (slab_map[slab_idx] == -1) {
+		D_DEBUG(DB_MGMT, "No slab %d for allocation of size %d, idx=%d\n", aligned_size,
+			size, slab_idx);
+		goto no_slab_alloc;
+	}
+
+	slab = slab_map[slab_idx];
+
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab) || aligned_size == umem_slab_usize(umm, slab),
+		  "registered: %d, id: %d, size: %d != %zu\n", umem_slab_registered(umm, slab),
+		  slab, aligned_size, umem_slab_usize(umm, slab));
+
+	return umem_alloc_verb(umm, umem_slab_flags(umm, slab) | POBJ_FLAG_ZERO, aligned_size);
+
+no_slab_alloc:
+	return umem_zalloc(umm, size);
 }
 
 /* vos_space.c */
@@ -1509,6 +1533,12 @@ vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_
  */
 int
 vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoch_t epoch);
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov);
 
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)

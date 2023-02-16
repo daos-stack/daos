@@ -265,11 +265,14 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-#define D_FREE(ptr)							\
-	do {								\
-		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		d_free(ptr);						\
-		(ptr) = NULL;						\
+/* Free a pointer. Only logs if the pointer is non-NULL. */
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
@@ -695,6 +698,178 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 }
 
 double d_stand_div(double *array, int nr);
+
+
+
+/**
+ * Return current HLC timestamp
+ *
+ * HLC timestamps are synchronized between nodes. They sends with each RPC for
+ * different nodes and updated when received from different node. The HLC
+ * timestamps synchronization will be called transparently at sending/receiving
+ * RPC into the wire (when Mercury will encode/decode the packet). So, with
+ * each call of this function you will get from it always last HLC timestamp
+ * synchronized across all nodes involved in current communication.
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+d_hlc_get(void);
+
+/**
+ * Sync HLC with remote message and get current HLC timestamp.
+ *
+ * \param[in] msg              remote HLC timestamp
+ * \param[out] hlc_out         HLC timestamp
+ * \param[out] offset          Returned observed clock offset.
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ * \retval -DER_HLC_SYNC       \a msg is too much higher than the local
+ *                             physical clock
+ */
+int
+d_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
+
+/**
+ * Return the nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Nanosecond timestamp
+ */
+uint64_t
+d_hlc2nsec(uint64_t hlc);
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2usec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / 1000;
+}
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2msec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / (1000 * 1000);
+}
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2sec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / (1000 * 1000 * 1000);
+}
+
+/**
+ * Return the HLC timestamp from nsec.
+ *
+ * \param[in] nsec             Nanosecond timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+d_nsec2hlc(uint64_t nsec);
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_usec2hlc(uint64_t usec)
+{
+	return d_nsec2hlc(usec * 1000);
+}
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_msec2hlc(uint64_t msec)
+{
+	return d_nsec2hlc(msec * 1000 * 1000);
+}
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_sec2hlc(uint64_t sec)
+{
+	return d_nsec2hlc(sec * 1000 * 1000 * 1000);
+}
+
+/**
+ * Return the Unix nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Unix nanosecond timestamp
+ */
+uint64_t
+d_hlc2unixnsec(uint64_t hlc);
+
+/**
+ * Return timespec from HLC
+ *
+ * \param[in]	hlc	HLC timestamp
+ * \param[out]	ts	timespec struct
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+d_hlc2timespec(uint64_t hlc, struct timespec *ts);
+
+/**
+ * Return HLC from timespec
+ *
+ * \param[in]	ts	timespec struct
+ * \param[out]	hlc	HLC timestamp
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+d_timespec2hlc(struct timespec ts, uint64_t *hlc);
+
+/**
+ * Return the HLC timestamp of unixnsec in hlc.
+ *
+ * \param[in] unixnsec         Unix nanosecond timestamp
+ *
+ * \return                     HLC timestamp on success, or 0 when it is
+ *                             impossible to convert unixnsec to hlc
+ */
+uint64_t
+d_unixnsec2hlc(uint64_t unixnsec);
+
+/**
+ * Set the maximum system clock offset.
+ *
+ * This is the maximum offset believed to be observable between the physical
+ * clocks behind any two HLCs in the system. The format of the value represent
+ * a nonnegative diff between two HLC timestamps. The value is rounded up to
+ * the HLC physical resolution.
+ *
+ * \param[in] epsilon          Nonnegative HLC duration
+ */
+void
+d_hlc_epsilon_set(uint64_t epsilon);
+
+/**
+ * Get the maximum system clock offset. See d_hlc_set_epsilon's API doc.
+ *
+ * \return                     Nonnegative HLC duration
+ */
+uint64_t
+d_hlc_epsilon_get(void);
+
+/**
+ * Get the upper bound of the HLC timestamp of an event happened before
+ * (through out of band communication) the event at \a hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Upper bound HLC timestamp
+ */
+uint64_t
+d_hlc_epsilon_get_bound(uint64_t hlc);
+
+uint64_t d_hlct_get(void);
+void d_hlct_sync(uint64_t msg);
 
 #if defined(__cplusplus)
 }

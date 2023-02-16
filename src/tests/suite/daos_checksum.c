@@ -192,7 +192,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -1835,9 +1835,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config,
-			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      layout1->ol_shards[0]->os_shard_loc[0].sd_rank, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, &affected_engines);
 	assert_true(disabled_nr < after_disabled_nr);
 	assert_true(d_rank_list_find(affected_engines, rank_to_exclude, NULL));
@@ -1872,8 +1872,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	daos_fail_loc_reset();
 	daos_fail_num_set(0);
 
-	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  rank_to_exclude);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank_to_exclude, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, NULL);
 	assert_int_equal(disabled_nr, after_disabled_nr);
 	/** wait for rebuild */
@@ -2246,7 +2247,6 @@ test_enumerate_object(void **state)
 	struct dcs_csum_info	*csum_info = NULL;
 	void			*end_byte;
 	daos_key_desc_t		*kds = NULL;
-	uint32_t		 csum_count = 0;
 	uint32_t		 nr;
 	int			 rc;
 	char			 dkey[32];
@@ -2364,7 +2364,6 @@ test_enumerate_object(void **state)
 		tmp_csum_iov.iov_buf += ci_size(*csum_info);
 		tmp_csum_iov.iov_buf_len -= ci_size(*csum_info);
 		tmp_csum_iov.iov_len -= ci_size(*csum_info);
-		csum_count++;
 	}
 
 

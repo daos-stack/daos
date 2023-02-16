@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -32,7 +31,7 @@ class PoolAPIAttributeTest(TestWithServers):
         """
         data_set = {}
         for index in range(1024):
-            size = random.randint(1, 100) #nosec
+            size = random.randint(1, 100)  # nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set

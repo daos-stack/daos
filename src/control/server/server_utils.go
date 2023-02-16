@@ -7,15 +7,18 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -23,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -36,8 +40,45 @@ import (
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// ipLookupFn defines the function signature for a helper that can
+// be used to resolve a host address to a list of IP addresses.
+type ipLookupFn func(string) ([]net.IP, error)
+
+// resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
+// If the hostname resolves to multiple addresses, the first one is returned.
+func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to split %q", addr)
+	}
+	iPort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to convert %q to int", port)
+	}
+	addrs, err := lookup(host)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to resolve %q", host)
+	}
+
+	if len(addrs) == 0 {
+		return nil, errors.Errorf("no addresses found for %q", host)
+	}
+
+	isIPv4 := func(ip net.IP) bool {
+		return ip.To4() != nil
+	}
+	// Ensure stable ordering of addresses.
+	sort.Slice(addrs, func(i, j int) bool {
+		if !isIPv4(addrs[i]) && isIPv4(addrs[j]) {
+			return false
+		} else if isIPv4(addrs[i]) && !isIPv4(addrs[j]) {
+			return true
+		}
+		return bytes.Compare(addrs[i], addrs[j]) < 0
+	})
+
+	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
+}
 
 const scanMinHugePageCount = 128
 
@@ -50,10 +91,10 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	return bdevCfgs
 }
 
-func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolve("tcp", ap)
+		apAddr, err := resolveFirstAddr(ap, lookup)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -98,7 +139,7 @@ type replicaAddrGetter interface {
 type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
-	resolveAddr    resolveTCPFn
+	lookupHost     ipLookupFn
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
@@ -108,7 +149,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 		ipStr = repAddr.IP.String()
 	}
 
-	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	ctlAddr, err := resolveFirstAddr(fmt.Sprintf("[%s]:%d", ipStr, params.port), params.lookupHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving control address")
 	}
@@ -166,24 +207,27 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
-// node and notify user.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
-	nodeMap := make(map[string]bool)
-	nodes := make([]string, 0, len(engineCfgs))
+// Detect the number of engine configs assigned to each NUMA node and return error if engines are
+// distributed unevenly across NUMA nodes. Otherwise return sorted list of NUMA nodes in use.
+// Configurations where all engines are on a single NUMA node will be allowed.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]string, error) {
+	nodeMap := make(map[int]int)
 	for _, ec := range engineCfgs {
-		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
-		if nodeMap[nn] {
-			log.Noticef("Multiple engines assigned to NUMA node %s, "+
-				"allocating all hugepages on this node.", nn)
-			nodes = []string{nn}
-			break
-		}
-		nodeMap[nn] = true
-		nodes = append(nodes, nn)
+		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
 	}
 
-	return nodes
+	var lastCount int
+	nodes := make([]string, 0, len(engineCfgs))
+	for k, v := range nodeMap {
+		if lastCount != 0 && v != lastCount {
+			return nil, FaultEngineNUMAImbalance(nodeMap)
+		}
+		lastCount = v
+		nodes = append(nodes, fmt.Sprintf("%d", k))
+	}
+	sort.Strings(nodes)
+
+	return nodes, nil
 }
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
@@ -239,9 +283,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
-		// of hugepages equally across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine).
-		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		// of hugepages across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
+		// numa node.
+		numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		if err != nil {
+			return err
+		}
 
 		if len(numaNodes) == 0 {
 			return errors.New("invalid number of numa nodes detected (0)")
@@ -303,9 +351,62 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	return nvmeScanResp, nil
 }
 
+func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, lastEngineIdx, lastBdevCount *int) error {
+	badInput := ""
+	switch {
+	case engine == nil:
+		badInput = "engine"
+	case scanResp == nil:
+		badInput = "scanResp"
+	case lastEngineIdx == nil:
+		badInput = "lastEngineIdx"
+	case lastBdevCount == nil:
+		badInput = "lastBdevCount"
+	}
+	if badInput != "" {
+		return errors.New("nil input param: " + badInput)
+	}
+
+	if err := engine.storage.SetBdevCache(*scanResp); err != nil {
+		return errors.Wrap(err, "setting engine storage bdev cache")
+	}
+
+	// After engine's bdev cache has been set, the cache will only contain details of bdevs
+	// identified in the relevant engine config and device addresses will have been verified
+	// against NVMe scan results. As any VMD endpoint addresses will have been replaced with
+	// backing device addresses, device counts will reflect the number of physical (as opposed
+	// to logical) bdevs and engine bdev counts can be accurately compared.
+
+	eIdx := engine.Index()
+	bdevCache := engine.storage.GetBdevCache()
+	newNrBdevs := len(bdevCache.Controllers)
+
+	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",
+		*lastEngineIdx, *lastBdevCount, eIdx, newNrBdevs)
+
+	// Update last recorded counters if this is the first update or if the number of bdevs is
+	// unchanged. If bdev count differs between engines, return fault.
+	switch {
+	case *lastEngineIdx < 0:
+		if *lastBdevCount >= 0 {
+			return errors.New("expecting both lastEngineIdx and lastBdevCount to be unset")
+		}
+		*lastEngineIdx = int(eIdx)
+		*lastBdevCount = newNrBdevs
+	case *lastBdevCount < 0:
+		return errors.New("expecting both lastEngineIdx and lastBdevCount to be set")
+	case newNrBdevs == *lastBdevCount:
+		*lastEngineIdx = int(eIdx)
+	default:
+		return config.FaultConfigBdevCountMismatch(int(eIdx), newNrBdevs, *lastEngineIdx, *lastBdevCount)
+	}
+
+	return nil
+}
+
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
-		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+		if err := setenv(pbin.DaosPrivHelperLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
@@ -322,7 +423,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetMemInfoFn) error {
 	engine.RLock()
 	ec := engine.runner.GetConfig()
 	ei := ec.Index
@@ -335,28 +436,28 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	engine.RUnlock()
 
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	hpi, err := getHugePageInfo()
+	mi, err := getMemInfo()
 	if err != nil {
 		return err
 	}
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMb := hpi.PageSizeKb >> 10
-	memSizeReqMb := nrPagesRequired * pageSizeMb
-	memSizeFreeMb := hpi.Free * pageSizeMb
+	pageSizeMiB := mi.HugePageSizeKb / humanize.KiByte // kib to mib
+	memSizeReqMiB := nrPagesRequired * pageSizeMiB
+	memSizeFreeMiB := mi.HugePagesFree * pageSizeMiB
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
-		pageSizeMb, *hpi)
-	if memSizeFreeMb < memSizeReqMb {
-		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
-			nrPagesRequired, hpi.Free)
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
+		pageSizeMiB, *mi)
+	if memSizeFreeMiB < memSizeReqMiB {
+		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMiB, memSizeFreeMiB,
+			nrPagesRequired, mi.HugePagesFree)
 	}
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	engine.setMemSize(memSizeReqMb)
-	engine.setHugePageSz(pageSizeMb)
+	engine.setMemSize(memSizeReqMiB)
+	engine.setHugePageSz(pageSizeMiB)
 
 	return nil
 }
@@ -405,7 +506,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
+		return errors.Wrap(updateMemValues(srv, engine, common.GetMemInfo),
 			"updating engine memory parameters")
 	})
 }
@@ -442,7 +543,7 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 		if sb := engine.getSuperblock(); !sb.ValidRank {
 			engine.log.Debug("marking bootstrap instance as rank 0")
 			req.Rank = 0
-			sb.Rank = system.NewRankPtr(0)
+			sb.Rank = ranklist.NewRankPtr(0)
 		}
 
 		return join(ctx, req)
@@ -497,7 +598,7 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
 					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
 					if system.IsNotLeader(err) {
 						// If we've lost leadership while processing the event,
@@ -519,8 +620,9 @@ func registerLeaderSubscriptions(srv *server) {
 }
 
 // getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.
-func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
+func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryLoggingInterceptor(log), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
 		unaryVersionInterceptor,

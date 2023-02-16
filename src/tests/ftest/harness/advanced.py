@@ -1,17 +1,19 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 from random import choice
-from re import findall
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from apricot import TestWithServers
 
-from general_utils import run_pcmd, get_avocado_config_value
+from general_utils import get_avocado_config_value
+from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
+from user_utils import get_chown_command
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -28,63 +30,15 @@ class HarnessAdvancedTest(TestWithServers):
         self.start_agents_once = False
         self.start_servers_once = False
 
-    def test_core_files(self):
-        """Test to verify core file creation.
+        # Whether to skip tearDown
+        self.skip_teardown = False
 
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
-
-        :avocado: tags=all
-        :avocado: tags=harness,harness_advanced_test,core_files
-        :avocado: tags=test_core_files
-        """
-        # Choose a server find the pid of its daos_engine process
-        host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
-        self.log.info("Obtaining pid of the daos_engine process on %s", host)
-        pid = None
-        result = run_pcmd(host, "pgrep --list-full daos_engine", 20)
-        index = 0
-        while not pid and index < len(result):
-            output = "\n".join(result[index]["stdout"])
-            match = findall(r"(\d+)\s+[A-Za-z0-9/]+", output)
-            if match:
-                pid = match[0]
-            index += 1
-        if pid is None:
-            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
-        self.log.info("Found pid %s", pid)
-
-        # Send a signal 6 to its daos_engine process
-        self.log.info("Sending a signal 6 to %s", pid)
-        result = run_pcmd(host, "sudo kill -6 {}".format(pid))
-        if len(result) > 1 or result[0]["exit_status"] != 0:
-            self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
-
-        # Display the journalctl log for the process that was sent the signal
-        self.server_managers[0].manager.dump_logs(host)
-
-        # Simplify resolving the host name to rank by marking all ranks as
-        # expected to be either running or errored (sent a signal 6)
-        self.server_managers[0].update_expected_states(None, ["Joined", "Errored"])
-
-    def test_core_files_hw(self):
-        """Test to verify core file creation.
-
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
-
-        :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_advanced_test,core_files
-        :avocado: tags=test_core_files_hw
-        """
-        self.test_core_files()
+    def tearDown(self):
+        """Conditionally skip tearDown."""
+        if self.skip_teardown:
+            self.log.info("Skipping test tearDown()")
+            return
+        super().tearDown()
 
     def test_pool_timeout(self):
         """Test to verify tearDown() timeout setting for timed out tests.
@@ -93,8 +47,9 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout
+        :avocado: tags=vm
+        :avocado: tags=harness,pool_timeout
+        :avocado: tags=HarnessAdvancedTest,test_pool_timeout
         """
         namespace = "runner.timeout"
         timeouts = {"after_interrupted": [], "process_alive": [], "process_died": []}
@@ -127,8 +82,93 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout_hw
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,pool_timeout
+        :avocado: tags=HarnessAdvancedTest,test_pool_timeout_hw
         """
         self.test_pool_timeout()
+
+    def test_launch_failures(self):
+        """Test to verify launch.py post processing error reporting.
+
+        The test will place uniquely named files in the paths where launch.py archives test results.
+        When these files are detected launch.py will trigger a fake failure for the archiving of
+        each file.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,launch_failures,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_launch_failures
+        """
+        host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
+        self.log.info("Creating launch.py failure trigger files on %s", host)
+        failure_trigger = "00_trigger-launch-failure_00"
+        failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
+        failure_trigger_files = [
+            os.path.join(self.base_test_dir, "{}_local.yaml".format(failure_trigger)),
+            os.path.join(os.sep, "etc", "daos", "daos_{}.yml".format(failure_trigger)),
+            os.path.join(self.base_test_dir, "{}.log".format(failure_trigger)),
+            os.path.join(failure_trigger_dir, "{}.log".format(failure_trigger)),
+            os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
+            os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),
+        ]
+
+        self.log.debug("Creating %s", failure_trigger_dir)
+        commands = [
+            "sudo -n mkdir -p {}".format(failure_trigger_dir),
+            "sudo -n {}".format(get_chown_command(options='-R', file=failure_trigger_dir)),
+        ]
+
+        local_trigger_file = failure_trigger_files.pop(0)
+        self.log.debug("Creating %s", local_trigger_file)
+        try:
+            with open(local_trigger_file, "w", encoding="utf-8") as local_trigger:
+                local_trigger.write("THIS IS JUST A TEST\n")
+        except IOError as error:
+            self.fail("Error writing {}: {}".format(local_trigger_file, str(error)))
+
+        for command in commands:
+            if not run_remote(self.log, host, command, timeout=20).passed:
+                self.fail("Error creating directory {}".format(failure_trigger_dir))
+
+        for failure_trigger_file in failure_trigger_files:
+            self.log.debug("Creating %s", failure_trigger_file)
+            sudo = "" if failure_trigger_file.startswith(self.tmp) else "sudo -n "
+            commands = [
+                "{}touch {}".format(sudo, failure_trigger_file),
+                "{}{}".format(sudo, get_chown_command(options='-R', file=failure_trigger_file)),
+                "echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file),
+            ]
+            for command in commands:
+                if not run_remote(self.log, host, command, timeout=20).passed:
+                    self.fail("Error creating file {}".format(failure_trigger_file))
+
+    def test_launch_failures_hw(self):
+        """Test to verify launch.py post processing error reporting.
+
+        The test will place uniquely named files in the paths where launch.py archives test results.
+        When these files are detected launch.py will trigger a fake failure for the archiving of
+        each file.
+
+        :avocado: tags=all
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,launch_failures,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_launch_failures_hw
+        """
+        self.test_launch_failures()
+
+    def test_cleanup_procs(self):
+        """Test to verify launch.py cleans up leftover processes.
+
+        The test starts some processes and then skips tearDown.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_cleanup_procs
+        """
+        self.skip_teardown = True
+        pool = self.get_pool()
+        container = self.get_container(pool)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool=pool, container=container)

@@ -1,13 +1,13 @@
-#!/usr/bin/python3
-'''
-  (C) Copyright 2019-2022 Intel Corporation.
+"""
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 
 import os
 import yaml
-from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
+from general_utils import distribute_files, run_command, DaosTestError
+from run_utils import get_clush_command
 
 # a lookup table of predefined faults
 #
@@ -239,6 +239,7 @@ class FaultInjection():
 
     :avocado: recursive
     """
+
     def __init__(self):
         super().__init__()
         self._hosts = []
@@ -247,7 +248,7 @@ class FaultInjection():
         self._fault_list = []
 
     def write_fault_file(self, on_the_fly_fault=None):
-        """ Write out a fault injection config file.
+        """Write out a fault injection config file.
 
         Args:
             on_the_fly_fault --a fault dictionary that isn't predefined
@@ -298,6 +299,7 @@ class FaultInjection():
 
     def stop(self):
         """Remove the fault injection file created during testing.
+
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """

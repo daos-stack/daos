@@ -519,93 +519,27 @@ exit:
 }
 
 static int
-set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
-{
-	struct daos_tree_overhead	ovhd = { 0 };
-	int				tclass, *size, rc;
-
-	if (id == VOS_SLAB_OBJ_DF) {
-		slab->unit_size = sizeof(struct vos_obj_df);
-		goto done;
-	}
-
-	size = &ovhd.to_leaf_overhead.no_size;
-
-	switch (id) {
-	case VOS_SLAB_OBJ_NODE:
-		tclass = VOS_TC_OBJECT;
-		break;
-	case VOS_SLAB_KEY_NODE:
-		tclass = VOS_TC_DKEY;
-		break;
-	case VOS_SLAB_SV_NODE:
-		tclass = VOS_TC_SV;
-		break;
-	case VOS_SLAB_EVT_NODE:
-		tclass = VOS_TC_ARRAY;
-		break;
-	case VOS_SLAB_EVT_NODE_SM:
-		tclass = VOS_TC_ARRAY;
-		size = &ovhd.to_int_node_size;
-		break;
-	case VOS_SLAB_EVT_DESC:
-		tclass = VOS_TC_ARRAY;
-		size = &ovhd.to_record_msize;
-		break;
-	default:
-		D_ERROR("Invalid slab ID: %d\n", id);
-		return -DER_INVAL;
-	}
-
-	rc = vos_tree_get_overhead(0, tclass, 0, &ovhd);
-	if (rc)
-		return rc;
-
-	slab->unit_size = *size;
-done:
-	D_ASSERT(slab->unit_size > 0);
-	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
-
-	slab->alignment = 0;
-	slab->units_per_block = 1000;
-	slab->header_type = POBJ_HEADER_NONE;
-
-	return 0;
-}
-
-static int
 vos_register_slabs(struct umem_attr *uma)
 {
-	struct pobj_alloc_class_desc	*slab;
-	int				 i, rc, j;
-	bool				 skip_set;
+	struct pobj_alloc_class_desc *slab;
+	int                           i, rc;
+	int                           defined;
+	int                           used = 0;
+
+	for (i = 0; i < ARRAY_SIZE(slab_map); i++) {
+		if (slab_map[i] != -1)
+			used |= (1 << i);
+	}
 
 	D_ASSERT(uma->uma_pool != NULL);
-	for (i = 0; i < VOS_SLAB_MAX; i++) {
+	for (i = 0; i < UMM_SLABS_CNT; i++) {
+		D_ASSERT(used != 0);
+		defined               = __builtin_ctz(used);
 		slab = &uma->uma_slabs[i];
-
-		D_ASSERT(slab->class_id == 0);
-		rc = set_slab_prop(i, slab);
-		if (rc) {
-			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
-			return rc;
-		}
-
-		skip_set = false;
-		for (j = 0; j < i; j++) {
-			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
-				/** PMDK will fail to register a new slab of the same size
-				 *  so reuse the class id
-				 */
-				slab->class_id = uma->uma_slabs[j].class_id;
-				skip_set = true;
-				D_ASSERT(slab->class_id != 0);
-				break;
-			}
-		}
-
-		if (skip_set)
-			continue;
+		slab->alignment       = 0;
+		slab->unit_size       = (defined + 1) * 32;
+		slab->units_per_block = 1000;
+		slab->header_type     = POBJ_HEADER_NONE;
 
 		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
 				     slab);
@@ -616,7 +550,11 @@ vos_register_slabs(struct umem_attr *uma)
 			return rc;
 		}
 		D_ASSERT(slab->class_id != 0);
+		D_DEBUG(DB_MGMT, "slab registered with size %zu\n", slab->unit_size);
+
+		used &= ~(1 << defined);
 	}
+	D_ASSERT(used == 0);
 
 	return 0;
 }
@@ -769,8 +707,10 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -920,8 +860,10 @@ end:
 	if (rc != 0)
 		return rc;
 
-	if (version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	return 0;
 }
@@ -1049,4 +991,24 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	}
 
 	return 0;
+}
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return NULL;
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+		return NULL;
+
+	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,8 +42,8 @@
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
-#define DF_UOID		DF_OID".%u"
-#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+#define DF_UOID		DF_OID".%u.%u"
+#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard, (uo).id_layout_ver
 #define DF_BOOL "%s"
 #define DP_BOOL(b) ((b) ? "true" : "false")
 #define DF_IOV "<%p, %zu/%zu>"
@@ -779,6 +779,7 @@ enum {
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
+#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -790,6 +791,7 @@ enum {
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
+#define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
@@ -818,6 +820,9 @@ enum {
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
 #define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
+#define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
+#define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
+#define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -878,13 +883,31 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
  * Merge \a src recx to \a dst recx.
  */
 static inline void
+daos_recx_merge_with_offset_size(daos_recx_t *dst, uint64_t offset, uint64_t size)
+{
+	uint64_t end;
+
+	end = max(offset + size, DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(offset, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
+static inline void
 daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 {
-	uint64_t	end;
+	daos_recx_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
+}
 
-	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
-	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
-	dst->rx_nr = end - dst->rx_idx;
+static inline bool
+daos_recx_can_merge_with_offset_size(daos_recx_t *recx, uint64_t offset, uint64_t size)
+{
+	return max(recx->rx_idx, offset) <= min(DAOS_RECX_END(*recx), offset + size);
+}
+
+static inline bool
+daos_recx_can_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	return daos_recx_can_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
 }
 
 /* NVMe shared constants */

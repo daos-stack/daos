@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -50,7 +51,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if svc.clientNetworkHint == nil {
 		return nil, errors.New("clientNetworkHint is missing")
 	}
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
 	groupMap, err := svc.sysdb.GroupMap()
 	if err != nil {
@@ -77,20 +77,13 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 	}
 	resp.ClientNetHint = svc.clientNetworkHint
-	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
+	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
-	// For resp.RankUris may be large, we make a resp copy with a limited
-	// number of rank URIs, to avoid flooding the debug log.
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v len(RankUris):%d\n",
-		*func(r *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
-			max := 1
-			if len(r.RankUris) <= max {
-				return r
-			}
-			s := *r
-			s.RankUris = s.RankUris[0:max]
-			return &s
-		}(resp), len(resp.RankUris))
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
 
 	return resp, nil
 }
@@ -100,7 +93,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	if err := svc.checkSystemRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
 	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
@@ -112,7 +104,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		Replicas:      replicas,
 	}
 
-	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
 	return resp, nil
 }
 
@@ -269,7 +260,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:           system.Rank(req.Rank),
+		Rank:           ranklist.Rank(req.Rank),
 		UUID:           uuid,
 		ControlAddr:    req.peerAddr,
 		FabricURI:      req.GetUri(),
@@ -356,7 +347,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
-	rankSet := &system.RankSet{}
+	rankSet := &ranklist.RankSet{}
 	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank:        rank.Uint32(),
@@ -411,14 +402,6 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.Join dispatch, req:%s", mgmtpb.Debug(req))
-	defer func() {
-		if err != nil {
-			svc.log.Errorf("MgmtSvc.Join failed: %s", err)
-			return
-		}
-		svc.log.Debugf("MgmtSvc.Join succeeded, resp:%s", mgmtpb.Debug(resp))
-	}()
 
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
@@ -458,7 +441,7 @@ type (
 
 	fanoutRequest struct {
 		Method     systemRanksFunc
-		Ranks      *system.RankSet
+		Ranks      *ranklist.RankSet
 		Force      bool
 		FullSystem bool
 	}
@@ -466,13 +449,13 @@ type (
 	fanoutResponse struct {
 		Results     system.MemberResults
 		AbsentHosts *hostlist.HostSet
-		AbsentRanks *system.RankSet
+		AbsentRanks *ranklist.RankSet
 	}
 )
 
 // resolveRanks derives ranks to be used for fanout by comparing host and rank
 // sets with the contents of the membership.
-func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.RankSet, missHS *hostlist.HostSet, err error) {
+func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.RankSet, missHS *hostlist.HostSet, err error) {
 	hasHosts := hosts != ""
 	hasRanks := ranks != ""
 
@@ -504,14 +487,14 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 		missHS = new(hostlist.HostSet)
 	}
 	if missRS == nil {
-		missRS = new(system.RankSet)
+		missRS = new(ranklist.RankSet)
 	}
 
 	return
 }
 
 // synthesise "Stopped" rank results for any harness host errors
-func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.Rank, rr *control.RanksResp, resp *fanoutResponse) {
 	for _, hes := range rr.HostErrors {
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
@@ -564,7 +547,7 @@ func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
-func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *ranklist.RankSet, error) {
 	if req == nil || req.Method == nil {
 		return nil, nil, errors.New("nil fanout request or method")
 	}
@@ -584,8 +567,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
 	}
 
-	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
-	finished := system.MustCreateRankSet("")
+	waiting := ranklist.RankSetFromRanks(req.Ranks.Ranks())
+	finished := ranklist.MustCreateRankSet("")
 	ranksReq.SetReportCb(func(hr *control.HostResponse) {
 		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
 		if !ok {
@@ -594,8 +577,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		}
 
 		for _, rr := range rs.GetResults() {
-			waiting.Delete(system.Rank(rr.Rank))
-			finished.Add(system.Rank(rr.Rank))
+			waiting.Delete(ranklist.Rank(rr.Rank))
+			finished.Add(ranklist.Rank(rr.Rank))
 		}
 
 		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
@@ -644,7 +627,6 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemQuery RPC: %+v", req)
 
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
 	if err != nil {
@@ -670,7 +652,11 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
-	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
 
 	return resp, nil
 }
@@ -733,7 +719,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 	return &fanoutRequest{
 			Ranks:      hitRanks,
 			Force:      force,
-			FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
+			FullSystem: len(ranklist.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
 		}, &fanoutResponse{
 			AbsentRanks: missRanks,
 			AbsentHosts: missHosts,
@@ -786,7 +772,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	if err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Responding to SystemStop RPC: %+v", resp)
 
 	return resp, nil
 }
@@ -847,7 +832,54 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	if err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Responding to SystemStart RPC: %+v", resp)
+
+	return resp, nil
+}
+
+// SystemExclude marks the specified ranks as administratively excluded from the system.
+func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExcludeReq) (*mgmtpb.SystemExcludeResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	if req.Hosts == "" && req.Ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	fReq, fResp, err := svc.getFanout(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if fResp.AbsentHosts.Count() > 0 {
+		return nil, errors.Errorf("invalid host(s): %s", fResp.AbsentHosts.String())
+	}
+	if fResp.AbsentRanks.Count() > 0 {
+		return nil, errors.Errorf("invalid rank(s): %s", fResp.AbsentRanks.String())
+	}
+
+	resp := new(mgmtpb.SystemExcludeResp)
+	for _, r := range fReq.Ranks.Ranks() {
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return nil, err
+		}
+		action := "set admin-excluded state"
+		m.State = system.MemberStateAdminExcluded
+		if req.Clear {
+			action = "clear admin-excluded state"
+			m.State = system.MemberStateExcluded // cleared on rejoin
+		}
+		if err := svc.sysdb.UpdateMember(m); err != nil {
+			return nil, err
+		}
+		resp.Results = append(resp.Results, &sharedpb.RankResult{
+			Rank:   r.Uint32(),
+			Action: action,
+			State:  strings.ToLower(m.State.String()),
+			Addr:   m.Addr.String(),
+		})
+	}
 
 	return resp, nil
 }
@@ -984,7 +1016,6 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemCleanup RPC: %+v", req)
 
 	if req.Machine == "" {
 		return nil, errors.New("SystemCleanup requires a machine name.")
@@ -1032,8 +1063,6 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		})
 	}
 
-	svc.log.Debugf("Responding to SystemCleanup RPC: %+v", resp)
-
 	return resp, nil
 }
 
@@ -1042,10 +1071,6 @@ func (svc *mgmtSvc) SystemSetAttr(ctx context.Context, req *mgmtpb.SystemSetAttr
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemSetAttr RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemSetAttr RPC: (%v)", err)
-	}()
 
 	if err := system.SetAttributes(svc.sysdb, req.GetAttributes()); err != nil {
 		return nil, err
@@ -1059,10 +1084,6 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemGetAttr RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemGetAttr RPC: %+v (%v)", resp, err)
-	}()
 
 	props, err := system.GetAttributes(svc.sysdb, req.GetKeys())
 	if err != nil {
@@ -1073,21 +1094,88 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	return
 }
 
+func sp2pp(sp *daos.SystemProperty) (*daos.PoolProperty, bool) {
+	if pp, ok := sp.Value.(interface{ PoolProperty() *daos.PoolProperty }); ok {
+		return pp.PoolProperty(), true
+	}
+	return nil, false
+}
+
 // SystemSetProp sets user-visible system properties.
-func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (_ *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (resp *mgmtpb.DaosResp, err error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemSetProp RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemSetProp RPC: (%v)", err)
-	}()
 
 	if err := system.SetUserProperties(svc.sysdb, svc.systemProps, req.GetProperties()); err != nil {
 		return nil, err
 	}
 
-	return &mgmtpb.DaosResp{}, nil
+	if resp, err = svc.updatePoolPropsWithSysProps(ctx, req.GetProperties(), req.Sys); err != nil {
+		return nil, err
+	}
+	return
+}
+
+// updatePoolPropsWithSysProps This function will take systemProperties and
+// update each associated pool property (if one exists) on each pool
+func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemProperties map[string]string, sys string) (resp *mgmtpb.DaosResp, err error) {
+	resp = new(mgmtpb.DaosResp)
+	// Get the properties from the request, convert to pool prop, then put into poolSysProps
+	var poolSysProps []*daos.PoolProperty
+	for k, v := range systemProperties {
+		p, ok := svc.systemProps.Get(k)
+		if !ok {
+			return nil, errors.Errorf("unknown property %q", k)
+		}
+		if pp, ok := sp2pp(p); ok {
+			if err := pp.SetValue(v); err != nil {
+				return nil, errors.Wrapf(err, "invalid value %q for property %q", v, k)
+			}
+			poolSysProps = append(poolSysProps, pp)
+		}
+	}
+
+	if len(poolSysProps) == 0 {
+		return
+	}
+
+	// Create the request for updating the pools. The request will have all pool properties
+	pspr := &mgmtpb.PoolSetPropReq{
+		Sys:        sys,
+		Properties: make([]*mgmtpb.PoolProperty, len(poolSysProps)),
+	}
+	for i, p := range poolSysProps {
+		pspr.Properties[i] = &mgmtpb.PoolProperty{
+			Number: p.Number,
+		}
+		if nv, err := p.Value.GetNumber(); err == nil {
+			pspr.Properties[i].SetValueNumber(nv)
+		} else {
+			pspr.Properties[i].SetValueString(p.Value.String())
+		}
+	}
+
+	pools, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, err
+	}
+	for _, ps := range pools {
+		pspr.Id = ps.PoolUUID.String()
+		pspr.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
+		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, pspr)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+		}
+		if resp.Status != 0 {
+			return nil, errors.Errorf("SystemSetProp: %d\n", resp.Status)
+		}
+	}
+	return resp, nil
 }
 
 // SystemGetProp gets user-visible system properties.
@@ -1095,10 +1183,6 @@ func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetProp
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemGetProp RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemGetProp RPC: %+v (%v)", resp, err)
-	}()
 
 	props, err := system.GetUserProperties(svc.sysdb, svc.systemProps, req.GetKeys())
 	if err != nil {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -691,7 +691,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = crt_hlc_get();
+		arg->hce = d_hlc_get();
 	}
 
 	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
@@ -875,32 +875,26 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
-static void
-daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
-		     const char *grp, const char *dmg_config,
-		     d_rank_t rank, int tgt_idx, daos_size_t scm_size)
+static int
+daos_dmg_pool_upgrade(const uuid_t pool_uuid, const char *dmg_config)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
-		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
-				  " --ranks=%d", sub_cmd,
-				  DP_UUID(pool_uuid), rank);
-	else
-		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
-				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
-				  rank);
+	dts_create_config(dmg_cmd, "dmg pool upgrade " DF_UUIDF, DP_UUID(pool_uuid));
 
-	if (tgt_idx != -1)
-		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
-	if (dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", dmg_config);
-
+	dts_append_config(dmg_cmd, " -o %s", dmg_config);
 	rc = system(dmg_cmd);
 	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
+	return rc;
+}
+
+int
+daos_pool_upgrade(const uuid_t pool_uuid)
+{
+	return daos_dmg_pool_upgrade(pool_uuid, dmg_config_file);
 }
 
 int
@@ -911,52 +905,21 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 }
 
 void
-daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config,
-		    d_rank_t rank, int tgt_idx)
+daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
-	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
+	int	rc;
 
-void
-daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank, int tgt_idx)
-{
-	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr++;
 
-void
-daos_extend_target(const uuid_t pool_uuid, const char *grp,
-		   const char *dmg_config, d_rank_t rank, int tgt_idx,
-		   daos_size_t nvme_size)
-{
-	daos_dmg_pool_target("extend", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, nvme_size);
-}
+	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
-void
-daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank, int tgt_idx)
-{
+	rc = dmg_system_start_rank(dmg_config_file, rank);
+	print_message(" dmg start: %d, rc %#x\n", rank, rc);
+	assert_rc_equal(rc, 0);
 
-	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
-
-void
-daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, d_rank_t rank)
-{
-	daos_exclude_target(pool_uuid, grp, dmg_config, rank, -1);
-}
-
-void
-daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank)
-{
-	daos_reint_target(pool_uuid, grp, dmg_config, rank, -1);
+	daos_cont_status_clear(arg->coh, NULL);
 }
 
 void
@@ -969,7 +932,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
-	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -998,13 +960,10 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+	/* stop the rank */
+	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	print_message(" dmg stop, rc %#x\n", rc);
 
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_rc_equal(rc, 0);
 
 	daos_cont_status_clear(arg->coh, NULL);
@@ -1118,6 +1077,8 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		strcat(dpid, line);
 	}
 
+	if (line)
+		free(line);
 	pclose(fp1);
 	return 0;
 }
@@ -1190,7 +1151,8 @@ get_server_config(char *host, char *server_config_file)
 	pclose(fp);
 
 	D_FREE(dpid);
-	free(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1219,13 +1181,12 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
-
-		D_FREE(line);
 	}
 
 out:
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return rc;
 }
 
@@ -1251,7 +1212,8 @@ int get_log_file(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1292,11 +1254,12 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			pclose(fp);
 	}
 
-	D_FREE(line);
+	if (line)
+		free(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
-	D_FREE(line);
+	free(line);
 	D_FREE(tmp);
 	return 0;
 }

@@ -37,6 +37,9 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	if (oclass == OC_EC_4P2G1 && !test_runable(arg, 8))
 		return;
 
+	if (svc_nreplicas < 5)
+		return;
+
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -52,39 +55,31 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	get_killing_rank_by_oid(arg, oid, kill_data_nr, kill_parity_nr,
 				kill_ranks, &kill_ranks_num);
 
-	rebuild_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, false);
+	rebuild_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, true);
+
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
+	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, true);
+
+	arg->rebuild_cb = NULL;
+	arg->rebuild_cb_arg = NULL;
+	ioreq_fini(&req);
 
 	/*
-	 * let's kill another 2 data node to do degrade fetch, so to
-	 * verify degrade fetch is correct.
+	 * let's kill extra data node to verify parity is correct.
 	 */
 	if (oclass == OC_EC_2P1G1) {
 		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
 	} else { /* oclass OC_EC_4P2G1 */
 		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
 	}
 
-	if (write_type == PARTIAL_UPDATE)
-		verify_ec_partial(&req, arg->index, 0);
-	else if (write_type == FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-	else if (write_type == FULL_PARTIAL_UPDATE)
-		verify_ec_full_partial(&req, arg->index, 0);
-	else if (write_type == PARTIAL_FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-	ioreq_fini(&req);
-
-	print_message("daos_obj_verify ...\n");
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_int_equal(rc, 0);
-
-	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)
@@ -158,7 +153,7 @@ rebuild_mixed_stripes(void **state)
 	free(verify_data);
 	ioreq_fini(&req);
 
-	reintegrate_pools_ranks(&arg, 1, &rank, 1);
+	reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 }
 
 static void
@@ -251,7 +246,7 @@ rebuild_ec_multi_stripes(void **state)
 	}
 
 	ioreq_fini(&req);
-	reintegrate_pools_ranks(&arg, 1, &rank, 1);
+	reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 }
 
 static int
@@ -749,7 +744,11 @@ rebuild_multiple_group_ec_object(void **state)
 	daos_recx_t	recx;
 	d_rank_t	rank = 0;
 	uint32_t	tgt_idx;
+	daos_iod_t	iod;
+	d_iov_t		sg_iov;
+	d_sg_list_t	sgl;
 	int		size = 4 * CELL_SIZE;
+	int		rc;
 
 	if (!test_runable(arg, 8))
 		return;
@@ -760,13 +759,30 @@ rebuild_multiple_group_ec_object(void **state)
 	verify_data = (char *)malloc(size);
 	make_buffer(data, 'a', size);
 	make_buffer(verify_data, 'a', size);
+
+	d_iov_set(&sg_iov, data, size);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
 		recx.rx_nr = size;
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		rc = daos_obj_update(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
 	}
 
 	rank = get_rank_by_oid_shard(arg, oid, 17);
@@ -774,6 +790,8 @@ rebuild_multiple_group_ec_object(void **state)
 	rebuild_single_pool_target(arg, rank, tgt_idx, false);
 
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
@@ -781,6 +799,21 @@ rebuild_multiple_group_ec_object(void **state)
 		memset(data, 0, size);
 		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+		assert_memory_equal(data, verify_data, size);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		d_iov_set(&sg_iov, data, size);
+		sgl.sg_nr	= 1;
+		sgl.sg_nr_out	= 0;
+		sgl.sg_iovs	= &sg_iov;
+		d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+		iod.iod_nr	= 1;
+		iod.iod_size	= size;
+		iod.iod_recxs	= NULL;
+		iod.iod_type	= DAOS_IOD_SINGLE;
+
+		rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
 		assert_memory_equal(data, verify_data, size);
 	}
 
@@ -875,7 +908,7 @@ rebuild_ec_parity_multi_group(void **state)
 	rank = get_rank_by_oid_shard(arg, oid, 9);
 	rebuild_single_pool_rank(arg, rank, false);
 
-	reintegrate_single_pool_rank(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 	ioreq_fini(&req);
 }
 
@@ -936,7 +969,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 		assert_int_equal(rc, 0);
 	}
 
-	reintegrate_single_pool_rank(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 	free(data);
 	free(verify_data);
 	ioreq_fini(&req);

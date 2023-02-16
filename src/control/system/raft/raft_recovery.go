@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -266,6 +267,9 @@ func GetLogEntries(log logging.Logger, cfg *DatabaseConfig, maxEntries ...uint64
 					close(entries)
 					return
 				}
+			} else {
+				details.Time = details.Log.AppendedAt
+				details.Operation = details.Log.Type.String()
 			}
 
 			entries <- details
@@ -301,7 +305,7 @@ type SnapshotDetails struct {
 	MapVersion    uint
 	SchemaVersion uint
 	NextRank      uint
-	MemberRanks   *system.RankSet
+	MemberRanks   *ranklist.RankSet
 	Pools         []string
 }
 
@@ -334,7 +338,7 @@ func (sd *SnapshotDetails) DecodeSnapshot(data []byte) error {
 		return err
 	}
 
-	sd.MemberRanks = system.NewRankSet()
+	sd.MemberRanks = ranklist.NewRankSet()
 	for _, m := range from.Members.Uuids {
 		sd.MemberRanks.Add(m.Rank)
 	}

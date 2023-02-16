@@ -64,19 +64,20 @@ class DmvrSerialLargePosix(DataMoverTestBase):
             dst_pool=pool2)
 
         # Get the destination cont2 uuid
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params("DAOS", "/", pool2, cont2_uuid, flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool2, cont2_label, flags=mdtest_flags[1])
 
     def test_dm_serial_large_posix_dserialize(self):
         """
         Test Description:
             DAOS-7432: Verify serializing a large POSIX container.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_serialize,mfu_deserialize,dfuse,dfs,mdtest,hdf5
-        :avocado: tags=dm_serial_large_posix,dm_serial_large_posix_dserialize
+        :avocado: tags=DmvrSerialLargePosix,test_dm_serial_large_posix_dserialize
         """
         self.run_dm_serial_large_posix("DSERIAL")

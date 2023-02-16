@@ -8,9 +8,14 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
+import json
+for arg in sys.argv:
+    if arg.startswith('--import='):
+        sys.path.append(arg[9:])
 try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
+    from pylint.constants import full_version
 except ImportError:
     print('install pylint to enable this check')
     sys.exit(0)
@@ -29,15 +34,14 @@ except ImportError:
 #  Supports minimum python version
 #  Supports python virtual environment usage
 #  Can be used by atom.io live
+#  Can be used by VS Code.
 #  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
-#  Can be used as a commit-hook
-#  flake8 style --diff option
 
-# For now this splits code into one of three types, build (scons), ftest or other.  For build code
-# it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
-# does not warn about f-strings, for others it runs without any special flags.
+# For now this splits code into one of four types, build (scons), fake_scons ftest or other.
+# For build code it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH
+# correctly and does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
@@ -46,16 +50,23 @@ except ImportError:
 
 
 class WrapScript():
-    """Create a wrapper for a scons file and maintain a line mapping"""
+    """Create a wrapper for a scons file and maintain a line mapping
 
-    def __init__(self, fname):
+    An update here is needed as files in site_scons/*.py do not automatically import SCons but
+    can do if they wish, this code is importing for all files however.
+    """
+
+    def __init__(self, fname, from_stdin):
 
         self.line_map = {}
         # pylint: disable-next=consider-using-with
         self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
         self.wrap_file = self._outfile.name
-        with open(fname, 'r') as infile:
-            self._read_files(infile, self._outfile)
+        if from_stdin:
+            self._read_files(sys.stdin, self._outfile)
+        else:
+            with open(fname, 'r') as infile:
+                self._read_files(infile, self._outfile)
         self._outfile.flush()
 
     def _read_files(self, infile, outfile):
@@ -155,8 +166,7 @@ class WrapScript():
 
     @staticmethod
     def write_header(outfile):
-        """write the header"""
-
+        """Write the header"""
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
@@ -178,12 +188,14 @@ class FileTypeList():
     Consumes a list of file/module names and sorts them into categories so that later on each
     category can be run in parallel.
     """
+
     def __init__(self):
         self.ftest_files = []
         self.scons_files = []
         self.fake_scons = []
         self.files = []
         self._regions = {}
+        self._reports = []
 
     def add_regions(self, file, regions):
         """Mark that only some regions for file should be reported"""
@@ -194,13 +206,12 @@ class FileTypeList():
         return len(self.ftest_files) + len(self.scons_files) \
             + len(self.files) + len(self.fake_scons)
 
-    def add(self, file):
+    def add(self, file, force=False):
         """Add a filename to the correct list"""
 
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
-
-            if filename == 'SConstruct' or filename.endswith('SConscript'):
+            if filename.endswith('SConstruct') or filename.endswith('SConscript'):
                 return True
 
             if not file.endswith('.py'):
@@ -212,8 +223,9 @@ class FileTypeList():
             self.scons_files.append(file)
             return
 
-        if not file.endswith('.py'):
-            return
+        if not force:
+            if not file.endswith('.py'):
+                return
 
         # If files are in a subdir under ftest then they need to be treated differently.
         if 'src/tests/ftest/' in file:
@@ -232,6 +244,7 @@ class FileTypeList():
         self.files.append(file)
 
     def __str__(self):
+        """Convert object to a nicely formatted string"""
         desc = "FileTypeList\n"
         if self.files:
             desc += f'files: {",".join(self.files)}\n'
@@ -245,7 +258,9 @@ class FileTypeList():
 
     def run(self, args):
         """Run pylint against all files"""
-        print(self)
+        if args.output_format != 'json':
+            print(self)
+
         failed = False
         if self.files:
             if self.parse_file(args, self.files):
@@ -260,18 +275,19 @@ class FileTypeList():
             for file in self.scons_files:
                 if self.parse_file(args, file, scons=True):
                     failed = True
+        if args.output_format == 'json':
+            print(json.dumps(self._reports, indent=4))
         return failed
 
     def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
         """Parse a list of targets.
 
-        Returns True if warnings issued to GitHub."""
-
-        # pylint: disable=too-many-branches
+        Returns True if warnings issued to GitHub.
+        """
+        # pylint: disable=too-many-branches,too-many-locals
 
         def word_is_allowed(word, code):
             """Return True if misspelling is permitted"""
-
             # pylint: disable=too-many-return-statements
 
             # Skip short words for now to cut down on noise whilst we resolve existing issues.
@@ -330,6 +346,11 @@ class FileTypeList():
                 vals['line'] = msg.line
             return vals
 
+        def msg_to_github(vals):
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
+
         failed = False
         rep = CollectingReporter()
         wrapper = None
@@ -342,7 +363,7 @@ class FileTypeList():
             ignore = ['ungrouped-imports']
             if target_file.endswith('__init__.py'):
                 ignore.append('relative-beyond-top-level')
-            wrapper = WrapScript(target_file)
+            wrapper = WrapScript(target_file, args.from_stdin)
             target = [wrapper.wrap_file]
             target.extend(['--disable', ','.join(ignore)])
             init_hook = """import sys
@@ -350,6 +371,8 @@ sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
         else:
             target = [target_file]
+            if args.from_stdin:
+                target.append('--from-stdin')
 
         if fake_scons:
             # Do not warn on module name for fake_scons files, we don't get to pick their name.
@@ -372,7 +395,7 @@ sys.path.append('site_scons')"""
         if args.rcfile:
             target.extend(['--rcfile', args.rcfile])
 
-        results = Run(target, reporter=rep, do_exit=False)
+        results = Run(target, reporter=rep, exit=False)
 
         types = Counter()
         symbols = Counter()
@@ -406,15 +429,15 @@ sys.path.append('site_scons')"""
 
             vals = parse_msg(msg)
 
-            if promote_to_error:
-                vals['category'] = 'error'
-
-            # The build/scons code is mostly clean, so only allow f-string warnings.
-            if scons and msg.symbol != 'consider-using-f-string':
-                vals['category'] = 'error'
-
             # Flag some serious warnings as errors
             if msg.symbol in ('condition-evals-to-constant'):
+                promote_to_error = True
+
+            # All non-scons code should be clean now.
+            if scons:
+                promote_to_error = True
+
+            if promote_to_error:
                 vals['category'] = 'error'
 
             types[vals['category']] += 1
@@ -429,7 +452,36 @@ sys.path.append('site_scons')"""
                     file_warnings.append(msg)
                     continue
 
-            print(args.msg_template.format(**vals))
+            if args.output_format == 'json':
+                report = {'type': vals['category'],
+                          'path': msg.path,
+                          'module': msg.module,
+                          'line': vals['line'],
+                          'column': vals['column'],
+                          'symbol': vals['symbol'],
+                          'message': vals['message'],
+                          'message-id': vals['message-id']}
+
+                if msg.obj:
+                    report['obj'] = msg.obj
+
+                if msg.end_line:
+                    if wrapper:
+                        report['endLine'] = wrapper.convert_line(msg.end_line)
+                    else:
+                        report['endLine'] = msg.end_line
+
+                if msg.end_column:
+                    report['endColumn'] = msg.end_column
+
+                # VS Code should allow customization of error levels but it appears to not be
+                # working.
+                # https://code.visualstudio.com/docs/python/linting
+                if args.promote_to_error:
+                    report['type'] = 'error'
+                self._reports.append(report)
+            else:
+                print(args.msg_template.format(**vals))
 
             if args.format == 'github':
                 if vals['category'] in ('convention', 'refactor'):
@@ -437,21 +489,32 @@ sys.path.append('site_scons')"""
                 if vals['category'] == 'warning':
                     continue
                 failed = True
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if file_warnings:
             print('Warnings from modified files:')
-        for msg in file_warnings:
-            vals = parse_msg(msg)
-            print(args.msg_template.format(**vals))
-            if args.format == 'github':
-                # Report all messages in modified files, but do it at the notice level.
+
+            # Low priority warnings, these are reported but are reported last.  As GitHub only
+            # displays 10 annotations at a given severity level this means they will only be shown
+            # to the user if there are no other warnings in modified files.
+            lp_warnings_i = []
+            lp_warnings_f = []
+            for msg in file_warnings:
+                vals = parse_msg(msg)
+                print(args.msg_template.format(**vals))
+                if args.format == 'github':
+                    if msg.symbol == 'invalid-name':
+                        lp_warnings_i.append(msg)
+                    elif msg.symbol == 'consider-using-f-string':
+                        lp_warnings_f.append(msg)
+                    else:
+                        # Report all messages in modified files, but do it at the notice level.
+                        vals['category'] = 'notice'
+                        msg_to_github(vals)
+            for msg in lp_warnings_i + lp_warnings_f:
+                vals = parse_msg(msg)
                 vals['category'] = 'notice'
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if not types or args.reports == 'n':
             return failed
@@ -465,7 +528,6 @@ sys.path.append('site_scons')"""
 
 def get_git_files(directory=None):
     """Run pylint on contents of 'git ls-files'"""
-
     all_files = FileTypeList()
 
     cmd = ['git', 'ls-files']
@@ -477,18 +539,6 @@ def get_git_files(directory=None):
     for file in stdout.splitlines():
         all_files.add(file)
     return all_files
-
-
-def run_input_file(args, input_file):
-    """Run from a input file"""
-
-    all_files = FileTypeList()
-
-    with open(input_file, encoding='utf-8') as fd:
-        for file in fd.readlines():
-            all_files.add(file.strip())
-
-    all_files.run(args)
 
 
 class OutPutRegion:
@@ -511,13 +561,14 @@ class OutPutRegion:
 
 def main():
     """Main program"""
+    # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
     parser = argparse.ArgumentParser()
 
     # Basic options.
     parser.add_argument('--git', action='store_true')
-    parser.add_argument('--from-file')
+    parser.add_argument('--from-stdin', action='store_true')
 
     spellings = True
     try:
@@ -534,9 +585,14 @@ def main():
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text'])
+    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--diff', action='store_true')
+    parser.add_argument('--version', action='store_true')
+    parser.add_argument('--promote-to-error', action='store_true')
+
+    # Args that VS Code uses.
+    parser.add_argument('--import')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
@@ -546,6 +602,13 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
+
+    if args.output_format == 'json':
+        args.reports = 'n'
+
+    if args.version:
+        print(full_version)
+        sys.exit(0)
 
     rc_tmp = None
 
@@ -582,16 +645,19 @@ def main():
                 regions = OutPutRegion()
                 all_files.add_regions(file, regions)
                 if not args.git:
-                    all_files.add(file)
+                    if os.path.exists(file):
+                        all_files.add(file)
+                    else:
+                        print(f'Skipping {file} as it does not exist')
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                try:
+                if parts[2] == '+1':
+                    # Handle new, one line files.
+                    post_start = 0
+                    post_len = 1
+                else:
                     (post_start, post_len) = parts[2][1:].split(',')
-                except ValueError:
-                    print(f'Unable to split parts[2] ("{parts[2]}") from line "{line.rstrip()}" '
-                          'on line number {lineno}')
-                    raise
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:
@@ -605,13 +671,13 @@ def main():
         if all_files.run(args):
             sys.exit(1)
         return
-    if args.from_file:
-        run_input_file(args, args.from_file)
-        return
     all_files = FileTypeList()
     all_dirs = []
+
     for file in args.files:
-        if os.path.isfile(file):
+        if args.from_stdin:
+            all_files.add(file, force=True)
+        elif os.path.isfile(file):
             all_files.add(file)
         elif os.path.isdir(file):
             all_dirs.append(file)

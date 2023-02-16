@@ -918,9 +918,8 @@ int run_csum_extent_tests(const char *cfg)
 		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
-	dts_create_config(test_name,
-		"evtreen helper functions for alignment, counting, etc for csum  %s",
-		cfg);
+	dts_create_config(
+	    test_name, "Checksum helper functions for alignment, counting, etc for csum  %s", cfg);
 
 	rc += cmocka_run_group_tests_name(
 		test_name,

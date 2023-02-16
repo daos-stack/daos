@@ -24,6 +24,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+type scmSocketCmd struct {
+	affinitySource config.EngineAffinityFn
+	SocketID       *uint `long:"socket" description:"Perform PMem namespace operations on the socket identified by this ID (defaults to all sockets). PMem region operations will be performed across all sockets."`
+}
+
 const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed and namespaces " +
 	"modified, this may be a destructive operation. Please ensure namespaces are unmounted " +
 	"and locally attached PMem modules are not in use. Please be patient as it may take " +
@@ -40,8 +45,8 @@ type scmCmd struct {
 type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-	cfgCmd         `json:"-"`
-	socketCmd      `json:"-"`
+	optCfgCmd      `json:"-"`
+	scmSocketCmd   `json:"-"`
 
 	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
@@ -217,8 +222,8 @@ func (cmd *prepareSCMCmd) Execute(args []string) error {
 type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-	cfgCmd         `json:"-"`
-	socketCmd      `json:"-"`
+	optCfgCmd      `json:"-"`
+	scmSocketCmd   `json:"-"`
 
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
@@ -309,6 +314,7 @@ func (cmd *resetSCMCmd) Execute(args []string) error {
 type scanSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	optCfgCmd      `json:"-"`
 }
 
 func (cmd *scanSCMCmd) Execute(args []string) error {

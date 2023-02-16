@@ -259,7 +259,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate dedup entry\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&entry->de_link);
@@ -267,7 +266,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	D_ASSERT(csum_len != 0);
 	D_ALLOC(entry->de_csum_buf, csum_len);
 	if (entry->de_csum_buf == NULL) {
-		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
 		D_FREE(entry);
 		return;
 	}
@@ -421,6 +419,8 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		if (buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
+			/* clear original/copied buffer addr */
+			biov_dup->bi_buf = NULL;
 			return -DER_NOMEM;
 		}
 		ioc->ic_dedup_bufs[*buf_idx] = buf;
@@ -704,8 +704,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
-		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1)) {
 			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
 				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
@@ -1413,6 +1412,12 @@ out:
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_io_size;
+}
+
 int
 vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err)
 {
@@ -1732,7 +1737,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 
 	if (is_array) {
 		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
-			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
 			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
 				DP_KEY(&iod->iod_name));
 			return rc;

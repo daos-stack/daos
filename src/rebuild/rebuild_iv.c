@@ -67,7 +67,7 @@ rebuild_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-rebuild_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+rebuild_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -136,17 +136,19 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rebuild_global_status_update(rgt, src_iv);
 		if (rgt->rgt_status.rs_errno == 0) {
 			rgt->rgt_status.rs_errno = src_iv->riv_status;
-			if (src_iv->riv_status != 0)
+			if (src_iv->riv_status != 0) {
 				rgt->rgt_status.rs_fail_rank = src_iv->riv_rank;
+				rgt->rgt_abort = 1;
+			}
 		}
-		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d gen %u"
-			"toberb_obj/rb_obj/rec/global state/status/rank "
-			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
+		D_DEBUG(DB_REBUILD, "update rebuild "DF_UUID" ver %d gen %u"
+			" toberb_obj/rb_obj/rec/global state/status/rank/abort "
+			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d/%d\n",
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
 			rgt->rgt_rebuild_gen, rgt->rgt_status.rs_toberb_obj_nr,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
 			rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
-			src_iv->riv_rank);
+			src_iv->riv_rank, rgt->rgt_abort);
 	}
 	rgt_put(rgt);
 out:

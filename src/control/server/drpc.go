@@ -65,13 +65,11 @@ func checkDrpcClientSocketPath(socketPath string) error {
 
 	f, err := os.Stat(socketPath)
 	if err != nil {
-		return errors.Errorf("socket path %q could not be accessed: %s",
-			socketPath, err.Error())
+		return errors.Wrapf(err, "socket path %q could not be accessed", socketPath)
 	}
 
 	if (f.Mode() & os.ModeSocket) == 0 {
-		return errors.Errorf("path %q is not a socket",
-			socketPath)
+		return errors.Errorf("path %q is not a socket", socketPath)
 	}
 
 	return nil
@@ -116,7 +114,10 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	}
 
 	sockPath := getDrpcServerSocketPath(req.sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(req.log, sockPath)
+
+	// Server socket file to be readable and writable by user. daos_server should receive
+	// messages from daos_engine and both processes will be run by the same user.
+	drpcServer, err := drpc.NewDomainSocketServer(req.log, sockPath, 0600)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}

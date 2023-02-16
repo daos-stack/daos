@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,6 +57,7 @@ class TelemetryUtils():
         "engine_pool_resent",
         "engine_pool_uncommitted_retry",
         "engine_pool_restarted",
+        "engine_pool_retry",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
         "engine_pool_xferred_update",
@@ -130,12 +130,54 @@ class TelemetryUtils():
         "engine_io_latency_fetch_mean",
         "engine_io_latency_fetch_min",
         "engine_io_latency_fetch_stddev"]
+    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = [
+        "engine_io_latency_bulk_fetch",
+        "engine_io_latency_bulk_fetch_max",
+        "engine_io_latency_bulk_fetch_mean",
+        "engine_io_latency_bulk_fetch_min",
+        "engine_io_latency_bulk_fetch_stddev"]
+    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = [
+        "engine_io_latency_vos_fetch",
+        "engine_io_latency_vos_fetch_max",
+        "engine_io_latency_vos_fetch_mean",
+        "engine_io_latency_vos_fetch_min",
+        "engine_io_latency_vos_fetch_stddev"]
+    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = [
+        "engine_io_latency_bio_fetch",
+        "engine_io_latency_bio_fetch_max",
+        "engine_io_latency_bio_fetch_mean",
+        "engine_io_latency_bio_fetch_min",
+        "engine_io_latency_bio_fetch_stddev"]
     ENGINE_IO_LATENCY_UPDATE_METRICS = [
         "engine_io_latency_update",
         "engine_io_latency_update_max",
         "engine_io_latency_update_mean",
         "engine_io_latency_update_min",
         "engine_io_latency_update_stddev"]
+    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = [
+        "engine_io_latency_tgt_update",
+        "engine_io_latency_tgt_update_max",
+        "engine_io_latency_tgt_update_mean",
+        "engine_io_latency_tgt_update_min",
+        "engine_io_latency_tgt_update_stddev"]
+    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = [
+        "engine_io_latency_bulk_update",
+        "engine_io_latency_bulk_update_max",
+        "engine_io_latency_bulk_update_mean",
+        "engine_io_latency_bulk_update_min",
+        "engine_io_latency_bulk_update_stddev"]
+    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = [
+        "engine_io_latency_vos_update",
+        "engine_io_latency_vos_update_max",
+        "engine_io_latency_vos_update_mean",
+        "engine_io_latency_vos_update_min",
+        "engine_io_latency_vos_update_stddev"]
+    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = [
+        "engine_io_latency_bio_update",
+        "engine_io_latency_bio_update_max",
+        "engine_io_latency_bio_update_mean",
+        "engine_io_latency_bio_update_min",
+        "engine_io_latency_bio_update_stddev"]
     ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
         "engine_io_ops_akey_enum_active",
         "engine_io_ops_akey_enum_active_max",
@@ -238,6 +280,18 @@ class TelemetryUtils():
         "engine_io_ops_key_query_latency_mean",
         "engine_io_ops_key_query_latency_min",
         "engine_io_ops_key_query_latency_stddev"]
+    ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = [
+        "engine_io_ops_key2anchor_active",
+        "engine_io_ops_key2anchor_active_max",
+        "engine_io_ops_key2anchor_active_mean",
+        "engine_io_ops_key2anchor_active_min",
+        "engine_io_ops_key2anchor_active_stddev"]
+    ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = [
+        "engine_io_ops_key2anchor_latency",
+        "engine_io_ops_key2anchor_latency_max",
+        "engine_io_ops_key2anchor_latency_mean",
+        "engine_io_ops_key2anchor_latency_min",
+        "engine_io_ops_key2anchor_latency_stddev"]
     ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = [
         "engine_io_ops_migrate_active",
         "engine_io_ops_migrate_active_max",
@@ -349,7 +403,14 @@ class TelemetryUtils():
     ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_VOS_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_BIO_FETCH_METRICS +\
         ENGINE_IO_LATENCY_UPDATE_METRICS +\
+        ENGINE_IO_LATENCY_TGT_UPDATE_METRICS +\
+        ENGINE_IO_LATENCY_BULK_UPDATE_METRICS +\
+        ENGINE_IO_LATENCY_VOS_UPDATE_METRICS +\
+        ENGINE_IO_LATENCY_BIO_UPDATE_METRICS +\
         ENGINE_IO_OPS_AKEY_ENUM_METRICS +\
         ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS +\
@@ -367,6 +428,8 @@ class TelemetryUtils():
         ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
         ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS +\
         ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS +\
+        ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
         ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\

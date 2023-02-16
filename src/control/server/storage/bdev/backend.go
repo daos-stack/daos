@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -178,9 +179,9 @@ func logNUMAStats(log logging.Logger) {
 
 	out, err := exec.Command("numastat", "-m").Output()
 	if err != nil {
-		toLog = (&runCmdError{
-			wrapped: err,
-			stdout:  string(out),
+		toLog = (&system.RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
 		}).Error()
 	} else {
 		toLog = string(out)
@@ -277,9 +278,13 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
-	vmds, err := mapVMDToBackingDevs(discovered)
-	if err != nil {
-		return nil, err
+	var vmds map[string]storage.NvmeControllers
+	if vmdEnabled {
+		vmdMap, err := mapVMDToBackingDevs(discovered)
+		if err != nil {
+			return nil, err
+		}
+		vmds = vmdMap
 	}
 
 	for _, want := range reqDevs.Addresses() {
@@ -425,17 +430,7 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 	}
 
 	for _, path := range req.Properties.DeviceList.Devices() {
-		devResp := new(storage.BdevDeviceFormatResponse)
-		resp.DeviceResponses[path] = devResp
-		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
-			devResp.Error = FaultFormatError(path, err)
-			continue
-		}
-		if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
-			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
-				"failed to set ownership of %q to %d.%d", path,
-				req.OwnerUID, req.OwnerGID))
-		}
+		resp.DeviceResponses[path] = createAioFile(sb.log, path, req)
 	}
 
 	return resp, nil

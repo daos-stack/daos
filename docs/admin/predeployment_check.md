@@ -237,29 +237,29 @@ To tell systemd to create the necessary directories for DAOS:
 
 ### Privileged Helper
 
-DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
+DAOS employs a privileged helper binary (`daos_server_helper`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
 
-When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
+When DAOS is installed from RPM, the `daos_server_helper` helper is automatically installed
 to the correct location with the correct permissions. The RPM creates a "daos_server"
-system group and configures permissions such that `daos_admin` may only be invoked
+system group and configures permissions such that `daos_server_helper` may only be invoked
 from `daos_server`.
 
 For non-RPM installations, there are two supported scenarios:
 
-1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
+1. `daos_server` is run as root, which means that `daos_server_helper` is also invoked as root,
 and therefore no additional setup is necessary.
-2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
+2. `daos_server` is run as a non-root user, which means that `daos_server_helper` must be
 manually installed and configured.
 
 The steps to enable the second scenario are as follows (steps are assumed to be
 running out of a DAOS source tree which may be on a NFS share):
 
 ```bash
-$ chmod -x $daospath/bin/daos_admin # prevent this copy from being executed
-$ sudo cp $daospath/bin/daos_admin /usr/bin/daos_admin
-$ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
+$ chmod -x $daospath/bin/daos_server_helper # prevent this copy from being executed
+$ sudo cp $daospath/bin/daos_server_helper /usr/bin/daos_server_helper
+$ sudo chmod 4755 /usr/bin/daos_server_helper # make this copy setuid root
 $ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
 $ sudo ln -sf $daospath/share/daos/control/setup_spdk.sh \
            /usr/share/daos/control

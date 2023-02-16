@@ -9,6 +9,7 @@ package server
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -17,11 +18,14 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func componentFromContext(ctx context.Context) (comp *security.Component, err error) {
@@ -145,7 +149,7 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	}
 
 	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
-	if err != nil || other.Version.IsZero() {
+	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
 			Version:   build.MustNewVersion(otherVersion),
@@ -204,4 +208,53 @@ func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.Una
 	}
 
 	return res, err
+}
+
+// isSentinelErr indicates whether or not the error is a sentinel
+// error used to convey a specific state to the client.
+func isSentinelErr(err error) bool {
+	return system.IsNotReady(err) || system.IsNotReplica(err) || system.IsNotLeader(err)
+}
+
+// unaryLoggingInterceptor generates a grpc.UnaryServerInterceptor that
+// will log an error if the RPC handler returned an error. If debugging is
+// enabled, it will also log the request and response messages.
+//
+// NB: This interceptor should be the last in the chain, i.e. first in the
+// list of interceptors passed to grpc.NewServer.
+func unaryLoggingInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		startTime := time.Now()
+		res, err := handler(ctx, req)
+		elapsed := time.Since(startTime)
+		logErr := err
+		if logErr != nil {
+			// Unwrap the message if it's a gRPC status error.
+			if st, ok := status.FromError(err); ok {
+				logErr = proto.UnwrapError(st)
+			}
+		}
+
+		// If the error is nil or is not a sentinel error, log the request.
+		// We don't want to log sentinel errors because they're spammy and
+		// don't provide any useful debug information.
+		if logErr == nil || !isSentinelErr(logErr) {
+			if m, ok := req.(protoreflect.ProtoMessage); ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m) {
+				log.Debugf("gRPC request: %s", proto.Debug(m))
+			}
+		}
+
+		// Log the unwrapped error if it's not a sentinel error.
+		if logErr != nil {
+			if !isSentinelErr(logErr) {
+				log.Errorf("gRPC handler for %T failed: %s (elapsed: %s)", req, logErr, elapsed)
+			}
+			return res, err
+		}
+
+		if m, ok := res.(protoreflect.ProtoMessage); ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m) {
+			log.Debugf("gRPC response for %T: %s (elapsed: %s)", req, proto.Debug(m), elapsed)
+		}
+		return res, err
+	}
 }

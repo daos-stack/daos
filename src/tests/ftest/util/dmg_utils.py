@@ -1,10 +1,10 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-
+from logging import getLogger
 from grp import getgrgid
 from pwd import getpwuid
 import re
@@ -50,7 +50,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
 
 
 class DmgCommand(DmgCommandBase):
-    # pylint: disable=too-many-ancestors,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
 
     # As the handling of these regular expressions are moved inside their
@@ -321,6 +321,60 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
+    def storage_led_identify(self, timeout=None, reset=False, ids=None):
+        """Get the result of the 'dmg storage led identify".
+
+        Args:
+            timeout (str, optional): Length of time for LED to blink. Defaults to None.
+            reset (bool, optional): Reset the LED status to previous state. Defaults to False.
+            ids (str, optional): Comma separated device id. Defaults to None.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage led identify command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "led", "identify"), timeout=timeout,
+            reset=reset, ids=ids)
+
+    def storage_led_check(self, ids=None):
+        """Get the result of the 'dmg storage led check".
+
+        Args:
+            ids (str, optional): Comma separated device id. Defaults to None.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage led check command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "led", "check"), ids=ids)
+
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+        """Get the result of the 'dmg storage replace nvme' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "replace", "nvme"), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
+
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
 
@@ -446,8 +500,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self):
+    def server_set_logmasks(self, masks=None, raise_exception=None):
         """Set engine log-masks at runtime.
+
+        Args:
+            masks (str, optional): log masks to set. Defaults to None.
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if the dmg server set logmasks command fails.
@@ -464,7 +524,13 @@ class DmgCommand(DmgCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("server", "set-logmasks"))
+
+        kwargs = {
+            "masks": masks,
+        }
+
+        return self._get_json_result(("server", "set-logmasks"),
+                                     raise_exception=raise_exception, **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -547,6 +613,7 @@ class DmgCommand(DmgCommandBase):
         if output["response"] is None:
             return data
 
+        data["status"] = output["status"]
         data["uuid"] = output["response"]["uuid"]
         data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
@@ -750,25 +817,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("pool", "list"), no_query=no_query, verbose=verbose)
 
-    def pool_set_prop(self, pool, name, value):
+    def pool_set_prop(self, pool, properties):
         """Set property for a given Pool.
 
         Args:
-            pool (str): Pool uuid for which property is supposed
-                        to be set.
-            name (str): Property name to be set
-            value (str): Property value to be set
+            pool (str): Pool uuid for which property is supposed to be set.
+            properties (str): Property in the form of key:val[,key:val...]
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: if the dmg pool set-prop command fails.
 
         """
-        return self._get_result(
-            ("pool", "set-prop"), pool=pool, name=name, value=value)
+        return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
     def pool_get_prop(self, pool, name):
         """Get the Property for a given pool.
@@ -1076,18 +1139,22 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
-    def config_generate(self, access_points, num_engines=None, min_ssds=None,
-                        net_class=None):
+    def config_generate(self, access_points, num_engines=None, scm_only=False,
+                        net_class=None, net_provider=None, use_tmpfs_scm=False):
         """Produce a server configuration.
 
         Args:
             access_points (str): Comma separated list of access point addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
                 storage host in DAOS system. Defaults to None.
-            num_nvme (int): Minimum number of NVMe devices required per storage
-                host in DAOS system. Defaults to None.
+            scm_only (bool, option): Whether to omit NVMe from generated config.
+                Defaults to False.
             net_class (str): Network class preferred. Defaults to None.
-                i.e. "best-available"|"ethernet"|"infiniband"
+                i.e. "ethernet"|"infiniband"
+            net_provider (str): Network provider preferred. Defaults to None.
+                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+            use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
+                as SCM. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1096,7 +1163,8 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(
             ("config", "generate"), access_points=access_points,
-            num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
+            num_engines=num_engines, scm_only=scm_only, net_class=net_class,
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.
@@ -1250,32 +1318,27 @@ def check_system_query_status(data):
     """Check if any server crashed.
 
     Args:
-        data (dict): dictionary of system query data obtained from
-            DmgCommand.system_query()
+        data (dict): dictionary of system query data obtained from DmgCommand.system_query()
 
     Returns:
         bool: True if no server crashed, False otherwise.
 
     """
+    log = getLogger()
     failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.
     if "response" in data and "members" in data["response"]:
         for member in data["response"]["members"]:
-            rank_info = [
-                "{}: {}".format(key, member[key]) for key in sorted(member)]
-            print(
-                "Rank {} info:\n  {}".format(
-                    member["rank"], "\n  ".join(rank_info)))
+            rank_info = ["{}: {}".format(key, member[key]) for key in sorted(member)]
+            log.debug("Rank %s info:\n  %s", member["rank"], "\n  ".join(rank_info))
             if "state" in member and member["state"].lower() in failed_states:
                 failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
     for rank in sorted(failed_rank_list):
-        print(
-            "Rank {} failed with state '{}'".format(
-                rank, failed_rank_list[rank]))
+        log.debug("Rank %s failed with state '%s'", rank, failed_rank_list[rank])
 
     # Return True if no ranks failed
     return not bool(failed_rank_list)
