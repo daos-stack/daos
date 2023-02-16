@@ -2367,7 +2367,7 @@ dfs_test_checker(void **state)
 	rc = dfs_release(root);
 	assert_int_equal(rc, 0);
 
-	/** create 100 files and  100 dirs */
+	/** create 100 files and 100 dirs */
 	for (i = 0; i < nr; i++) {
 		dfs_obj_t	*dir, *file;
 		d_sg_list_t	sgl;
