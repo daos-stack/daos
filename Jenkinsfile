@@ -654,7 +654,7 @@ pipeline {
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'yes',
+                                       build_deps: 'no',
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
