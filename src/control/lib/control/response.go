@@ -262,7 +262,7 @@ func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
 		if IsConnErr(err) {
-			return errMSConnectionFailure
+			return errors.Wrap(err, errMSConnectionFailure.Error())
 		}
 		return err
 	}

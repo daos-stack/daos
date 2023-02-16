@@ -132,9 +132,15 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
-	if fault.IsFaultCode(err, code.ServerWrongSystem) {
+	switch {
+	case fault.IsFaultCode(err, code.ServerWrongSystem):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
-	} else if err != nil {
+	case fault.IsFaultCode(err, code.SecurityInvalidCert):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)}
+	case fault.IsFaultCode(err, code.ClientConnectionClosed), fault.IsFaultCode(err, code.ClientConnectionRefused),
+		fault.IsFaultCode(err, code.ClientConnectionNoRoute), fault.IsFaultCode(err, code.ClientConnectionBadHost):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)}
+	case err != nil:
 		return nil, err
 	}
 
