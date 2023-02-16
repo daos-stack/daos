@@ -10,6 +10,7 @@ import threading
 import re
 
 from avocado.utils.process import CmdResult
+from exception_utils import CommandFailure
 from ior_utils import run_ior
 from job_manager_utils import get_job_manager
 from test_utils_pool import add_pool
@@ -39,9 +40,9 @@ class NvmePoolExclude(OSAUtils):
         self.cont_list = []
         self.dmg_command.exit_status_exception = True
 
-    def thread_run_ior(self, thread_queue, job_id, test, manager, log, hosts, path, slots, group, pool,
-                       container, processes, ppn, intercept, plugin_path, dfuse, display_space,
-                       fail_on_warning, namespace, ior_params):
+    def thread_run_ior(self, thread_queue, job_id, test, manager, log, hosts, path, slots, group,
+                       pool, container, processes, ppn, intercept, plugin_path, dfuse,
+                       display_space, fail_on_warning, namespace, ior_params):
         # pylint: disable=too-many-arguments
         """Start an IOR thread with thread queue for failure analysis.
 
@@ -86,8 +87,7 @@ class NvmePoolExclude(OSAUtils):
                                               pool, container, processes, ppn, intercept,
                                               plugin_path, dfuse, display_space, fail_on_warning,
                                               namespace, ior_params)
-        except Exception as error:
-        # pylint: disable=broad-exception-caught
+        except CommandFailure as error:
             thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
         thread_queue.put(thread_result)
 
@@ -202,9 +202,8 @@ class NvmePoolExclude(OSAUtils):
                 kwargs["ior_params"]["flags"] = self.ior_r_flags
                 kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
                 try:
-                    self.thread_run_ior(kwargs)
-                except Exception as error:
-                # pylint: disable=broad-exception-caught
+                    self.thread_run_ior(**kwargs)
+                except CommandFailure as error:
                     self.fail("Error in ior read {}.".format(error))
 
                 display_string = "Pool{} space at the End".format(val)
