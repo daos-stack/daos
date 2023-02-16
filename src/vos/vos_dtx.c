@@ -3054,12 +3054,23 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	D_DEBUG(DB_IO, "enter vos_dtx_cache_reset for "DF_UUID" with force %s\n",
+		DP_UUID(cont->vc_id), force ? "yes" : "no");
+
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
 	if (!force) {
-		if (cont->vc_dtx_array)
+		if (cont->vc_dtx_array) {
+			D_DEBUG(DB_IO, "Aggregating act table for "DF_UUID"\n",
+				DP_UUID(cont->vc_id));
+
 			lrua_array_aggregate(cont->vc_dtx_array);
+
+			D_DEBUG(DB_IO, "Aggregated act table for "DF_UUID"\n",
+				DP_UUID(cont->vc_id));
+		}
+
 		goto cmt;
 	}
 
@@ -3103,12 +3114,17 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 
 cmt:
 	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
+		D_DEBUG(DB_IO, "Destroying cmt table for "DF_UUID" count %u\n",
+			DP_UUID(cont->vc_id), cont->vc_dtx_committed_count);
+
 		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 		if (rc != 0) {
 			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
 				DP_UUID(cont->vc_id), DP_RC(rc));
 			return rc;
 		}
+
+		D_DEBUG(DB_IO, "Destroyed cmt table for "DF_UUID"\n", DP_UUID(cont->vc_id));
 
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;
@@ -3124,7 +3140,8 @@ cmt:
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
+	D_DEBUG(DB_IO, "exit vos_dtx_cache_reset for "DF_UUID" with force %s\n",
+		DP_UUID(cont->vc_id), force ? "yes" : "no");
 
 	return 0;
 }
