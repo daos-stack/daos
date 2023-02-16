@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -330,9 +330,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
 		sgl->sg_iovs[idx->iov_idx].iov_len;
 
-	D_ASSERT(idx->iov_offset <= len);
-	if (len == 0)
-		goto next_iov;
+	D_ASSERT(idx->iov_offset < len);
 	/** Point to current idx */
 	if (p_buf != NULL)
 		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
@@ -347,7 +345,6 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
-next_iov:
 	if (idx->iov_offset == len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
