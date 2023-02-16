@@ -109,7 +109,8 @@ class OSAOnlineDrain(OSAUtils):
             self.pool = pool[val]
             display_string = "Pool{} space at the End".format(val)
             self.pool.display_pool_daos_space(display_string)
-            self.run_ior_thread("Read", oclass, test_seq)
+            if app_name == "ior":
+                self.run_ior_thread("Read", oclass, test_seq)
             self.container = self.pool_cont_dict[self.pool][0]
             kwargs = {"pool": self.pool.uuid,
                       "cont": self.container.uuid}
