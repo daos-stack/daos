@@ -30,7 +30,7 @@ class Pass1Test(TestWithServers):
         6. Disable the checker.
         7. Verify that the dangling pool was removed. Call dmg pool list and it should
         return an empty list.
-        8. Unregister the pool so that we don't try to destroy during tearDown.
+        8. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-11711
 
@@ -81,7 +81,7 @@ class Pass1Test(TestWithServers):
         if pools:
             errors.append(f"Dangling pool was not removed! {pools}")
 
-        # 8. Unregister the pool so that we don't try to destroy during tearDown.
+        # 8. Un-register the pool so that we don't try to destroy during tearDown.
         # This is hack because when we create a pool using get_pool(), it'll call
         # register_cleanup() and there's no way to skip it or "unregister" other than this
         # approach.
@@ -216,7 +216,7 @@ class Pass1Test(TestWithServers):
         7. Verify that the orphan pool was removed. Call dmg pool list and it should
         return empty.
         8. Verify that the pool directory is removed from the mount point.
-        9. Unregister the pool so that we don't try to destroy during tearDown.
+        9. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-11712
 
@@ -239,7 +239,7 @@ class Pass1Test(TestWithServers):
         # 8. Verify that the pool directory is removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
-        # 9. Unregister the pool so that we don't try to destroy during tearDown.
+        # 9. Un-register the pool so that we don't try to destroy during tearDown.
         self._cleanup_methods = []
 
         report_errors(test=self, errors=errors)
@@ -292,7 +292,7 @@ class Pass1Test(TestWithServers):
 
         # 6. Query the checker and verify the message
         query_msg = ""
-        for i in range(8):
+        for _ in range(8):
             check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "COMPLETED":
                 query_msg = check_query_out["response"]["reports"][0]["msg"]
@@ -351,9 +351,9 @@ class Pass1Test(TestWithServers):
         5. Enable and start the checker. It should remove pool from MS and engine.
         6. Query the checker and verify the message.
         7. Disable the checker.
-        8. Check that the pool doesn’t appear with dmg pool list.
+        8. Check that the pool does not appear with dmg pool list.
         9. Verify that the pool directory was removed from the mount point.
-        10. Unregister the pool so that we don't try to destroy during tearDown.
+        10. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-12067
 
@@ -402,7 +402,7 @@ class Pass1Test(TestWithServers):
         # 7. Disable the checker.
         dmg_command.check_disable()
 
-        # 8. Check that the pool doesn’t appear with dmg pool list.
+        # 8. Check that the pool does not appear with dmg pool list.
         pools = dmg_command.get_pool_list_all()
         if pools:
             errors.append(f"Pool still exists after running checker! {pools}")
@@ -410,7 +410,7 @@ class Pass1Test(TestWithServers):
         # 9. Verify that the pool directory was removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
-        # 10. Unregister the pool so that we don't try to destroy during tearDown.
+        # 10. Un-register the pool so that we don't try to destroy during tearDown.
         self._cleanup_methods = []
 
         report_errors(test=self, errors=errors)
