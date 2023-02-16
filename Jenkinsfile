@@ -642,11 +642,11 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
-                                                                qb: true) +
+                                                                qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8', true) + '"' +
+                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
