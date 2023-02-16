@@ -6424,6 +6424,7 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 
 #define DFS_ITER_NR		128
 #define DFS_ITER_DKEY_BUF	(DFS_ITER_NR * sizeof(uint64_t))
+#define DFS_ITER_ENTRY_BUF	(DFS_ITER_NR * DFS_MAX_NAME)
 
 struct dfs_oit_args {
 	daos_handle_t	oit;
@@ -6433,7 +6434,92 @@ struct dfs_oit_args {
 	uint64_t	failed;
 };
 
-int
+static int
+fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char *enum_buf,
+		struct dfs_oit_args *args)
+{
+	daos_handle_t	oh;
+	d_sg_list_t	sgl, entry_sgl;
+	d_iov_t		iov, sg_iov;
+	daos_recx_t	recx;
+	uint32_t	nr;
+	char		*ptr;
+	daos_iod_t	iod;
+	d_iov_t		marker;
+	bool		mark_data = true;
+	daos_anchor_t	anchor = {0};
+	int		rc, rc2;
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	/** set sgl for enumeration */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, DFS_ITER_ENTRY_BUF);
+	sgl.sg_iovs = &iov;
+	ptr = enum_buf;
+
+	/** set sgl for fetch */
+	entry_sgl.sg_nr = 1;
+	entry_sgl.sg_nr_out = 0;
+	entry_sgl.sg_iovs = &sg_iov;
+
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	recx.rx_idx	= OID_IDX;
+	recx.rx_nr	= sizeof(daos_obj_id_t);
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	i;
+
+		nr = DFS_ITER_NR;
+		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_dkey() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+
+		/** for every entry, fetch its oid and mark it in the oit table */
+		for (i = 0; i < nr; i++) {
+			daos_obj_id_t	entry_oid;
+			daos_key_t	dkey;
+
+			d_iov_set(&dkey, ptr, kds[i].kd_key_len);
+			d_iov_set(&sg_iov, &entry_oid, sizeof(daos_obj_id_t));
+
+			rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_DKEY_FETCH, &dkey, 1, &iod,
+					    &entry_sgl, NULL, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_fetch() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+
+			/** mark oid in the oit table */
+			rc = daos_oit_mark(args->oit, entry_oid, &marker, NULL);
+			if (rc) {
+				D_ERROR("daos_oit_mark() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+			ptr += kds[i].kd_key_len;
+		}
+	}
+
+out_obj:
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
+}
+
+static int
 oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 {
 	struct dfs_oit_args	*oit_args = (struct dfs_oit_args *)args;
@@ -6501,12 +6587,11 @@ out_obj:
 	return rc;
 }
 
-int
-adjust_chunk_size(daos_handle_t coh, daos_obj_id_t oid, uint64_t *_max_offset)
+static int
+adjust_chunk_size(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char *enum_buf,
+		  uint64_t *_max_offset)
 {
 	daos_handle_t	oh;
-	char		buf[DFS_ITER_DKEY_BUF];
-	daos_key_desc_t kds[DFS_ITER_NR];
 	daos_anchor_t	anchor = {0};
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
@@ -6522,12 +6607,12 @@ adjust_chunk_size(daos_handle_t coh, daos_obj_id_t oid, uint64_t *_max_offset)
 	/** iterate over all (integer) dkeys and then query the max record / offset */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	d_iov_set(&iov, buf, DFS_ITER_DKEY_BUF);
+	d_iov_set(&iov, enum_buf, DFS_ITER_DKEY_BUF);
 	sgl.sg_iovs = &iov;
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	nr = DFS_ITER_NR;
-		char		*ptr = &buf[0];
+		char		*ptr = &enum_buf[0];
 		uint32_t	i;
 
 		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
@@ -6582,6 +6667,9 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	daos_anchor_t		anchor = {0};
 	uint32_t		nr_entries = DFS_ITER_NR, i;
 	daos_obj_id_t		oids[DFS_ITER_NR] = {0};
+	daos_key_desc_t		*kds = NULL;
+	char			*dkey_enum_buf = NULL;
+	char			*entry_enum_buf = NULL;
 	uint64_t		unmarked_entries = 0;
 	d_iov_t			marker;
 	bool			mark_data = true;
@@ -6722,13 +6810,28 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_ERROR("Failed to create dir in lost+found: %d\n", rc);
 			D_GOTO(out_lf1, rc);
 		}
+
+		/** allocate kds and enumeration buffers */
+		D_ALLOC_ARRAY(kds, DFS_ITER_NR);
+		if (kds == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
+
+		/** Allocate a buffer to store the array int dkeys */
+		D_ALLOC_ARRAY(dkey_enum_buf, DFS_ITER_DKEY_BUF);
+		if (dkey_enum_buf == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
+
+		/** Allocate a buffer to store the entries */
+		D_ALLOC_ARRAY(entry_enum_buf, DFS_ITER_ENTRY_BUF);
+		if (entry_enum_buf == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
 	}
 
 	/*
 	 * list all unmarked oids and print / remove / punch. In the case of the L+F relink flag, we
 	 * need 2 passes instead of 1:
-	 * Pass 1: relink directories only and then descend the namespace there to mark oids.
-	 * Pass 2: relink remaining files in the L+F root that are unmarked still after first pass.
+	 * Pass 1: check directories only and descend to mark all oids in the namespace of each dir.
+	 * Pass 2: relink remaining oids in the L+F root that are unmarked still after first pass.
 	 */
 	memset(&anchor, 0, sizeof(anchor));
 	/** Start Pass 1 */
@@ -6742,63 +6845,17 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 		for (i = 0; i < nr_entries; i++) {
 			if (flags & DFS_CHECK_RELINK) {
-				struct dfs_entry	entry = {0};
-				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
-				char			oid_name[DFS_MAX_NAME + 1];
-				daos_size_t		len;
-				daos_anchor_t		anchor_dir = {0};
-				uint32_t		nr = DFS_ITER_NR;
-				dfs_obj_t		*dir;
+				enum daos_otype_t otype = daos_obj_id2type(oids[i]);
 
 				/** Pass 1 - if a file is seen, skip in this pass */
 				if (daos_is_array_type(otype))
 					continue;
 
-				entry.mode = S_IFDIR | 0700;
-				entry.uid = uid;
-				entry.gid = gid;
-				oid_cp(&entry.oid, oids[i]);
-				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
-					now.tv_nsec;
-				entry.chunk_size = dfs->attr.da_chunk_size;
-
-				len = sprintf(oid_name, "%"PRIu64".%"PRIu64"",
-					      oids[i].hi, oids[i].lo);
-				D_ASSERT(len <= DFS_MAX_NAME);
-				rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
-						  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
-				if (rc) {
-					D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
-					D_GOTO(out_lf2, rc);
-				}
-
-				/*
-				 * Open the new directory that was relinked and scan it marking the
-				 * oids so we don't see them in pass 2.
-				 */
-				rc = dfs_lookup_rel(dfs, now_dir, oid_name, O_RDONLY, &dir,
-						    NULL, NULL);
-				if (rc) {
-					D_ERROR("dfs_lookup_rel() of %s failed: %d\n",
-						oid_name, rc);
-					D_GOTO(out_lf2, rc);
-				}
-
-				while (!daos_anchor_is_eof(&anchor_dir)) {
-					rc = dfs_iterate(dfs, now_dir, &anchor_dir, &nr,
-							 DFS_MAX_NAME * nr, oit_mark_cb, oit_args);
-					if (rc) {
-						dfs_release(dir);
-						D_ERROR("dfs_iterate() failed: %d\n", rc);
-						D_GOTO(out_lf2, rc);
-					}
-					nr = DFS_ITER_NR;
-				}
-
-				rc = dfs_release(dir);
+				/** for a directory, mark the oids reachable from it */
+				rc = fetch_mark_oids(coh, oids[i], kds, entry_enum_buf, oit_args);
 				if (rc)
 					D_GOTO(out_lf2, rc);
+				continue;
 			}
 
 			if (flags & DFS_CHECK_PRINT)
@@ -6861,16 +6918,9 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			char			oid_name[DFS_MAX_NAME + 1];
 			daos_size_t		len;
 
-			/** in Pass 2 we should only see files */
-			if (!daos_is_array_type(otype)) {
-				D_ERROR("Directories should not be seen in Pass 2\n");
-				D_GOTO(out_lf2, rc = EIO);
-			}
-
 			if (flags & DFS_CHECK_PRINT)
 				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
 					DP_OID(oids[i]));
-
 			if (flags & DFS_CHECK_VERIFY) {
 				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
 				if (rc == -DER_NOSYS) {
@@ -6886,7 +6936,10 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				}
 			}
 
-			entry.mode = S_IFREG | 0600;
+			if (daos_is_array_type(otype))
+				entry.mode = S_IFREG | 0600;
+			else
+				entry.mode = S_IFDIR | 0700;
 			entry.uid = uid;
 			entry.gid = gid;
 			oid_cp(&entry.oid, oids[i]);
@@ -6916,9 +6969,12 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			 * file respectively. This can be fixed later by the user by adjusting the
 			 * chunk size to the correct one they know using the daos tool.
 			 */
-			rc = adjust_chunk_size(dfs->coh, oids[i], &entry.chunk_size);
-			if (rc)
-				D_GOTO(out_lf2, rc);
+			if (daos_is_array_type(otype)) {
+				rc = adjust_chunk_size(dfs->coh, oids[i], kds, dkey_enum_buf,
+						       &entry.chunk_size);
+				if (rc)
+					D_GOTO(out_lf2, rc);
+			}
 			unmarked_entries++;
 		}
 	}
@@ -6933,6 +6989,9 @@ done:
 		}
 	}
 out_lf2:
+	D_FREE(kds);
+	D_FREE(dkey_enum_buf);
+	D_FREE(entry_enum_buf);
 	if (flags & DFS_CHECK_RELINK) {
 		rc2 = dfs_release(now_dir);
 		if (rc == 0)
