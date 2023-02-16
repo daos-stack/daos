@@ -49,7 +49,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, query->qt_bound, &query->qt_punch, NULL,
+			    epr.epr_hi, query->qt_bound, false, &query->qt_punch, NULL,
 			    &query->qt_info);
 	if (rc != 0)
 		return rc;

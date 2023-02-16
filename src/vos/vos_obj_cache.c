@@ -412,10 +412,13 @@ check_object:
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
+	if (ts_set != NULL && ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
+		cond_mask = VOS_ILOG_COND_UPDATE;
+
 	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    bound, NULL, NULL, &obj->obj_ilog_info);
+				    intent, &obj->obj_df->vo_ilog, epr->epr_hi, bound,
+				    cond_mask != 0 ? true : false, NULL, NULL, &obj->obj_ilog_info);
 		if (rc != 0) {
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))
@@ -446,8 +449,6 @@ check_object:
 	/** If it's a conditional update, we need to preserve the -DER_NONEXIST
 	 *  for the caller.
 	 */
-	if (ts_set && ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
-		cond_mask = VOS_ILOG_COND_UPDATE;
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr, bound, NULL,
 			     &obj->obj_ilog_info, cond_mask, ts_set);
 	if (rc == -DER_TX_RESTART)
