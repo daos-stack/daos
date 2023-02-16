@@ -146,7 +146,7 @@ class NvmePoolExclude(OSAUtils):
                         self.log.debug("  %s:", name)
                         for line in getattr(result["result"], name).splitlines():
                             self.log.debug("    %s:", line)
-                if result["result"].exit_status != 0:
+                    if result["result"].exit_status != 0:
                         errors += 1
                 if errors:
                     self.fail("Errors running {} threads".format(errors))
