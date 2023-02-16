@@ -314,8 +314,10 @@ array_free_one(struct lru_array *array, struct lru_sub *sub)
 {
 	uint32_t	idx;
 
-	for (idx = 0; idx < array->la_idx_mask + 1; idx++)
-		fini_cb(array, sub, &sub->ls_table[idx], idx);
+	if (array->la_cbs.lru_on_fini != NULL) {
+		for (idx = 0; idx < array->la_idx_mask + 1; idx++)
+			fini_cb(array, sub, &sub->ls_table[idx], idx);
+	}
 
 	D_FREE(sub->ls_table);
 }
