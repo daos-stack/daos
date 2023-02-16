@@ -317,22 +317,16 @@ err_out:
 	return rc;
 }
 
-int
-dc_sec_get_user_permissions(daos_prop_t *pool_prop, daos_prop_t *cont_prop, uid_t uid, gid_t gid,
-			    gid_t *gids, size_t nr_gids, uint64_t *perms)
+static int
+get_user_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t group_prop,
+	       uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, uint64_t min_owner_perms,
+	       uint64_t *perms)
 {
-	struct acl_user		user_info = {0};
-	uint64_t		pool_perms = 0;
-	uint64_t		cont_perms = 0;
-	int			rc;
+	struct acl_user	user_info = {0};
+	int		rc;
 
-	if (pool_prop == NULL) {
-		D_ERROR("null pool property\n");
-		return -DER_INVAL;
-	}
-
-	if (cont_prop == NULL) {
-		D_ERROR("null container property\n");
+	if (prop == NULL) {
+		D_ERROR("null property parameter\n");
 		return -DER_INVAL;
 	}
 
@@ -355,28 +349,29 @@ dc_sec_get_user_permissions(daos_prop_t *pool_prop, daos_prop_t *cont_prop, uid_
 		D_GOTO(out, rc);
 	}
 
-	rc = get_perms(pool_prop, DAOS_PROP_PO_ACL, DAOS_PROP_PO_OWNER, DAOS_PROP_PO_OWNER_GROUP,
-		       &user_info, POOL_OWNER_MIN_PERMS, &pool_perms);
-	if (rc != 0) {
+	rc = get_perms(prop, acl_prop, owner_prop, group_prop, &user_info, min_owner_perms, perms);
+	if (rc != 0)
 		D_ERROR("failed to collect pool permissions, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_user_info, rc);
-	}
 
-	/* If a user can't read the pool, they can't do anything with the container. */
-	if ((pool_perms & (DAOS_ACL_PERM_READ | DAOS_ACL_PERM_GET_PROP)) == 0)
-		D_GOTO(out_user_info, rc = 0);
-
-	rc = get_perms(cont_prop, DAOS_PROP_CO_ACL, DAOS_PROP_CO_OWNER, DAOS_PROP_CO_OWNER_GROUP,
-		       &user_info, CONT_OWNER_MIN_PERMS, &cont_perms);
-	if (rc != 0) {
-		D_ERROR("failed to collect container permissions, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_user_info, rc);
-	}
-
-	*perms = cont_perms;
-
-out_user_info:
 	free_user_info_strings(&user_info);
 out:
 	return rc;
+}
+
+int
+dc_sec_get_pool_permissions(daos_prop_t *pool_prop, uid_t uid, gid_t gid, gid_t *gids,
+			    size_t nr_gids, uint64_t *perms)
+{
+	return get_user_perms(pool_prop, DAOS_PROP_PO_ACL, DAOS_PROP_PO_OWNER,
+			      DAOS_PROP_PO_OWNER_GROUP, uid, gid, gids, nr_gids,
+			      POOL_OWNER_MIN_PERMS, perms);
+}
+
+int
+dc_sec_get_cont_permissions(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *gids,
+			    size_t nr_gids, uint64_t *perms)
+{
+	return get_user_perms(cont_prop, DAOS_PROP_CO_ACL, DAOS_PROP_CO_OWNER,
+			      DAOS_PROP_CO_OWNER_GROUP, uid, gid, gids, nr_gids,
+			      CONT_OWNER_MIN_PERMS, perms);
 }

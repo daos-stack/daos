@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -408,9 +408,78 @@ get_pool_acl_prop(char *owner_user, char *owner_group, struct daos_acl *acl)
 }
 
 static void
-test_get_user_perms_invalid_input(void **state)
+test_get_pool_perms_invalid_input(void **state)
 {
 	daos_prop_t	*pool_prop;
+	daos_prop_t	*prop_no_owner;
+	daos_prop_t	*prop_no_group;
+	daos_prop_t	*prop_no_acl;
+	struct daos_acl	*acl;
+	uid_t		uid = geteuid();
+	gid_t		gid = getegid();
+	gid_t		bad_gids[2] = {getegid(), (gid_t)-1};
+	uint64_t	perms;
+
+	acl = daos_acl_create(NULL, 0);
+	assert_non_null(acl);
+
+	pool_prop = get_pool_acl_prop("user@", "group@", acl);
+
+	D_PRINT("= NULL pool prop\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(NULL, uid, gid, NULL, 0, &perms),
+			-DER_INVAL);
+
+	D_PRINT("= NULL perms param\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(pool_prop, uid, gid, NULL, 0, NULL),
+			-DER_INVAL);
+
+	D_PRINT("= NULL gids with num gids > 0\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(pool_prop, uid, gid, NULL, 1, NULL),
+			-DER_INVAL);
+
+	D_PRINT("= bad uid\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(pool_prop, (uid_t)-1, gid, NULL, 0,
+						    &perms),
+			-DER_NONEXIST);
+
+	D_PRINT("= bad gid\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(pool_prop, uid, (gid_t)-1, NULL, 0,
+						    &perms),
+			-DER_NONEXIST);
+
+	D_PRINT("= bad gid in list\n");
+	assert_rc_equal(dc_sec_get_pool_permissions(pool_prop, uid, gid, bad_gids,
+						    ARRAY_SIZE(bad_gids), &perms),
+			-DER_NONEXIST);
+
+	D_PRINT("= no owner in prop\n");
+	prop_no_owner = get_pool_acl_prop(NULL, "group@", acl);
+	assert_rc_equal(dc_sec_get_pool_permissions(prop_no_owner, uid, gid, NULL, 0,
+						    &perms),
+			-DER_INVAL);
+	daos_prop_free(prop_no_owner);
+
+	D_PRINT("= no owner-group in prop\n");
+	prop_no_group = get_pool_acl_prop("user@", NULL, acl);
+	assert_rc_equal(dc_sec_get_pool_permissions(prop_no_group, uid, gid, NULL, 0,
+						    &perms),
+			-DER_INVAL);
+	daos_prop_free(prop_no_group);
+
+	D_PRINT("= no ACL in prop\n");
+	prop_no_acl = get_pool_acl_prop("user@", "group@", NULL);
+	assert_rc_equal(dc_sec_get_pool_permissions(prop_no_acl, uid, gid, NULL, 0,
+						    &perms),
+			-DER_INVAL);
+	daos_prop_free(prop_no_acl);
+
+	daos_prop_free(pool_prop);
+	daos_acl_free(acl);
+}
+
+static void
+test_get_cont_perms_invalid_input(void **state)
+{
 	daos_prop_t	*prop_no_owner;
 	daos_prop_t	*prop_no_group;
 	daos_prop_t	*prop_no_acl;
@@ -424,62 +493,56 @@ test_get_user_perms_invalid_input(void **state)
 	acl = daos_acl_create(NULL, 0);
 	assert_non_null(acl);
 
-	pool_prop = get_pool_acl_prop("user@", "group@", acl);
 	cont_prop = get_cont_acl_prop("user@", "group@", acl);
 
-	D_PRINT("= NULL pool prop\n");
-	assert_rc_equal(dc_sec_get_user_permissions(NULL, cont_prop, uid, gid, NULL, 0, &perms),
-			-DER_INVAL);
-
 	D_PRINT("= NULL cont prop\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, NULL, uid, gid, NULL, 0, &perms),
+	assert_rc_equal(dc_sec_get_cont_permissions(NULL, uid, gid, NULL, 0, &perms),
 			-DER_INVAL);
 
 	D_PRINT("= NULL perms param\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, uid, gid, NULL, 0, NULL),
+	assert_rc_equal(dc_sec_get_cont_permissions(cont_prop, uid, gid, NULL, 0, NULL),
 			-DER_INVAL);
 
 	D_PRINT("= NULL gids with num gids > 0\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, uid, gid, NULL, 1, NULL),
+	assert_rc_equal(dc_sec_get_cont_permissions(cont_prop, uid, gid, NULL, 1, NULL),
 			-DER_INVAL);
 
 	D_PRINT("= bad uid\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, (uid_t)-1, gid, NULL, 0,
+	assert_rc_equal(dc_sec_get_cont_permissions(cont_prop, (uid_t)-1, gid, NULL, 0,
 						    &perms),
 			-DER_NONEXIST);
 
 	D_PRINT("= bad gid\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, uid, (gid_t)-1, NULL, 0,
+	assert_rc_equal(dc_sec_get_cont_permissions(cont_prop, uid, (gid_t)-1, NULL, 0,
 						    &perms),
 			-DER_NONEXIST);
 
 	D_PRINT("= bad gid in list\n");
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, uid, gid, bad_gids,
+	assert_rc_equal(dc_sec_get_cont_permissions(cont_prop, uid, gid, bad_gids,
 						    ARRAY_SIZE(bad_gids), &perms),
 			-DER_NONEXIST);
 
 	D_PRINT("= no owner in prop\n");
-	prop_no_owner = get_pool_acl_prop(NULL, "group@", acl);
-	assert_rc_equal(dc_sec_get_user_permissions(prop_no_owner, cont_prop, uid, gid, NULL, 0,
+	prop_no_owner = get_cont_acl_prop(NULL, "group@", acl);
+	assert_rc_equal(dc_sec_get_cont_permissions(prop_no_owner, uid, gid, NULL, 0,
 						    &perms),
 			-DER_INVAL);
 	daos_prop_free(prop_no_owner);
 
 	D_PRINT("= no owner-group in prop\n");
-	prop_no_group = get_pool_acl_prop("user@", NULL, acl);
-	assert_rc_equal(dc_sec_get_user_permissions(prop_no_group, cont_prop, uid, gid, NULL, 0,
+	prop_no_group = get_cont_acl_prop("user@", NULL, acl);
+	assert_rc_equal(dc_sec_get_cont_permissions(prop_no_group, uid, gid, NULL, 0,
 						    &perms),
 			-DER_INVAL);
 	daos_prop_free(prop_no_group);
 
 	D_PRINT("= no ACL in prop\n");
-	prop_no_acl = get_pool_acl_prop("user@", "group@", NULL);
-	assert_rc_equal(dc_sec_get_user_permissions(prop_no_acl, cont_prop, uid, gid, NULL, 0,
+	prop_no_acl = get_cont_acl_prop("user@", "group@", NULL);
+	assert_rc_equal(dc_sec_get_cont_permissions(prop_no_acl, uid, gid, NULL, 0,
 						    &perms),
 			-DER_INVAL);
 	daos_prop_free(prop_no_acl);
 
-	daos_prop_free(pool_prop);
 	daos_prop_free(cont_prop);
 	daos_acl_free(acl);
 }
@@ -509,37 +572,26 @@ alloc_group_list(uid_t uid, gid_t gid, gid_t **groups, size_t *nr_groups)
 }
 
 static void
-expect_user_perms(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids,
-		  struct daos_ace **pool_aces, size_t nr_pool_aces, struct daos_ace **cont_aces,
-		  size_t nr_cont_aces, uint64_t exp_perms)
+expect_pool_perms(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids,
+		  struct daos_ace **aces, size_t nr_aces, uint64_t exp_perms)
 {
-	daos_prop_t	*pool_prop;
-	daos_prop_t	*cont_prop;
-	struct daos_acl	*pool_acl;
-	struct daos_acl	*cont_acl;
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
 	uint64_t	perms = 0;
 
-	pool_acl = daos_acl_create(pool_aces, nr_pool_aces);
-	assert_non_null(pool_acl);
-	pool_prop = get_pool_acl_prop("user@", "group@", pool_acl);
+	acl = daos_acl_create(aces, nr_aces);
+	assert_non_null(acl);
+	prop = get_pool_acl_prop("user@", "group@", acl);
 
-	cont_acl = daos_acl_create(cont_aces, nr_cont_aces);
-	assert_non_null(cont_acl);
-	cont_prop = get_cont_acl_prop("user@", "group@", cont_acl);
-
-	assert_rc_equal(dc_sec_get_user_permissions(pool_prop, cont_prop, uid, gid, gids, nr_gids,
-						    &perms),
-			0);
+	assert_rc_equal(dc_sec_get_pool_permissions(prop, uid, gid, gids, nr_gids, &perms), 0);
 	assert_int_equal(perms, exp_perms);
 
-	daos_prop_free(pool_prop);
-	daos_prop_free(cont_prop);
-	daos_acl_free(pool_acl);
-	daos_acl_free(cont_acl);
+	daos_prop_free(prop);
+	daos_acl_free(acl);
 }
 
 static void
-test_get_user_perms_valid(void **state)
+test_get_pool_perms_valid(void **state)
 {
 	uid_t		uid = geteuid();
 	gid_t		gid = getegid();
@@ -548,16 +600,13 @@ test_get_user_perms_valid(void **state)
 	char		*current_user;
 	char		*current_grp;
 	struct daos_ace	*pool_ace;
-	struct daos_ace	*user_ace;
 	struct daos_ace	*grp_aces[2];
 	size_t		nr_grp_aces = 1;
 	uint64_t	pool_perms;
-	uint64_t	cont_perms;
 	uint64_t	grp_perms;
 	size_t		i;
 
 	pool_perms = DAOS_ACL_PERM_GET_PROP;
-	cont_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 	grp_perms = DAOS_ACL_PERM_GET_PROP;
 
 	alloc_group_list(uid, gid, &gids, &nr_gids);
@@ -568,18 +617,11 @@ test_get_user_perms_valid(void **state)
 	pool_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	pool_ace->dae_allow_perms = pool_perms;
 
-	user_ace = daos_ace_create(DAOS_ACL_USER, current_user);
-	user_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	user_ace->dae_allow_perms = cont_perms;
-
 	D_PRINT("= No perms from pool ACL\n");
-	expect_user_perms(uid, gid, gids, nr_gids, NULL, 0, &user_ace, 1, 0);
-
-	D_PRINT("= No perms from cont ACL\n");
-	expect_user_perms(uid, gid, gids, nr_gids, &pool_ace, 1, NULL, 0, 0);
+	expect_pool_perms(uid, gid, gids, nr_gids, NULL, 0, 0);
 
 	D_PRINT("= Get user perms\n");
-	expect_user_perms(uid, gid, gids, nr_gids, &pool_ace, 1, &user_ace, 1, cont_perms);
+	expect_pool_perms(uid, gid, gids, nr_gids, &pool_ace, 1, pool_perms);
 
 	D_PRINT("= Get group perms\n");
 	assert_rc_equal(daos_acl_gid_to_principal(gid, &current_grp), 0);
@@ -599,12 +641,92 @@ test_get_user_perms_valid(void **state)
 
 		D_FREE(grp);
 	}
-	expect_user_perms(uid, gid, gids, nr_gids, &pool_ace, 1, grp_aces, nr_grp_aces, grp_perms);
+	expect_pool_perms(uid, gid, gids, nr_gids, grp_aces, nr_grp_aces, grp_perms);
 
 	D_FREE(current_grp);
 	for (i = 0; i < nr_grp_aces; i++)
 		daos_ace_free(grp_aces[i]);
 	daos_ace_free(pool_ace);
+	D_FREE(current_grp);
+	D_FREE(current_user);
+	D_FREE(gids);
+}
+
+static void
+expect_cont_perms(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids,
+		  struct daos_ace **aces, size_t nr_aces, uint64_t exp_perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	uint64_t	perms = 0;
+
+	acl = daos_acl_create(aces, nr_aces);
+	assert_non_null(acl);
+	prop = get_cont_acl_prop("user@", "group@", acl);
+
+	assert_rc_equal(dc_sec_get_cont_permissions(prop, uid, gid, gids, nr_gids, &perms), 0);
+	assert_int_equal(perms, exp_perms);
+
+	daos_prop_free(prop);
+	daos_acl_free(acl);
+}
+
+static void
+test_get_cont_perms_valid(void **state)
+{
+	uid_t		uid = geteuid();
+	gid_t		gid = getegid();
+	gid_t		*gids = NULL;
+	size_t		nr_gids = 0;
+	char		*current_user;
+	char		*current_grp;
+	struct daos_ace	*user_ace;
+	struct daos_ace	*grp_aces[2];
+	size_t		nr_grp_aces = 1;
+	uint64_t	cont_perms;
+	uint64_t	grp_perms;
+	size_t		i;
+
+	cont_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	grp_perms = DAOS_ACL_PERM_GET_PROP;
+
+	alloc_group_list(uid, gid, &gids, &nr_gids);
+
+	assert_rc_equal(daos_acl_uid_to_principal(uid, &current_user), 0);
+
+	user_ace = daos_ace_create(DAOS_ACL_USER, current_user);
+	user_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	user_ace->dae_allow_perms = cont_perms;
+
+	D_PRINT("= No perms from pool ACL\n");
+	expect_cont_perms(uid, gid, gids, nr_gids, NULL, 0, 0);
+
+	D_PRINT("= Get user perms\n");
+	expect_cont_perms(uid, gid, gids, nr_gids, &user_ace, 1, cont_perms);
+
+	D_PRINT("= Get group perms\n");
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &current_grp), 0);
+	grp_aces[0] = daos_ace_create(DAOS_ACL_GROUP, current_grp);
+	grp_aces[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	grp_aces[0]->dae_allow_perms = grp_perms;
+	if (nr_gids > 1) { /* include supplementary if we have any */
+		char *grp;
+
+		assert_rc_equal(daos_acl_gid_to_principal(gids[1], &grp), 0);
+		grp_aces[1] = daos_ace_create(DAOS_ACL_GROUP, grp);
+		grp_aces[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+		grp_aces[1]->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+		grp_perms |= grp_aces[1]->dae_allow_perms;
+		nr_grp_aces++;
+
+		D_FREE(grp);
+	}
+	expect_cont_perms(uid, gid, gids, nr_gids, grp_aces, nr_grp_aces, grp_perms);
+
+	D_FREE(current_grp);
+	for (i = 0; i < nr_grp_aces; i++)
+		daos_ace_free(grp_aces[i]);
 	daos_ace_free(user_ace);
 	D_FREE(current_grp);
 	D_FREE(current_user);
@@ -652,8 +774,10 @@ main(void)
 			test_request_credentials_fails_if_reply_cred_status),
 		SECURITY_UTEST(
 			test_request_credentials_returns_raw_bytes),
-		cmocka_unit_test(test_get_user_perms_invalid_input),
-		cmocka_unit_test(test_get_user_perms_valid),
+		cmocka_unit_test(test_get_pool_perms_invalid_input),
+		cmocka_unit_test(test_get_cont_perms_invalid_input),
+		cmocka_unit_test(test_get_pool_perms_valid),
+		cmocka_unit_test(test_get_cont_perms_valid),
 	};
 
 	return cmocka_run_group_tests_name("security_cli_security",

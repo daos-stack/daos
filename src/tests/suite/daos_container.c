@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3220,10 +3220,13 @@ co_get_perms(void **state)
 	uint64_t	perms = 0;
 	int		rc;
 
+	alloc_group_list(uid, gid, &gids, &nr_gids);
+
 	print_message("creating container with default ACLs\n");
 	rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
+	print_message("opening container\n");
 	uuid_unparse(arg->co_uuid, arg->co_str);
 	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -3237,6 +3240,12 @@ co_get_perms(void **state)
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, pool_prop, NULL);
 	assert_rc_equal(rc, 0);
 
+	print_message("getting pool permissions for uid %d\n", uid);
+	rc = daos_sec_get_pool_permissions(pool_prop, uid, gid, gids, nr_gids, &perms);
+	assert_rc_equal(rc, 0);
+	/* uid running this is the owner */
+	assert_int_equal(perms, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+
 	print_message("querying container ACL/ownership\n");
 	cont_prop = daos_prop_alloc(3);
 	assert_non_null(cont_prop);
@@ -3246,10 +3255,8 @@ co_get_perms(void **state)
 	rc = daos_cont_query(arg->coh, NULL, cont_prop, NULL);
 	assert_rc_equal(rc, 0);
 
-	alloc_group_list(uid, gid, &gids, &nr_gids);
-
-	print_message("getting permissions for uid %d\n", uid);
-	rc = daos_sec_get_permissions(pool_prop, cont_prop, uid, gid, gids, nr_gids, &perms);
+	print_message("getting cont permissions for uid %d\n", uid);
+	rc = daos_sec_get_cont_permissions(cont_prop, uid, gid, gids, nr_gids, &perms);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(perms, DAOS_ACL_PERM_CONT_ALL); /* uid running this is the owner */
 
@@ -3328,7 +3335,7 @@ static const struct CMUnitTest co_tests[] = {
      test_case_teardown},
     {"CONT31: container open/query number of handles (hdl_share)", co_nhandles, hdl_share_enable,
      test_case_teardown},
-    {"CONT32: container get container perms", co_get_perms, NULL, test_case_teardown},
+    {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
 };
 
 int
