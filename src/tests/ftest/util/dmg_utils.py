@@ -966,6 +966,26 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
 
+    def system_clear_exclude(self, ranks, rank_hosts):
+        """Clear exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+
+        Args:
+            ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the dmg system clear-exclude command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "clear-exclude"), ranks=ranks, rank_hosts=rank_hosts)
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
@@ -1048,6 +1068,26 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("system", "erase"))
+
+    def system_exclude(self, ranks, rank_hosts):
+        """Exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+
+        Args:
+            ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the dmg system exclude command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_start(self, ranks=None):
         """Start the system.
@@ -1295,6 +1335,61 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(["version"])
+
+    def check_enable(self, pool=None):
+        """Call dmg check enable.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_start(self, pool=None, dry_run=False, reset=False, failout=False,
+                    auto=False):
+        """Call dmg check start.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+            dry_run (bool): Scan only; do not initiate repairs. Defaults to False.
+            reset (bool): Reset the system check state. Defaults to False.
+            failout (bool): Stop on failure. Defaults to False.
+            auto (bool): Attempt to automatically repair problems. Defaults to False.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
+            auto=auto)
+
+    def check_query(self, pool=None):
+        """Call dmg check query.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "query"), pool=pool)
+
+    def check_disable(self, pool=None):
+        """Call dmg check disable.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "disable"), pool=pool)
 
 
 def check_system_query_status(data):
