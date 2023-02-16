@@ -118,7 +118,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
         thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
     finally:
         manager.verbose = saved_verbose
-    thread_queue.put(thread_result)
+        thread_queue.put(thread_result)
 
 
 class IorCommand(SubProcessCommand):
