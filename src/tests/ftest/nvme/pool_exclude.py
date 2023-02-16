@@ -9,7 +9,6 @@ import random
 import threading
 import re
 
-from avocado.utils.process import CmdResult
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
@@ -145,7 +144,7 @@ class NvmePoolExclude(OSAUtils):
                         self.log.debug("  %s: %s", name, getattr(result["result"], name))
                     for name in ("stdout", "stderr"):
                         self.log.debug("  %s:", name)
-                        for line in getattr(result["result"], name).splitlines()
+                        for line in getattr(result["result"], name).splitlines():
                             self.log.debug("    %s:", line)
                 if result["result"].exit_status != 0:
                         errors += 1

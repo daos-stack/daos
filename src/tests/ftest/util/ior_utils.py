@@ -8,6 +8,7 @@ import re
 import uuid
 from enum import IntEnum
 
+from avocado.utils.process import CmdResult
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
@@ -62,6 +63,7 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning)
+
 
 def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
                    pool, container, processes, ppn, intercept, plugin_path, dfuse,
