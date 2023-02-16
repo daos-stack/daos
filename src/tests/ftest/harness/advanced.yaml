@@ -1,6 +1,12 @@
 hosts:
   test_servers: 2
+  test_clients: 1
 timeout: 120
 pool:
   size: 2G
   control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
