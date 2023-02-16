@@ -7,7 +7,6 @@
 
 from collections import defaultdict
 from getpass import getuser
-import math
 import os
 import re
 import time
@@ -20,11 +19,10 @@ from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, stop_processes, get_display_size, run_pcmd
+from general_utils import pcmd, get_log_file, convert_list, stop_processes, get_display_size, \
+    run_pcmd
 from host_utils import get_local_host
-from server_utils_base import \
-    ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
+from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
 from run_utils import run_remote
@@ -938,167 +936,6 @@ class DaosServerManager(SubprocessManager):
             storage[key] = min(storage_capacity[key])
             self.log.info("  %-4s:  %s", key.upper(), get_display_size(storage[key]))
         return storage
-
-    def autosize_pool_params(self, size, tier_ratio, scm_size, nvme_size,
-                             min_targets=1, quantity=1):
-        """Update any pool size parameter ending in a %.
-
-        Use the current NVMe and SCM storage sizes to assign values to the size,
-        scm_size, and or nvme_size dmg pool create arguments which end in "%".
-        The numerical part of these arguments will be used to assign a value
-        that is X% of the available storage capacity.  The updated size and
-        nvme_size arguments will be assigned values that are multiples of 1GiB
-        times the number of targets assigned to each server engine.  If needed
-        the number of targets will be reduced (to not exceed min_targets) in
-        order to support the requested size.  An optional number of expected
-        pools (quantity) can also be specified to divide the available storage
-        capacity.
-
-        Note: depending upon the inputs this method may return dmg pool create
-            parameter combinations that are not supported, e.g. tier_ratio +
-            nvme_size.  This is intended to allow testing of these combinations.
-
-        Args:
-            size (object): the str, int, or None value for the dmg pool create size parameter.
-            tier_ratio (object): the int or None value for the dmg pool create size parameter.
-            scm_size (object): the str, int, or None value for the dmg pool
-                create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmg pool
-                create nvme_size parameter.
-            min_targets (int, optional): the minimum number of targets per
-                engine that can be configured. Defaults to 1.
-            quantity (int, optional): Number of pools to account for in the size
-                calculations. The pool size returned is only for a single pool.
-                Defaults to 1.
-
-        Raises:
-            ServerFailed: if there was a error obtaining auto-sized TestPool parameters.
-            AutosizeCancel: if a valid pool parameter size could not be obtained
-
-        Returns:
-            dict: the parameters for a TestPool object.
-
-        """
-        # Adjust any pool size parameter by the requested percentage
-        params = {"tier_ratio": tier_ratio}
-        adjusted = {"size": size, "scm_size": scm_size, "nvme_size": nvme_size}
-        keys = [
-            key for key in ("size", "scm_size", "nvme_size")
-            if adjusted[key] is not None and str(adjusted[key]).endswith("%")]
-        if keys:
-            # Verify the minimum number of targets configured per engine
-            targets = min(self.manager.job.get_engine_values("targets"))
-            if targets < min_targets:
-                raise ServerFailed(
-                    "Minimum target quantity ({}) exceeds current target "
-                    "quantity ({})".format(min_targets, targets))
-
-            self.log.info("-" * 100)
-            pool_msg = "{} pool{}".format(quantity, "s" if quantity > 1 else "")
-            self.log.info(
-                "Autosizing TestPool parameters ending with a \"%%\" for %s:",
-                pool_msg)
-            for key in ("size", "scm_size", "nvme_size"):
-                self.log.info("  - %-9s : %s (%s)", key, adjusted[key], key in keys)
-
-            # Determine the largest SCM and NVMe pool sizes can be used with
-            # this server configuration with an optionally applied ratio.
-            try:
-                available_storage = self.get_available_storage()
-            except ServerFailed as error:
-                raise ServerFailed("Error obtaining available storage") from error
-
-            # Determine the SCM and NVMe size limits for the size and tier_ratio
-            # arguments for the total number of engines
-            if tier_ratio is None:
-                # Use the default value if not provided
-                tier_ratio = 6
-            engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
-            available_storage["size"] = min(
-                engine_qty * available_storage["nvme"],
-                (engine_qty * available_storage["scm"]) / float(tier_ratio / 100)
-            )
-            available_storage["tier_ratio"] = available_storage["size"] * float(tier_ratio / 100)
-            self.log.info(
-                "Largest storage size available for %s engines with a %.2f%% "
-                "tier_ratio:", engine_qty, tier_ratio)
-            self.log.info(
-                "  - NVME     : %s",
-                get_display_size(available_storage["size"]))
-            self.log.info(
-                "  - SCM      : %s",
-                get_display_size(available_storage["tier_ratio"]))
-            self.log.info(
-                "  - COMBINED : %s",
-                get_display_size(available_storage["size"] + available_storage["tier_ratio"]))
-
-            # Apply any requested percentages to the pool parameters
-            available = {
-                "size": {"size": available_storage["size"], "type": "NVMe"},
-                "scm_size": {"size": available_storage["scm"], "type": "SCM"},
-                "nvme_size": {"size": available_storage["nvme"], "type": "NVMe"}
-            }
-            self.log.info("Adjusted pool sizes for %s:", pool_msg)
-            for key in keys:
-                try:
-                    ratio = int(str(adjusted[key]).replace("%", ""))
-                except NameError as error:
-                    raise ServerFailed(
-                        "Invalid '{}' format: {}".format(key, adjusted[key])) from error
-                adjusted[key] = (available[key]["size"] * float(ratio / 100)) / quantity
-                self.log.info(
-                    "  - %-9s : %-4s storage adjusted by %.2f%%: %s",
-                    key, available[key]["type"], ratio,
-                    get_display_size(adjusted[key]))
-
-            # Display the pool size increment value for each size argument
-            increment = {
-                "size": human_to_bytes("1GiB"),
-                "scm_size": human_to_bytes("16MiB"),
-                "nvme_size": human_to_bytes("1GiB")}
-            self.log.info("Increment sizes per target:")
-            for key in keys:
-                self.log.info("  - %-9s : %s", key, get_display_size(increment[key]))
-
-            # Adjust the size to use a SCM/NVMe target multiplier
-            self.log.info("Pool sizes adjusted to fit by increment sizes:")
-            adjusted_targets = targets
-            for key in keys:
-                multiplier = math.floor(adjusted[key] / increment[key])
-                params[key] = multiplier * increment[key]
-                self.log.info(
-                    "  - %-9s : %s * %s = %s",
-                    key, multiplier, increment[key],
-                    get_display_size(params[key]))
-                if multiplier < adjusted_targets:
-                    adjusted_targets = multiplier
-                    if adjusted_targets < min_targets:
-                        raise AutosizeCancel(
-                            "Unable to autosize the {} pool parameter due to "
-                            "exceeding the minimum of {} targets: {}".format(
-                                key, min_targets, adjusted_targets))
-                if key == "size":
-                    tier_ratio_size = params[key] * float(tier_ratio / 100)
-                    self.log.info(
-                        "  - %-9s : %.2f%% tier_ratio = %s",
-                        key, tier_ratio, get_display_size(tier_ratio_size))
-                    params[key] += tier_ratio_size
-                    self.log.info(
-                        "  - %-9s : NVMe + SCM = %s",
-                        key, get_display_size(params[key]))
-                params[key] = bytes_to_human(params[key], binary=True)
-
-            # Reboot the servers if a reduced number of targets is required
-            if adjusted_targets < targets:
-                self.log.info(
-                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
-                self.set_config_value("targets", adjusted_targets)
-                self.stop()
-                self.start()
-
-            self.log.info("-" * 100)
-
-        return params
 
     def get_daos_metrics(self, verbose=False, timeout=60):
         """Get daos_metrics for the server.

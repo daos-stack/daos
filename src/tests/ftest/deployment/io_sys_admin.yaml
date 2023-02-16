@@ -34,8 +34,7 @@ pool_2:
   nvme_size: 50GiB
 pool_3:
   control_method: dmg
-  scm_size: 90%
-  nvme_size: 90%
+  size: 90%
 container_1:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
@@ -51,8 +50,7 @@ container_3:
   oclass: EC_2P2GX
 
 pool:
-  scm_size: 40%
-  nvme_size: 40%
+  size: 40%
   control_method: dmg
 container:
   type: POSIX
