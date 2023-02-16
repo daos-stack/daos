@@ -866,36 +866,21 @@ struct umem_action {
 #define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
 #define UMEM_CACHE_PAGE_SZ_MASK   (UMEM_CACHE_PAGE_SZ - 1)
 
-#define UMEM_CACHE_CHUNK_SZ_SHIFT 14 /* 16KB */
+#define UMEM_CACHE_CHUNK_SZ_SHIFT 12 /* 4KB */
 #define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
 #define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
 
 #define UMEM_CACHE_BMAP_SZ        (1 << (UMEM_CACHE_PAGE_SZ_SHIFT - UMEM_CACHE_CHUNK_SZ_SHIFT - 6))
 
+struct umem_page_info;
 /** 16 MB page */
 struct umem_page {
 	/** page ID */
 	unsigned int		 pg_id;
 	/** refcount */
 	int			 pg_ref;
-	uint64_t                 pg_waiting : 1, /** Page is copied, but waiting for commit */
-	    pg_copying                      : 1; /** Page is being copied. Blocks writes. */
-	/** Highest transaction ID checkpointed.  This is set before the page is copied. The
-	 *  checkpoint will not be executed until the last committed ID is greater than or
-	 *  equal to this value.  If that's not the case immediately, the waiting flag is set
-	 *  along with this field.
-	 */
-	uint64_t                 pg_last_checkpoint;
-	/** Highest transaction ID of writes to the page */
-	uint64_t		 pg_last_inflight;
-	/** link chain on global dirty list or LRU list */
-	d_list_t                 pg_link;
-	/** page memory address */
-	uint8_t                 *pg_addr;
-	/** Information about inflight checkpoint */
-	void                    *pg_chkpt_data;
-	/** bitmap for each dirty 16K unit */
-	uint64_t                 pg_bmap[UMEM_CACHE_BMAP_SZ];
+	/** page info */
+	struct umem_page_info   *pg_info;
 };
 
 /** Global cache status for each umem_store */
@@ -907,6 +892,8 @@ struct umem_cache {
 	uint64_t                 ca_mapped;
 	/** Maximum number of cached pages */
 	uint64_t                 ca_max_mapped;
+	/** Free list for mapped page info */
+	d_list_t                 ca_pi_free;
 	/** all the dirty pages */
 	d_list_t                 ca_pgs_dirty;
 	/** Pages waiting for copy to DMA buffer */
@@ -942,13 +929,6 @@ umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
 		  cache->ca_num_pages, idx);
 
 	return &cache->ca_pages[idx];
-}
-
-/** From the offset within umem_store, return the mapped address */
-static inline void *
-umem_cache_off2ptr(struct umem_cache *cache, umem_off_t offset)
-{
-	return umem_cache_off2page(cache, offset)->pg_addr + (offset & UMEM_CACHE_PAGE_SZ_MASK);
 }
 
 /** From a mapped page address, return the umem_cache it belongs to */
