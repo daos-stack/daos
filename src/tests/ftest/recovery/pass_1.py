@@ -386,7 +386,7 @@ class Pass1Test(TestWithServers):
 
         # 6. Query the checker and verify the message.
         query_msg = ""
-        for i in range(8):
+        for _ in range(8):
             check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "COMPLETED":
                 if check_query_out["response"]["reports"]:
