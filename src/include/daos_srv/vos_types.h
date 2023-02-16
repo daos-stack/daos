@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -281,6 +281,8 @@ enum {
 	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
 	/** Pool check is supported for this pool */
 	VOS_POOL_FEAT_CHK = (1ULL << 1),
+	/** Dynamic evtree root supported for this pool */
+	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
 };
 
 /** Mask for any conditionals passed to to the fetch */
