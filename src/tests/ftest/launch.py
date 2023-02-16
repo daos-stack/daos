@@ -52,6 +52,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
@@ -61,6 +62,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -564,24 +567,23 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    def __init__(self, name, mode):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
-            repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
         self.name = name
-        self.repeat = repeat
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
+        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
         self.logdir = None
         self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.repeat = 1
         self.local_host = get_local_host()
 
         # Results tracking settings
@@ -636,8 +638,7 @@ class Launch():
         if test_result:
             test_result.end()
 
-    @staticmethod
-    def _pass_test(test_result, message=None):
+    def _pass_test(self, test_result, message=None):
         """Set the test result as passed.
 
         Args:
@@ -646,10 +647,21 @@ class Launch():
         """
         if message is not None:
             logger.debug(message)
-        test_result.status = TestResult.PASS
+        self.__set_test_status(test_result, TestResult.PASS, None, None)
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -659,12 +671,35 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
+
+    @staticmethod
+    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            status (str): TestResult status to set.
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if test_result.status is None:
+                test_result.status = status
+            return
+
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -674,15 +709,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Additional errors only update the test result fail reason with a fail counter
+
+        if test_result.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -776,6 +811,16 @@ class Launch():
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
+        # Set the number of times to repeat execution of each test
+        if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            self._warn_test(setup_result, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
+
         # Record the command line arguments
         logger.debug("Arguments:")
         for key in sorted(args.__dict__.keys()):
@@ -847,9 +892,10 @@ class Launch():
 
         try:
             self.setup_fuse_config(args.test_servers | args.test_clients)
-        except LaunchException as error:
+        except LaunchException:
             # Warn but don't fail
-            logger.warning(error)
+            message = "Issue detected setting up the fuse configuration"
+            self._warn_test(setup_result, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -2108,6 +2154,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2345,6 +2392,57 @@ class Launch():
         else:
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
+
+    def _cleanup_procs(self, test):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+        hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.debug("Looking for running processes: %s", proc_pattern)
+        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
+        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
+        if pgrep_result.passed_hosts:
+            any_found = True
+            logger.debug("Killing running processes: %s", proc_pattern)
+            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
+            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
+            if pkill_result.failed_hosts:
+                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Running processes found on {pgrep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            any_found = True
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        return 4096 if any_found else 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
@@ -2795,6 +2893,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
@@ -2968,10 +3067,6 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--slurm_setup",
-        action="store_true",
-        help="setup any slurm partitions required by the tests")
-    parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
         default=str(get_local_host()),
@@ -2979,9 +3074,9 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "-u", "--user_create",
+        "-ss", "--slurm_setup",
         action="store_true",
-        help="create additional users defined by each test's yaml file")
+        help="setup any slurm partitions required by the tests")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3012,6 +3107,10 @@ def main():
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
     parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "-v", "--verbose",
         action="count",
         default=0,
@@ -3027,7 +3126,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
+    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
