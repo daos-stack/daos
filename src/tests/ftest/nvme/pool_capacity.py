@@ -87,8 +87,7 @@ class NvmePoolCapacity(TestWithServers):
         except CommandFailure:
             results.put("FAIL")
 
-    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100,
-                           scm_size_percent=50, nvme_size_percent=90):
+    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
         Test Description:
             This method is used to create/delete pools
@@ -98,8 +97,6 @@ class NvmePoolCapacity(TestWithServers):
                 num_pool (int): Total pools for running test
                 num_cont (int): Total containers created on each pool
                 total_count (int): Total times the test is run in a loop
-                scm_size (int): SCM size used in the testing
-                nvme_size (int): NVME size used in the testing
             Returns:
                 None
         """
