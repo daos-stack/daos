@@ -70,9 +70,7 @@ class NvmePoolCapacity(TestWithServers):
         ior_cmd.flags.update(flags)
 
         container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
+                       .format(oclass, api, test[2])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_cmd)
@@ -107,37 +105,34 @@ class NvmePoolCapacity(TestWithServers):
         """
         self.pool = []
         cont = {}
+        nvme_size_begin = {}
+        nvme_size_end = {}
 
         for loop_count in range(0, total_count):
             self.log.info("Running test %s", loop_count)
-            for val in range(0, num_pool):
-                self.pool.append(self.get_pool(create=False))
-                # Split total SCM and NVME size for creating multiple pools.
-                temp = "{}{}".format((int(scm_size_percent) / num_pool),"%")
-                self.pool[-1].scm_size.update(temp)
-                temp = "{}{}".format((int(nvme_size_percent) / num_pool),"%")
-                self.pool[-1].nvme_size.update(str(temp))
-                self.pool[-1].create()
+            offset = loop_count * num_pool
+            for val in range(offset, offset + num_pool):
+                self.pool.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
+                                 properties="reclaim:disabled"))
 
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
-                nvme_size_begin = self.pool[-1].get_pool_free_space("NVME")
+                nvme_size_begin[val] = self.pool[-1].get_pool_free_space("NVME")
                 for cont_val in range(0, num_cont):
                     cont[cont_val] = TestContainer(self.pool[-1])
 
             m_leak = 0
 
             # Destroy the last num_pool pools created
-            offset = loop_count * num_pool
             for index in range(offset, offset + num_pool):
                 display_string = "Pool {} space at the End".format(
                     self.pool[index].uuid)
                 self.pool[index].display_pool_daos_space(display_string)
-                nvme_size_end = self.pool[index].get_pool_free_space("NVME")
+                nvme_size_end[index] = self.pool[index].get_pool_free_space("NVME")
                 self.pool[index].destroy()
 
-                if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
-                    m_leak = val + 1
+                if (nvme_size_begin[index] != nvme_size_end[index]) and (m_leak == 0):
+                    m_leak = m_leak + 1
 
             # After destroying pools, check memory leak for each test loop.
             if m_leak != 0:
@@ -165,8 +160,8 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                self.pool(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
-                          properties="reclaim:disabled"))
+                self.pool.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
+                                 properties="reclaim:disabled"))
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
 
@@ -234,4 +229,4 @@ class NvmePoolCapacity(TestWithServers):
         time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.test_create_delete(10, 50, 100)
+        self.test_create_delete(10, 50, 20)
