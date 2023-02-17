@@ -640,6 +640,15 @@ enum bio_chunk_type {
 int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		 unsigned int bulk_perm);
 
+/**
+ * Non-blocking version, instead of "wait & retry" internally when DMA buffer is
+ * under pressure, it'll immediately return -DER_AGAIN to the caller.
+ *
+ * BIO_IOD_TYPE_FETCH is not supported.
+ */
+int bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		     unsigned int bulk_perm);
+
 /*
  * Post operation after the RDMA transfer or local copy done for the io
  * descriptor.
