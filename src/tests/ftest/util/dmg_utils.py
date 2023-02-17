@@ -533,7 +533,7 @@ class DmgCommand(DmgCommandBase):
                                      raise_exception=raise_exception, **kwargs)
 
     def support_collect_log(self, stop=None, target=None, archive=None,
-                           custom_logs=None, raise_exception=None):
+                            custom_logs=None, raise_exception=None):
         """Collect logs for debug purpose.
 
         Args:
