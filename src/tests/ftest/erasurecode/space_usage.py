@@ -42,7 +42,7 @@ class EcodSpaceUsage(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ec,ior
+        :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p2gx
         """
         self._run_test(ior_namespace='/run/ior_ec_4p2gx/*')
