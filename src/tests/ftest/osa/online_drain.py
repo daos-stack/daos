@@ -105,17 +105,16 @@ class OSAOnlineDrain(OSAUtils):
                 if not self.out_queue.empty():
                     self.assert_on_exception()
 
-        for val in range(0, num_pool):
-            self.pool = pool[val]
-            display_string = "Pool{} space at the End".format(val)
-            self.pool.display_pool_daos_space(display_string)
-            if app_name == "ior":
+        if app_name == "ior":
+            for val in range(0, num_pool):
+                self.pool = pool[val]
+                display_string = "Pool{} space at the End".format(val)
+                self.pool.display_pool_daos_space(display_string)
                 self.run_ior_thread("Read", oclass, test_seq)
-            self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+                self.container = self.pool_cont_dict[self.pool][0]
+                output = self.daos_command.container_check(pool=self.pool.identifier,
+                                                           cont=self.container.identifier)
+                self.log.info(output)
 
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
