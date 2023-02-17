@@ -63,7 +63,7 @@ punch_obj(daos_handle_t coh, daos_obj_id_t oid, char *name)
 static int
 fi_dfs(daos_handle_t poh, daos_handle_t coh, const char *op, const char *path, daos_prop_t *prop)
 {
-	dfs_t		*dfs;
+	dfs_t		*dfs = NULL;
 	dfs_obj_t	*obj;
 	daos_obj_id_t	oid;
 	char		*dir = NULL, *dirp;
@@ -95,7 +95,7 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, const char *op, const char *path, d
 		return -DER_NOMEM;
 	D_STRNDUP(file, path, PATH_MAX);
 	if (file == NULL)
-		D_GOTO(out_dfs, rc = -DER_NOMEM);
+		D_GOTO(out_path, rc = -DER_NOMEM);
 
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc) {

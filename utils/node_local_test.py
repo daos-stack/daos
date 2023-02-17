@@ -3094,7 +3094,6 @@ class PosixTests():
         daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
         cmd_env = get_base_env()
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
-        cmd_env['LD_LIBRARY_PATH'] = join(self.conf['PREFIX'], 'lib64')
 
         dir1 = join(path, 'test_dir/')
         dir_list = os.listdir(dir1)
@@ -3126,10 +3125,28 @@ class PosixTests():
             print(rc.stderr.decode('utf-8').strip())
         if rc.stdout != b'':
             print(rc.stdout.decode('utf-8').strip())
+        assert rc.returncode == 0
 
+        # fs check with relink should find the 2 leaked directories.
+        # Everything under them should be relinked but not reported as leaked.
         cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 2':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # run again to check nothing is detected
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+            raise NLTestFail('Wrong number of Leaked OIDs')
 
         dir1 = join(path, 'lost+found/lf/')
         dir_list = os.listdir(dir1)
