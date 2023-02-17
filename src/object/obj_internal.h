@@ -391,6 +391,7 @@ struct obj_auxi_args {
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
 					 reintegrating:1,
+					 tx_renew:1,
 					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
