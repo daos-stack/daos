@@ -150,7 +150,6 @@ sc_sleep(struct scrub_ctx *ctx, uint32_t ms)
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
 	else
 		ctx->sc_yield_fn(ctx->sc_sched_arg);
-	ctx->sc_did_yield = true;
 }
 
 static inline bool
@@ -359,6 +358,16 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 {
 	int rc;
 
+	/** It's ok if we do the checksum calculation after a yield, hoping for the best, but we
+	 *  absolutely must check before modifying data at the current iterator position.  If the
+	 *  entry has been deleted, we can ignore any corruption we found and move on.
+	 */
+	rc = vos_iter_validate(ctx->sc_vos_iter_handle);
+	if (rc < 0)
+		return rc;
+	if (rc > 0) /** value no longer exists */
+		return 0;
+
 	sc_raise_ras(ctx);
 	sc_m_pool_corr_inc(ctx);
 	rc = sc_mark_corrupt(ctx);
@@ -526,10 +535,6 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	bio_ctx = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
 	rc = bio_read(bio_ctx, biov->bi_addr, &data);
 
-	/* if bio_read of NVME then it might have yielded */
-	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
-		ctx->sc_did_yield = true;
-
 	if (BIO_ADDR_IS_CORRUPTED(&biov->bi_addr)) {
 		/* Already know this is corrupt so just return */
 		if (sc_is_first_pass(ctx))
@@ -692,10 +697,6 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			sc_obj_val_setup(ctx, entry, type, param, ih);
 
 			rc = sc_verify_obj_value(ctx, &entry->ie_biov, ih);
-			if (ctx->sc_did_yield) {
-				*acts |= VOS_ITER_CB_YIELD;
-				ctx->sc_did_yield = false;
-			}
 
 			if (rc != 0) {
 				D_ERROR("Error Verifying:"DF_RC"\n", DP_RC(rc));
@@ -830,8 +831,7 @@ sc_pool_start(struct scrub_ctx *ctx)
 {
 	/* remember previous checksum calculations */
 	ctx->sc_pool_last_csum_calcs = ctx->sc_pool_csum_calcs;
-	ctx->sc_pool_csum_calcs = 0;
-	ctx->sc_did_yield = false;
+	ctx->sc_pool_csum_calcs      = 0;
 	d_gettime(&ctx->sc_pool_start_scrub);
 
 	sc_m_pool_csum_reset(ctx);
