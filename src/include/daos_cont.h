@@ -653,6 +653,27 @@ int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 
+/**
+ * Fetch a user's permissions for a specific container.
+ *
+ * \param[in]	cont_prop	Container property containing DAOS_PROP_CO_ACL/OWNER/OWNER_GROUP
+ *				entries
+ * \param[in]	uid		User's local uid
+ * \param[in]	gid		Gid of the user's primary group
+ * \param[in]	supp_gids	Gids of the user's supplementary groups, if any
+ * \param[in]	nr_supp_gids	Length of the supp_gids list
+ * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
+ *				in enum daos_acl_perm.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID or GID not found on the system
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
+		    size_t nr_supp_gids, uint64_t *perms);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */

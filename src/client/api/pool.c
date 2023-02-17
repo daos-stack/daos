@@ -7,6 +7,7 @@
 
 #include <daos/pool.h>
 #include <daos/pool_map.h>
+#include <daos/security.h>
 #include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
@@ -344,4 +345,11 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 	args->poh	= poh;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
+		    size_t nr_supp_gids, uint64_t *perms)
+{
+	return dc_sec_get_pool_permissions(pool_prop, uid, gid, supp_gids, nr_supp_gids, perms);
 }

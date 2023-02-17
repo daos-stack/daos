@@ -8,6 +8,7 @@
 #include <daos/container.h>
 #include <daos/task.h>
 #include <daos/pool.h>
+#include <daos/security.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -744,4 +745,11 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 	args->epr	= epr;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
+		    size_t nr_supp_gids, uint64_t *perms)
+{
+	return dc_sec_get_cont_permissions(cont_prop, uid, gid, supp_gids, nr_supp_gids, perms);
 }

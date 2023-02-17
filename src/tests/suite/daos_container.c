@@ -3241,7 +3241,7 @@ co_get_perms(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("getting pool permissions for uid %d\n", uid);
-	rc = daos_sec_get_pool_permissions(pool_prop, uid, gid, gids, nr_gids, &perms);
+	rc = daos_pool_get_perms(pool_prop, uid, gid, gids, nr_gids, &perms);
 	assert_rc_equal(rc, 0);
 	/* uid running this is the owner */
 	assert_int_equal(perms, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
@@ -3256,7 +3256,7 @@ co_get_perms(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("getting cont permissions for uid %d\n", uid);
-	rc = daos_sec_get_cont_permissions(cont_prop, uid, gid, gids, nr_gids, &perms);
+	rc = daos_cont_get_perms(cont_prop, uid, gid, gids, nr_gids, &perms);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(perms, DAOS_ACL_PERM_CONT_ALL); /* uid running this is the owner */
 
