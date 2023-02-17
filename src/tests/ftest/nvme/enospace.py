@@ -40,7 +40,7 @@ class NvmeEnospace(ServerFillUp):
         self.other_errors_count = 0
         self.test_result = []
 
-    def verify_enspace_log(self, der_nospace_err_count):
+    def verify_enospace_log(self, der_nospace_err_count):
         """
         Function to verify there are no other error except DER_NOSPACE and
         DER_NO_HDL in client log.Verify DER_NOSPACE count is higher.
@@ -126,46 +126,47 @@ class NvmeEnospace(ServerFillUp):
                 break
 
     def run_enospace_foreground(self):
+        """Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling
+        up SCM. Then verify that the storage usage is near 100%.
         """
-        Function to run test and validate DER_ENOSPACE and expected storage size
-        """
-        # Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
-        # start filling
+        # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
+        # start to fill up.
         print('Starting main IOR load')
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
         print(self.pool.pool_percentage_used())
 
-        # Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
-        # filled
+        # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
+        # continue to fill up.
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
         print(self.pool.pool_percentage_used())
 
-        # Fill 60% more of SCM pool, now NVMe will be Full so data will not be
-        # moved to NVMe but it will start filling SCM. SCM size will be going to
-        # full and this command expected to fail with DER_NOSPACE
+        # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
+        # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
+        # command is expected to fail with DER_NOSPACE.
         try:
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
-            self.fail('This test suppose to FAIL because of DER_NOSPACE'
-                      'but it got Passed')
+            self.fail('This test is suppose to FAIL because of DER_NOSPACE'
+                      'but it Passed')
         except TestFail:
-            self.log.info('Test expected to fail because of DER_NOSPACE')
+            self.log.info('Test is expected to fail because of DER_NOSPACE')
 
-        # Display the pool%
+        # Display the pool usage %
         print(self.pool.pool_percentage_used())
 
         # verify the DER_NO_SAPCE error count is expected and no other Error in client log
-        self.verify_enspace_log(self.der_nospace_count)
+        self.verify_enospace_log(self.der_nospace_count)
 
         # Check both NVMe and SCM are full.
         pool_usage = self.pool.pool_percentage_used()
-        # NVMe should be almost full if not test will fail.
-        if pool_usage['nvme'] > 8:
-            self.fail('Pool NVMe used percentage should be < 8%, instead {}'.
-                      format(pool_usage['nvme']))
-        # For SCM some % space used for system so it won't be 100% full.
-        if pool_usage['scm'] > 50:
-            self.fail('Pool SCM used percentage should be < 50%, instead {}'.
-                      format(pool_usage['scm']))
+        # NVMe should be almost full. If not, fail the test.
+        if pool_usage['nvme'] <= 95:
+            msg = (f"Pool NVMe used percentage should be > 95%, instead "
+                   f"{pool_usage['nvme']}")
+            self.fail(msg)
+        # SCM usage will not be 100% because some space (<1%) is used for the system.
+        if pool_usage['scm'] <= 95:
+            msg = f"Pool SCM used percentage should be > 95%, instead {pool_usage['scm']}"
+            self.fail(msg)
 
     def run_enospace_with_bg_job(self):
         """
@@ -399,7 +400,7 @@ class NvmeEnospace(ServerFillUp):
                 self.log.info('Expected to fail because of DER_NOSPACE')
 
             # Verify DER_NO_SAPCE error count is expected and no other Error in client log.
-            self.verify_enspace_log(self.der_nospace_count)
+            self.verify_enospace_log(self.der_nospace_count)
 
             # Delete all the containers
             self.delete_all_containers()
