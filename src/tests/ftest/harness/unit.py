@@ -4,7 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithoutServers
-from data_utils import list_unique, list_flatten, dict_extract_values, dict_sub, dict_aggregate
+from data_utils import list_unique, list_flatten, list_stats, \
+    dict_extract_values, dict_subtract
 
 
 class HarnessUnitTest(TestWithoutServers):
@@ -17,7 +18,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_unique().
 
         :avocado: tags=all
-        :avocado: tags=harness
+        :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_unique
         """
         self.assertEqual(
@@ -40,7 +41,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_flatten().
 
         :avocado: tags=all
-        :avocado: tags=harness
+        :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_flatten
         """
         self.assertEqual(
@@ -65,11 +66,33 @@ class HarnessUnitTest(TestWithoutServers):
             list_flatten([1, 2, 3, {'foo': 'bar'}]),
             [1, 2, 3, {'foo': 'bar'}])
 
+    def test_harness_unit_list_stats(self):
+        """Verify list_stats().
+
+        :avocado: tags=all
+        :avocado: tags=harness,dict_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_list_stats
+        """
+        self.assertEqual(
+            list_stats([100, 200]),
+            {
+                'mean': 150,
+                'min': 100,
+                'max': 200
+            })
+        self.assertEqual(
+            list_stats([-100, 200]),
+            {
+                'mean': 50,
+                'min': -100,
+                'max': 200
+            })
+
     def test_harness_unit_dict_extract_values(self):
         """Verify dict_extract_values().
 
         :avocado: tags=all
-        :avocado: tags=harness
+        :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_dict_extract_values
         """
         dict1 = {
@@ -125,32 +148,31 @@ class HarnessUnitTest(TestWithoutServers):
             dict_extract_values(dict2, ['a']),
             [{'b': {'a': 0}}, 0])
 
-    def test_harness_unit_dict_sub(self):
-        """Verify dict_sub().
+    def test_harness_unit_dict_subtract(self):
+        """Verify dict_subtract().
 
         :avocado: tags=all
-        :avocado: tags=harness
-        :avocado: tags=HarnessUnitTest,test_harness_unit_dict_sub
+        :avocado: tags=harness,dict_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_dict_subtract
         """
-        self.assertEqual(
-            dict_sub(
-                {
-                    'key1': {
-                        'key2': {
-                            'val1': 1000,
-                            'val2': 2000
-                        }
-                    }
-                },
-                {
-                    'key1': {
-                        'key2': {
-                            'val1': 100,
-                            'val2': 200
-                        }
-                    }
+        dict1 = {
+            'key1': {
+                'key2': {
+                    'val1': 1000,
+                    'val2': 2000
                 }
-            ),
+            }
+        }
+        dict2 = {
+            'key1': {
+                'key2': {
+                    'val1': 100,
+                    'val2': 200
+                }
+            }
+        }
+        self.assertEqual(
+            dict_subtract(dict1, dict2),
             {
                 'key1': {
                     'key2': {
@@ -158,34 +180,4 @@ class HarnessUnitTest(TestWithoutServers):
                         'val2': 1800
                     }
                 }
-            })
-
-    def test_harness_unit_dict_aggregate(self):
-        """Verify dict_aggregate().
-
-        :avocado: tags=all
-        :avocado: tags=harness
-        :avocado: tags=HarnessUnitTest,test_harness_unit_dict_aggregate
-        """
-        dict1 = {
-            'key1': {
-                'key1.1': {
-                    'val1': 100,
-                    'foo': 1000
-                }
-            },
-            'key2': {
-                'key2.1': {
-                    'val1': 200
-                },
-                'foo': 2000
-            }
-        }
-        self.assertEqual(
-            dict_aggregate(dict1, ['val1']),
-            {
-                'mean': 150,
-                'min': 100,
-                'max': 200,
-                'values': [100, 200]
             })

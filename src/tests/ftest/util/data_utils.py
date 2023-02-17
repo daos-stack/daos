@@ -45,6 +45,23 @@ def list_flatten(data):
     return flat
 
 
+def list_stats(values):
+    """Get a dictionary of statistics for a list of values.
+
+    Args:
+        values (list): list of numerical values
+
+    Returns:
+        dict: dictionary containing mean, min, max
+
+    """
+    return {
+        'mean': statistics.mean(values),
+        'min': min(values),
+        'max': max(values)
+    }
+
+
 def dict_extract_values(obj, key_path, val_type=object):
     """Extract all values of a key structure from a nested dictionary.
 
@@ -107,7 +124,7 @@ def dict_extract_values(obj, key_path, val_type=object):
     return _extract(obj, key_path, first_key=True, max_depth=20)
 
 
-def dict_sub(dict1, dict2):
+def dict_subtract(dict1, dict2):
     """Dictionary dict1 - dict2 for numerical leaf values.
 
     Assumes both dictionaries have the same structure.
@@ -126,41 +143,10 @@ def dict_sub(dict1, dict2):
     dict3 = {}
     for key, val in dict1.items():
         if isinstance(val, dict):
-            dict3[key] = dict_sub(val, dict2[key])
+            dict3[key] = dict_subtract(val, dict2[key])
         else:
             try:
                 dict3[key] = val - dict2[key]
             except TypeError as error:
                 raise TypeError('Invalid type for key {}'.format(key)) from error
     return dict3
-
-
-def dict_aggregate(data, key_path):
-    """Aggregate all values of a key structure from a nested dictionary.
-
-    For example:
-        data = {
-            'a': {'x': 1, 'y': 2},
-            'b': {'x': 3, 'y': 4}}
-        key_path = ['x']
-            -> {'mean': 2, 'min': 1, 'max': 3, 'values': [1,3]}
-
-    Args:
-        data (dict): dictionary to aggregate on
-        key_path (list): dictionary key or list index structure to extract values of.
-            Use '*' for wildcard key
-
-    Raises:
-        RecursionError: if max recursion depth is exceeded
-
-    Returns:
-        dict: dictionary with mean, min, max, and values
-
-    """
-    all_values = dict_extract_values(data, key_path)
-    return {
-        'mean': statistics.mean(all_values),
-        'min': min(all_values),
-        'max': max(all_values),
-        'values': all_values
-    }

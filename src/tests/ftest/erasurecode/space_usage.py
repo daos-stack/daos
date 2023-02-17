@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
-from data_utils import dict_sub, dict_aggregate
+from data_utils import list_stats, dict_subtract, dict_extract_values
 from general_utils import percent_change
 
 
@@ -30,7 +30,7 @@ class EcodSpaceUsage(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ec,ior
+        :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p1gx
         """
         self._run_test(ior_namespace='/run/ior_ec_4p1gx/*')
@@ -77,12 +77,12 @@ class EcodSpaceUsage(IorTestBase):
         space_after = self.pool.get_space_per_target(ranks=rank_list, target_idx=target_idx)
 
         # Calculate the difference in space so we know how much the usage increased
-        space_diff = dict_sub(space_after, space_before)
+        space_diff = dict_subtract(space_after, space_before)
 
         # Aggregate the space used to get min, max, mean
         space_aggregated = {
-            'scm': dict_aggregate(space_diff, ['scm', 'used']),
-            'nvme': dict_aggregate(space_diff, ['nvme', 'used'])
+            'scm': list_stats(dict_extract_values(space_diff, ['scm', 'used'])),
+            'nvme': list_stats(dict_extract_values(space_diff, ['nvme', 'used']))
         }
 
         # Print useful debugging info

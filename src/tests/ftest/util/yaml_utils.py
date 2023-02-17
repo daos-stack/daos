@@ -73,24 +73,23 @@ def get_yaml_data(yaml_file):
 class YamlUpdater():
     """A class for updating placeholders in test yaml files."""
 
-    YAML_KEYS = OrderedDict(
-        [
-            ("test_servers", "_servers"),
-            ("test_clients", "_clients"),
-            ("bdev_list", "_storage"),
-            ("timeout", "_timeout"),
-            ("timeouts", "_timeout"),
-            ("clush_timeout", "_timeout"),
-            ("ior_timeout", "_timeout"),
-            ("job_manager_timeout", "_timeout"),
-            ("pattern_timeout", "_timeout"),
-            ("pool_query_timeout", "_timeout"),
-            ("rebuild_timeout", "_timeout"),
-            ("srv_timeout", "_timeout"),
-            ("storage_prepare_timeout", "_timeout"),
-            ("storage_format_timeout", "_timeout"),
-        ]
-    )
+    # List of (yaml key, attribute name, val_type)
+    YAML_KEYS = [
+        ("test_servers", "_servers", (list, int, str)),
+        ("test_clients", "_clients", (list, int, str)),
+        ("bdev_list", "_storage", list),
+        ("timeout", "_timeout", int),
+        ("timeouts", "_timeout", dict),
+        ("clush_timeout", "_timeout", int),
+        ("ior_timeout", "_timeout", int),
+        ("job_manager_timeout", "_timeout", int),
+        ("pattern_timeout", "_timeout", int),
+        ("pool_query_timeout", "_timeout", int),
+        ("rebuild_timeout", "_timeout", int),
+        ("srv_timeout", "_timeout", int),
+        ("storage_prepare_timeout", "_timeout", int),
+        ("storage_format_timeout", "_timeout", int),
+    ]
 
     def __init__(self, logger, servers, clients, storage, timeout, override, verbose):
         """Initialize a YamlUpdater object.
@@ -158,20 +157,18 @@ class YamlUpdater():
         # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
         self.log.debug("Detected yaml data: %s", yaml_data)
-        placeholder_keys = list(self.YAML_KEYS.keys())
         placeholder_data = {}
-        for key in placeholder_keys:
+        for key, _, val_type in self.YAML_KEYS:
             # Get the unique values with lists flattened
-            values = list_unique(list_flatten(
-                dict_extract_values(yaml_data, [key], (list, int, dict, str))))
+            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], val_type)))
             if values:
                 # Use single value if list only contains 1 element
                 placeholder_data[key] = values if len(values) > 1 else values[0]
 
         # Generate a list of values that can be used as replacements
         replacement_data = OrderedDict()
-        for key, value in list(self.YAML_KEYS.items()):
-            args_value = getattr(self, value)
+        for key, attr_name, _ in self.YAML_KEYS:
+            args_value = getattr(self, attr_name)
             if isinstance(args_value, NodeSet):
                 replacement_data[key] = list(args_value)
             elif isinstance(args_value, str):
@@ -182,6 +179,7 @@ class YamlUpdater():
                 replacement_data[key] = None
 
         # Assign replacement values for the test yaml entries to be replaced
+        placeholder_keys = [yaml_key[0] for yaml_key in self.YAML_KEYS]
         self.log.debug("Detecting replacements for %s in %s", placeholder_keys, yaml_file)
         self.log.debug("  Placeholder data: %s", placeholder_data)
         self.log.debug("  Replacement data:  %s", dict(replacement_data))
