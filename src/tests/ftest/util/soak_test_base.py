@@ -30,7 +30,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline, display_job_failures
+    create_app_cmdline
 
 
 class SoakTestBase(TestWithServers):
@@ -140,8 +140,6 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-            # display the failed job logs
-            display_job_failures(self)
 
         # verify reserved container data
         if self.resv_cont:

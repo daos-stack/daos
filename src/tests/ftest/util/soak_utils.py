@@ -22,7 +22,7 @@ from general_utils import get_host_data, get_random_string, \
     run_pcmd, convert_list, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
-from run_utils import run_remote
+from run_utils import run_remote, run_local
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
@@ -351,30 +351,6 @@ def run_metrics_check(self, logging=True, prefix=None):
                     log_name = name + "-" + str(hosts)
                     self.log.info("Logging %s output to %s", daos_metrics, log_name)
                     write_logfile(result["stdout"], log_name, destination)
-
-
-def display_job_failures(self):
-    """Display job failure logs.
-
-    Args:
-        self (obj): soak obj
-    """
-    job_logs = []
-    self.log.debug("=" * 80)
-    self.log.debug("=" * 80)
-    self.log.debug("These are the job logs for failed jobs")
-    for job_id in self.all_failed_jobs:
-        cmd = f"ls -latr {self.outputsoak_dir}/pass*/*_{job_id}_*"
-        try:
-            output = run_command(cmd, timeout=120, verbose=False)
-            job_logs.extend(output.stdout_text.splitlines())
-        except DaosTestError:
-            self.log.error(
-                f" <<FAILED: No logs with job ID {job_id}>>")
-    for log in job_logs:
-        self.log.debug("  >>>%s", log)
-    self.log.debug("=" * 80)
-    self.log.debug("=" * 80)
 
 
 def get_harassers(harasser):
@@ -1280,7 +1256,7 @@ def build_job_script(self, commands, job, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    prepend_cmds = ["set -e",
+    prepend_cmds = ["set +e",
                     "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
                     "daos pool query {} ".format(self.pool[1].uuid),
                     "daos pool query {} ".format(self.pool[0].uuid)]
