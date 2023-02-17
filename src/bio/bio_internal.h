@@ -455,7 +455,8 @@ struct bio_desc {
 				 bd_rdma:1,
 				 bd_copy_dst:1,
 				 bd_in_fifo:1,
-				 bd_async_post:1;
+				 bd_async_post:1,
+				 bd_non_blocking:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;

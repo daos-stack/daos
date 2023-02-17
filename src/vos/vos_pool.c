@@ -117,9 +117,12 @@ vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_h
 
 	vos_iod2bsgl(store, iod, bsgl);
 
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
-	if (rc)
+	rc = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	if (rc) {
+		D_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR,
+			 "Failed to prepare DMA buffer. "DF_RC"\n", DP_RC(rc));
 		goto free;
+	}
 
 	fh->cookie = (uint64_t)biod;
 	return 0;
