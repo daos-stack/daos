@@ -3375,6 +3375,10 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
+        "-ss", "--slurm_setup",
+        action="store_true",
+        help="setup any slurm partitions required by the tests")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3403,10 +3407,6 @@ def main():
              "server placeholders in each test's yaml file.  If the "
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
-    parser.add_argument(
-        "-u", "--user_create",
-        action="store_true",
-        help="create additional users defined by each test's yaml file")
     parser.add_argument(
         "-v", "--verbose",
         action="count",
