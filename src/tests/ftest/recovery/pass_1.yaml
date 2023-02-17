@@ -13,7 +13,7 @@ server_config:
 
 pool:
   control_method: dmg
-  size: 10G
+  size: 60G
 
 container:
   control_method: daos
