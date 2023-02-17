@@ -6,7 +6,7 @@ job_manager:
   manager_timeout: 900
 server_config:
   name: daos_server
-  crt_timeout: 60
+  crt_timeout: 180
   engines_per_host: 1
   engines:
     0:
