@@ -74,7 +74,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
@@ -90,7 +90,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
