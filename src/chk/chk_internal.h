@@ -975,12 +975,15 @@ chk_pool_put(struct chk_pool_rec *cpr)
 }
 
 static inline void
-chk_pool_shutdown(struct chk_pool_rec *cpr)
+chk_pool_shutdown(struct chk_pool_rec *cpr, bool locked)
 {
 	d_iov_t		psid;
 	int		rc;
 
 	D_ASSERT(cpr->cpr_refs > 0);
+
+	if (!locked)
+		ABT_mutex_lock(cpr->cpr_mutex);
 
 	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
@@ -989,6 +992,9 @@ chk_pool_shutdown(struct chk_pool_rec *cpr)
 	ds_pool_stop(cpr->cpr_uuid);
 	cpr->cpr_started = 0;
 	cpr->cpr_start_post = 0;
+
+	if (!locked)
+		ABT_mutex_unlock(cpr->cpr_mutex);
 }
 
 static inline void
