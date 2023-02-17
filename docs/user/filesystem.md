@@ -272,7 +272,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   samirrav@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off
@@ -331,7 +331,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   root@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off

@@ -805,10 +805,25 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
+	struct daos_prop_entry *lbl_ent;
+	struct daos_prop_entry *def_lbl_ent;
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
+
+	/* Check for default label supplied via property. */
+	def_lbl_ent = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
+	if (lbl_ent != NULL) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) == 0) {
+			D_ERROR(DF_UUID": label is the same as default label\n",
+				DP_UUID(pool_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%d num=%u\n",
 		  ntargets, target_addrs->rl_nr);
@@ -5717,12 +5732,14 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
-		/* Extend the current pool map */
-		rc = pool_map_extend(map, map_version, map_buf);
-		pool_buf_free(map_buf);
-		map_buf = NULL;
-		if (rc != 0)
-			D_GOTO(out_map, rc);
+		if (map_buf != NULL) {
+			/* Extend the current pool map */
+			rc = pool_map_extend(map, map_version, map_buf);
+			pool_buf_free(map_buf);
+			map_buf = NULL;
+			if (rc != 0)
+				D_GOTO(out_map, rc);
+		}
 
 		/* Get a list of all the targets being added */
 		rc = pool_map_find_targets_on_ranks(map, extend_rank_list, tgts);
@@ -5968,7 +5985,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	switch (opc) {
 	case POOL_EXCLUDE:
-		op = RB_OP_FAIL;
+		op = RB_OP_EXCLUDE;
 		break;
 	case POOL_DRAIN:
 		op = RB_OP_DRAIN;

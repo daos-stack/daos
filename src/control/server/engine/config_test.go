@@ -35,57 +35,6 @@ var defConfigCmpOpts = []cmp.Option{
 	}),
 }
 
-func TestConfig_MergeEnvVars(t *testing.T) {
-	for name, tc := range map[string]struct {
-		baseVars  []string
-		mergeVars []string
-		wantVars  []string
-	}{
-		"no dupes without merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{},
-			wantVars:  []string{"FOO=BAR"},
-		},
-		"no dupes after merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{"FOO=QUX"},
-			wantVars:  []string{"FOO=QUX"},
-		},
-		"no dupes in merge": {
-			baseVars:  []string{"FOO=BAR"},
-			mergeVars: []string{"FOO=BAZ", "FOO=QUX"},
-			wantVars:  []string{"FOO=BAZ"},
-		},
-		"basic test": {
-			baseVars:  []string{"A=B"},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"A=B", "C=D"},
-		},
-		"complex value": {
-			baseVars:  []string{"SIMPLE=OK"},
-			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
-			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
-		},
-		"append no base": {
-			baseVars:  []string{},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"C=D"},
-		},
-		"skip malformed": {
-			baseVars:  []string{"GOOD_BASE=OK", "BAD_BASE="},
-			mergeVars: []string{"GOOD_MERGE=OK", "BAD_MERGE"},
-			wantVars:  []string{"GOOD_BASE=OK", "GOOD_MERGE=OK"},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(tc.wantVars, gotVars, defConfigCmpOpts...); diff != "" {
-				t.Fatalf("(-want, +got):\n%s", diff)
-			}
-		})
-	}
-}
-
 func TestConfig_HasEnvVar(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startVars []string

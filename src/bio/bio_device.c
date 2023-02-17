@@ -716,7 +716,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
 		opts->finished = true;
-		return;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);

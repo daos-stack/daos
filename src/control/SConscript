@@ -108,8 +108,7 @@ def scons():
 
     denv.Tool('go_builder')
 
-    prereqs.require(denv, 'ofi', 'hwloc')
-    prereqs.require(denv, 'ucx')
+    denv.require('ofi', 'ucx')
     # Sets CGO_LDFLAGS for rpath options
     denv.d_add_rpaths("..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
@@ -146,10 +145,9 @@ def scons():
     install_go_bin(senv, "daos_server")
 
     aenv = denv.Clone()
-    prereqs.require(aenv, 'spdk')
+    aenv.require('spdk', 'pmdk', 'ofi')
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
-    prereqs.require(aenv, 'pmdk', 'spdk', 'ofi', 'hwloc')
     aenv.Replace(RPATH=[])
     cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "

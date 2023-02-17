@@ -30,14 +30,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -47,14 +40,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   scm_size: 12GB
@@ -141,6 +127,8 @@ ior_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 fio_smoke:
   job_timeout: 10
   names:
@@ -172,6 +160,9 @@ fio_smoke:
       # - "EC_16P2GX"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_wb_caching: true
+    thread_count: 8
+    cores: '0-3'
 daos_racer:
   runtime: 120
 vpic_smoke:
@@ -186,6 +177,8 @@ vpic_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 lammps_smoke:
@@ -200,6 +193,8 @@ lammps_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 mdtest_smoke:
@@ -233,6 +228,8 @@ mdtest_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -259,6 +256,8 @@ macsio_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:

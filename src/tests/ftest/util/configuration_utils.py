@@ -295,7 +295,7 @@ class Configuration():
         """Is the specified path valid for the active configuration.
 
         Note:
-            Does not support paths with wildcards.
+            Does not support paths with wild-cards.
             Assumes configuration names are always at the end of the path.
 
         Args:

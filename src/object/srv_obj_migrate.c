@@ -84,6 +84,7 @@ struct migrate_one {
 	uint32_t		 mo_pool_tls_version;
 	uint32_t		 mo_iods_num_from_parity;
 	uint32_t		 mo_layout_version;
+	uint32_t		 mo_generation;
 	d_list_t		 mo_list;
 	d_iov_t			 mo_csum_iov;
 };
@@ -121,6 +122,7 @@ struct iter_obj_arg {
 	uint64_t		*snaps;
 	uint32_t		snap_cnt;
 	uint32_t		version;
+	uint32_t		generation;
 };
 
 static int
@@ -372,7 +374,7 @@ migrate_pool_tls_put(struct migrate_pool_tls *tls)
 }
 
 struct migrate_pool_tls *
-migrate_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver)
+migrate_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
 {
 	struct obj_tls	*tls = obj_tls_get();
 	struct migrate_pool_tls *pool_tls;
@@ -382,8 +384,8 @@ migrate_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver)
 	/* Only 1 thread will access the list, no need lock */
 	d_list_for_each_entry(pool_tls, &tls->ot_pool_list, mpt_list) {
 		if (uuid_compare(pool_tls->mpt_pool_uuid, pool_uuid) == 0 &&
-		    (ver == (unsigned int)(-1) ||
-		     ver == pool_tls->mpt_version)) {
+		    (ver == (unsigned int)(-1) || ver == pool_tls->mpt_version) &&
+		    (gen == (unsigned int)(-1) || gen == pool_tls->mpt_generation)) {
 			migrate_pool_tls_get(pool_tls);
 			found = pool_tls;
 			break;
@@ -399,7 +401,8 @@ struct migrate_pool_tls_create_arg {
 	uuid_t  co_hdl_uuid;
 	d_rank_list_t *svc_list;
 	uint64_t max_eph;
-	int	version;
+	unsigned int version;
+	unsigned int generation;
 	uint32_t opc;
 	uint32_t new_layout_ver;
 };
@@ -412,7 +415,7 @@ migrate_pool_tls_create_one(void *data)
 	struct migrate_pool_tls		   *pool_tls;
 	int rc;
 
-	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (pool_tls != NULL) {
 		/* Some one else already created, because collective function
 		 * might yield xstream.
@@ -441,6 +444,7 @@ migrate_pool_tls_create_one(void *data)
 	uuid_copy(pool_tls->mpt_poh_uuid, arg->pool_hdl_uuid);
 	uuid_copy(pool_tls->mpt_coh_uuid, arg->co_hdl_uuid);
 	pool_tls->mpt_version = arg->version;
+	pool_tls->mpt_generation = arg->generation;
 	pool_tls->mpt_rec_count = 0;
 	pool_tls->mpt_obj_count = 0;
 	pool_tls->mpt_size = 0;
@@ -474,9 +478,9 @@ out:
 }
 
 static struct migrate_pool_tls*
-migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
-			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid,
-			       uint64_t max_eph, uint32_t new_layout_ver, uint32_t opc)
+migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsigned int generation,
+			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid, uint64_t max_eph,
+			       uint32_t new_layout_ver, uint32_t opc)
 {
 	struct migrate_pool_tls *tls = NULL;
 	struct migrate_pool_tls_create_arg arg = { 0 };
@@ -485,7 +489,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	int			rc = 0;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
+	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	if (tls) {
 		if (tls->mpt_init_tls) {
 			ABT_mutex_lock(tls->mpt_init_mutex);
@@ -495,6 +499,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 		return tls;
 	}
 
+	D_ASSERT(generation != (unsigned int)(-1));
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
 	uuid_copy(arg.co_hdl_uuid, co_hdl_uuid);
@@ -502,12 +507,13 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	arg.opc = opc;
 	arg.max_eph = max_eph;
 	arg.new_layout_ver = new_layout_ver;
+	arg.generation = generation;
 	/* dss_task_collective does not do collective on xstream 0 */
 	rc = migrate_pool_tls_create_one(&arg);
 	if (rc)
 		D_GOTO(out, rc);
 
-	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
+	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	D_ASSERT(tls != NULL);
 	if (opc == RB_OP_REINT)
 		pool->sp_reintegrating++;
@@ -577,7 +583,8 @@ mrone_recx_daos_vos_internal(struct migrate_one *mrone, bool daos2vos, int shard
 			daos_recx_t *recx;
 
 			recx = &iod->iod_recxs[k];
-			D_ASSERT(recx->rx_nr <= cell_nr);
+			D_ASSERTF(recx->rx_nr <= cell_nr, DF_U64"/"DF_U64"cell nr %d "DF_UOID"\n",
+				  recx->rx_idx, recx->rx_nr, cell_nr, DP_UOID(mrone->mo_oid));
 			if (daos2vos)
 				recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
 								   stripe_nr,
@@ -618,7 +625,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	int			rc = 0;
 
 	tls = migrate_pool_tls_lookup(mrone->mo_pool_uuid,
-				      mrone->mo_pool_tls_version);
+				      mrone->mo_pool_tls_version, mrone->mo_generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(mrone->mo_pool_uuid));
@@ -634,7 +641,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	 * shard, which might cause parity corruption.
 	 */
 	obj = obj_hdl2ptr(oh);
-	if (tls->mpt_opc == RB_OP_FAIL && daos_oclass_is_ec(&mrone->mo_oca) &&
+	if (tls->mpt_opc == RB_OP_EXCLUDE && daos_oclass_is_ec(&mrone->mo_oca) &&
 	    iods[0].iod_type != DAOS_IOD_SINGLE &&
 	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard))
 		flags |= DIOF_FOR_FORCE_DEGRADE;
@@ -1655,7 +1662,7 @@ migrate_one_ult(void *arg)
 		dss_sleep(daos_fail_value_get() * 1000000);
 
 	tls = migrate_pool_tls_lookup(mrone->mo_pool_uuid,
-				      mrone->mo_pool_tls_version);
+				      mrone->mo_pool_tls_version, mrone->mo_generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(mrone->mo_pool_uuid));
@@ -1676,8 +1683,8 @@ migrate_one_ult(void *arg)
 	while (tls->mpt_inflight_size + data_size >=
 	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
 	       && !tls->mpt_fini) {
-		D_INFO("mrone %p wait "DF_U64"/"DF_U64"\n", mrone, tls->mpt_inflight_size,
-			tls->mpt_inflight_max_size);
+		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -2123,7 +2130,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	D_DEBUG(DB_REBUILD, "migrate dkey "DF_KEY" iod nr %d\n", DP_KEY(dkey),
 		iod_eph_total);
 
-	tls = migrate_pool_tls_lookup(iter_arg->pool_uuid, iter_arg->version);
+	tls = migrate_pool_tls_lookup(iter_arg->pool_uuid, iter_arg->version, iter_arg->generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(iter_arg->pool_uuid));
@@ -2184,6 +2191,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	mrone->mo_iod_alloc_num = iod_eph_total;
 	mrone->mo_min_epoch = DAOS_EPOCH_MAX;
 	mrone->mo_version = version;
+	mrone->mo_generation = tls->mpt_generation;
 	mrone->mo_dkey_hash = io->ui_dkey_hash;
 	mrone->mo_layout_version = obj->cob_layout_version;
 	/* only do the copy below when each with inline recx data */
@@ -2283,7 +2291,8 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if (rc < 0)
 		return rc;
 
-	tls = migrate_pool_tls_lookup(arg->arg->pool_uuid, arg->arg->version);
+	tls = migrate_pool_tls_lookup(arg->arg->pool_uuid, arg->arg->version,
+				      arg->arg->generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->arg->pool_uuid));
@@ -2302,7 +2311,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if ((rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
 	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) ||
-	    (tls->mpt_opc == RB_OP_FAIL && io->ui_oid.id_shard == shard)) {
+	    (tls->mpt_opc == RB_OP_EXCLUDE && io->ui_oid.id_shard == shard)) {
 		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
 			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
@@ -2403,7 +2412,7 @@ migrate_obj_punch_one(void *data)
 	struct ds_cont_child	*cont;
 	int			rc;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->pool_uuid));
@@ -2445,7 +2454,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	struct migrate_one	*tmp;
 	int			rc = 0;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->pool_uuid));
@@ -2502,7 +2511,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_handle_t		 oh  = DAOS_HDL_INVAL;
 	uint32_t		 minimum_nr;
-	uint32_t		 orig_flags;
+	uint32_t		 enum_flags;
 	uint32_t		 num;
 	int			 rc1;
 	int			 rc = 0;
@@ -2544,12 +2553,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 			     DIOF_FOR_MIGRATION;
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
 	} else {
 		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 	}
 
@@ -2584,9 +2593,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	}
 
 	while (!tls->mpt_fini) {
-		uint32_t enum_flags;
-
-		enum_flags = orig_flags;
 		memset(buf, 0, buf_len);
 		memset(kds, 0, KDS_NUM * sizeof(*kds));
 		iov.iov_len = 0;
@@ -2601,7 +2607,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			p_csum->iov_len = 0;
 
 		daos_anchor_set_flags(&dkey_anchor, enum_flags);
-retry:
 		num = KDS_NUM;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
@@ -2648,7 +2653,6 @@ retry:
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
-				daos_anchor_set_flags(&dkey_anchor, enum_flags);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
@@ -2661,7 +2665,7 @@ retry:
 				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
 			}
-			D_GOTO(retry, rc);
+			continue;
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
@@ -2691,8 +2695,8 @@ retry:
 			break;
 		}
 
-		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64" > "DF_U64"\n",
-			  sgl.sg_iovs[0].iov_len, buf_len);
+		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64"/"DF_U64" > "DF_U64"\n",
+			  sgl.sg_iovs[0].iov_buf_len, sgl.sg_iovs[0].iov_len, buf_len);
 		rc = dc_obj_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 					migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
@@ -2710,6 +2714,9 @@ retry:
 
 		if (daos_anchor_is_eof(&dkey_anchor))
 			break;
+
+		/* Restore leader flag to always try the leader first */
+		enum_flags |= DIOF_TO_LEADER;
 	}
 
 	if (buf != NULL && buf != stack_buf)
@@ -2736,7 +2743,8 @@ out:
 
 struct migrate_stop_arg {
 	uuid_t	pool_uuid;
-	uint32_t version;
+	unsigned int version;
+	unsigned int generation;
 };
 
 static int
@@ -2746,7 +2754,7 @@ migrate_fini_one_ult(void *data)
 	struct migrate_pool_tls *tls;
 	int			 rc;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL)
 		return 0;
 
@@ -2774,13 +2782,13 @@ migrate_fini_one_ult(void *data)
 
 /* stop the migration */
 void
-ds_migrate_stop(struct ds_pool *pool, unsigned int version)
+ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generation)
 {
 	struct migrate_pool_tls *tls;
 	struct migrate_stop_arg arg;
 	int			 rc;
 
-	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
+	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	if (tls == NULL) {
 		D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 		return;
@@ -2788,6 +2796,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
+	arg.generation = generation;
 	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
@@ -2839,7 +2848,7 @@ migrate_obj_ult(void *data)
 	int			 i;
 	int			 rc = 0;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->pool_uuid));
@@ -2911,9 +2920,9 @@ free:
 		tls->mpt_status = rc;
 
 	D_DEBUG(DB_REBUILD, ""DF_UUID"/%u stop migrate obj "DF_UOID
-		" for shard %u executed "DF_U64" : " DF_RC"\n",
+		" for shard %u executed "DF_U64"/"DF_U64" : " DF_RC"\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version,
-		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
+		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult, tls->mpt_obj_count,
 		DP_RC(rc));
 free_notls:
 	D_FREE(arg->snaps);
@@ -2956,6 +2965,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	uuid_copy(obj_arg->pool_uuid, cont_arg->pool_tls->mpt_pool_uuid);
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
 	obj_arg->version = cont_arg->pool_tls->mpt_version;
+	obj_arg->generation = cont_arg->pool_tls->mpt_generation;
 	if (cont_arg->snaps) {
 		D_ALLOC(obj_arg->snaps,
 			sizeof(*cont_arg->snaps) * cont_arg->snap_cnt);
@@ -3312,17 +3322,18 @@ migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 
 int
 ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
-		  uint32_t version, uint64_t max_eph, uint32_t opc, daos_unit_oid_t *oids,
-		  daos_epoch_t *epochs, daos_epoch_t *punched_epochs, unsigned int *shards,
-		  uint32_t count, unsigned int tgt_idx, uint32_t new_layout_ver)
+		  uint32_t version, unsigned int generation, uint64_t max_eph, uint32_t opc,
+		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
+		  unsigned int *shards, uint32_t count, unsigned int tgt_idx,
+		  uint32_t new_layout_ver)
 {
 	struct migrate_pool_tls	*tls;
 	int			i;
 	int			rc;
 
 	/* Check if the pool tls exists */
-	tls = migrate_pool_tls_lookup_create(pool, version, po_hdl, co_hdl, max_eph, new_layout_ver,
-					     opc);
+	tls = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
+					     new_layout_ver, opc);
 	if (tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	if (tls->mpt_fini)
@@ -3433,11 +3444,10 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = ds_migrate_object(pool, po_hdl_uuid, co_hdl_uuid, co_uuid,
-			       migrate_in->om_version, migrate_in->om_max_eph,
-			       migrate_in->om_opc, oids, ephs, punched_ephs,
-			       shards, oids_count, migrate_in->om_tgt_idx,
-			       migrate_in->om_new_layout_ver);
+	rc = ds_migrate_object(pool, po_hdl_uuid, co_hdl_uuid, co_uuid, migrate_in->om_version,
+			       migrate_in->om_generation, migrate_in->om_max_eph,
+			       migrate_in->om_opc, oids, ephs, punched_ephs, shards, oids_count,
+			       migrate_in->om_tgt_idx, migrate_in->om_new_layout_ver);
 out:
 	if (pool)
 		ds_pool_put(pool);
@@ -3456,6 +3466,7 @@ struct migrate_query_arg {
 	uint32_t generated_ult;
 	uint32_t executed_ult;
 	uint32_t version;
+	uint32_t generation;
 };
 
 static int
@@ -3464,7 +3475,7 @@ migrate_check_one(void *data)
 	struct migrate_query_arg	*arg = data;
 	struct migrate_pool_tls		*tls;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL)
 		return 0;
 
@@ -3490,19 +3501,20 @@ migrate_check_one(void *data)
 }
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 			struct ds_migrate_status *dms)
 {
 	struct migrate_query_arg	arg = { 0 };
 	struct migrate_pool_tls		*tls;
 	int				rc;
 
-	tls = migrate_pool_tls_lookup(pool_uuid, ver);
+	tls = migrate_pool_tls_lookup(pool_uuid, ver, generation);
 	if (tls == NULL)
 		return 0;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
+	arg.generation = generation;
 	rc = ABT_mutex_create(&arg.status_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
@@ -3551,6 +3563,10 @@ out:
  * param cont_uuid [in]		container uuid.
  * param cont_hdl_uuid [in]	container handle uuid.
  * param tgt_id [in]		target id where the data to be migrated.
+ * param version [in]		rebuild version.
+ * param generation [in]	rebuild generation.
+ * param max_eph [in]		maxim epoch of the migration.
+ * param max_eph [in]		maxim epoch of the migration.
  * param max_eph [in]		maxim epoch of the migration.
  * param oids [in]		array of the objects to be migrated.
  * param ephs [in]		epoch of the objects.
@@ -3565,12 +3581,11 @@ out:
  * return			0 if it succeeds, otherwise errno.
  */
 int
-ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid,
-		       uuid_t cont_hdl_uuid, uuid_t cont_uuid, int tgt_id,
-		       uint32_t version, uint64_t max_eph, daos_unit_oid_t *oids,
-		       daos_epoch_t *ephs, daos_epoch_t *punched_ephs,
-		       unsigned int *shards, int cnt, uint32_t new_layout_ver,
-		       uint32_t migrate_opc)
+ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_hdl_uuid,
+		       uuid_t cont_uuid, int tgt_id, uint32_t version, unsigned int generation,
+		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
+		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		       uint32_t new_layout_ver, uint32_t migrate_opc)
 {
 	struct obj_migrate_in	*migrate_in = NULL;
 	struct obj_migrate_out	*migrate_out = NULL;
@@ -3619,6 +3634,7 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	uuid_copy(migrate_in->om_cont_uuid, cont_uuid);
 	uuid_copy(migrate_in->om_coh_uuid, cont_hdl_uuid);
 	migrate_in->om_version = version;
+	migrate_in->om_generation = generation;
 	migrate_in->om_max_eph = max_eph,
 	migrate_in->om_tgt_idx = index;
 	migrate_in->om_new_layout_ver = new_layout_ver;

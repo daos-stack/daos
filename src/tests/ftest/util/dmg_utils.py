@@ -50,7 +50,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
 
 
 class DmgCommand(DmgCommandBase):
-    # pylint: disable=too-many-ancestors,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
 
     # As the handling of these regular expressions are moved inside their
@@ -321,23 +321,40 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
-    def storage_identify_vmd(self, uuid, verbose=False):
-        """Get the result of the 'dmg storage identify vmd".
+    def storage_led_identify(self, timeout=None, reset=False, ids=None):
+        """Get the result of the 'dmg storage led identify".
 
         Args:
-            uuid (str): Device UUID to query.
-            verbose (bool, optional): create verbose output. Defaults to False.
+            timeout (str, optional): Length of time for LED to blink. Defaults to None.
+            reset (bool, optional): Reset the LED status to previous state. Defaults to False.
+            ids (str, optional): Comma separated device id. Defaults to None.
 
         Returns:
             dict: JSON formatted dmg command result.
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg storage led identify command fails.
 
         """
         return self._get_json_result(
-            ("storage", "identify", "vmd"), uuid=uuid,
-            verbose=verbose)
+            ("storage", "led", "identify"), timeout=timeout,
+            reset=reset, ids=ids)
+
+    def storage_led_check(self, ids=None):
+        """Get the result of the 'dmg storage led check".
+
+        Args:
+            ids (str, optional): Comma separated device id. Defaults to None.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage led check command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "led", "check"), ids=ids)
 
     def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
         """Get the result of the 'dmg storage replace nvme' command.
@@ -491,6 +508,7 @@ class DmgCommand(DmgCommandBase):
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
+
         Raises:
             CommandFailure: if the dmg server set logmasks command fails.
 
@@ -1160,7 +1178,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-            net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False):
         """Produce a server configuration.
 
         Args:

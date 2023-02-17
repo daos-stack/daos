@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
@@ -69,6 +70,18 @@ func TestContSetOwnerCommand(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Bad owner principal",
+			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
+				testPoolUUID, testContUUID, "bad@@", testGroup),
+			"", errors.New("invalid ACL principal"),
+		},
+		{
+			"Bad group principal",
+			fmt.Sprintf("cont set-owner --pool=%s --cont=%s --user=%s --group=%s",
+				testPoolUUID, testContUUID, testUser, "bad@@"),
+			"", errors.New("invalid ACL principal"),
 		},
 	})
 }

@@ -21,7 +21,7 @@
  * associated targets
  */
 typedef enum {
-	RB_OP_FAIL,
+	RB_OP_EXCLUDE,
 	RB_OP_DRAIN,
 	RB_OP_REINT,
 	RB_OP_EXTEND,
@@ -30,7 +30,7 @@ typedef enum {
 	RB_OP_UPGRADE,
 } daos_rebuild_opc_t;
 
-#define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "Rebuild" : \
+#define RB_OP_STR(rb_op) ((rb_op) == RB_OP_EXCLUDE ? "Rebuild" : \
 			  (rb_op) == RB_OP_DRAIN ? "Drain" : \
 			  (rb_op) == RB_OP_REINT ? "Reintegrate" : \
 			  (rb_op) == RB_OP_EXTEND ? "Extend" : \

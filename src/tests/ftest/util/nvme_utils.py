@@ -44,7 +44,6 @@ def get_device_ids(dmg, servers):
 
 
 class ServerFillUp(IorTestBase):
-    # pylint: disable=too-many-ancestors,too-many-instance-attributes
     """Class to fill up the servers based on pool percentage given.
 
     It will get the drives listed in yaml file and find the maximum capacity of
@@ -234,8 +233,11 @@ class ServerFillUp(IorTestBase):
             for disk_id in range(0, self.no_of_drives):
                 self.set_device_faulty(server, device_ids[server][disk_id])
 
-    def get_max_storage_sizes(self):
+    def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.
+
+        Args:
+            percentage (int): percentage of the maximum storage space to use
 
         Returns:
             list: a list of the maximum SCM and NVMe size
@@ -243,22 +245,21 @@ class ServerFillUp(IorTestBase):
         """
         try:
             sizes_dict = self.server_managers[0].get_available_storage()
-            sizes = [sizes_dict["scm"], sizes_dict["nvme"]]
-        except (ServerFailed, KeyError) as error:
+            # Return a percentage of the storage space as it won't be used 100% for pool creation.
+            percentage /= 100
+            sizes = [int(sizes_dict["scm"] * percentage), int(sizes_dict["nvme"] * percentage)]
+        except (ServerFailed, KeyError, ValueError) as error:
             self.fail(error)
-
-        # Return the 96% of storage space as it won't be used 100% for pool creation.
-        for index, _size in enumerate(sizes):
-            sizes[index] = int(sizes[index] * 0.96)
 
         return sizes
 
-    def create_pool_max_size(self, scm=False, nvme=False):
+    def create_pool_max_size(self, scm=False, nvme=False, percentage=96):
         """Create a single pool with Maximum NVMe/SCM size available.
 
         Args:
             scm (bool): To create the pool with max SCM size or not.
             nvme (bool): To create the pool with max NVMe size or not.
+            percentage (int): percentage of the maximum storage space to use
 
         Note: Method to Fill up the server. It will get the maximum Storage space and create the
               pool. Replace with dmg options in future when it's available.
@@ -267,7 +268,7 @@ class ServerFillUp(IorTestBase):
         self.add_pool(create=False)
 
         if nvme or scm:
-            sizes = self.get_max_storage_sizes()
+            sizes = self.get_max_storage_sizes(percentage)
 
         # If NVMe is True get the max NVMe size from servers
         if nvme:
