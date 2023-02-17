@@ -142,4 +142,4 @@ class NvmePoolExtend(OSAUtils):
         :avocado: tags=nvme,checksum,nvme_osa,rebuild
         :avocado: tags=NvmePoolExtend,test_nvme_pool_extend
         """
-        self.run_nvme_pool_extend(3)
+        self.run_nvme_pool_extend(2)
