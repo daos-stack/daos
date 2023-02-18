@@ -42,27 +42,33 @@ class EcodFioRebuild(ErasureCodeFio):
         self.start_online_fio()
 
         # 3. Get total space consumed (scm+nvme)
-        usage_before_aggr = pool.pool_percentage_used()
+        #usage_before_aggr = pool.pool_percentage_used()
+        before_aggr_tier_stats = self.pool.get_tier_stats(True)
+        self.log("===>(3) before_aggr_tier_stats=", before_aggr_tier_stats)
 
         # 4. Enable aggregation
         self.pool.set_property("reclaim", "time")
 
-#        # 4. Verify Aggregation should start for Partial stripes IO
-#        if not any(self.check_aggregation_status(attempt=60).values()):
-#            self.fail("Aggregation failed to start..")
-
         # 5. Get total space consumed (scm+nvme).
-        usage_after_aggr = pool.pool_percentage_used()
+        #usage_after_aggr = pool.pool_percentage_used()
+        after_aggr_tier_stats = self.pool.get_tier_stats(True)
+        self.log("===>(5) after_aggr_tier_stats=", after_aggr_tier_stats)
 
-        # 6. Get total space consumed (scm+nvme) after aggregation, wait for 
+        # 6. Verify Aggregation should start for Partial stripes IO
+        if not any(self.check_aggregation_status(attempt=60).values()):
+            self.fail("Aggregation failed to start..")
+
+        # 7. Get total space consumed (scm+nvme) after aggregation, wait for
         #    maximun 3 minutes until aggregation triggered.
 
+        after_aggr_tier_stats = self.pool.get_tier_stats(True)
+        self.log("===>(7) after_aggr_tier_stats=", after_aggr_tier_stats)
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
                 [self.server_count - 1], self.d_log, force=True)
 
-        # 7. Adding unlink option for final read command
+        # 8. Adding unlink option for final read command
         if int(self.container.properties.value.split(":")[1]) == 1:
             self.fio_cmd._jobs['test'].unlink.value = 1
 
@@ -70,7 +76,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.fio_cmd._jobs['test'].rw.value = self.read_option
         self.fio_cmd.run()
 
-        # 8. If RF is 2 kill one more server and validate the data is not corrupted.
+        # 9. If RF is 2 kill one more server and validate the data is not corrupted.
         if int(self.container.properties.value.split(":")[1]) == 2:
             self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
@@ -94,7 +100,7 @@ class EcodFioRebuild(ErasureCodeFio):
             4. Verify the Fio write finish without any error.
             5. Get total space consumed (scm+nvme).
             6. Enable aggregation.
-            7. Get total space consumed (scm+nvme) after aggregation, wait for 
+            7. Get total space consumed (scm+nvme) after aggregation, wait for
                maximun 3 minutes until aggregation triggered.
             8. Read and verify the data after Aggregation.
             9. Kill one more rank and verify the data after rebuild finish.
