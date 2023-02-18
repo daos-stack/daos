@@ -411,7 +411,7 @@ class NvmeEnospace(ServerFillUp):
             for count in range(6):
                 time.sleep(10)
                 pool_usage = self.pool.pool_percentage_used()
-                self.log.info(f"Pool usage at iter {count}: {pool_usage}")
+                self.log.info("Pool usage at iter %d: %s", count, pool_usage)
                 if pool_usage["scm"] < 60:
                     scm_released = True
                     break
