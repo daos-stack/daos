@@ -2,6 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
+%define limits_script_name daos_limits.conf
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -326,6 +327,7 @@ mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
+install -m 644 utils/rpms/%{limits_script_name} %{buildroot}/%{_sysconfigdir}/security/limits.d
 mkdir -p %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
@@ -430,6 +432,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
+%{_sysconfigdir}/security/limits.d/%{limits_script_name}
 
 %files admin
 %doc README.md
@@ -550,6 +553,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Feb 15 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-4
+- Add /etc/security/limits.d/daos_limits.conf
+
 * Mon Feb 13 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-3
 - Remove explicit R: protobuf-c and let the auto-dependency generator
   handle it
