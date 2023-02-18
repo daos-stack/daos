@@ -1096,6 +1096,20 @@ class TestPool(TestDaosApiBase):
             raise CommandFailure(
                 "The dmg pool query key does not exist: {}".format(keys_str)) from error
 
+    def get_tier_stats(self, refresh=False):
+        """Get the pool tier stats from pool query output.
+        Args:
+             refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+        Returns:
+             dict: A dictionary for pool stats, scm and nvme:
+        """
+        tier_stats = {}
+        for tier_stat in self._get_query_data_keys("response", "tier_stats", refresh=refresh):
+            tier_type = tier_stat.pop("media_type")
+            tier_stats[tier_type] = tier_stat.copy()
+        return tier_stats
+
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.
 

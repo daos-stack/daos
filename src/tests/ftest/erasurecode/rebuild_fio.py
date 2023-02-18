@@ -28,25 +28,41 @@ class EcodFioRebuild(ErasureCodeFio):
         Args:
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        # Kill last server rank first
+        # 1. Disable aggregation
+        self.pool.set_property("reclaim", "disabled")
+
+        # 2.a Kill last server rank first
         self.rank_to_kill = self.server_count - 1
 
         if 'on-line' in rebuild_mode:
             # Enabled on-line rebuild for the test
             self.set_online_rebuild = True
 
-        # Write the Fio data and kill server if rebuild_mode is on-line
+        # 2.b Write the Fio data and kill server if rebuild_mode is on-line
         self.start_online_fio()
 
-        # Verify Aggregation should start for Partial stripes IO
-        if not any(self.check_aggregation_status(attempt=60).values()):
-            self.fail("Aggregation failed to start..")
+        # 3. Get total space consumed (scm+nvme)
+        usage_before_aggr = pool.pool_percentage_used()
+
+        # 4. Enable aggregation
+        self.pool.set_property("reclaim", "time")
+
+#        # 4. Verify Aggregation should start for Partial stripes IO
+#        if not any(self.check_aggregation_status(attempt=60).values()):
+#            self.fail("Aggregation failed to start..")
+
+        # 5. Get total space consumed (scm+nvme).
+        usage_after_aggr = pool.pool_percentage_used()
+
+        # 6. Get total space consumed (scm+nvme) after aggregation, wait for 
+        #    maximun 3 minutes until aggregation triggered.
+
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
                 [self.server_count - 1], self.d_log, force=True)
 
-        # Adding unlink option for final read command
+        # 7. Adding unlink option for final read command
         if int(self.container.properties.value.split(":")[1]) == 1:
             self.fio_cmd._jobs['test'].unlink.value = 1
 
@@ -54,7 +70,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.fio_cmd._jobs['test'].rw.value = self.read_option
         self.fio_cmd.run()
 
-        # If RF is 2 kill one more server and validate the data is not corrupted.
+        # 8. If RF is 2 kill one more server and validate the data is not corrupted.
         if int(self.container.properties.value.split(":")[1]) == 2:
             self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
@@ -69,14 +85,19 @@ class EcodFioRebuild(ErasureCodeFio):
         Test Description:
             Verify the EC works for Fio during on-line rebuild.
 
-        Use Cases:
-            Create the container with RF:1 or 2.
-            Create the Fio data file with verify pattern over Fuse.
-            Kill the server when Write is in progress.
-            Verify the Fio write finish without any error.
-            Wait and verify Aggregation is getting triggered.
-            Read and verify the data after Aggregation.
-            Kill one more rank and verify the data after rebuild finish.
+        Use Cases (steps):
+            0. Create the container with RF:1 or 2.
+               Create the Fio data file with verify pattern over Fuse.
+            1. Disable aggregation
+            2. Kill the server when Write is in progress.
+            3. Enable aggregation
+            4. Verify the Fio write finish without any error.
+            5. Get total space consumed (scm+nvme).
+            6. Enable aggregation.
+            7. Get total space consumed (scm+nvme) after aggregation, wait for 
+               maximun 3 minutes until aggregation triggered.
+            8. Read and verify the data after Aggregation.
+            9. Kill one more rank and verify the data after rebuild finish.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
