@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 from ior_test_base import IorTestBase
 
 
@@ -97,7 +96,8 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_healthy
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
-        random_host = random.choice(list(set(self.server_managers[0].ranks.values())))
+        # Arbitrarily select one host.
+        random_host = list(set(self.server_managers[0].ranks.values()))[0]
         ranks_to_stop = ",".join(
             [str(rank) for rank, host in self.server_managers[0].ranks.items()
              if host == random_host])
