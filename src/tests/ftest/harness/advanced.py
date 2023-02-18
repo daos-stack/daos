@@ -6,13 +6,14 @@
 import os
 from random import choice
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from apricot import TestWithServers
 
 from general_utils import get_avocado_config_value
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -28,6 +29,16 @@ class HarnessAdvancedTest(TestWithServers):
         # Always start the servers for each test variant
         self.start_agents_once = False
         self.start_servers_once = False
+
+        # Whether to skip tearDown
+        self.skip_teardown = False
+
+    def tearDown(self):
+        """Conditionally skip tearDown."""
+        if self.skip_teardown:
+            self.log.info("Skipping test tearDown()")
+            return
+        super().tearDown()
 
     def test_pool_timeout(self):
         """Test to verify tearDown() timeout setting for timed out tests.
@@ -145,3 +156,19 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=HarnessAdvancedTest,test_launch_failures_hw
         """
         self.test_launch_failures()
+
+    def test_cleanup_procs(self):
+        """Test to verify launch.py cleans up leftover processes.
+
+        The test starts some processes and then skips tearDown.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_cleanup_procs
+        """
+        self.skip_teardown = True
+        pool = self.get_pool()
+        container = self.get_container(pool)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool=pool, container=container)

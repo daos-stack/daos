@@ -47,9 +47,9 @@ ior_flags_common: &ior_flags_common
     #   - [scm_size, nvme_size, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
-    - [50000000000, 300000000000, 4000, 50000000]          # [4K, 51M]
-    - [50000000000, 300000000000, 1000000, 500000000]      # [1M, 512M]
-    - [50000000000, 300000000000, 1000000000, 8000000000]  # [1G, 8G]
+    - ["NA", "NA", 4000, 50000000]          # [4K, 51M]
+    - ["NA", "NA", 1000000, 500000000]      # [1M, 512M]
+    - ["NA", "NA", 1000000000, 8000000000]  # [1G, 8G]
 ior:
   client_processes:
     np: 48
@@ -57,10 +57,10 @@ ior:
   repetitions: 10
   dfs_destroy: False
   iorflags: !mux
-    rp_2g8:
+    rp_2g4:
       <<: *ior_flags_common
-      dfs_oclass: RP_2G8
-      dfs_dir_oclass: RP_2G8
+      dfs_oclass: RP_2G4
+      dfs_dir_oclass: RP_2G4
     ec_2p1gx:
       <<: *ior_flags_common
       dfs_oclass: EC_2P1GX
