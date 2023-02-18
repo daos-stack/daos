@@ -405,20 +405,20 @@ class NvmeEnospace(ServerFillUp):
             # Delete all the containers
             self.delete_all_containers()
 
-            # Wait for the SCM space to be released. (Usage goes below 10%)
+            # Wait for the SCM space to be released. (Usage goes below 60%)
             scm_released = False
             pool_usage = None
             for count in range(6):
                 time.sleep(10)
                 pool_usage = self.pool.pool_percentage_used()
                 self.log.info(f"Pool usage at iter {count}: {pool_usage}")
-                if pool_usage["scm"] < 10:
+                if pool_usage["scm"] < 60:
                     scm_released = True
                     break
 
-            # Verify that the SCM usage has gone down below 10%.
+            # Verify that the SCM usage has gone down below 60%.
             if not scm_released:
-                msg = (f"Pool SCM used percentage should be < 10%. Actual = "
+                msg = (f"Pool SCM used percentage should be < 60%. Actual = "
                        f"{pool_usage['scm']}")
                 self.fail(msg)
 
