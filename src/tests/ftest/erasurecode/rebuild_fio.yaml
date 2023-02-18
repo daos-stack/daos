@@ -34,8 +34,7 @@ server_config:
       targets: 2
       storage: auto
 pool:
-  scm_size: 10%
-  nvme_size: 50%
+  size: 60%
   control_method: dmg
 container:
   type: POSIX
