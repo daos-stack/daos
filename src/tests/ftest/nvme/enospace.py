@@ -131,14 +131,14 @@ class NvmeEnospace(ServerFillUp):
         """
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
-        print('Starting main IOR load')
+        self.log.info('Starting main IOR load')
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
-        print(self.pool.pool_percentage_used())
+        self.log.info(self.pool.pool_percentage_used())
 
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
-        print(self.pool.pool_percentage_used())
+        self.log.info(self.pool.pool_percentage_used())
 
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
@@ -151,7 +151,7 @@ class NvmeEnospace(ServerFillUp):
             self.log.info('Test is expected to fail because of DER_NOSPACE')
 
         # Display the pool usage %
-        print(self.pool.pool_percentage_used())
+        self.log.info(self.pool.pool_percentage_used())
 
         # verify the DER_NO_SAPCE error count is expected and no other Error in client log
         self.verify_enospace_log(self.der_nospace_count)
@@ -405,16 +405,22 @@ class NvmeEnospace(ServerFillUp):
             # Delete all the containers
             self.delete_all_containers()
 
-            # Get the pool usage
-            pool_usage = self.pool.pool_percentage_used()
-            # Delay to release the SCM size.
-            time.sleep(60)
-            print(pool_usage)
-            # SCM pool size should be released (some still be used for system)
-            # Pool SCM free % should not be less than 62%
-            if pool_usage['scm'] > 62:
-                self.fail('SCM pool used percentage should be < 62, instead {}'.
-                          format(pool_usage['scm']))
+            # Wait for the SCM space to be released. (Usage goes below 10%)
+            scm_released = False
+            pool_usage = None
+            for count in range(6):
+                time.sleep(10)
+                pool_usage = self.pool.pool_percentage_used()
+                self.log.info(f"Pool usage at iter {count}: {pool_usage}")
+                if pool_usage["scm"] < 10:
+                    scm_released = True
+                    break
+
+            # Verify that the SCM usage has gone down below 10%.
+            if not scm_released:
+                msg = (f"Pool SCM used percentage should be < 10%. Actual = "
+                       f"{pool_usage['scm']}")
+                self.fail(msg)
 
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
