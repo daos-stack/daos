@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import time
+
 from ec_utils import ErasureCodeFio
 
 
@@ -22,19 +24,15 @@ class EcodFioRebuild(ErasureCodeFio):
         self.rank_to_kill = None
         self.read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
-    def get_pool_freespace(self, step):
+    def get_pool_freespace(self):
         """Get pool total free space.
-
-        Args:
-            step (int): test step.
 
         Return:
             free_space (int): pool total free space.
         """
         tier_stats = self.pool.get_tier_stats(True)
         total_freespace = tier_stats["scm"]["free"] + tier_stats["nvme"]["free"]
-        self.log.info("==>(step) tier_stats= %s", tier_stats)
-        self.log.info("==>(step) total_freespace= %s", total_freespace)
+        self.log.info("==>tier_stats= %s", tier_stats)
         return total_freespace
 
     def execution(self, rebuild_mode):
@@ -44,6 +42,7 @@ class EcodFioRebuild(ErasureCodeFio):
             rebuild_mode (str): On-line or off-line rebuild mode
         """
         # 1. Disable aggregation
+        aggr_threshold = 100000
         self.pool.set_property("reclaim", "disabled")
 
         # 2.a Kill last server rank first
@@ -59,25 +58,30 @@ class EcodFioRebuild(ErasureCodeFio):
         # 3. Get total space consumed (scm+nvme)
         # usage_before_aggr = pool.pool_percentage_used()
         # before_aggr_tier_stats = self.pool.get_tier_stats(True)
-        self.log.info("==Before enable aggregation.")
-        self.get_pool_freespace(3)
+        init_pool_freespace = self.get_pool_freespace()
+        self.log.info("==>(3)Before enable aggregation, pool freespace= %d", init_pool_freespace)
 
         # 4. Enable aggregation
         self.pool.set_property("reclaim", "time")
 
         # 5. Get total space consumed (scm+nvme).
         # usage_after_aggr = pool.pool_percentage_used()
-        self.log.info("==After enable aggregation..")
-        self.get_pool_freespace(5)
+        pool_freespace = self.get_pool_freespace()
+        self.log.info("==>(5)After enable aggregation, pool freespace= %d", pool_freespace)
 
         # 6. Verify Aggregation should start for Partial stripes IO
-        if not any(self.check_aggregation_status(attempt=60).values()):
-            self.fail("Aggregation failed to start..")
-
-        # 7. Get total space consumed (scm+nvme) after aggregation, wait for
-        #    maximum 3 minutes until aggregation triggered.
-        self.log.info("==After enable and check for aggregation status....")
-        self.get_pool_freespace(7)
+        #    wait for maximum 3 minutes until aggregation triggered.
+        start = time()
+        max_elapse_time = 180
+        retry_timeout = False
+        while not retry_timeout and pool_freespace >= init_pool_freespace - aggr_threshold:
+            time.sleep(5)
+            time() - start > max_elapse_time:
+                retry_timeout = True
+            pool_freespace = self.get_pool_freespace()
+            self.log.info("==>(6)After enable aggregation, pool freespace= %d", pool_freespace)
+        if retry_timeout:
+            self.fail("Aggregation did not triggered and timeout")
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
