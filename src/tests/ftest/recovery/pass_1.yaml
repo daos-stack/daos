@@ -11,6 +11,9 @@ server_config:
       nr_xs_helpers: 1
       storage: auto
 
+setup:
+  start_servers_once: False
+
 pool:
   control_method: dmg
   size: 60G
