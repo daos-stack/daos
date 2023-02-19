@@ -42,27 +42,27 @@ class EcodFioRebuild(ErasureCodeFio):
         self.start_online_fio()
 
         # 3. Get total space consumed (scm+nvme)
-        #usage_before_aggr = pool.pool_percentage_used()
+        # usage_before_aggr = pool.pool_percentage_used()
         before_aggr_tier_stats = self.pool.get_tier_stats(True)
-        self.log("===>(3) before_aggr_tier_stats=", before_aggr_tier_stats)
+        self.log.info("===>(3) before_aggr_tier_stats= %s", before_aggr_tier_stats)
 
         # 4. Enable aggregation
         self.pool.set_property("reclaim", "time")
 
         # 5. Get total space consumed (scm+nvme).
-        #usage_after_aggr = pool.pool_percentage_used()
+        # usage_after_aggr = pool.pool_percentage_used()
         after_aggr_tier_stats = self.pool.get_tier_stats(True)
-        self.log("===>(5) after_aggr_tier_stats=", after_aggr_tier_stats)
+        self.log.info("===>(5) after_aggr_tier_stats= %s", after_aggr_tier_stats)
 
         # 6. Verify Aggregation should start for Partial stripes IO
         if not any(self.check_aggregation_status(attempt=60).values()):
             self.fail("Aggregation failed to start..")
 
         # 7. Get total space consumed (scm+nvme) after aggregation, wait for
-        #    maximun 3 minutes until aggregation triggered.
+        #    maximum 3 minutes until aggregation triggered.
 
         after_aggr_tier_stats = self.pool.get_tier_stats(True)
-        self.log("===>(7) after_aggr_tier_stats=", after_aggr_tier_stats)
+        self.log.info("===>(7) after_aggr_tier_stats= %s", after_aggr_tier_stats)
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
@@ -101,7 +101,7 @@ class EcodFioRebuild(ErasureCodeFio):
             5. Get total space consumed (scm+nvme).
             6. Enable aggregation.
             7. Get total space consumed (scm+nvme) after aggregation, wait for
-               maximun 3 minutes until aggregation triggered.
+               maximum 3 minutes until aggregation triggered.
             8. Read and verify the data after Aggregation.
             9. Kill one more rank and verify the data after rebuild finish.
 
