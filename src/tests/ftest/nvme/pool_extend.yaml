@@ -31,7 +31,7 @@ server_config:
 pool:
   svcn: 4
   control_method: dmg
-  rebuild_timeout: 120
+  rebuild_timeout: 180
   pool_query_timeout: 30
 pool_qty_1:
   size: "50%"

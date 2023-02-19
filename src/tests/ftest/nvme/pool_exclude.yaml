@@ -33,7 +33,7 @@ pool:
   nvme_size: 300000000000
   svcn: 4
   control_method: dmg
-  rebuild_timeout: 120
+  rebuild_timeout: 180
   pool_query_timeout: 30
 container:
   type: POSIX
