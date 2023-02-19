@@ -71,12 +71,12 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 6. Verify Aggregation should start for Partial stripes IO
         #    wait for maximum 3 minutes until aggregation triggered.
-        start = time()
+        start = time.time()
         max_elapse_time = 180
         retry_timeout = False
         while not retry_timeout and pool_freespace >= init_pool_freespace - aggr_threshold:
             time.sleep(5)
-            if time() - start > max_elapse_time:
+            if time.time() - start > max_elapse_time:
                 retry_timeout = True
             pool_freespace = self.get_pool_freespace()
             self.log.info("==>(6)After enable aggregation, pool freespace= %d", pool_freespace)
