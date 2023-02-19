@@ -343,11 +343,8 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 
-			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, nil)
-			for _, ei := range cs.harness.instances {
-				// tests are for pre-engine-start scenario
-				ei.(*EngineInstance).ready.SetFalse()
-			}
+			// tests are for pre-engine-start scenario so pass notStarted: true
+			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, nil, true)
 
 			if tc.req == nil {
 				tc.req = &ctlpb.StorageScanReq{

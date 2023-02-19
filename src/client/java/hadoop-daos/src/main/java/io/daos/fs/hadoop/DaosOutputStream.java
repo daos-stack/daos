@@ -9,6 +9,7 @@ package io.daos.fs.hadoop;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import com.jcraft.jsch.IO;
 import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
 
@@ -29,9 +30,35 @@ public class DaosOutputStream extends OutputStream {
 
   private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
+  /**
+   * Constructor for self buffer management and non-append
+   *
+   * @param daosFile
+   * @param writeBufferSize
+   * @param stats
+   * @param async
+   * @throws IOException
+   */
   protected DaosOutputStream(DaosFile daosFile,
-                          final int writeBufferSize, FileSystem.Statistics stats, boolean async) {
-    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, async, true);
+                             final int writeBufferSize, FileSystem.Statistics stats,
+                             boolean async) throws IOException {
+    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, false, async, true);
+  }
+
+  /**
+   * Constructor for self buffer management
+   *
+   * @param daosFile
+   * @param writeBufferSize
+   * @param stats
+   * @param append
+   * @param async
+   * @throws IOException
+   */
+  protected DaosOutputStream(DaosFile daosFile,
+                          final int writeBufferSize, FileSystem.Statistics stats,
+                          boolean append, boolean async) throws IOException {
+    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, append, async, true);
   }
 
   /**
@@ -47,10 +74,12 @@ public class DaosOutputStream extends OutputStream {
    * is self managed buffer?
    */
   private DaosOutputStream(DaosFile daosFile,
-                          ByteBuf buffer, FileSystem.Statistics stats, boolean async, boolean selfBuffer) {
+                          ByteBuf buffer, FileSystem.Statistics stats, boolean append, boolean async,
+                          boolean selfBuffer) throws IOException {
     this.closed = false;
-    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, false, stats) :
-        new DaosFileSourceSync(daosFile, buffer, 0, stats);
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer,
+        append ? daosFile.length() : 0, false, append, stats) :
+        new DaosFileSourceSync(daosFile, buffer, append ? daosFile.length() : 0, append, stats);
     this.buffer = selfBuffer ? buffer : null;
     this.stats = stats;
     if (!buffer.hasMemoryAddress()) {
@@ -59,7 +88,22 @@ public class DaosOutputStream extends OutputStream {
   }
 
   /**
-   * Constructor with daosFile, file path, direct byte buffer and Hadoop file system statistics.
+   * Constructor for external buffer management and non-append
+   *
+   * @param daosFile
+   * @param buffer
+   * @param stats
+   * @param async
+   * @throws IOException
+   */
+  protected DaosOutputStream(DaosFile daosFile,
+                             ByteBuf buffer, FileSystem.Statistics stats,
+                             boolean async) throws IOException {
+    this(daosFile, buffer, stats, false, async, false);
+  }
+
+  /**
+   * Constructor for external buffer management
    *
    * @param daosFile
    * DAOS file object
@@ -69,8 +113,9 @@ public class DaosOutputStream extends OutputStream {
    * Hadoop file system statistics
    */
   protected DaosOutputStream(DaosFile daosFile,
-                          ByteBuf buffer, FileSystem.Statistics stats, boolean async) {
-    this(daosFile, buffer, stats, async, false);
+                             ByteBuf buffer, FileSystem.Statistics stats,
+                             boolean append, boolean async) throws IOException {
+    this(daosFile, buffer, stats, append, async, false);
   }
 
   /**

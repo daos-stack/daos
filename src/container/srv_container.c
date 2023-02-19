@@ -890,6 +890,22 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Determine if the label property was supplied, and if so,
+	 * verify that it is not the default unset label.
+	 */
+	def_lbl_ent = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(in->cci_prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent != NULL && lbl_ent->dpe_str != NULL) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) == 0) {
+			D_ERROR(DF_CONT": label is the same as default label\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		lbl = lbl_ent->dpe_str;
+	}
+
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
@@ -909,19 +925,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
-	}
-
-	/* Determine if non-default label property supplied */
-	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
-					  DAOS_PROP_CO_LABEL);
-	D_ASSERT(def_lbl_ent != NULL);
-	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
-	D_ASSERT(lbl_ent != NULL);
-	if (lbl_ent->dpe_str) {
-		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
-			    DAOS_PROP_LABEL_MAX_LEN)) {
-			lbl = lbl_ent->dpe_str;
-		}
 	}
 
 	/* Check if a container with this UUID and label already exists */
@@ -1548,9 +1551,14 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": update aggregation max eph "DF_U64"\n",
-		DP_CONT(arg->pool_uuid, arg->cont_uuid), arg->min_eph);
-	cont_child->sc_ec_agg_eph_boundry = arg->min_eph;
+	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+		DP_CONT(arg->pool_uuid, arg->cont_uuid),
+		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
+		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
+
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
+		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
+
 	ds_cont_child_put(cont_child);
 	return rc;
 }
@@ -2363,10 +2371,10 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
-		/* sizeof(DEFAULT_CONT_LABEL) includes \0 at the end */
-		if (value.iov_len == (sizeof(DEFAULT_CONT_LABEL) - 1) &&
-		    strncmp(value.iov_buf, DEFAULT_CONT_LABEL,
-			    sizeof(DEFAULT_CONT_LABEL) - 1) == 0 ) {
+		/* sizeof(DAOS_PROP_CO_LABEL_DEFAULT) includes \0 at the end */
+		if (value.iov_len == (sizeof(DAOS_PROP_CO_LABEL_DEFAULT) - 1) &&
+		    strncmp(value.iov_buf, DAOS_PROP_CO_LABEL_DEFAULT,
+			    sizeof(DAOS_PROP_CO_LABEL_DEFAULT) - 1) == 0 ) {
 			prop->dpp_nr--;
 		} else {
 			if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
@@ -3157,7 +3165,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	struct daos_prop_entry	*def_ent;
 	char			*def_lbl;
 	struct daos_prop_entry	*old_ent;
-	char			*old_lbl;
+	char			*old_lbl = NULL;
 	d_iov_t			 key;
 	d_iov_t			 val;
 	uuid_t			 match_cuuid;
@@ -3188,10 +3196,11 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 
 	/* If specified label matches existing label, nothing more to do */
 	old_ent = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
-	D_ASSERT(old_ent != NULL);
-	old_lbl = old_ent->dpe_str;
-	if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
-		return 0;
+	if (old_ent) {
+		old_lbl = old_ent->dpe_str;
+		if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
+			return 0;
+	}
 
 	/* Insert new label into cs_uuids KVS, fail if already in use */
 	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
@@ -3220,6 +3229,9 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		DP_UUID(cont->c_uuid), in_lbl);
 
 	/* Remove old label from cs_uuids KVS, if applicable */
+	if (old_lbl == NULL)
+		return 0;
+
 	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
@@ -3820,7 +3832,7 @@ cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filt
 		       bool *match)
 {
 	d_iov_t			value;
-	uint64_t		val64;
+	uint64_t		val64 = 0;
 	uint32_t		val32;
 	bool			result = false;
 	struct co_md_times	mdtimes;

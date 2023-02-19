@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,7 +16,6 @@ from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
 from general_utils import check_pool_files, DaosTestError
-from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
@@ -91,6 +90,72 @@ def remove_pool(test, pool):
     return error_list
 
 
+def get_size_params(pool):
+    """Get the TestPool params that can be used to create a pool of the same size.
+
+    Useful for creating multiple pools of equal --size=X% as each subsequent 'dmg pool create
+    --size=X%' results in a smaller pool each time due to using a percentage of the available free
+    space.
+
+    Args:
+        pool (TestPool): pool whose size is being replicated.
+
+    Returns:
+        dict: size params argument for an add_pool() method
+
+    """
+    return {"size": None,
+            "tier_ratio": None,
+            "scm_size": pool.scm_per_rank,
+            "nvme_size": pool.nvme_per_rank}
+
+
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+    """Check the duration of each pool creation meets the requirement.
+
+    Args:
+        test (Test): the test to fail if the pool creation exceeds the max duration
+        pools (list): list of TestPool objects to create
+        max_duration (int): max pool creation duration allowed in seconds
+        offset (int, optional): pool index offset. Defaults to 1.
+        durations (list, optional): list of other pool create durations to include in the check.
+            Defaults to None.
+    """
+    if durations is None:
+        durations = []
+    for index, pool in enumerate(pools):
+        durations.append(time_pool_create(test.log, index + offset, pool))
+
+    exceeding_duration = 0
+    for index, duration in enumerate(durations):
+        if duration > max_duration:
+            exceeding_duration += 1
+
+    if exceeding_duration:
+        test.fail(
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))
+
+
+def time_pool_create(log, number, pool):
+    """Time how long it takes to create a pool.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        number (int): pool number in the list
+        pool (TestPool): pool to create
+
+    Returns:
+        float: number of seconds elapsed during pool create
+
+    """
+    start = time()
+    pool.create()
+    duration = time() - start
+    log.info("Pool %s creation: %s seconds", number, duration)
+    return duration
+
+
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
@@ -148,6 +213,9 @@ class TestPool(TestDaosApiBase):
         self.quantity = BasicParameter(None, 1)
         self.min_targets = BasicParameter(None, 1)
 
+        # Parameter to control log mask enable/disable for pool create/destroy
+        self.set_logmasks = BasicParameter(None, True)
+
         self.pool = None
         self.info = None
         self.svc_ranks = None
@@ -189,37 +257,6 @@ class TestPool(TestDaosApiBase):
             test (Test): avocado Test object
         """
         super().get_params(test)
-
-        # Autosize any size/scm_size/nvme_size parameters
-        # pylint: disable=too-many-boolean-expressions
-        if ((self.scm_size.value is not None
-             and str(self.scm_size.value).endswith("%"))
-                or (self.nvme_size.value is not None
-                    and str(self.nvme_size.value).endswith("%"))):
-            index = self.server_index.value
-            try:
-                params = test.server_managers[index].autosize_pool_params(
-                    size=None,
-                    tier_ratio=None,
-                    scm_size=self.scm_size.value,
-                    nvme_size=self.nvme_size.value,
-                    min_targets=self.min_targets.value,
-                    quantity=self.quantity.value)
-            except ServerFailed as error:
-                test.fail(
-                    "Failure autosizing pool parameters: {}".format(error))
-            except AutosizeCancel as error:
-                test.cancel(error)
-
-            # Update the pool parameters with any autosized values
-            for name in params:
-                test_pool_param = getattr(self, name)
-                test_pool_param.update(params[name], name)
-
-                # Cache the autosized value so we do not calculate it again
-                # pylint: disable=protected-access
-                cache_id = (name, self.namespace, test_pool_param._default)
-                test.params._cache[cache_id] = params[name]
 
         # Use a unique pool label if using pool labels
         if self.label.value is not None:
@@ -352,12 +389,14 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+        if self.set_logmasks is True:
+            self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            self.dmg.server_set_logmasks(raise_exception=False)
+            if self.set_logmasks is True:
+                self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
         if data is not None and create_res is not None:
@@ -455,9 +494,12 @@ class TestPool(TestDaosApiBase):
 
                 # Destroy the pool with the dmg command.
                 # Elevate log_mask to DEBUG, then restore after pool destroy
-                self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
-                self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
-                self.dmg.server_set_logmasks(raise_exception=False)
+                if self.set_logmasks is True:
+                    self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+                    self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
+                    self.dmg.server_set_logmasks(raise_exception=False)
+                else:
+                    self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
 
                 status = True
 
@@ -1006,8 +1048,10 @@ class TestPool(TestDaosApiBase):
         """
         daos_space = self.get_pool_daos_space()
         pool_percent = {
-            'scm': round(float(daos_space["s_free"][0]) / float(daos_space["s_total"][0]) * 100, 4),
-            'nvme': round(float(daos_space["s_free"][1]) / float(daos_space["s_total"][1]) * 100, 4)
+            'scm': round(float(daos_space["s_total"][0] - daos_space["s_free"][0])
+                         / float(daos_space["s_total"][0]) * 100, 4),
+            'nvme': round(float(daos_space["s_total"][1] - daos_space["s_free"][1])
+                          / float(daos_space["s_total"][1]) * 100, 4)
         }
         return pool_percent
 
@@ -1267,8 +1311,8 @@ class TestPool(TestDaosApiBase):
             interval (int): Interval (sec) to call pool query to check the rebuild status.
                 Defaults to 1.
         """
-        start = float(time())
+        start = time()
         self.wait_for_rebuild_to_start(interval=interval)
         self.wait_for_rebuild_to_end(interval=interval)
-        duration = float(time()) - start
+        duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
