@@ -652,11 +652,13 @@ crt_context_abort(struct crt_context *ctx, bool force)
 	}
 
 out_epis:
+	D_MUTEX_LOCK(&ctx->cc_mutex);
 	for (i = 0; i < epis.p_len; i++) {
 		struct crt_ep_inflight *epi = epis.p_buf[i];
 
 		d_hash_rec_decref(&ctx->cc_epi_table, &epi->epi_link);
 	}
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 	d_vec_pointers_fini(&epis);
 out:
 	return rc;
@@ -813,9 +815,9 @@ crt_rank_abort(d_rank_t rank)
 	 * will not be destroyed. We don't block if the lock is busy, because a
 	 * crt_context_destroy call may take the lock for quite some time.
 	 */
-	rc = pthread_rwlock_trywrlock(&crt_context_destroy_lock);
+	rc = D_RWLOCK_TRYWRLOCK(&crt_context_destroy_lock);
 	if (rc != 0)
-		D_GOTO(out, rc = d_errno2der(rc));
+		D_GOTO(out, rc);
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	/* TODO: Do we need to handle secondary providers? */
