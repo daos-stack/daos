@@ -76,7 +76,7 @@ class EcodFioRebuild(ErasureCodeFio):
         retry_timeout = False
         while not retry_timeout and pool_freespace >= init_pool_freespace - aggr_threshold:
             time.sleep(5)
-            time() - start > max_elapse_time:
+            if time() - start > max_elapse_time:
                 retry_timeout = True
             pool_freespace = self.get_pool_freespace()
             self.log.info("==>(6)After enable aggregation, pool freespace= %d", pool_freespace)
