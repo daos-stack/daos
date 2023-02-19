@@ -29,8 +29,7 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  scm_size: 25%
-  nvme_size: 93%
+  size: 93%
   svcn: 1
   control_method: dmg
   pool_query_timeout: 30

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
 
 /** 2.4 features */
-#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK)
+#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
 
 /**
  * Durable format for VOS pool
