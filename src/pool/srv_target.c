@@ -198,6 +198,9 @@ start_gc_ult(struct ds_pool_child *child)
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_gc_req == NULL);
 
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: starting GC ULT\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
@@ -830,6 +833,9 @@ ds_pool_chk_post(uuid_t uuid)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
+	D_DEBUG(DB_MGMT, "Post handle pool starting for "DF_UUIDF" after DAOS check: "DF_RC"\n",
+		DP_UUID(uuid), DP_RC(rc));
+
 	/* The pool must has been opened. */
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       NULL /* create_args */, &llink);
@@ -848,7 +854,7 @@ out:
 		daos_lru_ref_release(pool_cache, &pool->sp_entry);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Post handle pool start for "DF_UUIDF" after DAOS check: "DF_RC"\n",
+		 "Post handle pool started for "DF_UUIDF" after DAOS check: "DF_RC"\n",
 		 DP_UUID(uuid), DP_RC(rc));
 
 	return rc;

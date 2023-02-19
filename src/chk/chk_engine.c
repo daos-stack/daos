@@ -195,7 +195,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 
 		/* Notify the leader that check instance exit on the engine. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-				   CRT_IV_SYNC_EAGER, true);
+				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)
 			D_ERROR(DF_ENGINE" on rank %u failed to notify leader for its exit, "
 				"status %u: "DF_RC"\n",
@@ -1614,7 +1614,7 @@ chk_engine_pool_notify(struct chk_pool_rec *cpr, struct ds_pool *pool)
 		iv.ci_to_leader = 1;
 		/* Synchronously notify the check leader with the new check status/phase. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-				   CRT_IV_SYNC_EAGER, true);
+				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)
 			D_WARN(DF_ENGINE" on rank %u failed to notify check leader for "
 			       DF_UUIDF", phase %u, ins_status %u, pool_status %u: "DF_RC"\n",
@@ -1942,7 +1942,7 @@ chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 			goto out;
 	}
 
-	if (d_list_empty(&ins->ci_pool_list) && !(flags & CHK__CHECK_FLAG__CF_ORPHAN_POOL))
+	if (d_list_empty(&ins->ci_pool_list) && !(api_flags & CHK__CHECK_FLAG__CF_ORPHAN_POOL))
 		D_GOTO(out, rc = 1);
 
 	goto init;
@@ -2061,7 +2061,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		if (rc == 0) {
 			d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link)
 				/* Shutdown former instance left opened pool. */
-				chk_pool_shutdown(cpr);
+				chk_pool_shutdown(cpr, false);
 		}
 	}
 
@@ -3170,8 +3170,7 @@ out_notify:
 	iv.ci_to_leader = 1;
 
 	/* Notify the leader that check instance exit on the engine. */
-	rc1 = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-			    CRT_IV_SYNC_EAGER, true);
+	rc1 = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE, true);
 	if (rc1 != 0)
 		D_ERROR(DF_ENGINE" on rank %u failed to notify leader for its exit, status %u: "
 			DF_RC"\n", DP_ENGINE(ins), myrank, cbk->cb_ins_status, DP_RC(rc1));
