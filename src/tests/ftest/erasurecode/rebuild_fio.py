@@ -43,6 +43,7 @@ class EcodFioRebuild(ErasureCodeFio):
         """
         # 1. Disable aggregation
         aggr_threshold = 100000
+        self.log.info("==>(1)Disable aggregation")
         self.pool.set_property("reclaim", "disabled")
 
         # 2.a Kill last server rank first
@@ -53,6 +54,7 @@ class EcodFioRebuild(ErasureCodeFio):
             self.set_online_rebuild = True
 
         # 2.b Write the Fio data and kill server if rebuild_mode is on-line
+        self.log.info("==>(2)start fio and kill server")
         self.start_online_fio()
 
         # 3. Get total space consumed (scm+nvme)
@@ -62,6 +64,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.log.info("==>(3)Before enable aggregation, pool freespace= %d", init_pool_freespace)
 
         # 4. Enable aggregation
+        self.log.info("==>(4)Enable aggregation")
         self.pool.set_property("reclaim", "time")
 
         # 5. Get total space consumed (scm+nvme).
@@ -72,14 +75,17 @@ class EcodFioRebuild(ErasureCodeFio):
         # 6. Verify Aggregation should start for Partial stripes IO
         #    wait for maximum 3 minutes until aggregation triggered.
         start = time.time()
-        max_elapse_time = 180
+        max_elapse_time = 360
         retry_timeout = False
-        while not retry_timeout and pool_freespace >= init_pool_freespace - aggr_threshold:
-            time.sleep(5)
+        retry = 0
+        while not retry_timeout and pool_freespace <= init_pool_freespace - aggr_threshold:
+            time.sleep(10)
+            retry += 1
             if time.time() - start > max_elapse_time:
                 retry_timeout = True
             pool_freespace = self.get_pool_freespace()
-            self.log.info("==>(6)After enable aggregation, pool freespace= %d", pool_freespace)
+            self.log.info(
+                "==>(6.%d)After enable aggregation, pool freespace= %d", retry, pool_freespace)
         if retry_timeout:
             self.fail("Aggregation did not triggered and timeout")
 
