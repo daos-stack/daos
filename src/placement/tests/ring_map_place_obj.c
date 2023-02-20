@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,7 +59,7 @@ main(int argc, char **argv)
 
 	gen_pool_and_placement_map(1, DOM_NR, NODE_PER_DOM,
 				   VOS_PER_TARGET, PL_TYPE_RING,
-				   &po_map, &pl_map);
+				   PO_COMP_TP_RANK, &po_map, &pl_map);
 	D_ASSERT(po_map != NULL);
 	D_ASSERT(pl_map != NULL);
 	pool_map_print(po_map);

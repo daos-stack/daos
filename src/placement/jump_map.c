@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,7 +124,10 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	doms_per_pd = dom_nr / pd_nr;
 	D_ASSERTF(doms_per_pd >= 1, "bad dom_nr %d, pd_nr %d\n", dom_nr, pd_nr);
 
-	pd_grp_size = min(md->omd_pda, doms_per_pd);
+	if (jmop->jmop_grp_size == 1) /* non-replica */
+		pd_grp_size = md->omd_pda;
+	else
+		pd_grp_size = min(md->omd_pda, doms_per_pd);
 	pd_grp_nr = shard_nr / pd_grp_size + (shard_nr % pd_grp_size != 0);
 	jmop->jmop_pd_grp_size = pd_grp_size;
 	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
