@@ -42,7 +42,7 @@ class EcodFioRebuild(ErasureCodeFio):
             rebuild_mode (str): On-line or off-line rebuild mode
         """
         # 1. Disable aggregation
-        aggr_threshold = 100000
+        aggr_threshold = 1000000
         self.log.info("==>(1)Disable aggregation")
         self.pool.set_property("reclaim", "disabled")
 
@@ -78,7 +78,7 @@ class EcodFioRebuild(ErasureCodeFio):
         max_elapse_time = 360
         retry_timeout = False
         retry = 0
-        while not retry_timeout and pool_freespace <= init_pool_freespace - aggr_threshold:
+        while not retry_timeout and pool_freespace <= init_pool_freespace + aggr_threshold:
             time.sleep(10)
             retry += 1
             if time.time() - start > max_elapse_time:
