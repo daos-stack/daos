@@ -41,6 +41,7 @@ class EcodFioRebuild(ErasureCodeFio):
         Args:
             rebuild_mode (str): On-line or off-line rebuild mode
         """
+        aggregation_threshold = self.params.get("aggregation_threshold", "/run/pool/*")
         # 1. Disable aggregation
         self.log.info("==>(1)Disable aggregation")
         self.pool.set_property("reclaim", "disabled")
@@ -69,12 +70,12 @@ class EcodFioRebuild(ErasureCodeFio):
         self.log.info("==>(5)After enable aggregation, pool freespace= %d", pool_freespace)
 
         # 6. Verify Aggregation should start for Partial stripes IO
-        # wait until aggregation triggered, check for more than 5% free space released.
+        # wait until aggregation triggered, check for more than a threshold free space released.
         start = time.time()
         max_elapse_time = 360
         retry_timeout = False
         retry = 0
-        while not retry_timeout and pool_freespace <= init_pool_freespace * 1.05:
+        while not retry_timeout and pool_freespace <= init_pool_freespace + aggregation_threshold:
             time.sleep(10)
             retry += 1
             if time.time() - start > max_elapse_time:
