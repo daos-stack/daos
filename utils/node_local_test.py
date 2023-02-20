@@ -878,7 +878,7 @@ class DaosServer():
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
-            self.server_logs.remove(log)
+            # self.server_logs.remove(log)
         self.running = False
         return ret
 
