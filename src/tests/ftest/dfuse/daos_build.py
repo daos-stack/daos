@@ -136,6 +136,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            build_time = 60
         elif cache_mode == 'writethrough':
             cont_attrs['dfuse-data-cache'] = 'on'
             cont_attrs['dfuse-attr-time'] = cache_time
