@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -210,6 +210,7 @@ Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+Requires: protobuf-c-devel
 Requires: fio
 Requires: git
 Requires: dbench
@@ -550,8 +551,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Feb 16 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.103-4
+* Wed Feb 20 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.103-4
 - Update libfabric to version v1.17.0
+
+* Fri Feb 17 2023 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.3.103-4
+- Add protobuf-c-devel to deps of client-tests package
 
 * Mon Feb 13 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-3
 - Remove explicit R: protobuf-c and let the auto-dependency generator

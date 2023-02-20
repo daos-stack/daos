@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -799,6 +799,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
 	struct evt_desc_cbs	 cbs;
 	int			 expected_flag;
+	uint64_t                 feats = vos_evt_feats;
 	int			 unexpected_flag;
 	int			 rc = 0;
 
@@ -854,8 +855,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	}
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
-				uma, &cbs, sub_toh);
+		if (pool->vp_feats & VOS_POOL_FEAT_DYN_ROOT)
+			feats |= EVT_FEAT_DYNAMIC_ROOT;
+		rc = evt_create(&krec->kr_evt, feats, VOS_EVT_ORDER, uma, &cbs, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: "DF_RC"\n",
 				DP_RC(rc));

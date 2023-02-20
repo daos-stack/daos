@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,7 +166,7 @@ struct ilog_entry {
 	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 600
+#define ILOG_PRIV_SIZE 144
 /* Information about ilog entries */
 struct ilog_info {
 	/** Status of ilog entry */

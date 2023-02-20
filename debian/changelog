@@ -1,8 +1,15 @@
 daos (2.3.103-4) unstable; urgency=medium
+
   [ Alexander Oganezov ]
   * Update libfabric to 1.17.0
 
- -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 30 Jan 2023 09:04:51 -0400
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 20 Feb 2023 09:04:51 -0400
+
+daos (2.3.103-4) unstable; urgency=medium
+  [ Ashley M. Pittman ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Fri, 17 Feb 2023 17:53:00 -0800
 
 daos (2.3.103-3) unstable; urgency=medium
   [ Brian J. Murrell ]
