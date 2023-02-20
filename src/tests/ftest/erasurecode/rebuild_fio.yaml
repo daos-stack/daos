@@ -2,10 +2,10 @@ hosts:
   servers: !mux
     6_server:
       test_servers: server-[1-3]
-      #    8_server:
-      #      test_servers: server-[1-4]
-      #    12_server:
-      #      test_servers: server-[1-6]
+    8_server:
+      test_servers: server-[1-4]
+    12_server:
+      test_servers: server-[1-6]
   test_clients: 1
 timeout: 1500
 setup:
@@ -42,8 +42,8 @@ container:
   rf_properties: !mux
     rf1:
       properties: rd_fac:1
-      #    rf2:
-      #      properties: rd_fac:2
+    rf2:
+      properties: rd_fac:2
 fio:
   names:
     - test
@@ -60,9 +60,9 @@ fio:
       write_read:
         rw: 'write'
         rw_read: 'read'
-        #      randrw:
-        #        rw: 'randrw'
-        #        rw_read: 'randrw'
+      randrw:
+        rw: 'randrw'
+        rw_read: 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   disable_caching: True
