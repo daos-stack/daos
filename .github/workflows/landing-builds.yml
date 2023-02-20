@@ -157,6 +157,12 @@ jobs:
         with:
           name: tarfiles
           path: /tmp/*_daos.tgz
+      - name: Archive logfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logfiles
+          path: /tmp/*.log*
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -334,10 +340,10 @@ jobs:
              sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
              sudo apt-get update
              sudo apt-get install gdb
-             docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root \
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        build-image ./daos/utils/node_local_test.py --no-root \
-                        --memcheck no --test cont_copy
+                        --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        ./daos/utils/ci/run_in_gha.sh
       - name: Check for corefiles
         if: always()
         run: |
@@ -362,6 +368,12 @@ jobs:
         with:
           name: tarfiles
           path: /tmp/*_daos.tgz
+      - name: Archive logfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logfiles
+          path: /tmp/*.log*
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)

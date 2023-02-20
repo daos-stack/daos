@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 cd daos
 
@@ -19,7 +19,7 @@ echo ::endgroup::
 
 echo ::group::Test client only debug build
 scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
-       TARGET_TYPE=release -c install
+       TARGET_TYPE=debug -c install
 utils/ci/gha-file-check.sh -n /opt/daos/bin/dmg
 scons --jobs "$DEPS_JOBS" client install
 utils/ci/gha-file-check.sh -n /opt/daos/bin/daos_engine
@@ -51,19 +51,19 @@ utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
 utils/ci/gha-file-check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
-echo ::group::Rebuild ofi in alternative location
-rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
-scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
-      "$DEPS_JOBS"
-echo ::endgroup::
-
-echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
-scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
-      DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
-utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
-utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
-utils/ci/gha-file-check.sh /opt/daos/bin/dmg
-echo ::endgroup::
+#echo ::group::Rebuild ofi in alternative location
+#rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
+#scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
+#      "$DEPS_JOBS"
+#echo ::endgroup::
+#
+#echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
+#scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
+#      DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
+#utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
+#utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
+#utils/ci/gha-file-check.sh /opt/daos/bin/dmg
+#echo ::endgroup::
 
 echo ::group::Config file after ALT_PREFIX build
 cat daos.conf
@@ -99,7 +99,6 @@ for i in /tmp//core* ; do
     gdb /opt/daos/bin/daos_engine "$i" <<eof
 set pagination off
 bt full
-disass ABT_thread_create
 quit
 eof
 done

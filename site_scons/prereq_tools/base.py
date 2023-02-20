@@ -493,7 +493,6 @@ class PreReqComponent():
 
         self._setup_path_var('PREFIX')
         self._setup_path_var('GOPATH')
-
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
 

@@ -88,6 +88,12 @@ jobs:
         with:
           name: tarfiles
           path: /tmp/*_daos.tgz
+      - name: Archive logfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logfiles
+          path: /tmp/*.log*
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
