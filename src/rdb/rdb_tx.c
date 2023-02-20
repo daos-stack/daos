@@ -414,10 +414,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 		goto out_lock;
 	}
 
-	/* If tx is not critical, and almost out of space, do not append.
-	 * TODO: decide if an official free space amount should be in lc
-	 *       and possibly adjusted based on differences across replicas.
-	 */
+	/* If tx is not critical, and out of space (even after log compaction), do not append. */
 	if (!rdb_tx_is_critical(tx)) {
 		daos_size_t	scm_remaining = 0;
 		uint32_t	nchecks = 0;
@@ -425,34 +422,26 @@ rdb_tx_commit(struct rdb_tx *tx)
 check_space:
 		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to query free space\n",
-				DP_DB(tx->dt_db));
+			D_ERROR(DF_DB": failed to query free space\n", DP_DB(tx->dt_db));
 			goto out_lock;
 		}
 		nchecks++;
 
 		if (scm_remaining < RDB_NOAPPEND_FREE_SPACE) {
 			uint64_t		idx = 0;
-			uint64_t		delta_nsec;
 
 			if (nchecks > 1) {
 				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not append! "
 				       "scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
 				D_GOTO(out_lock, rc = -DER_NOSPACE);
-			} else {
-				/* Throttle number of times compacting the log when low on space. */
-				delta_nsec = (d_hlc2nsec(d_hlc_get()) -
-					      d_hlc2nsec(tx->dt_db->d_nospc_ts));
-				if (delta_nsec < RDB_NOSPC_ERROR_INTVL_NSEC) {
-					D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
-						"early to trigger compaction\n", DP_DB(tx->dt_db));
-					goto check_space;
-				}
 			}
 
-			/* Trigger compaction of all applied entries since very low on space.
-			 * This may recover enough space to allow the operation to proceed.
-			 */
+			/* Compact applied entries (not too often). May recover enough space. */
+			if ((daos_getutime() - tx->dt_db->d_nospc_ts) < RDB_NOSPC_ERR_INTVL_USEC) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
+					"early to trigger compaction\n", DP_DB(tx->dt_db));
+				goto check_space;	/* will return via nchecks test above */
+			}
 			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, compact log before retry! "
 				"scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
 			rc = rdb_raft_trigger_compaction(tx->dt_db, true /* compact_all */, &idx);
@@ -466,9 +455,16 @@ check_space:
 					DP_DB(tx->dt_db), tx->dt_db->d_lc_record.dlr_aggregated,
 					idx);
 			}
-			tx->dt_db->d_nospc_ts = d_hlc_get();
+			tx->dt_db->d_nospc_ts = daos_getutime();
+
+			/* Do not append if we lost leadership while waiting for log compaction. */
+			rc = rdb_tx_leader_check(tx);
+			if (rc != 0)
+				goto out_lock;
+
 			goto check_space;
 		}
+
 		D_DEBUG(DB_TRACE, DF_DB": %s append tx entry to raft log, scm_left="DF_U64"\n",
 			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" : "",
 			scm_remaining);

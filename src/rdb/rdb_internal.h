@@ -32,7 +32,7 @@ struct rdb_raft_event {
 	uint64_t			dre_term;
 };
 
-#define RDB_NOSPC_ERROR_INTVL_NSEC (1 * NSEC_PER_SEC)
+#define RDB_NOSPC_ERR_INTVL_USEC (1000000)	/* 1 second */
 
 /* rdb.c **********************************************************************/
 
@@ -68,7 +68,7 @@ struct rdb {
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
 	daos_handle_t		d_mc;		/* metadata container */
-	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (HLC) */
+	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
@@ -89,8 +89,8 @@ struct rdb {
 	int			d_nevents;	/* d_events queue len from 0 */
 	ABT_cond		d_events_cv;	/* for d_events enqueues */
 	uint64_t		d_compact_thres;/* of compactable entries */
-	ABT_cond		d_compact_cv;	/* for requesting base updates */
-	ABT_cond		d_compacted_cv;	/* for confirming base updates */
+	ABT_cond		d_compact_cv;	/* for triggering base updates */
+	ABT_cond		d_compacted_cv;	/* for d_lc_record.dlr_aggregated updates */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
 	ABT_thread		d_callbackd;
