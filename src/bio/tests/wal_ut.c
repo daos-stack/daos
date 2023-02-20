@@ -343,8 +343,6 @@ static void
 wal_ut_many_acts(void **state)
 {
 	struct bio_ut_args	*args = *state;
-	struct bio_meta_context	*mc = args->bua_mc;
-	uint64_t		 meta_sz = (128ULL << 20);	/* 128 MB */
 	struct umem_wal_tx	*tx;
 	struct ut_fake_tx	*fake_tx;
 	unsigned int		 hdr_sz = sizeof(struct wal_trans_head);
@@ -356,7 +354,7 @@ wal_ut_many_acts(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Generate many actions to fill 2 and half WAL blocks */
-	blk_bytes = mc->mc_wal_info.si_header.wh_blk_bytes;
+	blk_bytes = args->bua_mc->mc_wal_info.si_header.wh_blk_bytes;
 	act_nr = (blk_bytes - hdr_sz) / entry_sz;
 	act_nr = act_nr * 2 + act_nr / 2;
 
