@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,15 +98,17 @@ oclass_get(unsigned int random)
 daos_obj_id_t
 racer_oid_gen(int random)
 {
-	daos_obj_id_t	oid;
-	uint16_t	oclass;
+	daos_obj_id_t	 oid;
+	daos_oclass_id_t oclass;
+	int		 rc;
 
 	oclass = oclass_get(random);
 
 	oid.lo	= random % obj_cnt_per_class;
 	oid.lo	|= oclass;
 	oid.hi	= oclass;
-	daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
+	rc = daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
+	assert_success(rc);
 
 	return oid;
 }
