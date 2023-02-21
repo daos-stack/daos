@@ -3014,6 +3014,165 @@ class PosixTests():
 
         destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
+    @needs_dfuse_with_opt(caching=False)
+    def test_daos_fs_check(self):
+        """Test DAOS FS Checker"""
+
+        pool = self.pool.id()
+        cont = self.container
+        path = self.dfuse.dir
+        dirname = join(path, 'test_dir')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f1')
+        with open(fname, 'w') as fd:
+            fd.write('test1')
+
+        dirname = join(path, 'test_dir/1d1/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f2')
+        with open(fname, 'w') as fd:
+            fd.write('test2')
+        dirname = join(path, 'test_dir/1d2/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f3')
+        with open(fname, 'w') as fd:
+            fd.write('test3')
+        dirname = join(path, 'test_dir/1d3/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f4')
+        with open(fname, 'w') as fd:
+            fd.write('test4')
+
+        dirname = join(path, 'test_dir/1d1/2d1/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f5')
+        with open(fname, 'w') as fd:
+            fd.write('test5')
+        dirname = join(path, 'test_dir/1d1/2d2/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f6')
+        with open(fname, 'w') as fd:
+            fd.write('test6')
+        dirname = join(path, 'test_dir/1d1/2d3/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f7')
+        with open(fname, 'w') as fd:
+            fd.write('test7')
+
+        dirname = join(path, 'test_dir/1d2/2d4/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f8')
+        with open(fname, 'w') as fd:
+            fd.write('test8')
+        dirname = join(path, 'test_dir/1d2/2d5/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f9')
+        with open(fname, 'w') as fd:
+            fd.write('test9')
+        dirname = join(path, 'test_dir/1d2/2d6/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f10')
+        with open(fname, 'w') as fd:
+            fd.write('test10')
+
+        dirname = join(path, 'test_dir/1d3/2d7/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f11')
+        with open(fname, 'w') as fd:
+            fd.write('test11')
+        dirname = join(path, 'test_dir/1d3/2d8/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f12')
+        with open(fname, 'w') as fd:
+            fd.write('test12')
+        dirname = join(path, 'test_dir/1d3/2d9/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f13')
+        with open(fname, 'w') as fd:
+            fd.write('test13')
+
+        daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
+        cmd_env = get_base_env()
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        dir1 = join(path, 'test_dir/')
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 4:
+            raise NLTestFail('Wrong number of entries')
+
+        cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir/1d1/"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 3:
+            raise NLTestFail('Wrong number of entries')
+
+        cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+        assert rc.returncode == 0
+
+        # fs check with relink should find the 2 leaked directories.
+        # Everything under them should be relinked but not reported as leaked.
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 2':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # run again to check nothing is detected
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        dir1 = join(path, 'lost+found/lf/')
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 2:
+            raise NLTestFail('Wrong number of entries')
+        nr_entries = 0
+        file_nr = 0
+        dir_nr = 0
+        for entry in dir_list:
+            if os.path.isdir(os.path.join(dir1, entry)):
+                nr_entries += 1
+                for root, dirs, files in os.walk(os.path.join(dir1, entry)):
+                    for name in files:
+                        print(os.path.join(root, name))
+                        file_nr += 1
+                    for name in dirs:
+                        print(os.path.join(root, name))
+                        dir_nr += 1
+        if nr_entries != 2:
+            raise NLTestFail('Wrong number of leaked directory OIDS')
+        if file_nr != 13:
+            raise NLTestFail('Wrong number of sub-files in lost+found')
+        if dir_nr != 11:
+            raise NLTestFail('Wrong number of sub-directories in lost+found')
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
