@@ -227,9 +227,6 @@ struct umem_store_ops vos_store_ops = {
     .so_wal_id_cmp = vos_wal_id_cmp,
 };
 
-/* NB: None of pmemobj_create/open/close is thread-safe */
-pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
-
 bool
 vos_pool_needs_checkpoint(daos_handle_t poh)
 {
@@ -352,10 +349,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	store.stor_ops = &vos_store_ops;
 
 umem_create:
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
-
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -408,10 +402,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	store.stor_ops = &vos_store_ops;
 
 umem_open:
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
-
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -436,9 +427,7 @@ vos_pmemobj_close(struct umem_pool *pop)
 
 	store = pop->up_store;
 
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	umempobj_close(pop);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 
 	if (store.stor_priv != NULL) {
 		rc = bio_mc_close(store.stor_priv);

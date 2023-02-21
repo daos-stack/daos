@@ -1557,3 +1557,15 @@ dss_has_enough_helper(void)
 {
 	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
 }
+
+/**
+ * Miscellaneous routines
+ */
+void
+dss_bind_to_xstream_cpuset(int tgt_id)
+{
+	struct dss_xstream *dx;
+
+	dx = dss_get_xstream(DSS_MAIN_XS_ID(tgt_id));
+	(void)dss_xstream_set_affinity(dx);
+}
