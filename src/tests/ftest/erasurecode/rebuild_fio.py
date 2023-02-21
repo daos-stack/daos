@@ -58,7 +58,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 3. Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
-        init_pool_freespace = self.get_pool_freespace()
+        init_free_space = self.get_pool_freespace()
 
         # 4. Enable aggregation
         self.log_step("Enable aggregation")
@@ -67,7 +67,7 @@ class EcodFioRebuild(ErasureCodeFio):
         # 5. Get total space consumed (scm+nvme) after aggregation enabled, verify and wait until
         #    aggregation triggered, maximum 3 minutes.
         self.log_step("Verify the Fio write finish without any error")
-        start = time.time()
+        start_time = time.time()
         timed_out = False
         aggr_triggered = False
         self.log_step("Verify and wait until aggregation triggered")

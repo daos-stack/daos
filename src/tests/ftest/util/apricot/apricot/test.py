@@ -442,11 +442,11 @@ class Test(avocadoTest):
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
 
-    def log_step(self, message):
-        """Log a test step.
+    def log_step(self, message):
+        """Log a test step.
 
-        Args:
-            message (str): description of test step.
+        Args:
+            message (str): description of test step.
 
         """
         self.log.info("==> Step %s: %s", self._test_step, message)
