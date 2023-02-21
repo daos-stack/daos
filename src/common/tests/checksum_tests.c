@@ -18,6 +18,7 @@
 #include <daos/common.h>
 #include <daos/cont_props.h>
 #include <daos/tests_lib.h>
+#include <daos/test_perf.h>
 
 static bool verbose;
 
@@ -108,7 +109,7 @@ static struct hash_ft fake_algo = {
 	.cf_update	= fake_update,
 	.cf_reset	= fake_reset,
 	.cf_finish	= fake_finish,
-	.cf_hash_len	= 0,
+	.cf_hash_len	= 4,
 	.cf_get_size	= NULL,
 	.cf_type	= FAKE_CSUM_TYPE,
 	.cf_name	= "fake"
@@ -1859,6 +1860,97 @@ test_ci_serialize(void **state)
 	assert_null(actual);
 }
 
+static void
+csum_performance_measurements_experiment(uint32_t iod_nr, enum DAOS_HASH_TYPE algo_type)
+{
+	struct test_data	 td;
+	struct daos_csummer	*csummer;
+	daos_iod_t		*iods;
+	d_sg_list_t		*sgls;
+	struct dcs_iod_csums	*iod_csums = NULL;
+	daos_key_t		 key = {0};
+	struct dcs_csum_info	*key_csum;
+
+	td_init_array_values(&td, iod_nr, 3, 1024, 1024);
+
+	sgls = td.td_sgls;
+	iods = td.td_iods;
+
+	assert_success(daos_csummer_init_with_type(&csummer, algo_type, 1024 * 32, 0));
+
+	/*
+	 * checksum verification
+	 */
+	MEASURE_TIME(
+	    daos_csummer_verify_iods(csummer, iods, sgls, iod_csums, iod_nr, NULL, -1, NULL),
+	    daos_csummer_calc_iods(csummer, sgls, iods, NULL, iod_nr, false, NULL, -1, &iod_csums),
+	    daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 * checksum calculation
+	 */
+	MEASURE_TIME(daos_csummer_calc_iods(csummer, sgls, iods, NULL, iod_nr, false, NULL, -1,
+					    &iod_csums),
+		     noop(),
+		     daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 * iod_csum allocation
+	 */
+	MEASURE_TIME(daos_csummer_alloc_iods_csums(csummer, iods, iod_nr, false, NULL, &iod_csums),
+		     noop(),
+		     daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 *  allocation size
+	 */
+	MEASURE_TIME(daos_csummer_allocation_size(csummer, iods, iod_nr, false, NULL),
+		     noop(), noop());
+
+	/*
+	 * key verification
+	 */
+	dts_iov_alloc_str(&key, "key");
+
+	MEASURE_TIME(daos_csummer_verify_key(csummer, &key, key_csum),
+		     daos_csummer_calc_key(csummer, &key, &key_csum),
+		     daos_csummer_free_ci(csummer, &key_csum));
+
+	/*
+	 * copy csummer
+	 */
+	struct daos_csummer *copy;
+
+	MEASURE_TIME(copy = daos_csummer_copy(csummer),
+		     noop(),
+		     daos_csummer_destroy(&copy));
+
+	/*
+	 * Some helper functions
+	 */
+	MEASURE_TIME(daos_csummer_get_rec_chunksize(csummer, 3),
+		     noop(), noop());
+
+	MEASURE_TIME(csum_align_boundaries(10, 1000, 5, 100, 1, 8),
+		     noop(), noop());
+
+	/* Clean up */
+	daos_csummer_destroy(&csummer);
+	daos_iov_free(&key);
+	td_destroy(&td);
+}
+
+static void
+csum_performance_measurements(void **state)
+{
+	print_message("\n------\n1 iod, CRC32\n");
+	csum_performance_measurements_experiment(1, HASH_TYPE_CRC32);
+	print_message("\n------\n10 iod, CRC32\n");
+	csum_performance_measurements_experiment(10, HASH_TYPE_CRC32);
+	print_message("\n------\n10 iod, noop checksum\n");
+	csum_performance_measurements_experiment(10, HASH_TYPE_NOOP);
+}
+
 static int
 csum_test_setup(void **state)
 {
@@ -1962,6 +2054,7 @@ static const struct CMUnitTest tests[] = {
 	     "multiple chunks", holes_4),
 	TEST("CSUM_HOLES05: With record size 2 and many holes within a "
 	     "single chunk", holes_5),
+	TEST("CSUM_PERF: Some performance measurements", csum_performance_measurements),
 };
 
 int
