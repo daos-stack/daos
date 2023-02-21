@@ -334,34 +334,6 @@ int
 daos_acl_validate(struct daos_acl *acl);
 
 /**
- * Check that the Access Control List is valid for use with a DAOS pool.
- *
- * This includes the checks in daos_acl_validate().
- *
- * \param	acl	Access Control List to sanity check
- *
- * \return	0		ACL is valid
- *		-DER_INVAL	ACL is not valid
- *		-DER_NOMEM	Ran out of memory while checking
- */
-int
-daos_acl_pool_validate(struct daos_acl *acl);
-
-/**
- * Check that the Access Control List is valid for use with a DAOS container.
- *
- * This includes the checks in daos_acl_validate().
- *
- * \param	acl	Access Control List to sanity check
- *
- * \return	0		ACL is valid
- *		-DER_INVAL	ACL is not valid
- *		-DER_NOMEM	Ran out of memory while checking
- */
-int
-daos_acl_cont_validate(struct daos_acl *acl);
-
-/**
  * Allocate a new Access Control Entry with an appropriately aligned principal
  * name, if applicable.
  *
