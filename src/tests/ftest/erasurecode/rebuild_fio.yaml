@@ -36,7 +36,7 @@ server_config:
 pool:
   size: 60%
   control_method: dmg
-  aggregation_threshold: 200000000
+  aggregation_threshold: 130000000
 container:
   type: POSIX
   control_method: daos
