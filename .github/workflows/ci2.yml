@@ -64,6 +64,11 @@ jobs:
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
                         --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
+      - name: Check for logfiles
+        if: always()
+        run: |
+             sudo bash -c 'ls -latr /tmp/*.log*' || true
+             sudo bash -c 'chmod a+r /tmp/*.log*' || true
       - name: Check for corefiles
         if: always()
         run: |
