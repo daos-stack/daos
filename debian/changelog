@@ -1,3 +1,15 @@
+daos (2.3.103-4) unstable; urgency=medium
+  [ Ashley M. Pittman ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Fri, 17 Feb 2023 17:53:00 -0800
+
+daos (2.3.103-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 13 Feb 2023 10:04:29 -0500
+
 daos (2.3.103-2) unstable; urgency=medium
   [ Michael Hennecke ]
   * Change ipmctl requirement from v2 to v3
