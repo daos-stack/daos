@@ -302,6 +302,7 @@ fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_use
 		}
 		user_info->nr_groups++;
 	}
+	D_ASSERT(nr_gids == user_info->nr_groups);
 
 	return rc;
 

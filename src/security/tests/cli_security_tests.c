@@ -698,7 +698,7 @@ test_get_cont_perms_valid(void **state)
 	user_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	user_ace->dae_allow_perms = cont_perms;
 
-	D_PRINT("= No perms from pool ACL\n");
+	D_PRINT("= No perms from cont ACL\n");
 	expect_cont_perms(uid, gid, gids, nr_gids, NULL, 0, 0);
 
 	D_PRINT("= Get user perms\n");
