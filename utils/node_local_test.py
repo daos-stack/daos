@@ -416,6 +416,10 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     env['MALLOC_CHECK_'] = '3'
+    env['D_LOG_STDERR_IN_LOG'] = '1'
+    env['HG_LOG_LEVEL'] = 'DEBUG'
+    env['HG_LOG_SUBSYS'] = 'hg,na'
+    env['FI_LOG_LEVEL'] = 'DEBUG'
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
