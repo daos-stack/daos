@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -141,6 +141,13 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "with {1} PMem modules.".format(step, engines_per_socket))
 
     def ping_verify(self, host, expect_pass=True):
+        """Verify host up or down status by ping.
+     
+        Args:
+             hosts (NodeSet): hosts set to be rebooted.
+             expect_pass (bool): expect result pass.
+
+        """
         ping_timeout = 600
         start = time.time()
         ping_status = None
@@ -157,7 +164,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 time.sleep(1)
         if time.time() - start >= ping_timeout:
             self.fail(
-                "#{0} reboot failed, did not come back after {1} seconds".format,
+                "#{0} ping failed, did not come back after {1} seconds".format,
                 host, ping_timeout)
 
     def host_reboot(self, hosts):
@@ -166,17 +173,16 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         Args:
              hosts (NodeSet): hosts set to be rebooted.
         """
-        reboot_waittime = self.params.get("reboot_waittime", "/run/server_config/*", default=210)
         cmd = "sudo shutdown -r now"
         run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("===Server %s rebooting... \n", hosts)
 
         self.ping_verify(hosts[0], expect_pass=False)
-        for host in hosts:
-            self.ping_verify(host, expect_pass=True)
+        self.ping_verify(hosts[0], expect_pass=True)
         cmd = "sudo uname"
         if not run_remote(self.log, hosts, cmd, timeout=600).passed:
-            return 1
+            self.fail(
+                "#{0} reboot failed, sudo uname failed.".format(hosts))
         self.log.info("===Server %s is up after reboot. \n", hosts)
 
     def cleanup(self):
