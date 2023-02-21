@@ -541,6 +541,18 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
+    def disable_aggregation(self):
+        """ Disable pool aggregation."""
+        self.log.info("Disable pool aggregation for pool %s", self.identifier)
+        self.set_property("reclaim", "disabled")
+
+    @fail_on(CommandFailure)
+    def enable_aggregation(self):
+        """ Enable pool aggregation."""
+        self.log.info("Enable pool aggregation for pool %s", self.identifier)
+        self.set_property("reclaim", "time")
+
+    @fail_on(CommandFailure)
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
