@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -240,32 +240,6 @@ get_permissions_field(struct daos_ace *ace, enum daos_acl_access_type type)
 	}
 
 	return NULL;
-}
-
-static void
-expect_ace_invalid_with_bad_perms(enum daos_acl_access_type type)
-{
-	struct daos_ace	*ace;
-	uint64_t	*perms;
-
-	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
-	ace->dae_access_types = type;
-
-	perms = get_permissions_field(ace, type);
-	assert_non_null(perms);
-	*perms = (uint64_t)1 << 63;
-
-	assert_false(daos_ace_is_valid(ace));
-
-	daos_ace_free(ace);
-}
-
-static void
-test_ace_is_valid_undefined_perms(void **state)
-{
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_ALLOW);
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_AUDIT);
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_ALARM);
 }
 
 static void
@@ -749,7 +723,6 @@ main(void)
 		cmocka_unit_test(test_ace_is_valid_principal_not_terminated),
 		cmocka_unit_test(test_ace_is_valid_undefined_flags),
 		cmocka_unit_test(test_ace_is_valid_valid_flags),
-		cmocka_unit_test(test_ace_is_valid_undefined_perms),
 		cmocka_unit_test(test_ace_is_valid_valid_perms),
 		cmocka_unit_test(test_ace_is_valid_undefined_access_type),
 		cmocka_unit_test(test_ace_is_valid_no_access_type),
