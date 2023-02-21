@@ -111,12 +111,11 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
 		arg->count, rpt->rt_stable_epoch);
 	while (1) {
-		rc = ds_object_migrate(rpt->rt_pool, rpt->rt_poh_uuid,
-				       rpt->rt_coh_uuid, arg->cont_uuid,
-				       arg->tgt_id, rpt->rt_rebuild_ver,
-				       rpt->rt_stable_epoch, arg->oids,
-				       arg->ephs, arg->punched_ephs, arg->shards,
-				       arg->count, rpt->rt_rebuild_op);
+		rc = ds_object_migrate(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid,
+				       arg->cont_uuid, arg->tgt_id, rpt->rt_rebuild_ver,
+				       rpt->rt_rebuild_gen, rpt->rt_stable_epoch, arg->oids,
+				       arg->ephs, arg->punched_ephs, arg->shards, arg->count,
+				       rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -479,7 +478,6 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 					    NUM_SHARDS_STEP_INCREASE,
 					    max_shards);
 		}
-
 		/*
 		 * If the amount of space is too big for the stack arrays,
 		 * allocate some space
