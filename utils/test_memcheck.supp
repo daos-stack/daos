@@ -332,11 +332,7 @@
 {
    getgrouplist leak
    Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
    ...
+   fun:compat_call.constprop.0
    fun:internal_getgrouplist
-   fun:getgrouplist
-   fun:alloc_group_list*
-   ...
 }
