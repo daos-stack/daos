@@ -70,7 +70,8 @@ struct ds_cont_child {
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
-				 sc_scrubbing:1;
+				 sc_scrubbing:1,
+				 sc_discarding:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -103,7 +104,7 @@ struct ds_cont_child {
 	 * not cross this limit. For simplification purpose, all objects
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
-	uint64_t		sc_ec_agg_eph_boundry;
+	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
 	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
