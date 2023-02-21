@@ -2068,7 +2068,12 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 
 		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
 
-		wait_cb(store, chkpt_data->cd_max_tx, &committed_tx, arg);
+		/* Wait for inflight transactions committed, or yield to make progress */
+		wait_cb(store, chkpt_data ? chkpt_data->cd_max_tx : 0, &committed_tx, arg);
+
+		/* The so_flush_prep() could fail when the DMA buffer is under pressure */
+		if (chkpt_data == NULL)
+			continue;
 
 		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
 							chkpt_data->cd_max_tx) >= 0);
