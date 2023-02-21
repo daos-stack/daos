@@ -44,6 +44,9 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    if not os.path.isfile(yaml_file):
+        raise YamlException(f"File not found: {yaml_file}")
+
     class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
         """Helper class for parsing avocado yaml files."""
 
@@ -58,14 +61,11 @@ def get_yaml_data(yaml_file):
     DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
     DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
 
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
-            except yaml.YAMLError as error:
-                raise YamlException(f"Error reading {yaml_file}") from error
-    return yaml_data
+    with open(yaml_file, "r", encoding="utf-8") as open_file:
+        try:
+            return yaml.load(open_file.read(), Loader=DaosLoader)
+        except yaml.YAMLError as error:
+            raise YamlException(f"Error reading {yaml_file}") from error
 
 
 def find_values(obj, keys, key=None, val_type=str):
