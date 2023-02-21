@@ -98,7 +98,12 @@ class ErasureCodeIor(ServerFillUp):
         engine_count = self.server_managers[0].get_config_value("engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
         # Create the Pool
-        self.create_pool_max_size()
+        kwargs = {
+            "scm": self.params.get("scm", "/run/create_pool_max_size/*", False),
+            "nvme": self.params.get("nvme", "/run/create_pool_max_size/*", False),
+            "percentage": self.params.get("percentage", "/run/create_pool_max_size/*", 96)
+        }
+        self.create_pool_max_size(**kwargs)
         self.update_ior_cmd_with_pool()
         self.obj_class = self.params.get("dfs_oclass_list", '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get("chunk_block_transfer_sizes", '/run/ior/*')
