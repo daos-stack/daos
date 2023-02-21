@@ -1479,7 +1479,7 @@ int
 bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		 unsigned int bulk_perm)
 {
-	if (type == BIO_IOD_TYPE_FETCH)
+	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
 		return -DER_NOTSUPPORTED;
 
 	biod->bd_non_blocking = 1;
