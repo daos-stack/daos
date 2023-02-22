@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,7 @@ class DfuseMUMount(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu
+        :avocado: tags=dfuse,dfuse_mu,daos_cmd
         :avocado: tags=DfuseMUMount,test_dfuse_mu_mount
         """
         # Create a pool and container for dfuse

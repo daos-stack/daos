@@ -30,8 +30,42 @@ import (
 */
 import "C"
 
-type PoolID struct {
+// argOrID is used to handle a positional argument that can be a label or UUID,
+// or a non-ID positional argument to be consumed by the command handler if the
+// --path flag is used.
+type argOrID struct {
 	ui.LabelOrUUIDFlag
+	unparsedArg string
+}
+
+func (opt *argOrID) Clear() {
+	opt.LabelOrUUIDFlag.Clear()
+	opt.unparsedArg = ""
+}
+
+func (opt *argOrID) UnmarshalFlag(val string) error {
+	if err := opt.LabelOrUUIDFlag.UnmarshalFlag(val); err != nil {
+		if opt.unparsedArg != "" {
+			return err
+		}
+		opt.unparsedArg = val
+		return nil
+	}
+	return nil
+}
+
+func (opt *argOrID) String() string {
+	if opt.unparsedArg != "" {
+		return opt.unparsedArg
+	}
+	if !opt.LabelOrUUIDFlag.Empty() {
+		return opt.LabelOrUUIDFlag.String()
+	}
+	return ""
+}
+
+type PoolID struct {
+	argOrID
 }
 
 type poolBaseCmd struct {
@@ -43,7 +77,7 @@ type poolBaseCmd struct {
 
 	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
 	Args    struct {
-		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used and not existing"`
+		Pool PoolID `positional-arg-name:"pool label or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
@@ -55,8 +89,8 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
-func (cmd *poolBaseCmd) PoolID() PoolID {
-	return cmd.Args.Pool
+func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
+	return cmd.Args.Pool.LabelOrUUIDFlag
 }
 
 func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
@@ -430,8 +464,8 @@ type poolGetAttrCmd struct {
 	poolBaseCmd
 
 	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+		Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolGetAttrCmd) Execute(_ []string) error {
@@ -441,20 +475,27 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	attr, err := cmd.getAttr(cmd.Args.Name)
+	var attrs attrList
+	if len(cmd.Args.Attrs.ParsedProps) == 0 {
+		attrs, err = listDaosAttributes(cmd.cPoolHandle, poolAttr, true)
+	} else {
+		attrs, err = getDaosAttributes(cmd.cPoolHandle, poolAttr, cmd.Args.Attrs.ParsedProps.ToSlice())
+	}
 	if err != nil {
-		return errors.Wrapf(err,
-			"failed to get attribute %q from pool %s",
-			cmd.Args.Name, cmd.poolUUID)
+		return errors.Wrapf(err, "failed to get attributes for pool %s", cmd.PoolID())
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attr, nil)
+		// Maintain compatibility with older behavior.
+		if len(cmd.Args.Attrs.ParsedProps) == 1 && len(attrs) == 1 {
+			return cmd.outputJSON(attrs[0], nil)
+		}
+		return cmd.outputJSON(attrs, nil)
 	}
 
 	var bld strings.Builder
-	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
-	printAttributes(&bld, title, attr)
+	title := fmt.Sprintf("Attributes for pool %s:", cmd.PoolID())
+	printAttributes(&bld, title, attrs...)
 
 	cmd.Info(bld.String())
 
@@ -465,8 +506,7 @@ type poolSetAttrCmd struct {
 	poolBaseCmd
 
 	Args struct {
-		Name  string `positional-arg-name:"<attribute name>"`
-		Value string `positional-arg-name:"<attribute value>"`
+		Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
 	} `positional-args:"yes" required:"yes"`
 }
 
@@ -477,13 +517,20 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
-		Name:  cmd.Args.Name,
-		Value: []byte(cmd.Args.Value),
-	}); err != nil {
-		return errors.Wrapf(err,
-			"failed to set attribute %q on pool %s",
-			cmd.Args.Name, cmd.poolUUID)
+	if len(cmd.Args.Attrs.ParsedProps) == 0 {
+		return errors.New("attribute name and value are required")
+	}
+
+	attrs := make(attrList, 0, len(cmd.Args.Attrs.ParsedProps))
+	for key, val := range cmd.Args.Attrs.ParsedProps {
+		attrs = append(attrs, &attribute{
+			Name:  key,
+			Value: []byte(val),
+		})
+	}
+
+	if err := setDaosAttributes(cmd.cPoolHandle, poolAttr, attrs); err != nil {
+		return errors.Wrapf(err, "failed to set attributes on pool %s", cmd.PoolID())
 	}
 
 	return nil
