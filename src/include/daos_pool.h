@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -616,9 +616,8 @@ daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
  *
  * \param[in]	pool_prop	Pool property containing DAOS_PROP_PO_ACL/OWNER/OWNER_GROUP entries
  * \param[in]	uid		User's local uid
- * \param[in]	gid		Gid of the user's primary group
- * \param[in]	supp_gids	Gids of the user's supplementary groups, if any
- * \param[in]	nr_supp_gids	Length of the supp_gids list
+ * \param[in]	gids		Gids of the user's groups
+ * \param[in]	nr_gids		Length of the gids list
  * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
  *				in enum daos_acl_perm.
  *
@@ -628,8 +627,8 @@ daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
  *		-DER_NOMEM	Could not allocate memory
  */
 int
-daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
-		    size_t nr_supp_gids, uint64_t *perms);
+daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+		    uint64_t *perms);
 
 #if defined(__cplusplus)
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -659,9 +659,8 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
  * \param[in]	cont_prop	Container property containing DAOS_PROP_CO_ACL/OWNER/OWNER_GROUP
  *				entries
  * \param[in]	uid		User's local uid
- * \param[in]	gid		Gid of the user's primary group
- * \param[in]	supp_gids	Gids of the user's supplementary groups, if any
- * \param[in]	nr_supp_gids	Length of the supp_gids list
+ * \param[in]	gids		Gids of the user's groups
+ * \param[in]	nr_gids		Length of the gids list
  * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
  *				in enum daos_acl_perm.
  *
@@ -671,8 +670,8 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
  *		-DER_NOMEM	Could not allocate memory
  */
 int
-daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
-		    size_t nr_supp_gids, uint64_t *perms);
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+		    uint64_t *perms);
 
 #if defined(__cplusplus)
 }

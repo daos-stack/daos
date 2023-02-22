@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -748,8 +748,7 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 }
 
 int
-daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *supp_gids,
-		    size_t nr_supp_gids, uint64_t *perms)
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids, uint64_t *perms)
 {
-	return dc_sec_get_cont_permissions(cont_prop, uid, gid, supp_gids, nr_supp_gids, perms);
+	return dc_sec_get_cont_permissions(cont_prop, uid, gids, nr_gids, perms);
 }

@@ -20,7 +20,6 @@
  */
 struct acl_user {
 	char	*user;		/* username in ACL principal format */
-	char	*group;		/* primary group in ACL principal format */
 	char	**groups;	/* group list in ACL principal format */
 	size_t	nr_groups;
 };
@@ -33,7 +32,7 @@ struct acl_user {
  * \return	true if valid, false otherwise
  */
 bool
-is_ownership_valid(struct ownership *ownership);
+is_ownership_valid(struct d_ownership *ownership);
 
 /**
  * Get the user's ACL permissions for a resource, based on username, primary group, and other
@@ -49,7 +48,7 @@ is_ownership_valid(struct ownership *ownership);
  *		-DER_INVAL	Invalid input
  */
 int
-get_acl_permissions(struct daos_acl *acl, struct ownership *ownership, struct acl_user *user_info,
+get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
 		    uint64_t min_owner_perms, uint64_t *permissions);
 
 #endif

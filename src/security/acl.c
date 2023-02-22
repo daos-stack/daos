@@ -10,13 +10,10 @@
 #include "acl.h"
 
 bool
-is_ownership_valid(struct ownership *ownership)
+is_ownership_valid(struct d_ownership *ownership)
 {
-	if (daos_acl_principal_is_valid(ownership->user) &&
-	    daos_acl_principal_is_valid(ownership->group))
-		return true;
-
-	return false;
+	return (daos_acl_principal_is_valid(ownership->user) &&
+		daos_acl_principal_is_valid(ownership->group));
 }
 
 static int
@@ -41,9 +38,6 @@ acl_user_has_group(struct acl_user *user_info, const char *group)
 {
 	size_t i;
 
-	if (strncmp(user_info->group, group, DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
-		return true;
-
 	for (i = 0; i < user_info->nr_groups; i++) {
 		if (strncmp(user_info->groups[i], group, DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
 			return true;
@@ -67,7 +61,7 @@ add_perms_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 }
 
 static int
-get_perms_for_groups(struct daos_acl *acl, struct ownership *ownership,
+get_perms_for_groups(struct daos_acl *acl, struct d_ownership *ownership,
 		     struct acl_user *user_info, uint64_t *perms)
 {
 	int		rc;
@@ -86,10 +80,6 @@ get_perms_for_groups(struct daos_acl *acl, struct ownership *ownership,
 			found = true;
 	}
 
-	rc = add_perms_for_principal(acl, DAOS_ACL_GROUP, user_info->group, &grp_perms);
-	if (rc == 0)
-		found = true;
-
 	for (i = 0; i < user_info->nr_groups; i++) {
 		rc = add_perms_for_principal(acl, DAOS_ACL_GROUP, user_info->groups[i], &grp_perms);
 		if (rc == 0)
@@ -105,14 +95,14 @@ get_perms_for_groups(struct daos_acl *acl, struct ownership *ownership,
 }
 
 static bool
-acl_user_is_owner(struct acl_user *user_info, struct ownership *ownership)
+acl_user_is_owner(struct acl_user *user_info, struct d_ownership *ownership)
 {
 	return strncmp(user_info->user, ownership->user,
 		       DAOS_ACL_MAX_PRINCIPAL_LEN) == 0;
 }
 
 static int
-calculate_acl_perms(struct daos_acl *acl, struct ownership *ownership, struct acl_user *user_info,
+calculate_acl_perms(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
 		    uint64_t *perms)
 {
 	int rc;
@@ -154,7 +144,7 @@ calculate_acl_perms(struct daos_acl *acl, struct ownership *ownership, struct ac
 }
 
 int
-get_acl_permissions(struct daos_acl *acl, struct ownership *ownership, struct acl_user *user_info,
+get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
 		    uint64_t min_owner_perms, uint64_t *perms)
 {
 	int rc;

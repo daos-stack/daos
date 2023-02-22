@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -335,13 +335,15 @@ filter_pool_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 }
 
 static int
-get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
+get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
 			struct daos_acl *acl, uint64_t owner_min_perms,
 			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc;
 	Auth__Sys		*authsys;
+	char			**groups = NULL;
+	size_t			nr_groups = 0;
 	struct acl_user		user_info = {0};
 	uint64_t		perms = 0;
 
@@ -349,19 +351,37 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 	if (rc != 0)
 		return rc;
 
+	nr_groups = authsys->n_groups;
+	if (authsys->group != NULL)
+		nr_groups++;
+	if (nr_groups > 0) {
+		int i = 0;
+
+		D_ALLOC_ARRAY(groups, nr_groups);
+		if (groups == NULL)
+			return -DER_NOMEM;
+
+		for (i = 0; i < authsys->n_groups; i++)
+			groups[i] = authsys->groups[i];
+
+		if (authsys->group != NULL)
+			groups[i] = authsys->group;
+	}
+
 	user_info.user = authsys->user;
-	user_info.group = authsys->group;
-	user_info.groups = authsys->groups;
-	user_info.nr_groups = authsys->n_groups;
+	user_info.groups = groups;
+	user_info.nr_groups = nr_groups;
 
 	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms);
 	if (rc != 0) {
 		D_ERROR("failed to get user permissions: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		D_GOTO(out, rc);
 	}
 
 	*capas = convert_perms(perms);
 
+out:
+	D_FREE(groups);
 	auth__sys__free_unpacked(authsys, &alloc.alloc);
 	return rc;
 }
@@ -374,7 +394,6 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 	int			rc = 0;
 	char			*mtmp;
 	Auth__Sys		*authsys;
-
 
 	if (token == NULL || machine == NULL) {
 		D_ERROR("NULL input\n");
@@ -440,7 +459,7 @@ ds_sec_cred_get_origin(d_iov_t *cred, char **machine)
 
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+			     struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -564,7 +583,7 @@ unpack_token_from_cred(d_iov_t *cred)
 
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+			     struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -642,7 +661,7 @@ ds_sec_cont_can_open(uint64_t cont_capas)
 
 bool
 ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
-		       struct ownership *ownership,
+		       struct d_ownership *ownership,
 		       struct daos_acl *acl)
 {
 	int		rc;

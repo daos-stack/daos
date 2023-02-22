@@ -233,7 +233,7 @@ get_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t gr
 	  struct acl_user *user_info, uint64_t min_owner_perms, uint64_t *perms)
 {
 	struct daos_acl		*acl = NULL;
-	struct ownership	ownership = {0};
+	struct d_ownership	ownership = {0};
 	int			rc;
 
 	/* These ACL and ownership variables point to the data in-place in the prop, and thus don't
@@ -266,12 +266,11 @@ free_user_info_strings(struct acl_user *user_info)
 	for (i = 0; i < user_info->nr_groups; i++)
 		D_FREE(user_info->groups[i]);
 	D_FREE(user_info->groups);
-	D_FREE(user_info->group);
 	D_FREE(user_info->user);
 }
 
 static int
-fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_user *user_info)
+fill_user_info(uid_t uid, gid_t *gids, size_t nr_gids, struct acl_user *user_info)
 {
 	int	rc;
 	size_t	i;
@@ -282,15 +281,9 @@ fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_use
 		D_GOTO(err_out, rc);
 	}
 
-	rc = daos_acl_gid_to_principal(gid, &user_info->group);
-	if (rc != 0) {
-		D_ERROR("failed to convert gid %d to an ACL principal: "DF_RC"\n", gid, DP_RC(rc));
-		D_GOTO(err_user, rc);
-	}
-
 	D_ALLOC_ARRAY(user_info->groups, nr_gids);
 	if (user_info->groups == NULL)
-		D_GOTO(err_group, rc = -DER_NOMEM);
+		D_GOTO(err_userinfo, rc = -DER_NOMEM);
 
 	user_info->nr_groups = 0;
 	for (i = 0; i < nr_gids; i++) {
@@ -298,7 +291,7 @@ fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_use
 		if (rc != 0) {
 			D_ERROR("failed to convert gid %d to an ACL principal: "DF_RC"\n", gids[i],
 				DP_RC(rc));
-			D_GOTO(err_grps, rc);
+			D_GOTO(err_userinfo, rc);
 		}
 		user_info->nr_groups++;
 	}
@@ -306,21 +299,15 @@ fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_use
 
 	return rc;
 
-err_grps:
-	for (i = 0; i < user_info->nr_groups; i++)
-		D_FREE(user_info->groups[i]);
-	D_FREE(user_info->groups);
-err_group:
-	D_FREE(user_info->group);
-err_user:
-	D_FREE(user_info->user);
+err_userinfo:
+	free_user_info_strings(user_info);
 err_out:
 	return rc;
 }
 
 static int
 get_user_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t group_prop,
-	       uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, uint64_t min_owner_perms,
+	       uid_t uid, gid_t *gids, size_t nr_gids, uint64_t min_owner_perms,
 	       uint64_t *perms)
 {
 	struct acl_user	user_info = {0};
@@ -344,7 +331,7 @@ get_user_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32
 	/* Default is no permissions */
 	*perms = 0;
 
-	rc = fill_user_info(uid, gid, gids, nr_gids, &user_info);
+	rc = fill_user_info(uid, gids, nr_gids, &user_info);
 	if (rc != 0) {
 		D_ERROR("failed to convert uid/gids into ACL principals, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
@@ -360,19 +347,19 @@ out:
 }
 
 int
-dc_sec_get_pool_permissions(daos_prop_t *pool_prop, uid_t uid, gid_t gid, gid_t *gids,
-			    size_t nr_gids, uint64_t *perms)
+dc_sec_get_pool_permissions(daos_prop_t *pool_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+			    uint64_t *perms)
 {
 	return get_user_perms(pool_prop, DAOS_PROP_PO_ACL, DAOS_PROP_PO_OWNER,
-			      DAOS_PROP_PO_OWNER_GROUP, uid, gid, gids, nr_gids,
+			      DAOS_PROP_PO_OWNER_GROUP, uid, gids, nr_gids,
 			      POOL_OWNER_MIN_PERMS, perms);
 }
 
 int
-dc_sec_get_cont_permissions(daos_prop_t *cont_prop, uid_t uid, gid_t gid, gid_t *gids,
-			    size_t nr_gids, uint64_t *perms)
+dc_sec_get_cont_permissions(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+			    uint64_t *perms)
 {
 	return get_user_perms(cont_prop, DAOS_PROP_CO_ACL, DAOS_PROP_CO_OWNER,
-			      DAOS_PROP_CO_OWNER_GROUP, uid, gid, gids, nr_gids,
+			      DAOS_PROP_CO_OWNER_GROUP, uid, gids, nr_gids,
 			      CONT_OWNER_MIN_PERMS, perms);
 }
