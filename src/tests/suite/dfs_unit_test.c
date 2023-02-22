@@ -2543,7 +2543,7 @@ dfs_test_checker(void **state)
 }
 
 static void
-dfs_test_fix_sb(void **state)
+mwc_sb_root_test(void **state, const char *cname, bool sb_test)
 {
 	test_arg_t			*arg = *state;
 	dfs_t				*dfs;
@@ -2553,14 +2553,12 @@ dfs_test_fix_sb(void **state)
 	daos_prop_t			*prop = NULL;
 	dfs_attr_t			attr = {};
 	daos_handle_t			oh;
-	char				*cname = "cont_fix_sb";
 	int				rc;
 
 	/** create the DFS container */
 	rc = dfs_cont_create_with_label(arg->pool.poh, cname, NULL, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
-	/** Using lower level obj API, punch the SB object */
 	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -2575,17 +2573,37 @@ dfs_test_fix_sb(void **state)
 
 	rc = daos_obj_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
-	assert_rc_equal(rc, 0);
+	if (sb_test) {
+		/** punch the SB */
+		rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+		assert_rc_equal(rc, 0);
+	} else {
+		/** punch the root entry from the SB */
+		char		*name = "/";
+		d_iov_t		dkey;
+
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** try to mount the container. should fail */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, ENOENT);
-	/** fix the container by recreating the SB */
-	rc = dfs_recreate_sb(coh, &attr);
-	assert_int_equal(rc, 0);
+
+	if (sb_test) {
+		/** fix the container by recreating the SB */
+		rc = dfs_recreate_sb(coh, &attr);
+		assert_int_equal(rc, 0);
+	} else {
+		/** relink the root object */
+		rc = dfs_relink_root(coh);
+		assert_int_equal(rc, 0);
+	}
+
 	/** try to mount the container. should succeed */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -2597,6 +2615,18 @@ dfs_test_fix_sb(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cname, 0, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+static void
+dfs_test_fix_sb(void **state)
+{
+	mwc_sb_root_test(state, "cont_fix_sb", true);
+}
+
+static void
+dfs_test_relink_root(void **state)
+{
+	mwc_sb_root_test(state, "cont_relink_root", false);
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
@@ -2642,10 +2672,12 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST21: dfs multiple pools",
 	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs container checker",
+	{ "DFS_UNIT_TEST21: dfs MWC container checker",
 	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs SB fix",
+	{ "DFS_UNIT_TEST22: dfs MWC SB fix",
 	  dfs_test_fix_sb, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST23: dfs MWC root fix",
+	  dfs_test_relink_root, async_disable, test_case_teardown},
 };
 
 static int
