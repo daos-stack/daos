@@ -165,8 +165,10 @@ vos_wal_on_commit(struct umem_store *store, uint64_t id)
 
 	ctx->cc_commit_id = id;
 
-	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0)
+	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0) {
 		ctx->cc_wake_fn(ctx);
+		store->chkpt_ctx = NULL;
+	}
 }
 
 static inline int
@@ -213,6 +215,7 @@ chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, 
 	}
 
 	ctx->cc_wait_id = chkpt_tx;
+	store->chkpt_ctx = ctx;
 	ctx->cc_wait_fn(ctx);
 done:
 	*committed_tx = ctx->cc_commit_id;
