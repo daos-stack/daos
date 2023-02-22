@@ -163,7 +163,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry
+        :avocado: tags=telemetry,daos_cmd
         :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
