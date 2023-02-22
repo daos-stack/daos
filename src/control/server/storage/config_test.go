@@ -582,7 +582,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [meta,wal]`,
+  bdev_roles: [meta,wal,data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 1, 0),
 		},
 		"ram class; duplicate wal roles": {
@@ -599,7 +599,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [wal]`,
+  bdev_roles: [wal,data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 2, 1),
 		},
 		"ram class; duplicate meta roles": {
@@ -616,7 +616,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [meta]`,
+  bdev_roles: [meta,data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Meta", 2, 1),
 		},
 		"ram class; missing data role": {
@@ -647,6 +647,31 @@ storage:
   bdev_list: [0000:81:00.0,0000:82:00.0]
   bdev_roles: [wal]`,
 			expValidateErr: errors.New("tiers are missing role assignments: [1]"),
+		},
+		"explicit specification of data-only role": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list:
+  - 0000:80:00.0
+  bdev_roles:
+  - data`,
+			expCfgs: TierConfigs{
+				NewTierConfig().
+					WithStorageClass("ram").
+					WithScmRamdiskSize(16).
+					WithScmMountPoint("/mnt/daos"),
+				NewTierConfig().
+					WithTier(1).
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:80:00.0").
+					WithBdevDeviceRoles(BdevRoleData),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
