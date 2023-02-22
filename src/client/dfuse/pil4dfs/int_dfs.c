@@ -119,12 +119,6 @@ static pthread_mutex_t	lock_dirfd;
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t	mode_not_umask;
 
-//static daos_handle_t	poh;
-//static daos_handle_t	coh;
-//static dfs_t		*dfs;
-//static struct d_hash_table *dfs_dir_hash;
-//static char *fs_root;
-//static int len_fs_root;
 static int fd_stdin = -1, fd_stdout = -1, fd_stderr = -1;
 
 static void finalize_dfs(void);
@@ -418,9 +412,8 @@ discover_daos_mount(void)
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
-	if (fs_root == NULL) {
+	if (fs_root == NULL)
 		return;
-	}
 
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
@@ -492,14 +485,14 @@ discover_dfuse(void)
 	pos_fuse = strstr(buff_mount, device_fuse);
 	while (pos_fuse) {
 		item_read = sscanf(pos_fuse, "%s%s%s", device_type_read, fs_mount, fs_type_read);
-		if (item_read == 3 && strncmp(fs_type_read, fs_type_fuse, sizeof(fs_type_fuse)) == 0) {
+		if (item_read == 3 &&
+		    strncmp(fs_type_read, fs_type_fuse, sizeof(fs_type_fuse)) == 0) {
 			dfs_list[num_dfs].dfs_dir_hash = NULL;
 			dfs_list[num_dfs].len_fs_root = strlen(fs_mount);
 			dfs_list[num_dfs].inited = 0;
 			dfs_list[num_dfs].pool = NULL;
 			strncpy(dfs_list[num_dfs].fs_root, fs_mount, MAX_DFS_MT_PATH_LEN);
 			num_dfs++;
-///                        retrieve_handles_from_fuse(fs_mount);
 		}
 		/* move the pointer forward a little bit */
 		pos_fuse = strstr(pos_fuse + 8, device_fuse);
@@ -575,7 +568,6 @@ retrieve_handles_from_fuse(int idx)
 
 err:
 	real_close_libc(fd);
-	return;
 }
 
 /* Check whether path starts with "DAOS://" */
@@ -592,9 +584,8 @@ is_path_start_with_daos(const char *path)
 		return false;
 
 	/* The path starts with "DAOS://". */
-	if (path[4] == ':' || path[5] == '/' || path[6] == '/') {
+	if (path[4] == ':' || path[5] == '/' || path[6] == '/')
 		return true;
-	}
 
 	return false;
 }
@@ -609,17 +600,15 @@ get_pool_cont(const char *path, char *pool, char *cont)
 	cont[0] = 0;
 
 	pos_cont_s = strstr(path + 7, "/");
-	if (pos_cont_s == NULL) {
+	if (pos_cont_s == NULL)
 		return NULL;
-	}
 
 	memcpy(pool, path + 7, (long int)(pos_cont_s - path - 7));
 	pool[(long int)(pos_cont_s - path - 7)] = 0;
 
 	pos_cont_e = strstr(pos_cont_s + 1, "/");
-	if (pos_cont_e == NULL) {
+	if (pos_cont_e == NULL)
 		return NULL;
-	}
 	memcpy(cont, pos_cont_s + 1, (long int)(pos_cont_e - pos_cont_s - 1));
 	cont[(long int)(pos_cont_e - pos_cont_s) - 1] = 0;
 
@@ -648,19 +637,18 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		*is_target_path = 0;
 		/* TO DO */
 		return;
+	}
+	/* absolute path */
+	if (strncmp(szInput, ".", 2) == 0) {
+		strcpy(full_path_loc, cur_dir);
+	} else if (szInput[0] == '/')	{
+		strcpy(full_path_loc, szInput);
 	} else {
-		/* absolute path */
-		if (strncmp(szInput, ".", 2) == 0) {
-			strcpy(full_path_loc, cur_dir);
-		} else if (szInput[0] == '/')	{
-			strcpy(full_path_loc, szInput);
-		} else {
-			/* relative path */
-			len = snprintf(full_path_loc, MAX_FILE_NAME_LEN+1, "%s/%s", cur_dir, szInput);
-			if (len >= MAX_FILE_NAME_LEN) {
-				printf("The length of path is too long.\n");
-				exit(1);
-			}
+		/* relative path */
+		len = snprintf(full_path_loc, MAX_FILE_NAME_LEN+1, "%s/%s", cur_dir, szInput);
+		if (len >= MAX_FILE_NAME_LEN) {
+			printf("The length of path is too long.\n");
+			exit(1);
 		}
 	}
 
@@ -672,9 +660,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	if (idx_dfs >= 0) {
 		if (daos_inited == 0) {
 			/* mutex is used in daos_init(). */
-//			hook_enabled = false;
 			daos_init();
-//			hook_enabled = true;
 			daos_inited = 1;
 		}
 
@@ -1119,7 +1105,7 @@ close_all_duped_fd(void)
  * }
  */
 
-static int 
+static int
 check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 {
 	int len_str;
@@ -1203,7 +1189,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &file_obj, &mode_query, NULL);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &file_obj, &mode_query, NULL);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &file_obj,
+				    &mode_query, NULL);
 	}
 
 	if (rc) {
@@ -1570,7 +1557,8 @@ new_fxstat(int vers, int fd, struct stat *buf)
 			       file_list[fd-FD_FILE_BASE].file_obj, buf);
 		buf->st_ino = file_list[fd-FD_FILE_BASE].st_ino;
 	} else {
-		rc = dfs_ostat(dir_list[fd-FD_DIR_BASE].dfs_mt->dfs, dir_list[fd-FD_DIR_BASE].dir_obj, buf);
+		rc = dfs_ostat(dir_list[fd-FD_DIR_BASE].dfs_mt->dfs,
+			       dir_list[fd-FD_DIR_BASE].dir_obj, buf);
 		buf->st_ino = FAKE_ST_INO(dir_list[fd-FD_DIR_BASE].path);
 	}
 
@@ -1886,7 +1874,8 @@ opendir(const char *path)
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &dir_obj, &mode, NULL);
 	else
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFDIR, O_RDONLY, 0, 0, NULL, &dir_obj);
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFDIR, O_RDONLY, 0, 0, NULL,
+			      &dir_obj);
 
 /*	rc = dfs_lookup(dfs, full_path, O_RDWR, &dir_obj, &mode, NULL); */
 
@@ -2070,8 +2059,8 @@ new_readdir(DIR *dirp)
 
 	mydir->num_ents = READ_DIR_BATCH_SIZE;
 	while (!daos_anchor_is_eof(&mydir->anchor)) {
-		rc = dfs_readdir(dir_list[mydir->fd - FD_DIR_BASE].dfs_mt->dfs, mydir->dir_obj, &mydir->anchor, &mydir->num_ents,
-				 mydir->ents);
+		rc = dfs_readdir(dir_list[mydir->fd - FD_DIR_BASE].dfs_mt->dfs, mydir->dir_obj,
+				 &mydir->anchor, &mydir->num_ents, mydir->ents);
 		if (rc != 0)
 			goto out_null_readdir;
 
@@ -2255,7 +2244,8 @@ int rename(const char *old_name, const char *new_name)
 	if (!hook_enabled)
 		return real_rename(old_name, new_name);
 
-	parse_path(old_name, &is_target_path, &parent_old, item_name_old, parent_dir_old, NULL, &dfs_mt1);
+	parse_path(old_name, &is_target_path, &parent_old, item_name_old, parent_dir_old, NULL,
+		   &dfs_mt1);
 	if (!is_target_path)
 		return real_rename(old_name, new_name);
 
@@ -2266,7 +2256,8 @@ int rename(const char *old_name, const char *new_name)
 		return (-1);
 	}
 
-	parse_path(new_name, &is_target_path, &parent_new, item_name_new, parent_dir_new, NULL, &dfs_mt2);
+	parse_path(new_name, &is_target_path, &parent_new, item_name_new, parent_dir_new, NULL,
+		   &dfs_mt2);
 	if (!is_target_path)
 		return real_rename(old_name, new_name);
 
@@ -2547,7 +2538,8 @@ ftruncate(int fd, off_t length)
 		return (-1);
 	}
 
-	rc = dfs_punch(file_list[fd-FD_FILE_BASE].dfs_mt->dfs, file_list[fd-FD_FILE_BASE].file_obj, length, DFS_MAX_FSIZE);
+	rc = dfs_punch(file_list[fd-FD_FILE_BASE].dfs_mt->dfs, file_list[fd-FD_FILE_BASE].file_obj,
+		       length, DFS_MAX_FSIZE);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -3422,7 +3414,6 @@ static __attribute__((constructor)) void init_myhook(void)
 
 	init_fd_dup2_list();
 	discover_daos_mount();
-///	init_dfs();
 
 	install_hook();
 
@@ -3448,12 +3439,14 @@ init_dfs(int idx)
 {
 	int rc;
 
-	rc = daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh, NULL, NULL);
+	rc = daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh, NULL,
+			       NULL);
 	if (rc != 0) {
 		printf("Failed to connect pool: %s\nQuit\n", strerror(rc));
 		exit(1);
 	}
-	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh, NULL, NULL);
+	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
+			    NULL, NULL);
 	if (rc != 0) {
 		printf("Failed to open container: %s\nQuit\n", strerror(rc));
 		exit(1);
@@ -3490,7 +3483,8 @@ finalize_dfs(void)
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
 		if (rc != 0) {
-			printf("Warning: error in d_hash_table_destroy() for %s\n", dfs_list[i].fs_root);
+			printf("Warning: error in d_hash_table_destroy() for %s\n",
+			       dfs_list[i].fs_root);
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
@@ -3500,12 +3494,14 @@ finalize_dfs(void)
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
-			printf("Warning: error in daos_cont_close() for %s\n", dfs_list[i].fs_root);
+			printf("Warning: error in daos_cont_close() for %s\n",
+			       dfs_list[i].fs_root);
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != 0) {
-			printf("Warning: error in daos_pool_disconnect() for %s\n", dfs_list[i].fs_root);
+			printf("Warning: error in daos_pool_disconnect() for %s\n",
+			       dfs_list[i].fs_root);
 			continue;
 		}
 	}
