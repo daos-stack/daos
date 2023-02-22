@@ -109,13 +109,13 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc) {
 		fprintf(stderr, "dfs_mount() failed: (%d)\n", rc);
-		D_GOTO(out_path, rc);
+		return rc;
 	}
 
 	if (op == PUNCH_ENTRY) {
 		D_STRNDUP(dir, path, PATH_MAX);
 		if (dir == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_dfs, rc = -DER_NOMEM);
 		D_STRNDUP(file, path, PATH_MAX);
 		if (file == NULL)
 			D_GOTO(out_path, rc = -DER_NOMEM);
@@ -132,21 +132,21 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 	rc = dfs_lookup(dfs, dirp, O_RDWR, &obj, NULL, NULL);
 	if (rc) {
 		fprintf(stderr, "dfs_lookup() failed: (%d)\n", rc);
-		D_GOTO(out_dfs, rc);
+		D_GOTO(out_path, rc);
 	}
 	rc = dfs_obj2id(obj, &oid);
 	dfs_release(obj);
 	if (rc) {
 		fprintf(stderr, "dfs_obj2id() failed: (%d)\n", rc);
-		D_GOTO(out_dfs, rc);
+		D_GOTO(out_path, rc);
 	}
 
 	rc = punch_obj(coh, oid, fname);
-out_dfs:
-	dfs_umount(dfs);
 out_path:
 	D_FREE(file);
 	D_FREE(dir);
+out_dfs:
+	dfs_umount(dfs);
 	return rc;
 }
 
