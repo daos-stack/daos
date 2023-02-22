@@ -444,22 +444,6 @@ class DaosServerCommand(YamlCommand):
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
                 self.force = FormattedParameter("--force", False)
 
-            def scm_prepare(self, **kwargs):
-                """Call daos_server scm prepare.
-                Args:
-                    helper-log-file (str, optional): log file location for debug from daos_admin.
-                    ignore_config (bool, optional): ignore parameters set in config file.
-                    socket (str, optional): perform PMem namespace operations on this socket.
-                    scm_ns_per_socket (int, optional): num of PMem namespaces to create per socket.
-                    force (bool, optional): Perform SCM operations without waiting for confirmation.
-                Raises:
-                    CommandFailure: if the daos_server scm prepare command fails.
-                Returns:
-                    CmdResult: an avocado CmdResult object containing the daos_server command
-                        information, e.g. exit status, stdout, stderr, etc.
-                """
-                return self._get_result(["scm", "prepare"], **kwargs)
-
         class ResetSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server scm reset command."""
 
@@ -875,3 +859,22 @@ class DaosServerCommandRunner(DaosServerCommand):
 
         """
         return self._get_result(["version"])
+
+    def scm_prepare(self, **kwargs):
+        """Call daos_server scm prepare.
+
+        Args:
+            helper-log-file (str, optional): log file location for debug from daos_admin.
+            ignore_config (bool, optional): ignore parameters set in config file.
+            socket (str, optional): perform PMem namespace operations on this socket.
+            scm_ns_per_socket (int, optional): num of PMem namespaces to create per socket.
+            force (bool, optional): Perform SCM operations without waiting for confirmation.
+
+        Raises:
+            CommandFailure: if the daos_server scm prepare command fails.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+        """
+        return self._get_result(["scm", "prepare"], **kwargs)

@@ -15,7 +15,7 @@ from run_utils import run_remote, run_local
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
-from server_utils_base import DaosServerCommand
+from server_utils_base import DaosServerCommand, DaosServerCommandRunner
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
@@ -133,7 +133,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
-        result = DaosServerCommand().scm_prepare(
+        result = DaosServerCommandRunner().scm_prepare(
             scm_ns_per_socket=engines_per_socket, force=True)
         if 0 not in result or len(result) > 0:
             self.fail(
