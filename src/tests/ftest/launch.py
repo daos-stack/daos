@@ -48,6 +48,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
@@ -701,16 +702,14 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    def __init__(self, name, mode):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
-            repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
         self.name = name
-        self.repeat = repeat
         self.mode = mode
 
         self.avocado = AvocadoInfo()
@@ -719,6 +718,7 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.repeat = 1
         self.local_host = get_local_host()
 
         # Results tracking settings
@@ -773,8 +773,7 @@ class Launch():
         if test_result:
             test_result.end()
 
-    @staticmethod
-    def _pass_test(test_result, message=None):
+    def _pass_test(self, test_result, message=None):
         """Set the test result as passed.
 
         Args:
@@ -783,7 +782,7 @@ class Launch():
         """
         if message is not None:
             logger.debug(message)
-        test_result.status = TestResult.PASS
+        self.__set_test_status(test_result, TestResult.PASS, None, None)
 
     def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as warned.
@@ -795,7 +794,7 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.warning(fail_reason)
-        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.WARN)
+        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
 
     def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
@@ -807,22 +806,28 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
-        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.ERROR)
+        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
 
     @staticmethod
-    def __set_test_status(test_result, fail_class, fail_reason, exc_info=None, status=None):
+    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
         """Set the test result.
 
         Args:
             test_result (TestResult): the test result to mark as failed
+            status (str): TestResult status to set.
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
-            status (str, optional): TestResult status to set. Defaults to None.
         """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
         if not test_result:
+            return
+
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if test_result.status is None:
+                test_result.status = status
             return
 
         if test_result.fail_count == 0 \
@@ -940,6 +945,16 @@ class Launch():
         # Add a test result to account for any non-test execution steps
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
+
+        # Set the number of times to repeat execution of each test
+        if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            self._warn_test(setup_result, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
 
         # Record the command line arguments
         logger.debug("Arguments:")
@@ -2122,8 +2137,10 @@ class Launch():
 
     def setup_bullseye(self):
         """Set up the hosts for bullseye code coverage collection.
+
         Returns:
             int: status code: 0 = success, 128 = failure
+
         """
         if self.bullseye_hosts:
             logger.debug("-" * 80)
@@ -2153,8 +2170,10 @@ class Launch():
 
     def finalize_bullseye(self):
         """Retrieve the bullseye code coverage collection information from the hosts.
+
         Returns:
             int: status code: 0 = success, 16 = failure
+
         """
         if not self.bullseye_hosts:
             return 0
@@ -3349,16 +3368,16 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--slurm_setup",
-        action="store_true",
-        help="setup any slurm partitions required by the tests")
-    parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
         default=str(get_local_host()),
         type=str,
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
+    parser.add_argument(
+        "-ss", "--slurm_setup",
+        action="store_true",
+        help="setup any slurm partitions required by the tests")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3404,7 +3423,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
+    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
