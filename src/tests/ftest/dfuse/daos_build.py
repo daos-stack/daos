@@ -28,7 +28,7 @@ class DaosBuild(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=daosio,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")
@@ -172,9 +172,8 @@ class DaosBuild(DfuseTestBase):
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
-        for key, value in cont_attrs.items():
-            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                        attr=key, val=value)
+        daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
+                                     attrs=cont_attrs)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
