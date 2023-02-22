@@ -636,7 +636,7 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 	int	hfi = -1;
 	int	delimiter;
 	char	*hfi_str = NULL;
-	char	domain_name [10];
+	char	domain_name[10];
 
 	/* Current support for the following domains: ib<hfi> or opx<hfi> */
 	if (strncmp(domain, "ib", 2) == 0)
@@ -650,11 +650,10 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 
 	strcpy(domain_name, domain);
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
-	hfi = (unsigned int) strtoul(hfi_str, NULL, 10);
+	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
 	D_ASPRINTF(*string, "%s://%s/%s:%d:%d",
-		   provider, domain, ip, hfi,
-		   start_port + ctx_idx);
+		   provider, domain, ip, hfi, start_port + ctx_idx);
 
 out:
 	if (!rc && *string == NULL)
@@ -686,7 +685,6 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 	if (provider == CRT_PROV_OFI_OPX) {
 		rc = crt_get_opx_info_string(provider_str, domain_str, ip_str,
 					     string, start_port, ctx_idx);
-
 		D_GOTO(out, rc);
 	}
 
