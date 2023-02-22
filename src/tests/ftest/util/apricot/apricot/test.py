@@ -138,6 +138,7 @@ class Test(avocadoTest):
         self._stage_name = os.environ.get("STAGE_NAME", None)
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
+        self._test_step = 1
 
     def setUp(self):
         """Set up each test case."""

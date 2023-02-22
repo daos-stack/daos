@@ -24,17 +24,6 @@ class EcodFioRebuild(ErasureCodeFio):
         self.rank_to_kill = None
         self.read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
-    def get_pool_freespace(self):
-        """Get pool total free space.
-
-        Return:
-            free_space (int): pool total free space.
-        """
-        tier_stats = self.pool.get_tier_stats(True)
-        total_freespace = tier_stats["scm"]["free"] + tier_stats["nvme"]["free"]
-        self.log.info("==>tier_stats= %s", tier_stats)
-        return total_freespace
-
     def execution(self, rebuild_mode):
         """Execute test.
 
@@ -45,7 +34,7 @@ class EcodFioRebuild(ErasureCodeFio):
         aggregation_timeout = self.params.get("timeout", "/run/pool/aggregation/*")
         # 1. Disable aggregation
         self.log_step("Disable aggregation")
-        self.disable_aggregation()
+        self.pool.disable_aggregation()
 
         # 2.a Kill last server rank first
         self.log_step("Start fio and kill the last server")
@@ -58,11 +47,11 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 3. Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
-        init_free_space = self.get_pool_freespace()
+        init_free_space = self.pool.get_pool_freespace()
 
         # 4. Enable aggregation
         self.log_step("Enable aggregation")
-        self.enable_aggregation()
+        self.pool.enable_aggregation()
 
         # 5. Get total space consumed (scm+nvme) after aggregation enabled, verify and wait until
         #    aggregation triggered, maximum 3 minutes.
@@ -73,7 +62,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.log_step("Verify and wait until aggregation triggered")
         while not aggr_triggered and not timed_out:
             # Check if current free space exceeds threshold
-            free_space = self.get_pool_freespace()
+            free_space = self.pool.get_pool_freespace()
             difference = free_space - init_free_space
             aggr_triggered = difference >= aggregation_threshold
             self.log.debug("Total Free space: initial=%s, current=%s, difference=%s",
@@ -84,7 +73,7 @@ class EcodFioRebuild(ErasureCodeFio):
             if not aggr_triggered and not timed_out:
                 time.sleep(1)
         if timed_out:
-            self.fail("Aggregation not observed within %s seconds", aggregation_timeout)
+            self.fail("Aggregation not observed within {} seconds".format(aggregation_timeout))
 
         # ec off-line rebuild fio
         if 'off-line' in rebuild_mode:
