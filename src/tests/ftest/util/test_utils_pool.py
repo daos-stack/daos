@@ -1125,20 +1125,19 @@ class TestPool(TestDaosApiBase):
             tier_stats[tier_type] = tier_stat.copy()
         return tier_stats
 
-    def get_pool_freespace(self):
+    def get_total_free_space(self, refresh=False):
         """Get the pool total free space.
 
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
         Return:
-            free_space (int): pool total free space.
+            total_free_space (int): pool total free space.
+
         """
-        tier_stats = self.get_tier_stats(True)
-        total_freespace = 0
-        for key, tier_stat in tier_stats.items():
-            if key:
-                total_freespace += tier_stat["free"]
-        self.log.info("Pool %s, tier_stats= %s, total_freespace= %",
-                      self.pool, tier_stats, total_freespace)
-        return total_freespace
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["free"] for stat in tier_stats.values())
 
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.

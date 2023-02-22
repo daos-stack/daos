@@ -47,7 +47,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 3. Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
-        init_free_space = self.pool.get_pool_freespace()
+        init_free_space = self.pool.get_total_free_space(refresh=True)
 
         # 4. Enable aggregation
         self.log_step("Enable aggregation")
@@ -62,7 +62,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.log_step("Verify and wait until aggregation triggered")
         while not aggr_triggered and not timed_out:
             # Check if current free space exceeds threshold
-            free_space = self.pool.get_pool_freespace()
+            free_space = self.pool.get_total_free_space(refresh=True)
             difference = free_space - init_free_space
             aggr_triggered = difference >= aggregation_threshold
             self.log.debug("Total Free space: initial=%s, current=%s, difference=%s",
