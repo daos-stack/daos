@@ -31,29 +31,19 @@ is_idle()
 static int
 wait_fn(struct chkpt_ctx *ctx)
 {
-	ABT_eventual eventual;
 	int          rc;
 
-	rc = ABT_eventual_create(0, &eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	ctx->cc_eventual = &eventual;
-	rc               = ABT_eventual_wait(eventual, NULL);
+	rc = ABT_eventual_wait(ctx->cc_eventual, NULL);
 	if (rc != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);
 
-	ctx->cc_eventual = NULL;
-
-	ABT_eventual_free(&eventual);
+	ABT_eventual_reset(ctx->cc_eventual);
 	return rc;
 }
 
 static void
 wake_fn(struct chkpt_ctx *ctx)
 {
-	if (ctx->cc_eventual == NULL)
-		return;
 	ABT_eventual_set(ctx->cc_eventual, NULL, 0);
 }
 
@@ -72,6 +62,12 @@ chkpt_ult(void *arg)
 
 	if (child->spc_chkpt_req == NULL)
 		return;
+
+	rc = ABT_eventual_create(0, &ctx.cc_eventual);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Failed to create ABT eventual: %d", dss_abterr2der(rc));
+		return;
+	}
 
 	uuid_copy(ctx.cc_pool_uuid, pool_uuid);
 	ctx.cc_dmi          = dss_get_module_info();
@@ -100,6 +96,7 @@ chkpt_ult(void *arg)
 
 		sched_req_sleep(child->spc_chkpt_req, sleep_time);
 	}
+	ABT_eventual_free(&ctx.cc_eventual);
 }
 
 int

@@ -1270,7 +1270,7 @@ struct chkpt_ctx {
 	uint64_t                cc_commit_id;
 	uint64_t                cc_wait_id;
 	void                   *cc_sched_arg;
-	void                   *cc_eventual;
+	ABT_eventual		cc_eventual;
 };
 
 /**
