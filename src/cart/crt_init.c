@@ -509,6 +509,16 @@ do_init:
 			}
 		}
 
+		if (prov == CRT_NA_OFI_TCP_RXM) {
+			char *wait_obj_env;
+
+			wait_obj_env = getenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ");
+			if (wait_obj_env == NULL) {
+				D_INFO("FI_OFI_RXM_DEF_TCP_WAIT_OBJ not set, set=pollfd\n");
+				setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", true);
+			}
+		}
+
 		/* Print notice that "ofi+psm2" will be deprecated*/
 		if (prov == CRT_NA_OFI_PSM2) {
 			D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
