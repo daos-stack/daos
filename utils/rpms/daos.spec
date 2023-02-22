@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -70,7 +70,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
+BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -551,6 +551,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
+- Update raft to 0.9.2-1.403.g3d20556
+
 * Tue Feb 21 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.103-5
 - Bump min supported go version to 1.17
 
