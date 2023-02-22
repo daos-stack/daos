@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -295,9 +295,11 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	struct ds_pool	*pool;
 	int		rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, "Lookup "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		return 0;
+	}
 
 	/* This may not be the pool leader node, so down targets
 	 * may not be updated, then the following collective RPC
@@ -329,9 +331,11 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 	int			rc;
 
 	*failed_tgts_cnt = 0;
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL || pool->sp_map == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0 || pool->sp_map == NULL) {
+		D_DEBUG(DB_MD, "pool look "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(output, rc = 0);
+	}
 
 	/* Check if we need excluded the failure targets, NB:
 	 * since the ranks in the pool map are ranks of primary

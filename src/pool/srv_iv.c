@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -756,10 +756,12 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t		rank;
 	int			rc;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
-		D_GOTO(out_put, rc = 0);
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc) {
+		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		D_GOTO(out_put, rc);
 	}
 
 	rc = crt_group_rank(pool->sp_group, &rank);
@@ -821,7 +823,8 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
-	ds_pool_put(pool);
+	if (pool != NULL)
+		ds_pool_put(pool);
 	return rc;
 }
 
@@ -859,9 +862,12 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
-			pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-			if (pool == NULL)
-				return 0;
+			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+			if (rc) {
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+				return rc;
+			}
 			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
@@ -887,12 +893,14 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_key	*ent_pool_key = key2priv(&entry->iv_key);
 	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool = 0;
-	int			rc = 0;
+	int			rc;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
-		D_GOTO(out_put, rc = 0);
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc) {
+		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		D_GOTO(out_put, rc);
 	}
 
 	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
@@ -985,6 +993,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *value)
 {
 	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*pool_key;
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
@@ -993,18 +1002,22 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (entry->iv_class->iv_class_id != IV_POOL_MAP)
 		return 0;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_DEBUG(DB_TRACE, DF_UUID": pool not found\n",
-			DP_UUID(entry->ns->iv_pool_uuid));
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, DF_UUID": pool not found: %d\n",
+			DP_UUID(entry->ns->iv_pool_uuid), rc);
 		/* Return 0 to keep forwarding this sync request. */
-		return 0;
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		return rc;
 	}
 
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
-	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
+	pool_key = (struct pool_iv_key *)key->key_buf;
+	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank,
+			     pool_key->pik_term);
 
 	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
@@ -1073,7 +1086,7 @@ retry:
 }
 
 static int
-pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
+pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 	       struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
 	       unsigned int sync_mode, bool retry)
@@ -1096,6 +1109,7 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
 	pool_key->pik_eph = crt_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
@@ -1272,9 +1286,9 @@ ds_pool_map_refresh_ult(void *arg)
 
 	/* Pool IV fetch should only be done in xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	pool = ds_pool_lookup(iv_arg->iua_pool_uuid);
-	if (pool == NULL) {
-		rc = -DER_NONEXIST;
+	rc = ds_pool_lookup(iv_arg->iua_pool_uuid, &pool);
+	if (rc != 0) {
+		D_WARN(DF_UUID" refresh pool map: %d\n", DP_UUID(iv_arg->iua_pool_uuid), rc);
 		goto out;
 	}
 

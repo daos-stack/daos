@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -805,12 +805,14 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 				D_GOTO(out, rc);
 			}
 
-			rc = dss_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
-					     NULL, dc_obj_verify_ec_cb, dova);
-			if (rc) {
-				D_ERROR("Failed to verify ec object: "DF_RC"\n",
-					DP_RC(rc));
-				D_GOTO(out, rc);
+			if (!dova->non_exist && dova->num > 0) {
+				rc = dss_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
+						     NULL, dc_obj_verify_ec_cb, dova);
+				if (rc) {
+					D_ERROR(DF_UOID" failed to verify ec object: "DF_RC"\n",
+						DP_UOID(oid), DP_RC(rc));
+					D_GOTO(out, rc);
+				}
 			}
 		}
 	}

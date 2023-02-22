@@ -2517,7 +2517,7 @@ crt_rank_self_set(d_rank_t rank)
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
 	hg_class_t		*hg_class;
-	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
+	hg_size_t		size;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	d_list_t		*ctx_list;
@@ -2554,6 +2554,7 @@ crt_rank_self_set(d_rank_t rank)
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
+		size = CRT_ADDR_STR_MAX_LEN;
 		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
 			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);
