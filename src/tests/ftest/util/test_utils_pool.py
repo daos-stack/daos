@@ -543,13 +543,13 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     def disable_aggregation(self):
         """ Disable pool aggregation."""
-        self.log.info("Disable pool aggregation for pool %s", self.identifier)
+        self.log.info("Disable pool aggregation for %s", str(self))
         self.set_property("reclaim", "disabled")
 
     @fail_on(CommandFailure)
     def enable_aggregation(self):
         """ Enable pool aggregation."""
-        self.log.info("Enable pool aggregation for pool %s", self.identifier)
+        self.log.info("Enable pool aggregation for %s", str(self))
         self.set_property("reclaim", "time")
 
     @fail_on(CommandFailure)
