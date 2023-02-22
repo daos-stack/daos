@@ -1291,7 +1291,6 @@ err_threads:
 		sem_destroy(&eqt->de_sem);
 	}
 
-err_slab:
 	d_slab_destroy(&fs_handle->dpi_slab);
 err_ie_remove:
 	dfs_release(ie->ie_obj);
