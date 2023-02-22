@@ -1133,8 +1133,9 @@ class TestPool(TestDaosApiBase):
         """
         tier_stats = self.get_tier_stats(True)
         total_freespace = 0
-        for -, tier_stat in tier_stats.items():
-            total_freespace += tier_stat["free"]
+        for key, tier_stat in tier_stats.items():
+            if key:
+                total_freespace += tier_stat["free"]
         self.log.info("Pool %s, tier_stats= %s, total_freespace= %",
                       self.pool, tier_stats, total_freespace)
         return total_freespace
