@@ -38,7 +38,7 @@ pool:
   control_method: dmg
   aggregation:
     threshold: 50000000
-    timeout: 180
+    aggr_timeout: 180
 container:
   type: POSIX
   control_method: daos

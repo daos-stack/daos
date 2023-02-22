@@ -31,7 +31,7 @@ class EcodFioRebuild(ErasureCodeFio):
             rebuild_mode (str): On-line or off-line rebuild mode
         """
         aggregation_threshold = self.params.get("threshold", "/run/pool/aggregation/*")
-        aggregation_timeout = self.params.get("timeout", "/run/pool/aggregation/*")
+        aggregation_timeout = self.params.get("aggr_timeout", "/run/pool/aggregation/*")
         # 1. Disable aggregation
         self.log_step("Disable aggregation")
         self.pool.disable_aggregation()
