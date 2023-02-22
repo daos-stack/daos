@@ -11,7 +11,7 @@
 
 /* Async progress thread.
  *
- * A number of threads are created at launch, each thread having it's own event queue with a
+ * A number of threads are created at launch, each thread having its own event queue with a
  * semaphore to wakeup, posted for each entry added to the event queue and once for shutdown.
  * When there are no entries on the eq then the thread will yield in the semaphore, when there
  * are pending events it'll spin in eq_poll() for completion.  All pending events should be
@@ -63,6 +63,9 @@ cont:
 				ev->de_complete_cb(ev);
 			}
 			to_consume = rc;
+		} else if (rc < 0) {
+			DFUSE_TRA_WARNING(eqt, "Error from daos_eq_poll, " DF_RC, DP_RC(rc));
+			to_consume = 0;
 		} else {
 			to_consume = 0;
 		}
@@ -1257,11 +1260,11 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 		rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, eqt, &eqt->de_read_slab);
 		if (rc != -DER_SUCCESS)
-			D_GOTO(err_slab, rc);
+			D_GOTO(err_threads, rc);
 
 		rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, eqt, &eqt->de_write_slab);
 		if (rc != -DER_SUCCESS)
-			D_GOTO(err_slab, rc);
+			D_GOTO(err_threads, rc);
 
 		rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
 		if (rc != 0)

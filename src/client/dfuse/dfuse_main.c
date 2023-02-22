@@ -260,7 +260,7 @@ show_help(char *name)
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
 	    "	-S --singlethread	Single threaded\n"
-	    "	-t --thread-count=count	Number of fuse threads to use\n"
+	    "	-t --thread-count=count	Number of threads to use\n"
 	    "   -e --eq-count=count     Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
@@ -282,10 +282,13 @@ show_help(char *name)
 	    "\n"
 	    "The default thread count is one per available core to allow maximum throughput,\n"
 	    "this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
-	    "One thread will be started for asynchronous I/O handling so at least two threads\n"
-	    "must be specified in all cases.\n"
+	    "Each fuse thread will progress one synchronous operation or accept asynchronous\n"
+	    "operations (read/write) for background processing.\n"
+	    "A number of event queues and threads will be started for asynchronous I/O handling,\n"
+	    "the default number of event queues is 1 and a progress thread will be created per\n"
+	    "event queue which reduces the number of fuse threads for a given thread count.\n"
 	    "Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
-	    "threading logic in dfuse."
+	    "threading logic in dfuse so this affects fuse threads but not event queue count.\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
@@ -474,13 +477,13 @@ main(int argc, char **argv)
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
 	}
 
-	if (dfuse_info->di_thread_count < 2) {
-		printf("Dfuse needs at least two threads.\n");
+	/* Reserve one thread for each daos event queue */
+	dfuse_info->di_thread_count -= dfuse_info->di_equeue_count;
+
+	if (dfuse_info->di_thread_count < 1) {
+		printf("Dfuse needs at least one fuse thread.\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
-
-	/* Reserve one CPU thread for the daos event queue */
-	dfuse_info->di_thread_count -= 1;
 
 	if (!dfuse_info->di_foreground) {
 		rc = dfuse_bg(dfuse_info);
