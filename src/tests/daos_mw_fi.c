@@ -8,6 +8,15 @@
  * This program provides a testing tool for the middleware consistency work to allow introducing
  * leaks in the container by unlinking objects from the DFS or PyDAOS namespace without punching the
  * objects themselves.
+ * For POSIX container, this supports three types of operations:
+ * 1) Punch the SB object (punch_sb)
+ * 2) Punch an entry of an object leaving a leaked object (punch_entry path)
+ * 3) Punch an object leaving a dangling entry (punch_obj path)
+ * Note that the path specified must be relative to the root of the container.
+ * A path with dfuse mountpoint is not yet supported.
+ *
+ * For Python container, only punch_entry is valid to punch the entry of a dictionary
+ * (punch_entry dict_name).
  */
 
 #include <stdlib.h>
@@ -23,8 +32,14 @@
 #include <daos_fs.h>
 #include <daos/common.h>
 
+enum {
+	PUNCH_SB,
+	PUNCH_ENTRY,
+	PUNCH_OBJ
+};
+
 static int
-punch_obj(daos_handle_t coh, daos_obj_id_t oid, char *name)
+punch_obj(daos_handle_t coh, daos_obj_id_t oid, const char *name)
 {
 	daos_handle_t	oh;
 	daos_key_t	dkey;
@@ -61,16 +76,17 @@ punch_obj(daos_handle_t coh, daos_obj_id_t oid, char *name)
 }
 
 static int
-fi_dfs(daos_handle_t poh, daos_handle_t coh, const char *op, const char *path, daos_prop_t *prop)
+fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop_t *prop)
 {
 	dfs_t		*dfs = NULL;
 	dfs_obj_t	*obj;
 	daos_obj_id_t	oid;
-	char		*dir = NULL, *dirp;
-	char		*file = NULL, *fname;
+	char		*dir = NULL;
+	const char	*dirp;
+	char		*file = NULL, *fname = NULL;
 	int		rc;
 
-	if (strcmp(op, "punch_sb") == 0) {
+	if (op == PUNCH_SB) {
 		struct daos_prop_entry		*entry;
 		struct daos_prop_co_roots	*roots;
 
@@ -90,22 +106,29 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, const char *op, const char *path, d
 		return -DER_INVAL;
 	}
 
-	D_STRNDUP(dir, path, PATH_MAX);
-	if (dir == NULL)
-		return -DER_NOMEM;
-	D_STRNDUP(file, path, PATH_MAX);
-	if (file == NULL)
-		D_GOTO(out_path, rc = -DER_NOMEM);
-
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc) {
 		fprintf(stderr, "dfs_mount() failed: (%d)\n", rc);
 		D_GOTO(out_path, rc);
 	}
 
-	fname = basename(file);
-	dirp = dirname(dir);
-	printf("punching %s from %s\n", fname, dirp);
+	if (op == PUNCH_ENTRY) {
+		D_STRNDUP(dir, path, PATH_MAX);
+		if (dir == NULL)
+			return -DER_NOMEM;
+		D_STRNDUP(file, path, PATH_MAX);
+		if (file == NULL)
+			D_GOTO(out_path, rc = -DER_NOMEM);
+
+		fname = basename(file);
+		dirp = dirname(dir);
+		printf("punching %s from %s\n", fname, dirp);
+	} else {
+		D_ASSERT(op == PUNCH_OBJ);
+		dirp = path;
+		printf("punching object %s\n", path);
+	}
+
 	rc = dfs_lookup(dfs, dirp, O_RDWR, &obj, NULL, NULL);
 	if (rc) {
 		fprintf(stderr, "dfs_lookup() failed: (%d)\n", rc);
@@ -172,28 +195,35 @@ main(int argc, char **argv)
 	daos_handle_t			poh, coh;
 	uint32_t			props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
 	const int			num_props = ARRAY_SIZE(props);
-	int				i;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry = NULL;
+	int				i;
+	int				op;
 	int				rc;
 
 	if (argc != 5 && argc != 4) {
 		fprintf(stderr,
-			"usage: ./daos_mw_fi pool cont [punch_entry; punch_sb] [name or path]\n");
+			"usage: ./daos_mw_fi pool cont [punch_entry/punch_obj/punch_sb] [name or path]\n");
 		exit(1);
 	}
 
-	if (strcmp(argv[3], "punch_entry") == 0) {
+	if (strcmp(argv[3], "punch_entry") == 0 || strcmp(argv[3], "punch_obj") == 0) {
 		if (argc != 5) {
 			fprintf(stderr,
 				"usage: ./daos_mw_fi pool cont punch_entry [name or path]\n");
 			exit(1);
 		}
+
+		if (strcmp(argv[3], "punch_entry") == 0)
+			op = PUNCH_ENTRY;
+		else
+			op = PUNCH_OBJ;
 	} else if (strcmp(argv[3], "punch_sb") == 0) {
 		if (argc != 4) {
 			fprintf(stderr, "usage: ./daos_mw_fi pool cont punch_sb\n");
 			exit(1);
 		}
+		op = PUNCH_SB;
 	} else {
 		fprintf(stderr, "Invalid Operation: %s\n", argv[3]);
 		fprintf(stderr,
@@ -240,8 +270,7 @@ main(int argc, char **argv)
 	}
 
 	if (entry->dpe_val == DAOS_PROP_CO_LAYOUT_POSIX) {
-		D_ASSERT(strcmp(argv[3], "punch_entry") == 0 || strcmp(argv[3], "punch_sb") == 0);
-		rc = fi_dfs(poh, coh, argv[3], argv[4], prop);
+		rc = fi_dfs(poh, coh, op, argv[4], prop);
 	} else if (entry->dpe_val == DAOS_PROP_CO_LAYOUT_PYTHON) {
 		if (strcmp(argv[3], "punch_entry") != 0) {
 			fprintf(stderr, "Failed: Invalid op on PyDAOS container: %s\n", argv[3]);
