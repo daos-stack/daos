@@ -62,7 +62,7 @@ class ObjectMetadata(TestWithServers):
     """
 
     # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 2500
+    CREATED_CONTAINERS_MIN = 2900
 
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
