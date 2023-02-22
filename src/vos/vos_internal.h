@@ -1287,56 +1287,6 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
-/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
-static const int        slab_map[] = {
-    0,          /* 32 bytes */
-    1,          /* 64 bytes */
-    2,          /* 96 bytes */
-    3,          /* 128 bytes */
-    4,          /* 160 bytes */
-    5,          /* 192 bytes */
-    6,          /* 224 bytes */
-    7,          /* 256 bytes */
-    8,          /* 288 bytes */
-    -1, 9,      /* 352 bytes */
-    10,         /* 384 bytes */
-    11,         /* 416 bytes */
-    -1, -1, 12, /* 512 bytes */
-    -1, 13,     /* 576 bytes (2.2 compatibility only) */
-    -1, -1, 14, /* 672 bytes (2.2 compatibility only) */
-    -1, -1, 15, /* 768 bytes (2.2 compatibility only) */
-};
-
-static inline umem_off_t
-vos_slab_alloc(struct umem_instance *umm, int size)
-{
-	int aligned_size = D_ALIGNUP(size, 32);
-	int slab_idx;
-	int slab;
-
-	slab_idx = (aligned_size >> 5) - 1;
-	if (slab_idx >= ARRAY_SIZE(slab_map))
-		goto no_slab_alloc;
-
-	if (slab_map[slab_idx] == -1) {
-		D_DEBUG(DB_MGMT, "No slab %d for allocation of size %d, idx=%d\n", aligned_size,
-			size, slab_idx);
-		goto no_slab_alloc;
-	}
-
-	slab = slab_map[slab_idx];
-
-	/* evtree unit tests may skip slab register in vos_pool_open() */
-	D_ASSERTF(!umem_slab_registered(umm, slab) || aligned_size == umem_slab_usize(umm, slab),
-		  "registered: %d, id: %d, size: %d != %zu\n", umem_slab_registered(umm, slab),
-		  slab, aligned_size, umem_slab_usize(umm, slab));
-
-	return umem_alloc_verb(umm, slab, UMEM_FLAG_ZERO, aligned_size);
-
-no_slab_alloc:
-	return umem_zalloc(umm, size);
-}
-
 /* vos_space.c */
 void
 vos_space_sys_init(struct vos_pool *pool);
