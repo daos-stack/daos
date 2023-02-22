@@ -29,6 +29,7 @@ import subprocess  # nosec
 import tempfile
 import pickle  # nosec
 from collections import OrderedDict
+import shutil
 import xattr
 import junit_xml
 import tabulate
@@ -3091,6 +3092,10 @@ class PosixTests():
         with open(fname, 'w') as fd:
             fd.write('test13')
 
+        dirname2 = join(path, 'test_dir2')
+        dirname = join(path, 'test_dir')
+        shutil.copytree(dirname, dirname2)
+
         daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
         cmd_env = get_base_env()
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
@@ -3129,7 +3134,7 @@ class PosixTests():
 
         # fs check with relink should find the 2 leaked directories.
         # Everything under them should be relinked but not reported as leaked.
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf']
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf1']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3148,7 +3153,7 @@ class PosixTests():
         if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
-        dir1 = join(path, 'lost+found/lf/')
+        dir1 = join(path, 'lost+found/lf1/')
         dir_list = os.listdir(dir1)
         nr_entries = len(dir_list)
         if nr_entries != 2:
@@ -3171,6 +3176,59 @@ class PosixTests():
         if file_nr != 13:
             raise NLTestFail('Wrong number of sub-files in lost+found')
         if dir_nr != 11:
+            raise NLTestFail('Wrong number of sub-directories in lost+found')
+
+        # punch the test_dir2 object.
+        # this makes test_dir2 an empty dir (leaking everything under it)
+        cmd = [daos_mw_fi, pool, cont, "punch_obj", "/test_dir2"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+        assert rc.returncode == 0
+
+        # fs check with relink should find 3 leaked dirs and 1 leaked file that were directly under
+        # test_dir2. Everything under those leaked dirs are relinked but not reported as leaked.
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf2']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 4':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # run again to check nothing is detected
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        dir2 = join(path, 'lost+found/lf2/')
+        dir_list = os.listdir(dir2)
+        nr_entries = len(dir_list)
+        if nr_entries != 4:
+            raise NLTestFail('Wrong number of entries')
+        file_nr = 0
+        dir_nr = 0
+        for root, dirs, files in os.walk(dir2):
+            for name in files:
+                print(os.path.join(root, name))
+                file_nr += 1
+            for name in dirs:
+                print(os.path.join(root, name))
+                dir_nr += 1
+        if file_nr != 13:
+            raise NLTestFail('Wrong number of sub-files in lost+found')
+        if dir_nr != 12:
             raise NLTestFail('Wrong number of sub-directories in lost+found')
 
 
