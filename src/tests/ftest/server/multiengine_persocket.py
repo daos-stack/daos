@@ -133,7 +133,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
-        result = DaosServerCommandRunner().scm_prepare(
+        result = DaosServerCommandRunner(path=self.bin).scm_prepare(
             scm_ns_per_socket=engines_per_socket, force=True)
         if 0 not in result or len(result) > 0:
             self.fail(
@@ -142,7 +142,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
     def ping_verify(self, host, expect_pass=True):
         """Verify host up or down status by ping.
-     
+
         Args:
              hosts (NodeSet): hosts set to be rebooted.
              expect_pass (bool): expect result pass.
@@ -164,8 +164,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 time.sleep(1)
         if time.time() - start >= ping_timeout:
             self.fail(
-                "#{0} ping failed, did not come back after {1} seconds".format,
-                host, ping_timeout)
+                "#{0} ping failed, did not come back after {1} seconds".format(host, ping_timeout))
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
