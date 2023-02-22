@@ -10,10 +10,11 @@ import (
 	"bytes"
 	"crypto"
 	"os"
-	"strings"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func InsecureTC() *TransportConfig {
@@ -29,8 +30,6 @@ func BadTC() *TransportConfig {
 			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/bad.crt",
 			PrivateKeyPath:  "testdata/certs/bad.key",
-			tlsKeypair:      nil,
-			caPool:          nil,
 		},
 	}
 }
@@ -42,8 +41,6 @@ func ServerTC() *TransportConfig {
 			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/server.crt",
 			PrivateKeyPath:  "testdata/certs/server.key",
-			tlsKeypair:      nil,
-			caPool:          nil,
 			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
@@ -56,8 +53,6 @@ func AgentTC() *TransportConfig {
 			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/agent.crt",
 			PrivateKeyPath:  "testdata/certs/agent.key",
-			tlsKeypair:      nil,
-			caPool:          nil,
 			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
@@ -75,61 +70,60 @@ func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 	}
 }
 
-func ValidateInsecure(t *testing.T, c *TransportConfig, err error) {
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.tlsKeypair != nil || c.caPool != nil {
-		t.Fatal("insecure config loaded certs")
-	}
-}
-
-func ValidateGood(t *testing.T, c *TransportConfig, err error) {
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.tlsKeypair == nil || c.caPool == nil {
-		t.Fatal("certs did not load yet returned no error")
-	}
-}
-
-func ValidateBad(t *testing.T, c *TransportConfig, err error) {
-	if err == nil {
-		t.Fatal("Expected an error but got nil")
-	}
-}
-
-func ValidateNil(t *testing.T, c *TransportConfig, err error) {
-	if err != nil &&
-		strings.Compare(err.Error(), "nil TransportConfig") != 0 {
-		t.Fatalf("Expected nil TransportConfig but got %s", err)
-	}
-}
-
 func TestPreLoadCertData(t *testing.T) {
 	insecureTC := InsecureTC()
 	serverTC := ServerTC()
 	badTC := BadTC()
 
-	// Setup permissions for tests below.
-	SetupTCFilePerms(t, serverTC)
-	SetupTCFilePerms(t, badTC)
+	clientDirTC := ServerTC()
+	clientDirTC.ClientCertDir = "testdata/badperms"
 
-	testCases := []struct {
-		testname string
-		config   *TransportConfig
-		Validate func(t *testing.T, c *TransportConfig, err error)
+	for name, tc := range map[string]struct {
+		setup     func(t *testing.T)
+		config    *TransportConfig
+		expLoaded bool
+		expErr    error
 	}{
-		{"InsecureTC", insecureTC, ValidateInsecure},
-		{"GoodTC", serverTC, ValidateGood},
-		{"BadTC", badTC, ValidateBad},
-		{"NilTC", nil, ValidateNil},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.testname, func(t *testing.T) {
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"insecure": {
+			config: insecureTC,
+		},
+		"cert success": {
+			setup: func(t *testing.T) {
+				SetupTCFilePerms(t, serverTC)
+			},
+			config:    serverTC,
+			expLoaded: true,
+		},
+		"bad cert": {
+			setup: func(t *testing.T) {
+				SetupTCFilePerms(t, badTC)
+			},
+			config: badTC,
+			expErr: errors.New("insecure permissions"),
+		},
+		"bad client dir": {
+			setup: func(t *testing.T) {
+				SetupTCFilePerms(t, clientDirTC)
+			},
+			config: clientDirTC,
+			expErr: FaultUnreadableCertFile(clientDirTC.ClientCertDir),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.setup != nil {
+				tc.setup(t)
+			}
 			err := tc.config.PreLoadCertData()
-			tc.Validate(t, tc.config, err)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.config == nil {
+				return
+			}
+			test.AssertEqual(t, tc.expLoaded, tc.config.tlsKeypair != nil, "")
+			test.AssertEqual(t, tc.expLoaded, tc.config.caPool != nil, "")
 		})
 	}
 }

@@ -245,7 +245,8 @@ extern "C" {
 	/** Re-update again */                                                                     \
 	ACTION(DER_UPDATE_AGAIN, (DER_ERR_DAOS_BASE + 41), update again)                           \
 	ACTION(DER_NVME_IO, (DER_ERR_DAOS_BASE + 42), NVMe I / O error)                            \
-	ACTION(DER_CHKPT_BUSY, (DER_ERR_DAOS_BASE + 43),                                           \
+	ACTION(DER_NO_CERT, (DER_ERR_DAOS_BASE + 43), Unable to access one or more certificates)   \
+	ACTION(DER_CHKPT_BUSY, (DER_ERR_DAOS_BASE + 44),                                           \
 	       Page is temporarily read only due to checkpointing)
 
 /** Defines the gurt error codes */

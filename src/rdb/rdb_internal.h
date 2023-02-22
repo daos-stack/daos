@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,8 @@ struct rdb_raft_event {
 	enum rdb_raft_event_type	dre_type;
 	uint64_t			dre_term;
 };
+
+#define RDB_NOSPC_ERR_INTVL_USEC (1000000)	/* 1 second */
 
 /* rdb.c **********************************************************************/
 
@@ -66,6 +68,7 @@ struct rdb {
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
 	daos_handle_t		d_mc;		/* metadata container */
+	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
@@ -86,7 +89,8 @@ struct rdb {
 	int			d_nevents;	/* d_events queue len from 0 */
 	ABT_cond		d_events_cv;	/* for d_events enqueues */
 	uint64_t		d_compact_thres;/* of compactable entries */
-	ABT_cond		d_compact_cv;	/* for base updates */
+	ABT_cond		d_compact_cv;	/* for triggering base updates */
+	ABT_cond		d_compacted_cv;	/* for d_lc_record.dlr_aggregated updates */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
 	ABT_thread		d_callbackd;
@@ -96,11 +100,11 @@ struct rdb {
 	unsigned int		d_ae_max_entries;
 };
 
-/* thresholds of free space for a leader to avoid appending new log entries
- * and follower to warn if the situation is really dire.
+/* thresholds of free space for a leader to avoid appending new log entries (512 KiB)
+ * and follower to warn if the situation is really dire (16KiB)
  */
-#define RDB_NOAPPEND_FREE_SPACE (262144)
-#define RDB_CRITICAL_FREE_SPACE (16384)
+#define RDB_NOAPPEND_FREE_SPACE (1ULL << 19)
+#define RDB_CRITICAL_FREE_SPACE (1ULL << 14)
 
 /* Current rank */
 #define DF_RANK "%u"
@@ -170,6 +174,7 @@ void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
+int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx);
 
 /* rdb_rpc.c ******************************************************************/
 

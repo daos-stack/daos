@@ -1555,5 +1555,6 @@ dss_set_start_epoch(void)
 bool
 dss_has_enough_helper(void)
 {
-	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
+	return dss_tgt_offload_xs_nr >= 4 ||
+	       (dss_tgt_offload_xs_nr > 0 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4);
 }
