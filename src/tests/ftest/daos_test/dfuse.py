@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_test
+        :avocado: tags=dfuse,dfuse_test,daos_cmd
         :avocado: tags=dfuse_unit,test_daos_dfuse_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfuse_test')
@@ -76,9 +76,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         if use_dfuse:
-            for key, value in cont_attrs.items():
-                daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                            attr=key, val=value)
+            daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
+                                         attrs=cont_attrs)
 
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 

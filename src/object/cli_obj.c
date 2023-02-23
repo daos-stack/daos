@@ -4445,6 +4445,7 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 {
 	tse_task_t	 *task = obj_auxi->obj_task;
 	struct dc_object *obj = obj_auxi->obj;
+	bool		  data_recov = false;
 
 	D_ASSERT(obj_auxi->is_ec_obj);
 
@@ -4471,14 +4472,18 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 	if (obj_ec_should_recover_data(obj_auxi)) {
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
-		if (!obj_auxi->reasb_req.orr_size_fetch)
+		if (!obj_auxi->reasb_req.orr_size_fetch) {
 			obj_ec_recov_data(&obj_auxi->reasb_req, args->nr);
-	} else if ((task->dt_result == 0 || task->dt_result == -DER_REC2BIG) &&
-		    obj_auxi->opc == DAOS_OBJ_RPC_FETCH && obj_auxi->req_reasbed) {
+			data_recov = true;
+		}
+	}
+	if ((task->dt_result == 0 || task->dt_result == -DER_REC2BIG) &&
+	    obj_auxi->opc == DAOS_OBJ_RPC_FETCH && obj_auxi->req_reasbed) {
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
 		obj_ec_update_iod_size(&obj_auxi->reasb_req, args->nr);
-		if (obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_usgls != NULL)
+		if ((obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_usgls != NULL) ||
+		    data_recov)
 			obj_ec_fetch_set_sgl(obj, &obj_auxi->reasb_req,
 					     obj_auxi->dkey_hash, args->nr);
 	}
