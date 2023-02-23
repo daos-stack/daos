@@ -6,6 +6,7 @@
 from ior_test_base import IorTestBase
 from data_utils import list_stats, dict_subtract, dict_extract_values
 from general_utils import percent_change
+from oclass_utils import calculate_ec_targets_used
 
 
 class EcodSpaceUsage(IorTestBase):
@@ -18,7 +19,8 @@ class EcodSpaceUsage(IorTestBase):
             Create a pool.
             Create a POSIX container.
             Use IOR to create a large file with EC*GX.
-            Verify all targets use within X% of the mean space.
+            Verify the expected number of targets were used.
+            Verify used targets use within X% of the mean space.
 
     :avocado: recursive
     """
@@ -57,6 +59,7 @@ class EcodSpaceUsage(IorTestBase):
         max_diff_percent = self.params.get('max_diff_percent', '/run/space_usage/*')
         rank_list = list(range(self.server_managers[0].engines))
         targets_per_rank = self.server_managers[0].get_config_value("targets")
+        total_targets = targets_per_rank * len(rank_list)
         target_idx = ','.join(map(str, range(targets_per_rank)))
 
         self.pool = self.get_pool()
@@ -77,31 +80,36 @@ class EcodSpaceUsage(IorTestBase):
 
         # Calculate the difference in space so we know how much the usage increased
         space_diff = dict_subtract(space_after, space_before)
-
-        # Aggregate the space used to get min, max, mean
-        space_aggregated = {
-            'scm': list_stats(dict_extract_values(space_diff, ['scm', 'used'])),
-            'nvme': list_stats(dict_extract_values(space_diff, ['nvme', 'used']))
-        }
-
-        # Print useful debugging info
         self.log.debug('Space per target before IOR: %s', space_before)
         self.log.debug('Space per target after IOR : %s', space_after)
         self.log.debug('                difference : %s', space_diff)
-        self.log.debug('Aggregated SCM : %s', space_aggregated['scm'])
-        self.log.debug('Aggregated NVMe: %s', space_aggregated['nvme'])
+
+        # Keep just the non-zero values. I.e. the targets that were used
+        scm_used = list(filter(None, dict_extract_values(space_diff, ['scm', 'used'])))
+        nvme_used = list(filter(None, dict_extract_values(space_diff, ['nvme', 'used'])))
+        self.log.debug('SCM Targets Used : %s', len(scm_used))
+        self.log.debug('NVMe Targets Used: %s', len(nvme_used))
+
+        # Aggregate the space used to get min, max, mean
+        scm_aggregated = list_stats(scm_used)
+        nvme_aggregated = list_stats(nvme_used)
+        self.log.debug('Aggregated SCM : %s', scm_aggregated)
+        self.log.debug('Aggregated NVMe: %s', nvme_aggregated)
 
         # Calculate the max percent diff from the mean
         max_scm_diff = max(
-            abs(percent_change(space_aggregated['scm']['mean'], space_aggregated['scm']['max'])),
-            abs(percent_change(space_aggregated['scm']['mean'], space_aggregated['scm']['min'])))
+            abs(percent_change(scm_aggregated['mean'], scm_aggregated['max'])),
+            abs(percent_change(scm_aggregated['mean'], scm_aggregated['min'])))
         max_nvme_diff = max(
-            abs(percent_change(space_aggregated['nvme']['mean'], space_aggregated['nvme']['max'])),
-            abs(percent_change(space_aggregated['nvme']['mean'], space_aggregated['nvme']['min'])))
-
-        # Log max percent diff for debugging
+            abs(percent_change(nvme_aggregated['mean'], nvme_aggregated['max'])),
+            abs(percent_change(nvme_aggregated['mean'], nvme_aggregated['min'])))
         self.log.info('Max used SCM difference from mean : %.2f%%', max_scm_diff * 100)
         self.log.info('Max used NVMe difference from mean: %.2f%%', max_nvme_diff * 100)
+
+        # Verify the correct number of targets were used
+        expected_targets = calculate_ec_targets_used(self.ior_cmd.dfs_oclass.value, total_targets)
+        if not len(scm_used) == len(nvme_used) == expected_targets:
+            self.fail('Incorrect number of targets used!')
 
         # Verify space usage across targets is balanced
         if max_scm_diff > max_diff_percent or max_nvme_diff > max_diff_percent:
