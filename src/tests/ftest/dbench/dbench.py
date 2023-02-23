@@ -21,8 +21,7 @@ class DbenchTest(DfuseTestBase):
         """Jira ID: DAOS-4780
 
         Test Description:
-            Purpose of this test is to mount dfuse and run
-            dbench on top of it.
+            Purpose of this test is to mount dfuse and run dbench on top of it.
 
         Use cases:
             Create Pool.
@@ -34,7 +33,6 @@ class DbenchTest(DfuseTestBase):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=dbench,dfuse,test_dbench
         """
-
         self.add_pool(connect=False)
         self.add_container(self.pool)
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
