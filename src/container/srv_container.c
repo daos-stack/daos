@@ -4562,6 +4562,53 @@ out:
 	return rc;
 }
 
+void
+ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct rdb_tx	tx;
+	struct cont	*cont = NULL;
+	daos_prop_t	*prop = NULL;
+	int		rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to start rdb tx: %d\n",
+			DP_UUID(svc->cs_pool_uuid), rc);
+		return;
+	}
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed to look container: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	if (rc)
+		D_ERROR(DF_CONT": prop read failed:"DF_RC"\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), DP_RC(rc));
+	cont_put(cont);
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	if (rc == 0) {
+		/* Update prop IV with merged prop */
+		rc = cont_iv_prop_update(svc->cs_pool->sp_iv_ns, cont_uuid, prop);
+		if (rc)
+			D_ERROR(DF_CONT": failed to update prop IV for cont, "
+				DF_RC"\n", DP_CONT(svc->cs_pool_uuid, cont_uuid),
+				DP_RC(rc));
+	}
+
+	if (prop != NULL)
+		daos_prop_free(prop);
+}
+
 /*
  * Look up the container, or if the RPC does not need this, call the final
  * handler.
@@ -4649,8 +4696,12 @@ out_lock:
 	rdb_tx_end(&tx);
 out:
 	/* Propagate new snapshot list by IV */
-	if (rc == 0 && (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
-		ds_cont_update_snap_iv(svc, in->ci_uuid);
+	if (rc == 0) {
+		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
+			ds_cont_update_snap_iv(svc, in->ci_uuid);
+		else if (opc == CONT_PROP_SET)
+			ds_cont_prop_iv_update(svc, in->ci_uuid);
+	}
 
 	D_DEBUG(DB_MD, DF_CONT": opc=%d returning, "DF_RC"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc, DP_RC(rc));
