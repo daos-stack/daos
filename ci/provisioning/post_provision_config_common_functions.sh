@@ -266,7 +266,7 @@ post_provision_config_nodes() {
     if grep MOFED_VERSION /etc/do-release; then
         cmd+=(--setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE")
     else
-        cmd+=(upgrade)
+        cmd+=(upgrade --exclude clamav\*)
     fi
     if ! "${cmd[@]}"; then
         dump_repos
