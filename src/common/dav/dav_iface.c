@@ -323,19 +323,6 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	}
 	size = (size_t)statbuf.st_size;
 
-	if (store->stor_priv != NULL) {
-		if (ftruncate(fd, 0) == -1) {
-			close(fd);
-			return NULL;
-		}
-
-		if (ftruncate(fd, (off_t)size) == -1) {
-			close(fd);
-			errno = ENOSPC;
-			return NULL;
-		}
-	}
-
 	hdl = dav_obj_open_internal(fd, 0, size, path, store);
 	if (hdl == NULL) {
 		close(fd);

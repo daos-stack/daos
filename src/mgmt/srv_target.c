@@ -483,64 +483,174 @@ tgt_vos_create_one(void *varg)
 }
 
 static int
-tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
+tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 {
-	char			*path = NULL;
-	int			 i;
-	int			 fd = -1;
-	int			 rc = 0;
+	char				*path = NULL;
+	int				 fd = -1, rc;
 
-	for (i = 0; i < tgt_nr; i++) {
-		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
-		if (rc)
-			break;
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+	rc = path_gen(uuid, newborns_path, VOS_FILE, &tgt_id, &path);
+	if (rc)
+		goto out;
 
-		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
-			DP_UUID(uuid), path);
+	D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n", DP_UUID(uuid), path);
 
-		fd = open(path, O_CREAT|O_RDWR, 0600);
-		if (fd < 0) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to create vos file %s: "
-				DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-			break;
-		}
-
-		/** Align to 4K or locking the region based on the size will fail */
-		scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
-		/**
-		 * Pre-allocate blocks for vos files in order to provide
-		 * consistent performance and avoid entering into the backend
-		 * filesystem allocator through page faults.
-		 * Use fallocate(2) instead of posix_fallocate(3) since the
-		 * latter is bogus with tmpfs.
-		 */
-		rc = fallocate(fd, 0, 0, scm_size);
-		if (rc) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64": "DF_RC"\n",
-				DP_UUID(uuid), path, scm_size, DP_RC(rc));
-			break;
-		}
-
-		rc = fsync(fd);
-		(void)close(fd);
-		fd = -1;
-		if (rc) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to sync vos pool %s: "
-				DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-			break;
-		}
-		D_FREE(path);
+	fd = open(path, O_CREAT|O_RDWR, 0600);
+	if (fd < 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create vos file %s: "
+			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		goto out;
 	}
 
+	/** Align to 4K or locking the region based on the size will fail */
+	scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
+	/**
+	 * Pre-allocate blocks for vos files in order to provide
+	 * consistent performance and avoid entering into the backend
+	 * filesystem allocator through page faults.
+	 * Use fallocate(2) instead of posix_fallocate(3) since the
+	 * latter is bogus with tmpfs.
+	 */
+	rc = fallocate(fd, 0, 0, scm_size);
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to allocate vos file %s with "
+			"size: "DF_U64": "DF_RC"\n",
+			DP_UUID(uuid), path, scm_size, DP_RC(rc));
+		goto out;
+	}
+
+	rc = fsync(fd);
+	(void)close(fd);
+	fd = -1;
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to sync vos pool %s: "
+			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		goto out;
+	}
+out:
 	if (fd != -1)
 		close(fd);
-
 	D_FREE(path);
 	return rc;
+}
+
+struct tgt_vos_prealloc_args {
+	uuid_t		tvpa_uuid;
+	daos_size_t	tvpa_scm_size;
+	int		tvpa_tgt_id;
+};
+
+struct tgt_vos_thrdlist {
+	d_list_t			tvt_link;
+	pthread_t			tvt_tid;
+	struct tgt_vos_prealloc_args	tvt_args;
+};
+
+static void *
+tgt_vos_preallocate_thrd_func(void *arg)
+{
+	struct tgt_vos_prealloc_args	*tvpa = (struct tgt_vos_prealloc_args *)arg;
+
+	dss_bind_to_xstream_cpuset(tvpa->tvpa_tgt_id);
+	return (void *)(uintptr_t)tgt_vos_preallocate(tvpa->tvpa_uuid, tvpa->tvpa_scm_size,
+						      tvpa->tvpa_tgt_id);
+}
+
+static void
+tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
+{
+	struct tgt_vos_thrdlist *entry;
+	int			 rc;
+
+	d_list_for_each_entry(entry, head, tvt_link) {
+		rc = pthread_cancel(entry->tvt_tid);
+		if (rc)
+			D_ERROR("pthread_cancel failed: "DF_RC"\n", DP_RC(rc));
+	}
+
+	d_list_for_each_entry(entry, head, tvt_link) {
+		rc = pthread_join(entry->tvt_tid, NULL);
+		if (rc)
+			D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+	}
+}
+
+static int
+tgt_vos_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
+{
+	int i, rc = 0;
+
+	for (i = 0; i < tgt_nr; i++) {
+		rc = tgt_vos_preallocate(uuid, scm_size, i);
+		if (rc)
+			break;
+	}
+	return rc;
+}
+
+static int
+tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending)
+{
+	int				 i, rc, saved_rc = 0, res, old_cancelstate;
+	struct tgt_vos_thrdlist		*entry, *tmp;
+	struct tgt_vos_thrdlist		*thrds_list;
+
+	D_LIST_HEAD(thrds_list_head);
+
+	D_INIT_LIST_HEAD(&thrds_list_head);
+	D_ALLOC_ARRAY(thrds_list, tgt_nr);
+
+	/* Disable cancellation to manage other threads created within. */
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
+
+	for (i = 0; i < tgt_nr; i++) {
+		entry = &thrds_list[i];
+		uuid_copy(entry->tvt_args.tvpa_uuid, uuid);
+		entry->tvt_args.tvpa_scm_size = scm_size;
+		entry->tvt_args.tvpa_tgt_id = i;
+		rc = pthread_create(&entry->tvt_tid, NULL, tgt_vos_preallocate_thrd_func,
+				    &entry->tvt_args);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to create thread for target file "
+				"creation: "DF_RC"\n", DP_UUID(uuid),
+				DP_RC(rc));
+			saved_rc = daos_errno2der(rc);
+			goto out;
+		}
+		d_list_add_tail(&entry->tvt_link, &thrds_list_head);
+		if (*cancel_pending == true) {
+			saved_rc = -DER_CANCELED;
+			goto out;
+		}
+	}
+
+	while (!d_list_empty(&thrds_list_head)) {
+		sched_yield();
+		if (*cancel_pending == true) {
+			saved_rc = -DER_CANCELED;
+			goto out;
+		}
+		d_list_for_each_entry_safe(entry, tmp, &thrds_list_head, tvt_link) {
+			rc = pthread_tryjoin_np(entry->tvt_tid, (void **)&res);
+			if (rc == EBUSY)
+				continue;
+			else if (rc == 0)
+				rc = res;
+			else
+				D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+			if (!saved_rc && rc)
+				saved_rc = daos_errno2der(rc);
+			d_list_del(&entry->tvt_link);
+		}
+	}
+out:
+	tgt_vos_preallocate_thrds_cleanup(&thrds_list_head);
+	D_FREE(thrds_list);
+	pthread_setcancelstate(old_cancelstate, NULL);
+	return saved_rc;
 }
 
 int
@@ -661,9 +771,16 @@ tgt_create_preallocate(void *arg)
 		 * 16MB minimum per pmemobj file (SCM partition)
 		 */
 		D_ASSERT(dss_tgt_nr > 0);
-		rc = tgt_vos_preallocate(tca->tca_ptrec->dptr_uuid,
-					 max(tca->tca_scm_size / dss_tgt_nr,
-					     1 << 24), dss_tgt_nr);
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+			rc = tgt_vos_preallocate_sequential(tca->tca_ptrec->dptr_uuid,
+							    max(tca->tca_scm_size / dss_tgt_nr,
+								1 << 24), dss_tgt_nr);
+		} else {
+			rc = tgt_vos_preallocate_parallel(tca->tca_ptrec->dptr_uuid,
+							  max(tca->tca_scm_size / dss_tgt_nr,
+							      1 << 24), dss_tgt_nr,
+							  &tca->tca_ptrec->cancel_create);
+		}
 		if (rc)
 			goto out;
 	} else {
