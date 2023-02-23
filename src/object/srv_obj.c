@@ -2570,12 +2570,14 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 		rc = obj_local_rw(exec_arg->rpc, exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-				 (rc == -DER_EXIST && (orw->orw_api_flags &
-				  (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
-				 (rc == -DER_NONEXIST && (orw->orw_api_flags &
-				  (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-				 DB_IO, DLOG_ERR,
-				 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+				     (rc == -DER_EXIST &&
+				      (orw->orw_api_flags &
+				       (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+				     (rc == -DER_NONEXIST &&
+				      (orw->orw_api_flags &
+				       (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+				 DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n",
+				 DP_UOID(orw->orw_oid), DP_RC(rc));
 
 comp:
 		if (comp_cb != NULL)
