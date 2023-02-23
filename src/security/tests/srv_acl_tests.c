@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <cmocka.h>
 
 #include "drpc_mocks.h"
+#include "sec_test_util.h"
 #include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos/drpc_modules.h>
@@ -123,7 +124,7 @@ init_default_cred(d_iov_t *cred)
 }
 
 static void
-init_default_ownership(struct ownership *owner)
+init_default_ownership(struct d_ownership *owner)
 {
 	owner->user = TEST_USER;
 	owner->group = TEST_GROUP;
@@ -140,57 +141,6 @@ setup_drpc_with_default_token(void)
 	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	auth__token__free_unpacked(token, NULL);
-}
-
-static void
-free_ace_list(struct daos_ace **aces, size_t len)
-{
-	size_t i;
-
-	for (i = 0; i < len; i++)
-		daos_ace_free(aces[i]);
-}
-
-static struct daos_acl *
-get_acl_with_perms(uint64_t owner_perms, uint64_t group_perms)
-{
-	struct daos_acl *acl;
-	size_t		num_aces = 2;
-	struct daos_ace *aces[num_aces];
-	size_t		i;
-
-	aces[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
-	aces[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	aces[0]->dae_allow_perms = owner_perms;
-
-	aces[1] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
-	aces[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	aces[1]->dae_allow_perms = group_perms;
-
-	acl = daos_acl_create(aces, num_aces);
-
-	for (i = 0; i < num_aces; i++) {
-		daos_ace_free(aces[i]);
-	}
-
-	return acl;
-}
-
-static struct daos_acl *
-get_user_acl_with_perms(const char *user, uint64_t perms)
-{
-	struct daos_acl *acl;
-	struct daos_ace *ace;
-
-	ace = daos_ace_create(DAOS_ACL_USER, user);
-	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	ace->dae_allow_perms = perms;
-
-	acl = daos_acl_create(&ace, 1);
-
-	daos_ace_free(ace);
-
-	return acl;
 }
 
 /*
@@ -564,7 +514,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 {
 	struct daos_acl		*valid_acl;
 	d_iov_t			valid_cred;
-	struct ownership	valid_owner;
+	struct d_ownership	valid_owner;
 	uint64_t		result = 0;
 
 	valid_owner.user = "root@";
@@ -600,7 +550,7 @@ test_pool_get_capas_null_input(void **state)
 {
 	struct daos_acl		*valid_acl;
 	d_iov_t			valid_cred;
-	struct ownership	valid_owner;
+	struct d_ownership	valid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
 
@@ -643,7 +593,7 @@ expect_pool_get_capas_owner_invalid(char *user, char *group)
 {
 	struct daos_acl		*valid_acl;
 	d_iov_t			valid_cred;
-	struct ownership	invalid_owner;
+	struct d_ownership	invalid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
 
@@ -679,7 +629,7 @@ test_pool_get_capas_bad_acl(void **state)
 {
 	struct daos_acl		*bad_acl;
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result;
 
 	init_default_cred(&cred);
@@ -703,7 +653,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result;
 
 	init_default_cred(&cred);
@@ -731,7 +681,7 @@ expect_pool_get_capas_bad_authsys_payload(int auth_flavor)
 	size_t			data_len = 8;
 	Auth__Token		token = AUTH__TOKEN__INIT;
 	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result;
 
 	init_default_cred(&cred);
@@ -775,7 +725,7 @@ static void
 expect_pool_capas_with_acl(struct daos_acl *acl, d_iov_t *cred,
 		      uint64_t flags, uint64_t exp_capas)
 {
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result = -1;
 
 	init_default_ownership(&ownership);
@@ -1566,7 +1516,7 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 {
 	struct daos_acl		*valid_acl;
 	d_iov_t			valid_cred;
-	struct ownership	valid_owner;
+	struct d_ownership	valid_owner;
 	uint64_t		result = 0;
 
 	init_default_ownership(&valid_owner);
@@ -1597,7 +1547,7 @@ static void
 test_cont_get_capas_null_inputs(void **state)
 {
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	struct daos_acl		*acl;
 	uint64_t		result;
 
@@ -1628,7 +1578,7 @@ expect_cont_get_capas_owner_invalid(char *user, char *group)
 {
 	struct daos_acl		*valid_acl;
 	d_iov_t			valid_cred;
-	struct ownership	invalid_owner;
+	struct d_ownership	invalid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
 
@@ -1664,7 +1614,7 @@ test_cont_get_capas_bad_acl(void **state)
 {
 	struct daos_acl		*bad_acl;
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result;
 
 	init_default_cred(&cred);
@@ -1688,7 +1638,7 @@ test_cont_get_capas_bad_cred(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			bad_cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result;
 	uint8_t			bad_buf[32];
 	size_t			i;
@@ -1743,7 +1693,7 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result = -1;
 
 	/*
@@ -1825,7 +1775,7 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct ownership	ownership;
+	struct d_ownership	ownership;
 	uint64_t		result = -1;
 
 	/*
@@ -1932,7 +1882,7 @@ static void
 test_cont_can_delete(void **state)
 {
 	d_iov_t			cred;
-	struct ownership	owner;
+	struct d_ownership	owner;
 	struct daos_acl		*default_acl;
 	struct daos_acl		*no_del_acl;
 	struct daos_acl		*min_acl;

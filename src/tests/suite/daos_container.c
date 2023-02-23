@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,8 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 #include <daos/placement.h>
+#include <pwd.h>
+#include <grp.h>
 
 #define TEST_MAX_ATTR_LEN	(128)
 
@@ -3181,6 +3183,91 @@ co_nhandles(void **state)
 
 }
 
+static void
+alloc_group_list(uid_t uid, gid_t gid, gid_t **groups, size_t *nr_groups)
+{
+	struct passwd	*pw;
+	int		tmp = 0;
+	int		rc;
+
+	pw = getpwuid(uid);
+	assert_non_null(pw);
+
+	rc = getgrouplist(pw->pw_name, gid, NULL, &tmp);
+	if (rc != -1) {
+		D_PRINT("getting the number of groups failed\n");
+		assert_true(false);
+	}
+
+	*nr_groups = (size_t)tmp;
+	D_ALLOC_ARRAY(*groups, *nr_groups);
+	assert_non_null(*groups);
+
+	rc = getgrouplist(pw->pw_name, gid, *groups, &tmp);
+	assert_true(rc > 0);
+}
+
+static void
+co_get_perms(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_prop_t	*pool_prop = NULL;
+	daos_prop_t	*cont_prop = NULL;
+	uid_t		uid = geteuid();
+	gid_t		gid = getegid();
+	gid_t		*gids;
+	size_t		nr_gids;
+	uint64_t	perms = 0;
+	int		rc;
+
+	alloc_group_list(uid, gid, &gids, &nr_gids);
+
+	print_message("creating container with default ACLs\n");
+	rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("opening container\n");
+	uuid_unparse(arg->co_uuid, arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("querying pool ACL/ownership\n");
+	pool_prop = daos_prop_alloc(3);
+	assert_non_null(pool_prop);
+	pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
+	pool_prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_OWNER;
+	pool_prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+	rc = daos_pool_query(arg->pool.poh, NULL, NULL, pool_prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("getting pool permissions for uid %d\n", uid);
+	rc = daos_pool_get_perms(pool_prop, uid, gids, nr_gids, &perms);
+	assert_rc_equal(rc, 0);
+	/* uid running this is the owner */
+	assert_int_equal(perms, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+
+	print_message("querying container ACL/ownership\n");
+	cont_prop = daos_prop_alloc(3);
+	assert_non_null(cont_prop);
+	cont_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	cont_prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
+	cont_prop->dpp_entries[2].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	rc = daos_cont_query(arg->coh, NULL, cont_prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("getting cont permissions for uid %d\n", uid);
+	rc = daos_cont_get_perms(cont_prop, uid, gids, nr_gids, &perms);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(perms, DAOS_ACL_PERM_CONT_ALL); /* uid running this is the owner */
+
+	D_FREE(gids);
+	daos_prop_free(pool_prop);
+	daos_prop_free(cont_prop);
+
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -3248,6 +3335,7 @@ static const struct CMUnitTest co_tests[] = {
      test_case_teardown},
     {"CONT31: container open/query number of handles (hdl_share)", co_nhandles, hdl_share_enable,
      test_case_teardown},
+    {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
 };
 
 int
