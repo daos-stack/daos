@@ -11,6 +11,7 @@ server_config:
   name: daos_server
   reboot_waittime: 180
   engines_per_socket: 2
+  number_pmem: 4
   engines:
     -
       pinned_numa_node: 0
@@ -76,6 +77,14 @@ server_config:
           class: dcpm
           scm_list: [/dev/pmem1.1]
           scm_mount: /mnt/daos4
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 provider: ofi+tcp;ofi_rxm
 pool:
   control_method: dmg

@@ -1,6 +1,5 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -11,20 +10,19 @@ import traceback
 import re
 
 from general_utils import get_random_bytes
-from run_utils import run_remote, run_local
+from run_utils import run_remote, run_local, RunException
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
 from server_utils_base import DaosServerCommand, DaosServerCommandRunner
+from storage_utils import StorageInfo, StorageException
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Daos server configuration tests.
-
     Test Class Description:
         Tests to verify that the multiple engines per socket on daos_server.
-
     :avocado: recursive
     """
 
@@ -45,7 +43,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         Returns:
             dict: a large attribute dictionary
-
         """
         data_set = {}
         for index in range(num_attributes):
@@ -133,38 +130,79 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
-        result = DaosServerCommandRunner(path=self.bin).scm_prepare(
-            scm_ns_per_socket=engines_per_socket, force=True)
-        if 0 not in result or len(result) > 0:
-            self.fail(
-                "#({0}.B)daos_server scm_prepare failed, please make sure the server equipped "
-                "with {1} PMem modules.".format(step, engines_per_socket))
+        cmd = DaosServerCommand()
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.set_sub_command("scm")
+        cmd.sub_command_class.set_sub_command("prepare")
+        cmd.sub_command_class.sub_command_class.scm_ns_per_socket.value = engines_per_socket
+        cmd.sub_command_class.sub_command_class.force.value = True
 
-    def ping_verify(self, host, expect_pass=True):
-        """Verify host up or down status by ping.
+        self.log.info(
+            "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
+        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
+        if not results.passed:
+            self.fail(
+                "#({0}.B){1} failed, "
+                "please make sure the server equipped with {2} PMem "
+                "modules.".format(step, cmd, engines_per_socket))
+
+    def wait_for_result(self, get_method, timeout, **kwargs):
+        """Wait for a result with a timeout.
 
         Args:
-             hosts (NodeSet): hosts set to be rebooted.
-             expect_pass (bool): expect result pass.
+            get_method (object): method to call to determine if the result is found
+            timeout (int): number of seconds to wait for a response to be found
+            kwargs (dict): kwarg for get_method.
 
+        Returns:
+            bool: if the result was found
         """
-        ping_timeout = 600
+        result_found = False
+        timed_out = False
         start = time.time()
-        ping_status = None
-        while ping_status is None and (time.time() - start) < ping_timeout:
-            ping_result = run_local(self.log, ["ping", "-c 1", str(host)], check=False).stdout
-            self.log.info("===>ping_result= %s", ping_result)
-            if expect_pass:
-                ping_status = re.search("1 received", ping_result)
-            else:
-                ping_status = re.search("0 received", ping_result)
-            if (time.time() - start) < 120:
-                time.sleep(20)
-            else:
-                time.sleep(1)
-        if time.time() - start >= ping_timeout:
-            self.fail(
-                "#{0} ping failed, did not come back after {1} seconds".format(host, ping_timeout))
+
+        while not result_found and not timed_out:
+            timed_out = (time.time() - start) >= timeout
+            result_found = get_method(**kwargs)
+            self.log.debug("==Response found by %s(%s): %s", get_method, kwargs, result_found)
+            time.sleep(5)
+        return not timed_out
+
+    def check_ping(self, host, expected_pings=0, cmd_timeout=60, verbose=True):
+        """Check the host for a ping response.
+
+        Args:
+            host (Node): destination host to ping to.
+            expected_pings (int, optional): number of succeed ping expected. default is 0.
+            cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+            verbose (bool, optional): display check ping commands. Defaults to True.
+
+        Returns:
+            bool:  True if the expected number of pings were returned; False otherwise.
+        """
+        try:
+            result = run_local(
+                self.log, ["ping", "-c 1", str(host)], check=False,
+                timeout=cmd_timeout, verbose=verbose)
+            return bool(re.search("{} received".format(expected_pings), result.stdout))
+        except RunException:
+            self.log("ping -c 1 %s timed out", str(host))
+        return False
+
+    def check_ssh(self, hosts, cmd_timeout=60, verbose=True):
+        """Check the host for a successful passwordless ssh.
+
+        Args:
+            hosts (NodeSet): destination hosts to ssh to.
+            cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+            verbose (bool, optional): display check ping commands. Defaults to True.
+
+        Returns:
+            bool: True if all hosts respond to the remote ssh session; False otherwise
+        """
+        result = run_remote(self.log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
+        return result.passed
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -174,15 +212,36 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         cmd = "sudo shutdown -r now"
         run_remote(self.log, hosts, cmd, timeout=210)
-        self.log.info("===Server %s rebooting... \n", hosts)
+        self.log.info("==Server %s rebooting... \n", hosts)
 
-        self.ping_verify(hosts[0], expect_pass=False)
-        self.ping_verify(hosts[0], expect_pass=True)
-        cmd = "sudo uname"
-        if not run_remote(self.log, hosts, cmd, timeout=600).passed:
-            self.fail(
-                "#{0} reboot failed, sudo uname failed.".format(hosts))
-        self.log.info("===Server %s is up after reboot. \n", hosts)
+        if not self.wait_for_result(self.check_ping, 600, host=hosts[0], expected_pings=0,
+                                    cmd_timeout=60, verbose=True):
+            self.fail("Shutwown not detected within 600 seconds.")
+        if not self.wait_for_result(self.check_ping, 600, host=hosts[0], expected_pings=1,
+                                    cmd_timeout=60, verbose=True):
+            self.fail("Reboot not detected within 600 seconds.")
+        if not self.wait_for_result(self.check_ssh, 300, hosts=hosts, cmd_timeout=30,
+                                    verbose=True):
+            self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
+
+    def check_pmem(self, hosts, count, cmd_timeout=30, verbose=True):
+        """check for server pmem.
+
+        Args:
+            hosts (NodeSet): hosts set to be checked.
+            count (int): expected number of pmem storage device.
+            cmd_timeout (int):
+            verbose (bool, optional): display storage scan command. Defaults to True.
+
+        Returns:
+            bool: True if number of pmem devices on the server hosts.
+        """
+        storage = StorageInfo(self.log, hosts)
+        try:
+            storage.scan()
+        except StorageException:
+            self.log.debug("==Problem running StorageInfo.scan()")
+        return (len(storage.pmem_devices) == count)
 
     def cleanup(self):
         """Servers clean up after test complete."""
@@ -198,7 +257,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
     def test_multiengines_per_socket(self):
         """Test ID: DAOS-12076.
-
         Test description: Test multiple engines/sockets.
             (1) Scm reset and prepare --scm-ns-per-socket
             (2) Start server
@@ -212,7 +270,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         To launch test:
             (1) Make sure server is equipped with PMem
             (2) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
-
         :avocado: tags=manual
         :avocado: tags=server
         :avocado: tags=test_multiengines_per_socket
@@ -222,28 +279,16 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
         engines_per_socket = self.params.get(
             "engines_per_socket", "/run/server_config/*", default=1)
+        num_pmem = self.params.get(
+            "number_pmem", "/run/server_config/*", default=1)
         self.daos_server_scm_reset(step)
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
-
-        cmd = "/usr/bin/ls -l /dev/pmem*"
-        results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
-        retry = 0
-        max_retry = 3
-        while not results.passed and retry < max_retry:
-            retry += 1
-            self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
-                          "daos_server_scm_prepare_ns", step, retry)
-            time.sleep(15)
-            results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
-
-        if retry > max_retry:
-            self.cleanup()
-            self.fail(
-                "#PMem did not show after scm prepare --scm-ns-per-socket and {0} "
-                "retries".format(max_retry))
+        if not self.wait_for_result(self.check_pmem, 100, hosts=self.hostlist_servers,
+                                    count=num_pmem, cmd_timeout=30, verbose=True):
+            self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
 
         # (2) Start server
         step += 1
