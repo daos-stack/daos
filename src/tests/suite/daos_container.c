@@ -737,7 +737,7 @@ co_acl(void **state)
 			   DAOS_ACL_PERM_GET_ACL | DAOS_ACL_PERM_SET_ACL);
 	add_ace_with_perms(&exp_acl, DAOS_ACL_EVERYONE, NULL,
 			   DAOS_ACL_PERM_READ);
-	assert_rc_equal(daos_acl_cont_validate(exp_acl), 0);
+	assert_rc_equal(daos_acl_validate(exp_acl), 0);
 
 	/*
 	 * Set up the container with non-default owner/group and ACL values
@@ -795,7 +795,7 @@ co_acl(void **state)
 	assert_rc_equal(rc, 0);
 	ace->dae_allow_perms |= DAOS_ACL_PERM_SET_OWNER;
 
-	assert_rc_equal(daos_acl_cont_validate(exp_acl), 0);
+	assert_rc_equal(daos_acl_validate(exp_acl), 0);
 
 	rc = daos_cont_overwrite_acl(arg->coh, exp_acl, NULL);
 	assert_rc_equal(rc, 0);
@@ -816,7 +816,7 @@ co_acl(void **state)
 	add_ace_with_perms(&update_acl, DAOS_ACL_GROUP, "testgroup2@",
 			   DAOS_ACL_PERM_READ);
 
-	assert_rc_equal(daos_acl_cont_validate(update_acl), 0);
+	assert_rc_equal(daos_acl_validate(update_acl), 0);
 
 	/* Update expected ACL to include changes */
 	ace = daos_acl_get_next_ace(update_acl, NULL);
