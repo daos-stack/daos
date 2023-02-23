@@ -1160,8 +1160,10 @@ def create_fio_cmdline(self, job_spec, pool):
                         dfuse.mount_dir.value,
                         "fio --name=global --directory")
                     # add fio cmdline
+                    cmds.append("cd {};".format(dfuse.mount_dir.value))
                     cmds.append(str(fio_cmd))
                     cmds.append("status=$?")
+                    cmds.append("cd -")
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
                         cmds.extend(stop_dfuse(dfuse))
