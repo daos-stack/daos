@@ -14,7 +14,7 @@ from run_utils import run_remote, run_local, RunException
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
-from server_utils_base import DaosServerCommand, DaosServerCommandRunner
+from server_utils_base import DaosServerCommand
 from storage_utils import StorageInfo, StorageException
 
 
@@ -153,7 +153,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         Args:
             get_method (object): method to call to determine if the result is found
             timeout (int): number of seconds to wait for a response to be found
-            kwargs (dict): kwarg for get_method.
+            kwargs (dict): kwargs for get_method.
 
         Returns:
             bool: if the result was found
@@ -187,11 +187,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 timeout=cmd_timeout, verbose=verbose)
             return bool(re.search("{} received".format(expected_pings), result.stdout))
         except RunException:
-            self.log("ping -c 1 %s timed out", str(host))
+            self.log.debug("ping -c 1 %s timed out", str(host))
         return False
 
     def check_ssh(self, hosts, cmd_timeout=60, verbose=True):
-        """Check the host for a successful passwordless ssh.
+        """Check the host for a successful pass-wordless ssh.
 
         Args:
             hosts (NodeSet): destination hosts to ssh to.
@@ -224,13 +224,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                                     verbose=True):
             self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
 
-    def check_pmem(self, hosts, count, cmd_timeout=30, verbose=True):
+    def check_pmem(self, hosts, count, verbose=True):
         """check for server pmem.
 
         Args:
             hosts (NodeSet): hosts set to be checked.
             count (int): expected number of pmem storage device.
-            cmd_timeout (int):
             verbose (bool, optional): display storage scan command. Defaults to True.
 
         Returns:
@@ -238,10 +237,13 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         storage = StorageInfo(self.log, hosts)
         try:
-            storage.scan()
+            storage.scan(verbose=verbose)
         except StorageException:
             self.log.debug("==Problem running StorageInfo.scan()")
-        return (len(storage.pmem_devices) == count)
+        if len(storage.pmem_devices) == count:
+            return True
+        else:
+            return False
 
     def cleanup(self):
         """Servers clean up after test complete."""
@@ -287,7 +289,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
         if not self.wait_for_result(self.check_pmem, 100, hosts=self.hostlist_servers,
-                                    count=num_pmem, cmd_timeout=30, verbose=True):
+                                    count=num_pmem, verbose=True):
             self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
 
         # (2) Start server
