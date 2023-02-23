@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,8 +54,8 @@ class NvmePoolExtend(OSAUtils):
         # Create the pools
         pools = []
         for _ in range(0, num_pool):
-            pools.append(self.get_pool(properties="reclaim:disabled"))
-            # pools[-1].set_property("reclaim", "disabled")
+            pools.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
+                         properties="reclaim:disabled"))
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
@@ -139,7 +139,7 @@ class NvmePoolExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=nvme,checksum,nvme_osa,rebuild
+        :avocado: tags=nvme,checksum,nvme_osa,rebuild,daos_cmd
         :avocado: tags=NvmePoolExtend,test_nvme_pool_extend
         """
-        self.run_nvme_pool_extend(3)
+        self.run_nvme_pool_extend(2)

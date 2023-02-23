@@ -145,9 +145,9 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 			continue
 		}
 
-		results = append(results, &system.MemberResult{
-			Rank: rank, Msg: okMsg, State: state,
-		})
+		res := system.NewMemberResult(rank, nil, state)
+		res.Msg = okMsg
+		results = append(results, res)
 	}
 
 	return results, nil
@@ -225,9 +225,8 @@ func (svc *ControlService) queryLocalRanks(ctx context.Context, req *ctlpb.Ranks
 			// shouldn't happen, instances already filtered by ranks
 			return nil, err
 		}
-		results = append(results, &system.MemberResult{
-			Rank: rank, State: srv.LocalState(),
-		})
+		// Note this does not set Errored field in member result based on state.
+		results = append(results, system.NewMemberResult(rank, nil, srv.LocalState()))
 	}
 
 	return results, nil
