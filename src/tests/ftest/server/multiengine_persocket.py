@@ -276,6 +276,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         step = 1
         self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
         engines_per_socket = self.params.get(
+            "engines_per_socket", "/run/server_config/*", default=1)
+        num_pmem = self.params.get(
             "number_pmem", "/run/server_config/*", default=1)
         self.daos_server_scm_reset(step)
         self.host_reboot(self.hostlist_servers)
@@ -283,7 +285,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
         if not self.wait_for_result(self.check_pmem, 100, hosts=self.hostlist_servers,
-                                    count=num_pmem, verbose=True):
+                                    count=num_pmem):
             self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
 
         # (2) Start server
@@ -361,8 +363,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         # (7) IOR test
         step += 1
         self.log.info("===(%s)===IOR test", step)
-        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
-        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=True)
