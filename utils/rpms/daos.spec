@@ -110,7 +110,6 @@ BuildRequires: libcurl4
 %endif
 %endif
 %endif
-BuildRequires: libuuid-devel
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
