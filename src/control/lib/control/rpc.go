@@ -234,6 +234,7 @@ func isTimeout(err error) bool {
 	cause := errors.Cause(err)
 	return cause == context.DeadlineExceeded ||
 		cause == os.ErrDeadlineExceeded ||
+		fault.IsFaultCode(cause, code.ClientConnectionTimedOut) ||
 		status.Code(cause) == codes.DeadlineExceeded
 }
 

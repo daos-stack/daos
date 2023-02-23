@@ -31,6 +31,8 @@ func connErrToFault(st *status.Status, target string) error {
 		return FaultConnectionNoRoute(target)
 	case strings.Contains(st.Message(), "no such host"):
 		return FaultConnectionBadHost(target)
+	case strings.Contains(st.Message(), "i/o timeout"):
+		return FaultConnectionTimedOut(target)
 	default:
 		return st.Err()
 	}
