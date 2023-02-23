@@ -56,6 +56,18 @@ cat >> "${fname}" << EOF
 EOF
 }
 
+run_test_filter()
+{
+    if [ -n "${RUN_TEST_FILTER}" ]; then
+        if ! [[ "${COMP} $*" =~ ${RUN_TEST_FILTER} ]]; then
+            echo "Skipping test: $*"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 run_test()
 {
     local in="$*"
@@ -64,17 +76,15 @@ run_test()
     b="${b//;/-}"
     b="${b//\"/-}"
 
-    if [ -n "${RUN_TEST_FILTER}" ]; then
-        if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
-            echo "Skipping test: $in"
-            return
-        fi
+    if ! run_test_filter "$*"; then
+        return
     fi
+
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
-    echo "Running $* with log file: ${D_LOG_FILE}"
 
     export TNAME="${b}-${log_num}"
 
+    echo "Running $* with log file: ${D_LOG_FILE}"
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
     #    messages as daos_post_build.sh will look for this and mark the tests
     #    as passed, which we don't want as we need to check all of the tests
@@ -132,23 +142,26 @@ if [ -d "/mnt/daos" ]; then
         run_test src/common/tests/btree.sh dyn perf ukey -s 20000
         BTREE_SIZE=20000
 
+        COMP="UTEST_vos_nvme"
+        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -a"; then
+            cat /proc/meminfo
+            # Setup AIO device
+            AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
+            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+
+            # Setup daos_nvme.conf
+            NVME_CONF="/mnt/daos/daos_nvme.conf"
+            cp -f src/vos/tests/daos_nvme.conf ${NVME_CONF}
+            sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
+
+            export VOS_BDEV_CLASS="AIO"
+            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
+
+            rm -f "${AIO_DEV}"
+            rm -f "${NVME_CONF}"
+        fi
+
         COMP="UTEST_vos"
-        cat /proc/meminfo
-        # Setup AIO device
-        AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
-        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
-
-        # Setup daos_nvme.conf
-        NVME_CONF="/mnt/daos/daos_nvme.conf"
-        cp -f src/vos/tests/daos_nvme.conf ${NVME_CONF}
-        sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
-
-        export VOS_BDEV_CLASS="AIO"
-        run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
-
-        rm -f "${AIO_DEV}"
-        rm -f "${NVME_CONF}"
-
         run_test src/vos/tests/evt_stress.py
         run_test src/vos/tests/evt_stress.py --algo dist_even
         run_test src/vos/tests/evt_stress.py --algo soff

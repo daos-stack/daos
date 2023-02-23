@@ -1551,9 +1551,14 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": update aggregation max eph "DF_U64"\n",
-		DP_CONT(arg->pool_uuid, arg->cont_uuid), arg->min_eph);
-	cont_child->sc_ec_agg_eph_boundry = arg->min_eph;
+	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+		DP_CONT(arg->pool_uuid, arg->cont_uuid),
+		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
+		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
+
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
+		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
+
 	ds_cont_child_put(cont_child);
 	return rc;
 }
@@ -3203,7 +3208,7 @@ check_set_prop_label(struct rdb_tx *tx, struct cont *cont,
 
 	/* If specified label matches existing label, nothing more to do */
 	old_ent = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
-	if (old_ent != NULL) {
+	if (old_ent) {
 		old_lbl = old_ent->dpe_str;
 		if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
 			return 0;
@@ -3257,6 +3262,9 @@ check_set_prop_label(struct rdb_tx *tx, struct cont *cont,
 		return 0;
 
 	/* Remove old label from cs_uuids KVS, if applicable */
+	if (old_lbl == NULL)
+		return 0;
+
 	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);

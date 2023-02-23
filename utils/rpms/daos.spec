@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       1%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -112,7 +112,6 @@ BuildRequires: libuct-devel
 BuildRequires: ucx-devel
 %endif
 
-Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -138,10 +137,10 @@ Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl >= 02.00.00.3733
+Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 %else
-Requires: ipmctl > 02.00.00.3816
+Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
@@ -211,6 +210,7 @@ Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+Requires: protobuf-c-devel
 Requires: fio
 Requires: git
 Requires: dbench
@@ -555,6 +555,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 17 2023 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.3.103-4
+- Add protobuf-c-devel to deps of client-tests package
+
+* Mon Feb 13 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-3
+- Remove explicit R: protobuf-c and let the auto-dependency generator
+  handle it
+
+* Wed Feb 8 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-2
+- Change ipmctl requirement from v2 to v3
+
 * Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
 - Bump version to 2.3.103
 

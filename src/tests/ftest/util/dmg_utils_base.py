@@ -574,9 +574,9 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg storage sub command object."""
-            if self.sub_command.value == "identify":
-                self.sub_command_class = self.IdentifySubCommand()
-            if self.sub_command.value == "replace":
+            if self.sub_command.value == "led":
+                self.sub_command_class = self.LedSubCommand()
+            elif self.sub_command.value == "replace":
                 self.sub_command_class = self.ReplaceSubCommand()
             elif self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
@@ -614,29 +614,40 @@ class DmgCommandBase(YamlCommand):
                     self.new_uuid = FormattedParameter("--new-uuid {}", None)
                     self.no_reint = FormattedParameter("--no-reint", False)
 
-        class IdentifySubCommand(CommandWithSubCommand):
-            """Defines an object for the dmg storage identify command"""
+        class LedSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage LED command"""
 
             def __init__(self):
-                """Create a dmg storage identify sub command object."""
-                super().__init__("/run/dmg/storage/identify/*", "identify")
+                """Create a dmg storage led sub command object."""
+                super().__init__("/run/dmg/storage/led/*", "led")
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
-                """Get the dmg storage identify sub command object."""
-                if self.sub_command.value == "vmd":
-                    self.sub_command_class = self.VmdSubCommand()
+                """Get the dmg storage led sub command object."""
+                if self.sub_command.value == "identify":
+                    self.sub_command_class = self.IdentifySubCommand()
+                elif self.sub_command.value == "check":
+                    self.sub_command_class = self.CheckSubCommand()
                 else:
                     self.sub_command_class = None
 
-            class VmdSubCommand(CommandWithParameters):
-                """Get dmg storage identify vmd sub command object"""
+            class IdentifySubCommand(CommandWithParameters):
+                """Get dmg storage led identify sub command object"""
 
                 def __init__(self):
-                    """Create a dmg storage identify vmd command object."""
-                    super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
-                    self.verbose = FormattedParameter("--verbose", False)
-                    self.uuid = FormattedParameter("--uuid {}", None)
+                    """Create a dmg storage led identify command object."""
+                    super().__init__("/run/dmg/storage/led/identify/*", "identify")
+                    self.timeout = FormattedParameter("--timeout {}", None)
+                    self.reset = FormattedParameter("--reset", False)
+                    self.ids = BasicParameter(None)
+
+            class CheckSubCommand(CommandWithParameters):
+                """Get dmg storage led check sub command object"""
+
+                def __init__(self):
+                    """Create a dmg storage led check command object."""
+                    super().__init__("/run/dmg/storage/led/check/*", "check")
+                    self.ids = BasicParameter(None)
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""
