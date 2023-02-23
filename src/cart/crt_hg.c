@@ -532,7 +532,7 @@ crt_provider_ip_str_get(bool primary, int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_PROV_OFI_PSM2)
+	if (provider == CRT_PROV_OFI_PSM2 || provider == CRT_PROV_OFI_OPX)
 		return false;
 
 	return true;
@@ -652,8 +652,14 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
 	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
-	D_ASPRINTF(*string, "%s://%s/%s:%d:%d",
-		   provider, domain, ip, hfi, start_port + ctx_idx);
+	if (ip == NULL)
+		D_ASPRINTF(*string, "%s://%s:%d:%d",
+			   provider, domain, hfi,
+			   start_port + ctx_idx);
+	else
+		D_ASPRINTF(*string, "%s://%s/%s:%d:%d",
+			   provider, domain, ip, hfi,
+			   start_port + ctx_idx);
 
 out:
 	if (!rc && *string == NULL)

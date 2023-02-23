@@ -109,7 +109,7 @@ def define_mercury(reqs):
         reqs.define('rt', libs=['rt'])
 
     reqs.define('psm2',
-                retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
+                retriever=GitRepoRetriever('https://github.com/cornelisnetworks/opa-psm2.git'),
                 # psm2 hard-codes installing into /usr/...
                 commands=[['sed',
                            '-i',
@@ -126,12 +126,14 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
+    # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
                  '--disable-opx',
                  '--without-gdrcopy']
+
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
     else:
