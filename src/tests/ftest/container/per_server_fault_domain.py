@@ -96,7 +96,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_healthy
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
-        # Arbitrarily select one host.
+        # Select one host. (It doesn't matter which host to select.)
         random_host = list(set(self.server_managers[0].ranks.values()))[0]
         ranks_to_stop = ",".join(
             [str(rank) for rank, host in self.server_managers[0].ranks.items()
