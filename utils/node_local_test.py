@@ -420,6 +420,7 @@ def get_base_env(clean=False):
     env['HG_LOG_LEVEL'] = 'DEBUG'
     env['HG_LOG_SUBSYS'] = 'hg,na'
     env['FI_LOG_LEVEL'] = 'DEBUG'
+    env['PRINT_CONFIG'] = '1'
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
