@@ -1150,6 +1150,16 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 			if (provider == CRT_PROV_OFI_PSM2)
 				port = (uint16_t)port << 8;
+
+			if (provider == CRT_PROV_OFI_CXI) {
+				if (port > 511) {
+					D_WARN("Port=%d outside of valid range 0-511, "
+					       "converting it to %d\n",
+					       port, port % 512);
+					port = port % 512;
+				}
+			}
+
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
 		}
 	} else if (provider == CRT_PROV_OFI_PSM2) {
