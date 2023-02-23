@@ -315,10 +315,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, value]) for key, value in attrs.items()]
-        return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
-            sys_name=sys_name)
+        attr_list = [':'.join([key, str(value)]) for key, value in attrs.items()]
+        return self._get_result(("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
+                                sys_name=sys_name)
 
     def pool_get_attr(self, pool, attr, sys_name=None):
         """Set pool attribute.
