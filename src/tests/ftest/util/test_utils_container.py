@@ -901,13 +901,64 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     @fail_on(CommandFailure)
     def set_prop(self, *args, **kwargs):
         """Set container properties by calling daos container set-prop.
-
         Args:
             args (tuple, optional): positional arguments to DaosCommand.container_set_prop
             kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
-
         Returns:
             str: JSON output of daos container set-prop.
+        Raises:
+            DaosTestError: if params are invalid
+            CommandFailure: Raised from the daos command call.
+        """
+        if not self.daos:
+            raise DaosTestError("Undefined daos command")
+        return self.daos.container_set_prop(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def get_prop(self, *args, **kwargs):
+        """Get container properties by calling daos container get-prop.
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
+        Returns:
+            str: JSON output of daos container get-prop
+        Raises:
+            DaosTestError: if params are invalid
+            CommandFailure: Raised from the daos command call
+        """
+        if not self.daos:
+            raise DaosTestError("Undefined daos command")
+        return self.daos.container_get_prop(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def verify_prop(self, expected_props):
+        """Verify daos container get-prop returns expected values.
+
+        Args:
+            expected_props (dict): expected properties and values
+
+        Returns:
+            bool: whether props from daos container get-prop match expected values
+
+        """
+        prop_output = self.get_prop(properties=expected_props.keys())
+        for actual_prop in prop_output['response']:
+            if expected_props[actual_prop['name']] != actual_prop['value']:
+                return False
+        return True
+
+    @fail_on(CommandFailure)
+    @fail_on(DaosTestError)
+    def query(self, *args, **kwargs):
+        """Call daos container query.
+
+        Args:
+            args (tuple, optional): args to pass to container_query
+            kwargs (dict, optional): keyword args to pass to container_query
+
+        Returns:
+            str: JSON output of daos container query.
 
         Raises:
             DaosTestError: if params are invalid
@@ -916,48 +967,5 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         if not self.daos:
             raise DaosTestError("Undefined daos command")
-        return self.daos.container_set_prop(
-            pool=self.pool.identifier, cont=self.uuid, *args, **kwargs)
-
-    @fail_on(CommandFailure)
-    def get_prop(self, properties=None):
-        """Get container property by calling daos container get-prop.
-
-        Args:
-            properties (list): "name" field(s). Defaults to None.
-
-        Returns:
-            str: JSON output of daos container get-prop.
-
-        Raises:
-            CommandFailure: Raised from the daos command call.
-
-        """
-        if self.control_method.value == self.USE_DAOS and self.daos:
-            # Get container property using daos utility.
-            return self.daos.container_get_prop(
-                pool=self.pool.identifier, cont=self.identifier, properties=properties)
-
-        if self.control_method.value == self.USE_DAOS:
-            self.log.error("Error: Undefined daos command")
-
-        else:
-            self.log.error(
-                "Error: Undefined control_method: %s", self.control_method.value)
-
-        return None
-
-    def verify_health(self, expected_health):
-        """Check container property's Health field by calling daos container get-prop.
-
-        Args:
-            expected_health (str): Expected value in the Health field.
-
-        Returns:
-            bool: True if expected_health matches the one obtained from get-prop.
-
-        """
-        output = self.get_prop(properties=["status"])
-        actual_health = output["response"][0]["value"]
-
-        return actual_health == expected_health
+        return self.daos.container_query(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

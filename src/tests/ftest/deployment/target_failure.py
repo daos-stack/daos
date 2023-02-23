@@ -129,7 +129,7 @@ class TargetFailure(IorTestBase):
             errors.append("First IOR was supposed to fail, but worked!")
 
         # 5. Verify that the container's Health property is UNCLEAN.
-        if not self.container.verify_health(expected_health="UNCLEAN"):
+        if not self.container.verify_prop({"status": "UNCLEAN"}):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 6. Reintegrate the excluded target.
@@ -149,7 +149,7 @@ class TargetFailure(IorTestBase):
         self.container.set_prop(prop='status', value="healthy")
 
         # 7. Verify that the container's Health property is HEALTHY.
-        if not self.container.verify_health(expected_health="HEALTHY"):
+        if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
 
         # 8. Restart IOR. Should work.
@@ -245,7 +245,7 @@ class TargetFailure(IorTestBase):
                 "First IOR was supposed to fail, but worked! {}".format(ior_error))
 
         # 5. Verify that the container's Health property is UNCLEAN.
-        if not self.container.verify_health(expected_health="UNCLEAN"):
+        if not self.container.verify_prop({"status": "UNCLEAN"}):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 6. Reintegrate the excluded target.
@@ -257,7 +257,7 @@ class TargetFailure(IorTestBase):
         self.container.set_prop(prop='status', value="healthy")
 
         # 7. Verify that the container's Health property is HEALTHY.
-        if not self.container.verify_health(expected_health="HEALTHY"):
+        if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
 
         # 8. Run IOR again.
@@ -390,7 +390,7 @@ class TargetFailure(IorTestBase):
             errors.append(msg)
 
         # 6. Verify that self.container[1]'s Health property is UNCLEAN.
-        if not self.container[1].verify_health(expected_health="UNCLEAN"):
+        if not self.container[1].verify_prop({"status": "UNCLEAN"}):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 7. Reintegrate the excluded target.
@@ -404,7 +404,7 @@ class TargetFailure(IorTestBase):
         self.container[1].set_prop(prop='status', value="healthy")
 
         # 8. Verify that self.container[1]'s Health property is HEALTHY.
-        if not self.container[1].verify_health(expected_health="HEALTHY"):
+        if not self.container[1].verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after first IOR!")
 
         # 9. Run IOR again.

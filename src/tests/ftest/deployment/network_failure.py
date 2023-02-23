@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -291,7 +291,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_wo_rf
+        :avocado: tags=NetworkFailureTest,network_failure_wo_rf
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_wo_rf/*",
@@ -306,7 +306,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_rp
+        :avocado: tags=NetworkFailureTest,network_failure_with_rp
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_rp/*",
@@ -321,7 +321,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_ec
+        :avocado: tags=NetworkFailureTest,network_failure_with_ec
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_ec/*",
@@ -337,20 +337,20 @@ class NetworkFailureTest(IorTestBase):
         2. Create a pool across the four ranks on the two nodes.
         3. Create a container without redundancy factor.
         4. Take down the interface where the pool isn't created. This will simulate the
-        case where there’s a network failure, but does not affect the user because their
-        pool isn’t created on the failed node (assuming that everything else such as
+        case where there's a network failure, but does not affect the user because their
+        pool isn't created on the failed node (assuming that everything else such as
         client node, engine, etc. are still working).
         5. Run IOR with oclass SX.
         6. Verify that IOR finishes successfully.
         7. Verify that the container Health is HEALTHY.
-        8. To further verify that the pool isn’t affected, create a new container on the
+        8. To further verify that the pool isn't affected, create a new container on the
         pool and run IOR.
         9. To clean up, bring up the network interface.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_isolation
+        :avocado: tags=NetworkFailureTest,network_failure_isolation
         """
         # 1. Determine the four ranks to create the pool and an interface to take down.
         # We'll create a pool on two ranks in hostlist_servers[0] and two ranks in
@@ -414,7 +414,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 
