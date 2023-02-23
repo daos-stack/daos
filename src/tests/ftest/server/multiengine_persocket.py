@@ -224,26 +224,22 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                                     verbose=True):
             self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
 
-    def check_pmem(self, hosts, count, verbose=True):
+    def check_pmem(self, hosts, count):
         """check for server pmem.
 
         Args:
             hosts (NodeSet): hosts set to be checked.
             count (int): expected number of pmem storage device.
-            verbose (bool, optional): display storage scan command. Defaults to True.
 
         Returns:
             bool: True if number of pmem devices on the server hosts.
         """
         storage = StorageInfo(self.log, hosts)
         try:
-            storage.scan(verbose=verbose)
+            storage.scan()
         except StorageException:
             self.log.debug("==Problem running StorageInfo.scan()")
-        if len(storage.pmem_devices) == count:
-            return True
-        else:
-            return False
+        return bool(len(storage.pmem_devices) == count)
 
     def cleanup(self):
         """Servers clean up after test complete."""
@@ -280,8 +276,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         step = 1
         self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
         engines_per_socket = self.params.get(
-            "engines_per_socket", "/run/server_config/*", default=1)
-        num_pmem = self.params.get(
             "number_pmem", "/run/server_config/*", default=1)
         self.daos_server_scm_reset(step)
         self.host_reboot(self.hostlist_servers)
@@ -367,6 +361,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         # (7) IOR test
         step += 1
         self.log.info("===(%s)===IOR test", step)
+        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
+        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=True)
