@@ -315,7 +315,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, value]) for key, value in attrs.items()]
+        attr_list = [':'.join([key, str(value)]) for key, value in attrs.items()]
         return self._get_result(
             ("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
             sys_name=sys_name)
@@ -624,7 +624,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, val]) for key, val in attrs.items()]
+        attr_list = [':'.join([key, str(value)]) for key, value in attrs.items()]
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
             attr=','.join(attr_list), sys_name=sys_name)
