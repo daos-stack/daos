@@ -1356,13 +1356,15 @@ def percent_change(val1, val2):
         val1 (float): first value.
         val2 (float): second value.
 
+    Raises:
+        ZeroDivisionError: if val1 is 0
+        ValueError: if either val is not a number
+
     Returns:
         float: decimal percent change.
 
     """
-    if val1 and val2:
-        return (float(val2) - float(val1)) / float(val1)
-    return 0.0
+    return (float(val2) - float(val1)) / float(val1)
 
 
 def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
