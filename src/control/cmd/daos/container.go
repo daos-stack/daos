@@ -447,9 +447,6 @@ func (cmd *existingContainerCmd) resolveContainerPath(ap *C.struct_cmd_args_s) (
 	}
 	cmd.poolBaseCmd.poolUUID = cmd.poolBaseCmd.Args.Pool.UUID
 	cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
-	if cmd.poolBaseCmd.Args.Pool.Label != "" {
-		cmd.poolBaseCmd.poolLabel = C.CString(cmd.poolBaseCmd.Args.Pool.Label)
-	}
 
 	cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
 	if err != nil {
