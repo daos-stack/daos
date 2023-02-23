@@ -30,14 +30,13 @@ class Pass1Test(TestWithServers):
         6. Disable the checker.
         7. Verify that the dangling pool was removed. Call dmg pool list and it should
         return an empty list.
-        8. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-11711
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=recovery,pass_1
-        :avocado: tags=test_dangling_pool
+        :avocado: tags=Pass1Test,test_dangling_pool
         """
         # 1. Create a pool.
         self.pool = self.get_pool(connect=False)
@@ -81,11 +80,8 @@ class Pass1Test(TestWithServers):
         if pools:
             errors.append(f"Dangling pool was not removed! {pools}")
 
-        # 8. Un-register the pool so that we don't try to destroy during tearDown.
-        # This is hack because when we create a pool using get_pool(), it'll call
-        # register_cleanup() and there's no way to skip it or "unregister" other than this
-        # approach.
-        self._cleanup_methods = []
+        # Don't try to destroy the pool during tearDown.
+        self.pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
 
@@ -185,10 +181,10 @@ class Pass1Test(TestWithServers):
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=recovery,pass_1
-        :avocado: tags=test_orphan_pool_trust_ps
+        :avocado: tags=Pass1Test,test_orphan_pool_trust_ps
         """
         errors = []
         # Run step 1 to 6.
@@ -216,14 +212,13 @@ class Pass1Test(TestWithServers):
         7. Verify that the orphan pool was removed. Call dmg pool list and it should
         return empty.
         8. Verify that the pool directory is removed from the mount point.
-        9. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=recovery,pass_1
-        :avocado: tags=test_orphan_pool_trust_ms
+        :avocado: tags=Pass1Test,test_orphan_pool_trust_ms
         """
         errors = []
         # Run step 1 to 6 with the policies to trust MS during dmg check start.
@@ -239,8 +234,8 @@ class Pass1Test(TestWithServers):
         # 8. Verify that the pool directory is removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
-        # 9. Un-register the pool so that we don't try to destroy during tearDown.
-        self._cleanup_methods = []
+        # Don't try to destroy the pool during tearDown.
+        self.pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
 
@@ -261,10 +256,10 @@ class Pass1Test(TestWithServers):
 
         Jira ID: DAOS-12029
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=recovery,pass_1
-        :avocado: tags=test_lost_majority_ps_replicas
+        :avocado: tags=Pass1Test,test_lost_majority_ps_replicas
         """
         # 1. Create a pool with --nsvc=3.
         self.pool = self.get_pool(svcn=3)
@@ -335,8 +330,8 @@ class Pass1Test(TestWithServers):
                 self.log.info("rdb-pool found at %s", str(node))
 
         self.log.info("rdb-pool count = %d", count)
-        if count < 3:
-            errors.append(f"Enough rdb-pool hasn't been recovered! - {count} ranks")
+        if count < len(hosts) - 1:
+            errors.append(f"Not enough rdb-pool has been recovered! - {count} ranks")
 
         report_errors(test=self, errors=errors)
 
@@ -353,14 +348,13 @@ class Pass1Test(TestWithServers):
         7. Disable the checker.
         8. Check that the pool does not appear with dmg pool list.
         9. Verify that the pool directory was removed from the mount point.
-        10. Un-register the pool so that we don't try to destroy during tearDown.
 
         Jira ID: DAOS-12067
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=recovery,pass_1
-        :avocado: tags=test_lost_all_rdb
+        :avocado: tags=Pass1Test,test_lost_all_rdb
         """
         # 1. Create a pool.
         self.pool = self.get_pool()
@@ -373,7 +367,12 @@ class Pass1Test(TestWithServers):
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
         command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
-        pcmd(hosts=nodeset_hosts, command=command)
+        remove_result = pcmd(hosts=nodeset_hosts, command=command)
+        success_nodes = remove_result[0]
+        if nodeset_hosts != success_nodes:
+            msg = (f"Failed to remove rdb-pool! All = {nodeset_hosts}, "
+                   f"Success = {success_nodes}")
+            self.fail(msg)
 
         # 4. Start servers.
         dmg_command.system_start()
@@ -410,7 +409,7 @@ class Pass1Test(TestWithServers):
         # 9. Verify that the pool directory was removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
-        # 10. Un-register the pool so that we don't try to destroy during tearDown.
-        self._cleanup_methods = []
+        # Don't try to destroy the pool during tearDown.
+        self.pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)

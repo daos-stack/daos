@@ -17,7 +17,6 @@ setup:
   start_servers_once: False
 
 pool:
-  control_method: dmg
   size: 60G
 
 container:
