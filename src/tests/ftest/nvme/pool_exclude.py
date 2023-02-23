@@ -174,7 +174,7 @@ class NvmePoolExclude(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=nvme,checksum,nvme_osa
+        :avocado: tags=nvme,checksum,nvme_osa,daos_cmd
         :avocado: tags=NvmePoolExclude,test_nvme_pool_excluded
         """
         self.run_nvme_pool_exclude(1)

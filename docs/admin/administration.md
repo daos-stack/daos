@@ -358,15 +358,15 @@ boro-11
 -------
   Devices
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 2] Rank:0 State:NORMAL
+      Targets:[0 2] Rank:0 State:NORMAL LED:OFF
     UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:0000:8b:00.0]
-      Targets:[1 3] Rank:0 State:NORMAL
+      Targets:[1 3] Rank:0 State:NORMAL LED:OFF
     UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d [TrAddr:0000:8c:00.0]
-      Targets:[] Rank:0 State:NEW
+      Targets:[] Rank:0 State:NEW LED:OFF
     UUID:81905b24-be44-4106-8ff9-03002e9dd86a [TrAddr:5d0505:01:00.0]
-      Targets:[0 2] Rank:1 State:EVICTED
+      Targets:[0 2] Rank:1 State:EVICTED LED:ON
     UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
-      Targets:[1 3] Rank:1 State:NORMAL
+      Targets:[1 3] Rank:1 State:NORMAL LED:OFF
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -516,12 +516,18 @@ boro-11
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
             Targets:[] Rank:0 State:EVICTED LED:ON
 ```
-The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
-trigger the faulty device reaction (all targets on the SSD will be rebuilt, and the SSD
-will remain evicted until device replacement occurs).
+The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
+faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
+The SSD will remain evicted until device replacement occurs.
+
+If an NVMe SSD is faulty, the status LED on the VMD device will be set to an ON state,
+represented by a solidly ON amber light.
+This LED activity visually indicates a fault and that the device needs to be replaced and is no
+longer in use by DAOS.
+The LED of the VMD device will remain in this state until replaced by a new device.
 
 !!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
+    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
     Use is currently intended for testing only and is not supported for production.
 
 - To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
@@ -650,10 +656,10 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
 ```
 
-To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI
-addresses:
+To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
+adding custom timeout of 5 minutes for LED identification (time to flash LED for):
 ```bash
-$ dmg -l boro-11 storage led identify 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
+$ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
 boro-11
 ---------
@@ -672,15 +678,18 @@ Mappings of Device-UUIDs to PCI address can be found in the output of the
 An error will be returned if the Device-UUID or PCI address of a non-VMD enabled SSD is specified
 in the command.
 
-After issuing the identify command, the status LED on the VMD device is now set to an "QUICK_BLINK"
+Upon issuing a device identify command with specified device IDs and optional custom timeout value,
+an admin now can quickly identify a device in question.
+After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
 state, representing a quick, 4Hz blinking amber light.
-The device will quickly blink by default for about 2 minutes and then return to the default "OFF" state.
-The LED event duration can be customized by setting the VMD_LED_PERIOD environment variable if a duration
-other than the default value is desired.
+The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
+no value is specified on the command line, after which the LED state will return to the previous
+state (faulty "ON" or default "OFF").
 
 - Check LED state of SSDs:
 
-To verify the LED state of SSDs the following command can be used in a similar way to the identify command:
+To verify the LED state of SSDs the following command can be used in a similar way to the identify
+command:
 ```bash
 $ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
