@@ -961,6 +961,20 @@ dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 	return 0;
 }
 
+int
+dc_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size)
+{
+	struct dc_array		*array;
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+	array->chunk_size = chunk_size;
+	array_decref(array);
+
+	return 0;
+}
+
 static bool
 io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size,
 	       daos_size_t *num_records)

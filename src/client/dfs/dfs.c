@@ -65,8 +65,6 @@
 #define DFS_SB_VERSION		2
 /** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION	3
-/** Array object stripe size for regular files */
-#define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC		0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
@@ -3222,6 +3220,8 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 int
 dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 {
+	int	rc;
+
 	if (obj == NULL)
 		return EINVAL;
 	if (!S_ISREG(obj->mode))
@@ -3229,7 +3229,16 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	if (csize == 0)
 		csize = dfs->attr.da_chunk_size;
 
-	return set_chunk_size(dfs, obj, csize);
+	rc = set_chunk_size(dfs, obj, csize);
+	if (rc)
+		return daos_der2errno(rc);
+
+	/* need to update the array handle chunk size */
+	rc = daos_array_update_chunk_size(obj->oh, csize);
+	if (rc)
+		return daos_der2errno(rc);
+
+	return 0;
 }
 
 int
@@ -6921,6 +6930,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			if (flags & DFS_CHECK_PRINT)
 				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
 					DP_OID(oids[i]));
+
 			if (flags & DFS_CHECK_VERIFY) {
 				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
 				if (rc == -DER_NOSYS) {
@@ -6947,15 +6957,6 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 			entry.chunk_size = dfs->attr.da_chunk_size;
 
-			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
-			D_ASSERT(len <= DFS_MAX_NAME);
-			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
-					  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
-			if (rc) {
-				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
-				D_GOTO(out_lf2, rc);
-			}
-
 			/*
 			 * If this is a regular file / array object, the user might have used a
 			 * different chunk size than the default one. Since we lost the directory
@@ -6974,6 +6975,19 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 						       &entry.chunk_size);
 				if (rc)
 					D_GOTO(out_lf2, rc);
+				if (flags & DFS_CHECK_PRINT &&
+				    entry.chunk_size != dfs->attr.da_chunk_size)
+					D_PRINT("Adjusting File ("DF_OID") chunk size to %zu\n",
+						DP_OID(oids[i]),  entry.chunk_size);
+			}
+
+			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+			D_ASSERT(len <= DFS_MAX_NAME);
+			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
+					  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
+			if (rc) {
+				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
+				D_GOTO(out_lf2, rc);
 			}
 			unmarked_entries++;
 		}
