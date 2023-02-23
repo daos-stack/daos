@@ -123,6 +123,9 @@ class CoreFileProcessing():
                         "Failed to process core file %s", os.path.join(core_dir, core_name))
                     errors += 1
                 finally:
+                    # save corefile for further/later analysis
+                    command = ["cp", os.path.join(core_dir, core_name), "/scratch/bfaccini"]
+                    run_local(self.log, command)
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
