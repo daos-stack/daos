@@ -31,7 +31,7 @@ class POSIXStatTest(IorTestBase):
         time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
         :avocado: tags=stat_parameters,test_stat_parameters
         """
