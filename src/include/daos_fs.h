@@ -29,7 +29,8 @@ extern "C" {
 #define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
-
+/** Default chunk size for files (arrays) */
+#define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Maximum xattr name */
 #define DFS_MAX_XATTR_NAME	255
 /** Maximum xattr value */

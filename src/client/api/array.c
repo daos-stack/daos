@@ -151,6 +151,12 @@ daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 }
 
 int
+daos_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size)
+{
+	return dc_array_update_chunk_size(oh, chunk_size);
+}
+
+int
 daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		d_sg_list_t *sgl, daos_event_t *ev)
 {
