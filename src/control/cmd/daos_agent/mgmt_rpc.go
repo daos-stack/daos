@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -137,8 +137,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
 	case fault.IsFaultCode(err, code.SecurityInvalidCert):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)}
-	case fault.IsFaultCode(err, code.ClientConnectionClosed), fault.IsFaultCode(err, code.ClientConnectionRefused),
-		fault.IsFaultCode(err, code.ClientConnectionNoRoute), fault.IsFaultCode(err, code.ClientConnectionBadHost):
+	case control.IsMSConnectionFailure(err):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)}
 	case err != nil:
 		return nil, err
