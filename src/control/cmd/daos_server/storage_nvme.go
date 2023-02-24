@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -28,7 +27,7 @@ type (
 	nvmeScanFn         func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 )
 
-type nvmeCmd struct {
+type nvmeStorageCmd struct {
 	Prepare prepareNVMeCmd `command:"prepare" description:"Prepare NVMe SSDs for use by DAOS"`
 	Reset   resetNVMeCmd   `command:"reset" description:"Reset NVMe SSDs for use by OS"`
 	Scan    scanNVMeCmd    `command:"scan" description:"Scan NVMe SSDs"`
@@ -143,11 +142,7 @@ func sanitizePCIAddrLists(req *storage.BdevPrepareRequest) error {
 }
 
 type prepareNVMeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	iommuCheckerCmd `json:"-"`
-	optCfgCmd       `json:"-"`
-
+	nvmeCmd
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
@@ -245,8 +240,8 @@ func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error 
 	return err
 }
 
-func (cmd *prepareNVMeCmd) Execute(args []string) error {
-	if err := cmd.setHelperLogFile(); err != nil {
+func (cmd *prepareNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
 		return err
 	}
 
@@ -257,11 +252,7 @@ func (cmd *prepareNVMeCmd) Execute(args []string) error {
 }
 
 type resetNVMeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	iommuCheckerCmd `json:"-"`
-	optCfgCmd       `json:"-"`
-
+	nvmeCmd
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
@@ -294,6 +285,18 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	cmd.Info("Reset locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
+		CleanHugePagesOnly: true,
+	}
+
+	msg := "cleanup hugepages before nvme reset"
+
+	if resp, err := resetBackend(req); err != nil {
+		cmd.Errorf("%s", errors.Wrap(err, msg))
+	} else {
+		cmd.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+	}
+
+	req = storage.BdevPrepareRequest{
 		TargetUser:   cmd.TargetUser,
 		PCIAllowList: cmd.Args.PCIAllowList,
 		PCIBlockList: cmd.PCIBlockList,
@@ -309,7 +312,7 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
-	// As reset nvme backend doesn't use NrHugepages, set to zero value.
+	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
 	req.HugePageCount = 0
 
 	cmd.Debugf("nvme reset request parameters: %+v", req)
@@ -320,8 +323,8 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	return err
 }
 
-func (cmd *resetNVMeCmd) Execute(args []string) error {
-	if err := cmd.setHelperLogFile(); err != nil {
+func (cmd *resetNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
 		return err
 	}
 
@@ -332,10 +335,7 @@ func (cmd *resetNVMeCmd) Execute(args []string) error {
 }
 
 type scanNVMeCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-	optCfgCmd      `json:"-"`
-
+	nvmeCmd
 	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
@@ -358,10 +358,14 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
 		cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
 	}
 
+	// TODO: Add embedded cmd struct to check if daos_server process is already running and
+	//       applied to all daos_server commands.
 	resp, err := scanBackend(req)
 	if err != nil {
+		// TODO: Suggest running prepare if nr hugepages is low.
 		return err
 	}
+	// TODO: Suggest running prepare if IOMMU enabled and nr results is zero.
 
 	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
 		return err
@@ -372,8 +376,8 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
 	return nil
 }
 
-func (cmd *scanNVMeCmd) Execute(args []string) error {
-	if err := cmd.setHelperLogFile(); err != nil {
+func (cmd *scanNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
 		return err
 	}
 

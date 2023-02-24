@@ -148,8 +148,11 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 // parameters suitable to be used on the local host. Use the control API to generate config from
 // local scan results using the current process.
 func (cmd *configGenCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
 
+	ctx := context.Background()
 	cfg, err := cmd.confGen(ctx, getLocalFabric, getLocalStorage)
 	if err != nil {
 		return err

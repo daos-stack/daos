@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,16 +130,15 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 }
 
 func (cmd *legacyPrepCmd) Execute(args []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
 
 	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
-	// This is a little ugly, but allows for easier unit testing.
-	// FIXME: With the benefit of hindsight, it seems apparent
-	// that we should have made these Execute() methods thin
-	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	}
@@ -156,6 +155,9 @@ type legacyScanCmd struct {
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
 	cmd.Notice("storage scan subcommand is deprecated, use nvme or scm subcommands instead")
 
 	if cmd.HelperLogFile != "" {
