@@ -155,7 +155,7 @@ class CartTest(TestWithoutServers):
         error_list = []
         localhost = get_local_host()
         processes = r"'\<(crt_launch|orterun)\>'"
-        negative_filter=r"'\<(grep|defunct)\>'"
+        negative_filter = r"'\<(grep|defunct)\>'"
         retry_count = 0
         while retry_count < 2:
             if stop_processes(self.log, localhost, processes, negative_filter=negative_filter):

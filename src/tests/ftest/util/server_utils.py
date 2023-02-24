@@ -324,6 +324,10 @@ class DaosServerManager(SubprocessManager):
     def scm_prepare(self, **kwargs):
         """Run daos_server scm prepare on the server hosts.
 
+        Args:
+            kwargs (dict, optional): named arguments and their values use with the
+                DaosServerCommand.ScmSubCommand.PrepareSubCommand object
+
         Raises:
             RemoteCommandResult: a grouping of the command results from the same hosts with the same
                 return status
@@ -345,6 +349,10 @@ class DaosServerManager(SubprocessManager):
     def scm_reset(self, **kwargs):
         """Run daos_server scm reset on the server hosts.
 
+        Args:
+            kwargs (dict, optional): named arguments and their values use with the
+                DaosServerCommand.ScmSubCommand.ResetSubCommand object
+
         Raises:
             RemoteCommandResult: a grouping of the command results from the same hosts with the same
                 return status
@@ -360,6 +368,10 @@ class DaosServerManager(SubprocessManager):
 
     def nvme_prepare(self, **kwargs):
         """Run daos_server nvme prepare on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values use with the
+                DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
             RemoteCommandResult: a grouping of the command results from the same hosts with the same

@@ -251,8 +251,7 @@ class JobManager(ExecutableCommand):
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex
-        result = stop_processes(self.log, self._hosts, regex)
-        if result.all_failed:
+        if not stop_processes(self.log, self._hosts, regex):
             self.log.info("No remote %s processes killed (none found), done.", regex)
         else:
             self.log.info(

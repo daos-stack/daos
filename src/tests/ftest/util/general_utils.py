@@ -859,7 +859,6 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, negative_filte
             hosts.
 
     """
-    kill_attempted = False
     command = "/usr/bin/pgrep --list-full {}".format(pattern)
     pattern_match = str(pattern)
     if negative_filter:
@@ -869,25 +868,25 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, negative_filte
     # Search for any active processes
     log.debug("Searching for any processes on %s that match: %s", hosts, pattern_match)
     result = run_remote(log, hosts, command, verbose, timeout)
-    if result.passed_hosts:
-        # Attempt to kill any processes found on any of the hosts with increasing force
-        steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
-        while steps and result.passed_hosts:
-            step = steps.pop(0)
-            log.debug(
-                "Killing%s any processes on %s that match: %s",
-                step[0], result.passed_hosts, pattern_match)
-            kill_command = "sudo /usr/bin/pkill {}{}".format(step[0], pattern)
-            run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
-            time.sleep(step[1])
-            result = run_remote(log, result.passed_hosts, command, verbose, timeout)
-        if result.passed_hosts:
-            log.warning(
-                "Processes still running on %s that match: %s", result.passed_hosts, pattern_match)
-        kill_attempted = True
-    else:
+    if not result.passed_hosts:
         log.debug("No processes found on %s that match: %s", result.failed_hosts, pattern_match)
-    return kill_attempted
+        return False
+
+    # Attempt to kill any processes found on any of the hosts with increasing force
+    steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
+    while steps and result.passed_hosts:
+        step = steps.pop(0)
+        log.debug(
+            "Killing%s any processes on %s that match: %s",
+            step[0], result.passed_hosts, pattern_match)
+        kill_command = "sudo /usr/bin/pkill {}{}".format(step[0], pattern)
+        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
+        time.sleep(step[1])
+        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+    if result.passed_hosts:
+        log.warning(
+            "Processes still running on %s that match: %s", result.passed_hosts, pattern_match)
+    return True
 
 
 def get_log_file(name):
