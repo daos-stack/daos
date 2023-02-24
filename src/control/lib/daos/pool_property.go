@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -354,10 +354,10 @@ func PoolProperties() PoolPropertyMap {
 		"checkpoint_freq": {
 			Property: PoolProperty{
 				Number:      PoolPropertyCheckpointFreq,
-				Description: "WAL Checkpointing frequency",
+				Description: "WAL Checkpointing frequency, in seconds",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Checkpointing Frequency value %s", s)
-					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					rsPct, err := strconv.ParseUint(s, 10, 64)
 					if err != nil {
 						return nil, rbErr
 					}
@@ -376,10 +376,10 @@ func PoolProperties() PoolPropertyMap {
 		"checkpoint_thresh": {
 			Property: PoolProperty{
 				Number:      PoolPropertyCheckpointThresh,
-				Description: "WAL Checkpointing trigger threshold",
+				Description: "Usage of WAL before checkpoint is triggered, as a percentage",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Checkpointing threshold value %s", s)
-					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					rsPct, err := strconv.ParseUint(s, 10, 32)
 					if err != nil {
 						return nil, rbErr
 					}

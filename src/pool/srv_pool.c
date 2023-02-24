@@ -2440,18 +2440,18 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH) {
-		d_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_checkpoint_thresh, &value);
 		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
 			rc  = 0;
-			val = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT;
+			val32 = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_CHECKPOINT_THRESH;
-		prop->dpp_entries[idx].dpe_val  = val;
+		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
 
@@ -4744,19 +4744,19 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 
 	/** WAL Checkpointing properties */
 	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint mode",
-				       &ds_pool_prop_scrub_mode,
+				       &ds_pool_prop_checkpoint_mode,
 				       DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
 	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint freq",
-				       &ds_pool_prop_scrub_freq,
+				       &ds_pool_prop_checkpoint_freq,
 				       DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
 	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint thresh",
-				       &ds_pool_prop_scrub_thresh,
+				       &ds_pool_prop_checkpoint_thresh,
 				       DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
