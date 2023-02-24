@@ -138,6 +138,7 @@ class Test(avocadoTest):
         self._stage_name = os.environ.get("STAGE_NAME", None)
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
+        self._test_step = 1
 
     def setUp(self):
         """Set up each test case."""
@@ -441,6 +442,16 @@ class Test(avocadoTest):
             self.log.debug(
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
+
+    def log_step(self, message):
+        """Log a test step.
+
+        Args:
+            message (str): description of test step.
+
+        """
+        self.log.info("==> Step %s: %s", self._test_step, message)
+        self._test_step += 1
 
     def tearDown(self):
         """Tear down after each test case."""

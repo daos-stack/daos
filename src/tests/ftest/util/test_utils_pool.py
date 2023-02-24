@@ -541,6 +541,18 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
+    def disable_aggregation(self):
+        """ Disable pool aggregation."""
+        self.log.info("Disable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "disabled")
+
+    @fail_on(CommandFailure)
+    def enable_aggregation(self):
+        """ Enable pool aggregation."""
+        self.log.info("Enable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "time")
+
+    @fail_on(CommandFailure)
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
@@ -1095,6 +1107,37 @@ class TestPool(TestDaosApiBase):
             keys_str = ".".join(map(str, keys))
             raise CommandFailure(
                 "The dmg pool query key does not exist: {}".format(keys_str)) from error
+
+    def get_tier_stats(self, refresh=False):
+        """Get the pool tier stats from pool query output.
+
+        Args:
+             refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+             dict: A dictionary for pool stats, scm and nvme:
+
+        """
+        tier_stats = {}
+        for tier_stat in self._get_query_data_keys("response", "tier_stats", refresh=refresh):
+            tier_type = tier_stat.pop("media_type")
+            tier_stats[tier_type] = tier_stat.copy()
+        return tier_stats
+
+    def get_total_free_space(self, refresh=False):
+        """Get the pool total free space.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Return:
+            total_free_space (int): pool total free space.
+
+        """
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["free"] for stat in tier_stats.values())
 
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.
