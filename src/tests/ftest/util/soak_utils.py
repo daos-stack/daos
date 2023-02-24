@@ -1088,7 +1088,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
     log_name = job_spec
     cmds = []
-    cmds.append(str(daos_racer))
+    cmds.append(str(daos_racer.with_exports))
     cmds.append("status=$?")
     # add exit code
     commands.append([cmds, log_name])
@@ -1161,7 +1161,7 @@ def create_fio_cmdline(self, job_spec, pool):
                         "fio --name=global --directory")
                     # add fio cmdline
                     cmds.append("cd {};".format(dfuse.mount_dir.value))
-                    cmds.append(str(fio_cmd))
+                    cmds.append(str(fio_cmd.with_exports))
                     cmds.append("status=$?")
                     cmds.append("cd -")
                     # If posix, add the srun dfuse stop cmds
