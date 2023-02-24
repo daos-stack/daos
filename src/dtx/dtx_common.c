@@ -642,7 +642,7 @@ dtx_batched_commit(void *arg)
 	while (1) {
 		struct ds_cont_child	*cont;
 		struct dtx_stat		 stat = { 0 };
-		int			 sleep_time = 10; /* ms */
+		int			 sleep_time = 50; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list)) {
 			sleep_time = 500;
@@ -702,7 +702,6 @@ dtx_batched_commit(void *arg)
 		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
 		    DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
-			sleep_time = 0;
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);

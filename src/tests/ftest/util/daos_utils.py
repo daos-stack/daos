@@ -279,7 +279,7 @@ class DaosCommand(DaosCommandBase):
             ("container", "list"), pool=pool, sys_name=sys_name)
 
     def pool_set_attr(self, pool, attr, value, sys_name=None):
-        """Set pool attribute.
+        """Set single pool attribute.
 
         Args:
             pool (str): pool UUID or label
@@ -296,7 +296,28 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=attr, value=value,
+            ("pool", "set-attr"), pool=pool, attr=':'.join([attr, value]),
+            sys_name=sys_name)
+
+    def pool_set_attrs(self, pool, attrs, sys_name=None):
+        """Set multiple pool attributes.
+
+        Args:
+            pool (str): Pool UUID.
+            attrs (dict): Attribute name/value pairs.
+            sys_name (str): DAOS system name. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool set-attr command fails.
+
+        """
+        attr_list = [':'.join([key, value]) for key, value in attrs.items()]
+        return self._get_result(
+            ("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
             sys_name=sys_name)
 
     def pool_get_attr(self, pool, attr, sys_name=None):
@@ -357,7 +378,7 @@ class DaosCommand(DaosCommandBase):
             ("container", "query"), pool=pool, cont=cont, sys_name=sys_name)
 
     def container_set_prop(self, pool, cont, prop, value):
-        """Call daos container set-prop.
+        """Call daos container set-prop for a single property.
 
         Args:
             pool (str): pool UUID or label
@@ -377,6 +398,28 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
+
+    def container_set_props(self, pool, cont, props, sys_name=None):
+        """Set multiple container properties.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            props (dict): Property name/value pairs.
+            sys_name (str): DAOS system name. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool set-attr command fails.
+
+        """
+        attr_list = [":".join([k, v]) for k, v in props.items()]
+        return self._get_result(
+            ("container", "set-prop"), pool=pool, cont=cont,
+            attr=','.join(attr_list), sys_name=sys_name)
 
     def container_get_prop(self, pool, cont, properties=None):
         """Call daos container get-prop.
@@ -542,7 +585,7 @@ class DaosCommand(DaosCommandBase):
 
     def container_set_attr(
             self, pool, cont, attr, val, sys_name=None):
-        """Call daos container set-attr.
+        """Call daos container set-attr for a single attribute.
 
         Args:
             pool (str): pool UUID or label
@@ -562,10 +605,32 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=attr, value=val)
+            sys_name=sys_name, attr=':'.join([attr, val]))
+
+    def container_set_attrs(self, pool, cont, attrs, sys_name=None):
+        """Set multiple container attributes.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attrs (dict): Attribute key/val pairs.
+            sys_name (str): DAOS system name. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool set-attr command fails.
+
+        """
+        attr_list = [':'.join([key, val]) for key, val in attrs.items()]
+        return self._get_result(
+            ("container", "set-attr"), pool=pool, cont=cont,
+            attr=','.join(attr_list), sys_name=sys_name)
 
     def container_get_attr(self, pool, cont, attr, sys_name=None):
-        """Call daos container get-attr.
+        """Call daos container get-attr for a single attribute.
 
         Args:
             pool (str): pool UUID or label
@@ -583,6 +648,27 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_json_result(
             ("container", "get-attr"), pool=pool, cont=cont, attr=attr, sys_name=sys_name)
+
+    def container_get_attrs(self, pool, cont, attrs, sys_name=None):
+        """Call daos container get-attr for multiple attributes.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            attrs (list): Attribute names.
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the daos get-attr command fails.
+
+        """
+        return self._get_json_result(
+            ("container", "get-attr"), pool=pool, cont=cont,
+            attr=','.join(attrs), sys_name=sys_name)
 
     def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.

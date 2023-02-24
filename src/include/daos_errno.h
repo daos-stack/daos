@@ -286,8 +286,10 @@ extern "C" {
 	       update again)						\
 	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
 	       NVMe I/O error)						\
+	ACTION(DER_NO_CERT,		(DER_ERR_DAOS_BASE + 43),	\
+	       Unable to access one or more certificates)		\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 43),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 44),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

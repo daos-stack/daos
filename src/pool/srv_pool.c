@@ -2689,13 +2689,14 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	daos_prop_t		       *prop = NULL;
 	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
-	struct ownership		owner;
+	struct d_ownership		owner;
 	struct daos_prop_entry	       *owner_entry, *global_ver_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	struct daos_prop_entry	       *obj_ver_entry;
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
+	bool				transfer_map = false;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2866,25 +2867,13 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	/*
-	 * Transfer the pool map to the client before adding the pool handle,
-	 * so that we don't need to worry about rolling back the transaction
-	 * when the transfer fails. The client has already been authenticated
-	 * and authorized at this point. If an error occurs after the transfer
-	 * completes, then we simply return the error and the client will throw
-	 * its pool_buf away.
-	 */
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
-	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
-				      in->pci_map_bulk, &out->pco_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
+	transfer_map = true;
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
@@ -2970,14 +2959,17 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
-	if (hdl)
-		D_FREE(hdl);
-	D_FREE(machine);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	if (rc == 0 && transfer_map) {
+		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, in->pci_map_bulk,
+					      &out->pco_map_buf_size);
+		/** TODO: roll back tx if transfer fails? */
+	}
+	D_FREE(map_buf);
+	D_FREE(hdl);
+	D_FREE(machine);
 	if (prop)
 		daos_prop_free(prop);
 out_svc:

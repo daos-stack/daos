@@ -188,6 +188,18 @@ or query/manage an object inside a container.`
 			}
 		}
 
+		// fixup args for commands that can use --path and
+		// positional arguments
+		if contPathCmd, ok := cmd.(interface {
+			parseContPathArgs([]string) ([]string, error)
+		}); ok {
+			var err error
+			args, err = contPathCmd.parseContPathArgs(args)
+			if err != nil {
+				return err
+			}
+		}
+
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}

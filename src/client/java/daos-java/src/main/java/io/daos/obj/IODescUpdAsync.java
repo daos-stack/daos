@@ -141,16 +141,14 @@ public class IODescUpdAsync extends IODescUpdBase implements DaosEventQueue.Atta
     resultParsed = false;
     retCode = -1;
     event = null;
-    if (dataBuffer != null) {
-      dataBuffer.release();
-      dataBuffer = null;
-    }
+    releaseDataBuffer();
   }
 
   @Override
   public void ready() {
     descBuffer.writerIndex(descBuffer.capacity());
     descBuffer.readerIndex(requestLen);
+    resultParsed = true;
     retCode = descBuffer.readInt();
   }
 
@@ -173,6 +171,13 @@ public class IODescUpdAsync extends IODescUpdBase implements DaosEventQueue.Atta
     return retCode;
   }
 
+  public void releaseDataBuffer() {
+    if (dataBuffer != null) {
+      dataBuffer.release();
+      dataBuffer = null;
+    }
+  }
+
   @Override
   public void release() {
     if (descBuffer != null) {
@@ -182,10 +187,7 @@ public class IODescUpdAsync extends IODescUpdBase implements DaosEventQueue.Atta
       descBuffer.release();
       descBuffer = null;
     }
-    if (dataBuffer != null) {
-      dataBuffer.release();
-      dataBuffer = null;
-    }
+    releaseDataBuffer();
     if ((!resultParsed) && event != null) {
       try {
         event.abort();
