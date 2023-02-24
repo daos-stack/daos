@@ -733,6 +733,8 @@ destroy_shmem_with_key(key_t key)
 	header->sh_deleted = 1;
 	head = &header->sh_subregions;
 	for (cur = conv_ptr(header, head->next); cur != head; cur = conv_ptr(header, cur->next)) {
+		if (cur == NULL)
+			break;
 		entry = d_list_entry(cur, __typeof__(*entry), rl_link);
 		rc = destroy_shmem_with_key(entry->rl_key);
 		if (rc != 0)

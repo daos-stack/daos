@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/fs"
+	"os"
 
 	"github.com/pkg/errors"
 )
@@ -123,6 +124,13 @@ func (tc *TransportConfig) PreLoadCertData() error {
 		// In order to reload data use ReloadCertDatA
 		return nil
 	}
+
+	if tc.ClientCertDir != "" {
+		if _, err := os.ReadDir(tc.ClientCertDir); err != nil {
+			return FaultUnreadableCertFile(tc.ClientCertDir)
+		}
+	}
+
 	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath, tc.maxKeyPerms)
 	if err != nil {
 		return err

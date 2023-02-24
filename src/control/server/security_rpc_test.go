@@ -317,7 +317,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(daos.BadPath),
+		Status: int32(daos.NoCert),
 	})
 }
 
