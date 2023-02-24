@@ -155,13 +155,13 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("==Server %s rebooting... \n", hosts)
 
-        if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
+        if not wait_for_result(self.log, check_ping, 600, 5, rlog=self.log, host=hosts[0],
                                expected_ping=False, cmd_timeout=60, verbose=True):
             self.fail("Shutwown not detected within 600 seconds.")
-        if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
+        if not wait_for_result(self.log, check_ping, 600, 5, rlog=self.log, host=hosts[0],
                                expected_ping=True, cmd_timeout=60, verbose=True):
             self.fail("Reboot not detected within 600 seconds.")
-        if not wait_for_result(self.log, check_ssh, 300, delay=2, self.log, hosts=hosts,
+        if not wait_for_result(self.log, check_ssh, 300, 2, rlog=self.log, hosts=hosts,
                                vcmd_timeout=30, verbose=True):
             self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
 
@@ -225,7 +225,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
-        if not self.wait_for_result(self.log, self.check_pmem, 100, delay=1,
+        if not self.wait_for_result(self.log, self.check_pmem, 100, 1,
                                     hosts=self.hostlist_servers, count=num_pmem):
             self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
 
