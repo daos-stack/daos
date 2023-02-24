@@ -423,6 +423,11 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Value8
+   fun:racecall
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Cond
    fun:racecalladdr
 }
