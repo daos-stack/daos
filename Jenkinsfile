@@ -1,8 +1,8 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
-   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
-*/
-/* Copyright 2019-2022 Intel Corporation
+/* groovylint-disable-next-line LineLength */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -15,8 +15,9 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+//@Library(value='pipeline-lib@your_branch') _
 
+/* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
 void job_status_write() {
@@ -65,9 +66,9 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
-   currentBuild.result = 'SUCCESS'
-   return
-     }
+    currentBuild.result = 'SUCCESS'
+    return
+}
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
@@ -345,8 +346,8 @@ pipeline {
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -418,7 +419,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on EL 8.5') {
+                stage('Build RPM on EL 8.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -454,7 +455,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
+                stage('Build RPM on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -610,7 +611,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.4 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -654,8 +655,8 @@ pipeline {
             parallel {
                 stage('Unit Test on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -675,8 +676,8 @@ pipeline {
                 }
                 stage('NLT on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -710,8 +711,8 @@ pipeline {
                 }
                 stage('Unit Test Bullseye on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -738,8 +739,8 @@ pipeline {
                 } // stage('Unit test Bullseye on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -828,7 +829,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
+                stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -847,7 +848,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15')
+                } // stage('Functional on Leap 15.4')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -886,7 +887,7 @@ pipeline {
                         }
                     }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test EL 8.5 RPMs') {
+                stage('Test EL 8.6 RPMs') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -896,7 +897,7 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
-                                target: 'el8.5',
+                                target: 'el8.6',
                                 daos_pkg_version: daosPackagesVersion('el8', next_version)
                    }
                     post {
@@ -904,7 +905,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Test EL 8.5 RPMs')
+                } // stage('Test EL 8.6 RPMs')
                 stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
@@ -1047,8 +1048,8 @@ pipeline {
             parallel {
                 stage('Bullseye Report on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {

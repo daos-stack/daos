@@ -81,7 +81,12 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
+%if "%{?dist}" == ".suse.lp154"
+# use the leap 15.3 build of this for leap 15.4
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8.suse.lp153
+%else
 BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
+%endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
