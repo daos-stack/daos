@@ -1422,7 +1422,7 @@ check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entr
 {
 	const struct fuse_ctx *ctx;
 	daos_prop_t           *pool_prop;
-	daos_prop_t           *cont_prop;
+	daos_prop_t           *cont_prop = NULL;
 	gid_t                  glist[START_GROUP_SIZE];
 	int                    rc;
 	uint64_t               perms = 0;
@@ -1470,7 +1470,7 @@ check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entr
 		D_GOTO(out, rc = daos_der2errno(rc));
 
 	/* For pool permissions "read" means access allowing read-or-write, "write" means ability
-	 * to modify the pool by creating new containers etc so it's sufficent to check "read" only
+	 * to modify the pool by creating new containers etc so it's sufficient to check "read" only
 	 * here.
 	 */
 	if ((perms & DAOS_ACL_PERM_READ) == 0)

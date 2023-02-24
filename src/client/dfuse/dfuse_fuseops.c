@@ -270,7 +270,7 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	/* TODO: This is only required for multi-user so could potentally be handled through
+	/* TODO: This is only required for multi-user so could potentially be handled through
 	 * using a different function pointer
 	 */
 	rc = check_req_perms(fs_handle, parent_inode, req);
