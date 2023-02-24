@@ -33,7 +33,7 @@ ior: &ior_base
     ppn: 32
   api: DFS
   dfs_chunk: 1MiB
-  transfer_size: 1MiB
+  transfer_size: 32KiB  # Partial update
   block_size: 32GiB  # Aggregate 1 TiB
   write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
 ior_ec_4p2gx:

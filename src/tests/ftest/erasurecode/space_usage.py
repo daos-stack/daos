@@ -107,10 +107,13 @@ class EcodSpaceUsage(IorTestBase):
         self.log.info('Max used NVMe difference from mean: %.2f%%', max_nvme_diff * 100)
 
         # Verify the correct number of targets were used
+        # Don't enforce SCM, since little metadata is used
         expected_targets = calculate_ec_targets_used(self.ior_cmd.dfs_oclass.value, total_targets)
-        if not len(scm_used) == len(nvme_used) == expected_targets:
+        if len(nvme_used) != expected_targets:
             self.fail('Incorrect number of targets used!')
 
         # Verify space usage across targets is balanced
-        if max_scm_diff > max_diff_percent or max_nvme_diff > max_diff_percent:
-            self.fail('Space imbalance exceeds {:.2f}% threshold'.format(max_diff_percent * 100))
+        # Don't enforce SCM, since little metadata is used
+        if max_nvme_diff > max_diff_percent:
+            self.fail(
+                'NVMe space imbalance exceeds {:.2f}% threshold'.format(max_diff_percent * 100))
