@@ -8,6 +8,7 @@ import re
 import uuid
 from enum import IntEnum
 
+from avocado.utils.process import CmdResult
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
@@ -62,6 +63,62 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning)
+
+
+def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
+                   pool, container, processes, ppn, intercept, plugin_path, dfuse,
+                   display_space, fail_on_warning, namespace, ior_params):
+    # pylint: disable=too-many-arguments
+    """Start an IOR thread with thread queue for failure analysis.
+
+    Args:
+        thread_queue (Queue): Thread queue object.
+        job_id (str): Job identifier.
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        log (str): test log.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        group (str): DAOS server group name
+        pool (TestPool): DAOS test pool object
+        container (TestContainer): DAOS test container object.
+        processes (int): number of processes to run
+        ppn (int, optional): number of processes per node to run.  If specified it will override
+            the processes input. Defaults to None.
+        intercept (str, optional): path to interception library. Defaults to None.
+        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
+            working directory which is needed to run vol connector for DAOS. Default is None.
+        dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
+            Defaults to None.
+        display_space (bool, optional): Whether to display the pool space. Defaults to True.
+        fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
+            is found. Default is False.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Returns:
+        dict: A dictionary containing job_id(str), result(CmdResult) and log(str) keys.
+
+    """
+    thread_result = {
+        "job_id": job_id,
+        "result": None,
+        "log": log
+    }
+    saved_verbose = manager.verbose
+    manager.verbose = False
+    try:
+        thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+                                          pool, container, processes, ppn, intercept,
+                                          plugin_path, dfuse, display_space, fail_on_warning,
+                                          namespace, ior_params)
+    except CommandFailure as error:
+        thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
+    finally:
+        manager.verbose = saved_verbose
+        thread_queue.put(thread_result)
 
 
 class IorCommand(SubProcessCommand):

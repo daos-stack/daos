@@ -16,7 +16,6 @@ from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
 from general_utils import check_pool_files, DaosTestError
-from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
@@ -89,6 +88,72 @@ def remove_pool(test, pool):
         pool.dmg.exit_status_exception = exit_status_exception
 
     return error_list
+
+
+def get_size_params(pool):
+    """Get the TestPool params that can be used to create a pool of the same size.
+
+    Useful for creating multiple pools of equal --size=X% as each subsequent 'dmg pool create
+    --size=X%' results in a smaller pool each time due to using a percentage of the available free
+    space.
+
+    Args:
+        pool (TestPool): pool whose size is being replicated.
+
+    Returns:
+        dict: size params argument for an add_pool() method
+
+    """
+    return {"size": None,
+            "tier_ratio": None,
+            "scm_size": pool.scm_per_rank,
+            "nvme_size": pool.nvme_per_rank}
+
+
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+    """Check the duration of each pool creation meets the requirement.
+
+    Args:
+        test (Test): the test to fail if the pool creation exceeds the max duration
+        pools (list): list of TestPool objects to create
+        max_duration (int): max pool creation duration allowed in seconds
+        offset (int, optional): pool index offset. Defaults to 1.
+        durations (list, optional): list of other pool create durations to include in the check.
+            Defaults to None.
+    """
+    if durations is None:
+        durations = []
+    for index, pool in enumerate(pools):
+        durations.append(time_pool_create(test.log, index + offset, pool))
+
+    exceeding_duration = 0
+    for index, duration in enumerate(durations):
+        if duration > max_duration:
+            exceeding_duration += 1
+
+    if exceeding_duration:
+        test.fail(
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))
+
+
+def time_pool_create(log, number, pool):
+    """Time how long it takes to create a pool.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        number (int): pool number in the list
+        pool (TestPool): pool to create
+
+    Returns:
+        float: number of seconds elapsed during pool create
+
+    """
+    start = time()
+    pool.create()
+    duration = time() - start
+    log.info("Pool %s creation: %s seconds", number, duration)
+    return duration
 
 
 class TestPool(TestDaosApiBase):
@@ -192,37 +257,6 @@ class TestPool(TestDaosApiBase):
             test (Test): avocado Test object
         """
         super().get_params(test)
-
-        # Autosize any size/scm_size/nvme_size parameters
-        # pylint: disable=too-many-boolean-expressions
-        if ((self.scm_size.value is not None
-             and str(self.scm_size.value).endswith("%"))
-                or (self.nvme_size.value is not None
-                    and str(self.nvme_size.value).endswith("%"))):
-            index = self.server_index.value
-            try:
-                params = test.server_managers[index].autosize_pool_params(
-                    size=None,
-                    tier_ratio=None,
-                    scm_size=self.scm_size.value,
-                    nvme_size=self.nvme_size.value,
-                    min_targets=self.min_targets.value,
-                    quantity=self.quantity.value)
-            except ServerFailed as error:
-                test.fail(
-                    "Failure autosizing pool parameters: {}".format(error))
-            except AutosizeCancel as error:
-                test.cancel(error)
-
-            # Update the pool parameters with any autosized values
-            for name in params:
-                test_pool_param = getattr(self, name)
-                test_pool_param.update(params[name], name)
-
-                # Cache the autosized value so we do not calculate it again
-                # pylint: disable=protected-access
-                cache_id = (name, self.namespace, test_pool_param._default)
-                test.params._cache[cache_id] = params[name]
 
         # Use a unique pool label if using pool labels
         if self.label.value is not None:
@@ -505,6 +539,18 @@ class TestPool(TestDaosApiBase):
 
         """
         return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
+
+    @fail_on(CommandFailure)
+    def disable_aggregation(self):
+        """ Disable pool aggregation."""
+        self.log.info("Disable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "disabled")
+
+    @fail_on(CommandFailure)
+    def enable_aggregation(self):
+        """ Enable pool aggregation."""
+        self.log.info("Enable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "time")
 
     @fail_on(CommandFailure)
     def evict(self):
@@ -1062,6 +1108,37 @@ class TestPool(TestDaosApiBase):
             raise CommandFailure(
                 "The dmg pool query key does not exist: {}".format(keys_str)) from error
 
+    def get_tier_stats(self, refresh=False):
+        """Get the pool tier stats from pool query output.
+
+        Args:
+             refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+             dict: A dictionary for pool stats, scm and nvme:
+
+        """
+        tier_stats = {}
+        for tier_stat in self._get_query_data_keys("response", "tier_stats", refresh=refresh):
+            tier_type = tier_stat.pop("media_type")
+            tier_stats[tier_type] = tier_stat.copy()
+        return tier_stats
+
+    def get_total_free_space(self, refresh=False):
+        """Get the pool total free space.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Return:
+            total_free_space (int): pool total free space.
+
+        """
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["free"] for stat in tier_stats.values())
+
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.
 
@@ -1277,8 +1354,8 @@ class TestPool(TestDaosApiBase):
             interval (int): Interval (sec) to call pool query to check the rebuild status.
                 Defaults to 1.
         """
-        start = float(time())
+        start = time()
         self.wait_for_rebuild_to_start(interval=interval)
         self.wait_for_rebuild_to_end(interval=interval)
-        duration = float(time()) - start
+        duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
