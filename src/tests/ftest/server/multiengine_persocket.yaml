@@ -1,7 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 1230
+timeout: 930
 setup:
   start_agents: False
   start_servers: False
@@ -9,7 +9,7 @@ setup:
   start_servers_once: False
 server_config:
   name: daos_server
-  reboot_waittime: 180
+  reboot_waittime: 210
   engines_per_socket: 2
   number_pmem: 4
   engines:
@@ -78,13 +78,13 @@ server_config:
           scm_list: [/dev/pmem1.1]
           scm_mount: /mnt/daos4
   transport_config:
-    allow_insecure: True
+    allow_insecure: false
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: false
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: false
 provider: ofi+tcp;ofi_rxm
 pool:
   control_method: dmg
