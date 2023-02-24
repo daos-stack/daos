@@ -15,7 +15,7 @@
 
 Name:         daos
 Version:      2.2.0
-Release:      9%{?relval}%{?dist}
+Release:      10%{?relval}%{?dist}
 Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -132,7 +132,6 @@ BuildRequires: libuct-devel
 BuildRequires: ucx-devel
 %endif
 
-Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -564,6 +563,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Feb 13 2023 Brian J. Murrell <brian.murrell@intel.com> 2.2.0-10
+- Remove explicit R: protobuf-c and let the auto-dependency generator
+  handle it
+
 * Fri Feb 10 2023 Michael Hennecke <michael.hennecke@intel.com> 2.2.0-9
 - Change ipmctl requirement from v2 to v3
 - Change spdk requirement from 22.01.1 to 22.01.2
