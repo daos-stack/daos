@@ -156,10 +156,10 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("==Server %s rebooting... \n", hosts)
 
         if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
-                               expected_pings=False, cmd_timeout=60, verbose=True):
+                               expected_ping=False, cmd_timeout=60, verbose=True):
             self.fail("Shutwown not detected within 600 seconds.")
         if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
-                               expected_pings=True, cmd_timeout=60, verbose=True):
+                               expected_ping=True, cmd_timeout=60, verbose=True):
             self.fail("Reboot not detected within 600 seconds.")
         if not wait_for_result(self.log, check_ssh, 300, delay=2, self.log, hosts=hosts,
                                vcmd_timeout=30, verbose=True):

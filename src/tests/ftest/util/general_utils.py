@@ -1483,8 +1483,8 @@ def wait_for_result(log, get_method, timeout, delay=1, **kwargs):
     timed_out = False
     start = time.time()
     log.debug(
-        "wait_for_result: Waiting for a result from %s with a %s second timeout",
-         method_str, timeout)
+        "wait_for_result: Waiting for a result from %s with a %s second timeout",
+        method_str, timeout)
     while not result_found and not timed_out:
         timed_out = (time.time() - start) >= timeout
         result_found = get_method(**kwargs)
@@ -1514,7 +1514,7 @@ def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
     try:
         run_local(log, "ping -c 1 {}".format(host), timeout=cmd_timeout, verbose=verbose)
     except RunException:
-        return not expected_ping
+        return not expected_ping
     return expected_ping
 
 
