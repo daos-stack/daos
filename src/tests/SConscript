@@ -70,6 +70,9 @@ def build_tests(prereqs, env):
     # ftest
     SConscript('ftest/SConscript')
 
+    # rpc tests
+    SConscript('rpc/SConscript')
+
     # daos middleware consistency corruption tool for testing
     libs_client += ['dfs']
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
