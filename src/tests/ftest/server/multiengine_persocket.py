@@ -3,13 +3,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import random
 import base64
 import traceback
-import re
 
-from general_utils import get_random_bytes
+from general_utils import get_random_bytes, wait_for_result, check_ping, check_ssh
 from run_utils import run_remote, run_local, RunException
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
@@ -147,63 +145,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "please make sure the server equipped with {2} PMem "
                 "modules.".format(step, cmd, engines_per_socket))
 
-    def wait_for_result(self, get_method, timeout, **kwargs):
-        """Wait for a result with a timeout.
-
-        Args:
-            get_method (object): method to call to determine if the result is found
-            timeout (int): number of seconds to wait for a response to be found
-            kwargs (dict): kwargs for get_method.
-
-        Returns:
-            bool: if the result was found
-        """
-        result_found = False
-        timed_out = False
-        start = time.time()
-
-        while not result_found and not timed_out:
-            timed_out = (time.time() - start) >= timeout
-            result_found = get_method(**kwargs)
-            self.log.debug("==Response found by %s(%s): %s", get_method, kwargs, result_found)
-            time.sleep(5)
-        return not timed_out
-
-    def check_ping(self, host, expected_pings=0, cmd_timeout=60, verbose=True):
-        """Check the host for a ping response.
-
-        Args:
-            host (Node): destination host to ping to.
-            expected_pings (int, optional): number of succeed ping expected. default is 0.
-            cmd_timeout (int, optional): number of seconds to wait for a response to be found.
-            verbose (bool, optional): display check ping commands. Defaults to True.
-
-        Returns:
-            bool:  True if the expected number of pings were returned; False otherwise.
-        """
-        try:
-            result = run_local(
-                self.log, ["ping", "-c 1", str(host)], check=False,
-                timeout=cmd_timeout, verbose=verbose)
-            return bool(re.search("{} received".format(expected_pings), result.stdout))
-        except RunException:
-            self.log.debug("ping -c 1 %s timed out", str(host))
-        return False
-
-    def check_ssh(self, hosts, cmd_timeout=60, verbose=True):
-        """Check the host for a successful pass-wordless ssh.
-
-        Args:
-            hosts (NodeSet): destination hosts to ssh to.
-            cmd_timeout (int, optional): number of seconds to wait for a response to be found.
-            verbose (bool, optional): display check ping commands. Defaults to True.
-
-        Returns:
-            bool: True if all hosts respond to the remote ssh session; False otherwise
-        """
-        result = run_remote(self.log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
-        return result.passed
-
     def host_reboot(self, hosts):
         """To reboot the hosts.
 
@@ -214,14 +155,14 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         run_remote(self.log, hosts, cmd, timeout=210)
         self.log.info("==Server %s rebooting... \n", hosts)
 
-        if not self.wait_for_result(self.check_ping, 600, host=hosts[0], expected_pings=0,
-                                    cmd_timeout=60, verbose=True):
+        if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
+                               expected_pings=False, cmd_timeout=60, verbose=True):
             self.fail("Shutwown not detected within 600 seconds.")
-        if not self.wait_for_result(self.check_ping, 600, host=hosts[0], expected_pings=1,
-                                    cmd_timeout=60, verbose=True):
+        if not wait_for_result(self.log, check_ping, 600, delay=5, self.log, host=hosts[0],
+                               expected_pings=True, cmd_timeout=60, verbose=True):
             self.fail("Reboot not detected within 600 seconds.")
-        if not self.wait_for_result(self.check_ssh, 300, hosts=hosts, cmd_timeout=30,
-                                    verbose=True):
+        if not wait_for_result(self.log, check_ssh, 300, delay=2, self.log, hosts=hosts,
+                               vcmd_timeout=30, verbose=True):
             self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
 
     def check_pmem(self, hosts, count):
@@ -284,8 +225,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
-        if not self.wait_for_result(self.check_pmem, 100, hosts=self.hostlist_servers,
-                                    count=num_pmem):
+        if not self.wait_for_result(self.log, self.check_pmem, 100, delay=1,
+                                    hosts=self.hostlist_servers, count=num_pmem):
             self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
 
         # (2) Start server
