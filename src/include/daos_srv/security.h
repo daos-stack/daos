@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,7 @@
 #include <daos_types.h>
 #include <daos_security.h>
 #include <daos_srv/pool.h>
-
-/**
- * Structure representing a resource's ownership by user and group,
- * respectively.
- */
-struct ownership {
-	char *user;	/** name of the user owner */
-	char *group;	/** name of the group owner */
-};
+#include <daos/security.h>
 
 /**
  * Allocate the default ACL for DAOS pools.
@@ -80,7 +72,7 @@ ds_sec_cred_get_origin(d_iov_t *cred, char **machine);
  */
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+			     struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
@@ -103,7 +95,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  */
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+			     struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
@@ -172,7 +164,7 @@ ds_sec_cont_can_open(uint64_t cont_capas);
  */
 bool
 ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
-		       struct ownership *ownership, struct daos_acl *acl);
+		       struct d_ownership *ownership, struct daos_acl *acl);
 
 /**
  * Determine if the container properties can be viewed based on the container
