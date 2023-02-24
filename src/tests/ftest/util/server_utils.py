@@ -11,7 +11,6 @@ import time
 import random
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
