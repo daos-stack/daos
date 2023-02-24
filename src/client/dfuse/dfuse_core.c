@@ -1421,7 +1421,7 @@ check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entr
 		fuse_req_t req)
 {
 	const struct fuse_ctx *ctx;
-	daos_prop_t           *pool_prop;
+	daos_prop_t           *pool_prop = NULL;
 	daos_prop_t           *cont_prop = NULL;
 	gid_t                  glist[START_GROUP_SIZE];
 	int                    rc;
@@ -1445,6 +1445,9 @@ check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entr
 	if (ie->ie_stat.st_uid == ctx->uid && ie->ie_stat.st_gid == ctx->gid)
 		return 0;
 #endif
+
+	if (daos_handle_is_inval(ie->ie_dfs->dfs_dfp->dfp_poh))
+		D_GOTO(out, rc = 0);
 
 	pool_prop = daos_prop_alloc(3);
 	if (pool_prop == NULL)
@@ -1478,6 +1481,9 @@ check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entr
 
 	daos_prop_free(pool_prop);
 	pool_prop = NULL;
+
+	if (daos_handle_is_inval(ie->ie_dfs->dfs_coh))
+		D_GOTO(out, rc = 0);
 
 	cont_prop = daos_prop_alloc(3);
 
