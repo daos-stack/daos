@@ -257,10 +257,10 @@ out:
 static void
 df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*parent_inode;
-	d_list_t			*rlink;
-	int rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *parent_inode;
+	d_list_t                     *rlink;
+	int                           rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
@@ -269,6 +269,13 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	}
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	/* TODO: This is only required for multi-user so could potentally be handled through
+	 * using a different function pointer
+	 */
+	rc = check_req_perms(fs_handle, parent_inode, req);
+	if (rc != 0)
+		D_GOTO(err, rc);
 
 	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 

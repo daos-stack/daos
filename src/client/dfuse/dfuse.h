@@ -316,6 +316,10 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
 int
 dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
 
+int
+check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
+		fuse_req_t req);
+
 /* dfuse_thread.c */
 
 extern int

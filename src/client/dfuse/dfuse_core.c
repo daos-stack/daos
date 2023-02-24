@@ -1405,3 +1405,105 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 
 	return rc;
 }
+
+/* Check if a fuse request is compliant with DAOS ACLs
+ *
+ * This needs to check an inode (parent in this case) which belongs to a pool.
+ *
+ * TODO: Call for many more operations.  Call for UNS specifcially.
+ *
+ * Returns a system error code, 0 on success or EPERM on permissions error.
+ */
+#define START_GROUP_SIZE 12
+
+int
+check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
+		fuse_req_t req)
+{
+	const struct fuse_ctx *ctx;
+	daos_prop_t           *pool_prop;
+	daos_prop_t           *cont_prop;
+	gid_t                  glist[START_GROUP_SIZE];
+	int                    rc;
+	uint64_t               perms = 0;
+	int                    gsize;
+
+#if 0 /* Disabled for testing */
+	/* Check multi-user mode */
+	if (!fs_handle->dpi_info->di_multi_user)
+		return 0;
+#endif
+
+	ctx = fuse_req_ctx(req);
+
+#if 0 /* Disabled for testing */
+	/* If the user owns the file then that's probably OK.  It's not strictly correct as a user
+	 * may own files in another persons container which they do not have ACLs for however.
+	 * That does seems unlikely and would be caught by the lookup on the container root so
+	 * for now take the easy option here and allow it.
+	 */
+	if (ie->ie_stat.st_uid == ctx->uid && ie->ie_stat.st_gid == ctx->gid)
+		return 0;
+#endif
+
+	pool_prop = daos_prop_alloc(3);
+	if (pool_prop == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
+	pool_prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_OWNER;
+	pool_prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+
+	rc = daos_pool_query(ie->ie_dfs->dfs_dfp->dfp_poh, NULL, NULL, pool_prop, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	/* TODO: I want to cache this and only check pool_get_perms if pool_prop has changed
+	 * but what I do check to do that?
+	 */
+
+	/* TODO: This may not be big enough */
+	gsize = fuse_req_getgroups(req, START_GROUP_SIZE, glist);
+
+	rc = daos_pool_get_perms(pool_prop, ctx->uid, glist, gsize, &perms);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	/* For pool permissions "read" means access allowing read-or-write, "write" means ability
+	 * to modify the pool by creating new containers etc so it's sufficent to check "read" only
+	 * here.
+	 */
+	if ((perms & DAOS_ACL_PERM_READ) == 0)
+		rc = EPERM;
+
+	daos_prop_free(pool_prop);
+	pool_prop = NULL;
+
+	cont_prop = daos_prop_alloc(3);
+
+	cont_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	cont_prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
+	cont_prop->dpp_entries[2].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+
+	rc = daos_cont_query(ie->ie_dfs->dfs_coh, NULL, cont_prop, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	perms = 0;
+
+	rc = daos_cont_get_perms(cont_prop, ctx->uid, glist, gsize, &perms);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	if ((perms & DAOS_ACL_PERM_READ) == 0)
+		rc = EPERM;
+
+	/* TODO: This obviously doesn't need checking each time */
+	if ((perms & DAOS_ACL_PERM_WRITE) == 0)
+		rc = EPERM;
+
+out:
+	daos_prop_free(pool_prop);
+	daos_prop_free(cont_prop);
+	return rc;
+}
