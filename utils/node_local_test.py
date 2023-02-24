@@ -1096,7 +1096,7 @@ class DFuse():
         self.use_valgrind = True
         self._sp = None
         self.log_flush = False
-
+        self.log_mask = None
         self.log_file = None
 
         self.valgrind = None
@@ -1112,7 +1112,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
+    def start(self, v_hint=None, single_threaded=False, use_oopt=False, log_mask=None):
         """Start a dfuse instance"""
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
@@ -1135,6 +1135,8 @@ class DFuse():
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
+        if log_mask:
+            my_env['D_LOG_MASK'] = log_mask
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
@@ -3230,6 +3232,144 @@ class PosixTests():
             raise NLTestFail('Wrong number of sub-files in lost+found')
         if dir_nr != 12:
             raise NLTestFail('Wrong number of sub-directories in lost+found')
+
+    def test_daos_fs_fix(self):
+        """Test DAOS FS Fix Tool"""
+
+        pool = self.pool.id()
+        cont = self.container
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='fs_fix_test', log_mask='CRIT')
+        path = dfuse.dir
+        dirname = join(path, 'test_dir')
+        os.mkdir(dirname)
+
+        fname1 = join(dirname, 'f1')
+        with open(fname1, 'w') as fd:
+            fd.write('test1')
+        fname2 = join(dirname, 'f2')
+        with open(fname2, 'w') as fd:
+            fd.write('test2')
+
+        dirname1 = join(path, 'test_dir/1d1/')
+        os.mkdir(dirname1)
+        fname3 = join(dirname1, 'f3')
+        with open(fname3, 'w') as fd:
+            fd.write('test3')
+        dirname2 = join(path, 'test_dir/1d2/')
+        os.mkdir(dirname2)
+        fname4 = join(dirname2, 'f4')
+        with open(fname4, 'w') as fd:
+            fd.write('test4')
+
+        # start corrupting things
+        daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
+        cmd_env = get_base_env()
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/f1"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/1d1/f3"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/1d2"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+
+        # try to read from corrupted entries. all should fail
+        try:
+            fd = os.open(fname1, 'r')
+            os.close(fd)
+            assert False
+        except TypeError:
+            pass
+
+        try:
+            fd = os.open(fname3, 'r')
+            os.close(fd)
+            assert False
+        except TypeError:
+            pass
+
+        try:
+            dir_list = os.listdir(dirname2)
+            assert False
+        except OSError:
+            pass
+
+        # fix corrupted entries
+        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
+               '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Adjusting chunk size of /test_dir/f1 to 1048576':
+            raise NLTestFail('daos fs fix-entry /test_dir/f1')
+
+        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/1d1/f3', '--type',
+               '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Adjusting chunk size of /test_dir/1d1/f3 to 1048576':
+            raise NLTestFail('daos fs fix-entry /test_dir/1d1/f3')
+
+        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/1d2', '--type']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Setting entry type to S_IFDIR':
+            raise NLTestFail('daos fs fix-entry /test_dir/1d2')
+
+        # Check entries after fixing
+        cmd = ['fs', 'get-attr', '--path', fname1]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(f'rc is {rc}')
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, None, '1048576')
+        with open(fname1, 'rb') as fd:
+            data = fd.read()
+            data = data.decode('utf-8-sig').strip()
+            if data != 'test1':
+                raise NLTestFail('/test_dir/f1 data is corrupted')
+
+        cmd = ['fs', 'get-attr', '--path', fname3]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(f'rc is {rc}')
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, None, '1048576')
+        with open(fname3, 'rb') as fd:
+            data = fd.read()
+            data = data.decode('utf-8-sig').strip()
+            if data != 'test3':
+                raise NLTestFail('/test_dir/1d1/f3 data is corrupted')
+
+        dir_list = os.listdir(dirname2)
+        nr_entries = len(dir_list)
+        if nr_entries != 1:
+            raise NLTestFail('Wrong number of entries')
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
 
 class NltStdoutWrapper():

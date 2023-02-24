@@ -28,9 +28,9 @@ func dfsError(rc C.int) error {
 
 type fsCmd struct {
 	Check          fsCheckCmd          `command:"check" description:"Run the DFS Checker on the container"`
-	FixSB          fsFixSB             `command:"fix-sb" description:"Recreate / Fix the SB on the container"`
-	FixRoot        fsFixRoot           `command:"fix-root" description:"Relink root object in the container"`
-	FixChunkSize   fsFixChunkSizeCmd   `command:"fix-chunk-size" description:"Set chunk size on a file that was leaked and relinked in lost+found"`
+	FixSB          fsFixSBCmd          `command:"fix-sb" description:"Recreate / Fix the SB on the container"`
+	FixRoot        fsFixRootCmd        `command:"fix-root" description:"Relink root object in the container"`
+	FixEntry       fsFixEntryCmd       `command:"fix-entry" description:"Fix Entries in case the type or chunk size were corrupted"`
 	Copy           fsCopyCmd           `command:"copy" description:"copy to and from a POSIX filesystem"`
 	SetAttr        fsSetAttrCmd        `command:"set-attr" description:"set fs attributes"`
 	GetAttr        fsGetAttrCmd        `command:"get-attr" description:"get fs attributes"`
@@ -315,13 +315,14 @@ func (cmd *fsCheckCmd) Execute(_ []string) error {
 	return nil
 }
 
-type fsFixChunkSizeCmd struct {
+type fsFixEntryCmd struct {
 	fsAttrCmd
 
-	ChunkSize ChunkSizeFlag `long:"chunk-size" short:"z" description:"actual file chunk size" required:"1"`
+	ChunkSize ChunkSizeFlag `long:"chunk-size" short:"z" description:"actual file chunk size used when creating the file"`
+	Type      bool          `long:"type" short:"t" description:"check the object of the entry and fix the entry type accordingly"`
 }
 
-func (cmd *fsFixChunkSizeCmd) Execute(_ []string) error {
+func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
 	if err != nil {
 		return err
@@ -337,18 +338,19 @@ func (cmd *fsFixChunkSizeCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
+	ap.chunk_size = 0
 	if cmd.ChunkSize.Set {
 		ap.chunk_size = cmd.ChunkSize.Size
 	}
 
-	if err := dfsError(C.fs_set_cs_hdlr(ap)); err != nil {
-		return errors.Wrapf(err, "Fix Chunk size failed")
+	if err := dfsError(C.fs_fix_entry_hdlr(ap, C.bool(cmd.Type))); err != nil {
+		return errors.Wrapf(err, "Fix Entry failed")
 	}
 
 	return nil
 }
 
-type fsFixSB struct {
+type fsFixSBCmd struct {
 	existingContainerCmd
 
 	Mode            ConsModeFlag  `long:"mode" short:"M" description:"DFS consistency mode"`
@@ -359,7 +361,7 @@ type fsFixSB struct {
 	CHints          string        `long:"hints" short:"H" description:"container hints"`
 }
 
-func (cmd *fsFixSB) Execute(_ []string) error {
+func (cmd *fsFixSBCmd) Execute(_ []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -402,11 +404,11 @@ func (cmd *fsFixSB) Execute(_ []string) error {
 	return nil
 }
 
-type fsFixRoot struct {
+type fsFixRootCmd struct {
 	existingContainerCmd
 }
 
-func (cmd *fsFixRoot) Execute(_ []string) error {
+func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err

@@ -32,18 +32,37 @@
 #include <daos_fs.h>
 #include <daos/common.h>
 
+/** Copied from dfs.c (TODO: create an internal header file) */
+#define INODE_AKEYS	12
+#define INODE_AKEY_NAME	"DFS_INODE"
+#define SLINK_AKEY_NAME	"DFS_SLINK"
+#define MODE_IDX	0
+#define OID_IDX		(sizeof(mode_t))
+#define MTIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
+#define CTIME_IDX	(MTIME_IDX + sizeof(uint64_t))
+#define CSIZE_IDX	(CTIME_IDX + sizeof(uint64_t))
+#define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
+#define MTIME_NSEC_IDX	(OCLASS_IDX + sizeof(daos_oclass_id_t))
+#define CTIME_NSEC_IDX	(MTIME_NSEC_IDX + sizeof(uint64_t))
+#define UID_IDX		(CTIME_NSEC_IDX + sizeof(uint64_t))
+#define GID_IDX		(UID_IDX + sizeof(uid_t))
+#define SIZE_IDX	(GID_IDX + sizeof(gid_t))
+#define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
+#define END_IDX		(HLC_IDX + sizeof(uint64_t))
+
 enum {
 	PUNCH_SB,
 	PUNCH_ENTRY,
-	PUNCH_OBJ
+	PUNCH_OBJ,
+	CORRUPT_ENTRY
 };
 
 static int
-punch_obj(daos_handle_t coh, daos_obj_id_t oid, const char *name)
+action_obj(daos_handle_t coh, daos_obj_id_t oid, int op, const char *name)
 {
 	daos_handle_t	oh;
 	daos_key_t	dkey;
-	int		rc;
+	int		rc, rc2;
 
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -52,26 +71,54 @@ punch_obj(daos_handle_t coh, daos_obj_id_t oid, const char *name)
 	}
 
 	if (name == NULL) {
+		D_ASSERT(op == PUNCH_OBJ || op == PUNCH_SB);
 		rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
-		if (rc) {
-			daos_obj_close(oh, NULL);
+		if (rc)
 			fprintf(stderr, "daos_obj_punch() failed: "DF_RC"\n", DP_RC(rc));
-			return rc;
-		}
-	} else {
-		d_iov_set(&dkey, (void *)name, strlen(name));
-
-		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
-		if (rc) {
-			daos_obj_close(oh, NULL);
-			fprintf(stderr, "daos_obj_punch_dkeys() failed: "DF_RC"\n", DP_RC(rc));
-			return rc;
-		}
+		goto close;
 	}
 
-	rc = daos_obj_close(oh, NULL);
+	d_iov_set(&dkey, (void *)name, strlen(name));
+
+	if (op == PUNCH_ENTRY) {
+		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		if (rc)
+			fprintf(stderr, "daos_obj_punch_dkeys() failed: "DF_RC"\n", DP_RC(rc));
+		goto close;
+	}
+
+	mode_t		bad_mode = 0xDEADBEAF;
+	daos_size_t	bad_csize = 13;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iovs[2];
+	daos_iod_t	iod;
+	daos_recx_t	recxs[2];
+
+	D_ASSERT(op == CORRUPT_ENTRY);
+	/** corrupt the mode type bits and chunk size */
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_recxs	= recxs;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 2;
+	recxs[0].rx_idx	= MODE_IDX;
+	recxs[0].rx_nr	= sizeof(mode_t);
+	recxs[1].rx_idx	= CSIZE_IDX;
+	recxs[1].rx_nr	= sizeof(daos_size_t);
+	sgl.sg_nr	= 2;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iovs[0];
+	d_iov_set(&sg_iovs[0], &bad_mode, sizeof(mode_t));
+	d_iov_set(&sg_iovs[1], &bad_csize, sizeof(daos_size_t));
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc)
-		fprintf(stderr, "daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		fprintf(stderr, "Failed to corrupt entry %s: "DF_RC"\n", name, DP_RC(rc));
+
+close:
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = rc2;
 	return rc;
 }
 
@@ -98,7 +145,7 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 			fprintf(stderr, "Failed: Invalid superblock or root object ID\n");
 			return -DER_INVAL;
 		}
-		return punch_obj(coh, roots->cr_oids[0], NULL);
+		return action_obj(coh, roots->cr_oids[0], op, NULL);
 	}
 
 	if (path[0] != '/') {
@@ -112,7 +159,7 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 		return rc;
 	}
 
-	if (op == PUNCH_ENTRY) {
+	if (op == PUNCH_ENTRY || op == CORRUPT_ENTRY) {
 		D_STRNDUP(dir, path, PATH_MAX);
 		if (dir == NULL)
 			D_GOTO(out_dfs, rc = -DER_NOMEM);
@@ -122,11 +169,16 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 
 		fname = basename(file);
 		dirp = dirname(dir);
-		printf("punching %s from %s\n", fname, dirp);
-	} else {
+		if (op == PUNCH_ENTRY)
+			printf("punching %s from %s\n", fname, dirp);
+		else
+			printf("corrupting %s in %s\n", fname, dirp);
+	} else if (op == PUNCH_OBJ) {
 		D_ASSERT(op == PUNCH_OBJ);
 		dirp = path;
 		printf("punching object %s\n", path);
+	} else {
+		D_ASSERT(0);
 	}
 
 	rc = dfs_lookup(dfs, dirp, O_RDWR, &obj, NULL, NULL);
@@ -141,7 +193,7 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 		D_GOTO(out_path, rc);
 	}
 
-	rc = punch_obj(coh, oid, fname);
+	rc = action_obj(coh, oid, op, fname);
 out_path:
 	D_FREE(file);
 	D_FREE(dir);
@@ -189,6 +241,14 @@ fi_pydaos(daos_handle_t poh, daos_handle_t coh, const char *name, daos_prop_t *p
 	return rc;
 }
 
+static inline void
+print_usage()
+{
+	fprintf(stderr, "usage: ./daos_mw_fi pool_label container_label action target\n");
+	fprintf(stderr, "\t action: punch_entry; punch_obj; punch_sb; corrupt_entry\n");
+	fprintf(stderr, "\t target: DFS path; Dictionary name\n");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -202,32 +262,32 @@ main(int argc, char **argv)
 	int				rc;
 
 	if (argc != 5 && argc != 4) {
-		fprintf(stderr,
-			"usage: ./daos_mw_fi pool cont [punch_entry/punch_obj/punch_sb] [name or path]\n");
+		print_usage();
 		exit(1);
 	}
 
-	if (strcmp(argv[3], "punch_entry") == 0 || strcmp(argv[3], "punch_obj") == 0) {
+	if (strcmp(argv[3], "punch_entry") == 0 || strcmp(argv[3], "punch_obj") == 0 ||
+	    strcmp(argv[3], "corrupt_entry") == 0) {
 		if (argc != 5) {
-			fprintf(stderr,
-				"usage: ./daos_mw_fi pool cont punch_entry [name or path]\n");
+			print_usage();
 			exit(1);
 		}
 
 		if (strcmp(argv[3], "punch_entry") == 0)
 			op = PUNCH_ENTRY;
-		else
+		else if (strcmp(argv[3], "punch_obj") == 0)
 			op = PUNCH_OBJ;
+		else
+			op = CORRUPT_ENTRY;
 	} else if (strcmp(argv[3], "punch_sb") == 0) {
 		if (argc != 4) {
-			fprintf(stderr, "usage: ./daos_mw_fi pool cont punch_sb\n");
+			print_usage();
 			exit(1);
 		}
 		op = PUNCH_SB;
 	} else {
 		fprintf(stderr, "Invalid Operation: %s\n", argv[3]);
-		fprintf(stderr,
-			"usage: ./daos_mw_fi pool cont [punch_entry; punch_sb] [name or path]\n");
+		print_usage();
 		exit(1);
 	}
 

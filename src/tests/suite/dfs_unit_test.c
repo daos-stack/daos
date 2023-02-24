@@ -2740,7 +2740,6 @@ dfs_test_fix_chunk_size(void **state)
 	/** should be NR_FILES + SB + root object + LF dir + timestamp dir */
 	assert_int_equal((int)nr_oids, 9);
 
-
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 

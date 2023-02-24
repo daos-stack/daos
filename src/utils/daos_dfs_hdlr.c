@@ -202,10 +202,11 @@ out_umount:
 }
 
 int
-fs_set_cs_hdlr(struct cmd_args_s *ap)
+fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry)
 {
 	dfs_t		*dfs;
-	dfs_obj_t	*obj;
+	char            *name = NULL;
+	char            *dir_name = NULL;
 	int		rc, rc2;
 
 	rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &dfs);
@@ -221,22 +222,57 @@ fs_set_cs_hdlr(struct cmd_args_s *ap)
 			D_GOTO(out_umount, rc);
 	}
 
-	rc = dfs_lookup(dfs, ap->dfs_path, O_RDWR, &obj, NULL, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to lookup %s (%s)\n", ap->dfs_path, strerror(rc));
-		D_GOTO(out_umount, rc);
+	if (fix_entry) {
+		dfs_obj_t       *parent = NULL;
+
+		parse_filename_dfs(ap->dfs_path, &name, &dir_name);
+
+		D_PRINT("Fixing entry type of: %s\n", ap->dfs_path);
+		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, NULL, NULL);
+		if (rc) {
+			fprintf(ap->errstream, "dfs_lookup %s failed (%s)\n", dir_name,
+				strerror(rc));
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_obj_fix_type(dfs, parent, name);
+		if (rc) {
+			fprintf(ap->errstream, "DFS fix object type failed (%s)\n", strerror(rc));
+			dfs_release(parent);
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_release(parent);
+		if (rc)
+			D_GOTO(out_names, rc);
 	}
 
-	rc = dfs_file_update_chunk_size(dfs, obj, ap->chunk_size);
-	if (rc) {
-		fprintf(ap->errstream, "failed to update chunk size: %d (%s)\n", rc, strerror(rc));
-		D_GOTO(out_release, rc);
+	if (ap->chunk_size) {
+		dfs_obj_t	*obj;
+
+		D_PRINT("Adjusting chunk size of %s to %zu\n", ap->dfs_path, ap->chunk_size);
+		rc = dfs_lookup(dfs, ap->dfs_path, O_RDWR, &obj, NULL, NULL);
+		if (rc) {
+			fprintf(ap->errstream, "dfs_lookup %s failed (%s)\n", ap->dfs_path,
+				strerror(rc));
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_file_update_chunk_size(dfs, obj, ap->chunk_size);
+		if (rc) {
+			fprintf(ap->errstream, "DFS update chunk size failed (%s)\n", strerror(rc));
+			dfs_release(obj);
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_release(obj);
+		if (rc)
+			D_GOTO(out_names, rc);
 	}
 
-out_release:
-	rc2 = dfs_release(obj);
-	if (rc == 0)
-		rc = rc2;
+out_names:
+	D_FREE(name);
+	D_FREE(dir_name);
 out_umount:
 	rc2 = dfs_umount(dfs);
 	if (rc == 0)
