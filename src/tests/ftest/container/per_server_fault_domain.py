@@ -97,10 +97,10 @@ class PerServerFaultDomainTest(IorTestBase):
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
         # Select one host. (It doesn't matter which host to select.)
-        random_host = list(set(self.server_managers[0].ranks.values()))[0]
+        selected_host = list(set(self.server_managers[0].ranks.values()))[0]
         ranks_to_stop = ",".join(
             [str(rank) for rank, host in self.server_managers[0].ranks.items()
-             if host == random_host])
+             if host == selected_host])
         self.log.info("Ranks to stop = %s", ranks_to_stop)
 
         properties = self.params.get("rf_1", "/run/cont_property/*")
