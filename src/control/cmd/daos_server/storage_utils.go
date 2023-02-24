@@ -173,13 +173,14 @@ func (cmd *scmCmd) init() error {
 	}
 	if cmd.IgnoreConfig {
 		cmd.config = nil
-	} else {
+	} else if cmd.SocketID == nil {
+		// Read SocketID from config if not set explicitly in command.
 		affSrc, err := getAffinitySource(cmd.Logger)
 		if err != nil {
 			cmd.Error(err.Error())
-		} else {
-			cmd.SocketID = getSockFromCfg(cmd.Logger, cmd.config, affSrc)
+			return nil
 		}
+		cmd.SocketID = getSockFromCfg(cmd.Logger, cmd.config, affSrc)
 	}
 
 	return nil

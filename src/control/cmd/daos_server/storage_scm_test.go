@@ -37,17 +37,12 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		cmdSockID *uint
 		cfg       *config.Server
 		affSrc    config.EngineAffinityFn
 		expSockID *uint
 		expErr    error
 	}{
 		"nil config": {},
-		"sock specified in command": {
-			cmdSockID: &one,
-			expSockID: &one,
-		},
 		"sock derived from config": {
 			cfg: new(config.Server).WithEngines(
 				engine.NewConfig().
@@ -111,23 +106,15 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 				tc.cfg = &config.Server{}
 			}
 
-			req := &storage.ScmPrepareRequest{
-				SocketID: tc.cmdSockID,
-			}
-
 			affSrc := tc.affSrc
 			if affSrc == nil {
 				affSrc = mockAffinitySource
 			}
 
-			err := setSockFromCfg(log, tc.cfg, affSrc, req)
-			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
+			sockID := getSockFromCfg(log, tc.cfg, affSrc)
 
-			if diff := cmp.Diff(tc.expSockID, req.SocketID); diff != "" {
-				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expSockID, sockID); diff != "" {
+				t.Fatalf("unexpected socket ID (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -239,11 +226,12 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := prepareSCMCmd{
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
 				Force: !tc.noForce,
 			}
+			cmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+
 			nrNs := uint(1)
 			if tc.zeroNrNs {
 				nrNs = 0
@@ -424,10 +412,10 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := resetSCMCmd{
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
 				Force: !tc.noForce,
+			}
+			cmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
 			}
 
 			err := cmd.resetPMem(scs.ScmPrepare)

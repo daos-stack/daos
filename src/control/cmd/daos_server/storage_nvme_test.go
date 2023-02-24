@@ -357,7 +357,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			},
 		},
-		"config parameters ignored; set ignore-config in cmd": {
+		" parameters ignored; set ignore-config in cmd": {
 			resetCmd: new(resetNVMeCmd).WithIgnoreConfig(true),
 			cfg: new(config.Server).WithEngines(
 				engine.NewConfig().
@@ -457,9 +457,14 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
-			if len(mbb.PrepareCalls) != 0 {
-				t.Fatalf("unexpected number of prepare calls, want 0 got %d",
+			// Call to clean hugepages should always be expected first.
+			if len(mbb.PrepareCalls) != 1 {
+				t.Fatalf("unexpected number of prepare calls, want 1w got %d",
 					len(mbb.PrepareCalls))
+			}
+			if diff := cmp.Diff(storage.BdevPrepareRequest{CleanHugePagesOnly: true},
+				mbb.PrepareCalls[0]); diff != "" {
+				t.Fatalf("unexpected clean hugepage calls (-want, +got):\n%s\n", diff)
 			}
 			if tc.expResetCall == nil {
 				if len(mbb.ResetCalls) != 0 {
