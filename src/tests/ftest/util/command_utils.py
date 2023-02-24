@@ -570,6 +570,28 @@ class CommandWithSubCommand(ExecutableCommand):
                 "<{}> command failed: {}".format(self.command, error)) from error
         return self.result
 
+    def set_command(self, sub_command_list=None, **kwargs):
+        """Set the command and its arguments.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if an unknown parameter is provided for the full command
+
+        """
+        # Set up the full command by setting each specified sub-command
+        full_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                full_command.set_sub_command(sub_command)
+                full_command = full_command.sub_command_class
+
+        # Update any argument values for the full command
+        self.update_params(**kwargs)
+
     def _get_result(self, sub_command_list=None, raise_exception=None, **kwargs):
         """Get the result from running the command with the defined arguments.
 
@@ -598,16 +620,8 @@ class CommandWithSubCommand(ExecutableCommand):
                 execution.
 
         """
-        # Set the subcommands
-        this_command = self
-        if sub_command_list is not None:
-            for sub_command in sub_command_list:
-                this_command.set_sub_command(sub_command)
-                this_command = this_command.sub_command_class
-
-        # Set the sub-command arguments
-        for name, value in list(kwargs.items()):
-            getattr(this_command, name).value = value
+        # Setup the command and its arguments
+        self.set_command(sub_command_list, **kwargs)
 
         # Issue the command and store the command result
         return self.run(raise_exception)

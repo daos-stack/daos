@@ -207,8 +207,7 @@ class AgentFailure(IorTestBase):
         since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
-        result = stop_processes(hosts=[agent_host_kill], pattern=pattern)
-        if 0 in result and len(result) == 1:
+        if not stop_processes(self.log, hosts=agent_host_kill, pattern=pattern):
             msg = "No daos_agent process killed from {}!".format(agent_host_kill)
             errors.append(msg)
         else:

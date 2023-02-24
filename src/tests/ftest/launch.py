@@ -62,7 +62,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+PROCS_TO_CLEANUP = [
+    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 

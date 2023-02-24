@@ -7,6 +7,8 @@ import time
 import os
 import threading
 
+from ClusterShell.NodeSet import NodeSet
+
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from general_utils import report_errors, stop_processes
@@ -90,8 +92,7 @@ class ServerRankFailure(IorTestBase):
             engine_kill_host (str): Hostname to kill engine.
         """
         pattern = self.server_managers[0].manager.job.command_regex
-        result = stop_processes(hosts=[engine_kill_host], pattern=pattern)
-        if 0 in result and len(result) == 1:
+        if not stop_processes(self.log, hosts=NodeSet(engine_kill_host), pattern=pattern):
             self.log.info("No remote daos_engine process killed!")
         else:
             self.log.info("daos_engine in %s killed", engine_kill_host)

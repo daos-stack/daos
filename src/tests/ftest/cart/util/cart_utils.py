@@ -8,7 +8,6 @@ import os
 import shlex
 import subprocess  # nosec
 import logging
-import socket
 import re
 import glob
 import cart_logparse
@@ -18,6 +17,7 @@ from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import stop_processes
+from host_utils import get_local_host
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
 
@@ -153,22 +153,16 @@ class CartTest(TestWithoutServers):
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
-        localhost = NodeSet(socket.gethostname().split(".")[0])
+        localhost = get_local_host()
         processes = r"'\<(crt_launch|orterun)\>'"
+        negative_filter=r"'\<(grep|defunct)\>'"
         retry_count = 0
         while retry_count < 2:
-            result = stop_processes(localhost,
-                                    processes,
-                                    added_filter=r"'\<(grep|defunct)\>'")
-            if 1 in result:
-                self.log.info(
-                    "Stopped '%s' processes on %s", processes, str(result[1]))
+            if stop_processes(self.log, localhost, processes, negative_filter=negative_filter):
+                self.log.info("Stopped '%s' processes on %s", processes, localhost)
                 retry_count += 1
-            elif 0 in result:
-                self.log.info("All '%s' processes have been stopped", processes)
-                retry_count = 99
             else:
-                error_list.append("Error detecting/stopping cart processes")
+                self.log.info("All '%s' processes have been stopped", processes)
                 retry_count = 99
         if retry_count == 2:
             error_list.append("Unable to stop cart processes!")
