@@ -100,19 +100,19 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 
 	if req.PCIAllowList == "" {
 		allowed := nvmeBdevsFromCfg(cfg)
-		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", allowed)
 		if allowed.Len() != 0 {
+			log.Debugf("reading bdev_list entries (%q) from cfg", allowed)
 			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 		}
 	}
 
 	if req.PCIBlockList == "" && len(cfg.BdevExclude) > 0 {
-		log.Debugf("no block list set in req so reading bdev_exclude (%q) from cfg", cfg.BdevExclude)
 		blocked, err := hardware.NewPCIAddressSet(cfg.BdevExclude...)
 		if err != nil {
 			return errors.Wrap(err, "invalid addresses in pci block list")
 		}
 		if blocked.Len() != 0 {
+			log.Debugf("reading bdev_exclude entries (%q) from cfg", blocked)
 			req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 		}
 	}
@@ -354,27 +354,29 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePr
 	var bld strings.Builder
 	req := storage.BdevScanRequest{}
 
-	cmd.Info("Scan locally-attached NVMe storage...")
-
 	if !cmd.IgnoreConfig && cmd.config != nil {
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
-		cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
+		if req.DeviceList.Len() > 0 {
+			cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
+		}
 	}
 
 	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{}
+		req := storage.BdevPrepareRequest{
+			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+		}
 		if err := prepareNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
 			return errors.Wrap(err,
 				"nvme prep before scan failed, try with --skip-prep after manual nvme prepare")
 		}
 	}
 
+	cmd.Info("Scan locally-attached NVMe storage...")
+
 	resp, err := scanBackend(req)
 	if err != nil {
-		// TODO: Suggest running prepare if nr hugepages is low.
 		return err
 	}
-	// TODO: Suggest running prepare if IOMMU enabled and nr results is zero.
 
 	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
 		return err
@@ -383,7 +385,10 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePr
 	cmd.Info(bld.String())
 
 	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{}
+		req := storage.BdevPrepareRequest{
+			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+			Reset_:       true,
+		}
 		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
 			return errors.Wrap(err,
 				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
