@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,7 +70,6 @@ int
 crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 			  crt_group_t *grp, d_rank_t my_rank,
 			  bool delete_file);
-
 int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 			      crt_context_t *context);

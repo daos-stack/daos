@@ -1,10 +1,9 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <semaphore.h>
-
 #include "crt_utils.h"
 #include "test_ep_cred_common.h"
 

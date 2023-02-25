@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -570,7 +570,6 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			rc = crt_group_view_create(srv_group_name, grp);
 			if (rc != 0)
 				D_GOTO(out, rc);
-
 			if (*grp == NULL)
 				D_GOTO(out, rc = -DER_INVAL);
 
