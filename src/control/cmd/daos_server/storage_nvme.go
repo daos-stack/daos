@@ -212,16 +212,8 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
-func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error {
+func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nvmePrepareResetFn) error {
 	cmd.Info("Prepare locally-attached NVMe storage...")
-
-	req := storage.BdevPrepareRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    cmd.TargetUser,
-		PCIAllowList:  cmd.Args.PCIAllowList,
-		PCIBlockList:  cmd.PCIBlockList,
-		DisableVFIO:   cmd.DisableVFIO,
-	}
 
 	cfgParam := cmd.config
 	if cmd.IgnoreConfig {
@@ -248,7 +240,16 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
-	return cmd.prepareNVMe(scs.NvmePrepare)
+
+	req := storage.BdevPrepareRequest{
+		HugePageCount: cmd.NrHugepages,
+		TargetUser:    cmd.TargetUser,
+		PCIAllowList:  cmd.Args.PCIAllowList,
+		PCIBlockList:  cmd.PCIBlockList,
+		DisableVFIO:   cmd.DisableVFIO,
+	}
+
+	return prepareNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
 }
 
 type resetNVMeCmd struct {
@@ -281,27 +282,19 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 	return cmd
 }
 
-func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
+func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend nvmePrepareResetFn) error {
 	cmd.Info("Reset locally-attached NVMe storage...")
 
-	req := storage.BdevPrepareRequest{
+	cleanReq := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,
 	}
 
 	msg := "cleanup hugepages before nvme reset"
 
-	if resp, err := resetBackend(req); err != nil {
+	if resp, err := resetBackend(cleanReq); err != nil {
 		cmd.Errorf("%s", errors.Wrap(err, msg))
 	} else {
 		cmd.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
-	}
-
-	req = storage.BdevPrepareRequest{
-		TargetUser:   cmd.TargetUser,
-		PCIAllowList: cmd.Args.PCIAllowList,
-		PCIBlockList: cmd.PCIBlockList,
-		DisableVFIO:  cmd.DisableVFIO,
-		Reset_:       true,
 	}
 
 	cfgParam := cmd.config
@@ -309,16 +302,16 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 		cfgParam = nil
 	}
 
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
-	req.HugePageCount = 0
+	resetReq.HugePageCount = 0
 
-	cmd.Debugf("nvme reset request parameters: %+v", req)
+	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
 
 	// Reset NVMe device access.
-	_, err := resetBackend(req)
+	_, err := resetBackend(resetReq)
 
 	return err
 }
@@ -331,12 +324,22 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing reset nvme command: %+v", cmd)
-	return cmd.resetNVMe(scs.NvmePrepare)
+
+	req := storage.BdevPrepareRequest{
+		TargetUser:   cmd.TargetUser,
+		PCIAllowList: cmd.Args.PCIAllowList,
+		PCIBlockList: cmd.PCIBlockList,
+		DisableVFIO:  cmd.DisableVFIO,
+		Reset_:       true,
+	}
+
+	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
 	nvmeCmd
-	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
+	DisableVMD bool `long:"disable-vmd" description:"Disable VMD-aware scan."`
+	SkipPrep   bool `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
 func (cmd *scanNVMeCmd) getVMDState() bool {
@@ -347,7 +350,7 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 	return !cmd.DisableVMD && !cfgDisableVMD
 }
 
-func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
+func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) error {
 	var bld strings.Builder
 	req := storage.BdevScanRequest{}
 
@@ -358,8 +361,14 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
 		cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
 	}
 
-	// TODO: Add embedded cmd struct to check if daos_server process is already running and
-	//       applied to all daos_server commands.
+	if !cmd.SkipPrep {
+		req := storage.BdevPrepareRequest{}
+		if err := prepareNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
+			return errors.Wrap(err,
+				"nvme prep before scan failed, try with --skip-prep after manual nvme prepare")
+		}
+	}
+
 	resp, err := scanBackend(req)
 	if err != nil {
 		// TODO: Suggest running prepare if nr hugepages is low.
@@ -372,6 +381,14 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
 	}
 
 	cmd.Info(bld.String())
+
+	if !cmd.SkipPrep {
+		req := storage.BdevPrepareRequest{}
+		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
+			return errors.Wrap(err,
+				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
+		}
+	}
 
 	return nil
 }
@@ -387,5 +404,5 @@ func (cmd *scanNVMeCmd) Execute(_ []string) error {
 	}
 
 	cmd.Debugf("executing scan nvme command: %+v", cmd)
-	return cmd.scanNVMe(svc.NvmeScan)
+	return cmd.scanNVMe(svc.NvmeScan, svc.NvmePrepare)
 }
