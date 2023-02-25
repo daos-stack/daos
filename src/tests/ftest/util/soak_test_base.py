@@ -15,7 +15,6 @@ from getpass import getuser
 import socket
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
