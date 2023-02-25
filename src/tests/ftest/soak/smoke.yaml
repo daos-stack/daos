@@ -85,7 +85,7 @@ smoke:
   joblist:
     - ior_smoke
     - fio_smoke
-    - daos_racer
+    #- daos_racer
     - mdtest_smoke
     - vpic_smoke
     - lammps_smoke

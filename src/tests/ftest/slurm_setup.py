@@ -26,6 +26,8 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
+EPILOG_FILE = "/etc/slurm/epilog_soak.sh"
+
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
 
@@ -55,6 +57,28 @@ SLURMD_STARTUP_DEBUG = [
     "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
 
 
+def create_epilog_script(args):
+    """Create epilog script to run after each job.
+
+    Args:
+        args (Namespace): command line arguments
+
+     Returns:
+        returns 0 if command pass; 1 otherwise
+
+    """
+    sudo = "sudo" if args.sudo else ""
+    with open(EPILOG_FILE, 'w') as script_file:
+        script_file.write("#!/bin/bash\n#\n")
+        script_file.write("/usr/bin/bash -c 'pkill dfuse'\n")
+        script_file.write("/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse);"
+                          "do fusermount3 -uz $dir;rm -rf $dir; done'\n")
+        script_file.write("exit 0\n")
+        script_file.close()
+    command = f"{sudo} chmod 755 {EPILOG_FILE}"
+    return execute_cluster_cmds(args.control, [" ".join(command)])
+
+
 def update_config_cmdlist(args):
     """Create the command lines to update slurmd.conf file.
 
@@ -66,9 +90,13 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
-                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
-                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
+    if create_epilog_script(args) > 1:
+        logger.error(f"% {EPILOG_FILE} could not be updated. Check if file exists")
+        sys.exit(1)
+    cmd_list = [f"sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {SLURM_CONF}",
+                f"sed -i -e 's/SlurmUser=slurm/SlurmUser={args.user}/g' {SLURM_CONF}",
+                f"sed -i -e 's/NodeName/#NodeName/g' {SLURM_CONF}",
+                f"sed -i -e 's/EpilogSlurmctld=/EpilogSlurmctld={EPILOG_FILE}/g' {SLURM_CONF}"]
     sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
