@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -260,6 +260,8 @@ dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 	/* at most 2 helper XS per target */
 	if (dss_tgt_offload_xs_nr > 2 * nr)
 		dss_tgt_offload_xs_nr = 2 * nr;
+	else if (dss_tgt_offload_xs_nr == 0)
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 
 	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
 	 * offload XS. Calculate the tgt_nr as the number of main XS based
