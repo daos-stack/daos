@@ -454,6 +454,10 @@ func (p *SystemCheckPoolInfo) String() string {
 		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, p.StartTime, remOrElapsed)
 }
 
+func (p *SystemCheckPoolInfo) Unchecked() bool {
+	return p.Status == chkpb.CheckPoolStatus_CPS_UNCHECKED.String()
+}
+
 func getQueryPoolRank(pool *mgmtpb.CheckQueryPool) ranklist.Rank {
 	if len(pool.Targets) == 0 {
 		return ranklist.NilRank

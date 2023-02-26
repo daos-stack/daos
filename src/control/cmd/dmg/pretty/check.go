@@ -44,8 +44,12 @@ func countResultPools(resp *control.SystemCheckQueryResp) int {
 	}
 
 	poolMap := make(map[string]struct{})
-	for _, report := range resp.Reports {
-		poolMap[report.PoolUuid] = struct{}{}
+	for _, pool := range resp.Pools {
+		// Don't include pools that were not checked.
+		if pool.Unchecked() {
+			continue
+		}
+		poolMap[pool.UUID] = struct{}{}
 	}
 
 	return len(poolMap)
@@ -65,10 +69,9 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 	// should show the number of pools being checked. If the checker has completed,
 	// we should show the number of unique pools found in the reports.
 	action := "Checking"
-	poolCount := len(resp.Pools)
+	poolCount := countResultPools(resp)
 	if resp.Status == control.SystemCheckStatusCompleted {
 		action = "Checked"
-		poolCount = countResultPools(resp)
 	}
 	if poolCount > 0 {
 		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(poolCount, "pool", ""))
