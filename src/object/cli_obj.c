@@ -21,6 +21,8 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/* Only for test. */
+
 /**
  * Open an object shard (shard object), cache the open handle.
  */
