@@ -7,6 +7,7 @@ import re
 import traceback
 
 from daos_utils_base import DaosCommandBase
+from general_utils import list_to_str, dict_to_str
 
 
 class DaosCommand(DaosCommandBase):
@@ -296,7 +297,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=':'.join([attr, value]),
+            ("pool", "set-attr"), pool=pool, attr=list_to_str([attr, value], ':'),
             sys_name=sys_name)
 
     def pool_set_attrs(self, pool, attrs, sys_name=None):
@@ -315,10 +316,8 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, value]) for key, value in attrs.items()]
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
-            sys_name=sys_name)
+            ("pool", "set-attr"), pool=pool, attr=dict_to_str(attrs, ",", ":"), sys_name=sys_name)
 
     def pool_get_attr(self, pool, attr, sys_name=None):
         """Set pool attribute.
@@ -394,7 +393,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container set-prop command fails.
 
         """
-        prop_value = ":".join([prop, value])
+        prop_value = list_to_str([prop, value], ":")
         return self._get_result(
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
@@ -415,11 +414,13 @@ class DaosCommand(DaosCommandBase):
         Raises:
             CommandFailure: if the daos pool set-attr command fails.
 
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
         """
-        attr_list = [":".join([k, v]) for k, v in props.items()]
         return self._get_result(
-            ("container", "set-prop"), pool=pool, cont=cont,
-            attr=','.join(attr_list), sys_name=sys_name)
+            ("container", "set-prop"), pool=pool, cont=cont, attr=dict_to_str(props, ",", ":"),
+            sys_name=sys_name)
 
     def container_get_prop(self, pool, cont, properties=None):
         """Call daos container get-prop.
@@ -557,7 +558,7 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        props = ','.join(properties) if properties else None
+        props = list_to_str(properties, ',') if properties else None
 
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)
@@ -605,7 +606,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=':'.join([attr, val]))
+            sys_name=sys_name, attr=list_to_str([attr, val], ":"))
 
     def container_set_attrs(self, pool, cont, attrs, sys_name=None):
         """Set multiple container attributes.
@@ -624,10 +625,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, val]) for key, val in attrs.items()]
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
-            attr=','.join(attr_list), sys_name=sys_name)
+            attr=dict_to_str(attrs, ":", ","), sys_name=sys_name)
 
     def container_get_attr(self, pool, cont, attr, sys_name=None):
         """Call daos container get-attr for a single attribute.
@@ -668,7 +668,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_json_result(
             ("container", "get-attr"), pool=pool, cont=cont,
-            attr=','.join(attrs), sys_name=sys_name)
+            attr=list_to_str(attrs, ","), sys_name=sys_name)
 
     def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.
