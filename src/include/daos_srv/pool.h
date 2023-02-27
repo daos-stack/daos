@@ -98,6 +98,10 @@ struct ds_pool {
 	uint64_t		sp_scrub_mode;
 	uint64_t		sp_scrub_freq_sec;
 	uint64_t		sp_scrub_thresh;
+	/** WAL checkpointing properties */
+	uint64_t                 sp_checkpoint_mode;
+	uint64_t                 sp_checkpoint_freq;
+	uint32_t                 sp_checkpoint_thresh;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
