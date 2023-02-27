@@ -476,7 +476,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -513,10 +512,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/rdbt
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
-%{_bindir}/cli_checksum_tests
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/rpc_tests
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -553,6 +548,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Feb 27 2023 Ryon Jensen <ryon.jensen@intel.com> 2.3.103-7
+- Removed unnecessary test files
+
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556
 
