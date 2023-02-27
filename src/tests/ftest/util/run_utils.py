@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from socket import gethostname
 import subprocess   # nosec
 import shlex
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -162,23 +163,6 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
-def get_switch_user(user="root"):
-    """Get the switch user command for the requested user.
-
-    Args:
-        user (str): user account. Defaults to "root".
-
-    Returns:
-        list: the sudo command as a list
-
-    """
-    command = ["sudo", "-n"]
-    if user != "root":
-        # Use runuser to avoid using a password
-        command.extend(["runuser", "-u", user, "--"])
-    return command
-
-
 def get_clush_command_list(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
@@ -198,8 +182,8 @@ def get_clush_command_list(hosts, args=None, sudo=False):
         command.insert(1, args)
     if sudo:
         # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", get_switch_user()])
-        command.extend(get_switch_user())
+        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo", "-n"])
+        command.extend(["sudo", "-n"])
     return command
 
 
@@ -331,21 +315,33 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     return results
 
 
-def command_as_user(command, user):
+def command_as_user(command, user, env=None):
     """Adjust a command to be ran as another user.
 
     Args:
         command (str): the original command
         user (str): user to run as
+        env (EnvironmentVariables, optional): environment variables to export with the command.
+            Defaults to None.
 
     Returns:
         str: command adjusted to run as another user
 
     """
     if not user:
-        return command
-    switch_command = " ".join(get_switch_user(user))
-    return f"{switch_command} {command}"
+        if not env:
+            return command
+        return " ".join([env.to_export_str(), command]).strip()
+
+    cmd_list = ["sudo"]
+    if env:
+        cmd_list.extend(env.to_list())
+    cmd_list.append("-n")
+    if user != "root":
+        # Use runuser to avoid using a password
+        cmd_list.extend(["runuser", "-u", user, "--"])
+    cmd_list.append(command)
+    return " ".join(cmd_list)
 
 
 def find_command(source, pattern, depth, other=None):
