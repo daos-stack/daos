@@ -23,7 +23,7 @@ from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command
+from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):
@@ -1461,3 +1461,83 @@ def nodeset_append_suffix(nodeset, suffix):
     """
     return NodeSet.fromlist(
         map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
+
+
+def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
+    """Wait for a result with a timeout.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        get_method (object): method that returns a boolean used to determine if the result.
+            is found.
+        timeout (int): number of seconds to wait for a response to be found.
+        delay (int, optional): number of seconds to wait before checking the another result.
+            This should be a small number. Defaults to 1.
+        add_log (bool, optional): whether or not to include the log argument for get_method.
+            Defaults to False.
+        kwargs (dict): kwargs for get_method.
+
+    Returns:
+        bool: if the result was found.
+    """
+    if add_log:
+        kwargs["log"] = log
+    method_str = "{}({})".format(
+        get_method.__name__,
+        ", ".join(
+            ["=".join([str(key), str(value)]) for key, value in kwargs.items() if key != "log"]))
+    result_found = False
+    timed_out = False
+    start = time.time()
+    log.debug(
+        "wait_for_result: Waiting for a result from %s with a %s second timeout",
+        method_str, timeout)
+    while not result_found and not timed_out:
+        timed_out = (time.time() - start) >= timeout
+        result_found = get_method(**kwargs)
+        log.debug(
+            "wait_for_result: Result from %s: %s (timed out: %s)",
+            method_str, result_found, timed_out)
+        if not result_found and not timed_out:
+            time.sleep(delay)
+    log.debug("wait_for_result: Waiting for a result from %s complete", method_str)
+    return not timed_out
+
+
+def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
+    """Check the host for a ping response.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        host (Node): destination host to ping to.
+        expected_ping (bool, optional): whether a ping response is expected. Defaults to True.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+            Defaults to 60.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if the expected number of pings were returned; False otherwise.
+    """
+    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
+    try:
+        run_local(
+            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
+    except RunException:
+        return not expected_ping
+    return expected_ping
+
+
+def check_ssh(log, hosts, cmd_timeout=60, verbose=True):
+    """Check the host for a successful pass-wordless ssh.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        hosts (NodeSet): destination hosts to ssh to.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if all hosts respond to the remote ssh session; False otherwise.
+    """
+    result = run_remote(log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
+    return result.passed
