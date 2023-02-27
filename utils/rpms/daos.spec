@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.103
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -91,8 +91,6 @@ BuildRequires: Lmod
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libcurl4-mini
-BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
@@ -102,14 +100,9 @@ BuildRequires: python3-distro
 BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
-%if 0%{?is_opensuse}
-%else
-# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
-# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
-BuildRequires: libcurl4
 %endif
 %endif
-%endif
+BuildRequires: libuuid-devel
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
@@ -119,7 +112,6 @@ BuildRequires: libuct-devel
 BuildRequires: ucx-devel
 %endif
 
-Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -558,6 +550,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Feb 22 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-2
+- Remove explicit R: protobuf-c and let the auto-dependency generator
+  handle it
+
 * Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
 - Bump version to 2.3.103
 

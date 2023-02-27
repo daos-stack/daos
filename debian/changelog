@@ -1,3 +1,9 @@
+daos (2.3.103-2) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 22 Feb 2023 13:33:02 -0500
+
 daos (2.3.103-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version to 2.3.103
