@@ -36,23 +36,26 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 	 *
 	 * The hash table is using LRU so is therefore not using r/w locks and all operations
 	 * lock the entire bucket so there is no benefit from using find over find_insert here.
-	 *
 	 */
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
 
 	if (rlink != &ie->ie_htl) {
+		struct dfuse_obj_hdl     *oh;
 		struct dfuse_inode_entry *inode;
 
-		/* DAOS-12714 If create returns an existing file then oh->doe_ie will point to the
-		 * stale ie in this case.  A fix would be to update oh at this point (although) the
-		 * variable is not in scope but for now simply assert here so we can identify if
-		 * this problem is occouring.
-		 */
-		D_ASSERT(fi_out == NULL);
-
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+		if (fi_out) {
+			/* DAOS-12714 If create returns an existing file then oh->doe_ie will point
+			 * to the stale ie in this case.  This can probably only happen when there
+			 * is a race between a create call from one client and rename from a
+			 * different client.
+			 */
+			oh         = (struct dfuse_obj_hdl *)fi_out->fh;
+			oh->doh_ie = inode;
+		}
 
 		/* The lookup has resulted in an existing file, so reuse that entry, drop the inode
 		 * in the lookup descriptor and do not keep a reference on the parent.

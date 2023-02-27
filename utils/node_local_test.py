@@ -2166,6 +2166,20 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
+    @needs_dfuse
+    def test_create_simple(self):
+        """Create a file that already exists"""
+        new_file = join(self.dfuse.dir, 'new_file')
+        with open(new_file, 'w') as fd:
+            fd.write('hello')
+
+        with open(new_file, 'w') as fd:
+            fd.write('hello')
+
+        with open(new_file, 'r') as fd:
+            data = fd.read()
+            print(data)
+
     @needs_dfuse_with_opt(wbcache=True, caching=True)
     def test_stat_before_open(self):
         """Run open/close in a loop on the same file
@@ -3633,7 +3647,7 @@ def run_in_fg(server, conf, args):
     dfuse = DFuse(server,
                   conf,
                   pool=pool.uuid,
-                  caching=True,
+                  caching=False,
                   wbcache=False,
                   multi_user=args.multi_user)
 
