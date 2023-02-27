@@ -627,7 +627,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
-            attr=dict_to_str(attrs, ":", ","), sys_name=sys_name)
+            attr=dict_to_str(attrs, ",", ":"), sys_name=sys_name)
 
     def container_get_attr(self, pool, cont, attr, sys_name=None):
         """Call daos container get-attr for a single attribute.
