@@ -80,6 +80,7 @@ class EcodSpaceUsage(IorTestBase):
 
         # Calculate the difference in space so we know how much the usage increased
         space_diff = dict_subtract(space_after, space_before)
+        self.log.debug('File oclass: %s', self.ior_cmd.dfs_oclass.value)
         self.log.debug('Space per target before IOR: %s', space_before)
         self.log.debug('Space per target after IOR : %s', space_after)
         self.log.debug('                difference : %s', space_diff)

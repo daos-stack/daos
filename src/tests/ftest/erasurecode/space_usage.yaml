@@ -1,7 +1,7 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 900
+timeout: 600
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -34,8 +34,8 @@ ior: &ior_base
   api: DFS
   dfs_chunk: 1MiB
   transfer_size: 32KiB  # Partial update
-  block_size: 32GiB  # Aggregate 1 TiB
-  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
+  block_size: 16GiB  # Aggregate 500 GiB
+  flags: "-w -C -e -g -G 27 -k -Q 1 -v"
 ior_ec_4p2gx:
   <<: *ior_base
   dfs_oclass: EC_4P2GX
