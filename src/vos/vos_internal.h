@@ -179,9 +179,15 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 };
 
+struct vos_space_metrics {
+	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
+	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+};
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_space_metrics vp_space_metrics;
 	/* TODO: add more metrics for VOS */
 };
 

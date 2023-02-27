@@ -114,6 +114,7 @@ int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 {
 	struct vos_pool_df	*df = pool->vp_pool_df;
+	struct vos_pool_metrics	*vpm = pool->vp_metrics;
 	struct vea_attr		*attr = &vps->vps_vea_attr;
 	struct vea_stat		*stat = slow ? &vps->vps_vea_stat : NULL;
 	daos_size_t		 scm_used;
@@ -144,6 +145,9 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		SCM_FREE(vps) = 0;
 	} else {
 		SCM_FREE(vps) = SCM_TOTAL(vps) - scm_used;
+		if (vpm != NULL) {
+			d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_used, scm_used);
+		}
 	}
 
 	/* NVMe isn't configured for this VOS pool */

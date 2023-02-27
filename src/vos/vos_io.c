@@ -1952,7 +1952,8 @@ umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		daos_size_t size)
 {
-	umem_off_t	umoff;
+	umem_off_t		 umoff;
+	struct vos_pool_metrics	*vpm;
 
 	D_ASSERT(size > 0);
 
@@ -1971,6 +1972,25 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
+	vpm = cont->vc_pool->vp_metrics;
+	if (vpm && vpm->vp_space_metrics.vsm_scm_used) {
+		int		 rc;
+		struct vos_pool	*pool = vos_cont2pool(cont);
+		daos_size_t	 scm_used;
+
+		rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
+				     "stats.heap.run_allocated", &scm_used);
+		if (rc) {
+			rc = umem_tx_errno(rc);
+			D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
+				DP_UUID(pool->vp_id), DP_RC(rc));
+			goto done;
+		}
+
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_used, scm_used);
+	}
+
+done:
 	return umoff;
 }
 
