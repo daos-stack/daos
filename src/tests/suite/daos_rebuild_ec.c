@@ -40,6 +40,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	if (svc_nreplicas < 5)
 		return;
 
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
