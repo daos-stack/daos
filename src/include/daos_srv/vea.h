@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
 #define __VEA_API_H__
 
 #include <gurt/list.h>
+#include <gurt/telemetry_common.h>
 #include <daos/mem.h>
 #include <daos/btree.h>
 
@@ -329,5 +330,13 @@ void *vea_metrics_alloc(const char *path, int tgt_id);
  * Get VEA metrics count
  */
 int vea_metrics_count(void);
+
+/**
+ * Set the VEA metric defining the NVME usage.
+ *
+ * \param metrics   [IN|OUT]	Metrics to updated
+ * \param nvme_used [IN]	Metric to be set
+ */
+void vea_metrics_nvme_used_set(void *metrics, struct d_tm_node_t *nvme_used);
 
 #endif /* __VEA_API_H__ */
