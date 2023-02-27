@@ -33,14 +33,14 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 	new_exception_msg = (*env)->GetMethodID(env, daos_io_exception_class,
 			"<init>",
 			"(Ljava/lang/String;)V");
-	if (new_exception_msg == NULL) {
+	if (unlikely(new_exception_msg == NULL)) {
 		printf("failed to get constructor msg\n");
 		return JNI_ERR;
 	}
 	new_exception_cause = (*env)->GetMethodID(env, daos_io_exception_class,
 			"<init>",
 			"(Ljava/lang/Throwable;)V");
-	if (new_exception_cause == NULL) {
+	if (unlikely(new_exception_cause == NULL)) {
 		printf("failed to get constructor cause\n");
 		return JNI_ERR;
 	}
@@ -48,7 +48,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			daos_io_exception_class,
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/String;)V");
-	if (new_exception_msg_code_msg == NULL) {
+	if (unlikely(new_exception_msg_code_msg == NULL)) {
 		printf("failed to get constructor msg, code and daos msg\n");
 		return JNI_ERR;
 	}
@@ -56,13 +56,13 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			daos_io_exception_class,
 			"<init>",
 			"(Ljava/lang/String;ILjava/lang/Throwable;)V");
-	if (new_exception_msg_code_cause == NULL) {
+	if (unlikely(new_exception_msg_code_cause == NULL)) {
 		printf("failed to get constructor msg, code and cause\n");
 		return JNI_ERR;
 	}
 	int rc = daos_init();
 
-	if (rc) {
+	if (unlikely(rc != 0)) {
 		printf("daos_init() failed with rc = %d\n", rc);
 		printf("error msg: %.256s\n", d_errstr(rc));
 		return rc;
