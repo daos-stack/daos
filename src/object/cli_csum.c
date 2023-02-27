@@ -163,8 +163,8 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 
 static int
 iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
-		      d_sg_list_t *cp_sgl, struct obj_shard_iod *siod,
-		      uint64_t off)
+	     d_sg_list_t *cp_sgl, struct obj_shard_iod *siod,
+	     uint64_t off)
 {
 	struct daos_sgl_idx	sgl_idx = {0};
 	int			i, rc;

@@ -935,7 +935,7 @@ daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t
 
 	for (i = 0; i < nr && rc == 0; i++)
 		rc = daos_csummer_verify_iod(obj, &iods[i], &sgls[i], &iods_csum[i],
-					singv_lo, singv_idx, map);
+					     singv_lo, singv_idx, map);
 	return rc;
 }
 
