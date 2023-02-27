@@ -11,6 +11,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
 from run_utils import run_remote, run_local, RunException
+from core_file import CoreFileProcessing
 
 
 class HarnessCoreFilesTest(TestWithServers):
@@ -47,6 +48,8 @@ class HarnessCoreFilesTest(TestWithServers):
         except RunException:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
+        core_path = CoreFileProcessing(self.log).get_core_file_pattern(
+            self.server_managers[0].hosts, self.agent_managers[0].hosts.clients, True)
 
         core_file = "{}/core.gdb.harness.advanced".format(core_path)
         self.log.debug("Creating %s", core_file)

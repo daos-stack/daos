@@ -27,7 +27,7 @@ from ClusterShell.NodeSet import NodeSet
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing, CoreFileException
+from core_file import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -601,6 +601,7 @@ class Launch():
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
         self.slurm_add_partition = False
+        self.core_file_processing = CoreFileProcessing(logger)
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -1681,52 +1682,6 @@ class Launch():
             if not run_remote(logger, hosts, command.format(config)).passed:
                 raise LaunchException(f"Failed to setup {config}")
 
-    def _get_core_file_pattern(self, servers, clients, process_cores):
-        """Get the core file pattern information from the hosts if collecting core files.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-            process_cores (bool): whether or not to collect core files after the tests complete
-
-        Raises:
-            LaunchException: if there was an error obtaining the core file pattern information
-
-        Returns:
-            dict: a dictionary containing the path and pattern for the core files per NodeSet
-
-        """
-        core_files = {}
-        if not process_cores:
-            logger.debug("Not collecting core files")
-            return core_files
-
-        # Determine the core file pattern being used by the hosts
-        all_hosts = servers | clients
-        all_hosts |= self.local_host
-        command = 'sudo /bin/bash -c \'' + open('scripts/get_core_file_pattern.sh').read() + '\''
-        result = run_remote(logger, all_hosts, command)
-        # Verify all the hosts have the same core file pattern
-        if not result.passed:
-            raise LaunchException("Error obtaining the core file pattern")
-
-        # Get the path and pattern information from the core pattern
-        for data in result.output:
-            hosts = str(data.hosts)
-            try:
-                info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError) as error:
-                raise LaunchException(
-                    "Error obtaining the core file pattern and directory") from error
-            if not info[0]:
-                raise LaunchException("Error obtaining the core file pattern directory")
-            core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
-            logger.info(
-                "Collecting any '%s' core files written to %s on %s",
-                core_files[hosts]["pattern"], core_files[hosts]["path"], hosts)
-
-        return core_files
-
     def run_tests(self, sparse, fail_fast, stop_daos, archive, rename, jenkinslog, core_files,
                   threshold, user_create):
         # pylint: disable=too-many-arguments
@@ -2213,9 +2168,9 @@ class Launch():
 
             # Get the core file pattern information
             try:
-                core_files = self._get_core_file_pattern(
+                core_files = self.core_file_processing.get_core_file_pattern(
                     test.host_info.servers.hosts, test.host_info.clients.hosts, process_cores)
-            except LaunchException:
+            except CoreFileException:
                 message = "Error obtaining the core file pattern information"
                 self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return_code |= 256
@@ -2752,10 +2707,10 @@ class Launch():
             int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
-        core_file_processing = CoreFileProcessing(logger)
         try:
-            corefiles_processed = core_file_processing.process_core_files(test_job_results, True,
-                                                                          test=str(test))
+            corefiles_processed = self.core_file_processing.process_core_files(test_job_results,
+                                                                               True,
+                                                                               test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
