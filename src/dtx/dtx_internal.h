@@ -143,8 +143,8 @@ extern uint32_t dtx_agg_thd_age_lo;
 extern uint32_t dtx_batched_ult_max;
 
 /* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD_MIN	18
-#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+#define DTX_RPC_HELPER_THD_MIN	2
+#define DTX_RPC_HELPER_THD_DEF	6
 
 /*
  * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)

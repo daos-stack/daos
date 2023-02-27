@@ -1144,7 +1144,7 @@ out:
  * prop.
  */
 static void
-get_cont_prop_access_info(daos_prop_t *prop, struct ownership *owner,
+get_cont_prop_access_info(daos_prop_t *prop, struct d_ownership *owner,
 			  struct daos_acl **acl)
 {
 	struct daos_prop_entry	*acl_entry;
@@ -1313,7 +1313,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int				rc;
 	daos_prop_t		       *prop = NULL;
 	struct daos_prop_entry	       *lbl_ent;
-	struct ownership		owner;
+	struct d_ownership		owner;
 	struct daos_acl		       *acl;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
@@ -1882,7 +1882,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct container_hdl	chdl;
 	char			zero = 0;
 	int			rc;
-	struct ownership	owner;
+	struct d_ownership	owner;
 	struct daos_acl	       *acl;
 	bool			is_healthy;
 	bool			cont_hdl_opened = false;
@@ -3420,7 +3420,7 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_UUID(in->caui_op.ci_hdl));
 
 	acl_in = in->caui_acl;
-	if (daos_acl_cont_validate(acl_in) != 0)
+	if (daos_acl_validate(acl_in) != 0)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = get_acl(tx, cont, &acl);

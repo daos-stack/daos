@@ -1688,6 +1688,109 @@ ec_cond_fetch(void **state)
 	}
 }
 
+static void
+ec_data_recov(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_iov_t		 akey;
+	d_sg_list_t	 sgl[2];
+	d_iov_t		 sg_iov[2];
+	char		*buf[2];
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	int		 i, rc;
+	daos_size_t	 size = ec_cell_size * 4;
+	uint16_t	 shard[2];
+	uint64_t	 fail_val;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey_recov", strlen("dkey_recov"));
+	d_iov_set(&akey, "akey_recov", strlen("akey_recov"));
+
+	for (i = 0; i < 2; i++) {
+		D_ALLOC(buf[i], size);
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size);
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+	}
+
+	/** init I/O descriptor */
+	iod.iod_name		= akey;
+	iod.iod_nr		= 1;
+	iod.iod_size		= 1;
+	iod.iod_recxs		= &recx;
+	iod.iod_type		= DAOS_IOD_ARRAY;
+	recx.rx_idx		= 0;
+	recx.rx_nr		= size;
+
+	/** update record */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl[0], NULL);
+	assert_rc_equal(rc, 0);
+
+	/** normal fetch */
+	iod.iod_size	= DAOS_REC_ANY;
+
+	print_message("normal fetch\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, 1);
+
+	d_iov_set(&sg_iov[1], buf[1], size);
+	sg_iov[1].iov_buf = buf[1];
+	sg_iov[1].iov_len = 0;
+	sg_iov[1].iov_buf_len = size;
+	memset(buf[1], 0, size);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl[1], NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(buf[0], buf[1], size);
+	if (sg_iov[1].iov_len != size)
+		fail_msg("sg_iov[1].iov_len %zu\n", sg_iov[1].iov_len);
+
+	print_message("degraded fetch data recovery\n");
+	shard[0] = 1;
+	shard[1] = 3;
+	fail_val = daos_shard_fail_value(shard, 2);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(fail_val);
+
+	sg_iov[1].iov_len = 0;
+	sg_iov[1].iov_buf_len = size;
+	memset(buf[1], 0, size);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl[1], NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(buf[0], buf[1], size);
+	if (sg_iov[1].iov_len != size)
+		fail_msg("sg_iov[1].iov_len %zu\n", sg_iov[1].iov_len);
+
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		D_FREE(buf[i]);
+	}
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -1979,6 +2082,7 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
 	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
 	 test_case_teardown},
+	{"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
 };
 
 int

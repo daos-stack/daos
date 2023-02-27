@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -220,7 +220,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             DAOS-6233: add tests for daos filesystem copy
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior,daos_cmd
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")
