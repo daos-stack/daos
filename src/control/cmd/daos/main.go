@@ -206,6 +206,16 @@ or query/manage an object inside a container.`
 		return nil
 	}
 
+	// Configure DAOS client logging to stderr. We don't
+	// want stdout logging because it will interfere with
+	// JSON output.
+	if os.Getenv("DD_STDERR") == "" {
+		os.Setenv("DD_STDERR", "debug")
+	}
+	if os.Getenv("D_LOG_FILE") == "" {
+		os.Setenv("D_LOG_FILE", "/dev/null")
+	}
+
 	// Initialize the daos debug system first so that
 	// any allocations made as part of argument parsing
 	// are logged when running under NLT.
