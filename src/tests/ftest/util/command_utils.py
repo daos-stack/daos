@@ -590,7 +590,7 @@ class CommandWithSubCommand(ExecutableCommand):
                 full_command = full_command.sub_command_class
 
         # Update any argument values for the full command
-        self.update_params(**kwargs)
+        full_command.update_params(**kwargs)
 
     def _get_result(self, sub_command_list=None, raise_exception=None, **kwargs):
         """Get the result from running the command with the defined arguments.

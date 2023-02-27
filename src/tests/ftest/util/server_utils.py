@@ -324,7 +324,7 @@ class DaosServerManager(SubprocessManager):
         """Run daos_server scm prepare on the server hosts.
 
         Args:
-            kwargs (dict, optional): named arguments and their values use with the
+            kwargs (dict, optional): named arguments and their values to use with the
                 DaosServerCommand.ScmSubCommand.PrepareSubCommand object
 
         Raises:
@@ -349,7 +349,7 @@ class DaosServerManager(SubprocessManager):
         """Run daos_server scm reset on the server hosts.
 
         Args:
-            kwargs (dict, optional): named arguments and their values use with the
+            kwargs (dict, optional): named arguments and their values to use with the
                 DaosServerCommand.ScmSubCommand.ResetSubCommand object
 
         Raises:
@@ -369,7 +369,7 @@ class DaosServerManager(SubprocessManager):
         """Run daos_server nvme prepare on the server hosts.
 
         Args:
-            kwargs (dict, optional): named arguments and their values use with the
+            kwargs (dict, optional): named arguments and their values to use with the
                 DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
