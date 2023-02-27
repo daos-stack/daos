@@ -116,6 +116,12 @@ const (
 	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
 	// PoolPropertySvcList is the list of pool service replicas.
 	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
+	// PoolPropertyCheckpointMode defines the behavior of WAL checkpoints
+	PoolPropertyCheckpointMode = C.DAOS_PROP_PO_CHECKPOINT_MODE
+	// PoolPropertyCheckpointFreq defines the frequency of timed WAL checkpoints
+	PoolPropertyCheckpointFreq = C.DAOS_PROP_PO_CHECKPOINT_FREQ
+	// PoolPropertyCheckpointThresh defines the size threshold to trigger WAL checkpoints
+	PoolPropertyCheckpointThresh = C.DAOS_PROP_PO_CHECKPOINT_THRESH
 )
 
 const (
@@ -245,4 +251,10 @@ const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
 	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)
+
+const (
+	PoolCheckpointDisabled = C.DAOS_CHECKPOINT_DISABLED
+	PoolCheckpointTimed    = C.DAOS_CHECKPOINT_TIMED
+	PoolCheckpointLazy     = C.DAOS_CHECKPOINT_LAZY
 )

@@ -80,7 +80,17 @@ chkpt_ult(void *arg)
 	ctx.cc_is_idle_fn   = is_idle;
 
 	while (!dss_ult_exiting(child->spc_chkpt_req)) {
-		uint32_t sleep_time = 5000;
+		uint32_t sleep_time;
+
+		if (child->spc_pool->sp_checkpoint_mode == DAOS_CHECKPOINT_DISABLED) {
+			sleep_time = 5000; /** Sleep for 5 seconds in case props change */
+			goto sleep_ult;
+		}
+
+		/** For now, LAZY and TIMED are the same.  Eventually, lazy will mean only
+		 *  triggered by WAL space threshold and timed will also include time
+		 *  based trigger.
+		 */
 
 		rc = vos_pool_checkpoint(&ctx);
 		if (rc == -DER_SHUTDOWN) {
@@ -93,6 +103,8 @@ chkpt_ult(void *arg)
 				ctx.cc_dmi->dmi_tgt_id, DP_RC(rc));
 			sleep_time = 60000; /* wait longer if there's an error */
 		}
+		sleep_time = 1000 * child->spc_pool->sp_checkpoint_freq;
+sleep_ult:
 
 		sched_req_sleep(child->spc_chkpt_req, sleep_time);
 	}

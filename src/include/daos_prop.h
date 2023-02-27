@@ -123,6 +123,12 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_REDUN_FAC,
 	/** object global version */
 	DAOS_PROP_PO_OBJ_VERSION,
+	/** Checkpoint mode, only applicable to MD_ON_SSD */
+	DAOS_PROP_PO_CHECKPOINT_MODE,
+	/** Frequency of timed checkpoint in seconds, default is 5 */
+	DAOS_PROP_PO_CHECKPOINT_FREQ,
+	/** WAL usage threshold to trigger checkpoint, default is 50% */
+	DAOS_PROP_PO_CHECKPOINT_THRESH,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -195,8 +201,22 @@ enum {
 
 /* Checksum Scrubbing Defaults */
 #define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+
 #define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
 #define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
+
+/** Checkpoint strategy */
+enum {
+	DAOS_CHECKPOINT_DISABLED = 0,
+	DAOS_CHECKPOINT_TIMED,
+	DAOS_CHECKPOINT_LAZY,
+};
+
+#define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5  /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)

@@ -1624,6 +1624,10 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 
+	pool->sp_checkpoint_mode   = iv_prop->pip_checkpoint_mode;
+	pool->sp_checkpoint_freq   = iv_prop->pip_checkpoint_freq;
+	pool->sp_checkpoint_thresh = iv_prop->pip_checkpoint_thresh;
+
 	return ret;
 }
 
