@@ -3289,16 +3289,16 @@ class PosixTests():
 
         # try to read from corrupted entries. all should fail
         try:
-            with os.open(fname1, 'r'):
+            with open(fname1, 'r'):
                 assert False
-        except TypeError:
-            pass
+        except OSError as error:
+            assert error.errno == errno.EINVAL
 
         try:
-            with os.open(fname3, 'r'):
+            with open(fname3, 'r'):
                 assert False
-        except TypeError:
-            pass
+        except OSError as error:
+            assert error.errno == errno.EINVAL
 
         try:
             dir_list = os.listdir(dirname2)
