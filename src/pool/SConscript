@@ -6,7 +6,6 @@ def scons():
     Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv = env.Clone()
 
     denv.require('argobots', 'protobufc')

@@ -93,7 +93,6 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../utils/wrap/mpi')])
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     build_tests(prereqs, denv)
 
     if not base_env_mpi:

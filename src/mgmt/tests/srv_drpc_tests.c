@@ -21,7 +21,7 @@
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
-#include "../svc.pb-c.h"
+#include "svc.pb-c.h"
 #include "../server.pb-c.h"
 #include "../srv_internal.h"
 #include "../drpc_internal.h"
