@@ -105,6 +105,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 
+		ds_stop_chkpt_ult(child);
 		/* only stop gc ULT when all ops ULTs are done */
 		stop_gc_ult(child);
 		stop_flush_ult(child);
@@ -1588,6 +1589,12 @@ update_vos_prop_on_targets(void *in)
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
 	else if (pool->sp_global_version == 1)
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+
+	if (pool->sp_checkpoint_props_changed) {
+		pool->sp_checkpoint_props_changed = 0;
+		if (child->spc_chkpt_req != NULL)
+			sched_req_wakeup(child->spc_chkpt_req);
+	}
 out:
 	ds_pool_child_put(child);
 
@@ -1619,17 +1626,29 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 			iv_prop->pip_policy_str);
 		return -DER_MISMATCH;
 	}
-	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
-
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_mode);
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 
-	pool->sp_checkpoint_mode   = iv_prop->pip_checkpoint_mode;
-	pool->sp_checkpoint_freq   = iv_prop->pip_checkpoint_freq;
-	pool->sp_checkpoint_thresh = iv_prop->pip_checkpoint_thresh;
+	pool->sp_checkpoint_props_changed = 0;
+	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
+		pool->sp_checkpoint_mode          = iv_prop->pip_checkpoint_mode;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	if (pool->sp_checkpoint_freq != iv_prop->pip_checkpoint_freq) {
+		pool->sp_checkpoint_freq          = iv_prop->pip_checkpoint_freq;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	if (pool->sp_checkpoint_thresh != iv_prop->pip_checkpoint_thresh) {
+		pool->sp_checkpoint_thresh        = iv_prop->pip_checkpoint_thresh;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
 	return ret;
 }

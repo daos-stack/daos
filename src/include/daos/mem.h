@@ -124,7 +124,7 @@ struct umem_store {
 	uint32_t		 stor_hdr_blks;
 	/** private data passing between layers */
 	void			*stor_priv;
-	void                    *chkpt_ctx;
+	void                    *vos_priv;
 	/** Cache for this store */
 	struct umem_cache       *cache;
 	/**
@@ -1011,13 +1011,12 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 
 /** Callback for checkpoint to wait for the commit of chkpt_tx.
  *
- * \param[in]	store		The umem store
+ * \param[in]	arg		Argument passed to umem_cache_checkpoint
  * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
  * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
  */
 typedef void
-umem_cache_wait_cb_t(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx,
-		     void *arg);
+umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
 
 /**
  * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
