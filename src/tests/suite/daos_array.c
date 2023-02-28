@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1103,6 +1103,113 @@ truncate_array(void **state)
 	par_barrier(PAR_COMM_WORLD);
 } /* End truncate_array */
 
+#define DFS_ITER_NR		128
+#define DFS_ITER_DKEY_BUF	(DFS_ITER_NR * sizeof(uint64_t))
+
+static void
+ec_array_key_query(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	daos_array_iod_t	iod = {};
+	daos_range_t		rg = {};
+	d_iov_t			iov = {};
+	d_sg_list_t		sgl = {};
+	void			*buf;
+	daos_array_stbuf_t	stbuf;
+	daos_anchor_t           anchor = {0};
+	char			*enum_buf;
+	daos_key_desc_t		*kds = NULL;
+	int			rc;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (!test_runable(arg, 6))
+		skip();
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, typeb, 0, arg->myrank);
+
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+
+	/** write */
+	D_ALLOC(buf, 165509);
+	assert_non_null(buf);
+
+	iod.arr_nr = 1;
+	iod.arr_rgs = &rg;
+	rg.rg_idx = 0;
+	rg.rg_len = 165509;
+
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, buf, 165509);
+
+	/* perform small write */
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* check array size */
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 165509);
+
+	rc = daos_array_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_FREE(buf);
+
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_ALLOC_ARRAY(enum_buf, DFS_ITER_DKEY_BUF);
+	assert_non_null(enum_buf);
+	D_ALLOC_ARRAY(kds, DFS_ITER_NR);
+	assert_non_null(kds);
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, DFS_ITER_DKEY_BUF);
+	sgl.sg_iovs = &iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	nr = DFS_ITER_NR;
+		char		*ptr = &enum_buf[0];
+		uint32_t	i;
+
+		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		assert_rc_equal(rc, 0);
+
+		if (nr == 0)
+			continue;
+
+		for (i = 0; i < nr; i++) {
+			daos_key_t	dkey, akey;
+			uint64_t	dkey_val;
+			char		akey_val = '0';
+			daos_recx_t	recx;
+
+			memcpy(&dkey_val, ptr, kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+			d_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+			d_iov_set(&akey, &akey_val, 1);
+			rc = daos_obj_query_key(oh, DAOS_TX_NONE, DAOS_GET_RECX | DAOS_GET_MAX,
+						&dkey, &akey, &recx, NULL);
+			assert_rc_equal(rc, 0);
+		}
+	}
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(enum_buf);
+	D_FREE(kds);
+	par_barrier(PAR_COMM_WORLD);
+} /* End ec_array_key_query */
+
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
@@ -1126,6 +1233,8 @@ static const struct CMUnitTest array_api_tests[] = {
 	 strided_array, async_disable, NULL},
 	{"Array API: write after truncate",
 	 truncate_array, async_disable, NULL},
+	{"Array: EC Array Key Query",
+	 ec_array_key_query, async_disable, NULL},
 };
 
 static int
