@@ -4054,8 +4054,6 @@ int
 evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 
 {
-	int			 rc = 0;
-
 	if (root->tr_feats == feats)
 		return 0;
 
@@ -4064,20 +4062,7 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 		return -DER_INVAL;
 	}
 
-	if (DAOS_ON_VALGRIND) {
-		rc = umem_tx_begin(umm, NULL);
-		if (rc != 0)
-			return rc;
-		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
-				      UMEM_XADD_NO_SNAPSHOT);
-	}
+	umem_atomic_copy(umm, &root->tr_feats, &feats, sizeof(feats), UMEM_COMMIT_DEFER);
 
-	if (rc == 0)
-		root->tr_feats = feats;
-
-	if (DAOS_ON_VALGRIND)
-		rc = umem_tx_end(umm, rc);
-
-	return rc;
+	return 0;
 }
-
