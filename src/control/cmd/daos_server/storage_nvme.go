@@ -310,6 +310,12 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 
 	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
 
+	// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
+	//                 controllers (as specified in the server config file) then the backing
+	//                 devices of the unselected VMD controllers will be bound to no driver
+	//                 and therefore inaccessible from both OS and SPDK. Workaround is to run
+	//                 nvme scan --ignore-config to reset driver bindings.
+
 	// Reset NVMe device access.
 	_, err := resetBackend(resetReq)
 
@@ -385,6 +391,13 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePr
 	cmd.Info(bld.String())
 
 	if !cmd.SkipPrep {
+		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
+		//                 controllers (as specified in the server config file) then the
+		//                 backing devices of the unselected VMD controllers will be bound
+		//                 to no driver and therefore inaccessible from both OS and SPDK.
+		//                 Workaround is to run nvme scan --ignore-config to reset driver
+		//                 bindings.
+
 		req := storage.BdevPrepareRequest{
 			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
 			Reset_:       true,
