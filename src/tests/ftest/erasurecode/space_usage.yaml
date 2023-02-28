@@ -24,7 +24,7 @@ server_config:
       storage: auto
 pool:
   size: 95%
-  properties: ec_cell_sz:128KiB
+  properties: ec_cell_sz:128KiB,reclaim:disabled
 container:
   type: POSIX
   control_method: daos
