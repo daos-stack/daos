@@ -88,6 +88,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.ConfigSubCommand()
         elif self.sub_command.value == "cont":
             self.sub_command_class = self.ContSubCommand()
+        elif self.sub_command.value == "faults":
+            self.sub_command_class = self.FaultsSubCommand()
         elif self.sub_command.value == "network":
             self.sub_command_class = self.NetworkSubCommand()
         elif self.sub_command.value == "pool":
@@ -183,8 +185,10 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.dry_run = FormattedParameter("--dry-run", False)
                 self.reset = FormattedParameter("--reset", False)
-                self.failout = FormattedParameter("--failout", False)
-                self.auto = FormattedParameter("--auto", False)
+                self.failout = FormattedParameter("--failout={}", None)
+                self.auto = FormattedParameter("--auto={}", None)
+                self.find_orphans = FormattedParameter("--find-orphans", False)
+                self.policies = FormattedParameter("--policies={}", None)
 
         class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg check stop command."""
@@ -252,6 +256,79 @@ class DmgCommandBase(YamlCommand):
                 self.cont = FormattedParameter("--cont={}", None)
                 self.user = FormattedParameter("--user={}", None)
                 self.group = FormattedParameter("--group={}", None)
+
+    class FaultsSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg faults sub command."""
+
+        def __init__(self):
+            """Create a dmg faults subcommand object."""
+            super(DmgCommandBase.FaultsSubCommand, self).__init__(
+                "run/dmg/faults/*", "faults")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg faults sub command object."""
+            if self.sub_command.value == "add-checker-report":
+                self.sub_command_class = self.AddCheckerReportSubCommand()
+            elif self.sub_command.value == "mgmt-svc":
+                self.sub_command_class = self.MgmtSvcSubCommand()
+            elif self.sub_command.value == "pool-svc":
+                self.sub_command_class = self.PoolSvcSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class AddCheckerReportSubCommand(CommandWithParameters):
+            """Defines an object for the dmg faults add-checker-report command."""
+
+            def __init__(self):
+                """Create a dmg faults add-checker-report object."""
+                super(
+                    DmgCommandBase.FaultsSubCommand.AddCheckerReportSubCommand,
+                    self).__init__(
+                        "/run/dmg/faults/add-checker-report/*", "add-checker-report")
+                self.file = FormattedParameter("--file={}", None)
+                self.checker_report_class = FormattedParameter("--class={}", None)
+
+        class MgmtSvcSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg faults mgmt-svc command."""
+
+            def __init__(self):
+                """Create a dmg faults mgmt-svc object."""
+                super(
+                    DmgCommandBase.FaultsSubCommand.MgmtSvcSubCommand,
+                    self).__init__("/run/dmg/faults/mgmt-svc/*", "mgmt-svc")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg faults mgmt-svc sub command object."""
+                if self.sub_command.value == "pool":
+                    self.sub_command_class = self.PoolSubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class PoolSubCommand(CommandWithParameters):
+                """Defines an object for the dmg faults mgmt-svc pool command."""
+
+                def __init__(self):
+                    """Create a dmg faults mgmt-svc pool command object."""
+                    super().__init__("/run/dmg/faults/mgmt-svc/pool/*", "pool")
+                    self.pool = BasicParameter(None, position=1)
+                    self.checker_report_class = BasicParameter(None, position=2)
+                    self.svcl = FormattedParameter("--svcl={}", None)
+                    self.label = FormattedParameter("--label={}", None)
+
+        class PoolSvcSubCommand(CommandWithParameters):
+            """Defines an object for the dmg faults pool-svc command."""
+
+            def __init__(self):
+                """Create a dmg faults pool-svc object."""
+                super(
+                    DmgCommandBase.FaultsSubCommand.PoolSvcSubCommand,
+                    self).__init__("/run/dmg/faults/pool-svc/*", "pool-svc")
+                self.pool = BasicParameter(None, position=1)
+                self.checker_report_class = BasicParameter(None, position=2)
+                self.svcl = FormattedParameter("--svcl={}", None)
+                self.label = FormattedParameter("--label={}", None)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg network sub command."""
