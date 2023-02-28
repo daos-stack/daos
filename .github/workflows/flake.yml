@@ -1,15 +1,8 @@
 name: Flake
 
-# Run flake on all PRs.  This ignores many pre-existing errors however should catch
-# regressions and allows us to remove ignores and results issues iteratively.
-
+# Always run on Pull Requests as then this check can be marked as required.
 on:
   pull_request:
-    paths:
-      - '**/*.py'
-      - '**/SConscript'
-      - '**/SConstruct'
-      - .github/workflows/flake.yml
 
 jobs:
   flake8-lint:
