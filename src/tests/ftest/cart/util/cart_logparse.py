@@ -224,7 +224,7 @@ class LogLine():
         return '{}() {}'.format(self.function, ' '.join(fields))
 
     def endswith(self, item):
-        """Check is the line ends with a string.
+        """Check if the line ends with a string.
 
         This only matches on the actual string part of the message, not the timestamp/pid/faculty
         parts.
