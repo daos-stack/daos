@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -70,7 +70,7 @@ def create_epilog_script(args):
     sudo = "sudo" if args.sudo else ""
     with open(EPILOG_FILE, 'w') as script_file:
         script_file.write("#!/bin/bash\n#\n")
-        script_file.write("/usr/bin/bash -c 'pkill dfuse'\n")
+        script_file.write("/usr/bin/bash -c 'pkill --signal 9 dfuse'\n")
         script_file.write("/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse);"
                           "do fusermount3 -uz $dir;rm -rf $dir; done'\n")
         script_file.write("exit 0\n")
