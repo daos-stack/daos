@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -323,8 +323,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 
 		if (SCM_FREE(&vps) < (rb_reserve + POOL_SCM_HELD(pool) +
 				      space_est[DAOS_MEDIA_SCM])) {
-			D_ERROR("Insufficient rebuild reserved SCM space for Pool:"DF_UUID".\n",
-				DP_UUID(pool->vp_id));
+			D_ERROR("Insufficient SCM space due to check "DF_U64" bytes (%u percent) "
+				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
 			goto error;
 		}
 
@@ -334,8 +334,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		rb_reserve = NVME_TOTAL(&vps) * pool->vp_space_rb / 100;
 		/* 'NVMe held' has already been excluded from 'NVMe free' */
 		if (NVME_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_NVME])) {
-			D_ERROR("Insufficient rebuild reserved NVMe space for Pool:"DF_UUID".\n",
-				DP_UUID(pool->vp_id));
+			D_ERROR("Insufficient NVMe space due to check "DF_U64" bytes (%u percent) "
+				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
 			goto error;
 		}
 	}
