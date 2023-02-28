@@ -1466,6 +1466,7 @@ update_fetch_sv(void **state)
 
 	daos_csummer_destroy(&csummer);
 }
+
 #define assert_csum_err(fn) assert_rc_equal(-DER_CSUM, (fn))
 
 static void
