@@ -26,7 +26,7 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
-EPILOG_FILE = "/etc/slurm/epilog_soak.sh"
+EPILOG_FILE = "/var/tmp/epilog_soak.sh"
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
