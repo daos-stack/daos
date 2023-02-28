@@ -10,8 +10,6 @@ import shlex
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
-from command_utils_base import EnvironmentVariables
-
 
 class RunException(Exception):
     """Base exception for this module."""
@@ -314,13 +312,14 @@ def command_as_user(command, user, env=None):
         str: command adjusted to run as another user
 
     """
-    env = EnvironmentVariables(env or {})
-
     if not user:
+        if not env:
+            return command
         return " ".join([env.to_export_str(), command]).strip()
 
     cmd_list = ["sudo"]
-    cmd_list.extend(env.to_list())
+    if env:
+        cmd_list.extend(env.to_list())
     cmd_list.append("-n")
     if user != "root":
         # Use runuser to avoid using a password
