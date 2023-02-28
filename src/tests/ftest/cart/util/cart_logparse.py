@@ -1,5 +1,5 @@
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -102,7 +102,7 @@ class LogLine():
         except KeyError as error:
             raise InvalidLogFile(fields[4]) from error
 
-        self.ts = fields[0]
+        # self.time_stamp = fields[0]
         self._fields = fields[5:]
         try:
             if self._fields[1][-2:] == '()':
@@ -374,10 +374,10 @@ class StateIter():
     descriptor with the reuse-count appended.
     """
 
-    def __init__(self, li):
+    def __init__(self, log_iter):
         self.reuse_table = {}
         self.active_desc = {}
-        self.li = li
+        self._li = log_iter
         self._l = None
 
     def __iter__(self):
@@ -387,7 +387,7 @@ class StateIter():
         # Conversion from active pointer to line where it was created.
         self.active_desc = {}
 
-        self._l = iter(self.li)
+        self._l = iter(self._li)
         return self
 
     def __next__(self):
