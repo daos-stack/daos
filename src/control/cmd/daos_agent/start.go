@@ -64,6 +64,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
+	cmd.Debug("started dRPC server")
 
 	aicEnabled := !cmd.attachInfoCacheDisabled()
 	if !aicEnabled {
@@ -75,15 +76,18 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.Debug("Local fabric interface caching has been disabled")
 	}
 
+	cmd.Debug("initializing hardware providers")
 	hwprovFini, err := hwprov.Init(cmd.Logger)
 	if err != nil {
 		return err
 	}
 	defer hwprovFini()
 
+	cmd.Debug("starting process monitor")
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
+	cmd.Debug("creating fabric cache")
 	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
 		// Cache is required to use user-defined fabric interfaces
@@ -92,6 +96,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		fabricCache.Cache(ctx, nf)
 	}
 
+	cmd.Debug("registering dRPC modules")
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:            cmd.Logger,
@@ -106,6 +111,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		monitor:        procmon,
 	})
 
+	cmd.Debug("querying and caching hwloc content")
 	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
 	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.Logger)
 	if err != nil {
@@ -113,6 +119,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	defer hwloc.Cleanup(hwlocCtx)
 
+	cmd.Debug("starting dRPC server")
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
 		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
