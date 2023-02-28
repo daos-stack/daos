@@ -174,7 +174,6 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 		else
 			printf("corrupting %s in %s\n", fname, dirp);
 	} else if (op == PUNCH_OBJ) {
-		D_ASSERT(op == PUNCH_OBJ);
 		dirp = path;
 		printf("punching object %s\n", path);
 	} else {

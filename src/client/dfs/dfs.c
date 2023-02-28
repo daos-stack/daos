@@ -7268,7 +7268,7 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	rc = daos_obj_update(parent->oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
 			     NULL);
 	if (rc) {
-		D_ERROR("Failed to update object type ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update object type "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 

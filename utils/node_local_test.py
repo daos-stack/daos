@@ -3289,24 +3289,22 @@ class PosixTests():
 
         # try to read from corrupted entries. all should fail
         try:
-            fd = os.open(fname1, 'r')
-            os.close(fd)
-            assert False
+            with os.open(fname1, 'r'):
+                assert False
         except TypeError:
             pass
 
         try:
-            fd = os.open(fname3, 'r')
-            os.close(fd)
-            assert False
+            with os.open(fname3, 'r'):
+                assert False
         except TypeError:
             pass
 
         try:
             dir_list = os.listdir(dirname2)
             assert False
-        except OSError:
-            pass
+        except OSError as error:
+            assert error.errno == errno.EINVAL
 
         # fix corrupted entries
         cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
