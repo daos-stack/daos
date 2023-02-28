@@ -5,11 +5,15 @@ def scons():
     """Execute build"""
     Import('denv', 'pb_objs')
 
-    mocks = denv.Object("mocks.c")
+    tenv = denv.Clone()
 
-    denv.Append(CPPDEFINES={'DRPC_TEST': '1'})
+    tenv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
+
+    mocks = tenv.Object("mocks.c")
+
+    tenv.Append(CPPDEFINES={'DRPC_TEST': '1'})
     # Isolated unit tests
-    denv.d_test_program('srv_drpc_tests',
+    tenv.d_test_program('srv_drpc_tests',
                         source=[pb_objs, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
 

@@ -9,7 +9,7 @@
  */
 
 #include "svc.pb-c.h"
-#include "../srv_internal.h"
+#include "srv_internal.h"
 #include "mocks.h"
 
 /*

@@ -219,18 +219,31 @@ const ProtobufCMessageDescriptor shared__rasevent__engine_state_event_info__desc
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor shared__rasevent__pool_svc_event_info__field_descriptors[2] =
-    {
-	{
-	    "svc_reps", 1, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
-	    offsetof(Shared__RASEvent__PoolSvcEventInfo, n_svc_reps),
-	    offsetof(Shared__RASEvent__PoolSvcEventInfo, svc_reps), NULL, NULL, 0, /* flags */
-	    0, NULL, NULL /* reserved1,reserved2, etc */
-	},
-	{
-	    "version", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
-	    offsetof(Shared__RASEvent__PoolSvcEventInfo, version), NULL, NULL, 0, /* flags */
-	    0, NULL, NULL /* reserved1,reserved2, etc */
-	},
+{
+  {
+    "svc_reps",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, n_svc_reps),
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, svc_reps),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "version",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, version),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned shared__rasevent__pool_svc_event_info__field_indices_by_name[] = {
   0,   /* field[0] = svc_reps */
