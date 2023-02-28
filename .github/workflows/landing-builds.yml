@@ -140,6 +140,7 @@ jobs:
              sudo bash -c 'chmod a+r /tmp/*.log*' || true
       - name: Check for corefiles
         if: always()
+        continue-on-error: true
         run: |
              sudo bash -c 'ls -latr /tmp/core.*' || true
              sudo bash -c 'chmod a+r /tmp/core.*' || true
@@ -356,6 +357,7 @@ jobs:
              sudo bash -c 'chmod a+r /tmp/*.log*' || true
       - name: Check for corefiles
         if: always()
+        continue-on-error: true
         run: |
              sudo bash -c 'ls -latr /tmp/core.*' || true
              sudo bash -c 'chmod a+r /tmp/core.*' || true

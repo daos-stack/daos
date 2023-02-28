@@ -421,7 +421,7 @@ def get_base_env(clean=False):
     env['HG_LOG_SUBSYS'] = 'hg,na'
     env['FI_LOG_LEVEL'] = 'DEBUG'
     env['ABT_PRINT_CONFIG'] = '1'
-    env['ABT_THREAD_STACKSIZE'] = '32768'
+    env['ABT_THREAD_STACKSIZE'] = '12288'
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
