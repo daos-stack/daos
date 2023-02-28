@@ -26,8 +26,6 @@ from ClusterShell.NodeSet import NodeSet
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
-# pylint: disable=import-error,no-name-in-module
-from core_file import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -38,10 +36,11 @@ from results_utils import create_html, create_xml, Job, Results, TestResult   # 
 from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
-from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
-    get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
-    YamlException    # noqa: E402
+from user_utils import get_chown_command, groupadd, useradd, userdel,         \
+    get_group_id, get_user_groups                                             # noqa: E402
+from yaml_utils import get_test_category, get_yaml_data, find_values,         \
+    YamlUpdater, YamlException                                                # noqa: E402
+from core_file import CoreFileProcessing, CoreFileException                   # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
