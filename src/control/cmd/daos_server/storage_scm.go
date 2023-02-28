@@ -24,6 +24,7 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 	"several minutes and subsequent reboot maybe required.\n"
 
 type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
+type scmScanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
 
 type scmStorageCmd struct {
 	Prepare prepareSCMCmd `command:"prepare" description:"Prepare SCM devices so that they can be used with DAOS"`
@@ -192,24 +193,35 @@ type scanSCMCmd struct {
 	scmCmd
 }
 
-func (cmd *scanSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
-	}
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-
-	cmd.Info("Scanning locally-attached PMem storage...\n")
+func (cmd *scanSCMCmd) scanPMem(scanBackend scmScanFn) (*storage.ScmScanResponse, error) {
+	cmd.Info("Scanning locally-attached PMem storage...")
 
 	req := storage.ScmScanRequest{
 		SocketID: cmd.SocketID,
 	}
 	cmd.Debugf("scm scan request: %+v", req)
 
-	resp, err := svc.ScmScan(req)
+	resp, err := scanBackend(req)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Debugf("scm scan response: %+v", resp)
+
+	return resp, nil
+}
+
+func (cmd *scanSCMCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
+		return err
+	}
+
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+
+	cmd.Debugf("executing scan scm command: %+v", cmd)
+	resp, err := cmd.scanPMem(svc.ScmScan)
 	if err != nil {
 		return err
 	}
-	cmd.Debugf("scm scan response: %+v", resp)
 
 	var bld strings.Builder
 	if len(resp.Namespaces) > 0 {

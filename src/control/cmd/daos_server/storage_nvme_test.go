@@ -575,6 +575,9 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 		cfg           *config.Server
 		ignoreCfg     bool
 		iommuDisabled bool
+		skipPrep      bool
+		expPrepCalls  []storage.BdevPrepareRequest
+		expResetCalls []storage.BdevPrepareRequest
 		bmbc          *bdev.MockBackendConfig
 		expErr        error
 		expScanCall   *storage.BdevScanRequest
@@ -586,6 +589,13 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 						storage.MockNvmeController(1),
 					},
 				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{TargetUser: getCurrentUsername(t), EnableVMD: true},
+				{CleanHugePagesOnly: true},
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -611,11 +621,27 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 					WithBdevDeviceList(test.MockPCIAddr(1))),
 				(&engine.Config{}).WithStorage(storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(test.MockPCIAddr(3))),
+					WithBdevDeviceList(test.MockPCIAddr(2))),
 			),
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					TargetUser:   getCurrentUsername(t),
+					EnableVMD:    true,
+					PCIAllowList: spaceSepMultiAddrList,
+				},
+				{CleanHugePagesOnly: true},
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					TargetUser:   getCurrentUsername(t),
+					EnableVMD:    true,
+					PCIAllowList: spaceSepMultiAddrList,
+					Reset_:       true,
+				},
+			},
 			expScanCall: &storage.BdevScanRequest{
 				DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1),
-					test.MockPCIAddr(3)),
+					test.MockPCIAddr(2)),
 			},
 		},
 		"no devices specified in config": {
@@ -631,9 +657,16 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			cfg: (&config.Server{}).WithEngines(
 				(&engine.Config{}).WithStorage(),
 			),
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{TargetUser: getCurrentUsername(t), EnableVMD: true},
+				{CleanHugePagesOnly: true},
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
+			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
-		"cfg ignore flag set; device filtering skipped": {
+		"cfg ignore flag set; device filtering skipped; skip prep flag set": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -644,6 +677,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			ignoreCfg: true,
+			skipPrep:  true,
 			cfg: (&config.Server{}).WithEngines(
 				(&engine.Config{}).WithStorage(storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
@@ -675,6 +709,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			tc.scanCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
+			tc.scanCmd.SkipPrep = tc.skipPrep
 
 			gotErr := tc.scanCmd.scanNVMe(scs.NvmeScan, scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -688,6 +723,12 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expScanCall, &mbb.ScanCalls[0], cmpopt); diff != "" {
 				t.Fatalf("unexpected scan calls (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, cmpopt); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls, cmpopt); diff != "" {
+				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 			}
 			mbb.RUnlock()
 		})
@@ -744,33 +785,22 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			errors.New("unknown"),
 		},
 		{
-			"Prepare namespaces with all opts",
-			"scm prepare -S 2 -f --socket 0",
-			printCommand(t, &prepareSCMCmd{
-				NrNamespacesPerSocket: 2,
-				Force:                 true,
-			}),
+			"Scan drives",
+			"nvme scan",
+			printCommand(t, &scanNVMeCmd{}),
 			nil,
 		},
 		{
-			"Prepare namespaces; bad opt",
-			"scm prepare -X",
-			"",
-			errors.New("unknown"),
-		},
-		{
-			"Reset namespaces with all opts",
-			"scm reset -f --socket 1",
-			printCommand(t, &resetSCMCmd{
-				Force: true,
-			}),
+			"Scan drives; disable vmd",
+			"nvme scan --disable-vmd",
+			printCommand(t, &scanNVMeCmd{DisableVMD: true}),
 			nil,
 		},
 		{
-			"Reset namespaces; bad opt",
-			"scm reset -S",
-			"",
-			errors.New("unknown"),
+			"Scan drives; skip prep",
+			"nvme scan --skip-prep",
+			printCommand(t, &scanNVMeCmd{SkipPrep: true}),
+			nil,
 		},
 	})
 }
