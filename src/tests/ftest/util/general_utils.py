@@ -1110,10 +1110,9 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} /usr/bin/mkdir -p {}".format(
-            get_clush_command(hosts, "-S -v", sudo), directory),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
+    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
@@ -1149,10 +1148,9 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} {} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    chown_command = get_chown_command(owner, group, file=filename)
+    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
@@ -1210,8 +1208,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = "{} rm -f {}".format(
-                    get_clush_command(other_hosts, "-S -v", True), source)
+                rm_command = get_clush_command(
+                    other_hosts, args="-S -v", command="rm -f {}".format(source),
+                    command_sudo=True)
                 run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
@@ -1220,15 +1219,15 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if result is None or result.exit_status == 0:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = "{} cp {} {}".format(
-                    get_clush_command(hosts, "-S -v", True), source,
-                    destination)
+                command = get_clush_command(
+                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
+                    command_sudo=True)
                 result = run_command(command, timeout, verbose, raise_exception)
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
-            command = "{} --copy {} --dest {}".format(
-                get_clush_command(hosts, "-S -v", False), source, destination)
+            command = get_clush_command(
+                hosts, args="-S -V --copy {} --dest {}".format(source, destination))
             result = run_command(command, timeout, verbose, raise_exception)
 
         # If requested update the ownership of the destination file
@@ -1273,11 +1272,9 @@ def get_file_listing(hosts, files):
                 pid             - command's pid
 
     """
-    result = run_command(
-        "{} /usr/bin/ls -la {}".format(
-            get_clush_command(hosts, "-S -v", True),
-            convert_string(files, " ")),
-        verbose=False, raise_exception=False)
+    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
+    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
+    result = run_command(command, verbose=False, raise_exception=False)
     return result
 
 

@@ -11,7 +11,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from results_utils import TestName, TestResult, Results, Job, create_xml
-from run_utils import get_clush_command_list, run_local, run_remote
+from run_utils import get_clush_command, run_local, run_remote
 
 
 class CmockaUtils():
@@ -139,10 +139,10 @@ class CmockaUtils():
         run_remote(test.log, self.hosts, " ".join(ls_command))
 
         # Copy any remote cmocka files back to this host
-        command = get_clush_command_list(self.hosts)
-        command.extend(["--rcopy", self.cmocka_dir, "--dest", self.cmocka_dir])
+        command = get_clush_command(
+            self.hosts, args=" ".join(["--rcopy", self.cmocka_dir, "--dest", self.cmocka_dir]))
         try:
-            run_local(test.log, " ".join(command))
+            run_local(test.log, command)
 
         finally:
             test.log.debug("Local %s directory after clush:", self.cmocka_dir)

@@ -10,6 +10,8 @@ import shlex
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+from command_utils_base import EnvironmentVariables
+
 
 class RunException(Exception):
     """Base exception for this module."""
@@ -163,45 +165,29 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
-def get_clush_command_list(hosts, args=None, sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
     """Get the clush command with optional sudo arguments.
 
     Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        list: list of the clush command
-
-    """
-    command = ["clush", "-w", str(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo", "-n"])
-        command.extend(["sudo", "-n"])
-    return command
-
-
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
+        hosts (NodeSet): hosts with which to use the clush command.
+        args (str, optional): additional clush command line arguments. Defaults to None.
+        command (str, optional): command to execute with clush. Defaults to empty string.
+        command_env (EnvironmentVariables, optional): environment variables to export with the
+            command. Defaults to None.
+        sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
 
     Returns:
         str: the clush command
 
     """
-    return " ".join(get_clush_command_list(hosts, args, sudo))
+    cmd_list = ["clush"]
+    if args:
+        cmd_list.append(args)
+    cmd_list.extend(["-w", str(hosts)])
+    # If ever needed, this is how to disable host key checking:
+    # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
+    cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
+    return " ".join(cmd_list)
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
@@ -328,14 +314,13 @@ def command_as_user(command, user, env=None):
         str: command adjusted to run as another user
 
     """
+    env = EnvironmentVariables(env or {})
+
     if not user:
-        if not env:
-            return command
         return " ".join([env.to_export_str(), command]).strip()
 
     cmd_list = ["sudo"]
-    if env:
-        cmd_list.extend(env.to_list())
+    cmd_list.extend(env.to_list())
     cmd_list.append("-n")
     if user != "root":
         # Use runuser to avoid using a password
