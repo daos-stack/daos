@@ -23,7 +23,7 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
+      nr_xs_helpers: 2
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
@@ -33,7 +33,7 @@ server_config:
       storage: auto
     1:
       pinned_numa_node: 1
-      nr_xs_helpers: 1
+      nr_xs_helpers: 2
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
@@ -43,17 +43,14 @@ server_config:
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 12GB
-  nvme_size: 200GB
-  properties: reclaim:time,ec_cell_sz:64KiB
+pool_jobs:
+  size: 75%
   control_method: dmg
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
+  size: 10%
   control_method: dmg
 pool_racer:
-  scm_size: 3GB
-  nvme_size: 10GB
+  size: 10%
   control_method: dmg
 container:
   type: POSIX
