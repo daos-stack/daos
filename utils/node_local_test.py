@@ -415,10 +415,6 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
 
-    # Enable this to debug memory errors, it has a performance impact but will scan the heap
-    # for corruption.
-    env['MALLOC_CHECK_'] = '3'
-
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
 
@@ -2166,20 +2162,6 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
-    @needs_dfuse
-    def test_create_simple(self):
-        """Create a file that already exists"""
-        new_file = join(self.dfuse.dir, 'new_file')
-        with open(new_file, 'w') as fd:
-            fd.write('hello')
-
-        with open(new_file, 'w') as fd:
-            fd.write('hello')
-
-        with open(new_file, 'r') as fd:
-            data = fd.read()
-            print(data)
-
     @needs_dfuse_with_opt(wbcache=True, caching=True)
     def test_stat_before_open(self):
         """Run open/close in a loop on the same file
@@ -3647,7 +3629,7 @@ def run_in_fg(server, conf, args):
     dfuse = DFuse(server,
                   conf,
                   pool=pool.uuid,
-                  caching=False,
+                  caching=True,
                   wbcache=False,
                   multi_user=args.multi_user)
 
