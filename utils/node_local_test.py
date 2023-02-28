@@ -417,7 +417,7 @@ def get_base_env(clean=False):
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
-    env['MALLOC_CHECK_'] = '3'
+    # env['MALLOC_CHECK_'] = '3'
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
