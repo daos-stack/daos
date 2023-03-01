@@ -1211,29 +1211,29 @@ ec_array_key_query(void **state)
 } /* End ec_array_key_query */
 
 static const struct CMUnitTest array_api_tests[] = {
-	{"Array API: create/open/close (blocking)",
+	{"Array 0 API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
-	{"Array API: small/simple array IO (blocking)",
+	{"Array 1 API: small/simple array IO (blocking)",
 	 small_io, async_disable, NULL},
-	{"Array API: Contiguous memory and array (blocking)",
+	{"Array 2 API: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
-	{"Array API: Contiguous memory and array (non-blocking)",
+	{"Array 3 API: Contiguous memory and array (non-blocking)",
 	 contig_mem_contig_arr_io, async_enable, NULL},
-	{"Array API: Contiguous memory Strided array (blocking)",
+	{"Array 4 API: Contiguous memory Strided array (blocking)",
 	 contig_mem_str_arr_io, async_disable, NULL},
-	{"Array API: Contiguous memory Strided array (non-blocking)",
+	{"Array 5 API: Contiguous memory Strided array (non-blocking)",
 	 contig_mem_str_arr_io, async_enable, NULL},
-	{"Array API: Strided memory and array (blocking)",
+	{"Array 6 API: Strided memory and array (blocking)",
 	 str_mem_str_arr_io, async_disable, NULL},
-	{"Array API: Strided memory and array (non-blocking)",
+	{"Array 7 API: Strided memory and array (non-blocking)",
 	 str_mem_str_arr_io, async_enable, NULL},
-	{"Array API: Read from Empty array and records (blocking)",
+	{"Array 8 API: Read from Empty array and records (blocking)",
 	 read_empty_records, async_disable, NULL},
-	{"Array API: strided_array (blocking)",
+	{"Array 9 API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
-	{"Array API: write after truncate",
+	{"Array 10 API: write after truncate",
 	 truncate_array, async_disable, NULL},
-	{"Array: EC Array Key Query",
+	{"Array 11: EC Array Key Query",
 	 ec_array_key_query, async_disable, NULL},
 };
 
@@ -1245,14 +1245,20 @@ daos_array_setup(void **state)
 }
 
 int
-run_daos_array_test(int rank, int size)
+run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS_Array_API",
-					 array_api_tests, daos_array_setup,
-					 test_teardown);
+	par_barrier(PAR_COMM_WORLD);
+	if (sub_tests_size == 0) {
+		sub_tests_size = ARRAY_SIZE(array_api_tests);
+		sub_tests = NULL;
+	}
+
+	rc = run_daos_sub_tests("DAOS_Array_API", array_api_tests, ARRAY_SIZE(array_api_tests),
+				sub_tests, sub_tests_size, daos_array_setup, test_teardown);
 
 	par_barrier(PAR_COMM_WORLD);
+
 	return rc;
 }
