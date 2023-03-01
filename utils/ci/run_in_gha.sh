@@ -81,10 +81,10 @@ echo ::group::Setting up daos_server_helper
 echo ::endgroup::
 
 echo ::group::Tar /opt/daos et /home/daos/daos
-echo backing-up /opt/daos in /tmp/${DOCKER_BASE}_opt_daos.tgz
-tar czf /tmp/${DOCKER_BASE}_opt_daos.tgz /opt/daos
-echo backing-up /home/daos in  /tmp/${DOCKER_BASE}_home_daos.tgz
-tar czf /tmp/${DOCKER_BASE}_home_daos.tgz /home/daos
+echo backing-up /opt/daos in /tmp/${DOCKER_DISTRO}_opt_daos.tgz
+tar czf /tmp/${DOCKER_DISTRO}_opt_daos.tgz /opt/daos
+echo backing-up /home/daos in  /tmp/${DOCKER_DISTRO}_home_daos.tgz
+tar czf /tmp/${DOCKER_DISTRO}_home_daos.tgz /home/daos
 echo ::endgroup::
 
 echo ::group::Container copy test

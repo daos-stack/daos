@@ -97,6 +97,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
+      DOCKER_DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -131,7 +132,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_BASE --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -280,6 +281,9 @@ jobs:
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
+      COMPILER: ${{ matrix.compiler }}
+      DOCKER_DISTRO ${{ matrix.distro }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -348,7 +352,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_BASE --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
+                        --env DOCKER_DISTRO --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -410,6 +414,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      DOCKER_DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -475,9 +480,9 @@ jobs:
              sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
              sudo apt-get update
              sudo apt-get install gdb
-             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+             docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_BASE --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
