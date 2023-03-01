@@ -88,6 +88,131 @@ vos_meta_readv(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t
 	return vos_meta_rwv(store, iod, sgl, false);
 }
 
+
+#define META_READ_BATCH_SIZE (1024 * 1024)
+
+struct meta_load_control {
+	ABT_mutex		mlc_lock;
+	ABT_cond		mlc_cond;
+	int			mlc_rc;
+	int			mlc_inflights;
+	int			mlc_wait_finished;
+};
+
+struct meta_load_arg {
+	daos_off_t		  mla_off;
+	uint64_t		  mla_read_size;
+	char		         *mla_start;
+	struct umem_store        *mla_store;
+	struct meta_load_control *mla_control;
+};
+
+#define META_READ_QD_NR	4
+
+static inline void
+vos_meta_load_fn(void *arg)
+{
+	struct meta_load_arg	  *mla = arg;
+	struct umem_store_iod	  iod;
+	d_sg_list_t		  sgl;
+	d_iov_t			  iov;
+	int			  rc;
+	struct meta_load_control *mlc = mla->mla_control;
+
+	D_ASSERT(mla != NULL);
+	iod.io_nr             = 1;
+	iod.io_regions        = &iod.io_region;
+	iod.io_region.sr_addr = mla->mla_off;
+	iod.io_region.sr_size = mla->mla_read_size;
+
+	sgl.sg_iovs   = &iov;
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, mla->mla_start, mla->mla_read_size);
+
+	rc = vos_meta_rwv(mla->mla_store, &iod, &sgl, false);
+	if (!mlc->mlc_rc && rc)
+		mlc->mlc_rc = rc;
+
+	D_FREE(mla);
+	mlc->mlc_inflights--;
+	if (mlc->mlc_wait_finished && mlc->mlc_inflights == 0)
+		ABT_cond_signal(mlc->mlc_cond);
+	else if (!mlc->mlc_wait_finished && mlc->mlc_inflights == META_READ_QD_NR)
+		ABT_cond_signal(mlc->mlc_cond);
+}
+
+static inline int
+vos_meta_load(struct umem_store *store, char *start)
+{
+	uint64_t		 read_size;
+	uint64_t		 remain_size = store->stor_size;
+	daos_off_t		 off = 0;
+	int			 rc = 0;
+	struct meta_load_arg	*mla;
+	struct meta_load_control mlc;
+
+	mlc.mlc_inflights = 0;
+	mlc.mlc_rc = 0;
+	mlc.mlc_wait_finished = 0;
+	rc = ABT_mutex_create(&mlc.mlc_lock);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to create ABT mutex: %d\n", rc);
+		return rc;
+	}
+
+	rc = ABT_cond_create(&mlc.mlc_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to create ABT cond: %d", rc);
+		goto destroy_lock;
+	}
+
+	while (remain_size) {
+		read_size =
+		    (remain_size > META_READ_BATCH_SIZE) ? META_READ_BATCH_SIZE : remain_size;
+
+		D_ALLOC_PTR(mla);
+		if (mla == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		mla->mla_off = off;
+		mla->mla_read_size = read_size;
+		mla->mla_start = start;
+		mla->mla_store = store;
+		mla->mla_control = &mlc;
+
+		mlc.mlc_inflights++;
+		rc = vos_load_exec(vos_meta_load_fn, (void *)mla);
+		if (rc || mlc.mlc_rc) {
+			D_FREE(mla);
+			mlc.mlc_inflights--;
+			break;
+		}
+		if (mlc.mlc_inflights > META_READ_QD_NR) {
+			ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+			D_ASSERT(mlc.mlc_inflights <= META_READ_QD_NR);
+		}
+
+		off += read_size;
+		start += read_size;
+		remain_size -= read_size;
+	}
+
+	mlc.mlc_wait_finished = 1;
+	if (mlc.mlc_inflights > 0) {
+		ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+		D_ASSERT(mlc.mlc_inflights == 0);
+	}
+	ABT_cond_free(&mlc.mlc_cond);
+
+destroy_lock:
+	ABT_mutex_free(&mlc.mlc_lock);
+	return rc ? rc : mlc.mlc_rc;
+}
+
 static inline int
 vos_meta_writev(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl)
 {
@@ -222,15 +347,16 @@ done:
 }
 
 struct umem_store_ops vos_store_ops = {
-    .so_read       = vos_meta_readv,
-    .so_write      = vos_meta_writev,
-    .so_flush_prep = vos_meta_flush_prep,
-    .so_flush_copy = vos_meta_flush_copy,
-    .so_flush_post = vos_meta_flush_post,
-    .so_wal_reserv = vos_wal_reserve,
-    .so_wal_submit = vos_wal_commit,
-    .so_wal_replay = vos_wal_replay,
-    .so_wal_id_cmp = vos_wal_id_cmp,
+	.so_load	= vos_meta_load,
+	.so_read	= vos_meta_readv,
+	.so_write	= vos_meta_writev,
+	.so_flush_prep	= vos_meta_flush_prep,
+	.so_flush_copy	= vos_meta_flush_copy,
+	.so_flush_post	= vos_meta_flush_post,
+	.so_wal_reserv	= vos_wal_reserve,
+	.so_wal_submit	= vos_wal_commit,
+	.so_wal_replay	= vos_wal_replay,
+	.so_wal_id_cmp	= vos_wal_id_cmp,
 };
 
 bool

@@ -599,3 +599,14 @@ dss_offload_exec(int (*func)(void *), void *arg)
 
 	return dss_ult_execute(func, arg, NULL, NULL, DSS_XS_OFFLOAD, info->dmi_tgt_id, 0);
 }
+
+int
+dss_load_exec(void (*func)(void *), void *arg)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	D_ASSERT(info != NULL);
+	D_ASSERT(info->dmi_xstream->dx_main_xs);
+
+	return dss_ult_create(func, arg, DSS_XS_SELF, info->dmi_tgt_id, 0, NULL);
+}

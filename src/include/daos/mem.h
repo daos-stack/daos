@@ -93,6 +93,7 @@ struct umem_store_iod {
 struct umem_store;
 
 struct umem_store_ops {
+	int	(*so_load)(struct umem_store *store, char *start);
 	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
 			   d_sg_list_t *sgl);
 	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
