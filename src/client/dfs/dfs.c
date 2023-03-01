@@ -6452,7 +6452,6 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 	d_iov_t		iov, sg_iov;
 	daos_recx_t	recx;
 	uint32_t	nr;
-	char		*ptr;
 	daos_iod_t	iod;
 	d_iov_t		marker;
 	bool		mark_data = true;
@@ -6470,7 +6469,6 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 	sgl.sg_nr_out = 0;
 	d_iov_set(&iov, enum_buf, DFS_ITER_ENTRY_BUF);
 	sgl.sg_iovs = &iov;
-	ptr = enum_buf;
 
 	/** set sgl for fetch */
 	entry_sgl.sg_nr = 1;
@@ -6488,6 +6486,7 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	i;
+		char		*ptr;
 
 		nr = DFS_ITER_NR;
 		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
@@ -6497,7 +6496,7 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 		}
 
 		/** for every entry, fetch its oid and mark it in the oit table */
-		for (i = 0; i < nr; i++) {
+		for (ptr = enum_buf, i = 0; i < nr; i++) {
 			daos_obj_id_t	entry_oid;
 			daos_key_t	dkey;
 
@@ -7198,5 +7197,83 @@ out_super:
 	daos_obj_close(super_oh, NULL);
 out_prop:
 	daos_prop_free(prop);
+	return rc;
+}
+
+int
+dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
+{
+	struct dfs_entry	entry = {0};
+	bool			exists;
+	daos_key_t		dkey;
+	size_t			len;
+	enum daos_otype_t	otype;
+	mode_t			mode;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iov;
+	daos_recx_t		recx;
+	daos_iod_t		iod;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
+		D_GOTO(out, rc);
+	}
+	if (exists == false)
+		D_GOTO(out, rc = ENOENT);
+
+	/** get the object type from the oid */
+	otype = daos_obj_id2type(entry.oid);
+
+	/** reset the type bits to 0 and set 700 permission bits */
+	mode = S_IWUSR | S_IRUSR | S_IXUSR;
+	/** set the type bits according to oid type and entry value */
+	if (daos_is_array_type(otype)) {
+		mode |= S_IFREG;
+		D_PRINT("Setting entry type to S_IFREG\n");
+	} else if (entry.value_len) {
+		mode |= S_IFLNK;
+		D_PRINT("Setting entry type to S_IFLNK\n");
+	} else {
+		mode |= S_IFDIR;
+		D_PRINT("Setting entry type to S_IFDIR\n");
+	}
+
+	/** Update mode bits on storage */
+	d_iov_set(&dkey, (void *)name, len);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	recx.rx_idx	= MODE_IDX;
+	recx.rx_nr	= sizeof(mode_t);
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+	d_iov_set(&sg_iov, &mode, sizeof(mode_t));
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	rc = daos_obj_update(parent->oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+			     NULL);
+	if (rc) {
+		D_ERROR("Failed to update object type "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+out:
+	if (entry.value)
+		D_FREE(entry.value);
 	return rc;
 }

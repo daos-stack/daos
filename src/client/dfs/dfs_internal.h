@@ -109,6 +109,10 @@ dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
 int
 dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
 
+/** Internal routine for the daos fs tool to fix a corrupted entry type in the mode bits */
+int
+dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name);
+
 /*
  * Internal routine to recreate a POSIX container if it was ever corrupted as part of a catastrophic
  * recovery event.

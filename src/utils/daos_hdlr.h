@@ -191,7 +191,7 @@ int fs_copy_hdlr(struct cmd_args_s *ap);
 int fs_dfs_hdlr(struct cmd_args_s *ap);
 int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
-int fs_set_cs_hdlr(struct cmd_args_s *ap);
+int fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
 int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
 int fs_relink_root_hdlr(struct cmd_args_s *ap);
 
