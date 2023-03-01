@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -542,14 +542,15 @@ dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 	if (rc)
 		D_GOTO(free, rc);
 
-	if (!future_arg->dfa_async)
+	if (!future_arg->dfa_async) {
 		ABT_future_wait(future);
-free:
-	if (rc == 0)
 		rc = future_arg->dfa_status;
-
+	}
+free:
 	if (!future_arg->dfa_async) {
 		ABT_future_free(&future);
+		D_FREE(future_arg);
+	} else if (rc) {
 		D_FREE(future_arg);
 	}
 	return rc;
