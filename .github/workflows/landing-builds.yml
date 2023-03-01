@@ -283,7 +283,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DOCKER_DISTRO ${{ matrix.distro }}
+      DOCKER_DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
