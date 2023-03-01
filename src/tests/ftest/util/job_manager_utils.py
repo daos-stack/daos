@@ -16,9 +16,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, \
-    get_journalctl_command
-from run_utils import run_remote
+from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command
+from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
 
@@ -258,12 +257,18 @@ class JobManager(ExecutableCommand):
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex
-        if not stop_processes(self.log, self._hosts, regex):
-            self.log.info("No remote %s processes killed (none found), done.", regex)
+        detected, running = stop_processes(self.log, self._hosts, regex)
+        if not detected:
+            self.log.info(
+                "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote %s process on %s! Please investigate/report.***",
+                regex, running)
         else:
             self.log.info(
-                "***At least one remote %s process needed to be killed! Please "
-                "investigate/report.***", regex)
+                "***At least one remote %s process needed to be killed on %s! Please investigate/"
+                "report.***", regex, detected)
 
 
 class Orterun(JobManager):
@@ -602,11 +607,6 @@ class Systemctl(JobManager):
             "stop": None,
             "restart": None,
         }
-
-    @property
-    def hosts(self):
-        """Get the list of hosts associated with this command."""
-        return list(self._hosts) if self._hosts else None
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.

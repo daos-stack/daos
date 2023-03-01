@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,9 +10,10 @@ import threading
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, stop_processes, get_journalctl
+from general_utils import report_errors, get_journalctl
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import stop_processes
 
 
 class AgentFailure(IorTestBase):
@@ -207,11 +208,15 @@ class AgentFailure(IorTestBase):
         since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
-        if not stop_processes(self.log, hosts=agent_host_kill, pattern=pattern):
-            msg = "No daos_agent process killed from {}!".format(agent_host_kill)
+        detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern)
+        if not detected:
+            msg = "No daos_agent process killed on {}!".format(agent_host_kill)
+            errors.append(msg)
+        elif running:
+            msg = "Unable to kill daos_agent processes on {}!".format(running)
             errors.append(msg)
         else:
-            self.log.info("daos_agent in %s killed", agent_host_kill)
+            self.log.info("daos_agent processes on %s killed", detected)
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # 4. Wait until both of the IOR thread ends.

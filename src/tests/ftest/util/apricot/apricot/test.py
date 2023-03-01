@@ -27,12 +27,12 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    stop_processes, get_default_config_file, pcmd, get_file_listing, \
-    DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
-    set_avocado_config_value, nodeset_append_suffix
+    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command, \
+    dump_engines_stacks, get_avocado_config_value, set_avocado_config_value, nodeset_append_suffix
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
+from run_utils import stop_processes
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE

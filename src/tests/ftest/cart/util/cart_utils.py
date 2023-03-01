@@ -16,7 +16,7 @@ import cart_logtest
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import stop_processes
+from run_utils import stop_processes
 from host_utils import get_local_host
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
@@ -158,12 +158,10 @@ class CartTest(TestWithoutServers):
         negative_filter = r"'\<(grep|defunct)\>'"
         retry_count = 0
         while retry_count < 2:
-            if stop_processes(self.log, localhost, processes, negative_filter=negative_filter):
-                self.log.info("Stopped '%s' processes on %s", processes, localhost)
-                retry_count += 1
-            else:
-                self.log.info("All '%s' processes have been stopped", processes)
-                retry_count = 99
+            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
+            if not running:
+                retry_count = 2
+            retry_count += 1
         if retry_count == 2:
             error_list.append("Unable to stop cart processes!")
         return error_list

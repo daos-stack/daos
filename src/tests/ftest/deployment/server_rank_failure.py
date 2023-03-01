@@ -11,9 +11,10 @@ from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, stop_processes
+from general_utils import report_errors
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import stop_processes
 
 
 class ServerRankFailure(IorTestBase):
@@ -92,10 +93,13 @@ class ServerRankFailure(IorTestBase):
             engine_kill_host (str): Hostname to kill engine.
         """
         pattern = self.server_managers[0].manager.job.command_regex
-        if not stop_processes(self.log, hosts=NodeSet(engine_kill_host), pattern=pattern):
-            self.log.info("No remote daos_engine process killed!")
+        detected, running = stop_processes(self.log, NodeSet(engine_kill_host), pattern)
+        if not detected:
+            self.log.info("No daos_engine process killed on %s!", engine_kill_host)
+        elif running:
+            self.log.info("Unable to kill daos_engine processes on %s!", running)
         else:
-            self.log.info("daos_engine in %s killed", engine_kill_host)
+            self.log.info("daos_engine processes on %s killed", detected)
 
     def verify_ior_worked(self, ior_results, job_num, errors):
         """Verify that the IOR worked.

@@ -10,7 +10,7 @@ import time
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from general_utils import stop_processes
+from run_utils import stop_processes
 
 
 def get_hostname(host_addr):

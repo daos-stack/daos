@@ -841,54 +841,6 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     return result
 
 
-def stop_processes(log, hosts, pattern, verbose=True, timeout=60, negative_filter=None):
-    """Stop the processes on each hosts that match the pattern.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to stop any processes matching the pattern
-        pattern (str): regular expression used to find process names to stop
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
-        added_filter (str, optional): negative filter to better identify processes. Defaults to
-            None.
-
-    Returns:
-        bool: True if processes matching the pattern where found on at least one host and a pkill
-            command was issued; False if no processes where found matching the pattern on any of the
-            hosts.
-
-    """
-    command = "/usr/bin/pgrep --list-full {}".format(pattern)
-    pattern_match = str(pattern)
-    if negative_filter:
-        command = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(pattern, negative_filter)
-        pattern_match += " and doesn't match " + str(negative_filter)
-
-    # Search for any active processes
-    log.debug("Searching for any processes on %s that match: %s", hosts, pattern_match)
-    result = run_remote(log, hosts, command, verbose, timeout)
-    if not result.passed_hosts:
-        log.debug("No processes found on %s that match: %s", result.failed_hosts, pattern_match)
-        return False
-
-    # Attempt to kill any processes found on any of the hosts with increasing force
-    steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
-    while steps and result.passed_hosts:
-        step = steps.pop(0)
-        log.debug(
-            "Killing%s any processes on %s that match: %s",
-            step[0], result.passed_hosts, pattern_match)
-        kill_command = "sudo /usr/bin/pkill {}{}".format(step[0], pattern)
-        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
-        time.sleep(step[1])
-        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
-    if result.passed_hosts:
-        log.warning(
-            "Processes still running on %s that match: %s", result.passed_hosts, pattern_match)
-    return True
-
-
 def get_log_file(name):
     """Get the full log file name and path.
 

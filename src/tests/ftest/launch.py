@@ -35,7 +35,8 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException, \
+    stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
@@ -2411,19 +2412,13 @@ class Launch():
 
         proc_pattern = "|".join(PROCS_TO_CLEANUP)
         logger.debug("Looking for running processes: %s", proc_pattern)
-        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
-        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
-        if pgrep_result.passed_hosts:
-            any_found = True
-            logger.debug("Killing running processes: %s", proc_pattern)
-            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
-            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
-            if pkill_result.failed_hosts:
-                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-            else:
-                message = f"Running processes found on {pgrep_result.passed_hosts}"
-                self._warn_test(self.result.tests[-1], "Process", message)
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'")
+        if running:
+            message = f"Failed to kill processes on {running}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+        elif detected:
+            message = f"Running processes found on {detected}"
+            self._warn_test(self.result.tests[-1], "Process", message)
 
         logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging

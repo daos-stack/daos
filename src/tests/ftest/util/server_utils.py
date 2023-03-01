@@ -16,13 +16,12 @@ from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, convert_list, stop_processes, get_display_size, \
-    run_pcmd
+from general_utils import pcmd, get_log_file, convert_list, get_display_size, run_pcmd
 from host_utils import get_local_host
 from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
-from run_utils import run_remote
+from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -546,7 +545,7 @@ class DaosServerManager(SubprocessManager):
             wait (bool, optional): Whether or not to wait until the servers have joined. Defaults to
                 False.
         """
-        orig_hosts = self.manager.hosts
+        orig_hosts = self.manager.hosts.copy()
         self.manager.assign_hosts(hosts)
         orig_pattern = self.manager.job.pattern
         orig_count = self.manager.job.pattern_count
@@ -874,13 +873,19 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        # Try to dump all server's ULTs stacks before kill.
-        if not stop_processes(self.log, self._hosts, regex):
-            print("No remote {} server processes killed (none found), done.".format(regex))
+        detected, running = stop_processes(self.log, self._hosts, regex)
+        if not detected:
+            self.log.info(
+                "No remote %s server processes killed on %s (none found), done.",
+                regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote server %s process on %s! Please investigate/report.***",
+                regex, running)
         else:
-            print(
-                "***At least one remote {} server process needed to be killed! "
-                "Please investigate/report.***".format(regex))
+            self.log.info(
+                "***At least one remote server %s process needed to be killed on %s! Please "
+                "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
