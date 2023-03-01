@@ -296,7 +296,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=':'.join([attr, value]),
+            ("pool", "set-attr"), pool=pool, attr=':'.join([str(attr), str(value)]),
             sys_name=sys_name)
 
     def pool_set_attrs(self, pool, attrs, sys_name=None):
@@ -315,9 +315,10 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, str(value)]) for key, value in attrs.items()]
-        return self._get_result(("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
-                                sys_name=sys_name)
+        attr_list = [':'.join([str(key), str(value)]) for key, value in attrs.items()]
+        return self._get_result(
+            ("pool", "set-attr"), pool=pool, attr=','.join(attr_list),
+            sys_name=sys_name)
 
     def pool_get_attr(self, pool, attr, sys_name=None):
         """Set pool attribute.
@@ -604,7 +605,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=':'.join([attr, val]))
+            sys_name=sys_name, attr=':'.join([str(attr), str(val)]))
 
     def container_set_attrs(self, pool, cont, attrs, sys_name=None):
         """Set multiple container attributes.
@@ -623,7 +624,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool set-attr command fails.
 
         """
-        attr_list = [':'.join([key, val]) for key, val in attrs.items()]
+        attr_list = [':'.join([str(key), str(val)]) for key, val in attrs.items()]
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
             attr=','.join(attr_list), sys_name=sys_name)
