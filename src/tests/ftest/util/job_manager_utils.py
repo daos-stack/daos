@@ -92,12 +92,28 @@ class JobManager(ExecutableCommand):
         """
         super().__init__(namespace, command, path, subprocess)
         self.job = job
-        self._hosts = None
+        self._hosts = NodeSet()
 
     @property
     def hosts(self):
-        """Get the list of hosts associated with this command."""
+        """Get the hosts associated with this command.
+
+        Returns:
+            NodeSet: hosts used to run the job
+
+        """
         return self._hosts
+
+    @hosts.setter
+    def hosts(self, hosts):
+        """Set the hosts associated with this command.
+
+        Note: Use assign_hosts() to ensure other command options match the host assignment
+
+        Args:
+            hosts (NodeSet): hosts used to run the job
+        """
+        self._hosts = hosts.copy()
 
     @property
     def job(self):
@@ -311,7 +327,7 @@ class Orterun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts.copy()
+        self.hosts = hosts
         kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -420,7 +436,7 @@ class Mpirun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts.copy()
+        self.hosts = hosts
         kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -510,7 +526,7 @@ class Srun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts.copy()
+        self.hosts = hosts
         kwargs = {"hosts": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
@@ -684,7 +700,7 @@ class Systemctl(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None. Not used.
         """
-        self._hosts = hosts.copy()
+        self.hosts = hosts
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -1138,7 +1154,7 @@ class Clush(JobManager):
             path (str, optional): not used. Defaults to None.
             slots (int, optional): not used. Defaults to None.
         """
-        self._hosts = hosts.copy()
+        self.hosts = hosts
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.

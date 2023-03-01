@@ -533,7 +533,7 @@ class TestWithoutServers(Test):
 
         Args:
             processes (list): list of process names to stop
-            hosts (list): list of hosts on which to stop the leftover processes
+            hosts (NodeSet): hosts on which to stop the leftover processes
         """
         if processes:
             self.log.info(

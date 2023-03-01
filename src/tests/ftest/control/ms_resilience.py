@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -283,7 +283,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Finally, restart the dead servers and verify that quorum is
         # regained, which should allow for write operations to succeed again.
-        self.server_managers[0].restart(list(kill_list), wait=True)
+        self.server_managers[0].restart(kill_list, wait=True)
         self.verify_leader(replicas)
 
         # Dump the current system state.

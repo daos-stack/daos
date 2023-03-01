@@ -542,8 +542,9 @@ class DaosServerManager(SubprocessManager):
            The servers must have been previously formatted and started.
 
         Args:
-            hosts (list): List of servers to restart.
-            wait (bool): Whether or not to wait until the servers have joined.
+            hosts (NodeSet): hosts on which to restart the servers.
+            wait (bool, optional): Whether or not to wait until the servers have joined. Defaults to
+                False.
         """
         orig_hosts = self.manager.hosts
         self.manager.assign_hosts(hosts)
