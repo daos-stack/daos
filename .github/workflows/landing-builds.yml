@@ -131,7 +131,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        --env DOCKER_BASE --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -348,7 +348,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
+                        --env DOCKER_BASE --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -469,6 +469,49 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+        run: |
+             ulimit -c unlimited
+             sudo bash -c 'echo /tmp/core > /proc/sys/kernel/core_pattern'
+             sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
+             sudo apt-get update
+             sudo apt-get install gdb
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
+                        --env DOCKER_BASE --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        ./daos/utils/ci/run_in_gha.sh
+      - name: Check for logfiles
+        if: always()
+        run: |
+             sudo bash -c 'ls -latr /tmp/*.log*' || true
+             sudo bash -c 'chmod a+r /tmp/*.log*' || true
+      - name: Check for corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'ls -latr /tmp/core.*' || true
+             sudo bash -c 'chmod a+r /tmp/core.*' || true
+      - name: Analyze corefiles
+        if: always()
+        run: |
+             docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
+                        --env BASE_DISTRO --user root:root build-image \
+                        ./daos/utils/ci/corefile_in_gha.sh
+      - name: Archive corefiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: corefiles
+          path: /tmp/core.*
+      - name: Archive tarfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: tarfiles
+          path: /tmp/*_daos.tgz
+      - name: Archive logfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logfiles
+          path: /tmp/*.log*

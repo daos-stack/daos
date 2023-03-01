@@ -81,8 +81,8 @@ echo ::group::Setting up daos_server_helper
 echo ::endgroup::
 
 echo ::group::Tar /opt/daos et /home/daos/daos
-tar czf /tmp/opt_daos.tgz /opt/daos
-tar czf /tmp/home_daos.tgz /home/daos
+tar czf /tmp/$DOCKER_BASE_opt_daos.tgz /opt/daos
+tar czf /tmp/$DOCKER_BASE_home_daos.tgz /home/daos
 echo ::endgroup::
 
 echo ::group::Container copy test
