@@ -965,7 +965,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 DF_OID" obj_shard_open %u opc %u, rc "DF_RC".\n",
+			 DF_OID " obj_shard_open %u opc %u, rc " DF_RC "\n",
 			 DP_OID(obj->cob_md.omd_id), obj_auxi->opc, shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
