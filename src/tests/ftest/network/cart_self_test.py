@@ -95,7 +95,7 @@ class CartSelfTest(TestWithServers):
         """
         # Setup the orterun command
         orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")
-        orterun.hosts = get_local_host()
+        orterun.assign_hosts(get_local_host(), hostfile=False)
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
