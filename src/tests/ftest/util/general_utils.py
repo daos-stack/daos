@@ -1227,7 +1227,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             # Without the sudo requirement copy the source to the destination
             # directly with clush
             command = get_clush_command(
-                hosts, args="-S -V --copy {} --dest {}".format(source, destination))
+                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
             result = run_command(command, timeout, verbose, raise_exception)
 
         # If requested update the ownership of the destination file
