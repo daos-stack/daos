@@ -1918,10 +1918,20 @@ tgt_check:
 				tail_hole_size += recx_size;
 				continue;
 			}
+
 			D_ASSERT(data_size <= recx_size);
 			tail_hole_size += recx_size - data_size;
 			D_ASSERT(tail_hole_size <= size_in_iod);
-			dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
+
+			/**
+			 * During EC data recovery, data size might be shorter than
+			 * the real data size, because the tail degraded sgl might
+			 * be truncated by ioc_trim_tail_holes. so the sgl buf size
+			 * is set by obj_ec_recov_fill_back().
+			 */
+			if (!reasb_req->orr_recov_data ||
+			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl))
+				dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
 
 			return;
 		}
@@ -2610,16 +2620,34 @@ struct oes_copy_arg {
 	void		*buf;
 	uint64_t	 size;
 	uint64_t	 copied;
+	d_sg_list_t	*sgl;
+	struct daos_sgl_idx *sgl_idx;
 };
 
 static int
 oes_copy(uint8_t *buf, size_t len, void *data)
 {
 	struct oes_copy_arg	*arg = data;
+	d_sg_list_t		*sgl = arg->sgl;
+	struct daos_sgl_idx	*idx = arg->sgl_idx;
 
 	D_ASSERT(arg->copied + len <= arg->size);
 	memcpy(buf, arg->buf + arg->copied, len);
 	arg->copied += len;
+
+	if (idx->iov_offset == 0) {
+		D_ASSERT(idx->iov_idx > 0);
+		sgl->sg_iovs[idx->iov_idx - 1].iov_len =
+		     sgl->sg_iovs[idx->iov_idx - 1].iov_buf_len;
+	} else {
+		sgl->sg_iovs[idx->iov_idx].iov_len =
+			max(sgl->sg_iovs[idx->iov_idx].iov_len, idx->iov_offset);
+		D_ASSERTF(sgl->sg_iovs[idx->iov_idx].iov_len <=
+			  sgl->sg_iovs[idx->iov_idx].iov_buf_len,
+			  "iov_idx %u %p/%p offset %zd + len %zd > buf_len %zd",
+			  idx->iov_idx, sgl, sgl->sg_iovs[idx->iov_idx].iov_buf,
+			  idx->iov_offset, len, sgl->sg_iovs[idx->iov_idx].iov_buf_len);
+	}
 
 	return 0;
 }
@@ -2640,6 +2668,8 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	arg.buf = buf;
 	arg.size = size;
 	arg.copied = 0;
+	arg.sgl = sgl;
+	arg.sgl_idx = &sgl_idx;
 	/* to copy data from [buf, buf + size) to sgl */
 	rc = daos_sgl_processor(sgl, true, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
@@ -2813,6 +2843,7 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_recov_fill_back(iod, sgl, recov_list, stripe_list,
 				       stripe_sgl, stripe_total_sz,
 				       stripe_rec_nr);
+		reasb_req->orr_recov_data = 1;
 	}
 }
 
