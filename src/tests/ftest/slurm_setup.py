@@ -96,7 +96,7 @@ def update_config_cmdlist(args):
     cmd_list = [f"sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {SLURM_CONF}",
                 f"sed -i -e 's/SlurmUser=slurm/SlurmUser={args.user}/g' {SLURM_CONF}",
                 f"sed -i -e 's/NodeName/#NodeName/g' {SLURM_CONF}",
-                f"sed -i -e 's/EpilogSlurmctld=/EpilogSlurmctld={EPILOG_FILE}/g' {SLURM_CONF}"]
+                f"sed -i -e 's#EpilogSlurmctld=#EpilogSlurmctld={EPILOG_FILE}#g' {SLURM_CONF}"]
     sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
