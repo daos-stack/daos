@@ -853,43 +853,6 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	return vos_pool_destroy_ex(path, uuid, 0);
 }
 
-static int
-vos_register_slabs(struct umem_attr *uma)
-{
-	struct umem_slab_desc *slab;
-	int                           i, rc;
-	int                           defined;
-	int                           used = 0;
-
-	for (i = 0; i < ARRAY_SIZE(slab_map); i++) {
-		if (slab_map[i] != -1)
-			used |= (1 << i);
-	}
-
-	D_ASSERT(uma->uma_pool != NULL);
-	for (i = 0; i < UMM_SLABS_CNT; i++) {
-		D_ASSERT(used != 0);
-		defined               = __builtin_ctz(used);
-		slab = &uma->uma_slabs[i];
-		slab->unit_size       = (defined + 1) * 32;
-
-		rc = umempobj_set_slab_desc(uma->uma_pool, slab);
-		if (rc) {
-			D_ERROR("Failed to register VOS slab %d. rc:%d\n",
-				i, rc);
-			rc = umem_tx_errno(rc);
-			return rc;
-		}
-		D_ASSERT(slab->class_id != 0);
-		D_DEBUG(DB_MGMT, "slab registered with size %zu\n", slab->unit_size);
-
-		used &= ~(1 << defined);
-	}
-	D_ASSERT(used == 0);
-
-	return 0;
-}
-
 enum {
 	/** Memory locking flag not initialized */
 	LM_FLAG_UNINIT,
@@ -964,12 +927,6 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	uma = &pool->vp_uma;
 	uma->uma_id = UMEM_CLASS_PMEM;
 	uma->uma_pool = ph;
-
-	rc = vos_register_slabs(uma);
-	if (rc) {
-		D_ERROR("Register slabs failed. rc:%d\n", rc);
-		D_GOTO(failed, rc);
-	}
 
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);

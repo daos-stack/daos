@@ -42,6 +42,8 @@ enum {
 
 static int daos_md_backend = DAOS_MD_PMEM;
 
+#define UMM_SLABS_CNT 16
+
 /** Initializes global settings for the pmem objects.
  *
  *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
@@ -85,6 +87,166 @@ umempobj_settings_init(bool md_on_ssd)
 	return 0;
 }
 
+/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
+static const int        slab_map[] = {
+    0,          /* 32 bytes */
+    1,          /* 64 bytes */
+    2,          /* 96 bytes */
+    3,          /* 128 bytes */
+    4,          /* 160 bytes */
+    5,          /* 192 bytes */
+    6,          /* 224 bytes */
+    7,          /* 256 bytes */
+    8,          /* 288 bytes */
+    -1, 9,      /* 352 bytes */
+    10,         /* 384 bytes */
+    11,         /* 416 bytes */
+    -1, -1, 12, /* 512 bytes */
+    -1, 13,     /* 576 bytes (2.2 compatibility only) */
+    -1, -1, 14, /* 672 bytes (2.2 compatibility only) */
+    -1, -1, 15, /* 768 bytes (2.2 compatibility only) */
+};
+
+/** Create a slab within the pool.
+ *
+ *  \param	pool[IN]		Pointer to the persistent object.
+ *  \param	slab[IN]		Slab description
+ *
+ *  \return	zero on success, non-zero on failure.
+ */
+static int
+set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
+{
+	PMEMobjpool			*pop;
+	struct pobj_alloc_class_desc	 pmemslab;
+	struct dav_alloc_class_desc	 davslab;
+	int				 rc = 0;
+
+	switch (daos_md_backend) {
+	static unsigned class_id = 10;
+
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
+
+		pmemslab.unit_size = slab->unit_size;
+		pmemslab.alignment = 0;
+		pmemslab.units_per_block = 1000;
+		pmemslab.header_type = POBJ_HEADER_NONE;
+		pmemslab.class_id = slab->class_id;
+		rc = pmemobj_ctl_set(pop, "heap.alloc_class.new.desc", &pmemslab);
+		/* update with the new slab id */
+		slab->class_id = pmemslab.class_id;
+		break;
+	case DAOS_MD_BMEM:
+		davslab.unit_size = slab->unit_size;
+		davslab.alignment = 0;
+		davslab.units_per_block = 1000;
+		davslab.header_type = DAV_HEADER_NONE;
+		davslab.class_id = slab->class_id;
+		rc = dav_class_register((dav_obj_t *)ph_p->up_priv, &davslab);
+		/* update with the new slab id */
+		slab->class_id = davslab.class_id;
+		break;
+	case DAOS_MD_ADMEM:
+		/* NOOP for ADMEM now */
+		slab->class_id = class_id++;
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
+	}
+	return rc;
+}
+
+static inline bool
+slab_registered(struct umem_pool *pool, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return pool->up_slabs[slab_id].class_id != 0;
+}
+
+static inline size_t
+slab_usize(struct umem_pool *pool, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return pool->up_slabs[slab_id].unit_size;
+}
+
+static inline uint64_t
+slab_flags(struct umem_pool *pool, unsigned int slab_id)
+{
+	D_ASSERT(slab_id < UMM_SLABS_CNT);
+	return (daos_md_backend == DAOS_MD_PMEM) ?
+		POBJ_CLASS_ID(pool->up_slabs[slab_id].class_id) :
+		DAV_CLASS_ID(pool->up_slabs[slab_id].class_id);
+}
+
+static inline void
+get_slab(struct umem_instance *umm, uint64_t *flags, size_t *size)
+{
+	struct umem_pool *pool;
+	size_t aligned_size = D_ALIGNUP(*size, 32);
+	int slab_idx;
+	int slab;
+
+	slab_idx = (aligned_size >> 5) - 1;
+	if (slab_idx >= ARRAY_SIZE(slab_map))
+		return;
+
+	if (slab_map[slab_idx] == -1) {
+		D_DEBUG(DB_MEM, "No slab %zu for allocation of size %zu, idx=%d\n", aligned_size,
+			*size, slab_idx);
+		return;
+	}
+
+	pool = umm->umm_pool;
+	D_ASSERT(pool != NULL);
+
+	slab = slab_map[slab_idx];
+
+	D_ASSERTF(!slab_registered(pool, slab) || aligned_size == slab_usize(pool, slab),
+		  "registered: %d, id: %d, size: %zu != %zu\n", slab_registered(pool, slab),
+		  slab, aligned_size, slab_usize(pool, slab));
+
+	*size = aligned_size;
+	*flags |= slab_flags(pool, slab);
+}
+
+static int
+register_slabs(struct umem_pool *ph_p)
+{
+	struct umem_slab_desc *slab;
+	int                           i, rc;
+	int                           defined;
+	int                           used = 0;
+
+	for (i = 0; i < ARRAY_SIZE(slab_map); i++) {
+		if (slab_map[i] != -1)
+			used |= (1 << i);
+	}
+
+	for (i = 0; i < UMM_SLABS_CNT; i++) {
+		D_ASSERT(used != 0);
+		defined               = __builtin_ctz(used);
+		slab = &ph_p->up_slabs[i];
+		slab->unit_size       = (defined + 1) * 32;
+
+		rc = set_slab_desc(ph_p, slab);
+		if (rc) {
+			D_ERROR("Failed to register umem slab %d. rc:%d\n", i, rc);
+			rc = umem_tx_errno(rc);
+			return rc;
+		}
+		D_ASSERT(slab->class_id != 0);
+		D_DEBUG(DB_MEM, "slab registered with size %zu\n", slab->unit_size);
+
+		used &= ~(1 << defined);
+	}
+	D_ASSERT(used == 0);
+
+	return 0;
+}
+
 /* Persistent object allocator functions */
 /** Create a persistent memory object.
  *
@@ -101,14 +263,14 @@ struct umem_pool *
 umempobj_create(const char *path, const char *layout_name, int flags,
 		size_t poolsize, mode_t mode, struct umem_store *store)
 {
-	struct umem_pool	*umm_pool;
+	struct umem_pool	*umm_pool = NULL;
 	PMEMobjpool		*pop;
 	dav_obj_t		*dav_hdl;
 	struct ad_blob_handle	 bh;
 	int			 enabled = 1;
 	int			 rc;
 
-	D_ALLOC_PTR(umm_pool);
+	D_ALLOC(umm_pool, sizeof(*umm_pool) + sizeof(umm_pool->up_slabs[0]) * UMM_SLABS_CNT);
 	if (umm_pool == NULL)
 		return NULL;
 
@@ -123,8 +285,7 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		if (!pop) {
 			D_ERROR("Failed to create pool %s, size="DF_U64": %s\n",
 				path, poolsize, pmemobj_errormsg());
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
 			rc = pmemobj_ctl_set(pop, "stats.enabled", &enabled);
@@ -133,40 +294,43 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 					DP_RC(rc));
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
-				D_FREE(umm_pool);
-				return NULL;
+				goto error;
 			}
 		}
 
 		umm_pool->up_priv = pop;
-		return umm_pool;
+		break;
 	case DAOS_MD_BMEM:
 		dav_hdl = dav_obj_create(path, 0, poolsize, mode, &umm_pool->up_store);
 		if (!dav_hdl) {
 			D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
 				path, poolsize, errno);
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 		umm_pool->up_priv = dav_hdl;
 
 		/* TODO: Do checkpoint here to write back allocator heap */
-		return umm_pool;
+		break;
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_create(path, 0, store, &bh);
 		if (rc) {
 			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 
 		umm_pool->up_priv = bh.bh_blob;
-		return umm_pool;
+		break;
 	default:
 		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
 		break;
 	};
 
+	rc = register_slabs(umm_pool);
+	if (rc != 0)
+		goto error;
+	return umm_pool;
+error:
+	D_FREE(umm_pool);
 	return NULL;
 }
 
@@ -189,7 +353,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	int			 enabled = 1;
 	int			 rc;
 
-	D_ALLOC_PTR(umm_pool);
+	D_ALLOC(umm_pool, sizeof(*umm_pool) + sizeof(umm_pool->up_slabs[0]) * UMM_SLABS_CNT);
 	if (umm_pool == NULL)
 		return NULL;
 
@@ -203,8 +367,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 		if (!pop) {
 			D_ERROR("Error in opening the pool %s: %s\n",
 				path, pmemobj_errormsg());
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
 			rc = pmemobj_ctl_set(pop, "stats.enabled", &enabled);
@@ -213,13 +376,12 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 					DP_RC(rc));
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
-				D_FREE(umm_pool);
-				return NULL;
+				goto error;
 			}
 		}
 
 		umm_pool->up_priv = pop;
-		return umm_pool;
+		break;
 	case DAOS_MD_BMEM:
 		/* TODO mmap tmpfs file */
 		/* TODO Load all meta pages from SSD */
@@ -229,27 +391,31 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 		if (!dav_hdl) {
 			D_ERROR("Error in opening the pool %s: errno =%d\n",
 				path, errno);
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 
 		umm_pool->up_priv = dav_hdl;
-		return umm_pool;
+		break;
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_open(path, 0, store, &bh);
 		if (rc) {
 			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
-			D_FREE(umm_pool);
-			return NULL;
+			goto error;
 		}
 
 		umm_pool->up_priv = bh.bh_blob;
-		return umm_pool;
+		break;
 	default:
 		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
 		break;
 	}
 
+	rc = register_slabs(umm_pool);
+	if (rc != 0)
+		goto error;
+	return umm_pool;
+error:
+	D_FREE(umm_pool);
 	return NULL;
 }
 
@@ -397,66 +563,6 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 	}
 }
 
-/** Create a slab within the pool.
- *
- *  \param	pool[IN]		Pointer to the persistent object.
- *  \param	slab[IN]		Slab description
- *
- *  \return	zero on success, non-zero on failure.
- */
-int
-umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
-{
-	PMEMobjpool			*pop;
-	struct pobj_alloc_class_desc	 pmemslab;
-	struct dav_alloc_class_desc	 davslab;
-	int				 rc = 0;
-
-	switch (daos_md_backend) {
-	static unsigned class_id = 10;
-
-	case DAOS_MD_PMEM:
-		pop = (PMEMobjpool *)ph_p->up_priv;
-
-		pmemslab.unit_size = slab->unit_size;
-		pmemslab.alignment = 0;
-		pmemslab.units_per_block = 1000;
-		pmemslab.header_type = POBJ_HEADER_NONE;
-		pmemslab.class_id = slab->class_id;
-		rc = pmemobj_ctl_set(pop, "heap.alloc_class.new.desc", &pmemslab);
-		/* update with the new slab id */
-		slab->class_id = pmemslab.class_id;
-		break;
-	case DAOS_MD_BMEM:
-		davslab.unit_size = slab->unit_size;
-		davslab.alignment = 0;
-		davslab.units_per_block = 1000;
-		davslab.header_type = DAV_HEADER_NONE;
-		davslab.class_id = slab->class_id;
-		rc = dav_class_register((dav_obj_t *)ph_p->up_priv, &davslab);
-		/* update with the new slab id */
-		slab->class_id = davslab.class_id;
-		break;
-	case DAOS_MD_ADMEM:
-		/* NOOP for ADMEM now */
-		slab->class_id = class_id++;
-		break;
-	default:
-		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
-		break;
-	}
-	return rc;
-}
-
-static inline uint64_t
-umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return (daos_md_backend == DAOS_MD_PMEM) ?
-		POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id) :
-		DAV_CLASS_ID(umm->umm_slabs[slab_id].class_id);
-}
-
 bool
 umem_tx_none(struct umem_instance *umm)
 {
@@ -538,17 +644,16 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-pmem_tx_alloc(struct umem_instance *umm, size_t size, int slab_id,
-	      uint64_t flags, unsigned int type_num)
+pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
 {
 	uint64_t pflags = 0;
+
+	get_slab(umm, &pflags, &size);
 
 	if (flags & UMEM_FLAG_ZERO)
 		pflags |= POBJ_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= POBJ_FLAG_NO_FLUSH;
-	if (slab_id != SLAB_ID_ANY)
-		pflags |= umem_slab_flags(umm, slab_id);
 	return umem_id2off(umm, pmemobj_tx_xalloc(size, type_num, pflags));
 }
 
@@ -930,17 +1035,16 @@ bmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-bmem_tx_alloc(struct umem_instance *umm, size_t size, int slab_id,
-	      uint64_t flags, unsigned int type_num)
+bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
 {
 	uint64_t pflags = 0;
+
+	get_slab(umm, &pflags, &size);
 
 	if (flags & UMEM_FLAG_ZERO)
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
-	if (slab_id != SLAB_ID_ANY)
-		pflags |= umem_slab_flags(umm, slab_id);
 	return dav_tx_xalloc(size, type_num, pflags);
 }
 
@@ -1167,8 +1271,7 @@ vmem_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 umem_off_t
-vmem_alloc(struct umem_instance *umm, size_t size, int slab_id,
-	   uint64_t flags, unsigned int type_num)
+vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
 {
 	return (uint64_t)((flags & UMEM_FLAG_ZERO) ?
 			  calloc(1, size) : malloc(size));
@@ -1330,10 +1433,6 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
-#ifdef DAOS_PMEM_BUILD
-	memcpy(umm->umm_slabs, uma->uma_slabs,
-	       sizeof(struct umem_slab_desc) * UMM_SLABS_CNT);
-#endif
 
 	set_offsets(umm);
 

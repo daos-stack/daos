@@ -1324,6 +1324,10 @@ test_tx_dfree_publish_cancel(void **state)
 	umem_rsrvd_act_free(&rsrvd_act);
 }
 
+#if 0
+/** This test is removed because the umempobj_set_slab_desc APIs are removed.  Testing the
+ *  underlying dav or pmem APIs should probably be handled elsewhere.
+ */
 static void
 test_tx_alloc_withslabs(void **state)
 {
@@ -1388,6 +1392,7 @@ test_tx_alloc_withslabs(void **state)
 		assert_int_equal(rc, umem_tx_errno(ENOMEM));
 	}
 }
+#endif
 
 int
 main(int argc, char **argv)
@@ -1424,8 +1429,6 @@ main(int argc, char **argv)
 		{ "BMEM014: Test tx reserve publish/cancel", test_tx_reserve_publish_cancel,
 			setup_pmem, teardown_pmem},
 		{ "BMEM015: Test tx defer free publish/cancel", test_tx_dfree_publish_cancel,
-			setup_pmem, teardown_pmem},
-		{ "BMEM016: Test tx alloc/free with slabs", test_tx_alloc_withslabs,
 			setup_pmem, teardown_pmem},
 		{ NULL, NULL, NULL, NULL }
 	};
