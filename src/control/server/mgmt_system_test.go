@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -675,22 +675,22 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 4, Msg: "connection refused",
+					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Msg: "connection refused",
+					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 6, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
@@ -775,12 +775,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 6, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
@@ -866,12 +866,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 4, Msg: "connection refused",
+					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Msg: "connection refused",
+					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
