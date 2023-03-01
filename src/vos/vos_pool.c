@@ -22,8 +22,8 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <vos_layout.h>
-#include <vos_internal.h>
+#include "vos_layout.h"
+#include "vos_internal.h"
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
