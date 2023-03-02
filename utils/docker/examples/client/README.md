@@ -22,9 +22,9 @@ The platform was tested and validated with the following dependencies:
 
 This section describes how to build the base Docker image used for building the DAOS docker images
 of the following sections.  The easiest way is to use the `docker compose` sub command.  The first
-step is to update the docker environment file `utils/docker/cloud/.env` according to the targeted
-DAOS system.  The following environment variables must be defined for being able to properly build
-a docker image:
+step is to update the docker environment file `utils/docker/examples/client/.env` according to the
+targeted DAOS system.  The following environment variables must be defined for being able to
+properly build a docker image:
 - `DAOS_CLIENT_UNAME`: User name of the client (e.g. "foo")
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GNAME`: Group name of the client (e.g., "bar")
@@ -51,7 +51,7 @@ The following environment variables allow to customize the Docker image to build
 When the environment file has been properly filled, the docker image could be created thanks to the
 following command:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_base.yml build
+docker compose --file utils/docker/examples/client/docker-compose.daos_base.yml build
 ```
 
 
@@ -64,15 +64,15 @@ container and the DAOS Agent is running on the docker host node.
 
 This section describes how to build Docker container allowing to access a DAOS file system through
 a DAOS agent running on the docker host.  The easiest way is to use the `docker compose` sub
-command.  The first step is to update the docker environment file `utils/docker/cloud/.env`
-according to the targeted DAOS system.
+command.  The first step is to update the docker environment file
+`utils/docker/examples/client/.env` according to the targeted DAOS system.
 
 The following environment variables allow to customize the Docker image to build:
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "rocky8.6")
 
 The docker image could be then created thanks to the following command:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml build
+docker compose --file utils/docker/examples/client/docker-compose.daos_client.standalone.yml build
 ```
 
 !!! note
@@ -83,7 +83,7 @@ docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.y
 
 This section presents how to run some relevant use cases with a docker image build according to the
 previous section.  Firstly the following environment variables of the docker environment file
-`utils/docker/cloud/.env` must be defined:
+`utils/docker/examples/client/.env` must be defined:
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
 
@@ -94,14 +94,14 @@ of DAOS agent running on the docker host:
 When the environment file has been properly filled, the `daos pool autotest` could be run thanks to
 the following commands:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml run --rm daos_client
+docker compose --file utils/docker/examples/client/docker-compose.daos_client.standalone.yml run --rm daos_client
 $ daos pool autotest <POOL ID>
 ```
 
 With the same prerequites, the [fio](https://fio.readthedocs.io/) file system benchmark tool could
 be run thanks to the following commands:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml run --rm daos_client
+docker compose --file utils/docker/examples/client/docker-compose.daos_client.standalone.yml run --rm daos_client
 $ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
 $ daos container create --type=posix --label=posix-fs tank
 $ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
@@ -136,7 +136,7 @@ section.
 When the environment file has been properly filled, the docker image could be created thanks to the
 following command:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_client
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml build daos_client
 ```
 
 ### Building DAOS Agent Docker Image
@@ -166,21 +166,21 @@ The following environment variables allow to customize the Docker images to buil
 When the environment file has been properly filled, the docker image could be created thanks to the
 following command:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_agent
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml build daos_agent
 ```
 
 ### Running DAOS Docker Images
 
 This section presents how to run some relevant use cases with a docker image build according to the
 previous section.  In a first time the following environment variables of the docker environment
-file `utils/docker/cloud/.env` must be defined:
+file `utils/docker/examples/client/.env` must be defined:
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
 
 In a second time, a tarball (i.e. `tar` archive compressed with `xz`) of the DAOS certificate files
 should be created when the DAOS authentication is enabled.  For using Docker Compose the tarball of
 the certificates file path readable by all users and its file path defined in the following variable
-of the docker environment file `utils/docker/cloud/.env`:
+of the docker environment file `utils/docker/examples/client/.env`:
 - `DAOS_AGENT_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS agent
   (e.g. "secrets/daos\_agent-certs.txz")
 
@@ -199,16 +199,16 @@ of the docker environment file `utils/docker/cloud/.env`:
 When the environment file has been properly filled, then an application such as `daos pool autotest`
 could be run in the following way:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
 $ daos pool autotest <POOL ID>
 ```
 
 With the same prerequites, the [fio](https://fio.readthedocs.io/) file system benchmark tool could
 be run thanks to the following commands:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
-docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
+docker compose --file utils/docker/examples/client/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
 $ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
 $ daos container create --type=posix --label=posix-fs tank
 $ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
