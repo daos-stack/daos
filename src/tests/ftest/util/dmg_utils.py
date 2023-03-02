@@ -848,8 +848,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-prop command fails.
 
         """
-        return self._get_json_result(
-            ("pool", "get-prop {} {}".format(pool, name)))
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
     def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.

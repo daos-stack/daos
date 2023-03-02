@@ -302,6 +302,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "get-acl":
                 self.sub_command_class = self.GetAclSubCommand()
+            elif self.sub_command.value == "get-prop":
+                self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "list":
                 self.sub_command_class = self.ListSubCommand()
             elif self.sub_command.value == "overwrite-acl":
@@ -403,6 +405,15 @@ class DmgCommandBase(YamlCommand):
                 self.outfile = FormattedParameter("--outfile={}", None)
                 self.force = FormattedParameter("--force", False)
                 self.verbose = FormattedParameter("--verbose", False)
+
+        class GetPropSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool get-prop command."""
+
+            def __init__(self):
+                """Create a dmg pool get-prop command object."""
+                super().__init__("/run/dmg/pool/get-prop/*", "get-prop")
+                self.pool = BasicParameter(None, position=1)
+                self.name = BasicParameter(None, position=2)
 
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool list command."""
