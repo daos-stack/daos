@@ -296,11 +296,11 @@ class YamlUpdater():
         """Replace the server or client placeholders.
 
         Args:
-            replacements (_type_): _description_
-            placeholder_data (_type_): _description_
-            key (_type_): _description_
-            replacement (_type_): _description_
-            node_mapping (_type_): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
+            placeholder_data (dict): test yaml values requesting replacements
+            key (str): test yaml entry key
+            replacement (list): available values to use as replacements for the test yaml entries
+            node_mapping (dict): dictionary of nodes and their replacement values
 
         Raises:
             YamlException: if there was a problem replacing any of the placeholders
@@ -421,7 +421,7 @@ class YamlUpdater():
         Args:
             yaml_file (str): test yaml file to update
             yaml_dir (str): directory in which to write the updated test yaml file
-            replacements (dict): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
 
         Raises:
             YamlException: if any placeholders are found without a replacement
