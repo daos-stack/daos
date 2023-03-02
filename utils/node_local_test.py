@@ -490,9 +490,11 @@ class DaosCont():
         if not isinstance(self.pool, DaosPool):
             raise NLTestFail('No pool passed when creating container')
         for key, value in attrs.items():
-            run_daos_cmd(self.pool.conf, ['container', 'set-attr', self.pool.id(), self.uuid,
-                         f'{key}:{value}'],
-                         show_stdout=True)
+            rc = run_daos_cmd(self.pool.conf, ['container', 'set-attr', self.pool.id(), self.uuid,
+                                               f'{key}:{value}'],
+                              show_stdout=True)
+            print(rc)
+            assert rc.returncode == 0, rc
 
     def destroy(self, valgrind=True, log_check=True):
         """Destroy the container
@@ -1742,7 +1744,7 @@ class PosixTests():
     @needs_dfuse_with_opt(caching=False)
     def test_oclass(self):
         """Test container object class options"""
-        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='oclass_test',
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
         run_daos_cmd(self.conf,
                      ['container', 'query',
@@ -2544,7 +2546,7 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-            # Update container ACLs so current user has rw permissions only, the minimum required.
+        # Update container ACLs so current user has rw permissions only, the minimum required.
         rc = run_daos_cmd(self.conf, ['container',
                                       'update-acl',
                                       self.pool.id(),
@@ -2781,7 +2783,7 @@ class PosixTests():
         uns_container_2 = create_cont(conf, pool=pool, path=uns_path)
 
         # List the root container again.
-        print(os.listdir(join(dfuse.dir, pool, container)))
+        print(os.listdir(join(dfuse.dir, pool, container.uuid)))
 
         # List the 2nd container.
         files = os.listdir(second_path)
@@ -3058,6 +3060,19 @@ class PosixTests():
         cont_attrs['dfuse-ndentry-time'] = 1
 
         self.container.set_attrs(cont_attrs)
+
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+
+        side_dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+
+        dfuse.start()
+        side_dfuse.start()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        if side_dfuse.stop():
+            self.fatal_errors = True
 
 
 class NltStdoutWrapper():
