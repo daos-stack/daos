@@ -142,6 +142,7 @@ struct umem_slab_desc {
 struct umem_pool {
 	void			*up_priv;
 	struct umem_store	 up_store;
+	uint64_t		 up_registered;
 	/** Slabs of the umem pool */
 	struct umem_slab_desc	 up_slabs[0];
 };

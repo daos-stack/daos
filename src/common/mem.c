@@ -201,6 +201,7 @@ get_slab(struct umem_instance *umm, uint64_t *flags, size_t *size)
 
 	pool = umm->umm_pool;
 	D_ASSERT(pool != NULL);
+	D_ASSERT(pool->up_registered != 0);
 
 	slab = slab_map[slab_idx];
 
@@ -243,6 +244,7 @@ register_slabs(struct umem_pool *ph_p)
 		used &= ~(1 << defined);
 	}
 	D_ASSERT(used == 0);
+	ph_p->up_registered = 1;
 
 	return 0;
 }
@@ -1038,6 +1040,7 @@ static umem_off_t
 bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
 {
 	uint64_t pflags = 0;
+	umem_off_t ret;
 
 	get_slab(umm, &pflags, &size);
 
@@ -1045,7 +1048,11 @@ bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
-	return dav_tx_xalloc(size, type_num, pflags);
+	ret = dav_tx_xalloc(size, type_num, pflags);
+	D_INFO("Allocation "DF_X64" at %p size=%zu, flags="DF_X64"\n", ret, umem_off2ptr(umm, ret),
+	       size, pflags);
+
+	return ret;
 }
 
 static int

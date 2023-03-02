@@ -505,10 +505,12 @@ wal_kv_large(void **state)
 
 	epoch = epc_lo;
 	for (i = 0; i < 4; i++) {
+		D_INFO("i = %d fetch ev\n", i);
 		fetch_value(arg, oid, epoch++, 0, dkey, akey_ev[i], DAOS_IOD_ARRAY,
 			    sizes[i], &recx, buf_v);
 		assert_memory_equal(buf_v, bufs[i][0], sizes[i]);
 
+		D_INFO("i = %d fetch sv\n", i);
 		fetch_value(arg, oid, epoch++, 0, dkey, akey_sv[i], DAOS_IOD_SINGLE,
 			    sizes[i], &recx, buf_v);
 		assert_memory_equal(buf_v, bufs[i][1], sizes[i]);

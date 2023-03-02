@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -184,6 +184,7 @@ btr_is_int_key(struct btr_context *tcx)
 static bool
 btr_has_collision(struct btr_context *tcx)
 {
+	D_INFO("direct_key=%d int_key=%d\n", btr_is_direct_key(tcx), btr_is_int_key(tcx));
 	return !btr_is_direct_key(tcx) && !btr_is_int_key(tcx);
 }
 
@@ -534,6 +535,7 @@ btr_key_decode(struct btr_context *tcx, d_iov_t *key, daos_anchor_t *anchor)
 static int
 btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key)
 {
+	D_INFO("key cmp %p\n", btr_ops(tcx)->to_key_cmp);
 	if (btr_ops(tcx)->to_key_cmp)
 		return btr_ops(tcx)->to_key_cmp(&tcx->tc_tins, rec, key);
 	else

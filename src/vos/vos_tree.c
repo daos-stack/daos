@@ -152,6 +152,8 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 
 	hkey_common_gen(key_iov, hkey);
 
+	D_INFO("generating hash for key "DF_KEY"\n", DP_KEY(key_iov));
+
 	if (key_iov->iov_len > KH_INLINE_MAX)
 		vos_kh_set(kkey->kh_murmur64);
 }
@@ -162,6 +164,11 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
 	struct ktr_hkey *k1 = (struct ktr_hkey *)&rec->rec_hkey[0];
 	struct ktr_hkey *k2 = (struct ktr_hkey *)hkey;
+
+	D_INFO("Comparing hash keys\n");
+	for (int i=0; i < sizeof(*k1); i++) {
+		D_INFO("t:%02x u:%02x\n", ((char *)k1)[i], ((char *)k2)[i]);
+	}
 
 	return hkey_common_cmp(k1, k2);
 }
@@ -189,6 +196,11 @@ ktr_key_cmp_lexical(struct vos_krec_df *krec, d_iov_t *kiov)
 static int
 ktr_key_cmp_default(struct vos_krec_df *krec, d_iov_t *kiov)
 {
+	d_iov_t tree_key;
+
+	d_iov_set(&tree_key, vos_krec2key(krec), krec->kr_size);
+	D_INFO("intree krec = %p key="DF_KEY" ukey="DF_KEY"\n", krec, DP_KEY(&tree_key), DP_KEY(kiov));
+
 	/* This only gets called if hash comparison matches. */
 	if (krec->kr_size > kiov->iov_len)
 		return BTR_CMP_GT;
@@ -244,6 +256,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
+	d_iov_t			 key;
 	int			 rc = 0;
 
 	rbund = iov2rec_bundle(val_iov);
@@ -265,6 +278,9 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	rbund->rb_krec = krec;
 
 	ktr_rec_store(tins, rec, key_iov, rbund);
+
+	d_iov_set(&key, vos_krec2key(krec), krec->kr_size);
+	D_INFO("allocated key="DF_KEY" at "DF_X64" %p\n", DP_KEY(&key), rec->rec_off, krec);
 
 	return rc;
 }

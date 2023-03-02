@@ -360,6 +360,9 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 
 	palloc_get_prange(action, &off, &size, 1);
 	r = &(struct tx_range_def){off, size, args.flags};
+
+	D_INFO("range offset="DF_X64" size="DF_U64" flags="DF_X64"\n", r->offset, r->size, r->flags);
+
 	if (tx_ranges_insert_def(pop, tx, r) != 0)
 		goto err_oom;
 
