@@ -370,8 +370,8 @@ dtx_req_wait(struct dtx_req_args *dra)
 		  "ABT_future_wait failed for opc %x, length = %d: rc = %d.\n",
 		  dra->dra_opc, dra->dra_length, rc);
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
-		dra->dra_opc, dra->dra_future, rc);
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
+		 dra->dra_opc, dra->dra_future, rc);
 
 	ABT_future_free(&dra->dra_future);
 	return dra->dra_result;

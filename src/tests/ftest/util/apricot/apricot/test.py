@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -138,6 +138,7 @@ class Test(avocadoTest):
         self._stage_name = os.environ.get("STAGE_NAME", None)
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
+        self._test_step = 1
 
     def setUp(self):
         """Set up each test case."""
@@ -442,6 +443,16 @@ class Test(avocadoTest):
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
 
+    def log_step(self, message):
+        """Log a test step.
+
+        Args:
+            message (str): description of test step.
+
+        """
+        self.log.info("==> Step %s: %s", self._test_step, message)
+        self._test_step += 1
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
@@ -640,7 +651,6 @@ class TestWithServers(TestWithoutServers):
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
-
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -1762,14 +1772,15 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=(daos_command or self.get_daos_command()))
+        container = TestContainer(
+            pool, daos_command=(daos_command or self.get_daos_command()),
+            label_generator=self.label_generator)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
 
         # Set passed params
-        for name, value in kwargs.items():
-            getattr(container, name).update(value, name=name)
+        container.update_params(**kwargs)
 
         if create:
             container.create()

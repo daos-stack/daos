@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,6 +53,12 @@ agg_rate_ctl(void *arg)
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		return -1;
+
+	/* If the container is discarding the object mostly due to rebuild failure
+	 * reclaim, let's abort the aggregation to let discard proceed.
+	 */
+	if (cont->sc_discarding)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
@@ -279,7 +285,7 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 		return;
 
 	/* Cap VOS aggregation upper bound to EC aggregation HAE */
-	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundry);
+	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundary);
 }
 
 #define MAX_SNAPSHOT_LOCAL	16
@@ -495,7 +501,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, VOS_AGG_FL_FORCE_SCAN);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -1370,11 +1376,10 @@ ds_dtx_resync(void *arg)
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
 			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
-		D_WARN("Fail to resync some DTX(s) for the pool/cont "
-		       DF_UUID"/"DF_UUID" that may affect subsequent "
-		       "operations: rc = "DF_RC".\n",
-		       DP_UUID(ddra->pool->spc_uuid),
-		       DP_UUID(ddra->co_uuid), DP_RC(rc));
+		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
+		       " that may affect subsequent "
+		       "operations: rc = " DF_RC "\n",
+		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
 
 	ds_pool_child_put(ddra->pool);
 	D_FREE(ddra);

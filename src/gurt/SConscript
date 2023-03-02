@@ -1,4 +1,4 @@
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -20,17 +20,18 @@ def scons():
     denv = env.Clone()
 
     denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
-    prereqs.require(denv, 'uuid')
+    denv.require('uuid')
 
     gurt_targets = denv.SharedObject(SRC)
     gurt_lib = denv.d_library('gurt', gurt_targets, SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
-                             SHLIBVERSION=CART_VERSION)
+    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib, SHLIBVERSION=CART_VERSION)
 
     Export('gurt_targets')
 
     SConscript('examples/SConscript')
-    SConscript('tests/SConscript')
+
+    if prereqs.test_requested():
+        SConscript('tests/SConscript')
 
 
 if __name__ == "SCons.Script":
