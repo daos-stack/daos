@@ -490,6 +490,7 @@ class TestWithoutServers(Test):
         self.context = None
         self.d_log = None
         self.fault_injection = None
+        self.label_generator = LabelGenerator()
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -650,7 +651,6 @@ class TestWithServers(TestWithoutServers):
         self.job_manager = None
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
-        self.label_generator = LabelGenerator()
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
