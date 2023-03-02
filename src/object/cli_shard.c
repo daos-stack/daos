@@ -1014,9 +1014,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID" obj_ec_recov_add failed, "
-					DF_RC".\n", DP_UOID(orw->orw_oid),
-					DP_RC(rc));
+				D_ERROR(DF_UOID " obj_ec_recov_add failed, " DF_RC "\n",
+					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
 		} else if (is_ec_obj && reasb_req->orr_recov &&
@@ -1025,7 +1024,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						 orwo->orw_rels.ca_arrays,
 						 orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID" obj_ec_parity_check failed, "DF_RC".\n",
+				D_ERROR(DF_UOID " obj_ec_parity_check failed, " DF_RC "\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
@@ -1033,7 +1032,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		rc = dc_shard_update_size(rw_args, 0);
 		if (rc) {
-			D_ERROR(DF_UOID" dc_shard_update_size failed, "DF_RC".\n",
+			D_ERROR(DF_UOID " dc_shard_update_size failed, " DF_RC "\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
