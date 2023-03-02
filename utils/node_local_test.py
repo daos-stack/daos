@@ -1079,7 +1079,7 @@ class DFuse():
     instance_num = 0
 
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False,):
+                 caching=True, wbcache=True, multi_user=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1112,7 +1112,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False, use_oopt=False, log_mask=None):
+    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
         """Start a dfuse instance"""
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
@@ -1135,8 +1135,8 @@ class DFuse():
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
-        if log_mask:
-            my_env['D_LOG_MASK'] = log_mask
+        if self.log_mask:
+            my_env['D_LOG_MASK'] = self.log_mask
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
@@ -3244,7 +3244,8 @@ class PosixTests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.start(v_hint='fs_fix_test', log_mask='CRIT')
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_fix_test')
         path = dfuse.dir
         dirname = join(path, 'test_dir')
         os.mkdir(dirname)
