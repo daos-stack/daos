@@ -88,6 +88,7 @@ jobs:
     strategy:
       matrix:
         distro: [ubuntu]
+        runner: hosted
         include:
           - distro: ubuntu
             base: ubuntu
@@ -98,6 +99,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
       DOCKER_DISTRO: ${{ matrix.distro }}
+      BASE_RUNNER: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -132,7 +134,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        --env BASE_RUNNER --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -170,6 +172,21 @@ jobs:
         with:
           name: logfiles
           path: /tmp/*.log*
+      - name: Remove corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/core.*' || true
+      - name: Remove tarfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*_daos.tgz' || true
+      - name: Remove logfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*.log*' || true
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -268,6 +285,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [alma.8, alma.9, rocky.8]
+        runner: hosted
         include:
           - distro: alma.8
             base: el.8
@@ -284,6 +302,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       DOCKER_DISTRO: ${{ matrix.distro }}
+      BASE_RUNNER: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -352,7 +371,7 @@ jobs:
              sudo apt-get install gdb
              docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_DISTRO --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
+                        --env BASE_RUNNER --env DOCKER_DISTRO --env COMPILER=clang --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -390,6 +409,21 @@ jobs:
         with:
           name: logfiles
           path: /tmp/*.log*
+      - name: Remove corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/core.*' || true
+      - name: Remove tarfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*_daos.tgz' || true
+      - name: Remove logfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*.log*' || true
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
@@ -399,6 +433,7 @@ jobs:
       matrix:
         distro: [ubuntu, alma.8, leap.15]
         compiler: [clang]
+        runner: self
         include:
           - distro: ubuntu
             base: ubuntu
@@ -415,6 +450,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       DOCKER_DISTRO: ${{ matrix.distro }}
+      BASE_RUNNER: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -482,7 +518,7 @@ jobs:
              sudo apt-get install gdb
              docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
                         --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
-                        --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        --env BASE_RUNNER --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
                         ./daos/utils/ci/run_in_gha.sh
       - name: Check for logfiles
         if: always()
@@ -520,3 +556,19 @@ jobs:
         with:
           name: logfiles
           path: /tmp/*.log*
+      - name: Remove corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/core.*' || true
+      - name: Remove tarfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*_daos.tgz' || true
+      - name: Remove logfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*.log*' || true
+
