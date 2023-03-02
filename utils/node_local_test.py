@@ -28,7 +28,6 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
-from collections import OrderedDict
 import xattr
 import junit_xml
 import tabulate
@@ -406,7 +405,7 @@ def load_conf(args):
 def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
     if clean:
-        env = OrderedDict()
+        env = {}
     else:
         env = os.environ.copy()
     env['DD_MASK'] = 'all'
@@ -428,6 +427,7 @@ class DaosPool():
         self._server = server
         self.uuid = pool_uuid
         self.label = label
+        self.conf = server.conf
 
     # pylint: disable-next=invalid-name
     def id(self):
@@ -468,9 +468,48 @@ class DaosCont():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, cont_uuid, label):
+    def __init__(self, cont_uuid, label, pool=None):
         self.uuid = cont_uuid
         self.label = label
+        self.pool = pool
+
+    # pylint: disable-next=invalid-name
+    def id(self):
+        """Return the pool ID (label if set; UUID otherwise)"""
+        if self.label:
+            return self.label
+        return self.uuid
+
+    def __str__(self):
+        return self.uuid
+
+    def set_attrs(self, attrs):
+        """Set container attributes.
+
+        Args:
+            attrs (dict): Dictionary of attributes to set.
+        """
+        if not isinstance(self.pool, DaosPool):
+            raise NLTestFail('No pool passed when creating container')
+        for key, value in attrs.items():
+            run_daos_cmd(self.pool.conf, ['container', 'set-attr', self.pool.id(), self.uuid,
+                         f'{key}:{value}'],
+                         show_stdout=True)
+
+    def destroy(self, valgrind=True, log_check=True):
+        """_summary_
+
+        Args:
+            valgrind (bool, optional): Run the command under valgrind. Defaults to True.
+            log_check (bool, optional): Run log analysis. Defaults to True.
+
+        Raises:
+            NLTestFail: If Pool was not provided when object created.
+        """
+        if not isinstance(self.pool, DaosPool):
+            raise NLTestFail('No pool passed when creating container')
+        destroy_container(self.pool.conf, self.pool.id(), self.id(),
+                          valgrind=valgrind, log_check=log_check)
 
 
 class DaosServer():
@@ -1086,6 +1125,8 @@ class DFuse():
         self.pool = pool
         self.uns_path = uns_path
         self.container = container
+        if isinstance(container, DaosCont):
+            self.container = container.id()
         self.conf = conf
         self.multi_user = multi_user
         self.cores = daos.dfuse_cores
@@ -1418,23 +1459,38 @@ def run_daos_cmd(conf,
 
 
 # pylint: disable-next=too-many-arguments
-def create_cont(conf,
-                pool=None,
-                ctype=None,
-                label=None,
-                path=None,
-                oclass=None,
-                dir_oclass=None,
-                file_oclass=None,
-                hints=None,
-                valgrind=False,
-                log_check=True,
-                cwd=None):
-    """Create a container and return the uuid"""
+def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
+                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None):
+    """Use 'daos' command to create a new container.
+
+    Args:
+        conf (NLTConf): NLT configuration object.
+        pool (DaosPool or str, optional): Pool to create container in.
+              Not required when path is set.
+        ctype (str, optional): Container type.
+        label (str, optional): Container label.
+        path (str, optional): Path to use when creating container.
+        oclass (str, optional): object class to use.
+        dir_oclass (str, optional): directory object class to use.
+        file_oclass (str, optional): file object class to use.
+        hints (str, optional): Container hints.
+        valgrind (bool, optional): Whether to run command under valgrind.  Defaults to True.
+        log_check (bool, optional): Whether to run log analysis to check for leaks.
+        cwd (str, optional): Path to run daos command from.
+
+    Returns:
+        DaosCont: Newly created container as DaosCont object.
+    """
     cmd = ['container', 'create']
 
+    pool_obj = None
+
     if pool:
-        cmd.append(pool)
+        if isinstance(pool, DaosPool):
+            cmd.append(pool.id())
+            pool_obj = pool
+        else:
+            cmd.append(pool)
 
     if label:
         cmd.append(label)
@@ -1481,11 +1537,15 @@ def create_cont(conf,
         assert label == rc.json['response']['container_label']
     else:
         assert 'container_label' not in rc.json['response'].keys()
-    return rc.json['response']['container_uuid']
+    return DaosCont(rc.json['response']['container_uuid'], label, pool=pool_obj)
 
 
 def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     """Destroy a container"""
+    if isinstance(pool, DaosPool):
+        pool = pool.id()
+    if isinstance(container, DaosCont):
+        container = container.id()
     cmd = ['container', 'destroy', pool, container]
     rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
     print(rc)
@@ -1720,43 +1780,27 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-        destroy_container(self.conf, self.pool.id(), container)
+        container.destroy()
 
     def test_cache(self):
         """Test with caching enabled"""
-        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='Cache')
+        container = self.container
         run_daos_cmd(self.conf,
                      ['container', 'query',
-                      self.pool.id(), container],
+                      self.pool.id(), self.container.id()],
                      show_stdout=True)
 
-        run_daos_cmd(self.conf,
-                     ['container', 'set-attr',
-                      self.pool.id(), container,
-                      'dfuse-attr-time:2'],
-                     show_stdout=True)
+        cont_attrs = {}
+        cont_attrs['dfuse-attr-time'] = '2'
+        cont_attrs['dfuse-dentry-time'] = '100s'
+        cont_attrs['dfuse-dentry-dir-time'] = '100s'
+        cont_attrs['dfuse-ndentry-time'] = '100s'
+
+        self.container.set_attrs(cont_attrs)
 
         run_daos_cmd(self.conf,
-                     ['container', 'set-attr',
-                      self.pool.id(), container,
-                      'dfuse-dentry-time:100s'],
-                     show_stdout=True)
-
-        run_daos_cmd(self.conf,
-                     ['container', 'set-attr',
-                      self.pool.id(), container,
-                      'dfuse-dentry-time-dir:100s'],
-                     show_stdout=True)
-
-        run_daos_cmd(self.conf,
-                     ['container', 'set-attr',
-                      self.pool.id(), container,
-                      'dfuse-ndentry-time:100s'],
-                     show_stdout=True)
-
-        run_daos_cmd(self.conf,
-                     ['container', 'get-attrs',
-                      self.pool.id(), container],
+                     ['container', 'get-attr',
+                      self.pool.id(), self.container.id()],
                      show_stdout=True)
 
         dfuse = DFuse(self.server,
@@ -1769,8 +1813,6 @@ class PosixTests():
 
         if dfuse.stop():
             self.fatal_errors = True
-
-        destroy_container(self.conf, self.pool.id(), container)
 
     @needs_dfuse
     def test_truncate(self):
@@ -1817,7 +1859,7 @@ class PosixTests():
         _check_cmd(self.dfuse.dir)
 
         # Do not destroy the new containers at this point as dfuse will be holding references.
-        # destroy_container(self.conf, self.pool.id(), new_cont)
+        # new_cont.destroy()
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
@@ -2782,11 +2824,7 @@ class PosixTests():
 
     def test_dfuse_dio_off(self):
         """Test for dfuse with no caching options, but direct-io disabled"""
-        run_daos_cmd(self.conf,
-                     ['container', 'set-attr',
-                      self.pool.id(), self.container,
-                      'dfuse-direct-io-disable:on'],
-                     show_stdout=True)
+        self.container.set_attrs({'dfuse-direct-io-disable': 'on'})
         dfuse = DFuse(self.server,
                       self.conf,
                       caching=True,
@@ -3014,6 +3052,16 @@ class PosixTests():
 
         destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
+    def test_dfuse_perms(self):
+        """Test permissions caching for DAOS-12577"""
+        cont_attrs = {}
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = 1
+        cont_attrs['dfuse-dentry-time'] = 1
+        cont_attrs['dfuse-ndentry-time'] = 1
+
+        self.container.set_attrs(cont_attrs)
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -3113,17 +3161,14 @@ def run_posix_tests(server, conf, test=None):
             # should not reduce coverage.
             try:
                 ptl.container = create_cont(conf,
-                                            pool.id(),
+                                            pool,
                                             ctype="POSIX",
                                             valgrind=False,
                                             log_check=False,
                                             label=function)
                 ptl.container_label = function
                 test_cb()
-                destroy_container(conf, pool.id(),
-                                  ptl.container_label,
-                                  valgrind=False,
-                                  log_check=False)
+                ptl.container.destroy(valgrind=False, log_check=False)
                 ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
@@ -3610,21 +3655,18 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
+        container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = OrderedDict()
+        cont_attrs = {}
         cont_attrs['dfuse-data-cache'] = False
         cont_attrs['dfuse-attr-time'] = 60
         cont_attrs['dfuse-dentry-time'] = 60
         cont_attrs['dfuse-ndentry-time'] = 60
         cont_attrs['dfuse-direct-io-disable'] = False
 
-        for key, value in cont_attrs.items():
-            run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
-                                f'{key}:{value}'],
-                         show_stdout=True)
+        container.set_attrs(cont_attrs)
 
     dfuse = DFuse(server,
                   conf,
@@ -3636,7 +3678,7 @@ def run_in_fg(server, conf, args):
     dfuse.log_flush = True
     dfuse.start()
 
-    t_dir = join(dfuse.dir, container)
+    t_dir = join(dfuse.dir, container.id())
 
     print(f'Running at {t_dir}')
     print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
@@ -3860,7 +3902,7 @@ def test_pydaos_kv(server, conf):
     print(kv['a'])
 
     print("First iteration")
-    data = OrderedDict()
+    data = ()
     for key in kv:
         print(f'key is {key}, len {len(kv[key])}')
         print(type(kv[key]))
@@ -4479,15 +4521,8 @@ def test_fi_list_attr(server, conf, wf):
 
     container = create_cont(conf, pool)
 
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool, container,
-                  'my-test-attr-1:some-value'])
-
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool, container,
-                  'my-test-attr-2:some-other-value'])
+    container.set_attrs({'my-test-attr-1': 'some-value',
+                        'my-test-attr-2': 'some-other-value'})
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
@@ -4499,7 +4534,7 @@ def test_fi_list_attr(server, conf, wf):
     test_cmd.wf = wf
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
@@ -4520,27 +4555,24 @@ def test_fi_get_prop(server, conf, wf):
     test_cmd.check_stderr = False
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
 def test_fi_get_attr(server, conf, wf):
     """Run daos cont get-attr with fault injection"""
-    pool = server.get_test_pool_id()
+    pool = server.get_test_pool()
 
     container = create_cont(conf, pool)
 
     attr_name = 'my-test-attr'
 
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool, container,
-                  f'{attr_name}:value'])
+    container.set_attrs({attr_name: 'value'})
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
            'get-attr',
-           pool,
+           pool.id(),
            container,
            attr_name]
 
@@ -4552,20 +4584,20 @@ def test_fi_get_attr(server, conf, wf):
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
 def test_fi_cont_query(server, conf, wf):
     """Run daos cont query with fault injection"""
-    pool = server.get_test_pool_id()
+    pool = server.get_test_pool()
 
     container = create_cont(conf, pool, ctype='POSIX')
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
            'query',
-           pool,
+           pool.id(),
            container]
 
     test_cmd = AllocFailTest(conf, 'cont-query', cmd)
@@ -4576,20 +4608,20 @@ def test_fi_cont_query(server, conf, wf):
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
 def test_fi_cont_check(server, conf, wf):
     """Run daos cont check with fault injection"""
-    pool = server.get_test_pool_id()
+    pool = server.get_test_pool()
 
     container = create_cont(conf, pool)
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
            'check',
-           pool,
+           pool.id(),
            container]
 
     test_cmd = AllocFailTest(conf, 'cont-check', cmd)
@@ -4600,7 +4632,7 @@ def test_fi_cont_check(server, conf, wf):
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
@@ -4619,7 +4651,7 @@ def test_alloc_fail(server, conf):
     container = create_cont(conf, pool)
 
     rc = test_cmd.launch()
-    destroy_container(conf, pool, container)
+    container.destroy()
     return rc
 
 
