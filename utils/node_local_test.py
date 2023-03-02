@@ -2807,7 +2807,7 @@ class PosixTests():
         dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
-        second_path = join(dfuse.dir, pool, uns_container)
+        second_path = join(dfuse.dir, pool, uns_container.uuid)
         uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
         files = os.listdir(second_path)
         print(files)
@@ -3061,9 +3061,9 @@ class PosixTests():
 
         self.container.set_attrs(cont_attrs)
 
-        dfuse = DFuse(self.server, self.conf, pool=self.pool, container=self.container)
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.id(), container=self.container)
 
-        side_dfuse = DFuse(self.server, self.conf, pool=self.pool, container=self.container,
+        side_dfuse = DFuse(self.server, self.conf, pool=self.pool.id(), container=self.container,
                            caching=False)
 
         dfuse.start()
@@ -3931,9 +3931,9 @@ def test_pydaos_kv(server, conf):
     print("Default get value size %d", kv.value_size)
     print("Second iteration")
     failed = False
-    for key in data:
-        if data[key]:
-            print(f'key is {key}, len {len(kv[key])}')
+    for key, value in data.items():
+        if value:
+            print(f'key is {key}, len {len(value)}')
         elif key == 'no-key':
             pass
         else:
@@ -4692,8 +4692,6 @@ def run(wf, args):
                         fatal_errors=fatal_errors) as server:
             if args.mode == 'launch':
                 run_in_fg(server, conf, args)
-            elif args.mode == 'kv':
-                test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
             elif args.mode == 'set-fi':
