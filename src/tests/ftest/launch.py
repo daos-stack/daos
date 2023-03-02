@@ -601,6 +601,7 @@ class Launch():
         self.slurm_partition_hosts = NodeSet()
         self.slurm_add_partition = False
         self.core_file_processing = CoreFileProcessing(logger)
+        self.core_files = {}
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -904,7 +905,7 @@ class Launch():
         # Determine if bullseye code coverage collection is enabled
         logger.debug("Checking for bullseye code coverage configuration")
         # pylint: disable=unsupported-binary-operation
-        self.bullseye_hosts = args.test_servers | get_local_host()
+        self.bullseye_hosts = args.test_servers | self.local_host
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
             logger.info(
@@ -975,7 +976,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = str(get_local_host())
+        self.details["launch host"] = str(self.local_host)
 
     def _create_log_dir(self):
         """Create the log directory and rename it if it already exists.
@@ -2166,20 +2167,24 @@ class Launch():
             }
 
             # Get the core file pattern information
+            if not process_cores:
+                logger.debug("Not collecting core files")
+                return
+
             try:
-                core_files = self.core_file_processing.get_core_file_pattern(
-                    test.host_info.servers.hosts, test.host_info.clients.hosts, process_cores)
+                self.core_files = self.core_file_processing.get_core_file_pattern(
+                    test.host_info.servers.hosts | test.host_info.clients.hosts,
+                    self.result.tests[-1].time_start)
             except CoreFileException:
                 message = "Error obtaining the core file pattern information"
                 self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return_code |= 256
-                core_files = {}
 
-            for index, hosts in enumerate(core_files):
-                remote_files[f"core files {index + 1}/{len(core_files)}"] = {
-                    "source": core_files[hosts]["path"],
+            for index, hosts in enumerate(self.core_files):
+                remote_files[f"core files {index + 1}/{len(self.core_files)}"] = {
+                    "source": self.core_files[hosts]["path"],
                     "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
-                    "pattern": core_files[hosts]["pattern"],
+                    "pattern": self.core_files[hosts]["pattern"],
                     "hosts": NodeSet(hosts),
                     "depth": 1,
                     "timeout": 1800,
@@ -2209,7 +2214,7 @@ class Launch():
         """
         service = "daos_agent.service"
         # pylint: disable=unsupported-binary-operation
-        hosts = test.host_info.clients.hosts | get_local_host()
+        hosts = test.host_info.clients.hosts | self.local_host
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2457,7 +2462,8 @@ class Launch():
 
         if test and "core files" in summary:
             # Process the core files
-            return_code |= self._process_core_files(os.path.split(destination)[0], test)
+            return_code |= self._process_core_files(os.path.split(destination)[0] + os.path.sep,
+                                                    test)
 
         return return_code
 
@@ -2651,6 +2657,7 @@ class Launch():
         # destination directory plus the name of the host from which the files originated. Finally
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
+        rcopy_dest += os.path.sep
         if source == os.path.join(os.sep, "etc", "daos"):
             # Use a temporary sub-directory in a directory where the user has permissions
             tmp_copy_dir = os.path.join(
@@ -2707,9 +2714,12 @@ class Launch():
 
         """
         try:
-            corefiles_processed = self.core_file_processing.process_core_files(test_job_results,
-                                                                               True,
-                                                                               test=str(test))
+            corefiles_processed = self.core_file_processing.process_core_files(
+                test_job_results,
+                True,
+                [self.core_files[k]['path'] for k in list(self.core_files.keys())
+                    if NodeSet(self.local_host) in NodeSet(k)][0],
+                test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
