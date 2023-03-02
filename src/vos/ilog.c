@@ -1076,13 +1076,19 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
 }
 
 static void
-ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
+ilog_status_refresh(struct ilog_context *lctx, uint32_t intent, bool has_cond,
 		    struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_entry	 entry;
 	int32_t			 status;
 	bool			 same_intent = (intent == priv->ip_intent);
+	bool			 retry;
+
+	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH) && !has_cond)
+		retry = false;
+	else
+		retry = true;
 
 	priv->ip_intent = intent;
 	priv->ip_rc = 0;
@@ -1091,9 +1097,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		    (entry.ie_status == ILOG_COMMITTED ||
 		     entry.ie_status == ILOG_REMOVED))
 			continue;
-		status = ilog_status_get(lctx, &entry.ie_id, intent,
-					 (intent == DAOS_INTENT_UPDATE ||
-					  intent == DAOS_INTENT_PUNCH) ? false : true);
+		status = ilog_status_get(lctx, &entry.ie_id, intent, retry);
 		if (status < 0 && status != -DER_INPROGRESS) {
 			priv->ip_rc = status;
 			return;
@@ -1105,7 +1109,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 
 static bool
 ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
-		  const struct ilog_desc_cbs *cbs, uint32_t intent,
+		  const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 		  struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
@@ -1124,7 +1128,7 @@ ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
 		return true;
 
 	D_ASSERT(entries->ie_ids != NULL);
-	ilog_status_refresh(&priv->ip_lctx, intent, entries);
+	ilog_status_refresh(&priv->ip_lctx, intent, has_cond, entries);
 
 	return true;
 reset:
@@ -1174,7 +1178,7 @@ done:
 
 int
 ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
-	   const struct ilog_desc_cbs *cbs, uint32_t intent,
+	   const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 	   struct ilog_entries *entries)
 {
 	struct ilog_context	*lctx;
@@ -1185,12 +1189,13 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	int			 i;
 	int			 status;
 	int			 rc = 0;
+	bool			 retry;
 
 	ILOG_ASSERT_VALID(root_df);
 
 	root = (struct ilog_root *)root_df;
 
-	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
+	if (ilog_fetch_cached(umm, root, cbs, intent, has_cond, entries)) {
 		if (priv->ip_rc == -DER_NONEXIST)
 			return priv->ip_rc;
 		if (priv->ip_rc < 0) {
@@ -1214,11 +1219,14 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	if (rc != 0)
 		goto fail;
 
+	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH) && !has_cond)
+		retry = false;
+	else
+		retry = true;
+
 	for (i = 0; i < cache.ac_nr; i++) {
 		id = &cache.ac_entries[i];
-		status = ilog_status_get(lctx, id, intent,
-					 (intent == DAOS_INTENT_UPDATE ||
-					  intent == DAOS_INTENT_PUNCH) ? false : true);
+		status = ilog_status_get(lctx, id, intent, retry);
 		if (status < 0 && status != -DER_INPROGRESS)
 			D_GOTO(fail, rc = status);
 		entries->ie_info[entries->ie_num_entries].ii_removed = 0;
@@ -1498,7 +1506,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
 	 */
-	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, entries);
+	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, false, entries);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_TRACE, "log is empty\n");
 		/* Log is empty */
