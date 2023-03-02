@@ -496,11 +496,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				       ts_set);
 		if (obj != NULL) {
 			if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
-				if (DAOS_ON_VALGRIND)
-					rc = umem_tx_xadd_ptr(vos_cont2umm(cont),
-							      &obj->obj_df->vo_max_write,
-							      sizeof(obj->obj_df->vo_max_write),
-							      UMEM_XADD_NO_SNAPSHOT);
+				rc = umem_tx_xadd_ptr(
+				    vos_cont2umm(cont), &obj->obj_df->vo_max_write,
+				    sizeof(obj->obj_df->vo_max_write), UMEM_XADD_NO_SNAPSHOT);
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
