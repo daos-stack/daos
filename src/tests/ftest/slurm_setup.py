@@ -64,7 +64,7 @@ def create_epilog_script(args):
         args (Namespace): command line arguments
 
      Returns:
-        returns 0 if command pass; 1 otherwise
+        int: 0 if command passes; 1 otherwise
 
     """
     sudo = "sudo" if args.sudo else ""
@@ -74,9 +74,8 @@ def create_epilog_script(args):
         script_file.write("/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse);"
                           "do fusermount3 -uz $dir;rm -rf $dir; done'\n")
         script_file.write("exit 0\n")
-        script_file.close()
     command = f"{sudo} chmod 755 {EPILOG_FILE}"
-    return execute_cluster_cmds(args.control, [" ".join(command)])
+    return execute_cluster_cmds(args.control, [(command)])
 
 
 def update_config_cmdlist(args):
@@ -91,7 +90,7 @@ def update_config_cmdlist(args):
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     if create_epilog_script(args) > 1:
-        logger.error(f"% {EPILOG_FILE} could not be updated. Check if file exists")
+        logger.error("%s could not be updated. Check if file exists", EPILOG_FILE)
         sys.exit(1)
     cmd_list = [f"sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {SLURM_CONF}",
                 f"sed -i -e 's/SlurmUser=slurm/SlurmUser={args.user}/g' {SLURM_CONF}",
