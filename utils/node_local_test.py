@@ -1127,6 +1127,7 @@ class DFuse():
         self.container = container
         if isinstance(container, DaosCont):
             self.container = container.id()
+            self.pool = container.pool.id()
         self.conf = conf
         self.multi_user = multi_user
         self.cores = daos.dfuse_cores
@@ -1594,7 +1595,6 @@ def needs_dfuse(method):
         self.dfuse = DFuse(self.server,
                            self.conf,
                            caching=caching,
-                           pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
         self.dfuse.start(v_hint=self.test_name)
         try:
@@ -1641,7 +1641,6 @@ class needs_dfuse_with_opt():
                               obj.conf,
                               caching=caching,
                               wbcache=self.wbcache,
-                              pool=obj.pool.dfuse_mount_name(),
                               container=obj.container)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
             try:
@@ -1751,7 +1750,7 @@ class PosixTests():
                       self.pool.id(), container.id()],
                      show_stdout=True)
 
-        dfuse = DFuse(self.server, self.conf, self.pool.id(), container=container)
+        dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.use_valgrind = False
         dfuse.start()
 
@@ -1784,7 +1783,6 @@ class PosixTests():
 
     def test_cache(self):
         """Test with caching enabled"""
-        container = self.container
         run_daos_cmd(self.conf,
                      ['container', 'query',
                       self.pool.id(), self.container.id()],
@@ -1803,10 +1801,7 @@ class PosixTests():
                       self.pool.id(), self.container.id()],
                      show_stdout=True)
 
-        dfuse = DFuse(self.server,
-                      self.conf,
-                      pool=self.pool.uuid,
-                      container=container)
+        dfuse = DFuse(self.server, self.conf, container=self.container)
         dfuse.start()
 
         print(os.listdir(dfuse.dir))
@@ -1866,14 +1861,12 @@ class PosixTests():
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=False,
-                       pool=self.pool.uuid,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
 
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
@@ -2330,7 +2323,6 @@ class PosixTests():
         # Start another dfuse instance to move the files around without the kernel knowing.
         dfuse = DFuse(self.server,
                       self.conf,
-                      pool=self.pool.id(),
                       container=self.container,
                       caching=False)
         dfuse.start(v_hint='rename_other')
@@ -2491,7 +2483,6 @@ class PosixTests():
         # Start another dfuse instance to move the files around without the kernel knowing.
         dfuse = DFuse(self.server,
                       self.conf,
-                      pool=self.pool.id(),
                       container=self.container,
                       caching=False)
         dfuse.start(v_hint='unlink')
@@ -2520,7 +2511,6 @@ class PosixTests():
         """Test write access to another users container"""
         dfuse = DFuse(self.server,
                       self.conf,
-                      pool=self.pool.id(),
                       container=self.container.id(),
                       caching=False)
 
@@ -2569,7 +2559,6 @@ class PosixTests():
         # Now start dfuse and access the container, see who the file is owned by.
         dfuse = DFuse(self.server,
                       self.conf,
-                      pool=self.pool.id(),
                       container=self.container,
                       caching=False)
         dfuse.start(v_hint='cont_rw_2')
@@ -2627,7 +2616,6 @@ class PosixTests():
 
             dfuse = DFuse(self.server,
                           self.conf,
-                          pool=self.pool.id(),
                           container=self.container,
                           caching=False)
             dfuse.start(v_hint='rename')
@@ -2747,7 +2735,7 @@ class PosixTests():
         conf = self.conf
 
         # Start dfuse on the container.
-        dfuse = DFuse(server, conf, pool=pool, container=container, caching=False)
+        dfuse = DFuse(server, conf, container=container, caching=False)
         dfuse.start('uns-0')
 
         # Create a new container within it using UNS
@@ -2808,7 +2796,7 @@ class PosixTests():
         dfuse.start('uns-3')
 
         second_path = join(dfuse.dir, pool, uns_container.uuid)
-        uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
+        uns_path = join(dfuse.dir, pool, container.uuid, 'ep0', 'ep')
         files = os.listdir(second_path)
         print(files)
         print(os.listdir(uns_path))
@@ -2827,7 +2815,6 @@ class PosixTests():
         dfuse = DFuse(self.server,
                       self.conf,
                       caching=True,
-                      pool=self.pool.uuid,
                       container=self.container)
 
         dfuse.start(v_hint='dio_off')
@@ -2843,7 +2830,7 @@ class PosixTests():
 
     def test_dfuse_oopt(self):
         """Test dfuse with -opool=,container= options as used by fstab"""
-        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid, container=self.container)
+        dfuse = DFuse(self.server, self.conf, container=self.container)
 
         dfuse.start(use_oopt=True)
 
@@ -3061,10 +3048,9 @@ class PosixTests():
 
         self.container.set_attrs(cont_attrs)
 
-        dfuse = DFuse(self.server, self.conf, pool=self.pool.id(), container=self.container)
+        dfuse = DFuse(self.server, self.conf, container=self.container)
 
-        side_dfuse = DFuse(self.server, self.conf, pool=self.pool.id(), container=self.container,
-                           caching=False)
+        side_dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
 
         dfuse.start()
         side_dfuse.start()
@@ -3631,7 +3617,7 @@ def run_dfuse(server, conf):
 
     fatal_errors.add_result(dfuse.stop())
 
-    dfuse = DFuse(server, conf, pool=pool, container=container, caching=False)
+    dfuse = DFuse(server, conf, container=container, caching=False)
     dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
@@ -4440,7 +4426,7 @@ def test_alloc_fail_cont_create(server, conf):
     pool = server.get_test_pool()
     container = create_cont(conf, pool, ctype='POSIX', label='parent_cont')
 
-    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse = DFuse(server, conf, container=container)
     dfuse.use_valgrind = False
     dfuse.start()
 
@@ -4471,7 +4457,7 @@ def test_alloc_fail_cat(server, conf):
     pool = server.get_test_pool()
     container = create_cont(conf, pool, ctype='POSIX', label='fault_inject')
 
-    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse = DFuse(server, conf, container=container)
     dfuse.use_valgrind = False
     dfuse.start()
 
@@ -4498,7 +4484,7 @@ def test_alloc_fail_il_cp(server, conf):
     pool = server.get_test_pool()
     container = create_cont(conf, pool, ctype='POSIX', label='il_cp')
 
-    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse = DFuse(server, conf, container=container)
     dfuse.use_valgrind = False
     dfuse.start()
 
