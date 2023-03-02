@@ -17,11 +17,11 @@ jobs:
     strategy:
       matrix:
         distro: [ubuntu]
-        runner: hosted
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
+            runner: hosted
     env:
       DEPS_JOBS: 10
       COMPILER: clang
