@@ -14,7 +14,6 @@ server_config:
           scm_mount: /mnt/daos
 pool:
   scm_size: 1000000000
-  control_method: dmg
   pool_count: 10
 container:
   type: POSIX
@@ -49,5 +48,3 @@ ior:
   objectclass:
     oclass_EC_2P1GX:
       dfs_oclass: "EC_2P1GX"
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
