@@ -1534,8 +1534,8 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 			rc = obj_ec_fail_info_parity_get(obj, reasb_req, dkey_hash, &idx,
 							 NIL_BITMAP);
 			if (rc) {
-				D_ERROR(DF_OID" can not get parity failed, "
-					DF_RC".\n", DP_OID(reasb_req->orr_oid), DP_RC(rc));
+				D_ERROR(DF_OID " can not get parity failed, " DF_RC "\n",
+					DP_OID(reasb_req->orr_oid), DP_RC(rc));
 				goto out;
 			}
 		} else {
@@ -2164,7 +2164,7 @@ obj_ec_recov_codec_init(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 	D_ASSERT(nerrs > 0 && err_list != NULL);
 	if (nerrs > p) {
 		rc = -DER_DATA_LOSS;
-		D_ERROR(DF_OID" nerrs %d > p %d, "DF_RC".\n", DP_OID(obj->cob_md.omd_id), nerrs,
+		D_ERROR(DF_OID " nerrs %d > p %d, " DF_RC "\n", DP_OID(obj->cob_md.omd_id), nerrs,
 			p, DP_RC(rc));
 		return rc;
 	}
@@ -2592,8 +2592,8 @@ obj_ec_recov_prep(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 
 out:
 	if (rc)
-		D_ERROR(DF_OID" obj_ec_recov_prep failed, "DF_RC".\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		D_ERROR(DF_OID " obj_ec_recov_prep failed, " DF_RC "\n", DP_OID(obj->cob_md.omd_id),
+			DP_RC(rc));
 	return rc;
 }
 
