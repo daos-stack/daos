@@ -2775,7 +2775,7 @@ class PosixTests():
         print(os.listdir(join(dfuse.dir, pool, container.uuid)))
 
         # Now create a UNS link from the 2nd container to a 3rd one.
-        uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
+        uns_path = join(dfuse.dir, pool, container.uuid, 'ep0', 'ep')
         second_path = join(dfuse.dir, pool, uns_container.uuid)
 
         # Make a link within the new container.
@@ -3061,9 +3061,10 @@ class PosixTests():
 
         self.container.set_attrs(cont_attrs)
 
-        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse = DFuse(self.server, self.conf, pool=self.pool, container=self.container)
 
-        side_dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        side_dfuse = DFuse(self.server, self.conf, pool=self.pool, container=self.container,
+                           caching=False)
 
         dfuse.start()
         side_dfuse.start()
@@ -3900,9 +3901,9 @@ def test_pydaos_kv(server, conf):
 
     pool = server.get_test_pool()
 
-    c_uuid = create_cont(conf, pool, ctype="PYTHON")
+    cont = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.DCont(pool, c_uuid)
+    container = daos.DCont(pool, cont.uuid)
 
     kv = container.dict('my_test_kv')
     kv['a'] = 'a'
