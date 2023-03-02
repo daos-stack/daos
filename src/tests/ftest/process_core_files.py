@@ -10,8 +10,8 @@ import logging
 import sys
 
 # pylint: disable=import-error,no-name-in-module
-from util.logger_utils import get_console_handler
-from util.core_file import CoreFileProcessing, CoreFileException
+from logger_utils import get_console_handler
+from core_file import CoreFileProcessing, CoreFileException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)

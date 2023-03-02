@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 from random import choice
 from re import findall
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
-from run_utils import run_remote, run_local, RunException
+from run_utils import run_remote
+from host_utils import get_local_host
 from core_file import CoreFileProcessing
 
 
@@ -42,16 +42,10 @@ class HarnessCoreFilesTest(TestWithServers):
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
-        command = 'sudo /bin/bash -c \'' + open('scripts/get_core_file_pattern.sh').read() + '\''
-        try:
-            results = run_local(self.log, command, check=True)
-        except RunException:
-            self.fail("Unable to find local core file pattern")
-        core_path = os.path.split(results.stdout.splitlines()[-1])[0]
-        core_path = CoreFileProcessing(self.log).get_core_file_pattern(
-            self.server_managers[0].hosts, self.agent_managers[0].hosts.clients, True)
+        host = get_local_host()
+        result = CoreFileProcessing(self.log).get_core_file_pattern(host)
 
-        core_file = "{}/core.gdb.harness.advanced".format(core_path)
+        core_file = "{}/core.gdb.harness.advanced".format((result[str(host)])['path'])
         self.log.debug("Creating %s", core_file)
         try:
             with open(core_file, "w", encoding="utf-8") as local_core_file:

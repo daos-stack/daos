@@ -36,6 +36,8 @@ if [ \"\$(ulimit -n)\" != \"1048576\" ]; then
     echo \"*  hard  nofile 1048576\" >> /etc/security/limits.d/80_daos_limits.conf
 fi
 cat /etc/security/limits.d/80_daos_limits.conf
+# Note: we should never need to poke a value into /proc/sys/kernel/core_pattern
+# The daos RPMs should set up a resaonable value that CI should be able to use
 cat /proc/sys/kernel/core_pattern
 ulimit -a"
 sudo rm -f /var/tmp/core.*
