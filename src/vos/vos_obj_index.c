@@ -15,9 +15,9 @@
 #include <daos/btree.h>
 #include <daos/object.h>
 #include <daos_types.h>
-#include <vos_internal.h>
-#include <vos_ilog.h>
-#include <vos_obj.h>
+#include "vos_internal.h"
+#include "vos_ilog.h"
+#include "vos_obj.h"
 #include <daos_srv/vos.h>
 
 /** iterator for oid */
@@ -78,7 +78,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -164,7 +164,7 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 oi_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t oi_btr_ops = {

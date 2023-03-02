@@ -336,8 +336,7 @@ ilog_ptr_set_full(struct ilog_context *lctx, void *dest, const void *src,
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		goto done;
 	}
 
@@ -464,8 +463,7 @@ ilog_destroy(struct umem_instance *umm,
 
 	rc = ilog_tx_begin(&lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -514,8 +512,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -961,10 +958,9 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_TRACE, "%s in incarnation log "DF_X64
-		" status: rc=%s tree_version: %d\n",
-		opc_str[opc], id_in->id_epoch, d_errstr(rc),
-		ilog_mag2ver(lctx->ic_root->lr_magic));
+	D_DEBUG(DB_TRACE,
+		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
+		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
 
 	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
 	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
@@ -1431,17 +1427,14 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache,
 
 		dest = &cache->ac_entries[i];
 
-		D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
-			dest->id_epoch);
+		D_DEBUG(DB_TRACE, "Removing ilog entry at " DF_X64 "\n", dest->id_epoch);
 
 		rc = ilog_log_del(lctx, dest, true);
 		if (rc != 0) {
-			D_ERROR("Could not remove entry from tree: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Could not remove entry from tree: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
-		D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64"\n",
-			dest->id_epoch);
+		D_DEBUG(DB_TRACE, "Removed ilog entry at " DF_X64 "\n", dest->id_epoch);
 	}
 	if (cache->ac_nr == removed)
 		return reset_root(lctx, cache, -1);

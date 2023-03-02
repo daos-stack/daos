@@ -332,7 +332,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -685,7 +685,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t singv_btr_ops = {

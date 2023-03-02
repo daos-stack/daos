@@ -1320,7 +1320,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	return 0;
 out:
-	D_ERROR("Failed to release entry: %s\n", d_errstr(rc));
+	D_ERROR("Failed to release entry: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1428,7 +1428,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	umem_off_t		 nd_off;
 	bool                     leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf));
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -1501,7 +1501,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
-				D_ERROR("destroy failed: %s\n", d_errstr(rc));
+				D_ERROR("destroy failed: " DF_RC "\n", DP_RC(rc));
 				goto out;
 			}
 
@@ -3256,10 +3256,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (csum_buf_size > 0) {
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
-		} else {
-			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size);
 		}
+		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 

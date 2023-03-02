@@ -192,8 +192,8 @@ vos_dedup_init(struct vos_pool *pool)
 				 &pool->vp_dedup_hash);
 
 	if (rc)
-		D_ERROR(DF_UUID": Init dedup hash failed. "DF_RC".\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		D_ERROR(DF_UUID ": Init dedup hash failed. " DF_RC "\n", DP_UUID(pool->vp_id),
+			DP_RC(rc));
 	return rc;
 }
 
@@ -2466,7 +2466,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = dkey_update_begin(ioc);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": dkey update begin failed. %d\n", DP_UOID(oid), rc);
+		D_ERROR(DF_UOID ": dkey update begin failed. " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
 		goto error;
 	}
 	*ioh = vos_ioc2ioh(ioc);
