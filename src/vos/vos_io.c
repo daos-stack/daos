@@ -2347,8 +2347,12 @@ abort:
 	}
 
 	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
-		umem_atomic_copy(umem, &ioc->ic_obj->obj_df->vo_max_write, &ioc->ic_epr.epr_hi,
-				 sizeof(ioc->ic_obj->obj_df->vo_max_write), UMEM_COMMIT_DEFER);
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       UMEM_XADD_NO_SNAPSHOT);
+		if (err == 0)
+			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
 	if (err == 0)
