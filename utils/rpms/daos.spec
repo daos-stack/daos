@@ -14,7 +14,7 @@
 %endif
 
 Name:          daos
-Version:       2.3.104
+Version:       2.3.105
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -550,6 +550,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 3 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.105-1
+- Bump version to 2.3.105
+
 * Fri Mar 3 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.104-1
 - Bump version to 2.3.104
 
