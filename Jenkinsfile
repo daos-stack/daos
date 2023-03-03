@@ -65,6 +65,7 @@ if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith('weekly-testing') &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('feature/') &&
+     !env.BRANCH_NAME.startsWith('testbuild/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
     currentBuild.result = 'SUCCESS'

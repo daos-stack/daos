@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       3%{?relval}%{?dist}
+Version:       2.3.104
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -550,6 +550,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 3 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.104-1
+- Bump version to 2.3.104
+
 * Tue Feb 28 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-3
 - Change ipmctl requirement from v2 to v3
 

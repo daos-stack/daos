@@ -1,3 +1,9 @@
+daos (2.3.104-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.3.104
+
+ -- Johann Lombardi <johann.lombardi@intel.com> Fri, 3 Mar 2023 18:00:00 -0100
+
 daos (2.3.103-3) unstable; urgency=medium
   [ Michael Hennecke ]
   * Change ipmctl requirement from v2 to v3
