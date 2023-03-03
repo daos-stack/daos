@@ -68,6 +68,7 @@ struct DFSMOUNT {
 	char			fs_root[MAX_DFS_MT_PATH_LEN];
 };
 
+static pthread_mutex_t	lock_init;
 static bool		daos_inited;
 static int		num_dfs;
 static struct DFSMOUNT	dfs_list[MAX_DAOS_MT];
@@ -669,10 +670,11 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	idx_dfs = query_dfs_mount(full_path_loc);
 
 	if (idx_dfs >= 0) {
-		if (daos_inited == 0) {
-			/* mutex is used in daos_init(). */
+		if (!daos_inited) {
+			pthread_mutex_lock(&lock_init);
 			daos_init();
-			daos_inited = 1;
+			daos_inited = true;
+			pthread_mutex_unlock(&lock_init);
 		}
 
 		*dfs_mt = &dfs_list[idx_dfs];
@@ -1225,7 +1227,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 		if (strncmp(full_path, "/", 2) == 0)
 			full_path[0] = 0;
-		rc = asprintf(&(dir_list[idx_dirfd].path), "%s%s", dfs_mt->fs_root, full_path);
+		rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", dfs_mt->fs_root, full_path);
 		if (rc < 0) {
 			printf("Failed to allocate memory for dir_list[idx_dirfd].path\nQuit\n");
 			exit(1);
@@ -1907,7 +1909,7 @@ opendir(const char *path)
 	memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 	if (strncmp(full_path, "/", 2) == 0)
 		full_path[0] = 0;
-	rc = asprintf(&(dir_list[idx_dirfd].path), "%s%s", dfs_mt->fs_root, full_path);
+	rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", dfs_mt->fs_root, full_path);
 	if (rc < 0) {
 		printf("Failed to allocate memory for dir_list[idx_dirfd].path\n"
 		       "Quit\n");
@@ -3864,7 +3866,10 @@ static __attribute__((constructor)) void init_myhook(void)
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
 	update_cwd();
-
+	if (pthread_mutex_init(&lock_init, NULL) != 0) {
+		printf("\n mutex create_new_lock lock_init init failed\n");
+		exit(1);
+	}
 	init_fd_list();
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&real_open_ld));
@@ -3921,6 +3926,7 @@ static __attribute__((destructor)) void finalize_myhook(void)
 	uninstall_hook();
 	finalize_dfs();
 
+	pthread_mutex_destroy(&lock_init);
 	pthread_mutex_destroy(&lock_dirfd);
 	pthread_mutex_destroy(&lock_fd);
 
@@ -3951,7 +3957,7 @@ init_dfs(int idx)
 		exit(1);
 	}
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
-				 &hdl_hash_ops, &(dfs_list[idx].dfs_dir_hash));
+				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
 		printf("Failed to create hash table: %s\nQuit\n", strerror(rc));
 		exit(1);

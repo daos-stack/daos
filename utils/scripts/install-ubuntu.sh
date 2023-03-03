@@ -27,6 +27,7 @@ apt-get install \
     kmod \
     libaio-dev \
     libboost-dev \
+    libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
     libfuse3-dev \
@@ -53,8 +54,7 @@ apt-get install \
     python3-venv \
     uuid-dev \
     valgrind \
-    yasm \
-    libcapstone-dev
+    yasm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

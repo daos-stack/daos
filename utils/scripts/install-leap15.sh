@@ -32,6 +32,7 @@ dnf --nodocs install \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
+    libcapstone-devel \
     libevent-devel \
     libiscsi-devel \
     libjson-c-devel \
@@ -58,8 +59,7 @@ dnf --nodocs install \
     sudo \
     valgrind-devel \
     which \
-    yasm \
-    libcapstone-devel
+    yasm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
