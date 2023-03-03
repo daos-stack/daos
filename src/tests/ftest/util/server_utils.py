@@ -16,7 +16,7 @@ from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, convert_list, get_display_size, run_pcmd
+from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
 from host_utils import get_local_host
 from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -829,7 +829,7 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
+        self.dmg.system_stop(ranks=list_to_str(value=ranks), force=force)
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
