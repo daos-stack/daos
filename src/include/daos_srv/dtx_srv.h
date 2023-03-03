@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@ struct dtx_share_peer {
 	daos_unit_oid_t		 dsp_oid;
 	daos_epoch_t		 dsp_epoch;
 	uint64_t		 dsp_dkey_hash;
+	int			 dsp_status;
 	uint32_t		 dsp_inline_mbs:1;
 	struct dtx_memberships	*dsp_mbs;
 };
