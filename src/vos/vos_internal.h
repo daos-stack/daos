@@ -282,6 +282,8 @@ struct vos_container {
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
 	uint64_t		vc_io_nospc_ts;
+	/* The (next) position for committed DTX entries reindex. */
+	umem_off_t		vc_cmt_dtx_reindex_pos;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
