@@ -104,7 +104,7 @@ cct_setup(void **state)
 	D_ALLOC_PTR(st);
 	assert_non_null(st);
 
-	/* Using the noop algorithim so measurements are all overhead */
+	/* Using the noop algorithm so measurements are all overhead */
 	daos_csummer_init(&st->csummer, daos_mhash_type2algo(HASH_TYPE_NOOP), 1024, false);
 	daos_csummer_init_with_type(&st->csummer, HASH_TYPE_NOOP, 1024, false);
 

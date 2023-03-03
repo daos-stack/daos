@@ -274,10 +274,11 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
 
     COMP="UTEST_csum"
-    run_test "${SL_PREFIX}/bin/cli_checksum_tests"
-    run_test "${SL_PREFIX}/bin/srv_checksum_tests"
-    run_test "${SL_PREFIX}/bin/pool_scrubbing_tests"
-    run_test "${SL_PREFIX}/bin/rpc_tests"
+    /home/rjensen1/workspace/daos/src/object/tests/cli_checksum_tests.c
+    run_test "${SL_BUILD_DIR}/src/object/tests/cli_checksum_tests"
+    run_test "${SL_BUILD_DIR}/src/object/tests/srv_checksum_tests"
+    run_test "${SL_BUILD_DIR}/src/vos/tests/pool_scrubbing_tests"
+    run_test "${SL_BUILD_DIR}/src/tests/rpc_tests"
 
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
