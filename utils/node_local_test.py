@@ -3028,7 +3028,7 @@ class PosixTests():
         cmd = ['container',
                'clone',
                '--src',
-               f'daos://{self.pool.uuid}/{self.container.id}',
+               f'daos://{self.pool.uuid}/{self.container.id()}',
                '--dst',
                f'daos://{self.pool.uuid}/']
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
