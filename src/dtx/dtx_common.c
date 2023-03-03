@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -298,12 +298,18 @@ dtx_cleanup(void *arg)
 	struct dtx_partial_cmt_item	*dpci;
 	struct dtx_entry		*dte;
 	struct dtx_cleanup_cb_args	 dcca;
+	d_list_t			 cmt_list;
+	d_list_t			 abt_list;
+	d_list_t			 act_list;
 	int				 count;
 	int				 rc;
 
 	if (dbca->dbca_cleanup_req == NULL)
 		goto out;
 
+	D_INIT_LIST_HEAD(&cmt_list);
+	D_INIT_LIST_HEAD(&abt_list);
+	D_INIT_LIST_HEAD(&act_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
 	dcca.dcca_st_count = 0;
@@ -332,10 +338,14 @@ dtx_cleanup(void *arg)
 		 * even if some former ones hit failure.
 		 */
 		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
-					  NULL, NULL, NULL, false);
+					  &cmt_list, &abt_list, &act_list, false);
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
+
+	D_ASSERT(d_list_empty(&cmt_list));
+	D_ASSERT(d_list_empty(&abt_list));
+	D_ASSERT(d_list_empty(&act_list));
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list) &&
@@ -642,7 +652,7 @@ dtx_batched_commit(void *arg)
 	while (1) {
 		struct ds_cont_child	*cont;
 		struct dtx_stat		 stat = { 0 };
-		int			 sleep_time = 10; /* ms */
+		int			 sleep_time = 50; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
 			goto check;
@@ -700,7 +710,6 @@ dtx_batched_commit(void *arg)
 		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
 		    DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
-			sleep_time = 0;
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);

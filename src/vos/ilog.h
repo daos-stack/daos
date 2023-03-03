@@ -242,6 +242,7 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
  *  \param	root[in]	Pointer to log root
  *  \param	cbs[in]		Incarnation log transaction log callbacks
  *  \param	intent[in]	The intent of the operation
+ *  \param	has_cond[in]	Whether for conditional operation or not
  *  \param	entries[in,out]	Allocated structure passed in will be filled
  *				with incarnation log entries in the range.
  *
@@ -249,7 +250,7 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
  */
 int
 ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
-	   const struct ilog_desc_cbs *cbs, uint32_t intent,
+	   const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 	   struct ilog_entries *entries);
 
 /** Deallocate any memory associated with an ilog_entries struct for fetch
