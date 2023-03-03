@@ -23,7 +23,7 @@ from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command
+from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):
@@ -773,24 +773,48 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def convert_list(value, separator=","):
-    """Convert a list into a separator-separated string of its items.
-
-    Examples:
-        convert_list([1,2,3])        -> '1,2,3'
-        convert_list([1,2,3], " ")   -> '1 2 3'
-        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+def list_to_str(value, joiner=","):
+    """Convert a list to a string by joining its items.
 
     Args:
-        value (list): list to convert into a string
-        separator (str, optional): list item separator. Defaults to ",".
+        value (list): list to convert to a string
+        joiner (str, optional): _description_. Defaults to ",".
 
     Returns:
-        str: a single string containing all the list items separated by the
-            separator.
+        str: a string of each list entry joined by the joiner string
 
     """
-    return separator.join([str(item) for item in value])
+    return joiner.join(map(str, value))
+
+
+def dict_to_list(value, joiner="="):
+    """Convert a dictionary to a list of joined key and value pairs.
+
+    Args:
+        value (dict): dictionary to convert into a list
+        joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        list: a list of joined dictionary key and value strings
+
+    """
+    return [list_to_str(items, joiner) for items in value.items()]
+
+
+def dict_to_str(value, joiner=", ", items_joiner="="):
+    """Convert a dictionary to a string of joined key and value joined pairs.
+
+    Args:
+        value (dict): dictionary to convert into a string
+        joiner (str, optional): string to use to join dict_to_list() item. Defaults to ", ".
+        items_joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        str: a string of each dictionary key and value pair joined by the items_joiner string all
+            joined by the joiner string
+
+    """
+    return list_to_str(dict_to_list(value, items_joiner), joiner)
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
@@ -1073,7 +1097,7 @@ def convert_string(item, separator=","):
 
     """
     if isinstance(item, (list, tuple, set)):
-        item = convert_list(item, separator)
+        item = list_to_str(item, separator)
     elif not isinstance(item, str):
         item = str(item)
     return item
@@ -1459,3 +1483,82 @@ def nodeset_append_suffix(nodeset, suffix):
     """
     return NodeSet.fromlist(
         map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
+
+
+def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
+    """Wait for a result with a timeout.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        get_method (object): method that returns a boolean used to determine if the result.
+            is found.
+        timeout (int): number of seconds to wait for a response to be found.
+        delay (int, optional): number of seconds to wait before checking the another result.
+            This should be a small number. Defaults to 1.
+        add_log (bool, optional): whether or not to include the log argument for get_method.
+            Defaults to False.
+        kwargs (dict): kwargs for get_method.
+
+    Returns:
+        bool: if the result was found.
+    """
+    if add_log:
+        kwargs["log"] = log
+    method_str = "{}({})".format(
+        get_method.__name__,
+        ", ".join([list_to_str(items, "=") for items in kwargs.items() if items[0] != "log"]))
+    result_found = False
+    timed_out = False
+    start = time.time()
+    log.debug(
+        "wait_for_result: Waiting for a result from %s with a %s second timeout",
+        method_str, timeout)
+    while not result_found and not timed_out:
+        timed_out = (time.time() - start) >= timeout
+        result_found = get_method(**kwargs)
+        log.debug(
+            "wait_for_result: Result from %s: %s (timed out: %s)",
+            method_str, result_found, timed_out)
+        if not result_found and not timed_out:
+            time.sleep(delay)
+    log.debug("wait_for_result: Waiting for a result from %s complete", method_str)
+    return not timed_out
+
+
+def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
+    """Check the host for a ping response.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        host (Node): destination host to ping to.
+        expected_ping (bool, optional): whether a ping response is expected. Defaults to True.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+            Defaults to 60.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if the expected number of pings were returned; False otherwise.
+    """
+    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
+    try:
+        run_local(
+            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
+    except RunException:
+        return not expected_ping
+    return expected_ping
+
+
+def check_ssh(log, hosts, cmd_timeout=60, verbose=True):
+    """Check the host for a successful pass-wordless ssh.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        hosts (NodeSet): destination hosts to ssh to.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if all hosts respond to the remote ssh session; False otherwise.
+    """
+    result = run_remote(log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
+    return result.passed
