@@ -75,7 +75,7 @@ def create_epilog_script(args):
                           "do fusermount3 -uz $dir;rm -rf $dir; done'\n")
         script_file.write("exit 0\n")
     command = f"{sudo} chmod 755 {EPILOG_FILE}"
-    return execute_cluster_cmds(args.control, [(command)])
+    return execute_cluster_cmds(args.control, [command])
 
 
 def update_config_cmdlist(args):
@@ -276,9 +276,9 @@ def start_slurm(args):
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
     status = execute_cluster_cmds(args.nodes, cmd_list, args.sudo)
     if status > 0 or args.debug:
-        cmd_list = (SLURMCTLD_STARTUP_DEBUG)
+        cmd_list = SLURMCTLD_STARTUP_DEBUG
         execute_cluster_cmds(args.control, cmd_list, args.sudo)
-        cmd_list = (SLURMD_STARTUP_DEBUG)
+        cmd_list = SLURMD_STARTUP_DEBUG
         execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
     if status > 0:
         return 1

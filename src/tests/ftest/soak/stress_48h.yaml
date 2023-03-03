@@ -45,13 +45,10 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
-  control_method: dmg
 pool_reserved:
   size: 10%
-  control_method: dmg
 pool_racer:
   size: 10%
-  control_method: dmg
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -144,7 +141,7 @@ fio_stress:
     verify: 'crc64'
     iodepth: 16
   test:
-    numjobs: 16
+    numjobs: 1
   soak:
     blocksize:
       - '64K'

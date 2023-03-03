@@ -34,25 +34,20 @@ dmg:
     allow_insecure: true
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 40GB
-  nvme_size: 200GB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: SX
   control_method: daos
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: SX
   dir_oclass: SX
   control_method: daos
+  daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
