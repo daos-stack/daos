@@ -21,6 +21,7 @@
 #include <sys/statvfs.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <mntent.h>
 
 #include <gurt/list.h>
 #include <gurt/common.h>
@@ -40,7 +41,7 @@
 
 #define MAX_DAOS_MT		(8)
 
-#define READ_DIR_BATCH_SIZE	(24)
+#define READ_DIR_BATCH_SIZE	(96)
 #define MAX_DFS_MT_PATH_LEN	(256)
 #define MAX_FILE_NAME_LEN	(512)
 #define MAX_FD_DUP2ED		(8)
@@ -459,56 +460,33 @@ discover_daos_mount(void)
 	num_dfs++;
 }
 
-#define MAX_PROC_MOUNT_SIZE	(1024*64)
-
 static void
 discover_dfuse(void)
 {
 	FILE	        *fp;
-	int	        size_read, item_read;
-	char	        *buff_mount = NULL;
-	char	        *pos_fuse;
-	char            fs_mount[256];
-	char            device_type_read[256];
-	char            fs_type_read[256];
-	const char      device_fuse[] = "dfuse ";
-	const char      fs_type_fuse[] = "fuse.daos";
+	const char      mnt_type_fuse[] = "fuse.daos";
+	struct mntent	*fs_entry;
 
 	num_dfs = 0;
 
-	buff_mount = malloc(MAX_PROC_MOUNT_SIZE);
-	if (buff_mount == NULL) {
-		printf("Failed allocate memory for buff_mount.\nQuit\n");
-		exit(1);
-	}
-	fp = fopen("/proc/mounts", "rb");
+	fp = setmntent("/proc/self/mounts", "r");
 	if (fp == NULL)	{
-		printf("Fail to open file: /proc/mounts\nQuit\n");
+		printf("Fail to open file: /proc/self/mounts\nQuit\n");
 		exit(1);
 	}
 
-	size_read = fread(buff_mount, 1, MAX_PROC_MOUNT_SIZE, fp);
-	fclose(fp);
-	if (size_read < 0) {
-		printf("Error to read /proc/mounts\nQuit\n");
-		exit(1);
-	}
-
-	pos_fuse = strstr(buff_mount, device_fuse);
-	while (pos_fuse) {
-		item_read = sscanf(pos_fuse, "%s%s%s", device_type_read, fs_mount, fs_type_read);
-		if (item_read == 3 &&
-		    strncmp(fs_type_read, fs_type_fuse, sizeof(fs_type_fuse)) == 0) {
+	while ((fs_entry = getmntent(fp)) != NULL) {
+		if (strncmp(fs_entry->mnt_type, mnt_type_fuse, sizeof(mnt_type_fuse)) == 0) {
 			dfs_list[num_dfs].dfs_dir_hash = NULL;
-			dfs_list[num_dfs].len_fs_root = strlen(fs_mount);
+			dfs_list[num_dfs].len_fs_root = strlen(fs_entry->mnt_dir);
 			dfs_list[num_dfs].inited = 0;
 			dfs_list[num_dfs].pool = NULL;
-			strncpy(dfs_list[num_dfs].fs_root, fs_mount, MAX_DFS_MT_PATH_LEN);
+			strncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir, MAX_DFS_MT_PATH_LEN);
 			num_dfs++;
 		}
-		/* move the pointer forward a little bit */
-		pos_fuse = strstr(pos_fuse + 8, device_fuse);
 	}
+
+	endmntent(fp);
 }
 
 static void
