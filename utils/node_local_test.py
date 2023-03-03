@@ -3033,7 +3033,7 @@ class PosixTests():
                '--src',
                src_dir.name,
                '--dst',
-               f'daos://{self.pool.uuid}/{self.container}']
+               f'daos://{self.pool.uuid}/{self.container.id()}']
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
 
@@ -3047,7 +3047,7 @@ class PosixTests():
         cmd = ['container',
                'clone',
                '--src',
-               f'daos://{self.pool.uuid}/{self.container}',
+               f'daos://{self.pool.uuid}/{self.container.id}',
                '--dst',
                f'daos://{self.pool.uuid}/']
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
@@ -3470,7 +3470,10 @@ def log_test(conf,
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
 
-    if conf.max_log_size and fstat.st_size > conf.max_log_size:
+    if conf.max_log_size and fstat.st_size > conf.max_log_size / 2:
+        message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
+                   + sizeof_fmt(conf.max_log_size))
+        conf.wf.add_test_case('logfile_size', failure=message)
         raise NLTLogSize(fstat.st_size, conf.max_log_size)
 
     return lto.fi_location
@@ -4474,7 +4477,7 @@ def test_alloc_fail_cat(server, conf):
     Start dfuse for this test, and do not do output checking on the command
     itself yet.
     """
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_obj()
     container = create_cont(conf, pool, ctype='POSIX', label='fault_inject')
 
     dfuse = DFuse(server, conf, container=container)
