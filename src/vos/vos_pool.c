@@ -1262,6 +1262,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 			pool->vp_policy_desc.params[i] = p->params[i];
 
 		break;
+	case VOS_PO_CTL_SET_SPACE_RB:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		i = *((unsigned int *)param);
+		if (i >= 100 || i < 0) {
+			D_ERROR("Invalid space reserve ratio for rebuild. %d\n", i);
+			return -DER_INVAL;
+		}
+		pool->vp_space_rb = i;
+		break;
 	}
 
 	return 0;

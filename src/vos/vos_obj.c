@@ -734,7 +734,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound, false,
 			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)

@@ -1065,7 +1065,7 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 static int
 key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	       const struct vos_ilog_info *parent, daos_epoch_range_t *epr_out,
-	       struct vos_ilog_info *info)
+	       struct vos_ilog_info *info, bool has_cond)
 {
 	struct umem_instance	*umm;
 	daos_epoch_range_t	 epr = ioc->ic_epr;
@@ -1074,7 +1074,7 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	umm = vos_obj2umm(ioc->ic_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(ioc->ic_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, ioc->ic_bound, 0, parent, info);
+			    epr.epr_hi, ioc->ic_bound, has_cond, NULL, parent, info);
 	if (rc != 0)
 		goto out;
 
@@ -1192,6 +1192,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int			 i, rc;
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	bool			 has_cond = false;
 	struct daos_recx_ep_list *shadow;
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
@@ -1223,8 +1224,18 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		goto out;
 	}
 
+	if (ioc->ic_ts_set != NULL) {
+		if (ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY &&
+		    iod->iod_flags & VOS_OF_COND_AKEY_FETCH) {
+			has_cond = true;
+		} else if (!(ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY) &&
+			   ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH) {
+			has_cond = true;
+		}
+	}
+
 	rc = key_ilog_check(ioc, krec, &ioc->ic_dkey_info, &val_epr,
-			    &ioc->ic_akey_info);
+			    &ioc->ic_akey_info, has_cond);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, false)) {
 		if (rc == 0 && !ioc->ic_read_ts_only) {
@@ -1338,6 +1349,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i, rc;
+	bool			 has_cond;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1360,8 +1372,13 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		goto out;
 	}
 
+	if (ioc->ic_ts_set != NULL && ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH)
+		has_cond = true;
+	else
+		has_cond = false;
+
 	rc = key_ilog_check(ioc, krec, &obj->obj_ilog_info, &ioc->ic_epr,
-			    &ioc->ic_dkey_info);
+			    &ioc->ic_dkey_info, has_cond);
 
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {

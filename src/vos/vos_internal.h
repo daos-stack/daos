@@ -235,6 +235,8 @@ struct vos_pool {
 	uint32_t		 vp_dtx_committed_count;
 	/** Tiering policy */
 	struct policy_desc_t	vp_policy_desc;
+	/** Space (in percentage) reserved for rebuild */
+	unsigned int		vp_space_rb;
 };
 
 /**

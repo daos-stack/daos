@@ -377,7 +377,7 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound,
+			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound, false,
 			    NULL, NULL, &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;

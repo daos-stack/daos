@@ -197,8 +197,8 @@ type PoolCreateCmd struct {
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
-		PoolLabel string `positional-arg-name:"<pool label>"`
-	} `positional-args:"yes" required:"1"`
+		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -405,8 +405,8 @@ type poolCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool label or UUID>"`
-	} `positional-args:"yes" required:"1"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolCmd) PoolID() *PoolID {
@@ -675,8 +675,8 @@ type PoolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>"`
-	} `positional-args:"yes" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
