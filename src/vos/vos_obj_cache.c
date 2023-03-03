@@ -22,8 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <vos_obj.h>
-#include <vos_internal.h>
+#include "vos_obj.h"
+#include "vos_internal.h"
 #include <daos_errno.h>
 
 /**
