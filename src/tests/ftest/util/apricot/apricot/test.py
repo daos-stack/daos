@@ -29,7 +29,7 @@ from fault_config_utils import FaultInjection
 from general_utils import \
     stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
-    set_avocado_config_value, nodeset_append_suffix
+    set_avocado_config_value, nodeset_append_suffix, dict_to_str
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
@@ -138,6 +138,7 @@ class Test(avocadoTest):
         self._stage_name = os.environ.get("STAGE_NAME", None)
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
+        self._test_step = 1
 
     def setUp(self):
         """Set up each test case."""
@@ -400,11 +401,9 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
-                kwargs_str = ", ".join(
-                    ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
                 errors.append(
                     "Unhandled exception when calling {}({}): {}".format(
-                        str(cleanup["method"]), kwargs_str, str(error)))
+                        str(cleanup["method"]), dict_to_str(cleanup["kwargs"]), str(error)))
         return errors
 
     def register_cleanup(self, method, **kwargs):
@@ -414,8 +413,8 @@ class Test(avocadoTest):
             method (str): method to call with the kwargs
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
-        kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
-        self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
+        self.log.debug(
+            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
@@ -441,6 +440,16 @@ class Test(avocadoTest):
             self.log.debug(
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
+
+    def log_step(self, message):
+        """Log a test step.
+
+        Args:
+            message (str): description of test step.
+
+        """
+        self.log.info("==> Step %s: %s", self._test_step, message)
+        self._test_step += 1
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -479,6 +488,7 @@ class TestWithoutServers(Test):
         self.context = None
         self.d_log = None
         self.fault_injection = None
+        self.label_generator = LabelGenerator()
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -639,7 +649,6 @@ class TestWithServers(TestWithoutServers):
         self.job_manager = None
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
-        self.label_generator = LabelGenerator()
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
