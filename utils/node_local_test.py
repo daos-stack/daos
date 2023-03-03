@@ -54,25 +54,6 @@ class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
 
-class NLTLogSize(NLTestFail):
-    """Log file is bigger than specified
-
-    We occasionally see bugs where the server log size gets very large so check against this to
-    catch it before landing
-    """
-
-    def __init__(self, size, max_size):
-        super().__init__(self)
-        self.size = size
-        self.max = max_size
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return f'Max log size exceeded, {sizeof_fmt(self.size)} > {sizeof_fmt(self.max)}'
-
-
 instance_num = 0  # pylint: disable=invalid-name
 
 
@@ -3470,11 +3451,10 @@ def log_test(conf,
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
 
-    if conf.max_log_size and fstat.st_size > conf.max_log_size / 2:
+    if conf.max_log_size and fstat.st_size > conf.max_log_size:
         message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
                    + sizeof_fmt(conf.max_log_size))
         conf.wf.add_test_case('logfile_size', failure=message)
-        raise NLTLogSize(fstat.st_size, conf.max_log_size)
 
     return lto.fi_location
 
@@ -4504,7 +4484,7 @@ def test_alloc_fail_il_cp(server, conf):
 
     Start dfuse for this test, and do not do output checking on the command itself yet.
     """
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_obj()
     container = create_cont(conf, pool, ctype='POSIX', label='il_cp')
 
     dfuse = DFuse(server, conf, container=container)
@@ -4535,6 +4515,7 @@ def test_alloc_fail_il_cp(server, conf):
 
     rc = test_cmd.launch()
     dfuse.stop()
+    container.destroy()
     return rc
 
 
