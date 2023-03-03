@@ -45,12 +45,12 @@
 
 #define	MAX_LEN_DISASSEMBLE	(28)
 
-static int num_hook;
-static int num_module;
-static int num_patch_blk, is_uninstalled;
-static int get_module_maps_inited;
+static int	num_hook;
+static int	num_module;
+static int	num_patch_blk, is_uninstalled;
+static int	get_module_maps_inited;
 
-static struct module_patch_info_t module_list[MAX_MODULE];
+static struct module_patch_info_t	module_list[MAX_MODULE];
 
 /* The flag whethere libc.so is found or not. */
 static int found_libc = 1;
@@ -73,22 +73,22 @@ static struct patch_block_t patch_blk_list[MAX_MODULE];
 /* The max number of segments in /proc/pid/maps */
 #define MAX_NUM_SEG	(2048)
 
-static int num_seg, num_lib_in_map;
+static int	num_seg, num_lib_in_map;
 
 /* List of min and max addresses of segments in /proc/pid/maps */
-static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
+static uint64_t	addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 
 /* List of base addresses of loaded libraries */
-static uint64_t lib_base_addr[MAX_NUM_LIB];
+static uint64_t	lib_base_addr[MAX_NUM_LIB];
 
 /* List of names of loaded libraries */
-static char lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
+static char	lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char path_ld[512] = "";
-static char *path_libc;
-static char *path_libpthread;
+static char	path_ld[512] = "";
+static char	*path_libc;
+static char	*path_libpthread;
 
 #define MAP_SIZE_SMALL	(32768)
 
@@ -337,7 +337,9 @@ query_lib_name_in_list(const char *lib_name_str)
 static int
 query_registered_module(const char *lib_name_str)
 {
-	for (int i = 0; i < num_module; i++) {
+	int	i;
+
+	for (i = 0; i < num_module; i++) {
 		if (strcmp(lib_name_str, module_list[i].module_name) == 0)
 			return i;
 	}

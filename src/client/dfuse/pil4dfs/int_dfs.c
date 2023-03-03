@@ -29,6 +29,7 @@
 #include <daos_fs.h>
 #include <dfuse_ioctl.h>
 #include <daos_prop.h>
+#include "dfs_internal.h"
 
 #include "hook.h"
 
@@ -48,6 +49,9 @@
 #define MAX_OPENED_FILE_M1	((MAX_OPENED_FILE) - 1)
 #define MAX_OPENED_DIR		(512)
 #define MAX_OPENED_DIR_M1	((MAX_OPENED_DIR) - 1)
+
+/* The buffer size used for reading/writing in rename() */
+#define FILE_BUFFER_SIZE	(64*1024*1024)
 
 /* Create a fake st_ino in stat for a path */
 #define FAKE_ST_INO(path)	(d_hash_string_u32(path, strlen(path)))
@@ -119,7 +123,7 @@ static pthread_mutex_t	lock_dirfd;
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t	mode_not_umask;
 
-static int fd_stdin = -1, fd_stdout = -1, fd_stderr = -1;
+static int	fd_stdin = -1, fd_stdout = -1, fd_stderr = -1;
 
 static void finalize_dfs(void);
 static void update_cwd(void);
@@ -140,7 +144,7 @@ hdl_obj(d_list_t *rlink)
 static bool
 key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
-	struct dir_hdl *hdl = hdl_obj(rlink);
+	struct dir_hdl	*hdl = hdl_obj(rlink);
 
 	return (strcmp(hdl->name, (const char *)key) == 0);
 }
@@ -170,7 +174,7 @@ rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 static uint32_t
 rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dir_hdl *hdl = hdl_obj(rlink);
+	struct dir_hdl	*hdl = hdl_obj(rlink);
 
 	return d_hash_string_u32(hdl->name, strlen(hdl->name));
 }
@@ -329,6 +333,13 @@ static int (*real_dup)(int oldfd);
 
 static int (*real_dup2)(int oldfd, int newfd);
 
+static int (*real_symlink)(const char *symvalue, const char *path);
+
+static int (*real_symlinkat)(const char *symvalue, int dirfd, const char *path);
+
+static ssize_t (*real_readlink)(const char *path, char *buf, size_t size);
+static ssize_t (*real_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
+
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
 
@@ -357,20 +368,20 @@ static int (*real_tcgetattr)(int fd, void *termios_p);
 static void remove_dot_dot(char szPath[]);
 static int remove_dot(char szPath[]);
 
-static struct FILESTATUS *file_list;
-static struct DIRSTATUS *dir_list;
+static struct FILESTATUS	*file_list;
+static struct DIRSTATUS		*dir_list;
 
 /* last_fd==-1 means the list is empty. No active fd in list. */
-static int next_free_fd, last_fd = -1, num_fd;
-static int next_free_dirfd, last_dirfd = -1, num_dirfd;
+static int	next_free_fd, last_fd = -1, num_fd;
+static int	next_free_dirfd, last_dirfd = -1, num_dirfd;
 
 static int find_next_available_fd(void);
 static int find_next_available_dirfd(void);
 static void free_fd(int idx);
 static void free_dirfd(int idx);
 
-static int num_fd_dup2ed;
-struct FD_DUP2ED fd_dup2_list[MAX_FD_DUP2ED];
+static int		num_fd_dup2ed;
+struct FD_DUP2ED	fd_dup2_list[MAX_FD_DUP2ED];
 
 static void init_fd_dup2_list(void);
 /* return dest fd */
@@ -722,8 +733,8 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 static void
 remove_dot_dot(char szPath[])
 {
-	char *p_Offset_2Dots, *p_Back, *pTmp, *pMax, *pNewStr;
-	int i, nLen, nNonZero = 0;
+	char	*p_Offset_2Dots, *p_Back, *pTmp, *pMax, *pNewStr;
+	int	i, nLen, nNonZero = 0;
 
 	nLen = strlen(szPath);
 
@@ -760,8 +771,8 @@ remove_dot_dot(char szPath[])
 static int
 remove_dot(char szPath[])
 {
-	char *p_Offset_Dots, *p_Offset_Slash, *pNewStr;
-	int i, nLen, nNonZero = 0;
+	char	*p_Offset_Dots, *p_Offset_Slash, *pNewStr;
+	int	i, nLen, nNonZero = 0;
 
 	nLen = strlen(szPath);
 
@@ -808,7 +819,7 @@ remove_dot(char szPath[])
 static void
 init_fd_list(void)
 {
-	int i;
+	int	i;
 
 	if (pthread_mutex_init(&lock_fd, NULL) != 0) {
 		printf("\n mutex create_new_lock lock_fd init failed\n");
@@ -840,7 +851,7 @@ init_fd_list(void)
 static int
 find_next_available_fd(void)
 {
-	int i, idx = -1;
+	int	i, idx = -1;
 
 	pthread_mutex_lock(&lock_fd);
 	if (next_free_fd < 0)	{
@@ -871,7 +882,7 @@ find_next_available_fd(void)
 static int
 find_next_available_dirfd(void)
 {
-	int i, idx = -1;
+	int	i, idx = -1;
 
 	pthread_mutex_lock(&lock_dirfd);
 	if (next_free_dirfd < 0) {
@@ -904,7 +915,7 @@ find_next_available_dirfd(void)
 static void
 free_fd(int idx)
 {
-	int i;
+	int	i;
 
 	pthread_mutex_lock(&lock_fd);
 	file_list[idx].file_obj = NULL;
@@ -979,7 +990,7 @@ free_dirfd(int idx)
 static inline int
 Get_Fd_Redirected(int fd)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src == fd)
@@ -1005,7 +1016,7 @@ Get_Fd_Redirected(int fd)
 static void
 init_fd_dup2_list(void)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		fd_dup2_list[i].fd_src = -1;
@@ -1016,7 +1027,7 @@ init_fd_dup2_list(void)
 static void
 free_fd_in_dup2_list(int fd)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		if (fd_dup2_list[i].fd_src == fd) {
@@ -1029,7 +1040,7 @@ free_fd_in_dup2_list(int fd)
 static int
 find_free_fd_dup2_list(void)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		if (fd_dup2_list[i].fd_src == -1)
@@ -1056,7 +1067,7 @@ find_free_fd_dup2_list(void)
 static int
 query_fd_forward_dest(int fd_src)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		if (fd_src == fd_dup2_list[i].fd_src)
@@ -1080,7 +1091,7 @@ allocate_a_fd_from_kernel(void)
 static void
 close_all_duped_fd(void)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		if (fd_dup2_list[i].fd_src >= 0)	{
@@ -1108,7 +1119,7 @@ close_all_duped_fd(void)
 static int
 check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 {
-	int len_str;
+	int	len_str;
 
 	if (dirfd >= FD_DIR_BASE) {
 		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s",
@@ -1124,7 +1135,7 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 			exit(1);
 		}
 	} else {
-		char path_fd_dir[32];
+		char	path_fd_dir[32];
 		ssize_t bytes_read;
 
 		/* 32 bytes should be more than enough */
@@ -1153,15 +1164,15 @@ static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *szCallerName,
 	    const char *pathname, int oflags, ...)
 {
-	unsigned int mode = 0664;
-	int two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *file_obj;
-	dfs_obj_t *parent;
-	mode_t mode_query = 0;
-	struct DFSMOUNT *dfs_mt;
+	unsigned int	mode = 0664;
+	int		two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*file_obj;
+	dfs_obj_t	*parent;
+	mode_t		mode_query = 0;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (oflags & O_CREAT)   {
 		va_list arg;
@@ -1250,8 +1261,8 @@ org_func:
 static int
 new_open_ld(const char *pathname, int oflags, ...)
 {
-	unsigned int mode;
-	int two_args = 1, rc;
+	unsigned int	mode;
+	int		two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
@@ -1274,8 +1285,8 @@ new_open_ld(const char *pathname, int oflags, ...)
 static int
 new_open_libc(const char *pathname, int oflags, ...)
 {
-	unsigned int mode;
-	int two_args = 1, rc;
+	unsigned int	mode;
+	int		two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
@@ -1298,8 +1309,8 @@ new_open_libc(const char *pathname, int oflags, ...)
 static int
 new_open_pthread(const char *pathname, int oflags, ...)
 {
-	unsigned int mode;
-	int two_args = 1, rc;
+	unsigned int	mode;
+	int		two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
@@ -1321,7 +1332,7 @@ new_open_pthread(const char *pathname, int oflags, ...)
 static int
 new_close_common(int (*real_close)(int fd), int fd)
 {
-	int rc, fd_Directed, idx;
+	int	rc, fd_Directed, idx;
 
 	if (!hook_enabled)
 		return real_close(fd);
@@ -1375,7 +1386,7 @@ new_close_pthread(int fd)
 static int
 new_close_nocancel(int fd)
 {
-	int rc;
+	int	rc;
 
 	if (!hook_enabled)
 		return real_close_nocancel(fd);
@@ -1403,7 +1414,7 @@ new_close_nocancel(int fd)
 static ssize_t
 read_comm(ssize_t (*real_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
 {
-	ssize_t rc;
+	ssize_t	rc;
 
 	if (!hook_enabled)
 		return real_read(fd, buf, size);
@@ -1433,11 +1444,11 @@ new_read_pthread(int fd, void *buf, size_t size)
 ssize_t
 pread(int fd, void *buf, size_t size, off_t offset)
 {
-	daos_size_t bytes_read;
-	char *ptr = (char *)buf;
-	int rc;
-	d_iov_t iov;
-	d_sg_list_t sgl;
+	daos_size_t	bytes_read;
+	char		*ptr = (char *)buf;
+	int		rc;
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
 
 	if (size == 0)
 		return 0;
@@ -1474,7 +1485,7 @@ ssize_t
 write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
 {
-	ssize_t rc;
+	ssize_t	rc;
 
 	if (!hook_enabled)
 		return real_write(fd, buf, size);
@@ -1504,10 +1515,10 @@ new_write_pthread(int fd, const void *buf, size_t size)
 ssize_t
 pwrite(int fd, const void *buf, size_t size, off_t offset)
 {
-	char *ptr = (char *)buf;
-	int rc;
-	d_iov_t iov;
-	d_sg_list_t sgl;
+	char		*ptr = (char *)buf;
+	int		rc;
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
 
 	if (size == 0)
 		return 0;
@@ -1545,7 +1556,7 @@ ssize_t __pwrite64(int fd, const void *buf, size_t size, off_t offset)
 static int
 new_fxstat(int vers, int fd, struct stat *buf)
 {
-	int rc;
+	int	rc;
 
 	if (!hook_enabled)
 		return real_fxstat(vers, fd, buf);
@@ -1574,12 +1585,12 @@ new_fxstat(int vers, int fd, struct stat *buf)
 static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
-	int is_target_path, rc;
-	dfs_obj_t *parent;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	dfs_obj_t	*parent;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	struct DFSMOUNT	*dfs_mt;
 
 	if (!hook_enabled)
 		return real_xstat(ver, path, stat_buf);
@@ -1605,8 +1616,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 static int
 new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (!hook_enabled)
 		return real_fxstatat(ver, dirfd, path, stat_buf, flags);
@@ -1651,9 +1662,9 @@ copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
 int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
-	char full_path[MAX_FILE_NAME_LEN];
-	struct stat stat_buf;
-	int rc, idx_dfs;
+	int		rc, idx_dfs;
+	char		full_path[MAX_FILE_NAME_LEN];
+	struct stat	stat_buf;
 
 	if (real_statx == NULL)	{
 		real_statx = dlsym(RTLD_NEXT, "statx");
@@ -1682,12 +1693,12 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
-	int is_target_path, rc;
-	dfs_obj_t *parent;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	dfs_obj_t	*parent;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	struct DFSMOUNT	*dfs_mt;
 
 	if (!hook_enabled)
 		return real_xstat(ver, path, stat_buf);
@@ -1713,9 +1724,9 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 static off_t
 lseek_comm(off_t (*real_lseek)(int fd, off_t offset, int whence), int fd, off_t offset, int whence)
 {
-	int rc;
-	off_t new_offset;
-	struct stat fstat;
+	int		rc;
+	off_t		new_offset;
+	struct stat	fstat;
 
 	if (!hook_enabled)
 		return real_lseek(fd, offset, whence);
@@ -1766,12 +1777,12 @@ new_lseek_pthread(int fd, off_t offset, int whence)
 int
 statfs(const char *pathname, struct statfs *sfs)
 {
-	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
-	dfs_obj_t *parent;
-	int rc, is_target_path;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	struct DFSMOUNT *dfs_mt;
+	daos_pool_info_t	info = {.pi_bits = DPI_SPACE};
+	dfs_obj_t		*parent;
+	int			rc, is_target_path;
+	char			item_name[MAX_FILE_NAME_LEN];
+	char			parent_dir[MAX_FILE_NAME_LEN];
+	struct DFSMOUNT		*dfs_mt;
 
 	if (real_statfs == NULL) {
 		real_statfs = dlsym(RTLD_NEXT, "statfs");
@@ -1808,12 +1819,12 @@ int __statfs(const char *pathname, struct statfs *sfs) __attribute__ ((alias("st
 int
 statvfs(const char *pathname, struct statvfs *svfs)
 {
-	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
-	dfs_obj_t *parent;
-	int rc, is_target_path;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	struct DFSMOUNT *dfs_mt;
+	daos_pool_info_t	info = {.pi_bits = DPI_SPACE};
+	dfs_obj_t		*parent;
+	int			rc, is_target_path;
+	char			item_name[MAX_FILE_NAME_LEN];
+	char			parent_dir[MAX_FILE_NAME_LEN];
+	struct DFSMOUNT		*dfs_mt;
 
 	if (real_statvfs == NULL)	{
 		real_statvfs = dlsym(RTLD_NEXT, "statvfs");
@@ -1851,13 +1862,13 @@ int statvfs64 (const char *__restrict pathname, struct statvfs64 *__restrict svf
 DIR *
 opendir(const char *path)
 {
-	int is_target_path, idx_dirfd, rc;
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char item_name[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent, *dir_obj;
-	mode_t mode;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, idx_dirfd, rc;
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent, *dir_obj;
+	mode_t		mode;
+	struct DFSMOUNT	*dfs_mt;
 /*	struct dirent *ent_list = NULL; */
 
 	if (real_opendir == NULL)	{
@@ -1940,9 +1951,9 @@ fdopendir(int fd)
 int
 openat(int dirfd, const char *path, int oflags, ...)
 {
-	unsigned int mode;
-	int two_args = 1, idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	unsigned int	mode;
+	int		two_args = 1, idx_dfs;
+	char		full_path[MAX_FILE_NAME_LEN];
 
 	if (real_openat == NULL)	{
 		real_openat = dlsym(RTLD_NEXT, "openat");
@@ -1990,8 +2001,8 @@ int openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__ ((a
 int
 __openat_2(int dirfd, const char *path, int oflags)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_openat_2 == NULL)	{
 		real_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
@@ -2013,7 +2024,7 @@ __openat_2(int dirfd, const char *path, int oflags)
 int
 closedir(DIR *dirp)
 {
-	int fd;
+	int	fd;
 
 	if (real_closedir == NULL)	{
 		real_closedir = dlsym(RTLD_NEXT, "closedir");
@@ -2040,8 +2051,8 @@ closedir(DIR *dirp)
 static struct dirent *
 new_readdir(DIR *dirp)
 {
-	int rc = 0;
-	struct DIRSTATUS *mydir = (struct DIRSTATUS *)dirp;
+	int			rc = 0;
+	struct DIRSTATUS	*mydir = (struct DIRSTATUS *)dirp;
 
 	if (!hook_enabled)
 		return real_readdir(dirp);
@@ -2153,11 +2164,11 @@ out_readdir:
 int
 mkdir(const char *path, mode_t mode)
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_mkdir == NULL)	{
 		real_mkdir = dlsym(RTLD_NEXT, "mkdir");
@@ -2181,8 +2192,8 @@ mkdir(const char *path, mode_t mode)
 
 int mkdirat(int dirfd, const char *path, mode_t mode)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_mkdirat == NULL)	{
 		real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
@@ -2203,11 +2214,11 @@ int mkdirat(int dirfd, const char *path, mode_t mode)
 
 int rmdir(const char *path)
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_rmdir == NULL)	{
 		real_rmdir = dlsym(RTLD_NEXT, "rmdir");
@@ -2229,13 +2240,199 @@ int rmdir(const char *path)
 	}
 }
 
+int
+symlink(const char *symvalue, const char *path)
+{
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent, *obj;
+	struct DFSMOUNT	*dfs_mt;
+
+	if (real_symlink == NULL)	{
+		real_symlink = dlsym(RTLD_NEXT, "symlink");
+		assert(real_symlink != NULL);
+	}
+	if (!hook_enabled)
+		return real_symlink(symvalue, path);
+
+	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (!is_target_path)
+		return real_symlink(symvalue, path);
+
+	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFLNK, O_CREAT | O_EXCL, 0, 0, symvalue,
+		      &obj);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+	rc = dfs_release(obj);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return 0;
+}
+
+int
+symlinkat(const char *symvalue, int dirfd, const char *path)
+{
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
+
+	if (real_symlinkat == NULL)	{
+		real_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
+		assert(real_symlinkat != NULL);
+	}
+	if (!hook_enabled)
+		return real_symlinkat(symvalue, dirfd, path);
+
+	if (path[0] == '/')
+		return symlink(symvalue, path);
+
+	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
+	if (idx_dfs >= 0)
+		return symlink(symvalue, full_path);
+
+	return real_symlinkat(symvalue, dirfd, path);
+}
+
+ssize_t
+readlink(const char *path, char *buf, size_t size)
+{
+	int		is_target_path, rc, rc2, errno_save;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent, *obj;
+	struct DFSMOUNT	*dfs_mt;
+	daos_size_t	str_len = size;
+
+	if (real_readlink == NULL)	{
+		real_readlink = dlsym(RTLD_NEXT, "readlink");
+		assert(real_readlink != NULL);
+	}
+	if (!hook_enabled)
+		return real_readlink(path, buf, size);
+
+	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (!is_target_path)
+		return real_readlink(path, buf, size);
+
+	rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY | O_NOFOLLOW, &obj, NULL,
+			    NULL);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+	rc = dfs_get_symlink_value(obj, buf, &str_len);
+	if (rc)
+		errno_save = errno;
+	rc2 = dfs_release(obj);
+	if (rc2)
+		printf("Warning: error in dfs_release() for %s\n", path);
+	if (rc) {
+		errno = errno_save;
+		return (-1);
+	}
+	/* The NULL at the end should not be included in the length */
+	return (str_len - 1);
+}
+
+ssize_t
+readlinkat(int dirfd, const char *path, char *buf, size_t size)
+{
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
+
+	if (real_readlinkat == NULL)	{
+		real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
+		assert(real_readlinkat != NULL);
+	}
+	if (!hook_enabled)
+		return real_readlinkat(dirfd, path, buf, size);
+
+	if (path[0] == '/')
+		return readlink(path, buf, size);
+
+	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
+	if (idx_dfs >= 0)
+		return readlink(full_path, buf, size);
+
+	return real_readlinkat(dirfd, path, buf, size);
+}
+
+/**
+ *static ssize_t
+ *read_all(int fd, void *buf, size_t count)
+ *{
+ *	ssize_t	rc, byte_read = 0;
+ *	char	*p_buf = (char *)buf;
+ *
+ *	if (fd >= FD_FILE_BASE)
+ *		return read(fd, buf, count);
+ *
+ *	while (count != 0 && (rc = read(fd, p_buf, count)) != 0) {
+ *		if (rc == -1) {
+ *			if (errno == EINTR)
+ *				continue;
+ *			printf("Error in read_all: %s\n", strerror(errno));
+ *			return -1;
+ *		}
+ *		byte_read += rc;
+ *		count -= rc;
+ *		p_buf += rc;
+ *	}
+ *	return byte_read;
+ *}
+ */
+
+static ssize_t
+write_all(int fd, const void *buf, size_t count)
+{
+	ssize_t	rc, byte_written = 0;
+	char	*p_buf = (char *)buf;
+
+	if (fd >= FD_FILE_BASE)
+		return write(fd, buf, count);
+
+	while (count != 0 && (rc = write(fd, p_buf, count)) != 0) {
+		if (rc == -1) {
+			if (errno == EINTR)
+				continue;
+			else if (errno == ENOSPC)
+				/* out of space. Quit immediately. */
+				return -1;
+			printf("Error in write_all: %s\n", strerror(errno));
+			return -1;
+		}
+		byte_written += rc;
+		count -= rc;
+		p_buf += rc;
+	}
+	return byte_written;
+}
+
 int rename(const char *old_name, const char *new_name)
 {
-	int is_target_path, rc;
-	char item_name_old[MAX_FILE_NAME_LEN], item_name_new[MAX_FILE_NAME_LEN];
-	char parent_dir_old[MAX_FILE_NAME_LEN], parent_dir_new[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent_old, *parent_new;
-	struct DFSMOUNT *dfs_mt1, *dfs_mt2;
+	int		is_target_path1, is_target_path2, rc = -1, rc2;
+	char		item_name_old[MAX_FILE_NAME_LEN], item_name_new[MAX_FILE_NAME_LEN];
+	char		parent_dir_old[MAX_FILE_NAME_LEN], parent_dir_new[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent_old, *parent_new;
+	dfs_obj_t	*obj_old, *obj_new;
+	struct DFSMOUNT	*dfs_mt1, *dfs_mt2;
+	struct stat	stat_old, stat_new;
+	mode_t		mode_old, mode_new;
+	int		type_old, type_new;
+	char		symlink_value[MAX_FILE_NAME_LEN];
+	unsigned char	*buff = NULL;
+	d_sg_list_t	sgl_data;
+	d_iov_t		iov_buf;
+	daos_size_t	byte_left, byte_to_write, byte_read;
+	daos_size_t	link_len;
+	int		fd, errno_save;
+	FILE		*fIn = NULL;
+
 
 	if (real_rename == NULL)	{
 		real_rename = dlsym(RTLD_NEXT, "rename");
@@ -2244,38 +2441,335 @@ int rename(const char *old_name, const char *new_name)
 	if (!hook_enabled)
 		return real_rename(old_name, new_name);
 
-	parse_path(old_name, &is_target_path, &parent_old, item_name_old, parent_dir_old, NULL,
+	parse_path(old_name, &is_target_path1, &parent_old, item_name_old, parent_dir_old, NULL,
 		   &dfs_mt1);
-	if (!is_target_path)
-		return real_rename(old_name, new_name);
-
-	if (parent_old == NULL) {
-		printf("rename(): Failed to lookup parent: %s\n", old_name);
-		/* NEED to double check !!! */
+	if (is_target_path1 && parent_old == NULL) {
+		printf("rename(): Failed to lookup parent of %s\n", old_name);
 		errno = ENOTDIR;
 		return (-1);
 	}
 
-	parse_path(new_name, &is_target_path, &parent_new, item_name_new, parent_dir_new, NULL,
+	parse_path(new_name, &is_target_path2, &parent_new, item_name_new, parent_dir_new, NULL,
 		   &dfs_mt2);
-	if (!is_target_path)
-		return real_rename(old_name, new_name);
-
-	if (parent_new == NULL) {
-		printf("rename(): Failed to lookup parent: %s\n", new_name);
-		/* NEED to double check !!! */
+	if (is_target_path2 && parent_new == NULL) {
+		printf("rename(): Failed to lookup parent of %s\n", new_name);
 		errno = ENOTDIR;
 		return (-1);
 	}
 
-	/* TO DO !!!!!!!!!!!!!!!!!!!!!! */
-	/* assume both src and dest are in the same container */
-	rc = dfs_move(dfs_mt1->dfs, parent_old, item_name_old, parent_new, item_name_new, NULL);
-	if (rc) {
-		errno = rc;
-		return (-1);
+	if (is_target_path1 && is_target_path2) {
+		/* Both old and new are on DAOS */
+		rc = dfs_move(dfs_mt1->dfs, parent_old, item_name_old, parent_new, item_name_new,
+			      NULL);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+		return 0;
+	} else if (is_target_path1 == 0 && is_target_path2 == 0) {
+		/* Both are on non-DAOS filesystem */
+		return real_rename(old_name, new_name);
+	} else if (is_target_path1 == 1 && is_target_path2 == 0) {
+		/* Old_name is on DAOS and new_name is on non-DAOS filesystem */
+
+		if (!parent_old && (strncmp(item_name_old, "/", 2) == 0)) {
+			/* Renaming a root dir of a DAOS container */
+			errno = EINVAL;
+			return (-1);
+		}
+
+		rc = dfs_lookup_rel(dfs_mt1->dfs, parent_old, item_name_old, O_RDONLY | O_NOFOLLOW,
+				    &obj_old, &mode_old, &stat_old);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+		type_old = mode_old & S_IFMT;
+		if (type_old != S_IFLNK && type_old != S_IFREG && type_old != S_IFDIR) {
+			printf("Error: unsupported type for old file %s\n", old_name);
+			errno = ENOTSUP;
+			return (-1);
+		}
+
+		rc = stat(new_name, &stat_new);
+		if (rc != 0 && errno != ENOENT)
+			return (-1);
+		if (rc == 0) {
+			type_new = stat_new.st_mode & S_IFMT;
+			if (type_new != S_IFLNK && type_new != S_IFREG && type_new != S_IFDIR) {
+				printf("Error: unsupported type for new file %s\n", new_name);
+				errno = ENOTSUP;
+				return (-1);
+			}
+
+			/* New_name exists on non-DAOS filesystem, remove first. */;
+			/* The behavior depends on type_old and type_new!!! */
+
+			if (type_old == type_new ||
+			    (type_old == S_IFREG && type_new == S_IFLNK) ||
+			    (type_old == S_IFLNK && type_new == S_IFREG)) {
+				rc = unlink(new_name);
+				if (rc != 0)
+					D_GOTO(out_old, rc);
+			} else if (type_old != S_IFDIR && type_new == S_IFDIR) {
+				/* Is a directory */
+				D_GOTO(out_old, rc = EISDIR);
+			} else if (type_old == S_IFDIR && type_new != S_IFDIR) {
+				/* Not a directory */
+				D_GOTO(out_old, rc = ENOTDIR);
+			}
+		}
+
+		switch (type_old) {
+		case S_IFLNK:
+			rc = dfs_get_symlink_value(obj_old, symlink_value, &link_len);
+			if (link_len >= MAX_FILE_NAME_LEN) {
+				printf("MAX_FILE_NAME_LEN is not long enough. link_len = %"
+				       PRIu64 "\nQuit.\n", link_len);
+				exit(1);
+			}
+
+			rc = symlink(symlink_value, new_name);
+			if (rc != 0)
+				D_GOTO(out_old, rc);
+			break;
+		case S_IFREG:
+			/* Read the old file, write to the new file */
+			D_ALLOC(buff, ((stat_old.st_size > FILE_BUFFER_SIZE) ?
+				FILE_BUFFER_SIZE : stat_old.st_size));
+			if (buff == NULL)
+				D_GOTO(out_old, rc = ENOMEM);
+
+			fd = open(new_name, O_WRONLY | O_CREAT, stat_old.st_mode);
+			if (fd < 0)
+				D_GOTO(out_old, rc);
+
+			byte_left = stat_old.st_size;
+			sgl_data.sg_nr = 1;
+			sgl_data.sg_nr_out = 0;
+			sgl_data.sg_iovs = &iov_buf;
+			while (byte_left > 0) {
+				byte_to_write = byte_left > FILE_BUFFER_SIZE ?
+					FILE_BUFFER_SIZE : byte_left;
+				d_iov_set(&iov_buf, buff, byte_to_write);
+				rc = dfs_read(dfs_mt1->dfs, obj_old, &sgl_data,
+					      stat_old.st_size - byte_left, &byte_read, NULL);
+				if (rc != 0) {
+					errno = rc;
+					D_GOTO(out_old, rc);
+				}
+				if (byte_read != byte_to_write) {
+					printf("Error: fail to read %" PRIu64 " bytes from %s\n",
+					       byte_to_write, old_name);
+					exit(1);
+				}
+
+				rc = write_all(fd, buff, byte_to_write);
+				if (rc == -1) {
+					close(fd);
+					D_GOTO(out_old, rc);
+				}
+				if (rc != byte_to_write) {
+					printf("Error: fail to write %" PRIu64 " bytes from %s\n",
+					       byte_to_write, new_name);
+					break;
+				}
+				byte_left -= rc;
+			}
+			close(fd);
+			D_FREE(buff);
+			break;
+		case S_IFDIR:
+			rc = dfs_release(obj_old);
+			if (rc) {
+				errno = rc;
+				return (-1);
+			}
+			rc = mkdir(new_name, stat_old.st_mode);
+			if (rc != 0)
+				return rc;
+			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
+			if (rc) {
+				errno = rc;
+				return (-1);
+			}
+			break;
+		}
+		return chmod(new_name, stat_old.st_mode);
+	} else if (is_target_path1 == 0 && is_target_path2 == 1) {
+		/* Old_name is on non-DAOS and new_name is on DAOS filesystem */
+
+		rc = stat(old_name, &stat_old);
+		if (rc != 0)
+			return (-1);
+		type_old = stat_old.st_mode & S_IFMT;
+		if (type_old != S_IFLNK && type_old != S_IFREG && type_old != S_IFDIR) {
+			printf("Error: unsupported type for old file %s\n", old_name);
+			errno = ENOTSUP;
+			return (-1);
+		}
+
+		if (!parent_new && (strncmp(item_name_new, "/", 2) == 0)) {
+			/* Renaming a root dir of a DAOS container */
+			errno = EINVAL;
+			return (-1);
+		}
+
+		rc = dfs_lookup_rel(dfs_mt2->dfs, parent_new, item_name_new, O_RDONLY | O_NOFOLLOW,
+				    &obj_new, &mode_new, &stat_new);
+		if (rc != 0 && rc != ENOENT) {
+			errno = rc;
+			return (-1);
+		}
+		if (rc == 0) {
+			type_new = mode_new & S_IFMT;
+			if (type_new != S_IFLNK && type_new != S_IFREG && type_new != S_IFDIR) {
+				printf("Error: unsupported type for new file %s\n", new_name);
+				errno = ENOTSUP;
+				return (-1);
+			}
+
+			/* New_name exists on DAOS filesystem, remove first. */;
+			/* The behavior depends on type_old and type_new!!! */
+
+			if ((type_old == type_new) ||
+			    (type_old == S_IFREG && type_new == S_IFLNK) ||
+			    (type_old == S_IFLNK && type_new == S_IFREG)) {
+				/* Unlink then finish renaming */;
+				rc = dfs_release(obj_new);
+				if (rc) {
+					errno = rc;
+					return (-1);
+				}
+				rc = dfs_remove(dfs_mt2->dfs, parent_new, item_name_new, false,
+						NULL);
+				if (rc) {
+					errno = rc;
+					return (-1);
+				}
+			}
+			if (type_old != S_IFDIR && type_new == S_IFDIR) {
+				/* Is a directory */
+				D_GOTO(out_new, rc = EISDIR);
+			}
+			if (type_old == S_IFDIR && type_new != S_IFDIR) {
+				/* Not a directory */
+				D_GOTO(out_new, rc = ENOTDIR);
+			}
+		}
+		/* New_name was removed, now create a new one from the old one */
+		switch (type_old) {
+		case S_IFLNK:
+			link_len = readlink(old_name, symlink_value, MAX_FILE_NAME_LEN - 1);
+			if (link_len >= MAX_FILE_NAME_LEN) {
+				printf("MAX_FILE_NAME_LEN is not long enough. "
+				       "link_len = %" PRIu64 "\nQuit.\n", link_len);
+				exit(1);
+			}
+			rc = dfs_open(dfs_mt2->dfs, parent_new, item_name_new,
+				      DEFFILEMODE | S_IFLNK, O_RDWR | O_CREAT, 0, 0, symlink_value,
+				      &obj_new);
+			if (rc != 0) {
+				errno = rc;
+				return (-1);
+			}
+			rc = dfs_release(obj_new);
+			if (rc != 0) {
+				errno = rc;
+				return (-1);
+			}
+			break;
+		case S_IFREG:
+			/* Read the old file, write to the new file */
+			fIn = fopen(old_name, "r");
+			if (fIn == NULL)
+				return (-1);
+			rc = dfs_open(dfs_mt2->dfs, parent_new, item_name_new,
+				      S_IFREG, O_RDWR | O_CREAT, 0, 0, symlink_value,
+				      &obj_new);
+			if (rc) {
+				fclose(fIn);
+				errno = rc;
+				return (-1);
+			}
+			D_ALLOC(buff, ((stat_old.st_size > FILE_BUFFER_SIZE) ?
+				FILE_BUFFER_SIZE : stat_old.st_size));
+			if (buff == NULL)
+				D_GOTO(out_new, rc = ENOMEM);
+
+			byte_left = stat_old.st_size;
+			sgl_data.sg_nr = 1;
+			sgl_data.sg_nr_out = 0;
+			sgl_data.sg_iovs = &iov_buf;
+			while (byte_left > 0) {
+				byte_to_write = byte_left > FILE_BUFFER_SIZE ?
+					FILE_BUFFER_SIZE : byte_left;
+				byte_read = fread(buff, 1, byte_to_write, fIn);
+				if (byte_read != byte_to_write)
+					D_GOTO(out_new, rc = errno);
+
+				d_iov_set(&iov_buf, buff, byte_to_write);
+				rc = dfs_write(dfs_mt2->dfs, obj_new, &sgl_data,
+					       stat_old.st_size - byte_left, NULL);
+				if (rc != 0)
+					D_GOTO(out_new, rc);
+				byte_left -= byte_to_write;
+			}
+			rc = fclose(fIn);
+			if (rc != 0) {
+				rc2 = dfs_release(obj_new);
+				if (rc2 != 0) {
+					printf("Warning: error in dfs_release(). %s\n",
+					       strerror(rc2));
+				}
+				return rc;
+			}
+			dfs_release(obj_new);
+			break;
+		case S_IFDIR:
+			rc = dfs_mkdir(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode,
+				       0);
+			if (rc != 0) {
+				errno = rc;
+				return (-1);
+			}
+			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
+			if (rc) {
+				errno = rc;
+				return (-1);
+			}
+
+			break;
+		}
+
+		/* This could be improved later by calling daos_obj_update() directly. */
+		rc = dfs_chmod(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
 	}
+
 	return 0;
+
+out_old:
+	errno_save = rc;
+	D_FREE(buff);
+	rc = dfs_release(obj_old);
+	if (rc)
+		printf("Warning: error in dfs_release(). %s\n", strerror(rc));
+	errno = errno_save;
+	return (-1);
+
+out_new:
+	errno_save = rc;
+	D_FREE(buff);
+	fclose(fIn);
+	rc = dfs_release(obj_new);
+	if (rc)
+		printf("Warning: error in dfs_release(). %s\n", strerror(rc));
+	errno = errno_save;
+	return (-1);
 }
 
 char
@@ -2332,12 +2826,12 @@ int __isatty(int fd) __attribute__ ((alias("isatty"), leaf, nothrow));
 int
 access(const char *path, int mode)
 {
-	char full_path[MAX_FILE_NAME_LEN];
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	int rc, is_target_path;
-	struct DFSMOUNT *dfs_mt;
+	char		full_path[MAX_FILE_NAME_LEN];
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	int		rc, is_target_path;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_access == NULL)	{
 		real_access = dlsym(RTLD_NEXT, "access");
@@ -2363,8 +2857,8 @@ access(const char *path, int mode)
 int
 faccessat(int dirfd, const char *path, int mode, int flags)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_faccessat == NULL)	{
 		real_faccessat = dlsym(RTLD_NEXT, "faccessat");
@@ -2387,13 +2881,13 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 int
 chdir(const char *path)
 {
-	int is_target_path, rc, len_str;
-	char full_path[MAX_FILE_NAME_LEN];
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	struct stat stat_buf;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc, len_str;
+	char		full_path[MAX_FILE_NAME_LEN];
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	struct stat	stat_buf;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_chdir == NULL)  {
 		real_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -2451,11 +2945,11 @@ fchdir(int dirfd)
 static int
 new_unlink(const char *path)
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (!hook_enabled)
 		return real_unlink(path);
@@ -2476,8 +2970,8 @@ new_unlink(const char *path)
 int
 unlinkat(int dirfd, const char *path, int flags)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_unlinkat == NULL)	{
 		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
@@ -2522,7 +3016,7 @@ fsync(int fd)
 int
 ftruncate(int fd, off_t length)
 {
-	int rc;
+	int	rc;
 
 	if (real_ftruncate == NULL)  {
 		real_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
@@ -2550,12 +3044,12 @@ ftruncate(int fd, off_t length)
 int
 truncate(const char *path, off_t length)
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent, *file_obj;
-	mode_t mode;
-	struct DFSMOUNT *dfs_mt;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent, *file_obj;
+	mode_t		mode;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_truncate == NULL)	{
 		real_truncate = dlsym(RTLD_NEXT, "truncate");
@@ -2591,12 +3085,12 @@ truncate(const char *path, off_t length)
 int
 chmod(const char *path, mode_t mode)
 {
-	int rc, is_target_path;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *parent;
-	struct DFSMOUNT *dfs_mt;
+	int		rc, is_target_path;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*parent;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_chmod == NULL)	{
 		real_chmod = dlsym(RTLD_NEXT, "chmod");
@@ -2622,7 +3116,7 @@ chmod(const char *path, mode_t mode)
 int
 fchmod(int fd, mode_t mode)
 {
-	int rc;
+	int	rc;
 
 	if (real_fchmod == NULL)	{
 		real_fchmod = dlsym(RTLD_NEXT, "fchmod");
@@ -2652,8 +3146,8 @@ fchmod(int fd, mode_t mode)
 int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_fchmodat == NULL)	{
 		real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
@@ -2676,15 +3170,15 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 int
 utime(const char *path, const struct utimbuf *times)
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *file_obj, *parent;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*file_obj, *parent;
 	struct stat	stbuf;
 /*	mode_t mode_query; */
-	struct timespec times_loc;
-	struct DFSMOUNT *dfs_mt;
+	struct timespec	times_loc;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_utime == NULL)	{
 		real_utime = dlsym(RTLD_NEXT, "utime");
@@ -2736,15 +3230,15 @@ utime(const char *path, const struct utimbuf *times)
 int
 utimes(const char *path, const struct timeval times[2])
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *file_obj, *parent;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*file_obj, *parent;
 	struct stat	stbuf;
 /*	mode_t mode_query; */
-	struct timespec times_loc;
-	struct DFSMOUNT *dfs_mt;
+	struct timespec	times_loc;
+	struct DFSMOUNT	*dfs_mt;
 
 	if (real_utimes == NULL)	{
 		real_utimes = dlsym(RTLD_NEXT, "utimes");
@@ -2796,15 +3290,15 @@ utimes(const char *path, const struct timeval times[2])
 static int
 utimens_timespec(const char *path, const struct timespec times[2])
 {
-	int is_target_path, rc;
-	char item_name[MAX_FILE_NAME_LEN];
-	char parent_dir[MAX_FILE_NAME_LEN];
-	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t *file_obj, *parent;
+	int		is_target_path, rc;
+	char		item_name[MAX_FILE_NAME_LEN];
+	char		parent_dir[MAX_FILE_NAME_LEN];
+	char		full_path[MAX_FILE_NAME_LEN];
+	dfs_obj_t	*file_obj, *parent;
 	struct stat	stbuf;
-	struct timespec times_loc;
-	struct timeval times_us[2];
-	struct DFSMOUNT *dfs_mt;
+	struct timespec	times_loc;
+	struct timeval	times_us[2];
+	struct DFSMOUNT	*dfs_mt;
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path) {
@@ -2864,8 +3358,8 @@ utimens_timespec(const char *path, const struct timespec times[2])
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	int	idx_dfs;
+	char	full_path[MAX_FILE_NAME_LEN];
 
 	if (real_utimensat == NULL)	{
 		real_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -2893,8 +3387,8 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 int
 futimens(int fd, const struct timespec times[2])
 {
-	int rc;
-	struct timespec times_loc;
+	int		rc;
+	struct timespec	times_loc;
 	struct stat	stbuf;
 
 	if (real_futimens == NULL)	{
@@ -2934,9 +3428,9 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int fd_save, fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
-	int dup_next;
-	va_list arg;
+	int	fd_save, fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
+	int	dup_next;
+	va_list	arg;
 
 	fd_Directed = Get_Fd_Redirected(fd);
 	fd_save = fd_Directed;
@@ -3052,8 +3546,8 @@ new_fcntl(int fd, int cmd, ...)
 int
 ioctl(int fd, unsigned long request, ...)
 {
-	va_list arg;
-	void *param;
+	va_list	arg;
+	void	*param;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -3078,7 +3572,7 @@ ioctl(int fd, unsigned long request, ...)
 int
 dup(int oldfd)
 {
-	int fd_Directed, fd, idx;
+	int	fd_Directed, fd, idx;
 
 	if (real_dup == NULL)	{
 		real_dup = dlsym(RTLD_NEXT, "dup");
@@ -3125,7 +3619,7 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, fd_Directed, idx, rc;
+	int	fd, fd_Directed, idx, rc;
 
 	if (real_dup2 == NULL)	{
 		real_dup2 = dlsym(RTLD_NEXT, "dup2");
@@ -3153,7 +3647,7 @@ dup2(int oldfd, int newfd)
 			fd_Directed = oldfd;
 		if (fd_Directed >= FD_FILE_BASE) {
 			rc = close(newfd);
-			if (rc != 0)
+			if (rc != 0 && errno != EBADF)
 				return -1;
 			fd = allocate_a_fd_from_kernel();
 			if (fd != newfd) {
@@ -3349,7 +3843,7 @@ tcgetattr(int fd, void *termios_p)
 static void
 update_cwd(void)
 {
-	char *cwd = NULL;
+	char	*cwd = NULL;
 
 	cwd = get_current_dir_name();
 
@@ -3364,7 +3858,7 @@ update_cwd(void)
 
 static __attribute__((constructor)) void init_myhook(void)
 {
-	mode_t umask_old;
+	mode_t	umask_old;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -3437,7 +3931,7 @@ static __attribute__((destructor)) void finalize_myhook(void)
 static void
 init_dfs(int idx)
 {
-	int rc;
+	int	rc;
 
 	rc = daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh, NULL,
 			       NULL);
@@ -3467,8 +3961,8 @@ init_dfs(int idx)
 static void
 finalize_dfs(void)
 {
-	int rc, i;
-	d_list_t *rlink = NULL;
+	int		rc, i;
+	d_list_t	*rlink = NULL;
 
 	for (i = 0; i < num_dfs; i++) {
 		if (dfs_list[i].dfs_dir_hash == NULL)
