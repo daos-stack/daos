@@ -2004,12 +2004,9 @@ struct obj_query_key_cb_args {
 };
 
 static void
-obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
-			  struct obj_query_key_1_out *okqo, bool get_max,
-			  bool changed)
+obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard, daos_key_t *dkey,
+			  daos_recx_t *reply_recx, bool get_max, bool changed)
 {
-	daos_recx_t		*reply_recx = &okqo->okqo_recx;
-	d_iov_t			*dkey = &okqo->okqo_dkey;
 	daos_recx_t		*result_recx = cb_args->recx;
 	daos_recx_t		 tmp_recx = {0};
 	uint64_t		 tmp_end;
@@ -2184,10 +2181,15 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 
 	if (check && flags & DAOS_GET_RECX) {
-		bool get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
+		bool		 get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
+		daos_key_t	*dkey;
 
+		if (okqi->okqi_api_flags & DAOS_GET_DKEY)
+			dkey = &okqo->okqo_dkey;
+		else
+			dkey = &okqi->okqi_dkey;
 		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
-					  okqo, get_max, changed);
+					  dkey, &okqo->okqo_recx, get_max, changed);
 	}
 
 set_max_epoch:
