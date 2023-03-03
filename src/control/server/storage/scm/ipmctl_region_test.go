@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,8 @@ package scm
 import (
 	"encoding/xml"
 	"math"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -60,6 +62,98 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 				t.Fatal(err)
 			}
 			test.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
+		})
+	}
+}
+
+// TestIpmctl_showRegions verifies that temporary file gets removed if created, output filtering is
+// tested elsewhere in TestIpmctl_getRegions.
+func TestIpmctl_showRegions(t *testing.T) {
+	for name, tc := range map[string]struct {
+		oldStatErr    error
+		newStatErr    error
+		remErr        error
+		cmdErr        error
+		expNrRemCalls int
+		expErr        error
+		expLogHasErr  bool
+	}{
+		"temporary file exists": {},
+		"invalid file access": {
+			oldStatErr:   os.ErrInvalid,
+			newStatErr:   os.ErrInvalid,
+			expLogHasErr: true,
+		},
+		"temporary file created and removed": {
+			oldStatErr:    os.ErrNotExist,
+			expNrRemCalls: 1,
+		},
+		"temporary file not created": {
+			oldStatErr: os.ErrNotExist,
+			newStatErr: os.ErrNotExist,
+		},
+		"temporary file created and remove fails": {
+			oldStatErr:    os.ErrNotExist,
+			remErr:        errors.New("fail"),
+			expNrRemCalls: 1,
+			expLogHasErr:  true,
+		},
+		"temporary file created but command fails": {
+			oldStatErr:    os.ErrNotExist,
+			cmdErr:        errors.New("fail"),
+			expNrRemCalls: 1,
+			expErr:        errors.New("fail"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// mock osStat non-exported package-scope function variable
+			osStat = func(string) (os.FileInfo, error) {
+				return nil, tc.oldStatErr
+			}
+			// return to the unmocked behavior
+			defer func() {
+				osStat = os.Stat
+			}()
+
+			// mock osRemove non-exported package-scope function variable
+			nrRemCalls := 0
+			osRemove = func(string) error {
+				nrRemCalls++
+				return tc.remErr
+			}
+			// return to the unmocked behavior
+			defer func() {
+				osRemove = os.Remove
+			}()
+
+			mockRun := func(inCmd string) (string, error) {
+				if inCmd == cmdShowIpmctlVersion {
+					return verStr, nil
+				}
+				// mock creation of temporary file during cmd execution
+				osStat = func(string) (os.FileInfo, error) {
+					return nil, tc.newStatErr
+				}
+				return "", tc.cmdErr
+			}
+
+			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, gotErr := cr.showRegions(sockAny)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			test.AssertEqual(t, tc.expNrRemCalls, nrRemCalls,
+				"unexpected number of remove calls")
+
+			logHasErr := strings.Contains(buf.String(), "ERROR")
+			test.AssertEqual(t, tc.expLogHasErr, logHasErr,
+				"expected error to have been logged")
 		})
 	}
 }

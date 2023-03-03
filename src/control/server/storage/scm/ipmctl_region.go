@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package scm
 import (
 	"encoding/xml"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,6 +21,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const tmpOutFileName = "output.tmp"
+
+var (
+	osStat   = os.Stat
+	osRemove = os.Remove
 )
 
 type (
@@ -197,6 +205,29 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	return
 }
 
+func chkFile(name string) (bool, error) {
+	if _, err := osStat(name); err != nil {
+		if !os.IsNotExist(err) {
+			return false, errors.WithMessagef(err, "%q os existence check", name)
+		}
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func remFile(name string, log logging.Logger) error {
+	if err := osRemove(name); err != nil {
+		if !os.IsNotExist(err) {
+			return errors.WithMessagef(err, "%q remove", name)
+		}
+	} else {
+		log.Debugf("file %q removed", name)
+	}
+
+	return nil
+}
+
 func (cr *cmdRunner) showRegions(sockID int) (string, error) {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		return "", errors.WithMessage(err, "checkIpmctl")
@@ -207,9 +238,27 @@ func (cr *cmdRunner) showRegions(sockID int) (string, error) {
 		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
-	out, err := cr.runCmd(cmd)
+	existBefore, err := chkFile(tmpOutFileName)
 	if err != nil {
-		return "", errors.Wrapf(err, "cmd %q", cmd)
+		cr.log.Errorf("%s", err)
+	}
+
+	out, errCmd := cr.runCmd(cmd)
+
+	existAfter, err := chkFile(tmpOutFileName)
+	if err != nil {
+		cr.log.Errorf("%s", err)
+	}
+
+	if existAfter && !existBefore {
+		// Temporary file created during command execution so remove it.
+		if err := remFile(tmpOutFileName, cr.log); err != nil {
+			cr.log.Errorf("%s", err)
+		}
+	}
+
+	if errCmd != nil {
+		return "", errors.Wrapf(errCmd, "cmd %q", cmd)
 	}
 	cr.log.Debugf("%q cmd returned: %q", cmd, out)
 
