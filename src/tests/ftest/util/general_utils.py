@@ -778,7 +778,7 @@ def list_to_str(value, joiner=","):
 
     Args:
         value (list): list to convert to a string
-        joiner (str, optional): _description_. Defaults to ",".
+        joiner (str, optional): string to use to join items. Defaults to ",".
 
     Returns:
         str: a string of each list entry joined by the joiner string
