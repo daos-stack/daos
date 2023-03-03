@@ -7,54 +7,54 @@
 #define __HOOK_INT
 
 /* The max number of shared objects we intercept. */
-#define MAX_MODULE	(16)
+#define MAX_MODULE             (16)
 
 /* The max number of hooks we intercept with trampoline technique. */
-#define MAX_PATCH	(48)
+#define MAX_PATCH              (48)
 
 /* The max length of shared objects' path */
-#define MAX_LEN_PATH_NAME	(512)
+#define MAX_LEN_PATH_NAME      (512)
 
 /* The max length of names of the functions to intercept */
-#define MAX_LEN_FUNC_NAME	(128)
+#define MAX_LEN_FUNC_NAME      (128)
 
 /* The minimal memory size we need to allocate to hold trampolines. */
-#define MIN_MEM_SIZE	(0x1000)
+#define MIN_MEM_SIZE           (0x1000)
 
 /**
  * The max range of a signed integer can represent is 0x7FFFFFFF. We decrease it
  * a little bit to be safer.
-*/
-#define NULL_RIP_VAR_OFFSET	(0x7FF00000)
+ */
+#define NULL_RIP_VAR_OFFSET    (0x7FF00000)
 
 /**
  * The length of instructions to jmp to a new function is 14 bytes.
  * ff 25 00 00 00 00       jmp    QWORD PTR [rip+0x0]     6 bytes
  * 8 bytes for the address of new function.
  */
-#define BOUNCE_CODE_LEN	(14)
+#define BOUNCE_CODE_LEN        (14)
 
 /**
  * The relative offset of new function address in bouncing code. It is after
  * jmp    QWORD PTR [rip+0x0]
  */
-#define OFFSET_NEW_FUNC_ADDR	(6)
+#define OFFSET_NEW_FUNC_ADDR   (6)
 
 /* The max number of bytes to disassemble for the entry code of original functions */
-#define MAX_LEN_TO_DISASSEMBLE	(24)
+#define MAX_LEN_TO_DISASSEMBLE (24)
 
 /* The max length of an instruction */
-#define MAX_INSN_LEN (15)
+#define MAX_INSN_LEN           (15)
 
 /* The length of jmp instruction we use. */
-#define JMP_INSTRCTION_LEN (5)
+#define JMP_INSTRCTION_LEN     (5)
 
 /**
  * The max length of bytes to hold the instruments to call original function.
  * 1) saved instruction
  * 2) jump to resuming address
  */
-#define MAX_TRAMPOLINE_LEN	((MAX_INSN_LEN) + (JMP_INSTRCTION_LEN))
+#define MAX_TRAMPOLINE_LEN     ((MAX_INSN_LEN) + (JMP_INSTRCTION_LEN))
 
 struct module_patch_info_t {
 	char			module_name[MAX_LEN_PATH_NAME];
@@ -74,7 +74,7 @@ struct trampoline_t {
 	/* save the original function entry code and jump instrument */
 	unsigned char	trampoline[MAX_TRAMPOLINE_LEN];
 	/* the code can jmp to my hook function. +3 for padding */
-	unsigned char	bounce[BOUNCE_CODE_LEN+2];
+	unsigned char	bounce[BOUNCE_CODE_LEN + 2];
 	/* to save 5 bytes of the entry instruction of original function */
 	char		org_code[12];
 	/* the address of original function */
