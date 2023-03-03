@@ -259,7 +259,7 @@ need_remap_comp(struct pool_component *comp, uint32_t allow_status, uint32_t all
 		 * generated layout might include the failure shards, and inflight I/O might hit
 		 * the failure rank.
 		 */
-		if (comp->co_fseq > allow_version)
+		if (comp->co_fseq > allow_version && comp->co_in_ver < allow_version)
 			status = PO_COMP_ST_UPIN;
 	}
 
@@ -284,7 +284,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 	if (!spare_avail)
 		goto next_fail;
 
-	if (is_extending != NULL && pool_target_changing(spare_tgt))
+	if (is_extending != NULL && pool_target_is_up_or_drain(spare_tgt))
 		*is_extending = true;
 
 	/* The selected spare target is down as well */

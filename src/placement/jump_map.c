@@ -599,7 +599,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					D_GOTO(out, rc);
 			}
 
-			if (is_extending != NULL && pool_target_changing(target))
+			if (is_extending != NULL && pool_target_is_up_or_drain(target))
 				*is_extending = true;
 		}
 	}

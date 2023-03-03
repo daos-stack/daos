@@ -195,18 +195,6 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	return 1;
 }
 
-static inline uint8_t
-isset_2ranges(uint8_t *bitmap1, uint8_t *bitmap2, uint32_t start, uint32_t end)
-{
-	uint32_t index;
-
-	for (index = start; index <= end; ++index)
-		if (isclr(bitmap1, index) && isclr(bitmap2, index))
-			return 0;
-
-	return 1;
-}
-
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {

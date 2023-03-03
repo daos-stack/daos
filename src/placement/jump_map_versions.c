@@ -207,10 +207,10 @@ _get_dom(struct pool_domain *doms, uint32_t dom_idx, bool exclude_new, uint32_t 
  */
 #define MAX_STACK	5
 static void
-__get_target(struct pool_domain *curr_dom, struct pool_target **target,
-	     uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_full,
-	     uint8_t *dom_cur_grp_used, uint8_t *tgts_used, int shard_num,
-	     bool exclude_new, uint32_t allow_version, pool_comp_type_t fdom_lvl)
+__get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
+		uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_full,
+		uint8_t *dom_cur_grp_used, uint8_t *tgts_used, int shard_num,
+		bool exclude_new, uint32_t allow_version, pool_comp_type_t fdom_lvl)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
@@ -521,8 +521,8 @@ get_target_v1(struct pool_domain *root, struct pool_target **target,
 		exclude_new = false;
 
 	while (found == NULL) {
-		__get_target(root, &found, key, dom_used, dom_full, dom_cur_grp_used, tgts_used,
-			     shard_num, exclude_new, allow_version, fdom_lvl);
+		__get_target_v1(root, &found, key, dom_used, dom_full, dom_cur_grp_used, tgts_used,
+				shard_num, exclude_new, allow_version, fdom_lvl);
 		if (found == NULL)
 			reset_dom_cur_grp_v1(root, dom_cur_grp_used, dom_full, tgts_used,
 					     exclude_new, allow_version, fdom_lvl);
