@@ -465,6 +465,7 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	if (opc == EXTEND_UPDATE)
 		extend_read_check(dfs_mt, dir);
 
+	print_message("reintegrate rank %u then check\n", cb_arg.rank);
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 	if (kill)
