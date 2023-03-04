@@ -344,6 +344,9 @@ lrua_array_aggregate(struct lru_array *array)
 {
 	struct lru_sub	*sub;
 	struct lru_sub	*tmp;
+	uint32_t	 count = 0;
+	uint32_t	 busy = 0;
+	uint32_t	 saved = array->la_idx_mask;
 
 	if ((array->la_flags & LRU_FLAG_EVICT_MANUAL) == 0)
 		return; /* Not applicable */
@@ -359,10 +362,25 @@ lrua_array_aggregate(struct lru_array *array)
 
 	d_list_for_each_entry_safe_from(sub, tmp, &array->la_free_sub,
 					ls_link) {
-		if (sub->ls_lru != LRU_NO_IDX)
+		count++;
+		if (sub->ls_lru != LRU_NO_IDX) {
+			busy++;
+			if (busy % 100 == 1 && busy < 10000)
+				D_DEBUG(DB_IO, "Aggregating LRU array (1) %p/%p, sub %u, busy %u\n",
+					array, sub, count, busy);
 			continue; /** Used entries */
+		}
+
 		d_list_del(&sub->ls_link);
 		d_list_add_tail(&sub->ls_link, &array->la_unused_sub);
+
+		D_DEBUG(DB_IO, "Aggregating LRU array (2) %p/%p, sub %u, busy %u\n",
+			array, sub, count, busy);
+
 		array_free_one(array, sub);
+
+		D_ASSERTF(saved == array->la_idx_mask,
+			  "MASK crashed %u vs %u for LRU array %p, sub %u, busy %u\n",
+			  saved, array->la_idx_mask, array, count, busy);
 	}
 }
