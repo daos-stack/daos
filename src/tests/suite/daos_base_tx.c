@@ -590,13 +590,26 @@ dtx_16(void **state)
 	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize,
 		      DAOS_TX_NONE, &req);
 
-	dtx_set_fail_loc(arg, DAOS_DTX_LONG_TIME_RESEND);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 4, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_LONG_TIME_RESEND | DAOS_FAIL_SOME, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	arg->expect_result = -DER_EP_OLD;
-	punch_akey(dkey, akey, DAOS_TX_NONE, &req);
-	arg->expect_result = 0;
+	punch_akey_with_flags(dkey, akey, DAOS_TX_NONE, &req, DAOS_COND_PUNCH);
 
-	dtx_set_fail_loc(arg, 0);
+	arg->expect_result = 0;
+	punch_akey(dkey, "akey_non", DAOS_TX_NONE, &req);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	D_FREE(update_buf);
 	ioreq_fini(&req);
