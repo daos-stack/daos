@@ -1393,22 +1393,51 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 
 	struct tx_range_def range = {roff, 0, 0};
 	struct ravl_node *n = ravl_find(tx->ranges, &range,
-			RAVL_PREDICATE_EQUAL);
+			RAVL_PREDICATE_LESS_EQUAL);
 
 	/*
 	 * If attempting to free an object allocated within the same
 	 * transaction, simply cancel the alloc and remove it from the actions.
 	 */
 	if (n != NULL) {
+		struct tx_range_def *r = ravl_data(n);
+
+		if ((r->offset + r->size) < roff)
+			goto out;
+
 		VEC_FOREACH_BY_PTR(action, &tx->actions) {
 			if (action->type == DAV_ACTION_TYPE_HEAP &&
-				action->heap.offset == off) {
-				struct tx_range_def *r = ravl_data(n);
-				void *ptr = OBJ_OFF_TO_PTR(pop, r->offset);
+			    action->heap.offset == off) {
+				void *ptr = OBJ_OFF_TO_PTR(pop, roff);
+				uint64_t toff, usize;
 
-				VALGRIND_SET_CLEAN(ptr, r->size);
-				VALGRIND_REMOVE_FROM_TX(ptr, r->size);
-				ravl_remove(tx->ranges, n);
+				palloc_get_prange(action, &toff, &usize, 1);
+				D_ASSERT(usize <= r->size);
+				if ((r->offset == roff) && (r->size == usize)) {
+					/* Exact match. */
+					ravl_remove(tx->ranges, n);
+				} else if (r->offset == roff) {
+					/* Retain the right portion. */
+					r->offset += usize;
+				} else {
+					/* Retain the left portion. */
+					uint64_t osize = r->size;
+
+					r->size = roff - r->offset;
+
+					/* Still data after range remove. */
+					osize -= (r->size + usize);
+					if (osize) {
+						struct tx_range_def *r1 =
+							&(struct tx_range_def)
+							 {roff + usize, osize, r->flags};
+
+						tx_ranges_insert_def(pop, tx, r1);
+					}
+				}
+
+				VALGRIND_SET_CLEAN(ptr, usize);
+				VALGRIND_REMOVE_FROM_TX(ptr, usize);
 				palloc_cancel(pop->do_heap, action, 1);
 				VEC_ERASE_BY_PTR(&tx->actions, action);
 				PMEMOBJ_API_END();
@@ -1417,6 +1446,7 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 		}
 	}
 
+out:
 	action = tx_action_add(tx);
 	if (action == NULL) {
 		int ret = obj_tx_fail_err(errno, flags);
