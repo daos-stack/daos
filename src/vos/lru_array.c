@@ -314,6 +314,8 @@ array_free_one(struct lru_array *array, struct lru_sub *sub)
 {
 	uint32_t	idx;
 
+	D_ASSERT(array->la_idx_mask != 0);
+
 	for (idx = 0; idx < array->la_idx_mask + 1; idx++)
 		fini_cb(array, sub, &sub->ls_table[idx], idx);
 
@@ -329,12 +331,16 @@ lrua_array_free(struct lru_array *array)
 	if (array == NULL)
 		return;
 
+	D_ASSERT(array->la_array_nr != 0);
 
 	for (i = 0; i < array->la_array_nr; i++) {
 		sub = &array->la_sub[i];
 		if (sub->ls_table != NULL)
 			array_free_one(array, sub);
 	}
+
+	array->la_array_nr = 0;
+	array->la_idx_mask = 0;
 
 	D_FREE(array);
 }
@@ -344,6 +350,9 @@ lrua_array_aggregate(struct lru_array *array)
 {
 	struct lru_sub	*sub;
 	struct lru_sub	*tmp;
+
+	D_ASSERT(array->la_array_nr != 0);
+	D_ASSERT(array->la_idx_mask != 0);
 
 	if ((array->la_flags & LRU_FLAG_EVICT_MANUAL) == 0)
 		return; /* Not applicable */
