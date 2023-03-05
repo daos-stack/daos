@@ -1547,6 +1547,9 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	int			 cnt;
 	int			 rc = 0;
 
+	D_DEBUG(DB_MD, DF_CONT": flushing DTX when close\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+
 	dtx_stat(cont, &stat);
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
@@ -1577,9 +1580,8 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	}
 
 out:
-	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO, DF_CONT": flushed DTX when close, rc = %d\n",
+		 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), rc);
 }
 
 /* Per VOS container DTX re-index ULT ***************************************/
