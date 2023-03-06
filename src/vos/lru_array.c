@@ -16,6 +16,8 @@
 #define ent2idx(array, sub, ent_idx)	\
 	(((sub)->ls_array_idx << (array)->la_array_shift) + (ent_idx))
 
+/* Only for test */
+
 static void
 evict_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	 uint32_t idx)
