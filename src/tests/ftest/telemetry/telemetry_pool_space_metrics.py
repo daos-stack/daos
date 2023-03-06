@@ -20,36 +20,57 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         """Initialize a TelemetryPoolSpaceMetrics object."""
         super().__init__(*args, **kwargs)
 
-        self.server_count = 0
-        self.target_count = 0
+        self.metric_names = [
+            'engine_pool_vos_space_scm_used',
+            'engine_pool_vos_space_nvme_used']
+        self.data_size = 0
+        self.scm_data_size_percent = None
+        self.scm_metadata_max_size = 0
+        self.pool_space_metrics_minmax = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
         super().setUp()
 
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        self.server_count = len(self.hostlist_servers) * engine_count
-        self.target_count = self.server_managers[0].get_config_value("targets")
+        self.data_size = self.ior_cmd.block_size.value
+        self.scm_threshold_percent = self.params.get(
+            "data_size_percent", "/run/scm_metric_thresholds/*")
+        self.scm_metadata_max_size = self.params.get(
+            "metadata_max_size", "/run/scm_metric_thresholds/*")
+        self.pool_space_metrics_minmax = {
+            "/run/pool_scm/*": {
+                "engine_pool_vos_space_scm_used": (
+                    self.data_size - (self.data_size * self.scm_threshold_percent) / 100,
+                    self.data_size + (self.data_size * self.scm_threshold_percent) / 100
+                ),
+                "engine_pool_vos_space_nvme_used": (0, 0)
+            },
+            "/run/pool_scm_nvme/*": {
+                "engine_pool_vos_space_scm_used": (1, self.scm_metadata_max_size),
+                "engine_pool_vos_space_nvme_used": (self.data_size, self.data_size)
+            }
+        }
 
-    def get_scm_used(self):
-        """Get the SCM space used from all targets.
+    def get_expected_values_range(self, namespace):
+        """Return the expected metrics value output.
 
-        return:
-            scm_used (int): scm space used from all targets.
+        This function returns a hash map of pairs defining min and max values of each tested
+        telemetry metrics.  The hash map of pairs returned depends on the pool created with the
+        given namespace and the size of the data written in it.
+
+        Args:
+            namespace (string): Namespace of the last created pool.
+
+        Returns:
+            expected_values (dict): Dictionary of the expected metrics value output.
         """
-        self.pool.connect()
 
-        # Collect the space information for all the ranks and targets
-        scm_used = 0
-        for rank_idx in range(self.server_count):
-            for target_idx in range(self.target_count):
-                result = self.pool.pool.target_query(target_idx, rank_idx)
-                if result.ta_space.s_total[0] == result.ta_space.s_free[0]:
-                    return -1
-                scm_used += result.ta_space.s_total[0] - result.ta_space.s_free[0]
+        self.assertIn(
+            namespace, self.pool_space_metrics_minmax,
+            "Invalid pool namespace: {}".format(namespace))
 
-        return scm_used
+        return self.pool_space_metrics_minmax[namespace]
 
     def get_metrics(self, names):
         """Obtain the specified metrics information.
@@ -80,7 +101,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         Steps:
             Create a pool
             Create a container
-            Generate deterministic workload.  Using ior to write 16MiB of data.
+            Generate deterministic workload.  Using ior to write 128MiB of data.
             Use telemetry command to get value of vos space metrics "engine_pool_vos_space_scm_used"
             and "engine_pool_vos_space_nvme_used" for all targets.
             Verify the sum of all parameter metrics matches the workload.
@@ -91,49 +112,37 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=telemetry_pool_space_metrics,test_telemetry_pool_space_metrics
         """
 
-        # create pool and container
-        self.add_pool(connect=False)
-        self.pool.set_property("reclaim", "disabled")
-        self.add_container(pool=self.pool)
+        for namespace in ["/run/pool_scm/*", "/run/pool_scm_nvme/*"]:
+            # create pool and container
+            self.add_pool(namespace=namespace, create=True, connect=False)
+            self.pool.disable_aggregation()
+            self.add_container(pool=self.pool)
 
-        # Run ior command.
-        try:
-            self.update_ior_cmd_with_pool(False)
-            self.run_ior_with_pool(
-                timeout=200, create_pool=False, create_cont=False)
-        except TestFail as error:
-            self.log.info("ior command failed: %s", str(error))
-            raise
+            # Run ior command.
+            try:
+                self.update_ior_cmd_with_pool(create_cont=False)
+                self.run_ior_with_pool(
+                    timeout=200, create_pool=False, create_cont=False)
+            except TestFail as error:
+                self.log.info("ior command failed: %s", str(error))
+                raise
 
-        # collect pool space metric data after write
-        metric_names = [
-            'engine_pool_vos_space_scm_used',
-            'engine_pool_vos_space_nvme_used']
-        metrics = self.get_metrics(metric_names)
+            # collect pool space metric data after write
+            metrics = self.get_metrics(self.metric_names)
 
-        # perform SCM usage verification check
-        wait_value = self.get_scm_used()
-        if wait_value == -1:
-            self.log.warning(
-                "Insane storage usage value(s) returned with PMDK: "
-                "Not able to test the metric engine_pool_vos_space_scm_used")
-        else:
-            got_value = metrics["engine_pool_vos_space_scm_used"]
-            self.assertEqual(
-                got_value,
-                wait_value,
-                "Aggregated value of the metric engine_pool_vos_space_scm_used "
-                "is invalid: got={}, wait={}".format(got_value, wait_value))
-            self.log.debug("Successfully check the metric engine_pool_vos_space_scm_used")
+            expected_values = self.get_expected_values_range(namespace)
+            for name in self.metric_names:
+                val = metrics[name]
+                min_val, max_val = expected_values[name]
+                self.assertTrue(
+                    min_val <= val <= max_val,
+                    "Aggregated value of the metric {} is invalid: got={}, wait_in=[{}, {}]"
+                    .format(name, val, min_val, max_val))
+                self.log.info(
+                    "Successfully check the metric %s: got=%d, wait_in=[%d, %d]",
+                    name, val, min_val, max_val)
 
-        # perform NVME usage verification check
-        got_value = metrics["engine_pool_vos_space_nvme_used"]
-        wait_value = self.ior_cmd.block_size.value
-        self.assertEqual(
-            got_value,
-            wait_value,
-            "Aggregated value of the metric engine_pool_vos_space_nvme_used "
-            "is invalid: got={}, wait={}".format(got_value, wait_value))
-        self.log.debug("Successfully check the metric engine_pool_vos_space_nvme_used")
+            self.destroy_containers(self.container)
+            self.destroy_pools(self.pool)
 
         self.log.info("------Test passed------")

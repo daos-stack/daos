@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
-timeout: 60
+timeout: 120
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -36,7 +36,11 @@ server_config:
         1:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
-pool:
+pool_scm:
+  scm_size: 1G
+  nvme_size: 0
+  control_method: dmg
+pool_scm_nvme:
   size: 80%
   control_method: dmg
 container:
@@ -48,8 +52,8 @@ ior:
   api: DFS
   # 1MiB
   transfer_size: 1048576
-  # 16MiB
-  block_size: 16777216
+  # 128MiB
+  block_size: 134217728
   flags: "-v -w -k"
   test_file: "/testFile"
   dfs_oclass: SX
@@ -59,3 +63,11 @@ ior:
     - D_LOG_MASK=INFO
 mpirun:
   bind_to: socket
+
+scm_metric_thresholds:
+  # The size of the SCM used is not directly managed by DAOS, but through the PMDK library.
+  # Thus, the size of the SCM used mertric is not perfectly accurate as for NVME (thanks to VOS).
+  # To cope with this issue an arbitrary threshold of 10% is used .
+  data_size_percent: 10
+  # Maximal metadata size is empirically adjusted to 1MiB
+  metadata_max_size: 1048576
