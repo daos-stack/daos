@@ -600,7 +600,7 @@ class Launch():
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
         self.slurm_add_partition = False
-        self.core_file_processing = CoreFileProcessing(logger)
+        self.core_file_processing = None
         self.core_files = {}
 
     def _start_test(self, class_name, test_name, log_file):
@@ -2167,28 +2167,29 @@ class Launch():
             }
 
             # Get the core file pattern information
-            if not process_cores:
+            if process_cores:
+                try:
+                    self.core_file_processing = CoreFileProcessing(logger)
+                    self.core_files = self.core_file_processing.get_core_file_pattern(
+                        test.host_info.servers.hosts | test.host_info.clients.hosts,
+                        self.result.tests[-1].time_start)
+                except CoreFileException:
+                    message = "Error obtaining the core file pattern information"
+                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                    return_code |= 256
+
+                for index, hosts in enumerate(self.core_files):
+                    remote_files[f"core files {index + 1}/{len(self.core_files)}"] = {
+                        "source": self.core_files[hosts]["path"],
+                        "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                        "pattern": self.core_files[hosts]["pattern"],
+                        "hosts": NodeSet(hosts),
+                        "depth": 1,
+                        "timeout": 1800,
+                    }
+            else:
                 logger.debug("Not collecting core files")
-                return
 
-            try:
-                self.core_files = self.core_file_processing.get_core_file_pattern(
-                    test.host_info.servers.hosts | test.host_info.clients.hosts,
-                    self.result.tests[-1].time_start)
-            except CoreFileException:
-                message = "Error obtaining the core file pattern information"
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return_code |= 256
-
-            for index, hosts in enumerate(self.core_files):
-                remote_files[f"core files {index + 1}/{len(self.core_files)}"] = {
-                    "source": self.core_files[hosts]["path"],
-                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
-                    "pattern": self.core_files[hosts]["pattern"],
-                    "hosts": NodeSet(hosts),
-                    "depth": 1,
-                    "timeout": 1800,
-                }
             for summary, data in remote_files.items():
                 if not data["hosts"]:
                     continue
