@@ -484,6 +484,12 @@ is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
 	return obj_ec_shard_off(obj, dkey_hash, shard) >= obj_ec_data_tgt_nr(&obj->cob_oca);
 }
 
+static inline bool
+daos_obj_id_is_ec(daos_obj_id_t oid)
+{
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
+}
+
 #define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)
 #define obj_ec_parity_rotate_enabled_by_version(layout_ver)	(layout_ver > 0)
 #define DOVA_NUM	32
