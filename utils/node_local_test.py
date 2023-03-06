@@ -4245,8 +4245,6 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
-        if to_rerun:
-            print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4277,7 +4275,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
+            aftf.valgrind_hdl = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 

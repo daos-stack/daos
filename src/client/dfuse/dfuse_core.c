@@ -43,6 +43,7 @@ dfuse_progress_thread(void *arg)
 			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
 			ev->de_complete_cb(ev);
+			D_FREE(ev);
 		}
 	}
 	return NULL;
@@ -1038,85 +1039,12 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 	D_FREE(ie);
 }
 
-static void
-dfuse_event_init(void *arg, void *handle)
-{
-	struct dfuse_event *ev = arg;
-
-	ev->de_handle = handle;
-}
-
-static bool
-dfuse_read_event_reset(void *arg)
-{
-	struct dfuse_event *ev = arg;
-	int                 rc;
-
-	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
-		if (ev->de_iov.iov_buf == NULL)
-			return false;
-
-		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
-		ev->de_sgl.sg_iovs     = &ev->de_iov;
-		ev->de_sgl.sg_nr       = 1;
-	}
-
-	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
-	if (rc != -DER_SUCCESS) {
-		return false;
-	}
-
-	return true;
-}
-
-static bool
-dfuse_write_event_reset(void *arg)
-{
-	struct dfuse_event *ev = arg;
-	int                 rc;
-
-	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
-		if (ev->de_iov.iov_buf == NULL)
-			return false;
-
-		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
-		ev->de_sgl.sg_iovs     = &ev->de_iov;
-		ev->de_sgl.sg_nr       = 1;
-	}
-
-	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
-	if (rc != -DER_SUCCESS) {
-		return false;
-	}
-
-	return true;
-}
-
-static void
-dfuse_event_release(void *arg)
-{
-	struct dfuse_event *ev = arg;
-
-	D_FREE(ev->de_iov.iov_buf);
-}
-
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args     = {0};
-	struct dfuse_inode_entry *ie       = NULL;
-	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
-						.sr_reset   = dfuse_read_event_reset,
-						.sr_release = dfuse_event_release,
-						POOL_TYPE_INIT(dfuse_event, de_list)};
-	struct d_slab_reg         write_slab = {.sr_init    = dfuse_event_init,
-						.sr_reset   = dfuse_write_event_reset,
-						.sr_release = dfuse_event_release,
-						POOL_TYPE_INIT(dfuse_event, de_list)};
-
-	int                       rc;
+	struct fuse_args		args = {0};
+	struct dfuse_inode_entry	*ie = NULL;
+	int				rc;
 
 	args.argc = 5;
 
@@ -1190,38 +1118,23 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
-	rc = d_slab_init(&fs_handle->dpi_slab, fs_handle);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err_ie_remove, rc);
-
-	rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, &fs_handle->dpi_read_slab);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err_slab, rc);
-
-	rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, &fs_handle->dpi_write_slab);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err_slab, rc);
-
-	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
+	rc = pthread_create(&fs_handle->dpi_thread, NULL,
+			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_slab, rc = daos_errno2der(rc));
+		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	rc = dfuse_launch_fuse(fs_handle, &args);
-	if (rc == -DER_SUCCESS) {
-		fuse_opt_free_args(&args);
+	fuse_opt_free_args(&args);
+	if (rc == -DER_SUCCESS)
 		return rc;
-	}
 
-err_slab:
-	d_slab_destroy(&fs_handle->dpi_slab);
 err_ie_remove:
 	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
-	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }
@@ -1370,8 +1283,6 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
-
-	d_slab_destroy(&fs_handle->dpi_slab);
 
 	return 0;
 }

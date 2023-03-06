@@ -71,7 +71,6 @@ class DfuseCachingCheck(IorTestBase):
         out = self.run_ior_with_pool(fail_on_warning=False)
         with_caching = IorCommand.get_ior_metrics(out)
         # verify cached read performance is multiple times greater than without caching
-        # Log all the values first, then do the assert so that failures can be checked easily.
         for base_read in base_read_arr:
             actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])
             self.log.info('assert actual_change > min_change: %f > %f', actual_change, read_x)
