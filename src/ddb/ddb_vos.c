@@ -925,7 +925,7 @@ dv_get_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, dv_dump_ilog_ent
 	umm = vos_cont2umm(cont);
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
-	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (rc == -DER_NONEXIST) /* no entries exist ... not an error */
 		return 0;
 	if (!SUCCESS(rc))
@@ -948,7 +948,7 @@ process_ilog_entries(daos_handle_t coh, struct umem_instance *umm, struct ilog_d
 	vos_ilog_desc_cbs_init(&cbs, coh);
 	ilog_fetch_init(&entries);
 
-	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -1050,7 +1050,7 @@ key_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
 
-	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 

@@ -19,7 +19,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;

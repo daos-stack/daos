@@ -44,6 +44,9 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    if not os.path.isfile(yaml_file):
+        raise YamlException(f"File not found: {yaml_file}")
+
     class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
         """Helper class for parsing avocado yaml files."""
 
@@ -58,14 +61,11 @@ def get_yaml_data(yaml_file):
     DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
     DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
 
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
-            except yaml.YAMLError as error:
-                raise YamlException(f"Error reading {yaml_file}") from error
-    return yaml_data
+    with open(yaml_file, "r", encoding="utf-8") as open_file:
+        try:
+            return yaml.load(open_file.read(), Loader=DaosLoader)
+        except yaml.YAMLError as error:
+            raise YamlException(f"Error reading {yaml_file}") from error
 
 
 def find_values(obj, keys, key=None, val_type=str):
@@ -296,11 +296,11 @@ class YamlUpdater():
         """Replace the server or client placeholders.
 
         Args:
-            replacements (_type_): _description_
-            placeholder_data (_type_): _description_
-            key (_type_): _description_
-            replacement (_type_): _description_
-            node_mapping (_type_): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
+            placeholder_data (dict): test yaml values requesting replacements
+            key (str): test yaml entry key
+            replacement (list): available values to use as replacements for the test yaml entries
+            node_mapping (dict): dictionary of nodes and their replacement values
 
         Raises:
             YamlException: if there was a problem replacing any of the placeholders
@@ -421,7 +421,7 @@ class YamlUpdater():
         Args:
             yaml_file (str): test yaml file to update
             yaml_dir (str): directory in which to write the updated test yaml file
-            replacements (dict): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
 
         Raises:
             YamlException: if any placeholders are found without a replacement

@@ -1175,6 +1175,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_RESET_GC,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
+	/** Set space reserve ratio for rebuild */
+	VOS_PO_CTL_SET_SPACE_RB,
 };
 
 /**

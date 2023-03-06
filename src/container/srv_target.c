@@ -1445,11 +1445,10 @@ ds_dtx_resync(void *arg)
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
 			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
-		D_WARN("Fail to resync some DTX(s) for the pool/cont "
-		       DF_UUID"/"DF_UUID" that may affect subsequent "
-		       "operations: rc = "DF_RC".\n",
-		       DP_UUID(ddra->pool->spc_uuid),
-		       DP_UUID(ddra->co_uuid), DP_RC(rc));
+		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
+		       " that may affect subsequent "
+		       "operations: rc = " DF_RC "\n",
+		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
 
 	ds_pool_child_put(ddra->pool);
 	D_FREE(ddra);
