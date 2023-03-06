@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -142,18 +142,12 @@ extern uint32_t dtx_agg_thd_age_lo;
  */
 extern uint32_t dtx_batched_ult_max;
 
-/* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD_MIN	2
-#define DTX_RPC_HELPER_THD_DEF	6
-
 /*
  * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
  * dynamically when use it to avoid holding a lot of DRAM resource for long time that
  * may happen on some very large system.
  */
 #define DTX_INLINE_MBS_SIZE		512
-
-extern uint32_t dtx_rpc_helper_thd;
 
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;

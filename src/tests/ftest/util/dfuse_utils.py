@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -399,9 +399,11 @@ def get_dfuse(test, hosts, namespace=None):
     dfuse.get_params(test)
     dfuse.set_dfuse_exports(test.client_log)
 
-    # Default mount directory to be test-specific
+    # Default mount directory to be test-specific and unique
     if not dfuse.mount_dir.value:
-        dfuse.update_params(mount_dir=os.path.join(os.sep, 'tmp', 'daos_dfuse_' + test.test_id))
+        mount_dir = test.label_generator.get_label(
+            os.path.join(os.sep, 'tmp', 'daos_dfuse_' + test.test_id))
+        dfuse.update_params(mount_dir=mount_dir)
     return dfuse
 
 

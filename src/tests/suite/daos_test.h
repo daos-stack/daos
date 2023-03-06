@@ -121,6 +121,7 @@ struct epoch_io_args {
 	uint32_t                 op_no_verify : 1, op_ec : 1; /* true for EC, false for replica */
 };
 
+typedef int (*test_rebuild_cb_t)(void *test_arg);
 typedef struct {
 	bool			multi_rank;
 	int			myrank;
@@ -162,19 +163,19 @@ typedef struct {
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
-	int			(*rebuild_pre_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_pre_cb;
 	void			*rebuild_pre_cb_arg;
 
 	/* The callback is called during pool rebuild, used for concurrent IO,
 	 * container destroy etc
 	 */
-	int			(*rebuild_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_cb;
 	void			*rebuild_cb_arg;
 	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
-	int			(*rebuild_post_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_post_cb;
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
@@ -346,7 +347,7 @@ int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
-int run_daos_array_test(int rank, int size);
+int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
