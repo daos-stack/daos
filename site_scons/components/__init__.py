@@ -294,7 +294,8 @@ def define_components(reqs):
                  '--enable-stack-unwind']
 
     if reqs.target_type == 'debug':
-        abt_build.append('--enable-debug=most')
+        abt_build.append('--enable-debug=all')
+        abt_build.append('--disable-mem-pool')
     else:
         abt_build.append('--disable-debug')
 
