@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2022 Intel Corporation.
+ *  (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,7 +67,7 @@ obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint3
 	/* If the new layout changes dkey placement, i.e. dkey->grp, dkey->ec_start changes,
 	 * then all shards needs to be changed.
 	 */
-	if (new_ver == 1) { /* LAYOUT_VER == 1 change dkey mapping */
+	if (new_ver == 1 && daos_obj_id_is_ec(oid.id_pub)) {
 		*tgt = new_layout->ol_shards[shard].po_target;
 		*shard_p = shard;
 		D_GOTO(out, rc = 1);
