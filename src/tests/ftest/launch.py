@@ -2412,7 +2412,7 @@ class Launch():
 
         proc_pattern = "|".join(PROCS_TO_CLEANUP)
         logger.debug("Looking for running processes: %s", proc_pattern)
-        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'")
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
         if running:
             message = f"Failed to kill processes on {running}"
             self._fail_test(self.result.tests[-1], "Process", message)

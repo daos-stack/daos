@@ -156,13 +156,12 @@ class CartTest(TestWithoutServers):
         localhost = get_local_host()
         processes = r"'\<(crt_launch|orterun)\>'"
         negative_filter = r"'\<(grep|defunct)\>'"
-        retry_count = 0
-        while retry_count < 2:
+        running = True
+        for _ in range(2):
             _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
             if not running:
-                retry_count = 2
-            retry_count += 1
-        if retry_count == 2:
+                break
+        if running:
             error_list.append("Unable to stop cart processes!")
         return error_list
 

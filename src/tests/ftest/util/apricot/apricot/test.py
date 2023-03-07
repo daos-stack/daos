@@ -1684,9 +1684,9 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(POOL_NAMESPACE, True, True, 0)
+        self.add_pool()
 
-    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
@@ -1698,15 +1698,16 @@ class TestWithServers(TestWithoutServers):
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
 
         Returns:
             TestPool: the created test pool object.
 
         """
-        return add_pool(self, namespace, create, connect, index, **params)
+        return add_pool(self, namespace, create, connect, dmg, **params)
 
-    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
@@ -1718,11 +1719,12 @@ class TestWithServers(TestWithoutServers):
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
         """
-        self.pool = self.get_pool(namespace, create, connect, index, **params)
+        self.pool = self.get_pool(namespace, create, connect, dmg, **params)
 
-    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, index=0):
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None):
         """Add multiple pools to the test case.
 
         This method requires self.pool to be defined as a list.  If self.pool is
@@ -1736,7 +1738,8 @@ class TestWithServers(TestWithoutServers):
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
 
         Raises:
             TestFail: if self.pool is defined, but not as a list object.
@@ -1747,7 +1750,7 @@ class TestWithServers(TestWithoutServers):
         if not isinstance(self.pool, list):
             self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
         for _ in range(quantity):
-            self.pool.append(self.get_pool(namespace, create, connect, index))
+            self.pool.append(self.get_pool(namespace, create, connect, dmg))
 
     @fail_on(AttributeError)
     def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+from copy import deepcopy
 from logging import getLogger
 from grp import getgrgid
 from pwd import getpwuid
@@ -82,6 +83,15 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
+
+    def copy(self):
+        """Get a new dmg command with a copy of this dmg command's config file.
+
+        Returns:
+            DmgCommand: a new dmg command using the same config as this one
+
+        """
+        return DmgCommand(self.command_path, deepcopy(self.yaml), self.hostlist_suffix)
 
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
