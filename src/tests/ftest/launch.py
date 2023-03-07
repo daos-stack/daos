@@ -2170,6 +2170,7 @@ class Launch():
                 try:
                     self.core_file_processing = CoreFileProcessing(logger)
                     core_files = self.core_file_processing.get_core_file_pattern(
+                        # pylint: disable=unsupported-binary-operation
                         test.host_info.all_hosts | self.local_host,
                         self.result.tests[-1].time_start)
                 except CoreFileException:
