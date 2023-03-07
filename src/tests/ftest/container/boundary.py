@@ -43,7 +43,7 @@ class BoundaryTest(TestWithServers):
         self.io_obj_classs = self.params.get("obj_classs", '/run/container/execute_io/*')
         self.dmg = self.get_dmg_command()
 
-    def create_pool(self, dmg):
+    def create_pool(self):
         """Get a test pool object and append to list.
 
         Returns:
