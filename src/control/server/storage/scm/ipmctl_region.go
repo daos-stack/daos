@@ -393,8 +393,11 @@ func getPMemState(log logging.Logger, regions Regions) (*storage.ScmSocketState,
 		switch state {
 		case storage.ScmNotInterleaved, storage.ScmNotHealthy, storage.ScmPartFreeCap, storage.ScmUnknownMode:
 			log.Debugf("socket %d region in state %q", sid, state)
-			s := uint(sid)
-			resp.SocketID = &s
+			if resp.SocketID == nil {
+				// Indicate state for a specific socket.
+				s := uint(sid)
+				resp.SocketID = &s
+			}
 			resp.State = state
 			return resp, nil
 		case storage.ScmFreeCap:

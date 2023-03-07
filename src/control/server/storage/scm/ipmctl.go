@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -174,7 +174,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 	}
 
 	// Regardless of actionable state, remove any previously applied resource allocation goals.
-	if err := cr.deleteGoals(sockAny); err != nil {
+	if err := cr.deleteGoals(sockSelector); err != nil {
 		return nil, err
 	}
 
@@ -192,7 +192,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 		// PMem mode should be changed for all sockets as changing just for a single socket
 		// can be determined as an incorrect configuration on some platforms.
 		cr.log.Info("Creating PMem regions...")
-		if err := cr.createRegions(sockAny); err != nil {
+		if err := cr.createRegions(sockSelector); err != nil {
 			return nil, errors.Wrap(err, "createRegions")
 		}
 		resp.RebootRequired = true
@@ -395,10 +395,13 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 		return nil, errors.Wrap(err, "getPMemState")
 	}
 	resp.Socket = sockState
+	if sockState.SocketID == nil {
+		resp.Socket.SocketID = req.SocketID
+	}
 
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, resp.Socket)
 
-	if err := cr.deleteGoals(sockAny); err != nil {
+	if err := cr.deleteGoals(sockSelector); err != nil {
 		return nil, err
 	}
 
@@ -424,8 +427,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	cr.log.Info("Resetting memory allocations to remove PMem regions...")
 
-	// Remove all regions to avoid unsupported config on some platforms.
-	if err := cr.removeRegions(sockAny); err != nil {
+	if err := cr.removeRegions(sockSelector); err != nil {
 		return nil, err
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -228,7 +228,8 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals, fmt.Sprintf(cmdCreateRegions, " "),
+				cmdDeleteGoals + " -socket 1",
+				fmt.Sprintf(cmdCreateRegions, " -socket 1 "),
 			},
 		},
 		"no regions; delete goals fails": {
@@ -675,7 +676,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals,
+				cmdDeleteGoals + " -socket 1",
 			},
 		},
 		"remove regions; without namespaces": {
