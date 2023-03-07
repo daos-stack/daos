@@ -15,7 +15,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 /** Ensure the values of recx flags map to those exported by evtree */
 D_CASSERT((uint32_t)VOS_VIS_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
@@ -496,11 +496,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				       ts_set);
 		if (obj != NULL) {
 			if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
-				if (DAOS_ON_VALGRIND)
-					rc = umem_tx_xadd_ptr(vos_cont2umm(cont),
-							      &obj->obj_df->vo_max_write,
-							      sizeof(obj->obj_df->vo_max_write),
-							      UMEM_XADD_NO_SNAPSHOT);
+				rc = umem_tx_xadd_ptr(
+				    vos_cont2umm(cont), &obj->obj_df->vo_max_write,
+				    sizeof(obj->obj_df->vo_max_write), UMEM_XADD_NO_SNAPSHOT);
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
@@ -637,7 +635,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return 0;
 
 	if (rc) {
-		D_ERROR("Failed to hold object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to hold object: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -647,7 +645,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 
 	rc = vos_oi_delete(cont, obj->obj_id);
 	if (rc)
-		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
 
 	rc = umem_tx_end(umm, rc);
 
@@ -736,7 +734,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound, false,
 			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)

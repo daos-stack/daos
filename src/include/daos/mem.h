@@ -134,9 +134,16 @@ struct umem_store {
 	struct umem_store_ops	*stor_ops;
 };
 
+struct umem_slab_desc {
+	size_t		unit_size;
+	unsigned	class_id;
+};
+
 struct umem_pool {
 	void			*up_priv;
 	struct umem_store	 up_store;
+	/** Slabs of the umem pool */
+	struct umem_slab_desc	 up_slabs[0];
 };
 
 /* umem persistent object functions */
@@ -150,14 +157,6 @@ void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
 int   umempobj_get_heapusage(struct umem_pool *pool,
 			     daos_size_t *cur_allocated);
 void  umempobj_log_fraginfo(struct umem_pool *pool);
-
-struct umem_slab_desc {
-	size_t		unit_size;
-	unsigned	class_id;
-};
-
-/** Set the slab description with specific size for the pmem obj pool */
-int umempobj_set_slab_desc(struct umem_pool *pool, struct umem_slab_desc *slab);
 
 /** Number of flag bits to reserve for encoding extra information in
  *  a umem_off_t entry.
@@ -313,13 +312,11 @@ typedef struct {
 	 *
 	 * \param umm	   [IN]	umem class instance.
 	 * \param size	   [IN]	size to allocate.
-	 * \param slab_id  [IN]	hint about the slab to pick (for PMDK)
 	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	struct type (for PMDK)
 	 */
 	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
-					int slab_id, uint64_t flags,
-					unsigned int type_num);
+					uint64_t flags, unsigned int type_num);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -463,16 +460,10 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-#define UMM_SLABS_CNT 16
-
 /** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
 	struct umem_pool		*uma_pool;
-#ifdef DAOS_PMEM_BUILD
-	/** Slabs of the umem pool */
-	struct umem_slab_desc	 uma_slabs[UMM_SLABS_CNT];
-#endif
 };
 
 /** instance of an unified memory class */
@@ -487,28 +478,10 @@ struct umem_instance {
 	uint64_t		 umm_base;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
-#ifdef DAOS_PMEM_BUILD
-	/** Slabs of the umem pool */
-	struct umem_slab_desc	 umm_slabs[UMM_SLABS_CNT];
-#endif
 };
 
 #ifdef DAOS_PMEM_BUILD
 void umem_stage_callback(int stage, void *data);
-
-static inline bool
-umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return umm->umm_slabs[slab_id].class_id != 0;
-}
-
-static inline size_t
-umem_slab_usize(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return umm->umm_slabs[slab_id].unit_size;
-}
 #endif
 
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
@@ -563,11 +536,11 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, slab_id, flags, size)                                                 \
+#define umem_alloc_verb(umm, flags, size)			                                   \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, slab_id, flags, UMEM_TYPE_ANY);   \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);   \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -578,16 +551,14 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define	SLAB_ID_ANY	(-1)
-
 #define umem_alloc(umm, size)						\
-	umem_alloc_verb(umm, SLAB_ID_ANY, 0, size)
+	umem_alloc_verb(umm, 0, size)
 
 #define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, SLAB_ID_ANY, UMEM_FLAG_ZERO, size)
+	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size)
 
 #define umem_alloc_noflush(umm, size)					\
-	umem_alloc_verb(umm, SLAB_ID_ANY, UMEM_FLAG_NO_FLUSH, size)
+	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \

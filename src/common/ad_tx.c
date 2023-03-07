@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1144,7 +1144,7 @@ umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
+umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	     unsigned int type_num)
 {
 	struct ad_tx		*tx = tx_get();
@@ -1329,7 +1329,7 @@ failed:
 static umem_off_t
 umo_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
 {
-	return umo_tx_alloc(umm, size, 0, 0, type_num);
+	return umo_tx_alloc(umm, size, 0, type_num);
 }
 
 static int

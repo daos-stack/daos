@@ -19,7 +19,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, convert_list, get_log_file
+    run_pcmd, list_to_str, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
@@ -960,7 +960,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio = MacsioCommand()
             macsio.namespace = macsio_params
             macsio.daos_pool = pool.uuid
-            macsio.daos_svcl = convert_list(pool.svc_ranks)
+            macsio.daos_svcl = list_to_str(pool.svc_ranks)
             macsio.daos_cont = self.container[-1].uuid
             macsio.get_params(self)
             log_name = "{}_{}_{}_{}_{}_{}".format(

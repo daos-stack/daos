@@ -12,14 +12,11 @@ server_config:
     0:
       storage: auto
 pool:
-  control_method: dmg
   scm_size: 50G
   nvme_size: 100G
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests: !mux
   test1:
     testname: h5_partest_t_shapesame

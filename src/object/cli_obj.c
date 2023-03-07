@@ -965,7 +965,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 DF_OID" obj_shard_open %u opc %u, rc "DF_RC".\n",
+			 DF_OID " obj_shard_open %u opc %u, rc " DF_RC "\n",
 			 DP_OID(obj->cob_md.omd_id), obj_auxi->opc, shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -1786,8 +1786,9 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 			obj->cob_shards->do_shards[shard_idx].do_shard_idx);
 		if (!obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) &&
 		    !obj->cob_shards->do_shards[shard_idx].do_reintegrating) {
-			*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
-				 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
+			if (shard != NULL)
+				*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
+					 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
 			D_GOTO(out_put, rc = 1);
 		}
 	}

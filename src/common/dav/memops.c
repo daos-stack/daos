@@ -66,7 +66,7 @@ struct operation_context {
 	struct ulog *ulog_curr; /* current persistent log */
 	size_t total_logged; /* total amount of buffer stores in the logs */
 
-	struct ulog *ulog; /* pointer to the persistent ulog log */
+	struct ulog *ulog; /* pointer to the ulog used by context for undo ops */
 	size_t ulog_base_nbytes; /* available bytes in initial ulog log */
 	size_t ulog_capacity; /* sum of capacity, incl all next ulog logs */
 	int ulog_auto_reserve; /* allow or do not to auto ulog reservation */
@@ -75,7 +75,7 @@ struct operation_context {
 
 	enum operation_state state; /* operation sanity check */
 
-	struct operation_log pshadow_ops; /* shadow copy of persistent ulog */
+	struct operation_log pshadow_ops; /* used by context for redo ops */
 	struct operation_log transient_ops; /* log of transient changes */
 
 	/* collection used to look for potential merge candidates */
@@ -128,7 +128,7 @@ operation_log_persistent_init(struct operation_log *log,
 	}
 
 	/* initialize underlying redo log structure */
-	src->capacity = ulog_base_nbytes;
+	src->capacity = ULOG_BASE_SIZE;
 	memset(src->unused, 0, sizeof(src->unused));
 
 	log->ulog = src;
@@ -531,7 +531,7 @@ operation_process_persistent_redo(struct operation_context *ctx)
 int
 operation_reserve(struct operation_context *ctx, size_t new_capacity)
 {
-	if (new_capacity > ctx->ulog_capacity) {
+	if ((ctx->type == LOG_TYPE_UNDO) && (new_capacity > ctx->ulog_capacity)) {
 		if (ctx->extend == NULL) {
 			ERR("no extend function present");
 			return -1;
