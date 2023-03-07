@@ -6166,8 +6166,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	}
 
 	*size = iod.iod_size;
-	if (iod.iod_size == 0)
-		D_GOTO(close, rc = ENODATA);
 
 close:
 	daos_obj_close(oh, NULL);
