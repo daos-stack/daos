@@ -6153,16 +6153,16 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		sgl.sg_iovs	= &sg_iov;
 
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1,
-							&iod, &sgl,NULL, NULL);
+				    &iod, &sgl, NULL, NULL);
 	} else {
 		iod.iod_size	= DAOS_REC_ANY;
 
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1,
-							&iod, NULL, NULL, NULL);
+				    &iod, NULL, NULL, NULL);
 	}
 	if (rc) {
 		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
-			 "Failed to fetch xattr %s "DF_RC"\n", name, DP_RC(rc));
+			 "Failed to fetch xattr '%s' " DF_RC "\n", name, DP_RC(rc));
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
