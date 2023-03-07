@@ -51,7 +51,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(_ string) (string, error) {
+			mockRun := func(_ logging.Logger, in string) (string, error) {
 				return preTxt + tc.verOut, nil
 			}
 
@@ -209,7 +209,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(inCmd string) (string, error) {
+			mockRun := func(_ logging.Logger, inCmd string) (string, error) {
 				if inCmd == cmdShowIpmctlVersion {
 					return verStr, nil
 				}
@@ -354,7 +354,7 @@ func TestIpmctl_getPMemState(t *testing.T) {
 
 			callIdx := 0
 
-			mockRun := func(in string) (string, error) {
+			mockRun := func(_ logging.Logger, in string) (string, error) {
 				out := ""
 				if len(tc.runOut) > callIdx {
 					out = tc.runOut[callIdx]

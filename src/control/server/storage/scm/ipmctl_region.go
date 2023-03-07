@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -174,7 +174,7 @@ func validateSemVer(sv semVer, badList []semVer) error {
 // checkIpmctl verifies ipmctl application version is acceptable.
 func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	cr.checkOnce.Do(func() {
-		cmdOut, err := cr.runCmd(cmdShowIpmctlVersion)
+		cmdOut, err := cr.runCmd(cr.log, cmdShowIpmctlVersion)
 		if err != nil {
 			errOut = errors.WithMessage(err, "show version cmd")
 			return
@@ -207,13 +207,7 @@ func (cr *cmdRunner) showRegions(sockID int) (string, error) {
 		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
-	out, err := cr.runCmd(cmd)
-	if err != nil {
-		return "", errors.Wrapf(err, "cmd %q", cmd)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmd, out)
-
-	return out, nil
+	return cr.runCmd(cr.log, cmd)
 }
 
 func (cr *cmdRunner) createRegions(sockID int) error {
@@ -230,13 +224,8 @@ func (cr *cmdRunner) createRegions(sockID int) error {
 	}
 	cmd = fmt.Sprintf(cmd, opt)
 
-	out, err := cr.runCmd(cmd)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmd)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmd, out)
-
-	return nil
+	_, err := cr.runCmd(cr.log, cmd)
+	return err
 }
 
 func (cr *cmdRunner) removeRegions(sockID int) error {
@@ -253,13 +242,8 @@ func (cr *cmdRunner) removeRegions(sockID int) error {
 	}
 	cmd = fmt.Sprintf(cmd, opt)
 
-	out, err := cr.runCmd(cmd)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmd)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmd, out)
-
-	return nil
+	_, err := cr.runCmd(cr.log, cmd)
+	return err
 }
 
 func (cr *cmdRunner) deleteGoals(sockID int) error {
@@ -274,12 +258,8 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
-	if _, err := cr.runCmd(cmd); err != nil {
-		return errors.Wrapf(err, "cmd %q", cmd)
-	}
-	cr.log.Debugf("%q cmd was run", cmd)
-
-	return nil
+	_, err := cr.runCmd(cr.log, cmd)
+	return err
 }
 
 // socketRegionMap maps regions based on socket ID key.

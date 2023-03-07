@@ -159,7 +159,7 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 				return
 			}
 
-			mockRun := func(in string) (string, error) {
+			mockRun := func(_ logging.Logger, in string) (string, error) {
 				commands = append(commands, in)
 				return tt.cmdOut, nil
 			}

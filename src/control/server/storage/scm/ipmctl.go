@@ -32,18 +32,19 @@ const (
 )
 
 type (
-	runCmdFn   func(string) (string, error)
+	runCmdFn   func(logging.Logger, string) (string, error)
 	lookPathFn func(string) (string, error)
 )
 
-func run(cmd string) (string, error) {
+func run(log logging.Logger, cmd string) (string, error) {
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
-		return "", &system.RunCmdError{
+		return "", errors.Wrapf(&system.RunCmdError{
 			Wrapped: err,
 			Stdout:  string(out),
-		}
+		}, "cmd %q", cmd)
 	}
+	log.Debugf("%q cmd returned: %q", cmd, string(out))
 
 	return string(out), nil
 }

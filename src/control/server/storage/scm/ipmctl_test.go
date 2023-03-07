@@ -522,7 +522,7 @@ func TestIpmctl_prep(t *testing.T) {
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 				"ndctl create-namespace --region 0 --size 1082331758592",
 			},
-			expErr: errors.New("ndctl create-namespace --region 0 --size 1082331758592: fail"),
+			expErr: errors.New(`"ndctl create-namespace --region 0 --size 1082331758592": fail`),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -532,7 +532,7 @@ func TestIpmctl_prep(t *testing.T) {
 			var calls []string
 			var callIdx int
 
-			mockRun := func(cmd string) (string, error) {
+			mockRun := func(_ logging.Logger, cmd string) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -546,7 +546,7 @@ func TestIpmctl_prep(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, e
+				return o, errors.Wrapf(e, "cmd %q", cmd)
 			}
 
 			mockLookPath := func(string) (string, error) {
@@ -734,7 +734,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			var calls []string
 			var callIdx int
 
-			mockRun := func(cmd string) (string, error) {
+			mockRun := func(_ logging.Logger, cmd string) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -748,7 +748,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, e
+				return o, errors.Wrapf(e, "cmd %q", cmd)
 			}
 
 			mockLookPath := func(string) (string, error) {

@@ -38,18 +38,6 @@ func (cr *cmdRunner) checkNdctl() (errOut error) {
 	return
 }
 
-// create PMem namespaces through ndctl commandline tool, region parameter is zero-based, not
-// one-based like in ipmctl.
-func (cr *cmdRunner) createNamespace(regionID int, sizeBytes uint64) (string, error) {
-	cmd := cmdCreateNamespace
-	cmd = fmt.Sprintf("%s --region %d", cmd, regionID)
-	cmd = fmt.Sprintf("%s --size %d", cmd, sizeBytes)
-
-	out, err := cr.runCmd(cmd)
-
-	return out, errors.Wrapf(err, cmd)
-}
-
 // For each region, create <nrNsPerSocket> namespaces.
 func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSock uint) error {
 	if nrNsPerSock < minNrNssPerSocket || nrNsPerSock > maxNrNssPerSocket {
@@ -57,15 +45,16 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSock)
 	}
 
-	// 1:1 mapping of sockets to regions so nrRegions == nrSockets.
+	// For the moment assume 1:1 mapping of sockets to regions so nrRegions == nrSockets.
 	nrRegions := len(regionPerSocket)
 	if nrRegions == 0 {
 		return errors.New("expected non-zero number of pmem regions")
 	}
-	cr.log.Debugf("creating %d namespaces per socket (%d regions)", nrNsPerSock, nrRegions)
+	sockIDs := regionPerSocket.keys()
+	cr.log.Debugf("creating %d namespaces on each of the following sockets: %v", nrNsPerSock,
+		sockIDs)
 
-	keys := regionPerSocket.keys()
-	for sid := range keys {
+	for _, sid := range sockIDs {
 		region := regionPerSocket[sid]
 		cr.log.Debugf("creating namespaces on region %d, socket %d", region.ID, sid)
 
@@ -79,34 +68,18 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 
 		// Create specified number of namespaces on a single region (NUMA node).
 		for j := uint(0); j < nrNsPerSock; j++ {
-			// Specify socket ID for region ID in command as it takes a zero-based index.
-			out, err := cr.createNamespace(sid, pmemBytes)
-			if err != nil {
+			// Specify socket ID for region ID in command as region parameter in ndctl
+			// is zero-based, not one-based like in ipmctl.
+			if _, err := cr.runCmd(cr.log, fmt.Sprintf("%s --region %d --size %d",
+				cmdCreateNamespace, sid, pmemBytes)); err != nil {
 				return errors.WithMessagef(err, "socket %d", sid)
 			}
-			cr.log.Debugf("createNamespace on region index %d size %s returned: %s", sid,
-				humanize.Bytes(pmemBytes), out)
+			cr.log.Debugf("created namespace on socket %d (same region index) size %s",
+				sid, humanize.Bytes(pmemBytes))
 		}
 	}
 
 	return nil
-}
-
-func (cr *cmdRunner) listNamespaces(sockID int) (string, error) {
-	cmd := cmdListNamespaces
-	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --numa-node %d", cmd, sockID)
-	}
-
-	return cr.runCmd(cmd)
-}
-
-func (cr *cmdRunner) disableNamespace(name string) (string, error) {
-	return cr.runCmd(fmt.Sprintf("%s %s", cmdDisableNamespace, name))
-}
-
-func (cr *cmdRunner) destroyNamespace(name string) (string, error) {
-	return cr.runCmd(fmt.Sprintf("%s %s", cmdDestroyNamespace, name))
 }
 
 func (cr *cmdRunner) removeNamespace(devName string) error {
@@ -116,15 +89,14 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 
 	cr.log.Debugf("removing pmem namespace %q", devName)
 
-	if _, err := cr.disableNamespace(devName); err != nil {
-		return errors.WithMessagef(err, "disable namespace cmd (%s)", devName)
+	cmd := fmt.Sprintf("%s %s", cmdDisableNamespace, devName)
+	if _, err := cr.runCmd(cr.log, cmd); err != nil {
+		return err
 	}
 
-	if _, err := cr.destroyNamespace(devName); err != nil {
-		return errors.WithMessagef(err, "destroy namespace cmd (%s)", devName)
-	}
-
-	return nil
+	cmd = fmt.Sprintf("%s %s", cmdDestroyNamespace, devName)
+	_, err := cr.runCmd(cr.log, cmd)
+	return err
 }
 
 func parseNamespaces(jsonData string) (storage.ScmNamespaces, error) {
@@ -149,9 +121,13 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 		return nil, err
 	}
 
-	out, err := cr.listNamespaces(sockID)
+	cmd := cmdListNamespaces
+	if sockID != sockAny {
+		cmd = fmt.Sprintf("%s --numa-node %d", cmd, sockID)
+	}
+	out, err := cr.runCmd(cr.log, cmd)
 	if err != nil {
-		return nil, errors.WithMessage(err, "list namespaces cmd")
+		return nil, err
 	}
 
 	nss, err := parseNamespaces(out)
