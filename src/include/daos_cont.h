@@ -53,8 +53,8 @@ extern "C" {
 
 /**
  * Before opening the container, evict current user's handles. This flag
- * conflicts with DAOS_COO_EVICT_ALL. Using with DAOS_COO_EX is not supported
- * at the moment.
+ * conflicts with DAOS_COO_EVICT_ALL. This flag can only be used with
+ * DAOS_COO_RO or DAOS_COO_RW at the moment.
  *
  * This flag is for recovery purposes and shall not be used by regular
  * applications.
@@ -63,9 +63,9 @@ extern "C" {
 
 /**
  * Before opening the container, evict all handles, including other users'.
- * This flag conflicts with DAOS_COO_EVICT. Using with DAOS_COO_RO or
- * DAOS_COO_RW is not supported at the moment. The current user must be the
- * owner of the container.
+ * This flag conflicts with DAOS_COO_EVICT. This flag can only be used with
+ * DAOS_COO_EX at the moment. The current user must be the owner of the
+ * container.
  *
  * This flag is for recovery purposes and shall not be used by regular
  * applications.
@@ -202,7 +202,8 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[in]	flags	Open flags (DAOS_COO_RO, etc.). Must include one of
+ *			DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX.
  * \param[out]	coh	Returned open handle.
  * \param[out]	info	Optional, return container information
  * \param[in]	ev	Completion event, it is optional and can be NULL.

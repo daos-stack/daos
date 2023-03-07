@@ -102,7 +102,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
  * Determine if the pool connection can be established based on the calculated
  * set of pool capabilities.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Access allowed
@@ -115,7 +115,7 @@ ds_sec_pool_can_connect(uint64_t pool_capas);
  * Determine if a pool handle with given security capabilities can create a
  * container.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Operation allowed
@@ -128,7 +128,7 @@ ds_sec_pool_can_create_cont(uint64_t pool_capas);
  * Determine if a pool handle with given security capabilities can delete a
  * container.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Operation allowed
@@ -141,7 +141,7 @@ ds_sec_pool_can_delete_cont(uint64_t pool_capas);
  * Determine if the container can be opened based on the calculated set of
  * container capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -154,10 +154,10 @@ ds_sec_cont_can_open(uint64_t cont_capas);
  * Determine if the container can be deleted by the user with the given
  * credential, based on the container ACL and ownership information.
  *
- * \param	pool_flags	Parent pool handle flags
- * \param	cred		Pool's security credential
- * \param	ownership	Container ownership information
- * \param	acl		Container ACL
+ * \param[in]	pool_flags	Parent pool handle flags
+ * \param[in]	cred		Pool's security credential
+ * \param[in]	ownership	Container ownership information
+ * \param[in]	acl		Container ACL
  *
  * \return	True		Operation allowed
  *		False		Operation forbidden
@@ -170,7 +170,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
  * Determine if the container properties can be viewed based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -183,7 +183,7 @@ ds_sec_cont_can_get_props(uint64_t cont_capas);
  * Determine if the container properties can be modified based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -196,7 +196,7 @@ ds_sec_cont_can_set_props(uint64_t cont_capas);
  * Determine if the container Access Control List can be viewed based on the
  * container security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -209,7 +209,7 @@ ds_sec_cont_can_get_acl(uint64_t cont_capas);
  * Determine if the container Access Control List can be modified based on the
  * container security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -222,7 +222,7 @@ ds_sec_cont_can_set_acl(uint64_t cont_capas);
  * Determine if the container ownership can be modified based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -235,7 +235,7 @@ ds_sec_cont_can_set_owner(uint64_t cont_capas);
  * Determine if the container can be written based on the container security
  * capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -247,7 +247,7 @@ ds_sec_cont_can_write_data(uint64_t cont_capas);
 /**
  * Calculate the new capability after enable CONT_CAPA_WRITE_DATA.
  *
- * \param	cont_capas	Input capability.
+ * \param[in]	cont_capas	Input capability.
  *
  * \return	Output capability
  */
@@ -257,7 +257,7 @@ ds_sec_cont_capa_write_data_enable(uint64_t cont_capas);
 /**
  * Calculate the new capability after disable CONT_CAPA_WRITE_DATA.
  *
- * \param	cont_capas	Input capability.
+ * \param[in]	cont_capas	Input capability.
  *
  * \return	Output capability
  */
@@ -268,7 +268,7 @@ ds_sec_cont_capa_write_data_disable(uint64_t cont_capas);
  * Determine if the container can be read based on the container security
  * capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -281,7 +281,7 @@ ds_sec_cont_can_read_data(uint64_t cont_capas);
  * Determine if all handles of the container can be evicted based on the
  * container security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed

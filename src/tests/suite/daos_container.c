@@ -3331,6 +3331,10 @@ co_evict_hdls(void **state)
 	uuid_t		 uuid;
 	daos_handle_t	 coh0;
 	daos_handle_t	 coh1;
+#if 0
+	daos_handle_t	 coh2;
+#endif
+	daos_cont_info_t info;
 	int		 rc;
 
 	if (arg->myrank != 0)
@@ -3357,27 +3361,63 @@ co_evict_hdls(void **state)
 
 	print_message("SUBTEST: EVICT no handle; shall succeed\n");
 	print_message(" performing an RO|EVICT open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT, &coh0, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT, &coh0, &info, NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
 	print_message(" closing the handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
 
-	print_message("SUBTEST: EVICT an exclusive handle; shall succeed\n");
+	print_message("SUBTEST: EVICT my own exclusive handle; shall succeed\n");
 	print_message(" performing an EX open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
 	print_message(" performing an RW|EVICT open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
 	assert_rc_equal(rc, 0);
-	print_message(" closing the EX handle\n");
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the evicted EX handle to avoid local resource leaks\n");
 	rc = daos_cont_close(coh1, NULL);
+	/*
+	 * Closing an evicted handle returns zero. See "already closed" in
+	 * cont_close.
+	 */
 	assert_rc_equal(rc, 0);
 	print_message(" closing the RW|EVICT handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
 
-	print_message("SUBTEST: RO|EVICT_ALL and RW|EVICT are not supported\n");
+#if 0
+	/*
+	 * Temporarily commented out due to what appears to be an nhandles bug
+	 * that happens when closing a batch of two or more handles.
+	 */
+	print_message("SUBTEST: EVICT my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an RW|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RW|EVICT handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+#endif
+
+	print_message("SUBTEST: RO|EVICT_ALL and RW|EVICT_ALL are not supported\n");
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT_ALL, &coh0, NULL,
 			    NULL);
 	assert_rc_equal(rc, -DER_INVAL);
@@ -3387,27 +3427,60 @@ co_evict_hdls(void **state)
 
 	print_message("SUBTEST: EVICT_ALL no existing handles; shall succeed\n");
 	print_message(" performing an EX|EVICT_ALL open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, NULL,
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
 			    NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
 	print_message(" closing the handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
 
-	print_message("SUBTEST: EVICT_ALL an existing exclusive handle; shall succeed\n");
+	print_message("SUBTEST: EVICT_ALL my own exclusive handle; shall succeed\n");
 	print_message(" performing an EX open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
 	print_message(" performing an EX|EVICT_ALL open\n");
-	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, NULL,
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
 			    NULL);
 	assert_rc_equal(rc, 0);
-	print_message(" closing the EX handle\n");
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the EX handle to avoid local resource leaks\n");
 	rc = daos_cont_close(coh1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message(" closing the EX|EVICT_ALL handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
+
+#if 0
+	/*
+	 * Temporarily commented out due to what appears to be an nhandles bug
+	 * that happens when closing a batch of two or more handles.
+	 */
+	print_message("SUBTEST: EVICT_ALL my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the EX|EVICT_ALL handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+#endif
 
 	print_message("destroying container '%s'\n", label);
 	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);
