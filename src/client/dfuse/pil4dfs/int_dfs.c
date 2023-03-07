@@ -35,15 +35,24 @@
 #include "hook.h"
 
 /* Use very large synthetic FD to distinguish regular FD from Kernel */
-#define FD_FILE_BASE        (0x20000000)
-#define FD_DIR_BASE         (0x40000000)
-#define DUMMY_FD_DIR        (0x50000000)
 
+/* FD_FILE_BASE - The base number of the file descriptor for a regular file.
+ * The fd allocate from this lib is always larger than FD_FILE_BASE.
+ */
+#define FD_FILE_BASE        (0x20000000)
+
+/* FD_FILE_BASE - The base number of the file descriptor for a directory.
+ * The fd allocate from this lib is always larger than FD_FILE_BASE.
+ */
+#define FD_DIR_BASE         (0x40000000)
+
+/* The max number of mount points for DAOS mounted simultaneously */
 #define MAX_DAOS_MT         (8)
 
+/* Max length of item length */
+#define MAX_ITEM_LENGTH     (256)
+
 #define READ_DIR_BATCH_SIZE (96)
-#define MAX_DFS_MT_PATH_LEN (256)
-#define MAX_FILE_NAME_LEN   (512)
 #define MAX_FD_DUP2ED       (8)
 
 #define MAX_OPENED_FILE     (2048)
@@ -66,7 +75,7 @@ struct DFSMOUNT {
 	int                  len_fs_root;
 	int                  inited;
 	char                *pool, *cont;
-	char                 fs_root[MAX_DFS_MT_PATH_LEN];
+	char                 fs_root[DFS_MAX_PATH];
 };
 
 static pthread_mutex_t lock_init;
@@ -96,7 +105,7 @@ struct FILESTATUS {
 	int              fd_dup_next;
 	unsigned int     st_ino;
 	off_t            offset;
-	char             item_name[MAX_FILE_NAME_LEN];
+	char             item_name[MAX_ITEM_LENGTH];
 };
 
 /* structure allocated for a FD for a dir */
@@ -110,9 +119,10 @@ struct DIRSTATUS {
 	int              fd_dup_next;
 	int              open_flag;
 	daos_anchor_t    anchor;
-	char            *path;
 	struct DFSMOUNT *dfs_mt;
-	struct dirent    ents[READ_DIR_BATCH_SIZE];
+	/* path and ents will be allocated together dynamically since they are large. */
+	char            *path;
+	struct dirent   *ents;
 };
 
 struct FD_DUP2ED {
@@ -120,7 +130,7 @@ struct FD_DUP2ED {
 };
 
 /* working dir of current process */
-static char            cur_dir[MAX_FILE_NAME_LEN] = "";
+static char            cur_dir[DFS_MAX_PATH] = "";
 
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
@@ -141,7 +151,7 @@ update_cwd(void);
 struct dir_hdl {
 	d_list_t   entry;
 	dfs_obj_t *oh;
-	char       name[MAX_FILE_NAME_LEN];
+	char       name[DFS_MAX_PATH];
 };
 
 static inline struct dir_hdl *
@@ -221,7 +231,7 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode)
 	if (hdl == NULL)
 		return NULL;
 
-	strncpy(hdl->name, name, len);
+	strncpy(hdl->name, name, len + 1);
 	hdl->oh = oh;
 
 	rc = d_hash_rec_insert(dfs_list[idx_dfs].dfs_dir_hash, hdl->name, len, &hdl->entry, false);
@@ -413,7 +423,9 @@ query_dfs_mount(const char *path)
 
 	for (i = 0; i < num_dfs; i++) {
 		/* To find in existing list with max length */
-		if (strncmp(path, dfs_list[i].fs_root, dfs_list[i].len_fs_root) == 0) {
+		if (strncmp(path, dfs_list[i].fs_root, dfs_list[i].len_fs_root) == 0 &&
+		    (path[dfs_list[i].len_fs_root] == '/' ||
+		    path[dfs_list[i].len_fs_root] == 0)) {
 			if (dfs_list[i].len_fs_root > max_len) {
 				idx     = i;
 				max_len = dfs_list[i].len_fs_root;
@@ -447,8 +459,8 @@ discover_daos_mount(void)
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strlen(fs_root);
-	if (len_fs_root >= MAX_DFS_MT_PATH_LEN) {
-		printf("Warning: len_fs_root >= MAX_DFS_MT_PATH_LEN\n");
+	if (len_fs_root >= DFS_MAX_PATH) {
+		printf("Warning: len_fs_root >= DFS_MAX_PATH\n");
 		return;
 	}
 
@@ -464,7 +476,7 @@ discover_daos_mount(void)
 		return;
 	}
 
-	strncpy(dfs_list[num_dfs].fs_root, fs_root, MAX_DFS_MT_PATH_LEN);
+	strncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH);
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
 	dfs_list[num_dfs].dfs_dir_hash = NULL;
@@ -494,7 +506,7 @@ discover_dfuse(void)
 			dfs_list[num_dfs].len_fs_root  = strlen(fs_entry->mnt_dir);
 			dfs_list[num_dfs].inited       = 0;
 			dfs_list[num_dfs].pool         = NULL;
-			strncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir, MAX_DFS_MT_PATH_LEN);
+			strncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir, DFS_MAX_PATH);
 			num_dfs++;
 		}
 	}
@@ -623,7 +635,7 @@ static void
 parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *item_name,
 	   char *parent_dir, char full_path[], struct DFSMOUNT **dfs_mt)
 {
-	char   full_path_loc[MAX_FILE_NAME_LEN + 4];
+	char   full_path_loc[DFS_MAX_PATH + 4];
 	int    pos, len;
 	mode_t mode;
 	bool   with_daos_prefix;
@@ -648,8 +660,8 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		strcpy(full_path_loc, szInput);
 	} else {
 		/* relative path */
-		len = snprintf(full_path_loc, MAX_FILE_NAME_LEN + 1, "%s/%s", cur_dir, szInput);
-		if (len >= MAX_FILE_NAME_LEN) {
+		len = snprintf(full_path_loc, DFS_MAX_PATH + 1, "%s/%s", cur_dir, szInput);
+		if (len >= DFS_MAX_PATH) {
 			printf("The length of path is too long.\n");
 			exit(1);
 		}
@@ -797,6 +809,9 @@ remove_dot(char szPath[])
 	}
 	/* remove "/" at the end of path */
 	pNewStr[nNonZero] = 0;
+	if (pNewStr[1] == 0 && pNewStr[0] == '/')
+		/* root dir */
+		return 1;
 	for (i = nNonZero - 1; i >= 0; i--) {
 		if (pNewStr[i] == '/') {
 			pNewStr[i] = 0;
@@ -935,6 +950,7 @@ free_dirfd(int idx)
 	int        i, fd_dup_pre, fd_dup_next, rc;
 	bool       ready_to_release = false;
 	dfs_obj_t *dir_obj          = NULL;
+	char      *path;
 
 	pthread_mutex_lock(&lock_dirfd);
 
@@ -969,12 +985,16 @@ free_dirfd(int idx)
 		if (fd_dup_next >= 0)
 			dir_list[fd_dup_next].fd_dup_pre = fd_dup_pre;
 	}
-	if ((fd_dup_pre == -1) && (fd_dup_next == -1))
+	if ((fd_dup_pre == -1) && (fd_dup_next == -1)) {
 		ready_to_release = true;
+		path		 = dir_list[idx].path;
+	}
 
 	pthread_mutex_unlock(&lock_dirfd);
 
 	if (ready_to_release) {
+		/* free memory for path and ents. */
+		D_FREE(path);
 		rc = dfs_release(dir_obj);
 		assert(rc == 0);
 	}
@@ -1115,15 +1135,15 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 	int len_str;
 
 	if (dirfd >= FD_DIR_BASE) {
-		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s",
+		len_str = snprintf(full_path, DFS_MAX_PATH, "%s/%s",
 				   dir_list[dirfd - FD_DIR_BASE].path, rel_path);
-		if (len_str >= MAX_FILE_NAME_LEN) {
+		if (len_str >= DFS_MAX_PATH) {
 			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
 			exit(1);
 		}
 	} else if (dirfd == AT_FDCWD) {
-		len_str = snprintf(full_path, MAX_FILE_NAME_LEN, "%s/%s", cur_dir, rel_path);
-		if (len_str >= MAX_FILE_NAME_LEN) {
+		len_str = snprintf(full_path, DFS_MAX_PATH, "%s/%s", cur_dir, rel_path);
+		if (len_str >= DFS_MAX_PATH) {
 			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
 			exit(1);
 		}
@@ -1133,8 +1153,8 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 
 		/* 32 bytes should be more than enough */
 		snprintf(path_fd_dir, 32, "/proc/self/fd/%d", dirfd);
-		bytes_read = readlink(path_fd_dir, full_path, MAX_FILE_NAME_LEN);
-		if (bytes_read >= MAX_FILE_NAME_LEN) {
+		bytes_read = readlink(path_fd_dir, full_path, DFS_MAX_PATH);
+		if (bytes_read >= DFS_MAX_PATH) {
 			printf("Error in check_path_with_dirfd(). path %s is too long.\nQuit\n",
 			       full_path);
 			exit(1);
@@ -1143,8 +1163,8 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 			       strerror(errno));
 			exit(1);
 		}
-		len_str = snprintf(full_path + bytes_read, MAX_FILE_NAME_LEN, "/%s", rel_path);
-		if ((len_str + (int)bytes_read) >= MAX_FILE_NAME_LEN) {
+		len_str = snprintf(full_path + bytes_read, DFS_MAX_PATH, "/%s", rel_path);
+		if ((len_str + (int)bytes_read) >= DFS_MAX_PATH) {
 			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
 			exit(1);
 		}
@@ -1159,9 +1179,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 {
 	unsigned int     mode     = 0664;
 	int              two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 	dfs_obj_t       *file_obj;
 	dfs_obj_t       *parent;
 	mode_t           mode_query = 0;
@@ -1218,12 +1238,23 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 		if (strncmp(full_path, "/", 2) == 0)
 			full_path[0] = 0;
-		rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", dfs_mt->fs_root, full_path);
-		if (rc < 0) {
-			printf("Failed to allocate memory for dir_list[idx_dirfd].path\nQuit\n");
+
+		/* allocate memory for path and ents. */
+		D_ALLOC(dir_list[idx_dirfd].path, (sizeof(struct dirent)*READ_DIR_BATCH_SIZE +
+			DFS_MAX_PATH));
+		if (dir_list[idx_dirfd].path == NULL) {
+			errno = ENOMEM;
+			free_dirfd(idx_dirfd);
+			return (-1);
+		}
+		dir_list[idx_dirfd].ents = (struct dirent *)(dir_list[idx_dirfd].path +
+					   DFS_MAX_PATH);
+		rc = snprintf(dir_list[idx_dirfd].path, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root,
+			      full_path);
+		if (rc >= DFS_MAX_PATH) {
+			printf("Path is longer than DFS_MAX_PATH\nQuit.\n!");
 			exit(1);
 		}
-
 		return (idx_dirfd + FD_DIR_BASE);
 	}
 
@@ -1334,10 +1365,6 @@ new_close_common(int (*real_close)(int fd), int fd)
 
 	if (fd_Directed >= FD_DIR_BASE) {
 		/* directory */
-		if (fd_Directed == DUMMY_FD_DIR) {
-			printf("ERROR> Unexpected fd == DUMMY_FD_DIR in close().\n");
-			return 0;
-		}
 		free_dirfd(fd_Directed - FD_DIR_BASE);
 		return 0;
 	} else if (fd_Directed >= FD_FILE_BASE) {
@@ -1385,10 +1412,6 @@ new_close_nocancel(int fd)
 		return real_close_nocancel(fd);
 
 	if (fd >= FD_DIR_BASE) {
-		if (fd == DUMMY_FD_DIR) {
-			printf("ERROR> Unexpected fd == DUMMY_FD_DIR in close().\n");
-			return 0;
-		}
 		free_dirfd(fd - FD_DIR_BASE);
 		return 0;
 	} else if (fd >= FD_FILE_BASE) {
@@ -1582,10 +1605,10 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
 		return real_xstat(ver, path, stat_buf);
@@ -1612,7 +1635,7 @@ static int
 new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
 		return real_fxstatat(ver, dirfd, path, stat_buf, flags);
@@ -1658,7 +1681,7 @@ int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
 	int         rc, idx_dfs;
-	char        full_path[MAX_FILE_NAME_LEN];
+	char        full_path[DFS_MAX_PATH];
 	struct stat stat_buf;
 
 	if (real_statx == NULL) {
@@ -1690,10 +1713,10 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
 		return real_xstat(ver, path, stat_buf);
@@ -1775,9 +1798,9 @@ statfs(const char *pathname, struct statfs *sfs)
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_statfs == NULL) {
 		real_statfs = dlsym(RTLD_NEXT, "statfs");
@@ -1819,9 +1842,9 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_statvfs == NULL) {
 		real_statvfs = dlsym(RTLD_NEXT, "statvfs");
@@ -1861,13 +1884,12 @@ DIR *
 opendir(const char *path)
 {
 	int              is_target_path, idx_dirfd, rc;
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent, *dir_obj;
 	mode_t           mode;
 	struct DFSMOUNT *dfs_mt;
-	/*	struct dirent *ent_list = NULL; */
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (real_opendir == NULL) {
 		real_opendir = dlsym(RTLD_NEXT, "opendir");
@@ -1905,10 +1927,19 @@ opendir(const char *path)
 	memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 	if (strncmp(full_path, "/", 2) == 0)
 		full_path[0] = 0;
-	rc = asprintf(&dir_list[idx_dirfd].path, "%s%s", dfs_mt->fs_root, full_path);
-	if (rc < 0) {
-		printf("Failed to allocate memory for dir_list[idx_dirfd].path\n"
-		       "Quit\n");
+	/* allocate memory for path and ents. */
+	D_ALLOC(dir_list[idx_dirfd].path, sizeof(struct dirent)*READ_DIR_BATCH_SIZE +
+		DFS_MAX_PATH);
+	if (dir_list[idx_dirfd].path == NULL) {
+		free_dirfd(idx_dirfd);
+		errno = ENOMEM;
+		return NULL;
+	}
+	dir_list[idx_dirfd].ents = (struct dirent *)(dir_list[idx_dirfd].path + DFS_MAX_PATH);
+	rc = snprintf(dir_list[idx_dirfd].path, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root,
+		      full_path);
+	if (rc >= DFS_MAX_PATH) {
+		printf("Path is longer than DFS_MAX_PATH\nQuit.\n!");
 		exit(1);
 	}
 
@@ -1951,7 +1982,7 @@ openat(int dirfd, const char *path, int oflags, ...)
 {
 	unsigned int mode;
 	int          two_args = 1, idx_dfs;
-	char         full_path[MAX_FILE_NAME_LEN];
+	char         full_path[DFS_MAX_PATH];
 
 	if (real_openat == NULL) {
 		real_openat = dlsym(RTLD_NEXT, "openat");
@@ -2000,7 +2031,7 @@ int
 __openat_2(int dirfd, const char *path, int oflags)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_openat_2 == NULL) {
 		real_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
@@ -2163,10 +2194,10 @@ int
 mkdir(const char *path, mode_t mode)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_mkdir == NULL) {
 		real_mkdir = dlsym(RTLD_NEXT, "mkdir");
@@ -2192,7 +2223,7 @@ int
 mkdirat(int dirfd, const char *path, mode_t mode)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_mkdirat == NULL) {
 		real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
@@ -2215,10 +2246,10 @@ int
 rmdir(const char *path)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_rmdir == NULL) {
 		real_rmdir = dlsym(RTLD_NEXT, "rmdir");
@@ -2244,10 +2275,10 @@ int
 symlink(const char *symvalue, const char *path)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent, *obj;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_symlink == NULL) {
 		real_symlink = dlsym(RTLD_NEXT, "symlink");
@@ -2279,7 +2310,7 @@ int
 symlinkat(const char *symvalue, int dirfd, const char *path)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_symlinkat == NULL) {
 		real_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
@@ -2302,11 +2333,11 @@ ssize_t
 readlink(const char *path, char *buf, size_t size)
 {
 	int              is_target_path, rc, rc2, errno_save;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent, *obj;
 	struct DFSMOUNT *dfs_mt;
 	daos_size_t      str_len = size;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_readlink == NULL) {
 		real_readlink = dlsym(RTLD_NEXT, "readlink");
@@ -2343,7 +2374,7 @@ ssize_t
 readlinkat(int dirfd, const char *path, char *buf, size_t size)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_readlinkat == NULL) {
 		real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
@@ -2417,15 +2448,12 @@ int
 rename(const char *old_name, const char *new_name)
 {
 	int              is_target_path1, is_target_path2, rc = -1, rc2;
-	char             item_name_old[MAX_FILE_NAME_LEN], item_name_new[MAX_FILE_NAME_LEN];
-	char             parent_dir_old[MAX_FILE_NAME_LEN], parent_dir_new[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent_old, *parent_new;
 	dfs_obj_t       *obj_old, *obj_new;
 	struct DFSMOUNT *dfs_mt1, *dfs_mt2;
 	struct stat      stat_old, stat_new;
 	mode_t           mode_old, mode_new;
 	int              type_old, type_new;
-	char             symlink_value[MAX_FILE_NAME_LEN];
 	unsigned char   *buff = NULL;
 	d_sg_list_t      sgl_data;
 	d_iov_t          iov_buf;
@@ -2433,6 +2461,9 @@ rename(const char *old_name, const char *new_name)
 	daos_size_t      link_len;
 	int              fd, errno_save;
 	FILE            *fIn = NULL;
+	char             item_name_old[MAX_ITEM_LENGTH], item_name_new[MAX_ITEM_LENGTH];
+	char             parent_dir_old[DFS_MAX_PATH], parent_dir_new[DFS_MAX_PATH];
+	char             symlink_value[DFS_MAX_PATH];
 
 	if (real_rename == NULL) {
 		real_rename = dlsym(RTLD_NEXT, "rename");
@@ -2522,8 +2553,8 @@ rename(const char *old_name, const char *new_name)
 		switch (type_old) {
 		case S_IFLNK:
 			rc = dfs_get_symlink_value(obj_old, symlink_value, &link_len);
-			if (link_len >= MAX_FILE_NAME_LEN) {
-				printf("MAX_FILE_NAME_LEN is not long enough. link_len = %" PRIu64
+			if (link_len >= DFS_MAX_PATH) {
+				printf("DFS_MAX_PATH is not long enough. link_len = %" PRIu64
 				       "\nQuit.\n",
 				       link_len);
 				exit(1);
@@ -2660,9 +2691,9 @@ rename(const char *old_name, const char *new_name)
 		/* New_name was removed, now create a new one from the old one */
 		switch (type_old) {
 		case S_IFLNK:
-			link_len = readlink(old_name, symlink_value, MAX_FILE_NAME_LEN - 1);
-			if (link_len >= MAX_FILE_NAME_LEN) {
-				printf("MAX_FILE_NAME_LEN is not long enough. "
+			link_len = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
+			if (link_len >= DFS_MAX_PATH) {
+				printf("DFS_MAX_PATH is not long enough. "
 				       "link_len = %" PRIu64 "\nQuit.\n",
 				       link_len);
 				exit(1);
@@ -2827,12 +2858,12 @@ __isatty(int fd) __attribute__((alias("isatty"), leaf, nothrow));
 int
 access(const char *path, int mode)
 {
-	char             full_path[MAX_FILE_NAME_LEN];
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             full_path[DFS_MAX_PATH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_access == NULL) {
 		real_access = dlsym(RTLD_NEXT, "access");
@@ -2859,7 +2890,7 @@ int
 faccessat(int dirfd, const char *path, int mode, int flags)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_faccessat == NULL) {
 		real_faccessat = dlsym(RTLD_NEXT, "faccessat");
@@ -2883,12 +2914,12 @@ int
 chdir(const char *path)
 {
 	int              is_target_path, rc, len_str;
-	char             full_path[MAX_FILE_NAME_LEN];
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	struct stat      stat_buf;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             full_path[DFS_MAX_PATH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_chdir == NULL) {
 		real_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -2918,8 +2949,8 @@ chdir(const char *path)
 		errno = ENOTDIR;
 		return (-1);
 	}
-	len_str = snprintf(cur_dir, MAX_FILE_NAME_LEN, "%s%s", dfs_mt->fs_root, full_path);
-	if (len_str >= MAX_FILE_NAME_LEN) {
+	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
+	if (len_str >= DFS_MAX_PATH) {
 		printf("Error: path is too long.\nchdir(%s%s)\nQuit\n", dfs_mt->fs_root, full_path);
 		exit(1);
 	}
@@ -2947,10 +2978,10 @@ static int
 new_unlink(const char *path)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (!hook_enabled)
 		return real_unlink(path);
@@ -2972,7 +3003,7 @@ int
 unlinkat(int dirfd, const char *path, int flags)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_unlinkat == NULL) {
 		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
@@ -3046,11 +3077,11 @@ int
 truncate(const char *path, off_t length)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent, *file_obj;
 	mode_t           mode;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
 
 	if (real_truncate == NULL) {
 		real_truncate = dlsym(RTLD_NEXT, "truncate");
@@ -3087,11 +3118,11 @@ int
 chmod(const char *path, mode_t mode)
 {
 	int              rc, is_target_path;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (real_chmod == NULL) {
 		real_chmod = dlsym(RTLD_NEXT, "chmod");
@@ -3149,7 +3180,7 @@ int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_fchmodat == NULL) {
 		real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
@@ -3173,14 +3204,13 @@ int
 utime(const char *path, const struct utimbuf *times)
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *file_obj, *parent;
 	struct stat      stbuf;
-	/*	mode_t mode_query; */
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (real_utime == NULL) {
 		real_utime = dlsym(RTLD_NEXT, "utime");
@@ -3233,14 +3263,13 @@ int
 utimes(const char *path, const struct timeval times[2])
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *file_obj, *parent;
 	struct stat      stbuf;
-	/*	mode_t mode_query; */
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	if (real_utimes == NULL) {
 		real_utimes = dlsym(RTLD_NEXT, "utimes");
@@ -3293,14 +3322,14 @@ static int
 utimens_timespec(const char *path, const struct timespec times[2])
 {
 	int              is_target_path, rc;
-	char             item_name[MAX_FILE_NAME_LEN];
-	char             parent_dir[MAX_FILE_NAME_LEN];
-	char             full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t       *file_obj, *parent;
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct timeval   times_us[2];
 	struct DFSMOUNT *dfs_mt;
+	char             item_name[MAX_ITEM_LENGTH];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path) {
@@ -3361,7 +3390,7 @@ int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
 	int  idx_dfs;
-	char full_path[MAX_FILE_NAME_LEN];
+	char full_path[DFS_MAX_PATH];
 
 	if (real_utimensat == NULL) {
 		real_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -3484,12 +3513,6 @@ new_fcntl(int fd, int cmd, ...)
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_save >= FD_DIR_BASE) {
-				if (fd_save == DUMMY_FD_DIR) {
-					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in "
-					       "fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
-					return (-1);
-				}
-
 				Next_Dirfd = find_next_available_dirfd();
 				memcpy(&dir_list[Next_Dirfd], &dir_list[fd_Directed],
 				       sizeof(struct DIRSTATUS));

@@ -68,6 +68,9 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv.AppendUnique(CFLAGS='-Wno-error=nonnull-compare')
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
+    if '-Wframe-larger-than=4096' in pil4dfsenv['CCFLAGS']:
+        pil4dfsenv['CCFLAGS'].remove('-Wframe-larger-than=4096')
+        pil4dfsenv.AppendUnique(CCFLAGS=['-Wframe-larger-than=16384'])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
