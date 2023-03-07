@@ -18,7 +18,7 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos_types.h>
-#include <vos_obj.h>
+#include "vos_obj.h"
 #include <daos/checksum.h>
 
 #include "vos_internal.h"
