@@ -256,8 +256,8 @@ class DFS(CommonBase):
         akey = AKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.META,
-            value_type=ValType.SINGLE)
-        value = VosValue(count=3, size=64)
+            value_type=ValType.ARRAY)
+        value = VosValue(count=1, size=192)
         akey.add_value(value)
         dkey = DKey(
             key_type=KeyType.INTEGER,
