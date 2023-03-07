@@ -419,9 +419,6 @@ class ProcessBase(Common):
         chunk_size = self._parse_num_value('chunk_size', '1MiB')
         self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
 
-        if io_size % scm_cutoff:
-            raise ValueError('io_size must be multiple of scm_cutoff')
-
         self._debug('using io_size of {0} bytes'.format(io_size))
 
         if chunk_size % io_size:
