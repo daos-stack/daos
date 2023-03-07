@@ -130,7 +130,7 @@ struct crt_gdata {
 	/** Number of remote tags */
 	uint32_t		cg_num_remote_tags;
 
-	/* protects crt_gdata */
+	/* protects crt_gdata (see the lock order comment on crp_mutex) */
 	pthread_rwlock_t	cg_rwlock;
 
 	/** Global statistics (when cg_use_sensors = true) */
@@ -207,7 +207,10 @@ struct crt_context {
 	struct d_hash_table	 cc_epi_table;
 	/** binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/** mutex to protect cc_epi_table and timeout binheap */
+	/**
+	 * mutex to protect cc_epi_table and timeout binheap (see the lock
+	 * order comment on crp_mutex)
+	 */
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
@@ -247,7 +250,10 @@ struct crt_ep_inflight {
 	unsigned int		 epi_ref;
 	unsigned int		 epi_initialized:1;
 
-	/* mutex to protect ei_req_q and some counters */
+	/*
+	 * mutex to protect ei_req_q and some counters (see the lock order
+	 * comment on crp_mutex)
+	 */
 	pthread_mutex_t		 epi_mutex;
 };
 

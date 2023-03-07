@@ -1617,7 +1617,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			),
 			expNumaSet: []int{2, 1},
 		},
-		"multi engine with first_core set; detected affinities take precedence": {
+		"multi engine with first_core set; detected affinities overridden": {
 			cfg: baseSrvCfg().WithEngines(
 				engine.MockConfig().
 					WithServiceThreadCore(1).
@@ -1629,7 +1629,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					WithFabricProvider("ofi+verbs"),
 			),
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
-			expFabNumas: []int{1, 2},
+			expFabNumas: []int{0, 0},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
