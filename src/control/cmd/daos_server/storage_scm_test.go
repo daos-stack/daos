@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,29 +25,24 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func TestDaosServer_setSockFromCfg(t *testing.T) {
-	var (
-		zero uint = 0
-		one  uint = 1
-	)
+var (
+	zero uint = 0
+	one  uint = 1
+)
 
+func TestDaosServer_setSockFromCfg(t *testing.T) {
 	mockAffinitySource := func(l logging.Logger, e *engine.Config) (uint, error) {
 		l.Debugf("mock affinity source: assigning engine numa to its index %d", e.Index)
 		return uint(e.Index), nil
 	}
 
 	for name, tc := range map[string]struct {
-		cmdSockID *uint
 		cfg       *config.Server
 		affSrc    config.EngineAffinityFn
 		expSockID *uint
 		expErr    error
 	}{
 		"nil config": {},
-		"sock specified in command": {
-			cmdSockID: &one,
-			expSockID: &one,
-		},
 		"sock derived from config": {
 			cfg: new(config.Server).WithEngines(
 				engine.NewConfig().
@@ -111,23 +106,15 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 				tc.cfg = &config.Server{}
 			}
 
-			req := &storage.ScmPrepareRequest{
-				SocketID: tc.cmdSockID,
-			}
-
 			affSrc := tc.affSrc
 			if affSrc == nil {
 				affSrc = mockAffinitySource
 			}
 
-			err := setSockFromCfg(log, tc.cfg, affSrc, req)
-			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
+			sockID := getSockFromCfg(log, tc.cfg, affSrc)
 
-			if diff := cmp.Diff(tc.expSockID, req.SocketID); diff != "" {
-				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expSockID, sockID); diff != "" {
+				t.Fatalf("unexpected socket ID (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -143,6 +130,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		noForce   bool
 		zeroNrNs  bool
+		sockID    *uint
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expCalls  []storage.ScmPrepareRequest
@@ -181,6 +169,19 @@ func TestDaosServer_preparePMem(t *testing.T) {
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
+			},
+			expLogMsg: storage.ScmMsgRebootRequired,
+		},
+		"create regions; reboot required; single socket": {
+			sockID: &one,
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
+				RebootRequired: true,
+			},
+			expCalls: []storage.ScmPrepareRequest{
+				{NrNamespacesPerSocket: 1, SocketID: &one},
 			},
 			expLogMsg: storage.ScmMsgRebootRequired,
 		},
@@ -239,11 +240,13 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := prepareSCMCmd{
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
 				Force: !tc.noForce,
 			}
+			cmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+			cmd.SocketID = tc.sockID
+
 			nrNs := uint(1)
 			if tc.zeroNrNs {
 				nrNs = 0
@@ -294,6 +297,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		noForce   bool
+		sockID    *uint
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expErr    error
@@ -330,6 +334,19 @@ func TestDaosServer_resetPMem(t *testing.T) {
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
+			},
+			expLogMsg: "regions will be removed",
+		},
+		"remove regions; reboot required; free capacity; single socket": {
+			sockID: &one,
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
+				RebootRequired: true,
+			},
+			expCalls: []storage.ScmPrepareRequest{
+				{Reset: true, SocketID: &one},
 			},
 			expLogMsg: "regions will be removed",
 		},
@@ -424,11 +441,12 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := resetSCMCmd{
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
 				Force: !tc.noForce,
 			}
+			cmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+			cmd.SocketID = tc.sockID
 
 			err := cmd.resetPMem(scs.ScmPrepare)
 			test.CmpErr(t, tc.expErr, err)
@@ -463,4 +481,134 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDaosServer_scanSCM(t *testing.T) {
+	zero := uint(0)
+
+	for name, tc := range map[string]struct {
+		sockID             *uint
+		cfg                *config.Server
+		ignoreCfg          bool
+		smbc               *scm.MockBackendConfig
+		expErr             error
+		expResp            *storage.ScmScanResponse
+		expModulesCalls    []int
+		expNamespacesCalls []int
+	}{
+		"normal scan": {
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+			expNamespacesCalls: []int{-1},
+			expModulesCalls:    []int{-1},
+			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{storage.MockScmModule(0)},
+				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+		},
+		"failed scan": {
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesErr: errors.New("fail"),
+			},
+			expNamespacesCalls: []int{-1},
+			expModulesCalls:    []int{-1},
+			expErr:             errors.New("fail"),
+		},
+		"single socket scan": {
+			sockID: &zero,
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+			expNamespacesCalls: []int{0},
+			expModulesCalls:    []int{0},
+			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{storage.MockScmModule(0)},
+				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mbp := bdev.NewProvider(log, nil)
+			msb := scm.NewMockBackend(tc.smbc)
+			msp := scm.NewProvider(log, msb, nil, nil)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+
+			cmd := scanSCMCmd{}
+			cmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+			cmd.SocketID = tc.sockID
+			cmd.config = tc.cfg
+			cmd.IgnoreConfig = tc.ignoreCfg
+
+			resp, err := cmd.scanPMem(scs.ScmScan)
+			test.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected scan response calls (-want, +got):\n%s\n", diff)
+			}
+
+			msb.RLock()
+			if diff := cmp.Diff(tc.expModulesCalls, msb.GetModulesCalls); diff != "" {
+				t.Fatalf("unexpected get modules calls (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expNamespacesCalls, msb.GetNamespacesCalls); diff != "" {
+				t.Fatalf("unexpected get namespaces calls (-want, +got):\n%s\n", diff)
+			}
+			msb.RUnlock()
+		})
+	}
+}
+
+func TestDaosServer_SCM_Commands(t *testing.T) {
+	runCmdTests(t, []cmdTest{
+		{
+			"Prepare namespaces with all opts",
+			"scm prepare -S 2 -f --socket 0",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+			}),
+			nil,
+		},
+		{
+			"Prepare namespaces; bad opt",
+			"scm prepare -X",
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Reset namespaces with all opts",
+			"scm reset -f --socket 1",
+			printCommand(t, &resetSCMCmd{
+				Force: true,
+			}),
+			nil,
+		},
+		{
+			"Reset namespaces; bad opt",
+			"scm reset -S",
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Scan namespaces",
+			"scm scan",
+			printCommand(t, &scanSCMCmd{}),
+			nil,
+		},
+		{
+			"Scan namespaces; socket 1",
+			"scm scan --socket 1",
+			printCommand(t, &scanSCMCmd{}),
+			nil,
+		},
+	})
 }
