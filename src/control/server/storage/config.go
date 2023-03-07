@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -286,18 +286,15 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	tid := 0
-	tmp2 := make([]*TierConfig, 0, len(tmp))
-	for i := range tmp {
-		if tmp[i] == nil {
+	for i, tier := range tmp {
+		if tier == nil {
+			tmp = append(tmp[:i], tmp[i+1:]...)
 			continue
 		}
-		if tmp[i].Tier == 0 {
-			tmp[i].Tier = tid
-		}
-		tmp2 = append(tmp2, tmp[i])
+		tier.Tier = tid
 		tid++
 	}
-	*tcs = tmp2
+	*tcs = tmp
 
 	return nil
 }
