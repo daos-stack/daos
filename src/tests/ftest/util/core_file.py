@@ -9,6 +9,7 @@ from fnmatch import fnmatch
 import os
 import re
 from run_utils import run_local, run_remote, find_command, RunException
+from host_utils import get_local_host
 
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
@@ -35,12 +36,15 @@ class CoreFileProcessing():
 
         self.log = log
         self.distro_info = detect()
+        host = get_local_host()
+        self.local_core_path = self.get_core_file_pattern(host)[str(host)]['path']
 
     def get_core_file_pattern(self, all_hosts, since=0):
         """Get the core file pattern information from the hosts if collecting core files.
 
         Args:
             all_hosts (NodeSet): hosts used in testing
+            since (integer): epoch timestamp from which core files are processed
 
         Raises:
             CoreFileException: if there was an error obtaining the core file pattern information
@@ -76,7 +80,7 @@ class CoreFileProcessing():
 
         return core_files
 
-    def process_core_files(self, directory, delete, core_path=None, test=None):
+    def process_core_files(self, directory, delete, test=None):
         """Process any core files found in the 'stacktrace*' sub-directories of the specified path.
 
         Generate a stacktrace for each detected core file and then remove the core file.
@@ -158,9 +162,8 @@ class CoreFileProcessing():
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
                         os.remove(core_file)
-        if core_path:
-            # remove any core file generated post core processing on the local node
-            errors += self.delete_gdb_core_files(core_path)
+        # remove any core file generated post core processing on the local node
+        errors += self.delete_gdb_core_files(self.local_core_path)
         if errors:
             raise CoreFileException("Errors detected processing core files")
         return corefiles_processed

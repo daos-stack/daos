@@ -6,7 +6,7 @@ set -eu
 
 core_pattern=$(cat /proc/sys/kernel/core_pattern)
 
-# CI defined/overidden core path:
+# CI defined/overridden core path:
 if [ "$core_pattern" = "/var/tmp/core.%e.%t.%p" ]; then
     echo "$core_pattern"
     exit 0

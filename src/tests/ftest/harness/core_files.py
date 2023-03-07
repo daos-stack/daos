@@ -10,8 +10,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
 from run_utils import run_remote
-from host_utils import get_local_host
-from core_file import CoreFileProcessing
+from core_file import CoreFileProcessing, CoreFileException
 
 
 class HarnessCoreFilesTest(TestWithServers):
@@ -42,11 +41,13 @@ class HarnessCoreFilesTest(TestWithServers):
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
-        host = get_local_host()
-        result = CoreFileProcessing(self.log).get_core_file_pattern(host)
-
-        core_file = "{}/core.gdb.harness.advanced".format((result[str(host)])['path'])
+        try:
+            core_file = "{}/core.gdb.harness.advanced".format(
+                CoreFileProcessing(self.log).local_core_path)
+        except (CoreFileException, KeyError) as error:
+            self.fail("Error obtaining the path for the generated core file: {}".format(error))
         self.log.debug("Creating %s", core_file)
+
         try:
             with open(core_file, "w", encoding="utf-8") as local_core_file:
                 local_core_file.write("THIS IS JUST A TEST\n")
