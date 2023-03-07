@@ -163,7 +163,9 @@ func (mb *MockBackend) prep(req storage.ScmPrepareRequest, _ *storage.ScmScanRes
 	if mb.cfg.PrepErr != nil {
 		return nil, mb.cfg.PrepErr
 	} else if mb.cfg.PrepRes == nil {
-		return &storage.ScmPrepareResponse{}, nil
+		return &storage.ScmPrepareResponse{
+			Socket: &storage.ScmSocketState{},
+		}, nil
 	}
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
@@ -176,7 +178,9 @@ func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmSc
 	if mb.cfg.PrepResetErr != nil {
 		return nil, mb.cfg.PrepResetErr
 	} else if mb.cfg.PrepResetRes == nil {
-		return &storage.ScmPrepareResponse{}, nil
+		return &storage.ScmPrepareResponse{
+			Socket: &storage.ScmSocketState{},
+		}, nil
 	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }

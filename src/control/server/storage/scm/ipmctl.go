@@ -86,14 +86,22 @@ func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
 	return modules, nil
 }
 
-func checkStateHasSock(sockState storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
+func checkStateHasSock(sockState *storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
+	if sockState == nil {
+		return errors.New("nil sockState arg")
+	}
 	if sockState.SocketID == nil {
 		return errors.Errorf("expecting socket id with %s state", sockState.State)
 	}
+
 	return faultFunc(*sockState.SocketID)
 }
 
-func checkStateForErrors(sockState storage.ScmSocketState) error {
+func checkStateForErrors(sockState *storage.ScmSocketState) error {
+	if sockState == nil {
+		return errors.New("nil sockState arg")
+	}
+
 	switch sockState.State {
 	case storage.ScmNotInterleaved:
 		// Non-interleaved AppDirect memory mode is unsupported.
@@ -172,7 +180,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: namespaces,
-		Socket: storage.ScmSocketState{
+		Socket: &storage.ScmSocketState{
 			State:    state,
 			SocketID: req.SocketID,
 		},
@@ -197,7 +205,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 			return nil, errors.Wrap(err, "handleFreeCapacity")
 		}
 		resp.Namespaces = nss
-		resp.Socket = *sockState
+		resp.Socket = sockState
 	case storage.ScmNoFreeCap:
 		// Regions and namespaces exist so no changes to response necessary.
 		cr.log.Info("PMem namespaces already exist.")
@@ -301,7 +309,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		cr.log.Info("Skip SCM prep, no PMem modules.")
 		return &storage.ScmPrepareResponse{
 			Namespaces: storage.ScmNamespaces{},
-			Socket: storage.ScmSocketState{
+			Socket: &storage.ScmSocketState{
 				State: storage.ScmNoModules,
 			},
 		}, nil
@@ -334,7 +342,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 
 	// First identify any socket specific unexpected state that should trigger an immediate
 	// error response.
-	if err := checkStateForErrors(*sockState); err != nil {
+	if err := checkStateForErrors(sockState); err != nil {
 		return nil, errors.Wrap(err, "checkStateForErrors after getPMemState")
 	}
 
@@ -363,7 +371,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	}
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: storage.ScmNamespaces{},
-		Socket:     storage.ScmSocketState{},
+		Socket:     &storage.ScmSocketState{},
 	}
 	if len(scanRes.Modules) == 0 {
 		cr.log.Info("Skip SCM prep as there are no PMem modules.")
@@ -386,12 +394,9 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if err != nil {
 		return nil, errors.Wrap(err, "getPMemState")
 	}
-	resp.Socket = *sockState
-	if resp.Socket.SocketID == nil {
-		resp.Socket.SocketID = req.SocketID
-	}
+	resp.Socket = sockState
 
-	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
+	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, resp.Socket)
 
 	if err := cr.deleteGoals(sockAny); err != nil {
 		return nil, err
