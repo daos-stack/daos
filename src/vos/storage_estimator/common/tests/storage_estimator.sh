@@ -114,12 +114,16 @@ daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX \
 --checksum crc32
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX \
+--checksum crc32 --io_size=128KiB
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX \
 --checksum crc32
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32 -A
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32 -A  --io_size=128KiB
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32 -A --ec_cell_size=128KiB --chunk_size=2MiB
 

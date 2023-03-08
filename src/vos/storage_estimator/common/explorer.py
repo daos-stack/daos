@@ -170,7 +170,7 @@ class DFS(CommonBase):
         super().__init__()
         self._objects = []
         self._chunk_size = 1048576
-        self._io_size = 131072
+        self._io_size = 1048576
         self._ec_cell_size = 65536
         self._assume_aggregation = False
         self._all_ec_stats = CellStats()

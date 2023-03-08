@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -188,7 +188,7 @@ explore.add_argument(
     '--io_size',
     type=str,
     help='I/O size.',
-    default='128KiB')
+    default='1MiB')
 explore.add_argument(
     '-c',
     '--chunk_size',

@@ -150,7 +150,7 @@ class ObjectClass(CommonBase):
             if min(chunk_size, io_size) % ec_cell_size:
                 raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
             if self.get_dir_stripe() * ec_cell_size > chunk_size:
-                raise ValueError("chunk_size should be >= ec stripe size")
+                raise ValueError("chunk_size should be >= EC stripe size")
 
         if self.get_file_parity():
             if chunk_size % self.get_file_stripe():
@@ -432,7 +432,7 @@ class ProcessBase(Common):
 
     def _process_block_values(self):
         scm_cutoff = self._process_scm_cutoff()
-        io_size = self._parse_num_value('io_size', '128KiB')
+        io_size = self._parse_num_value('io_size', '1MiB')
         chunk_size = self._parse_num_value('chunk_size', '1MiB')
         ec_cell_size = self._parse_num_value('ec_cell_size', '64KiB')
         self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
