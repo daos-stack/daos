@@ -722,6 +722,7 @@ class PreReqComponent():
             extra_lib_path -- Subdirectories to add to dependent component path
             extra_include_path -- Subdirectories to add to dependent component path
             out_of_src_build -- Build from a different directory if set to True
+            build_env -- Environment variables to set for build
         """
         use_installed = False
         if 'all' in self.installed or name in self.installed:
@@ -953,6 +954,7 @@ class _Component():
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
         patch_rpath -- Add appropriate relative rpaths to binaries
+        build_env -- Environment variable(s) to add to build environment
     """
 
     def __init__(self,
@@ -996,6 +998,7 @@ class _Component():
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
+        self.build_env = kw.get("build_env", {})
 
     def _resolve_patches(self):
         """Parse the patches variable"""
@@ -1261,6 +1264,10 @@ class _Component():
         for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 
+    def _set_build_env(self, env):
+        """Add any environment variables to build environment"""
+        env["ENV"].update(self.build_env)
+
     def _check_installed_package(self, env):
         """Check installed targets"""
         if self.has_missing_targets(env):
@@ -1397,6 +1404,7 @@ class _Component():
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
+            self._set_build_env(envcopy)
             if not RUNNER.run_commands(self.build_commands, subdir=self.build_path, env=envcopy):
                 raise BuildFailure(self.name)
 
