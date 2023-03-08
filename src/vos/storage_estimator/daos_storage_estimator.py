@@ -58,6 +58,8 @@ class ProcessFS(ProcessBase):
         fse.set_verbose(args.verbose)
         fse.set_io_size(self.get_io_size())
         fse.set_chunk_size(self.get_chunk_size())
+        fse.set_ec_cell_size(self.get_ec_cell_size())
+        fse.set_assume_aggregation(args.assume_aggregation)
         fse.set_dfs_inode(inode_akey)
         fse.explore()
         fse.print_stats()
@@ -191,8 +193,20 @@ explore.add_argument(
     '-c',
     '--chunk_size',
     type=str,
-    help='Array chunk size/stripe size for regular files. Must be multiple of I/O size',
+    help='Array chunk size/stripe size for regular files.',
     default='1MiB')
+explore.add_argument(
+    '-e',
+    '--ec_cell_size',
+    type=str,
+    help='EC cell size',
+    default='64KiB')
+explore.add_argument(
+    '-A',
+    '--assume_aggregation',
+    action='store_true',
+    help='Assume aggregation',
+    default=False)
 explore.add_argument(
     '-s',
     '--scm_cutoff',
@@ -296,6 +310,18 @@ csv_file.add_argument(
     type=str,
     help='Array chunk size/stripe size for regular files. Must be multiple of I/O size',
     default='1MiB')
+csv_file.add_argument(
+    '-e',
+    '--ec_cell_size',
+    type=str,
+    help='EC cell size',
+    default='64KiB')
+csv_file.add_argument(
+    '-A',
+    '--assume_aggregation',
+    action='store_true',
+    help='Assume aggregation',
+    default=False)
 csv_file.add_argument(
     '-s',
     '--scm_cutoff',
