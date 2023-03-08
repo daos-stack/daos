@@ -158,7 +158,7 @@ def define_mercury(reqs):
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'],
-                build_env={'CFLAGS':"-fstack-usage"})
+                build_env={'CFLAGS': "-fstack-usage"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -286,7 +286,6 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n',
-                           #'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'],
