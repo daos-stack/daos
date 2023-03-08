@@ -17,7 +17,7 @@ import sys
 from ClusterShell.NodeSet import NodeSet
 
 from util.logger_utils import get_console_handler
-from util.run_utils import get_clush_command_list, run_remote
+from util.run_utils import get_clush_command, run_remote
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -215,9 +215,9 @@ def start_munge(args):
         return 1
 
     # copy munge.key to all hosts
-    command = get_clush_command_list(nodes)
-    command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
-    if execute_cluster_cmds(args.control, [" ".join(command)]) > 0:
+    command = get_clush_command(
+        nodes, args="--copy /etc/munge/munge.key --dest /etc/munge/munge.key")
+    if execute_cluster_cmds(args.control, [command]) > 0:
         return 1
 
     # set the protection back to defaults
