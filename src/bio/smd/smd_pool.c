@@ -303,6 +303,29 @@ smd_rdb_get_blob(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st, uint64_t
 	return pool_get_blob(pool_id, tgt_id, TABLE_RDBS[st], blob_id);
 }
 
+int
+smd_rdb_get_blob_sz(uuid_t pool_id, uint64_t *blob_sz)
+{
+	struct smd_pool	pool;
+	struct d_uuid	id;
+	int		rc = 0;
+
+	uuid_copy(id.uuid, pool_id);
+
+	smd_db_lock();
+	rc = smd_db_fetch(TABLE_RDBS[SMD_DEV_TYPE_META], &id, sizeof(id), &pool, sizeof(pool));
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch pool "DF_UUID" failed. "DF_RC"\n",
+			 DP_UUID(&id.uuid), DP_RC(rc));
+		goto out;
+	}
+	*blob_sz = pool.sp_blob_sz;
+out:
+	smd_db_unlock();
+	return rc;
+}
+
 static int
 smd_pool_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 {

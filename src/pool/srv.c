@@ -11,9 +11,13 @@
  */
 #define D_LOGFAC	DD_FAC(pool)
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -73,10 +77,106 @@ fini(void)
 }
 
 static int
+recreate_pool_layout()
+{
+	struct smd_pool_info    *pool_info = NULL, *tmp;
+	d_list_t                 pool_list;
+	char                     uuid_str[DAOS_UUID_STR_SIZE];
+	int			 rc = 0, pool_list_cnt, i, fd;
+	char			*path = NULL, *pool_dir = NULL;
+	uint64_t		 blob_sz;
+
+	D_INIT_LIST_HEAD(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Failed to get pool info list from SMD\n");
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		uuid_unparse_lower(pool_info->spi_id, uuid_str);
+		D_INFO("Recreating the layout for pool %s", uuid_str);
+		D_ASPRINTF(pool_dir, "%s/%s", dss_storage_path, uuid_str);
+		if (pool_dir == NULL) {
+			D_ERROR("Unable to create pool dir for %s", uuid_str);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rc = mkdir(pool_dir, S_IRWXU);
+		if (rc < 0 && errno != EEXIST) {
+			D_ERROR("failed to create pool dir %s: %d\n", pool_dir, errno);
+			D_GOTO(out, rc = daos_errno2der(errno));
+		}
+		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META]; i++) {
+			D_ASPRINTF(path, "%s/%s%d", pool_dir, VOS_FILE,
+				   pool_info->spi_tgts[SMD_DEV_TYPE_META][i]);
+			if (path == NULL) {
+				D_ERROR("Unable to create target file layout for %s", uuid_str);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			fd = open(path, O_RDWR|O_CREAT, S_IRWXU);
+			if (fd < 0) {
+				rc = daos_errno2der(errno);
+				D_ERROR("failed to create/open the vos file %s:"DF_RC"\n",
+					path, DP_RC(rc));
+				goto out;
+			}
+			rc = ftruncate(fd, pool_info->spi_blob_sz[SMD_DEV_TYPE_META]);
+			if (fd < 0) {
+				rc = daos_errno2der(errno);
+				D_ERROR("ftruncate on vos file %s failed:"DF_RC"\n",
+					path, DP_RC(rc));
+				goto out;
+			}
+			D_FREE(path);
+		}
+		path = pool_svc_rdb_path(pool_info->spi_id);
+		if (path == NULL) {
+			D_ERROR("Cannot retrieve rdb file info associated with pool %s",
+				uuid_str);
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		rc = smd_rdb_get_blob_sz(pool_info->spi_id, &blob_sz);
+		if (rc) {
+			D_ERROR("Failed to extract the size of rdb file for pool %s", uuid_str);
+			goto out;
+		}
+		fd = open(path, O_RDWR|O_CREAT, S_IRWXU);
+		if (fd < 0) {
+			rc = daos_errno2der(errno);
+			D_ERROR("failed to create/open the vos file %s:"DF_RC"\n", path, DP_RC(rc));
+			goto out;
+		}
+		rc = ftruncate(fd, blob_sz);
+		if (fd < 0) {
+			rc = daos_errno2der(errno);
+			D_ERROR("ftruncate on vos file %s failed:"DF_RC"\n", path, DP_RC(rc));
+			goto out;
+		}
+		D_FREE(path);
+		d_list_del(&pool_info->spi_link);
+		/* Frees spi_tgts, spi_blobs, and pool_info */
+		smd_pool_free_info(pool_info);
+		D_FREE(pool_dir);
+	}
+out:
+	D_FREE(path);
+	D_FREE(pool_dir);
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_del(&pool_info->spi_link);
+		/* Frees spi_tgts, spi_blobs, and pool_info */
+		smd_pool_free_info(pool_info);
+	}
+	return rc;
+}
+
+static int
 setup(void)
 {
 	bool start = true;
 
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		recreate_pool_layout();
 	d_getenv_bool("DAOS_START_POOL_SVC", &start);
 	if (start)
 		return ds_pool_start_all();

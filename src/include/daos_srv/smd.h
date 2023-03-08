@@ -201,6 +201,16 @@ int smd_rdb_get_blob(uuid_t pool_id, uint32_t tgt_id,
 		     enum smd_dev_type smd_type, uint64_t *blob_id);
 
 /**
+ * Get size of the blob corresponding to rdb-pool file
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [OUT]	blob_sz		Size of the blob
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_rdb_get_blob_sz(uuid_t pool_id, uint64_t *blob_sz);
+
+/**
  * Get pool info, caller is responsible to free list items
  *
  * \param [OUT]	pool_list	Pool list

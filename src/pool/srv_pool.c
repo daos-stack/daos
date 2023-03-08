@@ -281,7 +281,7 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 }
 
 /* Return a pool service RDB path. */
-static char *
+char *
 pool_svc_rdb_path(const uuid_t pool_uuid)
 {
 	return pool_svc_rdb_path_common(pool_uuid, "");

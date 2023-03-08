@@ -154,6 +154,7 @@ void ds_pool_filter_cont_handler(crt_rpc_t *rpc);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
+char *pool_svc_rdb_path(const uuid_t pool_uuid);
 
 /*
  * srv_target.c
