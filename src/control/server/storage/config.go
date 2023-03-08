@@ -145,7 +145,7 @@ func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	return tc
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	tc.Scm.RamdiskSize = size
@@ -749,13 +749,21 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// SpdkRpcServer struct describes settings for an optional SPDK JSON-RPC server instance that can
+// run in the engine process.
+type SpdkRpcServer struct {
+	Enable   bool   `yaml:"enable,omitempty" json:"enable"`
+	SockAddr string `yaml:"sock_addr,omitempty" json:"sock_addr"`
+}
+
 type Config struct {
-	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool        `yaml:"-"`
-	NumaNodeIndex    uint        `yaml:"-"`
-	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool          `yaml:"-"`
+	NumaNodeIndex    uint          `yaml:"-"`
+	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {

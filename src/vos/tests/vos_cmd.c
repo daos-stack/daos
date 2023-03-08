@@ -394,7 +394,7 @@ punch_key(struct cmd_info *cinfo)
 	d_iov_set(&dkey, &cinfo->key[0], strlen(&cinfo->key[0]));
 
 	/* Write the original value (under) */
-	rc = vos_obj_punch(current_open->kp_coh, oid, crt_hlc_get(), 0, 0, &dkey, 0, NULL, NULL);
+	rc = vos_obj_punch(current_open->kp_coh, oid, d_hlc_get(), 0, 0, &dkey, 0, NULL, NULL);
 
 	D_INFO("Punch %s in pool and container uuid=" DF_UUID ", rc=" DF_RC "\n", cinfo->key,
 	       DP_UUID(current_open->kp_uuid), DP_RC(rc));
@@ -404,7 +404,7 @@ punch_key(struct cmd_info *cinfo)
 static int
 discard(struct cmd_info *cinfo)
 {
-	daos_epoch_range_t epr = {0, crt_hlc_get()};
+	daos_epoch_range_t epr = {0, d_hlc_get()};
 	int                rc;
 
 	rc = vos_discard(current_open->kp_coh, NULL, &epr, NULL, NULL);
@@ -486,7 +486,7 @@ iterate(struct cmd_info *cinfo)
 	param.ip_hdl = current_open->kp_coh;
 	set_oid(&param.ip_oid);
 	param.ip_epr.epr_lo = 0;
-	param.ip_epr.epr_hi = crt_hlc_get();
+	param.ip_epr.epr_hi = d_hlc_get();
 	param.ip_flags      = VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, &count, NULL);
@@ -546,7 +546,7 @@ write_key(struct cmd_info *cinfo)
 			epr.epr_lo = 0;
 		else
 			epr.epr_lo = newest_write;
-		epr.epr_hi = crt_hlc_get();
+		epr.epr_hi = d_hlc_get();
 
 		D_INFO("begin %s " DF_U64 " bytes from " DF_U64 " in %s at " DF_X64
 		       " in pool and container uuid=" DF_UUID "\n",
@@ -588,7 +588,7 @@ static int in_agg;
 int
 aggregate(struct cmd_info *cinfo)
 {
-	daos_epoch_range_t epr      = {0, crt_hlc_get()};
+	daos_epoch_range_t epr      = {0, d_hlc_get()};
 	int                rc;
 
 	if (in_agg)
@@ -807,7 +807,7 @@ split_cmd_args(const char *arg0, const char *cmd)
 	char  *dest;
 	char  *src;
 	char   last;
-	char  *saveptr;
+	char  *saveptr = NULL;
 	char **newptr;
 
 	memset(&args, 0, sizeof(args));

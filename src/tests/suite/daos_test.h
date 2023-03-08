@@ -118,10 +118,10 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1,
-				op_ec:1; /* true for EC, false for replica */
+	uint32_t                 op_no_verify : 1, op_ec : 1; /* true for EC, false for replica */
 };
 
+typedef int (*test_rebuild_cb_t)(void *test_arg);
 typedef struct {
 	bool			multi_rank;
 	int			myrank;
@@ -163,19 +163,19 @@ typedef struct {
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
-	int			(*rebuild_pre_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_pre_cb;
 	void			*rebuild_pre_cb_arg;
 
 	/* The callback is called during pool rebuild, used for concurrent IO,
 	 * container destroy etc
 	 */
-	int			(*rebuild_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_cb;
 	void			*rebuild_cb_arg;
 	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
-	int			(*rebuild_post_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_post_cb;
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
@@ -347,7 +347,7 @@ int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
-int run_daos_array_test(int rank, int size);
+int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -395,24 +395,6 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t *
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
-void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank, int tgt);
-void daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_extend_target(const uuid_t pool_uuid, const char *grp,
-			const char *dmg_config,
-			d_rank_t rank, int tgt, daos_size_t nvme_size);
-void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank);
-void daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 

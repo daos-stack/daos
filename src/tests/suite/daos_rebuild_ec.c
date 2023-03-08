@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,6 +40,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	if (svc_nreplicas < 5)
 		return;
 
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -296,6 +297,12 @@ static int
 rebuild_ec_8nodes_setup(void **state)
 {
 	return rebuild_ec_setup(state, 8);
+}
+
+static int
+rebuild_ec_6nodes_setup(void **state)
+{
+	return rebuild_ec_setup(state, 6);
 }
 
 static void
@@ -744,7 +751,11 @@ rebuild_multiple_group_ec_object(void **state)
 	daos_recx_t	recx;
 	d_rank_t	rank = 0;
 	uint32_t	tgt_idx;
+	daos_iod_t	iod;
+	d_iov_t		sg_iov;
+	d_sg_list_t	sgl;
 	int		size = 4 * CELL_SIZE;
+	int		rc;
 
 	if (!test_runable(arg, 8))
 		return;
@@ -755,13 +766,30 @@ rebuild_multiple_group_ec_object(void **state)
 	verify_data = (char *)malloc(size);
 	make_buffer(data, 'a', size);
 	make_buffer(verify_data, 'a', size);
+
+	d_iov_set(&sg_iov, data, size);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
 		recx.rx_nr = size;
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		rc = daos_obj_update(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
 	}
 
 	rank = get_rank_by_oid_shard(arg, oid, 17);
@@ -769,6 +797,8 @@ rebuild_multiple_group_ec_object(void **state)
 	rebuild_single_pool_target(arg, rank, tgt_idx, false);
 
 	for (i = 0; i < 30; i++) {
+		daos_key_t	dkey_iov;
+
 		sprintf(dkey, "d_key_%d", i);
 
 		recx.rx_idx = 0;	/* full stripe */
@@ -776,6 +806,21 @@ rebuild_multiple_group_ec_object(void **state)
 		memset(data, 0, size);
 		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, &req);
+		assert_memory_equal(data, verify_data, size);
+
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+		d_iov_set(&sg_iov, data, size);
+		sgl.sg_nr	= 1;
+		sgl.sg_nr_out	= 0;
+		sgl.sg_iovs	= &sg_iov;
+		d_iov_set(&iod.iod_name, "a_key_single", strlen("a_key_single"));
+		iod.iod_nr	= 1;
+		iod.iod_size	= size;
+		iod.iod_recxs	= NULL;
+		iod.iod_type	= DAOS_IOD_SINGLE;
+
+		rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey_iov, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
 		assert_memory_equal(data, verify_data, size);
 	}
 
@@ -1049,6 +1094,118 @@ rebuild_ec_then_aggregation(void **state)
 	free(verify_data);
 }
 
+static void
+rebuild_ec_multiple_shards(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oids[20];
+	d_rank_t	rank = 2;
+	int		i, j, k;
+	char		*data;
+	uint64_t	stripe_size = 4 * CELL_SIZE;
+	daos_recx_t	recx;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+	for (k = 0; k < 3; k++) {
+		for (i = 0; i < 20; i++) {
+			oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			for (j = 5 * k; j < 5 * (k + 1); j++) {
+				req.iod_type = DAOS_IOD_ARRAY;
+				recx.rx_nr = stripe_size;
+				recx.rx_idx = j * stripe_size;
+				memset(data, 'a', stripe_size);
+				insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					     data, stripe_size, &req);
+			}
+			ioreq_fini(&req);
+		}
+		rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+		rank++;
+	}
+
+	rank = 2;
+	for (i = 0; i < 3; i++) {
+		reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
+		rank++;
+	}
+
+	free(data);
+}
+
+static void
+rebuild_ec_multiple_failure_tgts(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	daos_recx_t	recx;
+	char		dkey[32];
+	char		data[20];
+	char		v_data[20];
+
+	if (!test_runable(arg, 6))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 20; i++) {
+		sprintf(dkey, "d_key_%d", i);
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = 20;
+		recx.rx_idx = 0;
+		memset(data, 'a', 20);
+		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, 20, &req);
+	}
+	ioreq_fini(&req);
+
+	arg->no_rebuild = 1;
+	rebuild_single_pool_target(arg, 3, 3, false);
+	arg->no_rebuild = 0;
+	rank = 7;
+	rebuild_pools_ranks(&arg, 1, &rank, 1, true);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 20; i++) {
+		sprintf(dkey, "d_key_%d", i);
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = 20;
+		recx.rx_idx = 0;
+		memset(data, 0, 20);
+		memset(v_data, 'a', 20);
+		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, 20, &req);
+		assert_memory_equal(data, v_data, 20);
+	}
+	ioreq_fini(&req);
+
+	rank = 7;
+	reintegrate_pools_ranks(&arg, 1, &rank, 1, true);
+	reintegrate_single_pool_target(arg, 3, 3);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 20; i++) {
+		sprintf(dkey, "d_key_%d", i);
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = 20;
+		recx.rx_idx = 0;
+		memset(data, 0, 20);
+		memset(v_data, 'a', 20);
+		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, 20, &req);
+		assert_memory_equal(data, v_data, 20);
+	}
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1174,6 +1331,12 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD43: EC rebuild then aggregation",
 	 rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD44: multiple shards in the same target after rebuild",
+	 rebuild_ec_multiple_shards, rebuild_ec_6nodes_setup,
+	 test_teardown},
+	{"REBUILD45: multiple shards fail tgts",
+	 rebuild_ec_multiple_failure_tgts, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

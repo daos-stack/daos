@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -237,7 +237,7 @@ class DmvrPreserveProps(DataMoverTestBase):
 
         :avocado: tags=all,pr
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5,daos_cmd
         :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
         :avocado: tags=test_dm_preserve_props_fs_copy_posix_dfs
         """

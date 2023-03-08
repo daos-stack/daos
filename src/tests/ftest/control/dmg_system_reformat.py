@@ -1,17 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 from exception_utils import CommandFailure
-from pool_test_base import PoolTestBase
+from test_utils_pool import add_pool, get_size_params
 
 
-class DmgSystemReformatTest(PoolTestBase):
+class DmgSystemReformatTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
 
@@ -20,6 +21,12 @@ class DmgSystemReformatTest(PoolTestBase):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+        super().setUp()
 
     def test_dmg_system_reformat(self):
         """
@@ -33,13 +40,13 @@ class DmgSystemReformatTest(PoolTestBase):
         :avocado: tags=DmgSystemReformatTest,test_dmg_system_reformat
         """
         # Create pool using 90% of the available NVMe capacity
-        self.add_pool_qty(1)
+        pools = [add_pool(self)]
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.add_pool_qty(1, create=False)
+        pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
         try:
-            self.pool[-1].create()
+            pools[-1].create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
             if "-1007" not in self.get_dmg_command().result.stderr_text:
@@ -53,9 +60,9 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stderr_text))
 
         # Remove pools and disable removing pools that about to be removed by formatting
-        for pool in self.pool:
+        for pool in pools:
             pool.skip_cleanup()
-        self.pool = []
+        pools = []
 
         # Perform a dmg system erase to allow the dmg storage format to succeed
         self.log.info("Perform dmg system erase on all system ranks:")
@@ -92,8 +99,9 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.add_pool_qty(quantity=1, connect=False)
+        pools.append(add_pool(self, connect=False))
 
         # Lastly, verify that last created pool is in the list
         pool_uuids = self.get_dmg_command().get_pool_list_uuids()
-        self.assertEqual(pool_uuids[0].lower(), self.pool[-1].uuid.lower())
+        self.assertEqual(
+            pool_uuids[0].lower(), pools[-1].uuid.lower(), "{} missing from list".format(pools[-1]))

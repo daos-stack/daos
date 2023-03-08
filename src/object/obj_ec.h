@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -508,6 +508,19 @@ obj_io_desc_fini(struct obj_io_desc *oiod)
 	D_FREE(oiod->oiod_siods);
 }
 
+static inline struct obj_shard_iod *
+obj_shard_iod_get(struct obj_io_desc *oiod, uint32_t tgt)
+{
+	int i;
+
+	for (i = 0; i < oiod->oiod_nr; i++) {
+		if (oiod->oiod_siods[i].siod_tgt_idx == tgt)
+			return &oiod->oiod_siods[i];
+	}
+
+	return NULL;
+}
+
 /* translate the queried VOS shadow list to daos extents */
 static inline void
 obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
@@ -717,6 +730,37 @@ obj_id2ec_codec(daos_obj_id_t id)
 	return obj_ec_codec_get(daos_obj_id2class(id));
 }
 
+/* check if list_1 is fully covered by list_2 */
+static inline bool
+obj_ec_parity_list_covered(struct daos_recx_ep_list *list_1, struct daos_recx_ep_list *list_2)
+{
+	struct daos_recx_ep	*rep_1;
+	struct daos_recx_ep	*rep_2;
+	unsigned int		 i, j;
+
+	if (list_1->re_nr == 0 || list_2->re_nr == 0)
+		return false;
+
+	for (i = 0; i < list_1->re_nr; i++) {
+		rep_1 = &list_1->re_items[i];
+		for (j = 0; j < list_2->re_nr; j++) {
+			rep_2 = &list_2->re_items[j];
+			if (rep_1->re_rec_size != rep_2->re_rec_size) {
+				D_ERROR("mismatch rec_size %d:%d\n",
+					rep_1->re_rec_size, rep_2->re_rec_size);
+				return false;
+			}
+			if (DAOS_RECX_COVERED(rep_1->re_recx, rep_2->re_recx))
+				break;
+			if (j == list_2->re_nr - 1) {
+				D_ERROR("not fully covered recx list\n");
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static inline int
 obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			  struct daos_recx_ep_list *lists_2,
@@ -728,8 +772,16 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 	for (i = 0; i < nr; i++) {
 		list_1 = &lists_1[i];
 		list_2 = &lists_2[i];
-		if (list_1->re_nr != list_2->re_nr ||
-		    list_1->re_ep_valid != list_2->re_ep_valid) {
+		if (list_1->re_ep_valid != list_2->re_ep_valid) {
+			D_ERROR("got different ep_valid in EC data recovery\n");
+			return -DER_IO;
+		}
+		if (list_1->re_nr != list_2->re_nr) {
+			if (obj_ec_parity_list_covered(list_1, list_2) ||
+			    obj_ec_parity_list_covered(list_2, list_1)) {
+				D_DEBUG(DB_IO, "parity list mismatch but fully covered\n");
+				return -DER_FETCH_AGAIN;
+			}
 			D_ERROR("got different parity recx in EC data recovery\n");
 			return -DER_IO;
 		}

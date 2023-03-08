@@ -19,7 +19,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -450,7 +450,7 @@ vos_mod_init(void)
 	int	 rc = 0;
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
-		vos_start_epoch = crt_hlc_get();
+		vos_start_epoch = d_hlc_get();
 
 	rc = vos_pool_settings_init();
 	if (rc != 0) {

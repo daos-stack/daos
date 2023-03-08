@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1423,6 +1423,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	struct stat		stbuf;
 	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
+	dfs_obj_t		*tmp_obj;
 	int			rc;
 
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
@@ -1498,6 +1499,15 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookupx(dfs_mt, NULL, name, O_RDWR, &tmp_obj, NULL, &stbuf, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -1856,12 +1866,15 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	dfs_obj_t		*obj;
 	int			nr = 100;
 	char                    name[24];
+	char                    anchor_name[24];
 	daos_anchor_t		anchor = {0};
 	uint32_t		num_ents = 10;
 	struct dirent		ents[10];
 	struct stat		stbufs[10];
 	int			num_files = 0;
 	int			num_dirs = 0;
+	int			total_entries = 0;
+	bool			check_first = true;
 	char			dir_name[24];
 	int			i;
 	int			rc;
@@ -1886,11 +1899,15 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	}
 
 	/** readdir and stat */
+	print_message("start readdirplus and verify statbuf\n");
 	while (!daos_anchor_is_eof(&anchor)) {
 		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
 		assert_int_equal(rc, 0);
 
 		for (i = 0; i < num_ents; i++) {
+			/** save the 50th entry to restart iteration from there */
+			if (num_files+num_dirs == 50)
+				strcpy(anchor_name, ents[i].d_name);
 			if (strncmp(ents[i].d_name, "RD_file", 7) == 0) {
 				assert_true(S_ISREG(stbufs[i].st_mode));
 				num_files++;
@@ -1900,13 +1917,56 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 			} else {
 				print_error("Found invalid entry: %s\n", ents[i].d_name);
 			}
+			total_entries++;
 		}
+		num_ents = 10;
 	}
 
 	assert_true(num_files == 100);
 	assert_true(num_dirs == 100);
+	assert_true(total_entries == 200);
+
+	/** set anchor at the saved entry and restart iteration */
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
+	assert_int_equal(rc, 0);
+	total_entries = 0;
+	print_message("restart readdir with anchor set at: %s\n", anchor_name);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+		for (i = 0; i < num_ents; i++) {
+			total_entries++;
+			if (check_first) {
+				assert_true(strcmp(ents[i].d_name, anchor_name) == 0);
+				check_first = false;
+			}
+		}
+		num_ents = 10;
+	}
+	assert_true(total_entries == 150);
+
+	/** set anchor at the saved entry */
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
+	assert_int_equal(rc, 0);
+	total_entries = 0;
+
+	/** remove the entry of the anchor */
+	rc = dfs_remove(dfs_mt, dir, anchor_name, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("restart readdir with anchor set at removed entry: %s\n", anchor_name);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+		for (i = 0; i < num_ents; i++)
+			total_entries++;
+		num_ents = 10;
+	}
+	assert_true(total_entries == 149);
 
 	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dir_name, 1, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -1915,9 +1975,16 @@ dfs_test_readdir(void **state)
 {
 	test_arg_t	*arg = *state;
 
+	print_message("Running readdir test with OC_SX dir..\n");
 	dfs_test_readdir_internal(state, OC_SX);
-	if (test_runable(arg, 4))
+	if (test_runable(arg, 2)) {
+		print_message("Running readdir test with OC_RP_2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_RP_2GX);
+	}
+	if (test_runable(arg, 4)) {
+		print_message("Running readdir test with OC_EC_2P2GX dir..\n");
 		dfs_test_readdir_internal(state, OC_EC_2P2GX);
+	}
 }
 
 static int
@@ -2234,6 +2301,93 @@ dfs_test_multiple_pools(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+dfs_test_xattrs(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*dir = "xdir";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	int			create_flags = O_RDWR | O_CREAT;
+	const char		*xname1 = "user.empty";
+	const char		*xname2 = "user.with_value";
+	const char		*xval2  = "some value";
+	daos_size_t		size;
+	char			buf[32];
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, dir, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = 0;
+	rc = dfs_setxattr(dfs_mt, obj, xname1, NULL, size, 0);
+	assert_int_equal(rc, 0);
+
+	size = sizeof(buf);
+	rc = dfs_getxattr(dfs_mt, obj, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = strlen(xval2) + 1;
+	rc = dfs_setxattr(dfs_mt, obj, xname2, xval2, size, 0);
+	assert_int_equal(rc, 0);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, obj, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xval2) + 1);
+	assert_string_equal(xval2, buf);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname1) + 1 + strlen(xname2) + 1);
+	assert_string_equal(buf, xname1);
+	assert_string_equal(buf + strlen(xname1) + 1, xname2);
+
+	rc = dfs_removexattr(dfs_mt, obj, xname1);
+	assert_int_equal(rc, 0);
+
+	size = 0;
+	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname2) + 1);
+	assert_string_equal(buf, xname2);
+
+	rc = dfs_removexattr(dfs_mt, obj, xname2);
+	assert_int_equal(rc, 0);
+
+	size = 0;
+	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = sizeof(buf);
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -2277,6 +2431,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST21: dfs multiple pools",
 	  dfs_test_multiple_pools, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST22: dfs extended attributes",
+	  dfs_test_xattrs, test_case_teardown},
 };
 
 static int

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -338,7 +338,7 @@ get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool
 	if (do_update) {
 		uint64_t		cur_hlc;
 
-		cur_hlc = crt_hlc_get();
+		cur_hlc = d_hlc_get();
 		mdtimes.otime = update_otime ? cur_hlc : mdtimes.otime;
 		mdtimes.mtime = update_mtime ? cur_hlc : mdtimes.mtime;
 
@@ -890,6 +890,22 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Determine if the label property was supplied, and if so,
+	 * verify that it is not the default unset label.
+	 */
+	def_lbl_ent = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(in->cci_prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent != NULL && lbl_ent->dpe_str != NULL) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) == 0) {
+			D_ERROR(DF_CONT": label is the same as default label\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		lbl = lbl_ent->dpe_str;
+	}
+
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
@@ -909,17 +925,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
-	}
-
-	/* Determine if non-default label property supplied */
-	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
-					  DAOS_PROP_CO_LABEL);
-	D_ASSERT(def_lbl_ent != NULL);
-	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
-	D_ASSERT(lbl_ent != NULL);
-	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN)) {
-		lbl = lbl_ent->dpe_str;
 	}
 
 	/* Check if a container with this UUID and label already exists */
@@ -989,7 +994,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		struct co_md_times	mdtimes;
 
 		mdtimes.otime = 0;
-		mdtimes.mtime = crt_hlc_get();
+		mdtimes.mtime = d_hlc_get();
 		d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_co_md_times, &value);
 		if (rc != 0) {
@@ -1139,7 +1144,7 @@ out:
  * prop.
  */
 static void
-get_cont_prop_access_info(daos_prop_t *prop, struct ownership *owner,
+get_cont_prop_access_info(daos_prop_t *prop, struct d_ownership *owner,
 			  struct daos_acl **acl)
 {
 	struct daos_prop_entry	*acl_entry;
@@ -1308,7 +1313,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int				rc;
 	daos_prop_t		       *prop = NULL;
 	struct daos_prop_entry	       *lbl_ent;
-	struct ownership		owner;
+	struct d_ownership		owner;
 	struct daos_acl		       *acl;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
@@ -1546,9 +1551,14 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": update aggregation max eph "DF_U64"\n",
-		DP_CONT(arg->pool_uuid, arg->cont_uuid), arg->min_eph);
-	cont_child->sc_ec_agg_eph_boundry = arg->min_eph;
+	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+		DP_CONT(arg->pool_uuid, arg->cont_uuid),
+		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
+		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
+
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
+		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
+
 	ds_cont_child_put(cont_child);
 	return rc;
 }
@@ -1872,7 +1882,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct container_hdl	chdl;
 	char			zero = 0;
 	int			rc;
-	struct ownership	owner;
+	struct d_ownership	owner;
 	struct daos_acl	       *acl;
 	bool			is_healthy;
 	bool			cont_hdl_opened = false;
@@ -2176,8 +2186,11 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
 	rc = cont_close_recs(ctx, svc, recs, nrecs);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to close %d recs: "DF_RC"\n",
+			DP_CONT(svc->cs_pool_uuid, NULL), nrecs, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -2185,8 +2198,12 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 
 	for (i = 0; i < nrecs; i++) {
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to close handle: "DF_UUID", "DF_RC"\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[i].tcr_hdl),
+				DP_RC(rc));
 			goto out_tx;
+		}
 
 		/*
 		 * Yield frequently, in order to cope with the slow
@@ -2212,8 +2229,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 out_tx:
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT": leaving: %d\n",
-		DP_CONT(svc->cs_pool_uuid, NULL), rc);
+	if (rc == 0)
+		D_INFO(DF_CONT": closed %d recs\n", DP_CONT(svc->cs_pool_uuid, NULL), nrecs);
 	return rc;
 }
 
@@ -2354,18 +2371,25 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
-		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
-			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
-				DAOS_PROP_LABEL_MAX_LEN);
-			D_GOTO(out, rc = -DER_NOMEM);
+		/* sizeof(DAOS_PROP_CO_LABEL_DEFAULT) includes \0 at the end */
+		if (value.iov_len == (sizeof(DAOS_PROP_CO_LABEL_DEFAULT) - 1) &&
+		    strncmp(value.iov_buf, DAOS_PROP_CO_LABEL_DEFAULT,
+			    sizeof(DAOS_PROP_CO_LABEL_DEFAULT) - 1) == 0 ) {
+			prop->dpp_nr--;
+		} else {
+			if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+				D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
+					DAOS_PROP_LABEL_MAX_LEN);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			D_ASSERT(idx < nr);
+			prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
+			D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+				  value.iov_len);
+			if (prop->dpp_entries[idx].dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			idx++;
 		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
 		d_iov_set(&value, &val, sizeof(val));
@@ -3141,7 +3165,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	struct daos_prop_entry	*def_ent;
 	char			*def_lbl;
 	struct daos_prop_entry	*old_ent;
-	char			*old_lbl;
+	char			*old_lbl = NULL;
 	d_iov_t			 key;
 	d_iov_t			 val;
 	uuid_t			 match_cuuid;
@@ -3172,10 +3196,11 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 
 	/* If specified label matches existing label, nothing more to do */
 	old_ent = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
-	D_ASSERT(old_ent != NULL);
-	old_lbl = old_ent->dpe_str;
-	if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
-		return 0;
+	if (old_ent) {
+		old_lbl = old_ent->dpe_str;
+		if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
+			return 0;
+	}
 
 	/* Insert new label into cs_uuids KVS, fail if already in use */
 	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
@@ -3204,6 +3229,9 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		DP_UUID(cont->c_uuid), in_lbl);
 
 	/* Remove old label from cs_uuids KVS, if applicable */
+	if (old_lbl == NULL)
+		return 0;
+
 	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
@@ -3392,7 +3420,7 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_UUID(in->caui_op.ci_hdl));
 
 	acl_in = in->caui_acl;
-	if (daos_acl_cont_validate(acl_in) != 0)
+	if (daos_acl_validate(acl_in) != 0)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = get_acl(tx, cont, &acl);
@@ -3724,9 +3752,13 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
 	}
-	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
-		DAOS_PROP_LABEL_MAX_LEN);
-	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+	if (prop->dpp_entries[0].dpe_str) {
+		strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
+			DAOS_PROP_LABEL_MAX_LEN);
+		cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+	} else {
+		cinfo->pci_label[0] = '\0';
+	}
 
 	daos_prop_free(prop);
 	return 0;
@@ -3800,7 +3832,7 @@ cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filt
 		       bool *match)
 {
 	d_iov_t			value;
-	uint64_t		val64;
+	uint64_t		val64 = 0;
 	uint32_t		val32;
 	bool			result = false;
 	struct co_md_times	mdtimes;
@@ -4312,7 +4344,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		mdtimes.otime = 0;
 	}
 
-	mdtimes.mtime = crt_hlc_get();
+	mdtimes.mtime = d_hlc_get();
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 	if (rc) {
 		D_ERROR("failed to upgrade container co_md_times/cont: "DF_CONTF"\n",
@@ -4681,7 +4713,7 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
+		D_DEBUG(DB_MD, DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
 			opc, cont_cli_opc_name(opc));
 		D_GOTO(out_pool_hdl, rc);

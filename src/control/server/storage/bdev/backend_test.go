@@ -28,12 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const (
-	vmdAddr         = "0000:5d:05.5"
-	vmdBackingAddr1 = "5d0505:01:00.0"
-	vmdBackingAddr2 = "5d0505:03:00.0"
-)
-
 func addrListFromStrings(addrs ...string) *hardware.PCIAddressSet {
 	return hardware.MustNewPCIAddressSet(addrs...)
 }

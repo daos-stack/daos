@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -419,9 +418,6 @@ class ProcessBase(Common):
         io_size = self._parse_num_value('io_size', '128KiB')
         chunk_size = self._parse_num_value('chunk_size', '1MiB')
         self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
-
-        if io_size % scm_cutoff:
-            raise ValueError('io_size must be multiple of scm_cutoff')
 
         self._debug('using io_size of {0} bytes'.format(io_size))
 

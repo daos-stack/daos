@@ -24,13 +24,14 @@ timeouts:
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 1800
   test_daos_drain_simple: 500
-  test_daos_extend_simple: 500
+  test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
   test_daos_rebuild_ec: 4800
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
+  test_daos_upgrade: 300
 pool:
   # This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
@@ -52,14 +53,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -73,14 +67,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
     allow_insecure: true
 agent_config:
@@ -117,6 +104,7 @@ daos_tests:
     test_daos_aggregate_ec: 1
     test_daos_degraded_ec: 1
     test_daos_dedup: 1
+    test_daos_upgrade: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management
@@ -144,6 +132,7 @@ daos_tests:
     test_daos_degraded_ec: DAOS_Degraded_EC
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
+    test_daos_upgrade: DAOS_Upgrade
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
@@ -171,6 +160,7 @@ daos_tests:
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec: X
     test_daos_dedup: U
+    test_daos_upgrade: P
   args:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5

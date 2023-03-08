@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,12 +8,13 @@ import threading
 import subprocess  # nosec
 import time
 from getpass import getuser
-import general_utils
 
 from ClusterShell.NodeSet import NodeSet
+
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
 from ior_test_base import IorTestBase
+from general_utils import pcmd
 
 
 # pylint: disable=too-many-ancestors
@@ -124,9 +124,9 @@ class ParallelIo(FioBase, IorTestBase):
             This should fail.
             Check dfuse again.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio
+        :avocado: tags=ParallelIo,test_parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -146,7 +146,7 @@ class ParallelIo(FioBase, IorTestBase):
             cmd = "ls -a {}".format(dfuse_cont_dir)
             try:
                 # execute bash cmds
-                ret_code = general_utils.pcmd(
+                ret_code = pcmd(
                     self.hostlist_clients, cmd, timeout=30)
                 if 0 not in ret_code:
                     error_hosts = NodeSet(
@@ -215,9 +215,9 @@ class ParallelIo(FioBase, IorTestBase):
             fail the test.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=ParallelIo,test_multipool_parallelio
         """
         # test params
         threads = []
@@ -244,9 +244,9 @@ class ParallelIo(FioBase, IorTestBase):
             self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
-        # be parallelised as different container create could complete at
+        # be parallelized as different container create could complete at
         # different times and get appended in the self.container variable in
-        # unorderly manner, causing problems during the write process.
+        # unordered manner, causing problems during the write process.
         for _, pool in enumerate(self.pool):
             self.add_container_qty(self.cont_count, pool)
 

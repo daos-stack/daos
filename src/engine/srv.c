@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1498,11 +1498,16 @@ dss_get_start_epoch(void)
 void
 dss_set_start_epoch(void)
 {
-	dss_start_epoch = crt_hlc_get();
+	dss_start_epoch = d_hlc_get();
 }
 
+/**
+ * Currently, we do not have recommendatory ratio for main IO XS vs helper XS.
+ * But if helper XS is too less or non-configured, then it may cause system to
+ * be very slow as to RPC timeout under heavy load.
+ */
 bool
 dss_has_enough_helper(void)
 {
-	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
+	return dss_tgt_offload_xs_nr > 0;
 }

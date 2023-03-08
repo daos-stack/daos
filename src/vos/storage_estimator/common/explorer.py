@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +8,8 @@ import os
 import copy
 import sys
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, VosValue, Overhead, ValType, KeyType
+from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, \
+    VosValue, Overhead, ValType, KeyType
 from storage_estimator.util import CommonBase, ObjectClass
 
 
@@ -256,8 +256,8 @@ class DFS(CommonBase):
         akey = AKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.META,
-            value_type=ValType.SINGLE)
-        value = VosValue(count=3, size=64)
+            value_type=ValType.ARRAY)
+        value = VosValue(count=1, size=192)
         akey.add_value(value)
         dkey = DKey(
             key_type=KeyType.INTEGER,

@@ -190,6 +190,12 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
 	}
+	if ap.dm_args != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.dm_args))
+	}
+	if ap.fs_copy_stats != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.fs_copy_stats))
+	}
 
 	C.free(unsafe.Pointer(ap))
 }
@@ -270,6 +276,23 @@ func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
 	rc := C.resolve_duns_path(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to resolve path %s", path)
+	}
+
+	return nil
+}
+
+// _writeDunsPath is a test helper for creating a DUNS EA on a path.
+func _writeDunsPath(path, ct string, poolUUID uuid.UUID, contUUID uuid.UUID) error {
+	attrStr := fmt.Sprintf(C.DUNS_XATTR_FMT, ct, poolUUID.String(), contUUID.String())
+
+	cPath := C.CString(path)
+	defer freeString(cPath)
+	cAttrStr := C.CString(attrStr)
+	defer freeString(cAttrStr)
+	cAttrName := C.CString(C.DUNS_XATTR_NAME)
+	defer freeString(cAttrName)
+	if err := dfsError(C.lsetxattr(cPath, cAttrName, unsafe.Pointer(cAttrStr), C.size_t(len(attrStr)+1), 0)); err != nil {
+		return errors.Wrapf(err, "failed to set xattr on %s", path)
 	}
 
 	return nil

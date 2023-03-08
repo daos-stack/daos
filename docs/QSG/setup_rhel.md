@@ -89,8 +89,8 @@ daos-server RPM.
 
 ## Hardware Provisioning
 
-In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
-SSDs will be prepared and configured to be used by DAOS.
+In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
+used by DAOS and NVME SSDs will be identified.
 
 1. Prepare the pmem devices on Server nodes:
 
@@ -127,12 +127,7 @@ SSDs will be prepared and configured to be used by DAOS.
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-4. Prepare the NVME devices on Server nodes:
-
-		daos_server nvme prepare -u root
-		Preparing locally-attached NVMe storage\...
-
-5. Scan the available storage on the Server nodes:
+4. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
 		Scanning locally-attached storage\...
@@ -413,6 +408,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
 
 		# Sample output depending on number of client nodes
-		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.4 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
+		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.4 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
 

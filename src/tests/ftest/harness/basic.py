@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,6 +17,25 @@ class HarnessBasicTest(TestWithoutServers):
 
     :avocado: recursive
     """
+
+    def test_always_fails(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=always_fails,test_always_fails
+        """
+        self.fail("NOOP test to do nothing but fail")
+
+    def test_always_fails_hw(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=hw,large,medium,small
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=always_fails,test_always_fails_hw
+        """
+        self.test_always_fails()
 
     def test_always_passes(self):
         """Simple test of apricot test code.
@@ -99,9 +118,11 @@ class HarnessBasicTest(TestWithoutServers):
     def test_no_cmocka_xml(self):
         """Test to verify CmockaUtils detects lack of cmocka file generation.
 
+        If working correctly this test should fail due to a missing cmocka file.
+
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka
+        :avocado: tags=harness,harness_cmocka,failure_expected
         :avocado: tags=HarnessBasicTest,test_no_cmocka_xml
         """
         self.log.info("=" * 80)

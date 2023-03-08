@@ -172,6 +172,7 @@ const (
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
+	ServerConfigEngineNUMAImbalance
 )
 
 // SPDK library bindings codes
@@ -187,4 +188,5 @@ const (
 	SecurityUnknown Code = iota + 900
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
+	SecurityInvalidCert
 )

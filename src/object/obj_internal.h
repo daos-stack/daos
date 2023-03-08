@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,7 +189,9 @@ struct obj_reasb_req {
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1;
+					 orr_fail_alloc:1,
+	/* The fetch data/sgl is rebuilt by EC parity rebuild */
+					 orr_recov_data:1;
 };
 
 static inline void
@@ -309,6 +311,12 @@ struct shard_sync_args {
 	daos_epoch_t		*sa_epoch;
 };
 
+struct shard_k2a_args {
+	struct shard_auxi_args	 ka_auxi;
+	struct dtx_id		 ka_dti;
+	daos_anchor_t		*ka_anchor;
+};
+
 #define OBJ_TGT_INLINE_NR	9
 #define OBJ_INLINE_BTIMAP	4
 
@@ -385,11 +393,13 @@ struct obj_auxi_args {
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
 					 reintegrating:1,
+					 tx_renew:1,
 					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
-	uint32_t			 retry_cnt;
+	uint16_t			 retry_cnt;
+	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
@@ -403,10 +413,11 @@ struct obj_auxi_args {
 	 * request only targets for one shard.
 	 */
 	union {
-		struct shard_rw_args	 rw_args;
-		struct shard_punch_args	 p_args;
-		struct shard_list_args	 l_args;
-		struct shard_sync_args	 s_args;
+		struct shard_rw_args		rw_args;
+		struct shard_punch_args		p_args;
+		struct shard_list_args		l_args;
+		struct shard_k2a_args		k_args;
+		struct shard_sync_args		s_args;
 	};
 };
 
@@ -431,7 +442,8 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 #define CLI_OBJ_IO_PARMS	8
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph,
+	   uint64_t boundary);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -471,6 +483,12 @@ is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(&obj->cob_oca));
 	return obj_ec_shard_off(obj, dkey_hash, shard) >= obj_ec_data_tgt_nr(&obj->cob_oca);
+}
+
+static inline bool
+daos_obj_id_is_ec(daos_obj_id_t oid)
+{
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
 }
 
 #define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)
@@ -550,6 +568,10 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
+
+int dc_obj_shard_key2anchor(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+			    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+			    uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
 			   uint32_t req_map_ver, struct dc_object *obj,
@@ -699,6 +721,7 @@ struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 struct obj_io_context {
 	struct ds_cont_hdl	*ioc_coh;
 	struct ds_cont_child	*ioc_coc;
+	crt_rpc_t		*ioc_rpc;
 	struct daos_oclass_attr	 ioc_oca;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_layout_ver;

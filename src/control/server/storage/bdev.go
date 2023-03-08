@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,6 +47,7 @@ const (
 	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -66,6 +67,7 @@ const (
 	NvmeStateNormal NvmeDevState = iota
 	NvmeStateNew
 	NvmeStateFaulty
+	NvmeStateUnplugged
 )
 
 func (nds NvmeDevState) String() string {
@@ -259,16 +261,15 @@ type NvmeController struct {
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
-func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
-	for idx := range nc.SmdDevices {
-		if smdDev.UUID == nc.SmdDevices[idx].UUID {
-			nc.SmdDevices[idx] = smdDev
-
+func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
+	for _, exstDev := range nc.SmdDevices {
+		if newDev.UUID == exstDev.UUID {
+			*exstDev = *newDev
 			return
 		}
 	}
 
-	nc.SmdDevices = append(nc.SmdDevices, smdDev)
+	nc.SmdDevices = append(nc.SmdDevices, newDev)
 }
 
 // Capacity returns the cumulative total bytes of all namespace sizes.
@@ -342,23 +343,25 @@ func (ncs NvmeControllers) Summary() string {
 }
 
 // Update adds or updates slice of NVMe Controllers.
-func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
+func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
+	if ncs == nil {
+		return
+	}
+
 	for _, ctrlr := range ctrlrs {
 		replaced := false
-
-		for idx, existing := range ncs {
+		for _, existing := range *ncs {
 			if ctrlr.PciAddr == existing.PciAddr {
-				ncs[idx] = ctrlr
+				*existing = ctrlr
 				replaced = true
-				continue
+				break
 			}
 		}
 		if !replaced {
-			ncs = append(ncs, ctrlr)
+			newCtrlr := ctrlr
+			*ncs = append(*ncs, &newCtrlr)
 		}
 	}
-
-	return ncs
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
@@ -445,6 +448,7 @@ type (
 		Hostname          string
 		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
+		SpdkRpcSrvProps   SpdkRpcServer
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

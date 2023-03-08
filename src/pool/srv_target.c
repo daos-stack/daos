@@ -888,7 +888,7 @@ ds_pool_stop(uuid_t uuid)
 	pool_fetch_hdls_ult_abort(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
-	ds_migrate_stop(pool, -1);
+	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
@@ -1571,15 +1571,19 @@ update_vos_prop_on_targets(void *in)
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	if (ret)
+		goto out;
 
-	if (ret == 0) {
-		/** If necessary, upgrade the vos pool format */
-		if (pool->sp_global_version >= 2)
-			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-		else if (pool->sp_global_version == 1)
-			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
-	}
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_SPACE_RB, &pool->sp_space_rb);
+	if (ret)
+		goto out;
 
+	/** If necessary, upgrade the vos pool format */
+	if (pool->sp_global_version >= 2)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+	else if (pool->sp_global_version == 1)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+out:
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1597,6 +1601,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_space_rb = iv_prop->pip_space_rb;
 
 	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
 		pool->sp_disable_rebuild = 0;

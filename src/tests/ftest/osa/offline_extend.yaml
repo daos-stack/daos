@@ -2,7 +2,7 @@ hosts:
   test_servers: server-[1-2]
   test_clients: 1
 extra_servers:
-  test_servers: server-[3-4]
+  test_servers: server-3
 timeout: 1100
 setup:
   start_servers_once: false
@@ -20,14 +20,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,18 +30,11 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 6000000000
   nvme_size: 54000000000
-  svcn: 4
+  svcn: 2
   control_method: dmg
   properties: scrub:lazy
 container:
@@ -94,8 +80,6 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_2G8
-    - RP_3G6
-    - S1
     - EC_2P1G1
 loop_test:
   iterations: 3
@@ -108,4 +92,4 @@ checksum:
 snapshot:
   test_with_snapshot: true
 test_ranks:
-  rank_list: ["4", "5", ["6", "7"]]
+  rank_list: ["4", "5"]
