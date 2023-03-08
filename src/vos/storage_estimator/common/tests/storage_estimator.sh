@@ -120,5 +120,7 @@ daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32 -A
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32 -A --ec_cell_size=128KiB --chunk_size=2MiB
 
 print_header "Storage Estimator: Successful"

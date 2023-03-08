@@ -324,48 +324,57 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _add_ec_full_chunks(self, file_object, chunks, parity_stats):
-        """Add all writes to full chunks"""
+    def _add_replicated_data(self, file_object, replicas, chunks, remainder, parity_stats):
+        """Add replicated data"""
+        if chunks > 0:
+            chunks *= replicas
+            dkey = self._create_file_dkey(self._chunk_size, self._io_size)
+            dkey.set_count(chunks)
+            parity_stats.payload += chunks
+            file_object.add_value(dkey)
+
+        if remainder > 0:
+            dkey = self._create_file_dkey(remainder, self._io_size)
+            dkey.set_count(replicas)
+            file_object.add_value(dkey)
+            parity_stats.payload += replicas
+
+    def _add_ec_full_stripes(self, file_object, stripe_size, stripes, parity_stats):
+        """Add full stripe writes but not full chunk"""
         parity = self._oclass.get_file_parity()
         cell_count = self._oclass.get_file_stripe()
-        full_dkeys = chunks // cell_count
-        partial_dkeys = 0
-        if chunks % cell_count:
-            partial_dkeys = 1
+        dkey = self._create_file_dkey(stripes * stripe_size, self._ec_cell_size)
+        dkey.set_count(cell_count + parity)
+        file_object.add_value(dkey)
+
+        parity_stats.payload += cell_count
+        parity_stats.parity += parity
+
+    def _add_ec_full_chunks(self, file_object, stripe_size, chunks, parity_stats):
+        """Add all writes to full chunks"""
+        parity = self._oclass.get_file_parity()
+        stripes_per_chunk = self._chunk_size // stripe_size
+        cell_count = self._oclass.get_file_stripe()
+        full_dkeys = chunks // (cell_count * stripes_per_chunk)
+        partial_dkey = 0
+        if chunks % (stripes_per_chunk * cell_count):
+            partial_dkey = 1
         dkey = self._create_file_dkey(self._chunk_size, self._ec_cell_size)
         dkey.set_count(full_dkeys * (cell_count + parity))
         file_object.add_value(dkey)
 
-        if partial_dkeys:
-            # partial data chunk
+        parity_stats.payload += cell_count * full_dkeys
+        parity_stats.parity += parity * full_dkeys
+
+        if partial_dkey:
+            stripes = (chunks % (stripes_per_chunk * cell_count)) // cell_count
             size = (chunks % cell_count) * self._ec_cell_size
-            dkey = self._create_file_dkey(size, self._ec_cell_size)
-            dkey.set_count(partial_dkeys * (cell_count + parity))
-            file_object.add_value(dkey)
-
-        parity_stats.payload += cell_count * (full_dkeys + partial_dkeys)
-        parity_stats.parity += parity * (full_dkeys + partial_dkeys)
-
-    def _add_ec_partial_chunk(self, file_object, remainder, parity_stats):
-        """Add writes to the final chunk"""
-        parity = self._oclass.get_file_parity()
-        cell_count = self._oclass.get_file_stripe()
-        leftover = remainder % self._ec_cell_size
-        full_stripes = remainder // self._ec_cell_size
-
-        if leftover:
-            # Partial stripes are just replicated
-            dkey = self._create_file_dkey(leftover, self._ec_cell_size)
-            dkey.set_count(cell_count + parity)
-            file_object.add_value(dkey)
-
-        if full_stripes:
-            dkey = self._create_file_dkey(remainder - leftover, self._ec_cell_size)
-            dkey.set_count(cell_count + parity)
-            file_object.add_value(dkey)
-
-        parity_stats.payload += cell_count
-        parity_stats.parity += parity
+            if stripes:
+                self._add_ec_full_stripes(file_object, stripe_size, stripes, parity_stats)
+                size -= stripe_size * stripes
+            if size:
+                # simple replication
+                self._add_replicated_data(file_object, 1 + parity, 0, size, parity_stats)
 
     def _add_ec_elements(self, file_object, chunks, remainder, parity_stats):
         """If it's an EC class, add EC specific data and return True.
@@ -376,11 +385,23 @@ class DFS(CommonBase):
         if parity == 0:
             return False
 
+        cell_count = self._oclass.get_file_stripe()
+        stripe_size = cell_count * self._ec_cell_size
+
+        if not self._assume_aggregation and self._io_size < stripe_size:
+            self._add_replicated_data(file_object, parity + 1, chunks, remainder, parity_stats)
+            return True
+
         if chunks > 0:
-            self._add_ec_full_chunks(file_object, chunks, parity_stats)
+            self._add_ec_full_chunks(file_object, stripe_size, chunks, parity_stats)
+
+        if remainder > stripe_size:
+            stripes = remainder // stripe_size
+            remainder -= stripes * stripe_size
+            self._add_ec_full_stripes(file_object, stripe_size, stripes, parity_stats)
 
         if remainder > 0:
-            self._add_ec_partial_chunk(file_object, remainder, parity_stats)
+            self._add_replicated_data(file_object, 1 + parity, 0, remainder, parity_stats)
 
         return True
 
@@ -397,18 +418,7 @@ class DFS(CommonBase):
 
         replicas = self._oclass.get_file_replicas()
 
-        if chunks > 0:
-            chunks *= replicas
-            dkey = self._create_file_dkey(self._chunk_size, self._io_size)
-            dkey.set_count(chunks)
-            parity_stats.payload += chunks
-            file_object.add_value(dkey)
-
-        if remainder > 0:
-            dkey = self._create_file_dkey(remainder, self._io_size)
-            dkey.set_count(replicas)
-            file_object.add_value(dkey)
-            parity_stats.payload += replicas
+        self._add_replicated_data(file_object, replicas, chunks, remainder, parity_stats)
 
     def create_dir_obj(self, identical_dirs=1):
         parity_stats = CellStats(self._verbose)

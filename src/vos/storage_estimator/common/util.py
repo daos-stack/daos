@@ -149,12 +149,16 @@ class ObjectClass(CommonBase):
                 raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
             if min(chunk_size, io_size) % ec_cell_size:
                 raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
+            if self.get_dir_stripe() * ec_cell_size > chunk_size:
+                raise ValueError("chunk_size should be >= ec stripe size")
 
         if self.get_file_parity():
             if chunk_size % self.get_file_stripe():
                 raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
             if min(chunk_size, io_size) % ec_cell_size:
                 raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
+            if self.get_file_stripe() * ec_cell_size > chunk_size:
+                raise ValueError("chunk_size should be >= EC stripe size")
 
     def is_ec_enabled(self):
         if self.get_dir_parity():
@@ -417,9 +421,8 @@ class ProcessBase(Common):
             csum_name = self._args.checksum
 
             if csum_name not in csummers:
-                raise ValueError(
-                    'unknown checksum algorithm: "{0}", the supported checksum algorithms are: {1}'. format(
-                        csum_name, list(csummers.keys())))
+                raise ValueError(f"unknown checksum algorithm: '{csum_name}', the supported "
+                                 + f"checksum algorithms are: '{list(csummers.keys())}'")
 
             csum_size = csummers[csum_name]
             self._debug(
