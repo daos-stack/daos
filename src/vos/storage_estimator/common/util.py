@@ -148,13 +148,13 @@ class ObjectClass(CommonBase):
             if chunk_size % self.get_dir_stripe():
                 raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
             if min(chunk_size, io_size) % ec_cell_size:
-                raise ValueError(f"ec_cell_size must divide evenly into min(chunk_size, io_size)")
+                raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
 
         if self.get_file_parity():
             if chunk_size % self.get_file_stripe():
                 raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
             if min(chunk_size, io_size) % ec_cell_size:
-                raise ValueError(f"ec_cell_size must divide evenly into min(chunk_size, io_size)")
+                raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
 
     def is_ec_enabled(self):
         if self.get_dir_parity():

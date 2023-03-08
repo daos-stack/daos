@@ -296,9 +296,9 @@ class DFS(CommonBase):
         akey_size = size
         remainder = 0
         if not self._assume_aggregation and io_size < size:
-                count = size // io_size
-                remainder = size % io_size
-                akey_size = io_size
+            count = size // io_size
+            remainder = size % io_size
+            akey_size = io_size
 
         akey = AKey(
             key_type=KeyType.INTEGER,
@@ -363,7 +363,7 @@ class DFS(CommonBase):
             dkey = self._create_file_dkey(remainder - leftover, self._ec_cell_size)
             dkey.set_count(cell_count + parity)
             file_object.add_value(dkey)
-            
+
         parity_stats.payload += cell_count
         parity_stats.parity += parity
 
