@@ -113,6 +113,7 @@ class MyFormatter(argparse.ArgumentDefaultsHelpFormatter,
     """Just to get proper help output"""
     pass
 
+
 # create the top-level parser
 parser = argparse.ArgumentParser(description=tool_description,
                                  formatter_class=MyFormatter)
@@ -363,13 +364,15 @@ csv_file.add_argument(
     '-t',
     '--dir_oclass',
     type=str,
-    help='Predefined object classes. It describes schema of data distribution & protection for directories.',
+    help='Predefined object classes. It describes schema of data distribution & protection for '
+         + 'directories.',
     default='S1')
 csv_file.add_argument(
     '-r',
     '--file_oclass',
     type=str,
-    help='Predefined object classes. It describes schema of data distribution & protection for files.',
+    help='Predefined object classes. It describes schema of data distribution & protection for '
+         + 'files.',
     default='SX')
 csv_file.add_argument(
     '-m',
