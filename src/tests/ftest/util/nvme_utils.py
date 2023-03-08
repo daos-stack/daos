@@ -6,19 +6,23 @@
 import threading
 import re
 import time
-from exception_utils import CommandFailure
+
 from avocado.core.exceptions import TestFail
+
+from dmg_utils import get_storage_query_device_uuids
+from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
+from server_utils import ServerFailed
 
 
-def get_device_ids(dmg, servers):
+def get_device_ids(test, dmg, servers):
     """Get the NVMe Device ID from servers.
 
     Args:
-        dmg: DmgCommand class instance.
+        test (Test): avocado test class
+        dmg (DmgCommand): a DmgCommand class instance.
         servers (list): list of server hosts.
 
     Returns:
@@ -26,20 +30,13 @@ def get_device_ids(dmg, servers):
 
     """
     devices = {}
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("query")
-    dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
+    # dmg.set_sub_command("storage")
+    # dmg.sub_command_class.set_sub_command("query")
+    # dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
     for host in servers:
         dmg.hostlist = host
-        try:
-            result = dmg.run()
-        except CommandFailure as _error:
-            raise CommandFailure("dmg list-devices failed with error {}".format(_error)) from _error
-        drive_list = []
-        for line in result.stdout_text.split('\n'):
-            if 'UUID' in line:
-                drive_list.append(line.split('UUID:')[1].split(' ')[0])
-        devices[host] = drive_list
+        host_uuids = get_storage_query_device_uuids(test, dmg)
+        devices[host] = list(host_uuids.values())
     return devices
 
 
@@ -224,7 +221,7 @@ class ServerFillUp(IorTestBase):
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""
         # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(self.dmg, self.hostlist_servers)
+        device_ids = get_device_ids(self, self.dmg, self.hostlist_servers)
 
         # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
         # single drive from single server

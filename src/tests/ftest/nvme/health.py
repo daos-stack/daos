@@ -7,6 +7,7 @@ from __future__ import division
 
 from avocado.core.exceptions import TestFail
 
+from dmg_utils import get_storage_query_pool_info, get_dmg_response
 from nvme_utils import ServerFillUp, get_device_ids
 from exception_utils import CommandFailure
 
@@ -30,7 +31,7 @@ class NvmeHealth(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme,pool
-        :avocado: tags=nvme_health,test_monitor_for_large_pools
+        :avocado: tags=NvmeHealth,test_monitor_for_large_pools
         """
         max_num_pools = self.params.get("max_num_pools", '/run/pool/*')
         total_pool_percentage = self.params.get("total_pool_percentage", '/run/pool/*') / 100
@@ -68,28 +69,39 @@ class NvmeHealth(ServerFillUp):
         # List all pools
         for host in self.hostlist_servers:
             dmg.hostlist = host
-            try:
-                result = dmg.storage_query_list_pools()
-            except CommandFailure as error:
-                self.fail("dmg command failed: {}".format(error))
-            # Verify all pools UUID listed as part of query
+            host_pool_uuids = []
+            pool_info = get_storage_query_pool_info(self, dmg)
+            for pool in pool_info:
+                try:
+                    host_pool_uuids.append(pool['uuid'])
+                except KeyError as error:
+                    self.fail(
+                        "Error parsing dmg.storage_query_list_pools() output: {}".format(error))
             for pool in pool_list:
-                if pool.uuid.lower() not in result.stdout_text:
+                if pool.uuid.lower() not in host_pool_uuids:
                     self.fail('Pool uuid {} not found in smd query'.format(pool.uuid.lower()))
 
         # Get the device ID from all the servers.
-        device_ids = get_device_ids(dmg, self.hostlist_servers)
+        device_ids = get_device_ids(self, dmg, self.hostlist_servers)
 
         # Get the device health
-        for host, dev_list in device_ids.items():
+        for host, dev_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
             dmg.hostlist = host
             for device in dev_list:
-                try:
-                    result = dmg.storage_query_device_health(device)
-                except CommandFailure as error:
-                    self.fail("dmg get device states failed {}".format(error))
-                if 'State:NORMAL' not in result.stdout_text:
-                    self.fail("device {} on host {} is not NORMAL".format(device, host))
+                host_storage_map = get_dmg_response(
+                    self, dmg.storage_query_device_health, 'host_storage_map', uuid=device)
+                for entry in host_storage_map.values():
+                    passed = False
+                    try:
+                        for device in entry['storage']['smd_info']['devices']:
+                            if device['uuid'] == device and device['dev_state'] == 'NORMAL':
+                                passed = True
+                    except KeyError as error:
+                        self.fail(
+                            "Error parsing dmg.storage_query_device_health() output: {}".format(
+                                error))
+                    if not passed:
+                        self.fail("device {} on host {} is not NORMAL".format(device, host))
 
         # Get the nvme-health
         try:
