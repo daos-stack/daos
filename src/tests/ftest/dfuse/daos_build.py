@@ -215,7 +215,7 @@ class DaosBuild(DfuseTestBase):
                 timeout = build_time * 60
             start = time.time()
             result = run_remote(
-                self.log, self.hostfile_clients, command, verbose=True, timeout=timeout)
+                self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
             self.log.info('Command %s completed in %d:%02d (%d%% of timeout)',
