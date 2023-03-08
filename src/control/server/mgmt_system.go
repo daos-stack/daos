@@ -498,11 +498,8 @@ func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.
 	for _, hes := range rr.HostErrors {
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
-				resp.Results = append(resp.Results,
-					&system.MemberResult{
-						Rank: rank, Msg: hes.HostError.Error(),
-						State: system.MemberStateUnresponsive,
-					})
+				resp.Results = append(resp.Results, system.NewMemberResult(rank,
+					hes.HostError, system.MemberStateUnresponsive))
 			}
 			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
 				hes.HostError)

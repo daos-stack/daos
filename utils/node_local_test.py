@@ -415,6 +415,10 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
 
+    # Enable this to debug memory errors, it has a performance impact but will scan the heap
+    # for corruption.  See DAOS-12735 for why this can cause problems in practice.
+    # env['MALLOC_CHECK_'] = '3'
+
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
 
@@ -1733,29 +1737,29 @@ class PosixTests():
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       self.pool.id(), container,
-                      '--attr', 'dfuse-attr-time', '--value', '2'],
+                      'dfuse-attr-time:2'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       self.pool.id(), container,
-                      '--attr', 'dfuse-dentry-time', '--value', '100s'],
+                      'dfuse-dentry-time:100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       self.pool.id(), container,
-                      '--attr', 'dfuse-dentry-time-dir', '--value', '100s'],
+                      'dfuse-dentry-time-dir:100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       self.pool.id(), container,
-                      '--attr', 'dfuse-ndentry-time', '--value', '100s'],
+                      'dfuse-ndentry-time:100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
-                     ['container', 'list-attrs',
+                     ['container', 'get-attrs',
                       self.pool.id(), container],
                      show_stdout=True)
 
@@ -2785,7 +2789,7 @@ class PosixTests():
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       self.pool.id(), self.container,
-                      '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                      'dfuse-direct-io-disable:on'],
                      show_stdout=True)
         dfuse = DFuse(self.server,
                       self.conf,
@@ -3623,7 +3627,7 @@ def run_in_fg(server, conf, args):
 
         for key, value in cont_attrs.items():
             run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
-                                '--attr', key, '--value', str(value)],
+                                f'{key}:{value}'],
                          show_stdout=True)
 
     dfuse = DFuse(server,
@@ -4482,12 +4486,12 @@ def test_fi_list_attr(server, conf, wf):
     run_daos_cmd(conf,
                  ['container', 'set-attr',
                   pool, container,
-                  '--attr', 'my-test-attr-1', '--value', 'some-value'])
+                  'my-test-attr-1:some-value'])
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
                   pool, container,
-                  '--attr', 'my-test-attr-2', '--value', 'some-other-value'])
+                  'my-test-attr-2:some-other-value'])
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
@@ -4535,7 +4539,7 @@ def test_fi_get_attr(server, conf, wf):
     run_daos_cmd(conf,
                  ['container', 'set-attr',
                   pool, container,
-                  '--attr', attr_name, '--value', 'value'])
+                  f'{attr_name}:value'])
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
