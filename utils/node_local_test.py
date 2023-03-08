@@ -422,6 +422,9 @@ def get_base_env(clean=False):
     env['FI_LOG_LEVEL'] = 'DEBUG'
     env['ABT_PRINT_CONFIG'] = '1'
     env['ABT_THREAD_STACKSIZE'] = '12288'
+    env['ABT_USE_LOG'] = '1'
+    env['ABT_USE_DEBUG'] = '1'
+    env['ABT_USE_EVENT_DEBUG'] = '1'
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
