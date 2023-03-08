@@ -506,7 +506,7 @@ test_default_pool_acl(void **state)
 	acl = ds_sec_alloc_default_daos_pool_acl();
 
 	assert_non_null(acl);
-	assert_rc_equal(daos_acl_pool_validate(acl), 0); /* valid pool ACL */
+	assert_rc_equal(daos_acl_validate(acl), 0); /* valid pool ACL */
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	assert_non_null(current);
@@ -538,7 +538,7 @@ test_default_cont_acl(void **state)
 	acl = ds_sec_alloc_default_daos_cont_acl();
 
 	assert_non_null(acl);
-	assert_rc_equal(daos_acl_cont_validate(acl), 0); /* valid cont ACL */
+	assert_rc_equal(daos_acl_validate(acl), 0); /* valid cont ACL */
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	assert_non_null(current);
