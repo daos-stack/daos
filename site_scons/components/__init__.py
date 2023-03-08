@@ -286,10 +286,10 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n',
+                           'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
-                libs=['pmemobj'],
-                build_env={'EXTRA_CFLAGS': "-Wno-error -fstack-usage"})
+                libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
