@@ -42,7 +42,7 @@ enum dc_tx_status {
 
 /*
  * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
- *	classified and stored separatedly (but adjacent each other). The Read
+ *	classified and stored separately (but adjacent each other). The Read
  *	ones are in front of the write ones. Such layout will simplify server
  *	side CPD RPC processing.
  *
