@@ -4,19 +4,19 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package support_test
+package support
 
 import (
 	"testing"
 
-	// "github.com/pkg/errors"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/support"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestDisplay(t *testing.T) {
-	progress := support.ProgressBar{
+func TestSupport_Display(t *testing.T) {
+	progress := ProgressBar{
 		Start:     1,
 		Total:     7,
 		NoDisplay: false,
@@ -53,6 +53,48 @@ func TestDisplay(t *testing.T) {
 			progress.NoDisplay = tc.NoDisplay
 			gotOutput := progress.Display()
 			test.AssertEqual(t, tc.expResult, gotOutput, "")
+		})
+	}
+}
+
+func TestSupport_checkEngineState(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	for name, tc := range map[string]struct {
+		expResult bool
+		expErr    error
+	}{
+		"Check Engine status when no engine process is running": {
+			expResult: false,
+			expErr:    errors.New("daos_engine is not running on server: exit status 1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOutput, gotErr := checkEngineState(log)
+			test.AssertEqual(t, tc.expResult, gotOutput, "")
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestSupport_getRunningConf(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	for name, tc := range map[string]struct {
+		expResult string
+		expErr    error
+	}{
+		"get default server config": {
+			expResult: "",
+			expErr:    errors.New("daos_engine is not running on server: exit status 1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOutput, gotErr := getRunningConf(log)
+			test.AssertEqual(t, tc.expResult, gotOutput, "")
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
