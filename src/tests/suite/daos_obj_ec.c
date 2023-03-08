@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1854,7 +1854,7 @@ ec_setup(void  **state)
 	dt_cell_size = ec_cell_size;
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			DEFAULT_POOL_SIZE, num_ranks, NULL);
+			DEFAULT_POOL_SIZE * 2, 1, NULL);
 	dt_cell_size = orig_dt_cell_size;
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
@@ -2089,6 +2089,142 @@ ec_update_2akeys(void **state)
 	}
 }
 
+void
+dfs_space_check(void **state)
+{
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	dfs_obj_t	*obj;
+	daos_size_t	chunk_size = 1024 * 1024;
+	uuid_t		co_uuid;
+	char		str[37];
+	char		filename[32];
+	struct stat	st;
+	char		*buf;
+	int		i;
+	daos_size_t	buf_size = 4096;
+	int		file_num = 1024;
+	daos_obj_id_t	oid;
+	daos_pool_info_t info_0 = {0};
+	daos_pool_info_t info = {0};
+	struct daos_pool_space *space_0;
+	struct daos_pool_space *space;
+	uint64_t	used[2];
+	int		rc;
+	dfs_attr_t	attr = {};
+
+	info_0.pi_bits = DPI_SPACE;
+	rc = daos_pool_query(arg->pool.poh, NULL, &info_0, NULL, NULL);
+	assert_int_equal(rc, 0);
+	space_0 = &info_0.pi_space;
+	print_message("queried space:\n");
+	print_message("ps_ntargets: %d\n", space_0->ps_ntargets);
+	print_message("SCM -\n");
+	print_message("total: "DF_U64", free: "DF_U64", used: "DF_U64"\n",
+		      space_0->ps_space.s_total[0], space_0->ps_space.s_free[0],
+		      space_0->ps_space.s_total[0] - space_0->ps_space.s_free[0]);
+	print_message("free_min: "DF_U64", free_max: "DF_U64", free_mean: "DF_U64"\n",
+		      space_0->ps_free_min[0], space_0->ps_free_max[0], space_0->ps_free_mean[0]);
+	print_message("NVME -\n");
+	print_message("total: "DF_U64", free: "DF_U64", used: "DF_U64"\n",
+		      space_0->ps_space.s_total[1], space_0->ps_space.s_free[1],
+		      space_0->ps_space.s_total[1] - space_0->ps_space.s_free[1]);
+	print_message("free_min: "DF_U64", free_max: "DF_U64", free_mean: "DF_U64"\n",
+		      space_0->ps_free_min[1], space_0->ps_free_max[1], space_0->ps_free_mean[1]);
+
+	attr.da_props = daos_prop_alloc(2);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	print_message("will create %d files, each file's size %d\n", file_num, (int)buf_size);
+	D_ALLOC(buf, max(buf_size, 8));
+	assert_true(buf != NULL);
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	for (i = 0; i < file_num; i++) {
+		sprintf(filename, "%016d", i);
+		rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_SX, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		dfs_obj2id(obj, &oid);
+		if (i % (file_num / 10) == 0 || i == file_num - 1 )
+			print_message("lxz created %s, oid:"DF_OID"\n", filename, DP_OID(oid));
+
+		if (buf_size > 0) {
+			rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+			assert_int_equal(rc, 0);
+		}
+
+		rc = dfs_stat(dfs_mt, NULL, filename, &st);
+		assert_int_equal(rc, 0);
+		assert_int_equal(st.st_size, buf_size);
+
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+
+	D_FREE(buf);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	info.pi_bits = DPI_SPACE;
+	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+	assert_int_equal(rc, 0);
+	space = &info.pi_space;
+	print_message("queried space:\n");
+	print_message("ps_ntargets: %d\n", space->ps_ntargets);
+	print_message("SCM -\n");
+	print_message("total: "DF_U64", free: "DF_U64", used: "DF_U64"\n",
+		      space->ps_space.s_total[0], space->ps_space.s_free[0],
+		      space->ps_space.s_total[0] - space->ps_space.s_free[0]);
+	print_message("free_min: "DF_U64", free_max: "DF_U64", free_mean: "DF_U64"\n",
+		      space->ps_free_min[0], space->ps_free_max[0], space->ps_free_mean[0]);
+	print_message("NVME -\n");
+	print_message("total: "DF_U64", free: "DF_U64", used: "DF_U64"\n",
+		      space->ps_space.s_total[1], space->ps_space.s_free[1],
+		      space->ps_space.s_total[1] - space->ps_space.s_free[1]);
+	print_message("free_min: "DF_U64", free_max: "DF_U64", free_mean: "DF_U64"\n",
+		      space->ps_free_min[1], space->ps_free_max[1], space->ps_free_mean[1]);
+
+	print_message("\n\n");
+	used[0] = space_0->ps_space.s_total[0] - space_0->ps_space.s_free[0];
+	used[1] = space->ps_space.s_total[0] - space->ps_space.s_free[0];
+	print_message("===== SCM used "DF_U64"B, %fKB, %fMB, %fGB\n",
+		      used[1] - used[0], (used[1] - used[0])/1024.0,
+		      (used[1] - used[0])/(1024.0 * 1024.0),
+		      (used[1] - used[0])/(1024.0 * 1024.0 * 1024.0));
+	used[0] = space_0->ps_space.s_total[1] - space_0->ps_space.s_free[1];
+	used[1] = space->ps_space.s_total[1] - space->ps_space.s_free[1];
+	print_message("===== NVME used "DF_U64"B, %fKB, %fMB, %fGB\n",
+		      used[1] - used[0], (used[1] - used[0])/1024.0,
+		      (used[1] - used[0])/(1024.0 * 1024.0),
+		      (used[1] - used[0])/(1024.0 * 1024.0 * 1024.0));
+
+	print_message("getchar\n");
+	getchar();
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -2135,6 +2271,7 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
 	 test_case_teardown},
 	{"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
+	{"EC23: dfs space check", dfs_space_check, async_disable, test_case_teardown},
 };
 
 int
