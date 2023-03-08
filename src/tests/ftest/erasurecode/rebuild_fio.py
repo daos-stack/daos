@@ -101,6 +101,9 @@ class EcodFioRebuild(ErasureCodeFio):
             # Read and verify the original data.
             self.fio_cmd.run()
 
+        # Pre-teardown: make sure rebuild is done before too-quickly trying to destroy container.
+        self.pool.wait_for_rebuild_to_end()
+
     def test_ec_online_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
