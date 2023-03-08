@@ -22,6 +22,7 @@
 
 # pylint: disable=too-many-lines
 import os
+from copy import deepcopy
 import sys
 import json
 import datetime
@@ -969,19 +970,17 @@ class _Component():
         self.use_installed = use_installed
         self.build_path = None
         self.prebuilt_path = None
-        self.patch_rpath = kw.get("patch_rpath", [])
+        self.key_words = deepcopy(kw)
         self.src_path = None
         self.prefix = None
         self.component_prefix = None
         self.package = kw.get("package", None)
-        self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
         self.functions = kw.get("functions", {})
-        self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
-        if self.patch_rpath:
+        if kw.get("patch_rpath", []):
             self.required_progs.append("patchelf")
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
@@ -998,7 +997,6 @@ class _Component():
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
-        self.build_env = kw.get("build_env", {})
 
     def _resolve_patches(self):
         """Parse the patches variable"""
@@ -1135,15 +1133,16 @@ class _Component():
         print(f"Checking targets for component '{self.name}'")
 
         config = env.Configure()
-        if self.config_cb:
-            if not self.config_cb(config):
+        config_cb = self.key_words.get("config_cb", None)
+        if config_cb:
+            if not config_cb(config):
                 config.Finish()
                 if self.__check_only:
                     env.SetOption('no_exec', True)
                 print('Custom check failed')
                 return True
 
-        for prog in self.progs:
+        for prog in self.key_words.get("progs", []):
             if not config.CheckProg(prog):
                 config.Finish()
                 if self.__check_only:
@@ -1266,7 +1265,7 @@ class _Component():
 
     def _set_build_env(self, env):
         """Add any environment variables to build environment"""
-        env["ENV"].update(self.build_env)
+        env["ENV"].update(self.key_words.get("build_env", {}))
 
     def _check_installed_package(self, env):
         """Check installed targets"""
@@ -1340,7 +1339,7 @@ class _Component():
                 break
 
         rpath += norigin
-        for folder in self.patch_rpath:
+        for folder in self.key_words.get("patch_rpath", []):
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
