@@ -108,8 +108,14 @@ def process_csv(args):
         sys.exit(-1)
 
 
+class MyFormatter(argparse.ArgumentDefaultsHelpFormatter,
+                  argparse.RawTextHelpFormatter):
+    """Just to get proper help output"""
+    pass
+
 # create the top-level parser
-parser = argparse.ArgumentParser(description=tool_description)
+parser = argparse.ArgumentParser(description=tool_description,
+                                 formatter_class=MyFormatter)
 subparsers = parser.add_subparsers(description='valid subcommands')
 
 example_description = '''
@@ -122,7 +128,8 @@ commands "explore_fs", "read_yaml", "read_csv".
 example = subparsers.add_parser(
     'create_example',
     help='Create a YAML example of the DFS layout',
-    description=example_description)
+    description=example_description,
+    formatter_class=MyFormatter)
 example.add_argument('-a', '--alloc_overhead', type=int,
                      help='Vos alloc overhead', default=16)
 example.add_argument(
@@ -154,13 +161,14 @@ example.set_defaults(func=create_dfs_example)
 
 # read the file system
 explore = subparsers.add_parser(
-    'explore_fs', help='Estimate the VOS overhead from a given tree directory')
+    'explore_fs', help='Estimate the VOS overhead from a given tree directory',
+    formatter_class=MyFormatter)
 explore.add_argument(
     'path',
     type=str,
     nargs=1,
     help='Path to the target directory',
-    default='')
+    default=None)
 explore.add_argument(
     '-v',
     '--verbose',
@@ -170,13 +178,15 @@ explore.add_argument(
     '-t',
     '--dir_oclass',
     type=str,
-    help='Predefined object classes. It describes schema of data distribution & protection for directories.',
+    help='Predefined object classes. It describes schema of data distribution & protection '
+         + 'for directories.',
     default='S1')
 explore.add_argument(
     '-r',
     '--file_oclass',
     type=str,
-    help='Predefined object classes. It describes schema of data distribution & protection for files.',
+    help='Predefined object classes. It describes schema of data distribution & protection for '
+         + 'files.',
     default='SX')
 explore.add_argument(
     '-x',
@@ -212,7 +222,7 @@ explore.add_argument(
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='')
+    default='4KiB')
 explore.add_argument(
     '-n',
     '--num_shards',
@@ -226,20 +236,20 @@ explore.add_argument(
     '--checksum',
     type=str,
     help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
-    default='')
+    default=None)
 explore.add_argument(
     '-m',
     '--meta',
     metavar='META',
     help='[optional] Input metadata file',
-    default='')
+    default=None)
 explore.add_argument(
     '-o',
     '--output',
     dest='output',
     type=str,
     help='Output file name',
-    default='')
+    default=None)
 explore.add_argument(
     '-S',
     '--storage',
@@ -252,7 +262,8 @@ explore.set_defaults(func=process_fs)
 
 # parse a yaml file
 yaml_file = subparsers.add_parser(
-    'read_yaml', help='Estimate the VOS overhead from a given YAML file')
+    'read_yaml', help='Estimate the VOS overhead from a given YAML file',
+    formatter_class=MyFormatter)
 yaml_file.add_argument(
     '-v',
     '--verbose',
@@ -267,13 +278,13 @@ yaml_file.add_argument(
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='')
+    default='4KiB')
 yaml_file.add_argument(
     '-m',
     '--meta',
     metavar='META',
     help='[optional] Input metadata file',
-    default='')
+    default=None)
 yaml_file.add_argument(
     '-S',
     '--storage',
@@ -285,7 +296,8 @@ yaml_file.set_defaults(func=process_yaml)
 
 # parse a csv file
 csv_file = subparsers.add_parser(
-    'read_csv', help='Estimate the VOS overhead from a given CSV file')
+    'read_csv', help='Estimate the VOS overhead from a given CSV file',
+    formatter_class=MyFormatter)
 csv_file.add_argument(
     'csv',
     metavar='CSV',
@@ -327,7 +339,7 @@ csv_file.add_argument(
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='')
+    default='4KiB')
 csv_file.add_argument(
     '--num_shards',
     dest='num_shards',
@@ -339,7 +351,7 @@ csv_file.add_argument(
     '--checksum',
     type=str,
     help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
-    default='')
+    default=None)
 csv_file.add_argument(
     '-v',
     '--verbose',
@@ -364,13 +376,13 @@ csv_file.add_argument(
     '--meta',
     metavar='META',
     help='[optional] Input metadata file',
-    default='')
+    default=None)
 csv_file.add_argument(
     '-o', '--output',
     dest='output',
     type=str,
     help='Output file name',
-    default='')
+    default=None)
 csv_file.add_argument(
     '-S',
     '--storage',
