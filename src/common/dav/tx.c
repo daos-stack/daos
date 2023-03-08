@@ -1419,6 +1419,7 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 				} else if (r->offset == roff) {
 					/* Retain the right portion. */
 					r->offset += usize;
+					r->size   -= usize;
 				} else {
 					/* Retain the left portion. */
 					uint64_t osize = r->size;
