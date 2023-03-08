@@ -15,11 +15,13 @@ fi
 # systemd-coredump core path
 if [[ "$core_pattern" = *systemd-coredump* ]]; then
     # move the core files where our processing scripts wants to find them
-    coredumpctl list -S @"$1" --no-legend | while read -r d dd t tz pid _uid _gid _sig _status exe; do
+    coredumpctl list -S @"$1" --no-legend |
+      while read -r d dd t tz pid _uid _gid _sig _status exe; do
         if [[ $exe = */gdb ]]; then
             continue
         fi
-        coredumpctl dump --output /var/tmp/core."${exe##*/}"."$(date +%s -d"$d $dd $t $tz")"."$pid" "$pid"
+        coredumpctl dump --output \
+                    /var/tmp/core."${exe##*/}"."$(date +%s -d"$d $dd $t $tz")"."$pid" "$pid"
     done
 fi
 
