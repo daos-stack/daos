@@ -1,4 +1,10 @@
-"""Analyze stack usage output"""
+"""
+(C) Copyright 2019-2023 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
+Analyze stack usage output
+"""
 import os
 import argparse
 import atexit
@@ -110,18 +116,18 @@ class Analyzer():
         """Run the analysis"""
         function_map = {}
 
-        print('Options:')
-        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
-        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
-        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
-        print('\tcutoff                    : {self.cutoff}')
-
         self._gather_path('daos', self.daos_prefix, function_map)
         for path in os.listdir(self.comp_prefix):
             comp_path = os.path.join(self.comp_prefix, path)
             path = path.replace(".build", "")
             if os.path.isdir(comp_path):
                 self._gather_path(path, comp_path, function_map)
+
+        print('Options:')
+        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
+        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
+        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
+        print('\tcutoff                    : {self.cutoff}')
 
         size_map = {}
         for key, value in function_map.items():
