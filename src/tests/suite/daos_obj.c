@@ -3785,7 +3785,7 @@ split_sgl_internal(void **state, int size)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
 
-	/** Let's use differet iod_size to see if fetch
+	/** Let's use different iod_size to see if fetch
 	 *  can reset the correct iod_size
 	 */
 	iod.iod_size = size/2;
