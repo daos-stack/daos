@@ -7207,12 +7207,10 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 }
 
 /**
- * A hack for cont_svc to look up the credential of a pool handle in the DB.
- *
- * CAUTION:
- *
- *   - The caller must not yield while using the credential, because we don't
- *     take the pool metadata lock.
+ * A hack (since we don't take svc->ps_lock to avoid lock order issues with
+ * cont_svc->cs_lock) for cont_svc to look up the credential of a pool handle
+ * in the DB. If the return value is zero, the caller is responsible for
+ * freeing \a cred->iov_buf with D_FREE.
  */
 int
 ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid, d_iov_t *cred)
@@ -7221,6 +7219,7 @@ ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uui
 	d_iov_t			key;
 	d_iov_t			value;
 	struct pool_hdl	       *hdl;
+	void		       *buf;
 	int			rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL /* hint */);
@@ -7241,7 +7240,14 @@ ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uui
 		goto out_svc;
 	hdl = value.iov_buf;
 
-	cred->iov_buf = hdl->ph_cred;
+	D_ALLOC(buf, hdl->ph_cred_len);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out_svc;
+	}
+	memcpy(buf, hdl->ph_cred, hdl->ph_cred_len);
+
+	cred->iov_buf = buf;
 	cred->iov_len = hdl->ph_cred_len;
 	cred->iov_buf_len = hdl->ph_cred_len;
 
