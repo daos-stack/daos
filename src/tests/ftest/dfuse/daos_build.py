@@ -119,8 +119,6 @@ class DaosBuild(DfuseTestBase):
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
-        daos_cmd = self.get_daos_command()
-
         cont_attrs = {}
 
         # How long to cache things for, if caching is enabled.  Set to longer than test run-time.
@@ -169,8 +167,7 @@ class DaosBuild(DfuseTestBase):
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
-        daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
-                                     attrs=cont_attrs)
+        self.container.set_attr(attrs=cont_attrs)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
