@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,7 +7,7 @@ from __future__ import division
 
 from avocado.core.exceptions import TestFail
 
-from dmg_utils import get_storage_query_pool_info, get_dmg_response
+from dmg_utils import get_storage_query_pool_info, get_dmg_smd_info
 from nvme_utils import ServerFillUp, get_device_ids
 from exception_utils import CommandFailure
 
@@ -87,21 +87,20 @@ class NvmeHealth(ServerFillUp):
         # Get the device health
         for host, dev_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
             dmg.hostlist = host
-            for device in dev_list:
-                host_storage_map = get_dmg_response(
-                    self, dmg.storage_query_device_health, 'host_storage_map', uuid=device)
-                for entry in host_storage_map.values():
-                    passed = False
-                    try:
-                        for device in entry['storage']['smd_info']['devices']:
+            for uuid in dev_list:
+                info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=uuid)
+                passed = False
+                for devices in info.values():
+                    for device in devices:
+                        try:
                             if device['uuid'] == device and device['dev_state'] == 'NORMAL':
                                 passed = True
-                    except KeyError as error:
-                        self.fail(
-                            "Error parsing dmg.storage_query_device_health() output: {}".format(
-                                error))
-                    if not passed:
-                        self.fail("device {} on host {} is not NORMAL".format(device, host))
+                        except KeyError as error:
+                            self.fail(
+                                "Error parsing dmg.storage_query_device_health() output: {}".format(
+                                    error))
+                if not passed:
+                    self.fail("device {} on host {} is not NORMAL".format(device, host))
 
         # Get the nvme-health
         try:

@@ -5,7 +5,7 @@
 """
 
 from daos_core_base import DaosCoreBase
-from dmg_utils import get_storage_query_device_uuids, get_storage_query_smd_info
+from dmg_utils import get_storage_query_device_uuids, get_dmg_smd_info
 from general_utils import get_log_file
 
 
@@ -30,15 +30,16 @@ class CsumErrorLog(DaosCoreBase):
             int: the number of checksum errors on the device
         """
         checksum_errs = 0
-        response = get_storage_query_smd_info(self, dmg.storage_query_device_health, uuid=device_id)
-        for smd_info in response.values():
-            try:
-                for device in smd_info['devices']:
+        info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=device_id)
+        for devices in info.values():
+            for device in devices:
+                try:
                     if device['uuid'] == device_id:
                         checksum_errs = device['health']['checksum_errs']
                         break
-            except KeyError as error:
-                self.fail('Error parsing dmg storage query device-health output: {}'.format(error))
+                except KeyError as error:
+                    self.fail(
+                        'Error parsing dmg storage query device-health output: {}'.format(error))
         return checksum_errs
 
     def test_csum_error_logging(self):

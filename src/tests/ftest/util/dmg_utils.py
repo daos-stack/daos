@@ -1356,25 +1356,34 @@ def get_dmg_response(test, dmg_method, key=None, **kwargs):
     return response
 
 
-def get_storage_query_smd_info(test, dmg_method, **kwargs):
+def get_dmg_smd_info(test, dmg_method, smd_info_key=None, **kwargs):
     """Get the smd_info entries from the json output of the specified dmg command method.
+
+    Note: only works with dmg methods that produce json output with ['response']['host_storage_map']
+        [<key>]['storage']['smd_info'] entries.
 
     Args:
         test (Test): avocado test class
         dmg_method (object): the DmgCommand storage query method from which to get the json output
+        smd_info_key (str, optional): smd_info dictionary key for the value to return. Defaults to
+            None which will return the entire smd_info dictionary as the value.
         kwargs (dict): arguments to pass to the DmgCommand storage query method
 
     Raises:
         TestFail: if there is an error running the dmg command or parsing the json output
 
     Returns:
-        dict: a dictionary of host keys and smd information dictionary values
+        dict: a dictionary of host keys and dmg json output smd_info values (type based upon the
+            dmg_method and the smd_info_key)
     """
     smd_info = {}
     response = get_dmg_response(test, dmg_method, 'host_storage_map', **kwargs)
     try:
         for value in response.values():
-            smd_info[value['hosts']] = value['storage']['smd_info']
+            if smd_info_key:
+                smd_info[value['hosts']] = value['storage']['smd_info'][smd_info_key]
+            else:
+                smd_info[value['hosts']] = value['storage']['smd_info']
     except KeyError as error:
         test.fail(
             "Error parsing dmg.{}({}) json output: {}".format(
@@ -1383,7 +1392,7 @@ def get_storage_query_smd_info(test, dmg_method, **kwargs):
 
 
 def get_storage_query_device_uuids(test, dmg, **kwargs):
-    """Get the NVMe device uuids from the dmg storage query list-devices command.
+    """Get each NVMe device uuid from the dmg storage query list-devices command.
 
     Args:
         test (Test): avocado test class
@@ -1397,16 +1406,17 @@ def get_storage_query_device_uuids(test, dmg, **kwargs):
         dict: a dictionary of host keys and list of device uuid values
     """
     uuids = {}
-    response = get_storage_query_smd_info(test, dmg.storage_query_list_devices, **kwargs)
-    for host, smd_info in response.values():
-        uuids[host] = []
-        try:
-            for device in smd_info['devices']:
+    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_devices, 'devices', **kwargs)
+    for host, devices in smd_info.items():
+        if host not in uuids:
+            uuids[host] = []
+        for device in devices:
+            try:
                 uuids[host].append(device['uuid'])
-        except KeyError as error:
-            test.fail(
-                "Error parsing dmg.storage_query_list_devices({}) json output: {}".format(
-                    dict_to_str(kwargs), error))
+            except KeyError as error:
+                test.fail(
+                    "Error parsing dmg.storage_query_list_devices({}) json output: {}".format(
+                        dict_to_str(kwargs), error))
     return uuids
 
 
@@ -1425,16 +1435,11 @@ def get_storage_query_device_info(test, dmg, **kwargs):
         list: a list of device information dictionaries
     """
     device_info = []
-    data = get_storage_query_smd_info(test, dmg.storage_query_list_devices, **kwargs)
-    for hosts, smd_info in data.items():
-        try:
-            for device in smd_info['devices']:
-                device_info.append(device)
-                device_info[-1]['hosts'] = hosts
-        except KeyError as error:
-            test.fail(
-                'Error parsing dmg.storage_query_list_devices({}) json output: {}'.format(
-                    dict_to_str(kwargs), error))
+    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_devices, 'devices', **kwargs)
+    for hosts, devices in smd_info.items():
+        for device in devices:
+            device_info.append(device)
+            device_info[-1]['hosts'] = hosts
     return device_info
 
 
@@ -1453,14 +1458,10 @@ def get_storage_query_pool_info(test, dmg, **kwargs):
         list: a list of pool information dictionaries
     """
     pool_info = []
-    data = get_storage_query_smd_info(test, dmg.storage_query_list_pools, **kwargs)
-    for hosts, smd_info in data.items():
-        try:
-            for pool in smd_info['pools'].values():
+    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_pools, 'pools', **kwargs)
+    for hosts, pools in smd_info.items():
+        for pool_list in pools.values():
+            for pool in pool_list:
                 pool_info.append(pool)
                 pool_info[-1]['hosts'] = hosts
-        except KeyError as error:
-            test.fail(
-                'Error parsing dmg.storage_query_list_pools({}) json output: {}'.format(
-                    dict_to_str(kwargs), error))
     return pool_info

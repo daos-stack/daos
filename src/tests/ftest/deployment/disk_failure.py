@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,7 @@ import time
 
 from dmg_utils import get_storage_query_device_info, get_dmg_response
 from exception_utils import CommandFailure
-from general_utils import list_ot_str
+from general_utils import list_to_str
 from test_utils_pool import add_pool
 from osa_utils import OSAUtils
 
@@ -84,7 +84,7 @@ class DiskFailureTest(OSAUtils):
                 "Reintegrating evicted target: uuid=%s, rank=%s, targets=%s",
                 evict_device["uuid"], evict_device["rank"], evict_device["tgt_ids"])
             output = self.pool.reintegrate(
-                evict_device["rank"], list_ot_str(evict_device["tgt_ids"]))
+                evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
             time.sleep(15)
             done = "Faulty NVMEs replaced"
             self.print_and_assert_on_rebuild_failure(output)
