@@ -48,6 +48,7 @@ type (
 		LeadershipTransfer() raft.Future
 		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
+		Snapshot() raft.SnapshotFuture
 		State() raft.RaftState
 	}
 
@@ -66,6 +67,7 @@ type (
 		sync.RWMutex
 		log logging.Logger
 
+		Incarnation   uuid.UUID
 		Version       uint64
 		NextRank      ranklist.Rank
 		MapVersion    uint32

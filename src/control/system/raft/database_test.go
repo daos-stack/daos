@@ -346,6 +346,32 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	test.CmpErr(t, wantErr, gotErr)
 }
 
+func TestSystem_Database_SnapshotRestoreDifferentIncarnations(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	db0, cleanup0 := TestDatabase(t, log)
+	defer cleanup0()
+	db0.data.Incarnation = uuid.New()
+
+	snap, err := (*fsm)(db0).Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := &testSnapshotSink{}
+	if err := snap.Persist(sink); err != nil {
+		t.Fatal(err)
+	}
+
+	db1, cleanup1 := TestDatabase(t, log)
+	defer cleanup1()
+	db1.data.Incarnation = uuid.New()
+
+	wantErr := errors.Errorf("%s != %s", db0.data.Incarnation, db1.data.Incarnation)
+	gotErr := (*fsm)(db1).Restore(sink.Reader())
+	test.CmpErr(t, wantErr, gotErr)
+}
+
 func TestSystem_Database_BadApply(t *testing.T) {
 	makePayload := func(t *testing.T, op raftOp, inner interface{}) []byte {
 		t.Helper()

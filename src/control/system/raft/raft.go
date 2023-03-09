@@ -7,6 +7,7 @@
 package raft
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb/v2"
@@ -46,6 +48,7 @@ const (
 	raftOpRemovePoolService
 	raftOpIncMapVer
 	raftOpUpdateSystemAttrs
+	raftOpSetIncarnation
 
 	sysDBFile = "daos_system.db"
 )
@@ -81,6 +84,7 @@ func (ro raftOp) String() string {
 		"removePoolService",
 		"incMapVer",
 		"updateSystemAttrs",
+		"setIncarnation",
 	}[ro]
 }
 
@@ -357,6 +361,11 @@ func (db *Database) bootstrapRaft(newDB bool) error {
 		}); err != nil {
 			return err
 		}
+
+		// On bootstrap, set the DB incarnation to a new UUID.
+		db.OnLeadershipGained(func(ctx context.Context) error {
+			return db.setIncarnation(uuid.New())
+		})
 	}
 
 	return nil
@@ -460,6 +469,14 @@ func (db *Database) submitSystemAttrsUpdate(props map[string]string) error {
 	return db.submitRaftUpdate(data)
 }
 
+func (db *Database) setIncarnation(incarnation uuid.UUID) error {
+	data, err := createRaftUpdate(raftOpSetIncarnation, incarnation)
+	if err != nil {
+		return err
+	}
+	return db.submitRaftUpdate(data)
+}
+
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
@@ -517,6 +534,19 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpUpdateSystemAttrs:
 		f.data.applySystemUpdate(c.Op, c.Data, f.EmergencyShutdown)
+	case raftOpSetIncarnation:
+		f.data.Lock()
+		if f.data.Incarnation != uuid.Nil {
+			f.data.Unlock()
+			f.EmergencyShutdown(errors.New("attempted to set incarnation twice"))
+			return nil
+		}
+		if err := json.Unmarshal(c.Data, &f.data.Incarnation); err != nil {
+			f.data.Unlock()
+			f.EmergencyShutdown(errors.Wrapf(err, "failed to unmarshal incarnation %s", c.Data))
+			return nil
+		}
+		f.data.Unlock()
 	default:
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
 		return nil
@@ -637,6 +667,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	f.log.Debugf("created raft db snapshot (map version %d; data version %d)", f.data.MapVersion, f.data.Version)
+	f.log.Debugf("db incarnation: %s", f.data.Incarnation)
 	return &fsmSnapshot{data}, nil
 }
 
@@ -648,18 +679,25 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	}
 
 	if db.data.SchemaVersion != CurrentSchemaVersion {
-		return errors.Errorf("restored schema version %d != %d",
+		return errors.Errorf("can't restore db snapshot with different schema version (%d != %d)",
 			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
 	f.data.Lock()
+	defer f.data.Unlock()
+	if f.data.Incarnation != uuid.Nil {
+		if db.data.Incarnation != f.data.Incarnation {
+			return errors.Errorf("can't restore db snapshot from different incarnation (%s != %s)",
+				db.data.Incarnation, f.data.Incarnation)
+		}
+	}
+	f.data.Incarnation = db.data.Incarnation
 	f.data.Members = db.data.Members
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
 	f.data.System = db.data.System
 	f.data.Version = db.data.Version
-	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d; data version %d)", db.data.MapVersion, db.data.Version)
 	return nil
 }

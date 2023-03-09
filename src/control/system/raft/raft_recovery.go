@@ -15,6 +15,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
@@ -301,6 +302,7 @@ func GetLastLogEntry(log logging.Logger, cfg *DatabaseConfig) (*LogEntryDetails,
 type SnapshotDetails struct {
 	Metadata      *raft.SnapshotMeta
 	Path          string
+	Incarnation   uuid.UUID
 	Version       uint
 	MapVersion    uint
 	SchemaVersion uint

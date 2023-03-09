@@ -7,6 +7,7 @@
 package raft
 
 import (
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -25,12 +26,18 @@ type (
 		index    uint64
 		response interface{}
 	}
+
+	mockRaftSnapshotFuture struct {
+		mockRaftFuture
+	}
+
 	mockRaftServiceConfig struct {
 		LeaderCh              <-chan bool
 		ServerAddress         raft.ServerAddress
 		State                 raft.RaftState
 		LeadershipTransferErr error
 	}
+
 	mockRaftService struct {
 		cfg mockRaftServiceConfig
 		fsm raft.FSM
@@ -41,6 +48,10 @@ type (
 func (mrf *mockRaftFuture) Error() error          { return mrf.err }
 func (mrf *mockRaftFuture) Index() uint64         { return mrf.index }
 func (mrf *mockRaftFuture) Response() interface{} { return mrf.response }
+
+func (mrsf *mockRaftSnapshotFuture) Open() (*raft.SnapshotMeta, io.ReadCloser, error) {
+	return nil, nil, nil
+}
 
 func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyFuture {
 	mrs.fsm.Apply(&raft.Log{Data: cmd})
@@ -85,6 +96,10 @@ func (mrs *mockRaftService) State() raft.RaftState {
 
 func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
 	return &mockRaftFuture{}
+}
+
+func (mrs *mockRaftService) Snapshot() raft.SnapshotFuture {
+	return &mockRaftSnapshotFuture{}
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
