@@ -308,7 +308,7 @@ struct vos_dtx_act_ent {
 	/* If single object is modified and if it is the same as the
 	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
 	 *
-	 * If the single object is differet from 'dae_base::dae_oid',
+	 * If the single object is different from 'dae_base::dae_oid',
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
