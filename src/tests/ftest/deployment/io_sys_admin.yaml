@@ -51,7 +51,6 @@ container_3:
 
 pool:
   size: 40%
-  control_method: dmg
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -81,7 +80,6 @@ ior:
   transfer_size: '1Mib'
   block_size: '1Mib'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
 
 mdtest:
