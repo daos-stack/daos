@@ -286,15 +286,16 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	tid := 0
-	for i, tier := range tmp {
-		if tier == nil {
-			tmp = append(tmp[:i], tmp[i+1:]...)
+	tmp2 := make([]*TierConfig, 0, len(tmp))
+	for i := range tmp {
+		if tmp[i] == nil {
 			continue
 		}
-		tier.Tier = tid
+		tmp[i].Tier = tid
+		tmp2 = append(tmp2, tmp[i])
 		tid++
 	}
-	*tcs = tmp
+	*tcs = tmp2
 
 	return nil
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -565,6 +565,32 @@ storage:
   scm_size: 16
 -
   class: dcpm
+-
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+				&TierConfig{
+					Tier:  1,
+					Class: ClassDcpm,
+				},
+			},
+		},
+		"two empty tiers last": {
+			input: `
+storage:
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+-
+  class: dcpm
+-
 -
 `,
 			expTiers: TierConfigs{
