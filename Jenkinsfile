@@ -141,6 +141,9 @@ pipeline {
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
         cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
+             BRANCH_NAME.startsWith('feature/') ? '0 12 * * 7\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
@@ -171,7 +174,7 @@ pipeline {
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
-               defaultValue: 'auto',
+               defaultValue: 'auto_md_on_ssd',
                description: 'The launch.py --nvme argument to use for the Functional test ' +
                             'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
                             '0000:81:00.0, etc.)')
