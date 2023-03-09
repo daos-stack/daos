@@ -1330,7 +1330,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
-			    CRT_IV_SYNC_EAGER, false /* retry */);
+			    CRT_IV_SYNC_EAGER, true /* retry */);
 	D_FREE(iv_entry);
 	return rc;
 }

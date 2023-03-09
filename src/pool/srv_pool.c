@@ -4887,6 +4887,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	int				rc;
 	bool				schedule_layout_upgrade = false;
 	bool				need_put_leader = false;
+	bool				schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
@@ -4897,7 +4898,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_put_leader, rc);
 
 	/**
 	 * Four kinds of pool upgrading states:
@@ -4989,6 +4990,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
+	schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5003,8 +5005,8 @@ out_upgrade:
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	if (!schedule_layout_upgrade) {
+
+	if (schedule_upgrade && !schedule_layout_upgrade) {
 		int rc1;
 
 		if (rc == 0 && need_put_leader &&
