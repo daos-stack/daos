@@ -256,7 +256,7 @@ jobs:
         run: |
           . ci/gha_functions.sh
           test_tags=()
-          # the $(echo ...) here is to unquote the GH substituted ${{ ... }} value
+          # the $(echo ...) here is to unquote the GH substituted value
           for tag in $(echo ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}); do
               test_tags+=($tag,-hw)
           done
