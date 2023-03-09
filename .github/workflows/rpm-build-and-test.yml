@@ -256,10 +256,11 @@ jobs:
         run: |
           . ci/gha_functions.sh
           test_tags=()
-          for tag in ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}; do
-              test_tag+=($tag,-hw)
+          # the $(echo ...) here is to unquote the GH substituted ${{ ... }} value
+          for tag in $(echo ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}); do
+              test_tags+=($tag,-hw)
           done
-          TEST_TAG="$test_tag" ci/functional/test_main.sh
+          TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
