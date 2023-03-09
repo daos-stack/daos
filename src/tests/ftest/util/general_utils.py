@@ -12,6 +12,7 @@ import random
 import string
 import time
 import ctypes
+import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
@@ -1378,14 +1379,17 @@ def percent_change(val1, val2):
         val2 (float): second value.
 
     Raises:
-        ZeroDivisionError: if val1 is 0
         ValueError: if either val is not a number
 
     Returns:
         float: decimal percent change.
+        math.nan: if val1 is 0
 
     """
-    return (float(val2) - float(val1)) / float(val1)
+    try:
+        return (float(val2) - float(val1)) / float(val1)
+    except ZeroDivisionError:
+        return math.nan
 
 
 def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
