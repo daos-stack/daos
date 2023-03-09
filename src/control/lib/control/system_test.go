@@ -25,6 +25,30 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func TestControl_IsMSConnectionFailure(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		expResult bool
+	}{
+		"nil": {},
+		"MS connection error": {
+			err:       errMSConnectionFailure,
+			expResult: true,
+		},
+		"wrapped MS connection error": {
+			err:       errors.Wrap(errMSConnectionFailure, "something bad happened"),
+			expResult: true,
+		},
+		"other error": {
+			err: errors.New("something went wrong"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, IsMSConnectionFailure(tc.err), "")
+		})
+	}
+}
+
 func TestControl_StartRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		uErr    error

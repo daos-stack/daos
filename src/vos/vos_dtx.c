@@ -913,7 +913,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
-		D_ERROR("No space when create actvie DTX table.\n");
+		D_ERROR("No space when create active DTX table.\n");
 		return -DER_NOSPACE;
 	}
 

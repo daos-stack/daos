@@ -29,7 +29,6 @@
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
-#define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
@@ -289,7 +288,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
-	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	env = getenv("VOS_BDEV_CLASS");
