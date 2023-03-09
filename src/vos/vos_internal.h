@@ -1415,10 +1415,10 @@ vos_offload_exec(int (*func)(void *), void *arg)
 }
 
 static inline int
-vos_load_exec(void (*func)(void *), void *arg)
+vos_exec(void (*func)(void *), void *arg)
 {
-	if (dss_load_exec != NULL)
-		return dss_load_exec(func, arg);
+	if (dss_main_exec != NULL)
+		return dss_main_exec(func, arg);
 
 	func(arg);
 

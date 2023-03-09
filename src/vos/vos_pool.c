@@ -185,12 +185,15 @@ vos_meta_load(struct umem_store *store, char *start)
 		mla->mla_control = &mlc;
 
 		mlc.mlc_inflights++;
-		rc = vos_load_exec(vos_meta_load_fn, (void *)mla);
+		rc = vos_exec(vos_meta_load_fn, (void *)mla);
 		if (rc || mlc.mlc_rc) {
-			D_FREE(mla);
-			mlc.mlc_inflights--;
+			if (rc) {
+				D_FREE(mla);
+				mlc.mlc_inflights--;
+			}
 			break;
 		}
+
 		if (mlc.mlc_inflights > META_READ_QD_NR) {
 			ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
 			D_ASSERT(mlc.mlc_inflights <= META_READ_QD_NR);

@@ -601,7 +601,7 @@ dss_offload_exec(int (*func)(void *), void *arg)
 }
 
 int
-dss_load_exec(void (*func)(void *), void *arg)
+dss_main_exec(void (*func)(void *), void *arg)
 {
 	struct dss_module_info *info = dss_get_module_info();
 
