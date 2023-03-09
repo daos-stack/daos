@@ -316,7 +316,7 @@ csv_file.add_argument(
     '--io_size',
     type=str,
     help='I/O size.',
-    default='128KiB')
+    default='1MiB')
 csv_file.add_argument(
     '--chunk_size',
     dest='chunk_size',
