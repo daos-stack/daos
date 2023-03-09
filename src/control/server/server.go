@@ -319,15 +319,15 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
-	if err != nil {
-		return err
-	}
+	// iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	// if err != nil {
+	// 	return err
+	// }
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
-		return err
-	}
+	// if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	// 	return err
+	// }
 
 	// Retrieve NVMe device details (before engines are started) so static details can be
 	// recovered by the engine storage provider(s) during scan even if devices are in use.

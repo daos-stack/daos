@@ -24,6 +24,10 @@ const (
 	// can be set to enable non-ERROR logging in the privileged helper.
 	DaosPrivHelperLogFileEnvVar = "DAOS_HELPER_LOG_FILE"
 
+	// DisableReqFwdEnvVar is the name of the environment variable which
+	// can be set to disable forwarding requests to the privileged binary.
+	DisableReqFwdEnvVar = "DAOS_DISABLE_REQ_FWD"
+
 	// DaosFWName is the name of the firmware helper.
 	DaosFWName = "daos_firmware_helper"
 
@@ -46,6 +50,10 @@ func CheckHelper(log logging.Logger, helperName string) error {
 	fwd := NewForwarder(log, helperName)
 	dummy := struct{}{}
 	pingRes := PingResp{}
+
+	if fwd.Disabled {
+		return nil
+	}
 
 	if err := fwd.SendReq("Ping", dummy, &pingRes); err != nil {
 		err = errors.Cause(err)
