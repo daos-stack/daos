@@ -142,7 +142,7 @@ pipeline {
         /* groovylint-disable-next-line AddEmptyString */
         cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
              /* groovylint-disable-next-line AddEmptyString */
-             BRANCH_NAME.startsWith('feature/') ? '0 12 * * 7\n' : '' +
+             BRANCH_NAME.startsWith('feature/') ? '0 12 * * 0\n' : '' +
              /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
