@@ -518,6 +518,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
 
 	p_arg->bulks_inflight++;
+	D_INFO("bulk_op %d sgl_nr %d bulks_inflight=%d\n", bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	if (daos_handle_is_valid(ioh)) {
 		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
@@ -557,16 +558,25 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		if (rc)
 			break;
 	}
+	D_INFO("Done bulk_xfer_sgls rc=%d for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
+
 done:
-	if (--(p_arg->bulks_inflight) == 0)
+	if (--(p_arg->bulks_inflight) == 0) {
+		D_INFO("bulks_inflight now 0, set the eventual\n");
 		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+	}
 
 	if (async)
 		return rc;
 
+	D_INFO("rc=%d wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
 	if (rc == 0)
 		rc = ret ? dss_abterr2der(ret) : *status;
+	D_INFO("rc=%d done wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	ABT_eventual_free(&p_arg->eventual);
 
@@ -1899,6 +1909,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 			rc = -DER_NO_HDL;
 		return rc;
 	}
+	D_INFO("hdl="DF_UUID": sch_ref=%d after find hdl\n",
+	       DP_UUID(coh_uuid), coh->sch_ref);
 
 	/* normal container open handle with ds_cont_child attached */
 	if (coh->sch_cont != NULL) {
@@ -1948,6 +1960,8 @@ out:
 failed:
 	if (coc != NULL)
 		ds_cont_child_put(coc);
+	D_INFO("hdl="DF_UUID": in failed path, sch_ref=%d before ds_cont_hdl_put()\n",
+	       DP_UUID(coh_uuid), coh->sch_ref);
 	ds_cont_hdl_put(coh);
 	return rc;
 }

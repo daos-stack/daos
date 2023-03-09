@@ -1358,7 +1358,13 @@ class TestWithServers(TestWithoutServers):
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next - eventually this call will encompass all teardown steps
+        self.log.info("Elevate engines log_mask before pool destroys in tearDown")
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
+
         self._teardown_errors.extend(self._cleanup())
+
+        self.log.info("Restoring engines log_mask after pool destroys in tearDown")
+        self.get_dmg_command().server_set_logmasks(raise_exception=False)
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())

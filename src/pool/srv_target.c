@@ -398,14 +398,21 @@ pool_child_delete_one(void *uuid)
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
 	ds_stop_scrubbing_ult(child);
+	D_DEBUG(DB_MD, DF_UUID": child spc_ref=%d before first ds_pool_child_put()\n",
+		DP_UUID(child->spc_uuid), child->spc_ref);
 	ds_pool_child_put(child); /* -1 for the list */
 
+	D_DEBUG(DB_MD, DF_UUID": child spc_ref=%d before second/final ds_pool_child_put()\n",
+		DP_UUID(child->spc_uuid), child->spc_ref);
 	ds_pool_child_put(child); /* -1 for lookup */
 
+	D_DEBUG(DB_MD, DF_UUID": child spc_ref=%d before wait for spc_ref_eventual\n",
+		DP_UUID(child->spc_uuid), child->spc_ref);
 	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
+	D_DEBUG(DB_MD, DF_UUID": done wait for spc_ref_eventual\n", DP_UUID(child->spc_uuid));
 	ABT_eventual_free(&child->spc_ref_eventual);
 
 	/* ds_pool_child must be freed here to keep
