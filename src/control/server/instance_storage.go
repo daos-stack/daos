@@ -99,7 +99,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	}
 	ei.log.Debugf("needsScmFormat: %t", needsScmFormat)
 
-	if !needsMetaFormat && ei.storage.ControlMetadataHasPath() && needsScmFormat {
+	if !needsMetaFormat && ei.storage.ControlMetadataPathConfigured() {
 		cfg, err := ei.storage.GetScmConfig()
 		if err != nil {
 			return err

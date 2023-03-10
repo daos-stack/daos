@@ -99,8 +99,8 @@ func (p *Provider) ControlMetadataNeedsFormat() (bool, error) {
 	return p.metadata.NeedsFormat(req)
 }
 
-// ControlMetadataHasPath checks whether metadata section is defined
-func (p *Provider) ControlMetadataHasPath() bool {
+// ControlMetadataPathConfigured checks whether metadata section is defined
+func (p *Provider) ControlMetadataPathConfigured() bool {
 	if p == nil {
 		return false
 	}

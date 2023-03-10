@@ -40,10 +40,13 @@ struct smd_pool_info {
 	d_list_t	 spi_link;
 	uuid_t		 spi_id;
 	uint64_t	 spi_blob_sz[SMD_DEV_TYPE_MAX];
-	uint32_t	 spi_tgt_cnt[SMD_DEV_TYPE_MAX];
+	uint16_t	 spi_flags[SMD_DEV_TYPE_MAX];
+	uint16_t	 spi_tgt_cnt[SMD_DEV_TYPE_MAX];
 	int		*spi_tgts[SMD_DEV_TYPE_MAX];
 	uint64_t	*spi_blobs[SMD_DEV_TYPE_MAX];
 };
+
+#define	SMD_POOL_IN_CREATION	0x1
 
 struct sys_db;
 /**
@@ -228,6 +231,15 @@ int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
  * \return			Static string representing enum value
  */
 char *smd_dev_stat2str(enum smd_dev_state state);
+
+/**
+ * Mark a pool as ready to be used in smd.
+ *
+ * \param [IN]	pool_id		Pool UUID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_mark_ready(uuid_t pool_id);
 
 static inline void
 smd_pool_free_info(struct smd_pool_info *pool_info)
