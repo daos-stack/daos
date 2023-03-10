@@ -2097,6 +2097,9 @@ verify_rank_list_dup_uniq(int *src_ranks, int num_src_ranks,
 		assert_int_equal(ret_list->rl_ranks[i], exp_ranks[i]);
 	}
 	fprintf(stdout, "]\n");
+
+	d_rank_list_free(ret_list);
+	d_rank_list_free(orig_list);
 }
 
 static void
