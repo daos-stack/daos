@@ -175,9 +175,9 @@ jobs:
     env:
       TEST_TAG: pr,-hw
       # yamllint disable-line rule:line-length
-      NODELIST: wolf-240vm1,wolf-240vm2,wolf-240vm3,wolf-240vm4,wolf-240vm5,wolf-240vm6,wolf-240vm7,wolf-240vm8,wolf-240vm9
+      # NODELIST: wolf-240vm1,wolf-240vm2,wolf-240vm3,wolf-240vm4,wolf-240vm5,wolf-240vm6,wolf-240vm7,wolf-240vm8,wolf-240vm9
       # yamllint disable-line rule:line-length
-      NODESTRING: wolf-240vm1,wolf-240vm2,wolf-240vm3,wolf-240vm4,wolf-240vm5,wolf-240vm6,wolf-240vm7,wolf-240vm8,wolf-240vm9
+      # NODESTRING: wolf-240vm1,wolf-240vm2,wolf-240vm3,wolf-240vm4,wolf-240vm5,wolf-240vm6,wolf-240vm7,wolf-240vm8,wolf-240vm9
       CONFIG_POWER_ONLY: false
       INST_RPMS: daos-client daos-tests daos-server daos-serialize daos-client-tests-openmpi ndctl
                  fio patchutils ior romio-tests testmpio python3-mpi4py-tests hdf5-mpich-tests
@@ -222,8 +222,18 @@ jobs:
       - uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
-      - name: Provision cluster
-        run: ssh root@wolf-240 "POOL=${{ env.cp_PROVISIONING_POOL }}
+      - name: Request and Provision a Cluster
+        run: set -eux
+             uuid=$(uuidgen)
+             curl -v -X POST --user ${{JENKINS_TOKEN}} \
+                 'https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid"
+             while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
+                 ls -l /scratch/Get\ a\ cluster/
+                 sleep 1
+             done
+             NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid)
+             echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV
+             ssh root@${NODESTRING%%vm*} "POOL=${{ env.cp_PROVISIONING_POOL }}
              NODESTRING=${{ env.NODESTRING}}
              $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
