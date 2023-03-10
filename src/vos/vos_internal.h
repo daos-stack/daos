@@ -233,6 +233,8 @@ struct vos_pool {
 	uint32_t		 vp_dtx_committed_count;
 	/** Tiering policy */
 	struct policy_desc_t	vp_policy_desc;
+	/** Space (in percentage) reserved for rebuild */
+	unsigned int		vp_space_rb;
 };
 
 /**
@@ -306,7 +308,7 @@ struct vos_dtx_act_ent {
 	/* If single object is modified and if it is the same as the
 	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
 	 *
-	 * If the single object is differet from 'dae_base::dae_oid',
+	 * If the single object is different from 'dae_base::dae_oid',
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.

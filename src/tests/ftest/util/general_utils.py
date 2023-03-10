@@ -773,24 +773,48 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def convert_list(value, separator=","):
-    """Convert a list into a separator-separated string of its items.
-
-    Examples:
-        convert_list([1,2,3])        -> '1,2,3'
-        convert_list([1,2,3], " ")   -> '1 2 3'
-        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+def list_to_str(value, joiner=","):
+    """Convert a list to a string by joining its items.
 
     Args:
-        value (list): list to convert into a string
-        separator (str, optional): list item separator. Defaults to ",".
+        value (list): list to convert to a string
+        joiner (str, optional): string to use to join items. Defaults to ",".
 
     Returns:
-        str: a single string containing all the list items separated by the
-            separator.
+        str: a string of each list entry joined by the joiner string
 
     """
-    return separator.join([str(item) for item in value])
+    return joiner.join(map(str, value))
+
+
+def dict_to_list(value, joiner="="):
+    """Convert a dictionary to a list of joined key and value pairs.
+
+    Args:
+        value (dict): dictionary to convert into a list
+        joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        list: a list of joined dictionary key and value strings
+
+    """
+    return [list_to_str(items, joiner) for items in value.items()]
+
+
+def dict_to_str(value, joiner=", ", items_joiner="="):
+    """Convert a dictionary to a string of joined key and value joined pairs.
+
+    Args:
+        value (dict): dictionary to convert into a string
+        joiner (str, optional): string to use to join dict_to_list() item. Defaults to ", ".
+        items_joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        str: a string of each dictionary key and value pair joined by the items_joiner string all
+            joined by the joiner string
+
+    """
+    return list_to_str(dict_to_list(value, items_joiner), joiner)
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
@@ -1073,7 +1097,7 @@ def convert_string(item, separator=","):
 
     """
     if isinstance(item, (list, tuple, set)):
-        item = convert_list(item, separator)
+        item = list_to_str(item, separator)
     elif not isinstance(item, str):
         item = str(item)
     return item
@@ -1110,10 +1134,9 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} /usr/bin/mkdir -p {}".format(
-            get_clush_command(hosts, "-S -v", sudo), directory),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
+    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
@@ -1149,10 +1172,9 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} {} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    chown_command = get_chown_command(owner, group, file=filename)
+    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
@@ -1210,8 +1232,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = "{} rm -f {}".format(
-                    get_clush_command(other_hosts, "-S -v", True), source)
+                rm_command = get_clush_command(
+                    other_hosts, args="-S -v", command="rm -f {}".format(source),
+                    command_sudo=True)
                 run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
@@ -1220,15 +1243,15 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if result is None or result.exit_status == 0:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = "{} cp {} {}".format(
-                    get_clush_command(hosts, "-S -v", True), source,
-                    destination)
+                command = get_clush_command(
+                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
+                    command_sudo=True)
                 result = run_command(command, timeout, verbose, raise_exception)
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
-            command = "{} --copy {} --dest {}".format(
-                get_clush_command(hosts, "-S -v", False), source, destination)
+            command = get_clush_command(
+                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
             result = run_command(command, timeout, verbose, raise_exception)
 
         # If requested update the ownership of the destination file
@@ -1273,11 +1296,9 @@ def get_file_listing(hosts, files):
                 pid             - command's pid
 
     """
-    result = run_command(
-        "{} /usr/bin/ls -la {}".format(
-            get_clush_command(hosts, "-S -v", True),
-            convert_string(files, " ")),
-        verbose=False, raise_exception=False)
+    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
+    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
+    result = run_command(command, verbose=False, raise_exception=False)
     return result
 
 
@@ -1482,8 +1503,7 @@ def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
         kwargs["log"] = log
     method_str = "{}({})".format(
         get_method.__name__,
-        ", ".join(
-            ["=".join([str(key), str(value)]) for key, value in kwargs.items() if key != "log"]))
+        ", ".join([list_to_str(items, "=") for items in kwargs.items() if items[0] != "log"]))
     result_found = False
     timed_out = False
     start = time.time()

@@ -113,7 +113,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         for attr_value in attr_values:
             self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1])
+                attrs={attr_value[0]: attr_value[1]})
 
             kwargs["attr"] = attr_value[0]
             data = self.daos_cmd.container_get_attr(**kwargs)['response']
@@ -200,7 +200,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         errors = []
 
         # bulk-set all attributes
-        self.daos_cmd.container_set_attrs(
+        self.daos_cmd.container_set_attr(
             pool=actual_pool_uuid, cont=actual_cont_uuid,
             attrs=attr_values)
 
@@ -255,26 +255,16 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         self.daos_cmd = self.get_daos_command()
 
-        expected_attrs = []
-        vals = []
+        expected_attrs = {"attr" + str(idx): "val" + str(idx) for idx in range(50)}
 
-        for idx in range(50):
-            expected_attrs.append("attr" + str(idx))
-            vals.append("val" + str(idx))
-
-        for expected_attr, val in zip(expected_attrs, vals):
-            _ = self.daos_cmd.container_set_attr(
-                pool=self.pool.uuid, cont=self.container.uuid,
-                attr=expected_attr, val=val)
-
-        expected_attrs.sort()
+        self.container.set_attr(attrs=expected_attrs)
 
         kwargs = {
             "pool": self.pool.uuid,
             "cont": self.container.uuid
         }
-        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data)
-        actual_attrs.sort()
+        response = self.daos_cmd.container_list_attrs(**kwargs)['response']
+        actual_attr_names = sorted(list(response))
+        expected_attr_names = sorted(expected_attrs.keys())
         self.assertEqual(
-            expected_attrs, actual_attrs, "Unexpected output from list_attrs")
+            actual_attr_names, expected_attr_names, "Unexpected output from list_attrs")

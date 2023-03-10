@@ -3268,6 +3268,225 @@ co_get_perms(void **state)
 	test_teardown_cont(arg);
 }
 
+static void
+co_exclusive_open(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*label = "exclusive_open";
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_handle_t	 coh_ex;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' ("DF_UUIDF")\n", label, DP_UUID(uuid));
+
+	print_message("SUBTEST: EX conflicts with RO\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EX, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EX conflicts with RW\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EX, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: other handles already exist; shall get "DF_RC"\n",
+		      DP_RC(-DER_BUSY));
+	print_message(" performing a non-exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" trying to perform an exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh_ex, NULL, NULL);
+	assert_rc_equal(rc, -DER_BUSY);
+	print_message(" closing the non-exclusive handle\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: no other handles; shall succeed\n");
+	print_message(" performing an exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh_ex, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: shall prevent other handles ("DF_RC")\n", DP_RC(-DER_BUSY));
+	print_message(" trying to perform a non-exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_BUSY);
+	print_message(" closing the exclusive handle\n");
+	rc = daos_cont_close(coh_ex, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+co_evict_hdls(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*label = "evict_hdls";
+	uuid_t		 uuid;
+	daos_handle_t	 coh0;
+	daos_handle_t	 coh1;
+#if 0
+	daos_handle_t	 coh2;
+#endif
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' ("DF_UUIDF")\n", label, DP_UUID(uuid));
+
+	print_message("SUBTEST: EVICT conflicts with EVICT_ALL\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EX|EVICT is not supported\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT, &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EVICT no handle; shall succeed\n");
+	print_message(" performing an RO|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT my own exclusive handle; shall succeed\n");
+	print_message(" performing an EX open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the evicted EX handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	/*
+	 * Closing an evicted handle returns zero. See "already closed" in
+	 * cont_close.
+	 */
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RW|EVICT handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	/*
+	 * Temporarily commented out due to what appears to be an nhandles bug
+	 * that happens when closing a batch of two or more handles.
+	 */
+	print_message("SUBTEST: EVICT my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an RW|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RW|EVICT handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+#endif
+
+	print_message("SUBTEST: RO|EVICT_ALL and RW|EVICT_ALL are not supported\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT_ALL, &coh0, NULL,
+			    NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT_ALL, &coh0, NULL,
+			    NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EVICT_ALL no existing handles; shall succeed\n");
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT_ALL my own exclusive handle; shall succeed\n");
+	print_message(" performing an EX open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the EX handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the EX|EVICT_ALL handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	/*
+	 * Temporarily commented out due to what appears to be an nhandles bug
+	 * that happens when closing a batch of two or more handles.
+	 */
+	print_message("SUBTEST: EVICT_ALL my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the EX|EVICT_ALL handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+#endif
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -3336,6 +3555,8 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT31: container open/query number of handles (hdl_share)", co_nhandles, hdl_share_enable,
      test_case_teardown},
     {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
+    {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
+    {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
 };
 
 int
