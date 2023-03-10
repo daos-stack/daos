@@ -256,6 +256,8 @@ func (f *FsCheckFlag) UnmarshalFlag(fv string) error {
 		switch strings.TrimSpace(strings.ToLower(cflag)) {
 		case "print":
 			f.Flags |= C.DFS_CHECK_PRINT
+		case "evict":
+			f.Flags |= C.DFS_CHECK_EVICT_ALL
 		case "remove":
 			f.Flags |= C.DFS_CHECK_REMOVE
 		case "relink":

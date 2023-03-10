@@ -1144,6 +1144,8 @@ enum {
 	DFS_CHECK_RELINK	= (1 << 2),
 	/** verify data consistency of each oid in the container (note that this will be slow) */
 	DFS_CHECK_VERIFY	= (1 << 3),
+	/** Evict all open container handles to ensure exclusive open works for the checker */
+	DFS_CHECK_EVICT_ALL	= (1 << 4),
 };
 
 /**

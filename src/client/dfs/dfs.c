@@ -6684,6 +6684,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	struct timespec		now;
 	uid_t			uid = geteuid();
 	gid_t			gid = getegid();
+	unsigned int		co_flags = DAOS_COO_EX;
 	int			rc, rc2;
 
 	if (flags & DFS_CHECK_RELINK && flags & DFS_CHECK_REMOVE) {
@@ -6691,8 +6692,10 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		return EINVAL;
 	}
 
-	/** TODO - Update to use Exclusive open when available */
-	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	if (flags & DFS_CHECK_EVICT_ALL)
+		co_flags |= DAOS_COO_EVICT_ALL;
+
+	rc = daos_cont_open(poh, cont, co_flags, &coh, NULL, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
