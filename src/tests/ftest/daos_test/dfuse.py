@@ -39,8 +39,6 @@ class DaosCoreTestDfuse(DfuseTestBase):
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
-        daos_cmd = self.get_daos_command()
-
         cont_attrs = OrderedDict()
 
         cache_mode = self.params.get('name', '/run/dfuse/*')
@@ -76,8 +74,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         if use_dfuse:
-            daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
-                                         attrs=cont_attrs)
+            self.container.set_attr(attrs=cont_attrs)
 
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 

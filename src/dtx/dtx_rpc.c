@@ -234,8 +234,16 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 			din->di_flags.ca_arrays = NULL;
 		}
 
-		if (dra->dra_opc == DTX_REFRESH && DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY)) {
-			rc = crt_req_set_timeout(req, 3);
+		if (dra->dra_opc == DTX_REFRESH) {
+			if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+				rc = crt_req_set_timeout(req, 3);
+			else
+				/*
+				 * If related DTX is committable, then it will be committed
+				 * within DTX_COMMIT_THRESHOLD_AGE time. So if need to wait
+				 * for longer, then just let related client to retry.
+				 */
+				rc = crt_req_set_timeout(req, DTX_COMMIT_THRESHOLD_AGE);
 			D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
 		}
 
@@ -1067,8 +1075,13 @@ next:
 				rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid,
 						    NULL, NULL, NULL, NULL, false);
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
-				    rc1 != -DER_NONEXIST && rc == 0)
-					rc = -DER_INPROGRESS;
+				    rc1 != -DER_NONEXIST) {
+					if (!failout)
+						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
+						       DP_DTI(&dsp->dsp_xid), rc1);
+					else if (rc == 0)
+						rc = -DER_INPROGRESS;
+				}
 
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
@@ -1191,6 +1204,8 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 			dtx_handle_reinit(dth);
 			rc = -DER_AGAIN;
 		}
+	} else if (rc == -DER_TIMEDOUT) {
+		rc = -DER_INPROGRESS;
 	}
 
 	return rc;
