@@ -6,6 +6,7 @@
 *
 !src
 !utils/build.config
+!utils/Argobots_v1.1_mprotect_ABTI_ythread.patch
 !utils/certs
 !utils/ci
 !utils/completion
