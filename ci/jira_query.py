@@ -85,6 +85,8 @@ def fetch_pr_data():
 
 def main():
     """Run the script"""
+
+    # pylint: disable=too-many-branches
     pr_data = fetch_pr_data()
 
     priority = None
