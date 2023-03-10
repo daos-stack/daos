@@ -1143,6 +1143,10 @@ co_open_access(void **state)
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
 				-DER_NO_PERM);
 
+	print_message("cont ACL gives the user RO + DEL, they want RW\n");
+	expect_cont_open_access(arg, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW,
+				-DER_NO_PERM);
+
 	print_message("cont ACL gives the user RO, they want RO\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RO,
 				0);
