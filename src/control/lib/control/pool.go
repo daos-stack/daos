@@ -134,12 +134,19 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
+	var acl []string
+	if pcr.ACL != nil {
+		acl = pcr.ACL.Entries
+	}
+
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
+		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
 		Properties: props,
+		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
 	})
 }
@@ -227,7 +234,7 @@ type (
 		poolRequest
 		User       string
 		UserGroup  string
-		ACL        *AccessControlList
+		ACL        *AccessControlList `json:"-"`
 		NumSvcReps uint32
 		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
