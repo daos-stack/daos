@@ -22,6 +22,7 @@
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <mntent.h>
+#include <signal.h>
 
 #include <gurt/list.h>
 #include <gurt/common.h>
@@ -55,6 +56,8 @@
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (8)
 
+#define MAX_MMAP_BLOCK      (64)
+
 #define MAX_OPENED_FILE     (2048)
 #define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
 #define MAX_OPENED_DIR      (512)
@@ -77,6 +80,8 @@ struct DFSMOUNT {
 	char                *pool, *cont;
 	char                 fs_root[DFS_MAX_PATH];
 };
+
+static long int        page_size;
 
 static pthread_mutex_t lock_init;
 static bool            daos_inited;
@@ -125,17 +130,39 @@ struct DIRSTATUS {
 	struct dirent   *ents;
 };
 
+struct MMAPSTATUS {
+	/* The base address of this memory block */
+	char            *addr;
+	size_t           length;
+	/* the size of file. It is needed when write back to storage. */
+	size_t           file_size;
+	int              prot;
+	int              flags;
+	/* The fd used when mmap is called */
+	int              fd;
+	/* num_pages = length / page_size */
+	int              num_pages;
+	int              num_dirty_pages;
+	off_t            offset;
+	/* An array to indicate whether a page is updated or not */
+	bool            *updated;
+};
+
 struct FD_DUP2ED {
 	int fd_src, fd_dest;
 };
 
 /* working dir of current process */
 static char            cur_dir[DFS_MAX_PATH] = "";
+static bool            segv_handler_inited;
+/* Old segv handler */
+struct sigaction       old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
+static pthread_mutex_t lock_mmap;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -231,7 +258,7 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode)
 	if (hdl == NULL)
 		return NULL;
 
-	strncpy(hdl->name, name, len + 1);
+	strncpy(hdl->name, name, len);
 	hdl->oh = oh;
 
 	rc = d_hash_rec_insert(dfs_list[idx_dfs].dfs_dir_hash, hdl->name, len, &hdl->entry, false);
@@ -247,27 +274,27 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode)
 }
 /* end   copied from https://github.com/hpc/ior/blob/main/src/aiori-DFS.c */
 
-static int (*real_open_ld)(const char *pathname, int oflags, ...);
-static int (*real_open_libc)(const char *pathname, int oflags, ...);
-static int (*real_open_pthread)(const char *pathname, int oflags, ...);
+static int (*ld_open)(const char *pathname, int oflags, ...);
+static int (*libc_open)(const char *pathname, int oflags, ...);
+static int (*pthread_open)(const char *pathname, int oflags, ...);
 
-static int (*real_close_nocancel)(int fd);
+static int (*libc_close_nocancel)(int fd);
 
-static int (*real_close_libc)(int fd);
-static int (*real_close_pthread)(int fd);
+static int (*libc_close)(int fd);
+static int (*pthread_close)(int fd);
 
-static ssize_t (*real_read_libc)(int fd, void *buf, size_t count);
-static ssize_t (*real_read_pthread)(int fd, void *buf, size_t count);
+static ssize_t (*libc_read)(int fd, void *buf, size_t count);
+static ssize_t (*pthread_read)(int fd, void *buf, size_t count);
 
 static ssize_t (*real_pread)(int fd, void *buf, size_t size, off_t offset);
 
-static ssize_t (*real_write_libc)(int fd, const void *buf, size_t count);
-static ssize_t (*real_write_pthread)(int fd, const void *buf, size_t count);
+static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
+static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*real_pwrite)(int fd, const void *buf, size_t size, off_t offset);
 
-static off_t (*real_lseek_libc)(int fd, off_t offset, int whence);
-static off_t (*real_lseek_pthread)(int fd, off_t offset, int whence);
+static off_t (*libc_lseek)(int fd, off_t offset, int whence);
+static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 
 static int (*real_fxstat)(int vers, int fd, struct stat *buf);
 
@@ -356,6 +383,9 @@ static int (*real_symlinkat)(const char *symvalue, int dirfd, const char *path);
 static ssize_t (*real_readlink)(const char *path, char *buf, size_t size);
 static ssize_t (*real_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
 
+static void * (*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static int (*real_munmap)(void *addr, size_t length);
+
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
 
@@ -384,23 +414,32 @@ static int (*real_tcgetattr)(int fd, void *termios_p);
 static void
 remove_dot_dot(char szPath[]);
 static int
-			  remove_dot(char szPath[]);
+remove_dot(char szPath[]);
 
 static struct FILESTATUS *file_list;
 static struct DIRSTATUS  *dir_list;
+static struct MMAPSTATUS  mmap_list[MAX_MMAP_BLOCK];
 
 /* last_fd==-1 means the list is empty. No active fd in list. */
 static int                next_free_fd, last_fd       = -1, num_fd;
 static int                next_free_dirfd, last_dirfd = -1, num_dirfd;
+static int                next_free_map, last_map     = -1, num_map;
 
 static int
 find_next_available_fd(void);
 static int
 find_next_available_dirfd(void);
+static int
+find_next_available_map(void);
 static void
 free_fd(int idx);
 static void
-		 free_dirfd(int idx);
+free_dirfd(int idx);
+static void
+free_map(int idx);
+
+static void
+register_handler(int sig, struct sigaction *old_handler);
 
 static int       num_fd_dup2ed;
 struct FD_DUP2ED fd_dup2_list[MAX_FD_DUP2ED];
@@ -522,7 +561,7 @@ retrieve_handles_from_fuse(int idx)
 	d_iov_t               iov = {};
 	char                  buff[2048];
 
-	fd = real_open_libc(dfs_list[idx].fs_root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	fd = libc_open(dfs_list[idx].fs_root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0) {
 		printf("Error: failed to open dir: %s\n", dfs_list[idx].fs_root);
 		return;
@@ -582,7 +621,7 @@ retrieve_handles_from_fuse(int idx)
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 
 err:
-	real_close_libc(fd);
+	libc_close(fd);
 }
 
 /* Check whether path starts with "DAOS://" */
@@ -837,11 +876,17 @@ init_fd_list(void)
 		printf("\n mutex create_new_lock lock_dirfd init failed\n");
 		exit(1);
 	}
+	if (pthread_mutex_init(&lock_mmap, NULL) != 0) {
+		printf("\n mutex create_new_lock lock_mmap init failed\n");
+		exit(1);
+	}
 
 	file_list = (struct FILESTATUS *)malloc(sizeof(struct FILESTATUS) * MAX_OPENED_FILE);
 	dir_list  = (struct DIRSTATUS *)malloc(sizeof(struct DIRSTATUS) * MAX_OPENED_DIR);
 	memset(file_list, 0, sizeof(struct FILESTATUS) * MAX_OPENED_FILE);
 	memset(dir_list, 0, sizeof(struct DIRSTATUS) * MAX_OPENED_DIR);
+
+	memset(mmap_list, 0, sizeof(struct MMAPSTATUS) * MAX_MMAP_BLOCK);
 
 	for (i = 0; i < MAX_OPENED_FILE; i++)
 		file_list[i].file_obj = NULL;
@@ -853,7 +898,9 @@ init_fd_list(void)
 	last_fd         = -1;
 	next_free_dirfd = 0;
 	last_dirfd      = -1;
-	num_fd = num_dirfd = 0;
+	next_free_map   = 0;
+	last_map        = -1;
+	num_fd = num_dirfd = num_map = 0;
 }
 
 static int
@@ -915,6 +962,37 @@ find_next_available_dirfd(void)
 
 	num_dirfd++;
 	pthread_mutex_unlock(&lock_dirfd);
+
+	return idx;
+}
+
+static int
+find_next_available_map(void)
+{
+	int i, idx = -1;
+
+	pthread_mutex_lock(&lock_mmap);
+	if (next_free_map < 0) {
+		pthread_mutex_unlock(&lock_mmap);
+		return next_free_map;
+	}
+	idx = next_free_map;
+	if (next_free_map > last_map)
+		last_map = next_free_map;
+	next_free_map = -1;
+
+	for (i = idx + 1; i < MAX_MMAP_BLOCK; i++) {
+		if (mmap_list[i].addr == NULL) {
+			/* available, then update next_free_map */
+			next_free_map = i;
+			break;
+		}
+	}
+	if (next_free_map < 0)
+		printf("WARNING> All space for mmap_list are used.\n");
+
+	num_map++;
+	pthread_mutex_unlock(&lock_mmap);
 
 	return idx;
 }
@@ -998,6 +1076,30 @@ free_dirfd(int idx)
 		rc = dfs_release(dir_obj);
 		assert(rc == 0);
 	}
+}
+
+static void
+free_map(int idx)
+{
+	int i;
+
+	pthread_mutex_lock(&lock_mmap);
+	mmap_list[idx].addr = NULL;
+
+	if (idx < next_free_map)
+		next_free_map = idx;
+
+	if (idx == last_map) {
+		for (i = idx - 1; i >= 0; i--) {
+			if (mmap_list[i].addr) {
+				last_map = i;
+				break;
+			}
+		}
+	}
+
+	num_map--;
+	pthread_mutex_unlock(&lock_mmap);
 }
 
 static inline int
@@ -1109,7 +1211,7 @@ close_all_duped_fd(void)
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0) {
 			fd_dup2_list[i].fd_src = -1;
-			new_close_common(real_close_libc, fd_dup2_list[i].fd_dest);
+			new_close_common(libc_close, fd_dup2_list[i].fd_dest);
 		}
 	}
 }
@@ -1298,9 +1400,9 @@ new_open_ld(const char *pathname, int oflags, ...)
 	}
 
 	if (two_args)
-		rc = open_common(real_open_ld, "new_open_ld", pathname, oflags);
+		rc = open_common(ld_open, "new_open_ld", pathname, oflags);
 	else
-		rc = open_common(real_open_ld, "new_open_ld", pathname, oflags, mode);
+		rc = open_common(ld_open, "new_open_ld", pathname, oflags, mode);
 
 	return rc;
 }
@@ -1322,9 +1424,9 @@ new_open_libc(const char *pathname, int oflags, ...)
 	}
 
 	if (two_args)
-		rc = open_common(real_open_libc, "new_open_libc", pathname, oflags);
+		rc = open_common(libc_open, "new_open_libc", pathname, oflags);
 	else
-		rc = open_common(real_open_libc, "new_open_libc", pathname, oflags, mode);
+		rc = open_common(libc_open, "new_open_libc", pathname, oflags, mode);
 
 	return rc;
 }
@@ -1346,9 +1448,9 @@ new_open_pthread(const char *pathname, int oflags, ...)
 	}
 
 	if (two_args)
-		rc = open_common(real_open_pthread, "new_open_pthread", pathname, oflags);
+		rc = open_common(pthread_open, "new_open_pthread", pathname, oflags);
 	else
-		rc = open_common(real_open_pthread, "new_open_pthread", pathname, oflags, mode);
+		rc = open_common(pthread_open, "new_open_pthread", pathname, oflags, mode);
 
 	return rc;
 }
@@ -1394,13 +1496,13 @@ new_close_common(int (*real_close)(int fd), int fd)
 static int
 new_close_libc(int fd)
 {
-	return new_close_common(real_close_libc, fd);
+	return new_close_common(libc_close, fd);
 }
 
 static int
 new_close_pthread(int fd)
 {
-	return new_close_common(real_close_pthread, fd);
+	return new_close_common(pthread_close, fd);
 }
 
 static int
@@ -1409,7 +1511,7 @@ new_close_nocancel(int fd)
 	int rc;
 
 	if (!hook_enabled)
-		return real_close_nocancel(fd);
+		return libc_close_nocancel(fd);
 
 	if (fd >= FD_DIR_BASE) {
 		free_dirfd(fd - FD_DIR_BASE);
@@ -1424,7 +1526,7 @@ new_close_nocancel(int fd)
 		return 0;
 	}
 
-	return real_close_nocancel(fd);
+	return libc_close_nocancel(fd);
 }
 
 static ssize_t
@@ -1448,13 +1550,13 @@ read_comm(ssize_t (*real_read)(int fd, void *buf, size_t size), int fd, void *bu
 static ssize_t
 new_read_libc(int fd, void *buf, size_t size)
 {
-	return read_comm(real_read_libc, fd, buf, size);
+	return read_comm(libc_read, fd, buf, size);
 }
 
 static ssize_t
 new_read_pthread(int fd, void *buf, size_t size)
 {
-	return read_comm(real_read_pthread, fd, buf, size);
+	return read_comm(pthread_read, fd, buf, size);
 }
 
 ssize_t
@@ -1522,13 +1624,13 @@ write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, 
 static ssize_t
 new_write_libc(int fd, const void *buf, size_t size)
 {
-	return write_comm(real_write_libc, fd, buf, size);
+	return write_comm(libc_write, fd, buf, size);
 }
 
 static ssize_t
 new_write_pthread(int fd, const void *buf, size_t size)
 {
-	return write_comm(real_write_pthread, fd, buf, size);
+	return write_comm(pthread_write, fd, buf, size);
 }
 
 ssize_t
@@ -1783,13 +1885,13 @@ lseek_comm(off_t (*real_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 static off_t
 new_lseek_libc(int fd, off_t offset, int whence)
 {
-	return lseek_comm(real_lseek_libc, fd, offset, whence);
+	return lseek_comm(libc_lseek, fd, offset, whence);
 }
 
 static off_t
 new_lseek_pthread(int fd, off_t offset, int whence)
 {
-	return lseek_comm(real_lseek_pthread, fd, offset, whence);
+	return lseek_comm(pthread_lseek, fd, offset, whence);
 }
 
 int
@@ -2004,18 +2106,18 @@ openat(int dirfd, const char *path, int oflags, ...)
 	/* Absolute path, dirfd is ignored */
 	if (path[0] == '/') {
 		if (two_args)
-			return open_common(real_open_libc, "new_openat", path, oflags);
+			return open_common(libc_open, "new_openat", path, oflags);
 		else
-			return open_common(real_open_libc, "new_openat", path, oflags, mode);
+			return open_common(libc_open, "new_openat", path, oflags, mode);
 	}
 
 	/* Relative path */
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
 	if (idx_dfs >= 0) {
 		if (two_args)
-			return open_common(real_open_libc, "new_openat", full_path, oflags);
+			return open_common(libc_open, "new_openat", full_path, oflags);
 		else
-			return open_common(real_open_libc, "new_openat", full_path, oflags, mode);
+			return open_common(libc_open, "new_openat", full_path, oflags, mode);
 	}
 
 org_func:
@@ -2041,11 +2143,11 @@ __openat_2(int dirfd, const char *path, int oflags)
 		return real_openat_2(dirfd, path, oflags);
 
 	if (path[0] == '/')
-		return open_common(real_open_libc, "__openat_2", full_path, oflags);
+		return open_common(libc_open, "__openat_2", full_path, oflags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
 	if (idx_dfs >= 0)
-		return open_common(real_open_libc, "__openat_2", full_path, oflags);
+		return open_common(libc_open, "__openat_2", full_path, oflags);
 
 	return real_openat_2(dirfd, path, oflags);
 }
@@ -3756,6 +3858,132 @@ __dup2(int oldfd, int newfd) __attribute__((alias("dup2"), leaf, nothrow));
  *	return -1;
  *}
  */
+
+void *
+new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+	int             rc, idx_map;
+	struct stat     stat_buf;
+	void            *addr_ret;
+
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return real_mmap(addr, length, prot, flags, fd, offset);
+
+	addr_ret = real_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
+	if (addr_ret == MAP_FAILED)
+		return (void *)(-1);
+
+	rc = dfs_ostat(file_list[fd - FD_FILE_BASE].dfs_mt->dfs,
+		       file_list[fd - FD_FILE_BASE].file_obj, &stat_buf);
+	if (rc) {
+		errno = rc;
+		return (void *)(-1);
+	}
+
+	idx_map = find_next_available_map();
+	if (idx_map < 0) {
+		printf("Failed to call find_next_available_map().\n");
+		exit(1);
+	}
+
+	mmap_list[idx_map].addr = (char *)addr_ret;
+	mmap_list[idx_map].length = length;
+	mmap_list[idx_map].file_size = stat_buf.st_size;
+	mmap_list[idx_map].prot = prot;
+	mmap_list[idx_map].flags = flags;
+	mmap_list[idx_map].fd = fd;
+	mmap_list[idx_map].num_pages = length & (page_size - 1) ?
+				       (length / page_size + 1) :
+				       (length / page_size);
+	mmap_list[idx_map].num_dirty_pages = 0;
+	mmap_list[idx_map].offset = offset;
+	D_ALLOC(mmap_list[idx_map].updated, sizeof(bool)*mmap_list[idx_map].num_pages);
+	if (mmap_list[idx_map].updated == NULL) {
+		errno = ENOMEM;
+		return (void *)(-1);
+	}
+	memset(mmap_list[idx_map].updated, 0, sizeof(bool)*mmap_list[idx_map].num_pages);
+
+	/* Clear all permissions on these pages, so segv will be triggered by read/write */
+	rc = mprotect(addr_ret, length, PROT_NONE);
+	if (rc < 0)
+		return (void *)(-1);
+	if (!segv_handler_inited) {
+		pthread_mutex_lock(&lock_mmap);
+		register_handler(SIGSEGV, &old_segv);
+		segv_handler_inited = true;
+		pthread_mutex_unlock(&lock_mmap);
+	}
+	return addr_ret;
+}
+
+static int
+flush_dirty_pages_to_file(int idx)
+{
+	int             idx_file, idx_page = 0, idx_page2, rc, num_pages;
+	size_t          addr_min, addr_max;
+	d_iov_t         iov;
+	d_sg_list_t     sgl;
+
+	num_pages = mmap_list[idx].num_pages;
+	idx_file = mmap_list[idx].fd - FD_FILE_BASE;
+	while (idx_page < num_pages) {
+		/* To find the next non-dirty page */
+		idx_page2 = idx_page + 1;
+		while (idx_page2 < num_pages && mmap_list[idx].updated[idx_page2])
+			idx_page2++;
+		/* Write pages [idx_page, idx_page2-1] to file */
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		addr_min      = page_size*idx_page + mmap_list[idx].offset;
+		addr_max      = addr_min + (idx_page2 - idx_page)*page_size;
+		if (addr_max > mmap_list[idx].file_size)
+			addr_max = mmap_list[idx].file_size;
+		d_iov_set(&iov, (void *)(mmap_list[idx].addr + addr_min), addr_max - addr_min);
+		sgl.sg_iovs = &iov;
+		rc          = dfs_write(file_list[idx_file].dfs_mt->dfs,
+					file_list[idx_file].file_obj, &sgl, addr_min, NULL);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+
+		/* Find the next updated page */
+		idx_page = idx_page2 + 1;
+		while (idx_page < num_pages && !mmap_list[idx].updated[idx_page])
+			idx_page++;
+	}
+
+	return 0;
+}
+
+int
+new_munmap(void *addr, size_t length)
+{
+	int i, rc;
+
+	if (!hook_enabled)
+		return real_munmap(addr, length);
+
+	for (i = 0; i <= last_map; i++) {
+		if (mmap_list[i].addr == addr) {
+			if (mmap_list[i].flags & MAP_SHARED &&
+			    mmap_list[i].num_dirty_pages) {
+				/* Need to flush dirty pages to file */
+				rc = flush_dirty_pages_to_file(i);
+				if (rc < 0)
+					return rc;
+			}
+			D_FREE(mmap_list[i].updated);
+			free_map(i);
+
+			return real_munmap(addr, length);
+		}
+	}
+
+	return real_munmap(addr, length);
+}
+
 int
 posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
@@ -3883,6 +4111,114 @@ update_cwd(void)
 	}
 }
 
+static int
+query_mmap_block(char *addr)
+{
+	int i;
+
+	for (i = 0 ; i <= last_map; i++) {
+		if (mmap_list[i].addr) {
+			if (addr >= mmap_list[i].addr &&
+			    addr < (mmap_list[i].addr + mmap_list[i].length))
+				return i;
+		}
+	}
+	return (-1);
+}
+
+static void *
+align_to_page_boundary(void *addr)
+{
+	return (void *)((unsigned long int)addr & ~(page_size - 1));
+}
+
+static void
+sig_handler(int code, siginfo_t *siginfo, void *ctx)
+{
+	char                   *addr, err_msg[256];
+	size_t                  bytes_read, length;
+	size_t                  addr_min, addr_max, idx_page;
+	int                     rc, fd, idx_map;
+	d_iov_t                 iov;
+	d_sg_list_t             sgl;
+	struct ucontext_t      *context = (struct ucontext_t *)ctx;
+
+	if (code != SIGSEGV)
+		return old_segv.sa_sigaction(code, siginfo, context);
+	addr = (char *)siginfo->si_addr;
+	idx_map = query_mmap_block(addr);
+	if (idx_map < 0)
+		return old_segv.sa_sigaction(code, siginfo, context);
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	addr_min      = (size_t)align_to_page_boundary(addr);
+	/* Out of the range of file size */
+	if ((addr_min + (size_t)mmap_list[idx_map].offset - (size_t)mmap_list[idx_map].addr) >
+	    mmap_list[idx_map].file_size)
+		return old_segv.sa_sigaction(code, siginfo, context);
+	/* We read only one page at this time. Reading multiple pages may get better performance. */
+	addr_max      = addr_min + page_size;
+	if ((addr_max - (size_t)mmap_list[idx_map].addr + (size_t)mmap_list[idx_map].offset) >
+	    mmap_list[idx_map].file_size)
+		addr_max = mmap_list[idx_map].file_size - (size_t)mmap_list[idx_map].offset +
+			   (size_t)mmap_list[idx_map].addr;
+	d_iov_set(&iov, (void *)addr_min, addr_max - addr_min);
+	sgl.sg_iovs = &iov;
+	fd = mmap_list[idx_map].fd - FD_FILE_BASE;
+
+	length = addr_max - addr_min;
+	length = (length & (page_size - 1) ? (length + page_size - (length & (page_size - 1))) :
+		(length));
+	/* Restore the read & write permission on page */
+	rc = mprotect((void *)addr_min, length, PROT_READ | PROT_WRITE);
+	if (rc < 0) {
+		snprintf(err_msg, 256, "Error in mprotect() in signal handler. %s\n",
+			strerror(errno));
+		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
+		exit(1);
+	}
+
+	rc          = dfs_read(file_list[fd].dfs_mt->dfs,
+			       file_list[fd].file_obj, &sgl,
+			       addr_min -  (size_t)mmap_list[idx_map].addr +
+			       (size_t)mmap_list[idx_map].offset, &bytes_read, NULL);
+	if (rc) {
+		snprintf(err_msg, 256, "Error in dfs_read() in signal handler. %s\n",
+			strerror(errno));
+		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
+		exit(1);
+	}
+	if (context->uc_mcontext.gregs[REG_ERR] & 0x2) {
+		/* Write fault, set flag for dirty page which will be written to file later */
+		idx_page = (addr_min - (size_t)mmap_list[idx_map].addr) / page_size;
+		mmap_list[idx_map].updated[idx_page] = true;
+		mmap_list[idx_map].num_dirty_pages++;
+
+	} else if (context->uc_mcontext.gregs[REG_ERR] & 0x1) {
+		/* Read fault, do nothing */
+	}
+}
+
+static void
+register_handler(int sig, struct sigaction *old_handler)
+{
+	struct sigaction        action;
+	int                     rc;
+
+	action.sa_flags = SA_RESTART;
+	action.sa_handler = NULL;
+	action.sa_sigaction = sig_handler;
+	action.sa_flags |= SA_SIGINFO;
+	sigemptyset(&action.sa_mask);
+
+	rc = sigaction(sig, &action, old_handler);
+	if (rc != 0) {
+		printf("sigaction failed with %d. errno: %d\n", rc, errno);
+		exit(-1);
+	}
+}
+
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -3891,6 +4227,8 @@ init_myhook(void)
 	umask_old = umask(0);
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
+	page_size = sysconf(_SC_PAGESIZE);
+
 	update_cwd();
 	if (pthread_mutex_init(&lock_init, NULL) != 0) {
 		printf("\n mutex create_new_lock lock_init init failed\n");
@@ -3898,27 +4236,27 @@ init_myhook(void)
 	}
 	init_fd_list();
 
-	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&real_open_ld));
-	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&real_open_libc));
+	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
+	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
-			(long int *)(&real_open_pthread));
+			(long int *)(&pthread_open));
 
-	register_a_hook("libc", "__close", (void *)new_close_libc, (long int *)(&real_close_libc));
+	register_a_hook("libc", "__close", (void *)new_close_libc, (long int *)(&libc_close));
 	register_a_hook("libpthread", "__close", (void *)new_close_pthread,
-			(long int *)(&real_close_pthread));
+			(long int *)(&pthread_close));
 	register_a_hook("libc", "__close_nocancel", (void *)new_close_nocancel,
-			(long int *)(&real_close_nocancel));
+			(long int *)(&libc_close_nocancel));
 
-	register_a_hook("libc", "__read", (void *)new_read_libc, (long int *)(&real_read_libc));
+	register_a_hook("libc", "__read", (void *)new_read_libc, (long int *)(&libc_read));
 	register_a_hook("libpthread", "__read", (void *)new_read_pthread,
-			(long int *)(&real_read_pthread));
-	register_a_hook("libc", "__write", (void *)new_write_libc, (long int *)(&real_write_libc));
+			(long int *)(&pthread_read));
+	register_a_hook("libc", "__write", (void *)new_write_libc, (long int *)(&libc_write));
 	register_a_hook("libpthread", "__write", (void *)new_write_pthread,
-			(long int *)(&real_write_pthread));
+			(long int *)(&pthread_write));
 
-	register_a_hook("libc", "lseek64", (void *)new_lseek_libc, (long int *)(&real_lseek_libc));
+	register_a_hook("libc", "lseek64", (void *)new_lseek_libc, (long int *)(&libc_lseek));
 	register_a_hook("libpthread", "lseek64", (void *)new_lseek_pthread,
-			(long int *)(&real_lseek_pthread));
+			(long int *)(&pthread_lseek));
 
 	register_a_hook("libc", "unlink", (void *)new_unlink, (long int *)(&real_unlink));
 
@@ -3930,6 +4268,9 @@ init_myhook(void)
 	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&real_readdir));
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&real_fcntl));
+
+	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&real_mmap));
+	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&real_munmap));
 
 	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
 	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
@@ -3956,6 +4297,7 @@ finalize_myhook(void)
 	pthread_mutex_destroy(&lock_init);
 	pthread_mutex_destroy(&lock_dirfd);
 	pthread_mutex_destroy(&lock_fd);
+	pthread_mutex_destroy(&lock_mmap);
 
 	free(file_list);
 	free(dir_list);
@@ -3966,6 +4308,7 @@ init_dfs(int idx)
 {
 	int rc;
 
+	/* TODO: Need to check the permission of mount point first!!! */
 	rc =
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh, NULL, NULL);
 	if (rc != 0) {
