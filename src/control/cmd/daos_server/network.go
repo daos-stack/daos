@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -79,6 +79,10 @@ func GetLocalFabricIfaces(ctx context.Context, fs *hardware.FabricScanner, filte
 }
 
 func (cmd *networkScanCmd) Execute(_ []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	fs := hwprov.DefaultFabricScanner(cmd.Logger)
 

@@ -10,10 +10,12 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // connErrToFault attempts to resolve a network connection
@@ -31,6 +33,8 @@ func connErrToFault(st *status.Status, target string) error {
 		return FaultConnectionNoRoute(target)
 	case strings.Contains(st.Message(), "no such host"):
 		return FaultConnectionBadHost(target)
+	case strings.Contains(st.Message(), "certificate has expired"):
+		return security.FaultInvalidCert(errors.New(st.Message()))
 	default:
 		return st.Err()
 	}

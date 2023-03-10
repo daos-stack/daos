@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -95,10 +95,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        command = super().__str__()
-        if self.bind_cores:
-            command = ' '.join(['taskset', '-c', self.bind_cores, command])
-        return command_as_user(command, self.run_user)
+        return self.with_sudo
 
     @property
     def sudo(self):
@@ -138,14 +135,37 @@ class ExecutableCommand(CommandWithParameters):
         return "'({})'".format("|".join(self._exe_names))
 
     @property
-    def with_exports(self):
-        """Get the command string with any environment variable exports.
+    def with_bind(self):
+        """Get the command string with bind_cores.
 
         Returns:
-            str: the command string with any environment variable exports
+            str: the command string with bind_cores
 
         """
-        return " ".join([self.env.to_export_str(), str(self)]).strip()
+        command = super().__str__()
+        if self.bind_cores:
+            command = ' '.join(['taskset', '-c', self.bind_cores, command])
+        return command
+
+    @property
+    def with_sudo(self):
+        """Get the command string with bind_cores and sudo, but not env exports.
+
+        Returns:
+            str: the command string with bind_cores and sudo
+
+        """
+        return command_as_user(self.with_bind, self.run_user)
+
+    @property
+    def with_exports(self):
+        """Get the command string with bind_cores, sudo, and env exports.
+
+        Returns:
+            str: the command string with bind_cores, sudo, and env exports
+
+        """
+        return command_as_user(self.with_bind, self.run_user, self.env)
 
     def run(self, raise_exception=None):
         """Run the command.
