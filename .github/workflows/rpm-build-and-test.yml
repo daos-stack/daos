@@ -248,7 +248,7 @@ jobs:
         #    #   Host *
         #    #   ConnectTimeout=420
         #    script: timeout=$((SECONDS+420));
-        run: clush -B -S -l root -w ${{ env.NODESTRING }} "timeout=$((SECONDS+420));
+        run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x; timeout=$((SECONDS+420));
                   while [ \$SECONDS -lt \$timeout ]; do
                       if [ -d /var/chef/reports ]; then
                           exit 0;
@@ -276,8 +276,8 @@ jobs:
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
-             ci/functional/job_cleanup.sh;
-             rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"
+             rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
+             ci/functional/job_cleanup.sh
       - name: Debug - find junit files
         if: always()
         run: . ci/gha_functions.sh;
