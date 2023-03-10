@@ -132,7 +132,7 @@ example = subparsers.add_parser(
     description=example_description,
     formatter_class=MyFormatter)
 example.add_argument('-a', '--alloc_overhead', type=int,
-                     help='Vos alloc overhead', default=16)
+                     help='Vos alloc overhead', default=0)
 example.add_argument(
     '-f',
     '--dfs_file_name',
@@ -231,7 +231,7 @@ explore.add_argument(
     help='Number of VOS Pools',
     default=1000)
 explore.add_argument('-a', '--alloc_overhead', type=int,
-                     help='Vos alloc overhead', default=16)
+                     help='Vos alloc overhead', default=0)
 explore.add_argument(
     '-k',
     '--checksum',
@@ -273,7 +273,7 @@ yaml_file.add_argument(
 yaml_file.add_argument('config', metavar='CONFIG', type=str, nargs=1,
                        help='Path to the input yaml configuration file')
 yaml_file.add_argument('-a', '--alloc_overhead', type=int,
-                       help='Vos alloc overhead', default=16)
+                       help='Vos alloc overhead', default=0)
 yaml_file.add_argument(
     '-s',
     '--scm_cutoff',
@@ -359,7 +359,7 @@ csv_file.add_argument(
     action='store_true',
     help='Explain what is being done')
 csv_file.add_argument('-a', '--alloc_overhead', type=int,
-                      help='Vos alloc overhead', default=16)
+                      help='Vos alloc overhead', default=0)
 csv_file.add_argument(
     '-t',
     '--dir_oclass',
