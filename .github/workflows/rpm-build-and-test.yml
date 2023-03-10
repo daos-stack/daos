@@ -234,7 +234,8 @@ jobs:
              done;
              NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
              echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
-             ssh root@${NODESTRING%%vm*} "POOL=${{ env.cp_PROVISIONING_POOL }}
+             ssh -oPasswordAuthentication=false -v root@${NODESTRING%%vm*} "set -x
+             POOL=${{ env.cp_PROVISIONING_POOL }}
              NODESTRING=$NODESTRING
              $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
