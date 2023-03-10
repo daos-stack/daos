@@ -274,7 +274,10 @@ class MetaOverhead():
         if num_values > max_dyn:
             leaf_node_size = self.meta["trees"][key]["leaf_node_size"]
             int_node_size = self.meta["trees"][key]["int_node_size"]
-            tree_nodes = (num_values * 2 + order - 1) // order
+            mult = 1
+            if num_values > order:
+                mult = 2 # assume 50% capacity
+            tree_nodes = (num_values * mult + order - 1) // order
             return leaf_node_size, int_node_size, tree_nodes
 
         if self.meta["trees"][key]["num_dynamic"] == 0:
