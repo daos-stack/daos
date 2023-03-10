@@ -225,6 +225,7 @@ jobs:
       - name: Request and Provision a Cluster
         run: set -eux;
              uuid=$(uuidgen);
+             echo "CLUSTER_REQUEST_UUID=$uuid" >> $GITHUB_ENV;
              url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
              curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} "$url";
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
@@ -234,7 +235,7 @@ jobs:
              NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
              echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
              ssh root@${NODESTRING%%vm*} "POOL=${{ env.cp_PROVISIONING_POOL }}
-             NODESTRING=${{ env.NODESTRING}}
+             NODESTRING=$NODESTRING
              $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master
@@ -274,7 +275,8 @@ jobs:
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
-             ci/functional/job_cleanup.sh
+             ci/functional/job_cleanup.sh;
+             rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"
       - name: Debug - find junit files
         if: always()
         run: . ci/gha_functions.sh;
