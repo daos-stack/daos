@@ -223,16 +223,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
       - name: Request and Provision a Cluster
-        run: set -eux
-             uuid=$(uuidgen)
+        run: set -eux;
+             uuid=$(uuidgen);
              curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} \
-                 'https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid"
+                 'https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
-                 ls -l /scratch/Get\ a\ cluster/
-                 sleep 1
-             done
-             NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid)
-             echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV
+                 ls -l /scratch/Get\ a\ cluster/;
+                 sleep 1;
+             done;
+             NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
+             echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
              ssh root@${NODESTRING%%vm*} "POOL=${{ env.cp_PROVISIONING_POOL }}
              NODESTRING=${{ env.NODESTRING}}
              $(cat ci/provisioning/provision_cluster.sh)"
