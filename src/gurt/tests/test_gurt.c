@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2073,7 +2073,7 @@ verify_rank_list_dup_uniq(int *src_ranks, int num_src_ranks,
 {
 	d_rank_list_t	*orig_list;
 	d_rank_list_t	*ret_list = NULL;
-	int 		rc;
+	int		rc;
 	int		i;
 
 	orig_list = d_rank_list_alloc(num_src_ranks);
@@ -2106,40 +2106,40 @@ test_d_rank_list_dup_sort_uniq(void **state)
 		int	src_ranks[] = {0, 0, 0, 1, 1};
 		int	exp_ranks[] = {0, 1};
 
-		verify_rank_list_dup_uniq(src_ranks, sizeof(src_ranks)/sizeof(src_ranks[0]),
-					  exp_ranks, sizeof(exp_ranks)/sizeof(exp_ranks[0]));
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 
 	{
 		int	src_ranks[] = {0, 0, 0, 0, 1};
 		int	exp_ranks[] = {0, 1};
 
-		verify_rank_list_dup_uniq(src_ranks, sizeof(src_ranks)/sizeof(src_ranks[0]),
-					  exp_ranks, sizeof(exp_ranks)/sizeof(exp_ranks[0]));
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 
 	{
 		int	src_ranks[] = {0, 0, 0, 1, 1, 1, 2, 3, 3, 5};
 		int	exp_ranks[] = {0, 1, 2, 3, 5};
 
-		verify_rank_list_dup_uniq(src_ranks, sizeof(src_ranks)/sizeof(src_ranks[0]),
-					  exp_ranks, sizeof(exp_ranks)/sizeof(exp_ranks[0]));
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 
 	{
 		int	src_ranks[] = {1, 2, 1, 3, 1, 5};
 		int	exp_ranks[] = {1, 2, 3, 5};
 
-		verify_rank_list_dup_uniq(src_ranks, sizeof(src_ranks)/sizeof(src_ranks[0]),
-					  exp_ranks, sizeof(exp_ranks)/sizeof(exp_ranks[0]));
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 
 	{
 		int	src_ranks[] = {5, 5, 2, 2, 1, 3, 4, 1, 1, 2};
 		int	exp_ranks[] = {1, 2, 3, 4, 5};
 
-		verify_rank_list_dup_uniq(src_ranks, sizeof(src_ranks)/sizeof(src_ranks[0]),
-					  exp_ranks, sizeof(exp_ranks)/sizeof(exp_ranks[0]));
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 }
 
