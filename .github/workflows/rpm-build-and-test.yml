@@ -265,12 +265,12 @@ jobs:
         if: always()
         run: . ci/gha_functions.sh;
              ci/functional/job_cleanup.sh
-      # - name: Debug - find junit files
-      #   if: always()
-      #   run: . ci/gha_functions.sh;
-      #        hostname;
-      #        pwd;
-      #        find Functional\ on\ EL\ 8 -type f
+      - name: Debug - find junit files
+        if: always()
+        run: . ci/gha_functions.sh;
+             hostname;
+             pwd;
+             find Functional\ on\ EL\ 8 -type f
       # - name: Debug Publish NLT test results
       #   if: always()
       #   run: pwd;
@@ -292,9 +292,7 @@ jobs:
         if: success() || failure()    # run this step even if previous step failed
         with:
           name: JUnit Results         # Name of the check run which will be created
-          path: |
-            Functional on EL 8/**/*.xml
-            !Functional on EL 8/**/xunit1_results.xml
+          path: Functional on EL 8/**/*.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
