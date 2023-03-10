@@ -70,6 +70,7 @@ open_retry:
 		oid.id_shard  = obj_shard->do_shard;
 		oid.id_pub    = obj->cob_md.omd_id;
 		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
@@ -1404,6 +1405,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
+	D_ASSERT(obj->cob_co->dc_props.dcp_obj_version < MAX_OBJ_LAYOUT_VERSION);
 	obj->cob_layout_version = obj->cob_co->dc_props.dcp_obj_version;
 	rc = obj_init_oca(obj);
 	if (rc != 0)
@@ -7133,6 +7135,7 @@ daos_dc_obj2id(void *ptr, daos_unit_oid_t *id)
 
 	id->id_pub = obj->cob_md.omd_id;
 	id->id_layout_ver = obj->cob_layout_version;
+	id->id_padding = 0;
 }
 
 /**
