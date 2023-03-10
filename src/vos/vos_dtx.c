@@ -645,7 +645,8 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		return 0;
 
 	dbd = dae->dae_dbd;
-	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
+	D_ASSERTF(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC, "Invalid blob magic %x for "
+		  DF_DTI"\n", dbd->dbd_magic, DP_DTI(&DAE_XID(dae)));
 
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
 	D_ASSERT(dae_df != NULL);
@@ -1138,6 +1139,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 		return ALB_UNAVAILABLE;
 	}
+
+	D_ASSERTF(epoch != 0, "Invalid epoch for lid %x\n", entry);
 
 	found = lrua_lookupx(cont->vc_dtx_array, (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,
 			     epoch, &dae);
