@@ -40,14 +40,14 @@ array_meta: &file_meta
   count: 1
   type: integer
   overhead: meta
-  value_type: single_value
-  values: [{'count': 3, 'size': 64, 'aligned': 'Yes'}]
+  value_type: array
+  values: [{'count': 1, 'size': 192, 'aligned': 'Yes'}]
 
 file_dkey_key0: &file_dkey0
   count: 1
   type: integer
   overhead: user
-  akeys: [*file_data, *file_meta]
+  akeys: [*file_meta]
 
 file_dkey_key: &file_dkey
   count: 1
