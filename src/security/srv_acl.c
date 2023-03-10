@@ -336,9 +336,9 @@ filter_pool_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 }
 
 static int
-get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
-			struct daos_acl *acl, uint64_t owner_min_perms, uint64_t owner_min_capas,
-			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
+get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership, struct daos_acl *acl,
+			uint64_t owner_min_perms, uint64_t (*convert_perms)(uint64_t),
+			uint64_t *capas, bool *is_owner)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc;
@@ -373,15 +373,13 @@ get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
 	user_info.groups = groups;
 	user_info.nr_groups = nr_groups;
 
-	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms);
+	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms, is_owner);
 	if (rc != 0) {
 		D_ERROR("failed to get user permissions: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	*capas = convert_perms(perms);
-	if (acl_user_is_owner(&user_info, ownership))
-		*capas |= owner_min_capas;
 
 out:
 	D_FREE(groups);
@@ -466,8 +464,9 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int		rc;
-	Auth__Token	*token;
+	int			rc;
+	Auth__Token		*token;
+	bool			is_owner;
 
 	if (cred == NULL || ownership == NULL || acl == NULL ||
 	    capas == NULL) {
@@ -500,7 +499,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 	}
 
 	rc = get_sec_capas_for_token(token, ownership, acl, 0 /* no special owner perms */,
-				     0 /* no special owner capas */, pool_capas_from_perms, capas);
+				     pool_capas_from_perms, capas, &is_owner);
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
 
@@ -536,19 +535,15 @@ cont_capas_from_perms(uint64_t perms)
 static void
 filter_cont_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 {
-	if (flags & DAOS_COO_RO) {
+	if (flags & DAOS_COO_RO)
 		*capas &= CONT_CAPAS_RO_MASK;
-	} else {
-		if (!(*capas & CONT_CAPAS_RO_MASK) ||
-		    !(*capas & ~CONT_CAPAS_RO_MASK))
-			/*
-			 * User requested RW - if they don't have permissions for both
-			 * read and write capas of some kind, we won't grant them any.
-			 */
-			*capas = 0;
-	}
-	if (!(flags & DAOS_COO_EVICT_ALL))
-		*capas &= ~CONT_CAPA_EVICT_ALL;
+	else if (!(*capas & CONT_CAPAS_RO_MASK) ||
+		 !(*capas & ~CONT_CAPAS_RO_MASK))
+		/*
+		 * User requested RW - if they don't have permissions for both
+		 * read and write capas of some kind, we won't grant them any.
+		 */
+		*capas = 0;
 }
 
 static Auth__Token *
@@ -573,17 +568,15 @@ unpack_token_from_cred(d_iov_t *cred)
 }
 
 int
-ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct d_ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas)
+ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
+			     struct daos_acl *acl, uint64_t *capas, bool *is_owner)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__Token	*token;
 	int		rc;
 	uint64_t	owner_min_perms = CONT_OWNER_MIN_PERMS;
-	uint64_t	owner_min_capas = CONT_CAPA_EVICT_ALL;
 
-	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL || is_owner == NULL) {
 		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
@@ -615,8 +608,8 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 	if (token == NULL)
 		return -DER_INVAL;
 
-	rc = get_sec_capas_for_token(token, ownership, acl, owner_min_perms, owner_min_capas,
-				     cont_capas_from_perms, capas);
+	rc = get_sec_capas_for_token(token, ownership, acl, owner_min_perms, cont_capas_from_perms,
+				     capas, is_owner);
 	if (rc == 0)
 		filter_cont_capas_based_on_flags(flags, capas);
 
@@ -658,6 +651,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 	int		rc;
 	uint64_t	capas = 0;
 	uint64_t	cont_flags = 0;
+	bool		is_owner;
 
 	/*
 	 * Translate the pool flags to allow us to properly filter RO/RW
@@ -668,8 +662,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 	if (pool_flags & DAOS_PC_RW)
 		cont_flags |= DAOS_COO_RW;
 
-	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl,
-					  &capas);
+	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl, &capas, &is_owner);
 	if (rc != 0) {
 		D_ERROR("failed to get container capabilities: %d\n", rc);
 		return false;
@@ -730,12 +723,6 @@ bool
 ds_sec_cont_can_read_data(uint64_t cont_capas)
 {
 	return (cont_capas & CONT_CAPA_READ_DATA) != 0;
-}
-
-bool
-ds_sec_cont_can_evict_all(uint64_t cont_capas)
-{
-	return (cont_capas & CONT_CAPA_EVICT_ALL) != 0;
 }
 
 uint64_t

@@ -1278,7 +1278,7 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 	rc = ds_sec_creds_are_same_user(&cred, arg->fha_cred);
 
 	if (pool_hdl == NULL)
-		D_FREE(cred->iov_buf);
+		D_FREE(cred.iov_buf);
 	return rc;
 }
 
@@ -2003,6 +2003,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	const uint64_t		NOSTAT = (DAOS_COO_RO | DAOS_COO_RO_MDSTATS);
 	bool			update_otime = ((in->coi_flags & NOSTAT) == NOSTAT) ? false : true;
 	uint32_t		pool_global_version = cont->c_svc->cs_pool->sp_global_version;
+	bool			is_owner;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " flags=" DF_X64 "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
@@ -2047,8 +2048,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
-	rc = ds_sec_cont_get_capabilities(in->coi_flags, &pool_hdl->sph_cred,
-					  &owner, acl, &sec_capas);
+	rc = ds_sec_cont_get_capabilities(in->coi_flags, &pool_hdl->sph_cred, &owner, acl,
+					  &sec_capas, &is_owner);
 	if (rc != 0) {
 		D_ERROR(DF_CONT ": refusing attempt to open with flags " DF_X64 " error: " DF_RC
 				"\n",
@@ -2057,8 +2058,16 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	if ((in->coi_flags & DAOS_COO_EVICT_ALL) && !ds_sec_cont_can_evict_all(sec_capas)) {
-		D_ERROR(DF_CONT": permission denied evicting all handles\n",
+	if ((in->coi_flags & DAOS_COO_EVICT_ALL) && !is_owner) {
+		D_ERROR(DF_CONT": only owner can evict all handles\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		daos_prop_free(prop);
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
+	if ((in->coi_flags & DAOS_COO_EX) && !is_owner) {
+		D_ERROR(DF_CONT": only owner can open exclusively\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		daos_prop_free(prop);
 		rc = -DER_NO_PERM;

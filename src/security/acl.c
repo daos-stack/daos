@@ -94,7 +94,7 @@ get_perms_for_groups(struct daos_acl *acl, struct d_ownership *ownership,
 	return -DER_NONEXIST;
 }
 
-bool
+static bool
 acl_user_is_owner(struct acl_user *user_info, struct d_ownership *ownership)
 {
 	return strncmp(user_info->user, ownership->user,
@@ -145,7 +145,7 @@ calculate_acl_perms(struct daos_acl *acl, struct d_ownership *ownership, struct 
 
 int
 get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
-		    uint64_t min_owner_perms, uint64_t *perms)
+		    uint64_t min_owner_perms, uint64_t *perms, bool *is_owner)
 {
 	int rc;
 
@@ -159,8 +159,10 @@ get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct 
 	if (rc != 0)
 		return rc;
 
+	*is_owner = acl_user_is_owner(user_info, ownership);
+
 	/* Owner may have certain implicit permissions */
-	if (acl_user_is_owner(user_info, ownership))
+	if (*is_owner)
 		*perms |= min_owner_perms;
 
 	return rc;
