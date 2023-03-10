@@ -478,8 +478,8 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 			option_nr = 2;
 
 			snprintf(suggested, CHK_MSG_BUFLEN - 1,
-				 "Change pool map for the dangling map entry as %u [suggested].",
-				 status);
+				 "Change pool map for the dangling map entry as %s [suggested].",
+				 pool_map_status2name(status));
 			strs[0] = suggested;
 			strs[1] = "Keep the dangling map entry in pool map, repair nothing.";
 
@@ -507,9 +507,10 @@ report:
 	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects dangling %s entry in pool map for pool "
-		 DF_UUIDF", rank %u, index %u, (want) mark as %u\n",
+		 DF_UUIDF", rank %u, index %u, (want) mark as %s\n",
 		 comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
-		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, status);
+		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index,
+		 pool_map_status2name(status));
 	cru.cru_msg = msg;
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -520,10 +521,11 @@ report:
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects dangling %s entry in pool map for pool "
 		 DF_UUIDF" rank %u, index %u, action %u (%s), handle_rc %d, report_rc %d, "
-		 "decision %d, (want) mark as %u\n",
+		 "decision %d, (want) mark as %s\n",
 		 DP_ENGINE(ins), comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act,
-		 option_nr ? "need interact" : "no interact", result, rc, decision, status);
+		 option_nr ? "need interact" : "no interact", result, rc, decision,
+		 pool_map_status2name(status));
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
@@ -544,10 +546,11 @@ report:
 	switch (decision) {
 	default:
 		D_ERROR(DF_ENGINE" got invalid decision %d for dangling %s entry in pool map "
-			"for pool "DF_UUIDF", rank %u, index %u, (want) mark as %u. Ignore.\n",
+			"for pool "DF_UUIDF", rank %u, index %u, (want) mark as %s. Ignore.\n",
 			DP_ENGINE(ins), decision,
 			comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
-			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, status);
+			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index,
+			pool_map_status2name(status));
 		/*
 		 * Invalid option, ignore the inconsistency.
 		 *
