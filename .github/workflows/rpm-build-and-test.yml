@@ -225,8 +225,8 @@ jobs:
       - name: Request and Provision a Cluster
         run: set -eux;
              uuid=$(uuidgen);
-             curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} \
-                 'https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
+             url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
+             curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} "$url";
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
                  ls -l /scratch/Get\ a\ cluster/;
                  sleep 1;
