@@ -39,7 +39,8 @@ extern "C" {
 
 /**
  * Opens the container for exclusive reading and writing. This flag conflicts
- * with DAOS_COO_RO and DAOS_COO_RW.
+ * with DAOS_COO_RO and DAOS_COO_RW. The current user must be the owner of the
+ * container.
  */
 #define DAOS_COO_EX		(1U << 2)
 
