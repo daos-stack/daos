@@ -34,18 +34,20 @@ index b958e40..7165aa9 100644
          if (p_ythread)
              ABTI_mem_unregister_stack(p_ythread->p_stack);
 diff --git a/src/include/abti_thread.h b/src/include/abti_thread.h
-index 1466e83..d123f6c 100644
+index 1466e83..e2af3ff 100644
 --- a/src/include/abti_thread.h
 +++ b/src/include/abti_thread.h
-@@ -51,7 +51,7 @@ static inline ABT_unit_type ABTI_thread_type_get_type(ABTI_thread_type type)
+@@ -51,8 +51,8 @@ static inline ABT_unit_type ABTI_thread_type_get_type(ABTI_thread_type type)
  
  static inline ABTI_ythread *ABTI_thread_get_ythread(ABTI_thread *p_thread)
  {
 -    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
+-    return (ABTI_ythread *)p_thread;
 +    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == sizeof(ABTI_thread)+sizeof(ABTD_ythread_context)+sizeof(void *)+sizeof(size_t));
-     return (ABTI_ythread *)p_thread;
++    return (ABTI_ythread *)((char *)p_thread - sizeof(ABTI_thread)+sizeof(ABTD_ythread_context)+sizeof(void *)+sizeof(size_t));
  }
  
+ static inline ABTI_ythread *
 diff --git a/src/thread.c b/src/thread.c
 index aac05d1..bee0018 100644
 --- a/src/thread.c
