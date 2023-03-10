@@ -286,6 +286,17 @@ jobs:
           junit_files: |
             Functional on EL 8/**/*.xml
             !Functional on EL 8/**/xunit1_results.xml
+      - name: Test Report
+        uses: phoenix-actions/test-reporting@v8
+        id: test-report               # Set ID reference for step
+        if: success() || failure()    # run this step even if previous step failed
+        with:
+          name: JUnit Results         # Name of the check run which will be created
+          path: |
+            Functional on EL 8/**/*.xml
+            !Functional on EL 8/**/xunit1_results.xml
+          reporter: java-junit        # Format of test results
+
       - name: Publish artifacts
         uses: actions/upload-artifact@v3
         with:
