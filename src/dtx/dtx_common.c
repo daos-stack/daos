@@ -995,6 +995,13 @@ out:
 	return 0;
 }
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
+{
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+}
+
 /**
  * Initialize the DTX handle for per modification based part.
  *
@@ -1183,7 +1190,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
-	int				 status = -1;
+	uint32_t			 status;
+	int				 i;
 	int				 rc = 0;
 	bool				 aborted = false;
 	bool				 unpin = false;
@@ -1204,33 +1212,42 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_need_validation) {
+	if (result < 0 || rc < 0)
+		D_GOTO(abort, result = result < 0 ? result : rc);
+
+	if (dth->dth_need_validation || unlikely(dth->dth_aborted)) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
 		 * by race. Let's check it.
 		 */
 		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE))
-			D_GOTO(out, result = 0);
+		switch (status) {
+		case DTX_ST_PREPARED:
+			if (likely(!dth->dth_aborted))
+				break;
+			/* Fall through */
+		case DTX_ST_INITED:
+		case DTX_ST_PREPARING:
+			aborted = true;
+			result = -DER_AGAIN;
+			goto out;
+		case DTX_ST_ABORTED:
+		case DTX_ST_ABORTING:
+			aborted = true;
+			result = -DER_INPROGRESS;
+			goto out;
+		case DTX_ST_COMMITTED:
+		case DTX_ST_COMMITTING:
+		case DTX_ST_COMMITTABLE:
+			result = 0;
+			goto out;
+		default:
+			D_ASSERT(0);
+		}
 	}
 
-	if (result < 0 || rc < 0 || dth->dth_solo)
-		D_GOTO(abort, result = result < 0 ? result : rc);
-
-	switch (status) {
-	case -1:
-	case DTX_ST_PREPARED:
-		break;
-	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0 || !dth->dth_active)
-			break;
-		/* Fall through */
-	case DTX_ST_ABORTED:
-		aborted = true;
-		D_GOTO(out, result = -DER_INPROGRESS);
-	default:
-		D_ASSERT(0);
-	}
+	if (dth->dth_solo)
+		D_GOTO(out, result = 0);
 
 	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
 		/* We do not know whether some other participants have
@@ -1248,46 +1265,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (!dth->dth_active) {
 		unpin = true;
 		D_GOTO(abort, result = 0);
-	}
-
-	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possible that the DTX resync ULT may have aborted or committed
-	 * the DTX during current ULT waiting for other non-leaders' reply.
-	 * Let's check DTX status locally before marking as 'committable'.
-	 */
-	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL, false);
-		/* Committed by race, do nothing. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
-			D_GOTO(abort, result = 0);
-
-		/* The DTX is marked as 'corrupted' by DTX resync by race,
-		 * then let's abort it.
-		 */
-		if (rc == DTX_ST_CORRUPTED) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is marked as corrupted "
-			       "by resync because of lost some participants\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		/* Aborted by race, restart it. */
-		if (rc == -DER_NONEXIST) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is aborted with "
-			       "old epoch "DF_U64" by resync\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-			       dth->dth_epoch);
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		if (rc != DTX_ST_PREPARED) {
-			D_ASSERTF(rc < 0, "Invalid status %d for DTX "DF_DTI"\n",
-				  rc, DP_DTI(&dth->dth_xid));
-
-			D_WARN(DF_UUID": Failed to check local DTX "DF_DTI" status: "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(abort, result = rc);
-		}
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
@@ -1383,8 +1360,6 @@ abort:
 	 * will trigger retry globally without aborting 'prepared' ones.
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
-		/* Drop partial modification for distributed transaction. */
-		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
@@ -1392,6 +1367,7 @@ abort:
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		if (result < 0 && !aborted)
+			/* Drop partial modification for distributed transaction. */
 			vos_dtx_cleanup(dth, true);
 
 		vos_dtx_rsrvd_fini(dth);
@@ -1411,10 +1387,10 @@ out:
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	/* Local modification is done, then need to handle CoS cache. */
-	if (dth->dth_cos_done) {
-		int	i;
-
+	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
+	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	 */
+	if (result == 0 && dth->dth_cos_done) {
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
 			dtx_del_cos(cont, &dth->dth_dti_cos[i],
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
@@ -1721,7 +1697,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 
 	cont->sc_dtx_committable_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
-	cont->sc_dtx_resync_ver = cont->sc_pool->spc_map_version;
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
