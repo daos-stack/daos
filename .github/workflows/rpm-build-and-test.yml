@@ -281,18 +281,16 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          check_name: Functional on EL 8 Test Results
+          check_name: Functional on EL 8 Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          junit_files: |
-            Functional on EL 8/**/*.xml
-            !Functional on EL 8/**/xunit1_results.xml
+          junit_files: Functional on EL 8/**/results.xml
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
         if: success() || failure()    # run this step even if previous step failed
         with:
-          name: JUnit Results         # Name of the check run which will be created
-          path: Functional on EL 8/**/*.xml
+          name: Functional on EL 8 Test Results (new)
+          path: Functional on EL 8/**/results.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
