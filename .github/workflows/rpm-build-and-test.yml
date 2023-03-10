@@ -287,13 +287,14 @@ jobs:
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
-        if: success() || failure()    # run this step even if previous step failed
+        if: always()
         with:
           name: Functional on EL 8 Test Results (new)
           path: Functional on EL 8/**/results.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: Functional on EL 8 artifacts
