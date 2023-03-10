@@ -44,7 +44,7 @@ index 1466e83..e2af3ff 100644
 -    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
 -    return (ABTI_ythread *)p_thread;
 +    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == sizeof(ABTI_thread)+sizeof(ABTD_ythread_context)+sizeof(void *)+sizeof(size_t));
-+    return (ABTI_ythread *)((char *)p_thread - sizeof(ABTI_thread)+sizeof(ABTD_ythread_context)+sizeof(void *)+sizeof(size_t));
++    return (ABTI_ythread *)((char *)p_thread - (sizeof(ABTI_thread)+sizeof(ABTD_ythread_context)+sizeof(void *)+sizeof(size_t)));
  }
  
  static inline ABTI_ythread *
