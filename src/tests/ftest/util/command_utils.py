@@ -454,6 +454,16 @@ class ExecutableCommand(CommandWithParameters):
             if namespace is not None:
                 self.env.update_from_list(test.params.get("env_vars", namespace, []))
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            ExecutableCommand: a new ExecutableCommand object
+        """
+        return ExecutableCommand(
+            self.namespace, self._command, self._path, self.run_as_subprocess,
+            self.check_results_list)
+
 
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
@@ -679,6 +689,14 @@ class CommandWithSubCommand(ExecutableCommand):
                 self.exit_status_exception = prev_exit_exception
         return json.loads(self.result.stdout)
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommandWithSubCommand: a new CommandWithSubCommand object
+        """
+        return CommandWithSubCommand(self.namespace, self._command, self._path)
+
 
 class SubProcessCommand(CommandWithSubCommand):
     """A class for a command run as a subprocess with a sub command.
@@ -800,6 +818,15 @@ class SubProcessCommand(CommandWithSubCommand):
         else:
             # Report the successful start
             self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            SubProcessCommand: a new SubProcessCommand object
+        """
+        return SubProcessCommand(
+            self.namespace, self._command, self._path, self.pattern_timeout.value)
 
 
 class YamlCommand(SubProcessCommand):
@@ -1041,6 +1068,15 @@ class YamlCommand(SubProcessCommand):
 
         """
         return self.get_config_value("socket_dir")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            YamlCommand: a new YamlCommand object
+        """
+        return YamlCommand(
+            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value)
 
 
 class SubprocessManager(ObjectWithParameters):

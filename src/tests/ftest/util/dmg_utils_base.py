@@ -838,3 +838,11 @@ class DmgCommandBase(YamlCommand):
             """Create a dmg version subcommand object."""
             super(DmgCommandBase.VersionSubCommand, self).__init__(
                 "/run/dmg/version/*", "version")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgCommandBase: a new DmgCommandBase object
+        """
+        return DmgCommandBase(self._path, self.yaml, self.hostlist_suffix)
