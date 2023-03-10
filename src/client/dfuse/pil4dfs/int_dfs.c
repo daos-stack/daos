@@ -174,7 +174,6 @@ finalize_dfs(void);
 static void
 update_cwd(void);
 
-/* start copied from https://github.com/hpc/ior/blob/main/src/aiori-DFS.c */
 struct dir_hdl {
 	d_list_t   entry;
 	dfs_obj_t *oh;
@@ -257,8 +256,8 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode)
 	hdl = calloc(1, sizeof(struct dir_hdl));
 	if (hdl == NULL)
 		return NULL;
-
-	strncpy(hdl->name, name, len);
+	/* "len + 1" is used to avoid compiling issue on Ubuntu. */
+	strncpy(hdl->name, name, len + 1);
 	hdl->oh = oh;
 
 	rc = d_hash_rec_insert(dfs_list[idx_dfs].dfs_dir_hash, hdl->name, len, &hdl->entry, false);
@@ -272,7 +271,6 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode)
 
 	return hdl->oh;
 }
-/* end   copied from https://github.com/hpc/ior/blob/main/src/aiori-DFS.c */
 
 static int (*ld_open)(const char *pathname, int oflags, ...);
 static int (*libc_open)(const char *pathname, int oflags, ...);
@@ -286,105 +284,105 @@ static int (*pthread_close)(int fd);
 static ssize_t (*libc_read)(int fd, void *buf, size_t count);
 static ssize_t (*pthread_read)(int fd, void *buf, size_t count);
 
-static ssize_t (*real_pread)(int fd, void *buf, size_t size, off_t offset);
+static ssize_t (*next_pread)(int fd, void *buf, size_t size, off_t offset);
 
 static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
 static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
-static ssize_t (*real_pwrite)(int fd, const void *buf, size_t size, off_t offset);
+static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
 
 static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 
-static int (*real_fxstat)(int vers, int fd, struct stat *buf);
+static int (*next_fxstat)(int vers, int fd, struct stat *buf);
 
-static int (*real_statfs)(const char *pathname, struct statfs *buf);
+static int (*next_statfs)(const char *pathname, struct statfs *buf);
 
-static int (*real_statvfs)(const char *pathname, struct statvfs *buf);
+static int (*next_statvfs)(const char *pathname, struct statvfs *buf);
 
-static DIR *(*real_opendir)(const char *name);
+static DIR *(*next_opendir)(const char *name);
 
-static DIR *(*real_fdopendir)(int fd);
+static DIR *(*next_fdopendir)(int fd);
 
-static int (*real_closedir)(DIR *dirp);
+static int (*next_closedir)(DIR *dirp);
 
-static struct dirent *(*real_readdir)(DIR *dirp);
+static struct dirent *(*next_readdir)(DIR *dirp);
 
-static int (*real_mkdir)(const char *path, mode_t mode);
+static int (*next_mkdir)(const char *path, mode_t mode);
 
-static int (*real_mkdirat)(int dirfd, const char *pathname, mode_t mode);
+static int (*next_mkdirat)(int dirfd, const char *pathname, mode_t mode);
 
-static int (*real_xstat)(int ver, const char *path, struct stat *stat_buf);
+static int (*next_xstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*real_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
-static int (*real_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
+static int (*next_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
 
-static int (*real_statx)(int dirfd, const char *path, int flags, unsigned int mask,
+static int (*next_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
 
-static int (*real_isatty)(int fd);
+static int (*next_isatty)(int fd);
 
-static int (*real_access)(const char *pathname, int mode);
+static int (*next_access)(const char *pathname, int mode);
 
-static int (*real_faccessat)(int dirfd, const char *pathname, int mode, int flags);
+static int (*next_faccessat)(int dirfd, const char *pathname, int mode, int flags);
 
-static int (*real_chdir)(const char *path);
+static int (*next_chdir)(const char *path);
 
-static int (*real_fchdir)(int fd);
+static int (*next_fchdir)(int fd);
 
-static int (*real_rmdir)(const char *path);
+static int (*next_rmdir)(const char *path);
 
-static int (*real_rename)(const char *old_name, const char *new_name);
+static int (*next_rename)(const char *old_name, const char *new_name);
 
-static char *(*real_getcwd)(char *buf, size_t size);
+static char *(*next_getcwd)(char *buf, size_t size);
 
-static int (*real_unlink)(const char *path);
+static int (*libc_unlink)(const char *path);
 
-static int (*real_unlinkat)(int dirfd, const char *path, int flags);
+static int (*next_unlinkat)(int dirfd, const char *path, int flags);
 
-static int (*real_fsync)(int fd);
+static int (*next_fsync)(int fd);
 
-static int (*real_truncate)(const char *path, off_t length);
+static int (*next_truncate)(const char *path, off_t length);
 
-static int (*real_ftruncate)(int fd, off_t length);
+static int (*next_ftruncate)(int fd, off_t length);
 
-static int (*real_chmod)(const char *path, mode_t mode);
+static int (*next_chmod)(const char *path, mode_t mode);
 
-static int (*real_fchmod)(int fd, mode_t mode);
+static int (*next_fchmod)(int fd, mode_t mode);
 
-static int (*real_fchmodat)(int dirfd, const char *path, mode_t mode, int flags);
+static int (*next_fchmodat)(int dirfd, const char *path, mode_t mode, int flags);
 
-static int (*real_utime)(const char *path, const struct utimbuf *times);
+static int (*next_utime)(const char *path, const struct utimbuf *times);
 
-static int (*real_utimes)(const char *path, const struct timeval times[2]);
+static int (*next_utimes)(const char *path, const struct timeval times[2]);
 
-static int (*real_futimens)(int fd, const struct timespec times[2]);
+static int (*next_futimens)(int fd, const struct timespec times[2]);
 
-static int (*real_utimensat)(int dirfd, const char *path, const struct timespec times[2],
+static int (*next_utimensat)(int dirfd, const char *path, const struct timespec times[2],
 			     int flags);
 
-static int (*real_openat)(int dirfd, const char *pathname, int flags, ...);
+static int (*next_openat)(int dirfd, const char *pathname, int flags, ...);
 
-static int (*real_openat_2)(int dirfd, const char *pathname, int flags);
+static int (*next_openat_2)(int dirfd, const char *pathname, int flags);
 
-static int (*real_fcntl)(int fd, int cmd, ...);
+static int (*libc_fcntl)(int fd, int cmd, ...);
 
-static int (*real_ioctl)(int fd, unsigned long request, ...);
+static int (*next_ioctl)(int fd, unsigned long request, ...);
 
-static int (*real_dup)(int oldfd);
+static int (*next_dup)(int oldfd);
 
-static int (*real_dup2)(int oldfd, int newfd);
+static int (*next_dup2)(int oldfd, int newfd);
 
-static int (*real_symlink)(const char *symvalue, const char *path);
+static int (*next_symlink)(const char *symvalue, const char *path);
 
-static int (*real_symlinkat)(const char *symvalue, int dirfd, const char *path);
+static int (*next_symlinkat)(const char *symvalue, int dirfd, const char *path);
 
-static ssize_t (*real_readlink)(const char *path, char *buf, size_t size);
-static ssize_t (*real_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
+static ssize_t (*next_readlink)(const char *path, char *buf, size_t size);
+static ssize_t (*next_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
 
-static void * (*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-static int (*real_munmap)(void *addr, size_t length);
+static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static int (*next_munmap)(void *addr, size_t length);
 
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
@@ -397,12 +395,12 @@ static int (*real_munmap)(void *addr, size_t length);
  */
 
 /* start NOT supported by DAOS */
-static int (*real_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
-static int (*real_flock)(int fd, int operation);
-static int (*real_fallocate)(int fd, int mode, off_t offset, off_t len);
-static int (*real_posix_fallocate)(int fd, off_t offset, off_t len);
-static int (*real_posix_fallocate64)(int fd, off64_t offset, off64_t len);
-static int (*real_tcgetattr)(int fd, void *termios_p);
+static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
+static int (*next_flock)(int fd, int operation);
+static int (*next_fallocate)(int fd, int mode, off_t offset, off_t len);
+static int (*next_posix_fallocate)(int fd, off_t offset, off_t len);
+static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
+static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
 /* to do!! */
@@ -453,7 +451,7 @@ query_fd_forward_dest(int fd_src);
 /* static void Close_Duped_All_Fd(void); */
 
 static int
-new_close_common(int (*real_close)(int fd), int fd);
+new_close_common(int (*next_close)(int fd), int fd);
 
 static int
 query_dfs_mount(const char *path)
@@ -1456,12 +1454,12 @@ new_open_pthread(const char *pathname, int oflags, ...)
 }
 
 static int
-new_close_common(int (*real_close)(int fd), int fd)
+new_close_common(int (*next_close)(int fd), int fd)
 {
 	int rc, fd_Directed, idx;
 
 	if (!hook_enabled)
-		return real_close(fd);
+		return next_close(fd);
 
 	fd_Directed = Get_Fd_Redirected(fd);
 
@@ -1481,7 +1479,7 @@ new_close_common(int (*real_close)(int fd), int fd)
 			}
 			free_fd(idx);
 			if (fd < FD_FILE_BASE) {
-				real_close(fd);
+				next_close(fd);
 				num_fd_dup2ed--;
 				free_fd_in_dup2_list(fd);
 			}
@@ -1490,7 +1488,7 @@ new_close_common(int (*real_close)(int fd), int fd)
 		return 0;
 	}
 
-	return real_close(fd);
+	return next_close(fd);
 }
 
 static int
@@ -1530,12 +1528,12 @@ new_close_nocancel(int fd)
 }
 
 static ssize_t
-read_comm(ssize_t (*real_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
+read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
 {
 	ssize_t rc;
 
 	if (!hook_enabled)
-		return real_read(fd, buf, size);
+		return next_read(fd, buf, size);
 
 	if (fd >= FD_FILE_BASE) {
 		rc = pread(fd, buf, size, file_list[fd - FD_FILE_BASE].offset);
@@ -1543,7 +1541,7 @@ read_comm(ssize_t (*real_read)(int fd, void *buf, size_t size), int fd, void *bu
 			file_list[fd - FD_FILE_BASE].offset += rc;
 		return rc;
 	} else {
-		return real_read(fd, buf, size);
+		return next_read(fd, buf, size);
 	}
 }
 
@@ -1571,16 +1569,13 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	if (size == 0)
 		return 0;
 
-	if (real_pread == NULL) {
-		real_pread = dlsym(RTLD_NEXT, "pread64");
-		assert(real_pread != NULL);
+	if (next_pread == NULL) {
+		next_pread = dlsym(RTLD_NEXT, "pread64");
+		assert(next_pread != NULL);
 	}
 
-	if (!hook_enabled)
-		return real_pread(fd, buf, size, offset);
-
-	if (fd < FD_FILE_BASE)
-		return real_pread(fd, buf, size, offset);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_pread(fd, buf, size, offset);
 
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
@@ -1603,13 +1598,13 @@ ssize_t
 __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
 
 ssize_t
-write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
+write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
 {
 	ssize_t rc;
 
 	if (!hook_enabled)
-		return real_write(fd, buf, size);
+		return next_write(fd, buf, size);
 
 	if (fd >= FD_FILE_BASE) {
 		rc = pwrite(fd, buf, size, file_list[fd - FD_FILE_BASE].offset);
@@ -1617,7 +1612,7 @@ write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, 
 			file_list[fd - FD_FILE_BASE].offset += rc;
 		return rc;
 	} else {
-		return real_write(fd, buf, size);
+		return next_write(fd, buf, size);
 	}
 }
 
@@ -1644,15 +1639,12 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	if (size == 0)
 		return 0;
 
-	if (real_pwrite == NULL) {
-		real_pwrite = dlsym(RTLD_NEXT, "pwrite64");
-		assert(real_pwrite != NULL);
+	if (next_pwrite == NULL) {
+		next_pwrite = dlsym(RTLD_NEXT, "pwrite64");
+		assert(next_pwrite != NULL);
 	}
-	if (!hook_enabled)
-		return real_pwrite(fd, buf, size, offset);
-
-	if (fd < FD_FILE_BASE)
-		return real_pwrite(fd, buf, size, offset);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_pwrite(fd, buf, size, offset);
 
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
@@ -1678,12 +1670,10 @@ new_fxstat(int vers, int fd, struct stat *buf)
 {
 	int rc;
 
-	if (!hook_enabled)
-		return real_fxstat(vers, fd, buf);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_fxstat(vers, fd, buf);
 
-	if (fd < FD_FILE_BASE) {
-		return real_fxstat(vers, fd, buf);
-	} else if (fd < FD_DIR_BASE) {
+	if (fd < FD_DIR_BASE) {
 		rc          = dfs_ostat(file_list[fd - FD_FILE_BASE].dfs_mt->dfs,
 					file_list[fd - FD_FILE_BASE].file_obj, buf);
 		buf->st_ino = file_list[fd - FD_FILE_BASE].st_ino;
@@ -1713,11 +1703,11 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	char             full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
-		return real_xstat(ver, path, stat_buf);
+		return next_xstat(ver, path, stat_buf);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path)
-		return real_xstat(ver, path, stat_buf);
+		return next_xstat(ver, path, stat_buf);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
@@ -1740,7 +1730,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	char full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
-		return real_fxstatat(ver, dirfd, path, stat_buf, flags);
+		return next_fxstatat(ver, dirfd, path, stat_buf, flags);
 
 	if (path[0] == '/')
 		/* Absolute path, dirfd is ignored */
@@ -1750,7 +1740,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	if (idx_dfs >= 0)
 		return new_xstat(1, full_path, stat_buf);
 
-	return real_fxstatat(ver, dirfd, path, stat_buf, flags);
+	return next_fxstatat(ver, dirfd, path, stat_buf, flags);
 }
 
 static void
@@ -1786,12 +1776,12 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	char        full_path[DFS_MAX_PATH];
 	struct stat stat_buf;
 
-	if (real_statx == NULL) {
-		real_statx = dlsym(RTLD_NEXT, "statx");
-		assert(real_statx != NULL);
+	if (next_statx == NULL) {
+		next_statx = dlsym(RTLD_NEXT, "statx");
+		assert(next_statx != NULL);
 	}
 	if (!hook_enabled)
-		return real_statx(dirfd, path, flags, mask, statx_buf);
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {
@@ -1807,7 +1797,7 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		return rc;
 	}
 
-	return real_statx(dirfd, path, flags, mask, statx_buf);
+	return next_statx(dirfd, path, flags, mask, statx_buf);
 }
 
 static int
@@ -1821,11 +1811,11 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	char             full_path[DFS_MAX_PATH];
 
 	if (!hook_enabled)
-		return real_xstat(ver, path, stat_buf);
+		return next_xstat(ver, path, stat_buf);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path)
-		return real_xstat(ver, path, stat_buf);
+		return next_xstat(ver, path, stat_buf);
 
 	/* Need to compare with using dfs_lookup!!! */
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -1842,17 +1832,14 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 }
 
 static off_t
-lseek_comm(off_t (*real_lseek)(int fd, off_t offset, int whence), int fd, off_t offset, int whence)
+lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t offset, int whence)
 {
 	int         rc;
 	off_t       new_offset;
 	struct stat fstat;
 
-	if (!hook_enabled)
-		return real_lseek(fd, offset, whence);
-
-	if (fd < FD_FILE_BASE)
-		return real_lseek(fd, offset, whence);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_lseek(fd, offset, whence);
 
 	switch (whence) {
 	case SEEK_SET:
@@ -1904,17 +1891,17 @@ statfs(const char *pathname, struct statfs *sfs)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_statfs == NULL) {
-		real_statfs = dlsym(RTLD_NEXT, "statfs");
-		assert(real_statfs != NULL);
+	if (next_statfs == NULL) {
+		next_statfs = dlsym(RTLD_NEXT, "statfs");
+		assert(next_statfs != NULL);
 	}
 
 	if (!hook_enabled)
-		return real_statfs(pathname, sfs);
+		return next_statfs(pathname, sfs);
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_statfs(pathname, sfs);
+		return next_statfs(pathname, sfs);
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	assert(rc == 0);
@@ -1948,17 +1935,17 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_statvfs == NULL) {
-		real_statvfs = dlsym(RTLD_NEXT, "statvfs");
-		assert(real_statvfs != NULL);
+	if (next_statvfs == NULL) {
+		next_statvfs = dlsym(RTLD_NEXT, "statvfs");
+		assert(next_statvfs != NULL);
 	}
 
 	if (!hook_enabled)
-		return real_statvfs(pathname, svfs);
+		return next_statvfs(pathname, svfs);
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_statvfs(pathname, svfs);
+		return next_statvfs(pathname, svfs);
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	assert(rc == 0);
@@ -1993,16 +1980,16 @@ opendir(const char *path)
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
-	if (real_opendir == NULL) {
-		real_opendir = dlsym(RTLD_NEXT, "opendir");
-		assert(real_opendir != NULL);
+	if (next_opendir == NULL) {
+		next_opendir = dlsym(RTLD_NEXT, "opendir");
+		assert(next_opendir != NULL);
 	}
 	if (!hook_enabled)
-		return real_opendir(path);
+		return next_opendir(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path)
-		return real_opendir(path);
+		return next_opendir(path);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &dir_obj, &mode, NULL);
@@ -2066,15 +2053,12 @@ opendir(const char *path)
 DIR *
 fdopendir(int fd)
 {
-	if (real_fdopendir == NULL) {
-		real_fdopendir = dlsym(RTLD_NEXT, "fdopendir");
-		assert(real_fdopendir != NULL);
+	if (next_fdopendir == NULL) {
+		next_fdopendir = dlsym(RTLD_NEXT, "fdopendir");
+		assert(next_fdopendir != NULL);
 	}
-	if (!hook_enabled)
-		return real_fdopendir(fd);
-
-	if (fd < FD_DIR_BASE)
-		return real_fdopendir(fd);
+	if (!hook_enabled || fd < FD_DIR_BASE)
+		return next_fdopendir(fd);
 
 	return (DIR *)(&dir_list[fd - FD_DIR_BASE]);
 }
@@ -2086,9 +2070,9 @@ openat(int dirfd, const char *path, int oflags, ...)
 	int          two_args = 1, idx_dfs;
 	char         full_path[DFS_MAX_PATH];
 
-	if (real_openat == NULL) {
-		real_openat = dlsym(RTLD_NEXT, "openat");
-		assert(real_openat != NULL);
+	if (next_openat == NULL) {
+		next_openat = dlsym(RTLD_NEXT, "openat");
+		assert(next_openat != NULL);
 	}
 
 	if (oflags & O_CREAT) {
@@ -2122,9 +2106,9 @@ openat(int dirfd, const char *path, int oflags, ...)
 
 org_func:
 	if (two_args)
-		return real_openat(dirfd, path, oflags);
+		return next_openat(dirfd, path, oflags);
 	else
-		return real_openat(dirfd, path, oflags, mode);
+		return next_openat(dirfd, path, oflags, mode);
 }
 int
 openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__((alias("openat")));
@@ -2135,12 +2119,12 @@ __openat_2(int dirfd, const char *path, int oflags)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_openat_2 == NULL) {
-		real_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
-		assert(real_openat_2 != NULL);
+	if (next_openat_2 == NULL) {
+		next_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
+		assert(next_openat_2 != NULL);
 	}
 	if (!hook_enabled)
-		return real_openat_2(dirfd, path, oflags);
+		return next_openat_2(dirfd, path, oflags);
 
 	if (path[0] == '/')
 		return open_common(libc_open, "__openat_2", full_path, oflags);
@@ -2149,7 +2133,7 @@ __openat_2(int dirfd, const char *path, int oflags)
 	if (idx_dfs >= 0)
 		return open_common(libc_open, "__openat_2", full_path, oflags);
 
-	return real_openat_2(dirfd, path, oflags);
+	return next_openat_2(dirfd, path, oflags);
 }
 
 int
@@ -2157,12 +2141,12 @@ closedir(DIR *dirp)
 {
 	int fd;
 
-	if (real_closedir == NULL) {
-		real_closedir = dlsym(RTLD_NEXT, "closedir");
-		assert(real_closedir != NULL);
+	if (next_closedir == NULL) {
+		next_closedir = dlsym(RTLD_NEXT, "closedir");
+		assert(next_closedir != NULL);
 	}
 	if (!hook_enabled)
-		return real_closedir(dirp);
+		return next_closedir(dirp);
 
 	if (!dirp) {
 		printf("dirp == NULL in closedir().\nQuit\n");
@@ -2175,7 +2159,7 @@ closedir(DIR *dirp)
 		free_dirfd(dirfd(dirp) - FD_DIR_BASE);
 		return 0;
 	} else {
-		return real_closedir(dirp);
+		return next_closedir(dirp);
 	}
 }
 
@@ -2185,12 +2169,10 @@ new_readdir(DIR *dirp)
 	int               rc    = 0;
 	struct DIRSTATUS *mydir = (struct DIRSTATUS *)dirp;
 
-	if (!hook_enabled)
-		return real_readdir(dirp);
+	if (!hook_enabled || mydir->fd < FD_FILE_BASE)
+		return next_readdir(dirp);
 
-	if (mydir->fd < FD_FILE_BASE) {
-		return real_readdir(dirp);
-	} else if (mydir->fd < FD_DIR_BASE) {
+	if (mydir->fd < FD_DIR_BASE) {
 		printf("Error: invalid fd in readdir.\n");
 		errno = EINVAL;
 		return NULL;
@@ -2301,16 +2283,16 @@ mkdir(const char *path, mode_t mode)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_mkdir == NULL) {
-		real_mkdir = dlsym(RTLD_NEXT, "mkdir");
-		assert(real_mkdir != NULL);
+	if (next_mkdir == NULL) {
+		next_mkdir = dlsym(RTLD_NEXT, "mkdir");
+		assert(next_mkdir != NULL);
 	}
 	if (!hook_enabled)
-		return real_mkdir(path, mode);
+		return next_mkdir(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_mkdir(path, mode);
+		return next_mkdir(path, mode);
 
 	rc = dfs_mkdir(dfs_mt->dfs, parent, item_name, mode & mode_not_umask, 0);
 	if (rc) {
@@ -2327,12 +2309,12 @@ mkdirat(int dirfd, const char *path, mode_t mode)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_mkdirat == NULL) {
-		real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
-		assert(real_mkdirat != NULL);
+	if (next_mkdirat == NULL) {
+		next_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
+		assert(next_mkdirat != NULL);
 	}
 	if (!hook_enabled)
-		return real_mkdirat(dirfd, path, mode);
+		return next_mkdirat(dirfd, path, mode);
 
 	if (path[0] == '/')
 		return mkdir(path, mode);
@@ -2341,7 +2323,7 @@ mkdirat(int dirfd, const char *path, mode_t mode)
 	if (idx_dfs >= 0)
 		return mkdir(full_path, mode);
 
-	return real_mkdirat(dirfd, path, mode);
+	return next_mkdirat(dirfd, path, mode);
 }
 
 int
@@ -2353,16 +2335,16 @@ rmdir(const char *path)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_rmdir == NULL) {
-		real_rmdir = dlsym(RTLD_NEXT, "rmdir");
-		assert(real_rmdir != NULL);
+	if (next_rmdir == NULL) {
+		next_rmdir = dlsym(RTLD_NEXT, "rmdir");
+		assert(next_rmdir != NULL);
 	}
 	if (!hook_enabled)
-		return real_rmdir(path);
+		return next_rmdir(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_rmdir(path);
+		return next_rmdir(path);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -2382,16 +2364,16 @@ symlink(const char *symvalue, const char *path)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_symlink == NULL) {
-		real_symlink = dlsym(RTLD_NEXT, "symlink");
-		assert(real_symlink != NULL);
+	if (next_symlink == NULL) {
+		next_symlink = dlsym(RTLD_NEXT, "symlink");
+		assert(next_symlink != NULL);
 	}
 	if (!hook_enabled)
-		return real_symlink(symvalue, path);
+		return next_symlink(symvalue, path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_symlink(symvalue, path);
+		return next_symlink(symvalue, path);
 
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFLNK, O_CREAT | O_EXCL, 0, 0, symvalue,
 		      &obj);
@@ -2414,12 +2396,12 @@ symlinkat(const char *symvalue, int dirfd, const char *path)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_symlinkat == NULL) {
-		real_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
-		assert(real_symlinkat != NULL);
+	if (next_symlinkat == NULL) {
+		next_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
+		assert(next_symlinkat != NULL);
 	}
 	if (!hook_enabled)
-		return real_symlinkat(symvalue, dirfd, path);
+		return next_symlinkat(symvalue, dirfd, path);
 
 	if (path[0] == '/')
 		return symlink(symvalue, path);
@@ -2428,7 +2410,7 @@ symlinkat(const char *symvalue, int dirfd, const char *path)
 	if (idx_dfs >= 0)
 		return symlink(symvalue, full_path);
 
-	return real_symlinkat(symvalue, dirfd, path);
+	return next_symlinkat(symvalue, dirfd, path);
 }
 
 ssize_t
@@ -2441,16 +2423,16 @@ readlink(const char *path, char *buf, size_t size)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_readlink == NULL) {
-		real_readlink = dlsym(RTLD_NEXT, "readlink");
-		assert(real_readlink != NULL);
+	if (next_readlink == NULL) {
+		next_readlink = dlsym(RTLD_NEXT, "readlink");
+		assert(next_readlink != NULL);
 	}
 	if (!hook_enabled)
-		return real_readlink(path, buf, size);
+		return next_readlink(path, buf, size);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_readlink(path, buf, size);
+		return next_readlink(path, buf, size);
 
 	rc =
 	    dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
@@ -2478,12 +2460,12 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_readlinkat == NULL) {
-		real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
-		assert(real_readlinkat != NULL);
+	if (next_readlinkat == NULL) {
+		next_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
+		assert(next_readlinkat != NULL);
 	}
 	if (!hook_enabled)
-		return real_readlinkat(dirfd, path, buf, size);
+		return next_readlinkat(dirfd, path, buf, size);
 
 	if (path[0] == '/')
 		return readlink(path, buf, size);
@@ -2492,7 +2474,7 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	if (idx_dfs >= 0)
 		return readlink(full_path, buf, size);
 
-	return real_readlinkat(dirfd, path, buf, size);
+	return next_readlinkat(dirfd, path, buf, size);
 }
 
 /**
@@ -2567,12 +2549,12 @@ rename(const char *old_name, const char *new_name)
 	char             parent_dir_old[DFS_MAX_PATH], parent_dir_new[DFS_MAX_PATH];
 	char             symlink_value[DFS_MAX_PATH];
 
-	if (real_rename == NULL) {
-		real_rename = dlsym(RTLD_NEXT, "rename");
-		assert(real_rename != NULL);
+	if (next_rename == NULL) {
+		next_rename = dlsym(RTLD_NEXT, "rename");
+		assert(next_rename != NULL);
 	}
 	if (!hook_enabled)
-		return real_rename(old_name, new_name);
+		return next_rename(old_name, new_name);
 
 	parse_path(old_name, &is_target_path1, &parent_old, item_name_old, parent_dir_old, NULL,
 		   &dfs_mt1);
@@ -2601,7 +2583,7 @@ rename(const char *old_name, const char *new_name)
 		return 0;
 	} else if (is_target_path1 == 0 && is_target_path2 == 0) {
 		/* Both are on non-DAOS filesystem */
-		return real_rename(old_name, new_name);
+		return next_rename(old_name, new_name);
 	} else if (is_target_path1 == 1 && is_target_path2 == 0) {
 		/* Old_name is on DAOS and new_name is on non-DAOS filesystem */
 
@@ -2908,19 +2890,19 @@ out_new:
 char *
 getcwd(char *buf, size_t size)
 {
-	if (real_getcwd == NULL) {
-		real_getcwd = dlsym(RTLD_NEXT, "getcwd");
-		assert(real_getcwd != NULL);
+	if (next_getcwd == NULL) {
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		assert(next_getcwd != NULL);
 	}
 
 	if (!hook_enabled)
-		return real_getcwd(buf, size);
+		return next_getcwd(buf, size);
 
 	if (cur_dir[0] != '/')
 		update_cwd();
 
 	if (query_dfs_mount(cur_dir) < 0)
-		return real_getcwd(buf, size);
+		return next_getcwd(buf, size);
 
 	if (buf == NULL) {
 		char *szPath = NULL;
@@ -2941,18 +2923,18 @@ getcwd(char *buf, size_t size)
 int
 isatty(int fd)
 {
-	if (real_isatty == NULL) {
-		real_isatty = dlsym(RTLD_NEXT, "isatty");
-		assert(real_isatty != NULL);
+	if (next_isatty == NULL) {
+		next_isatty = dlsym(RTLD_NEXT, "isatty");
+		assert(next_isatty != NULL);
 	}
 	if (!hook_enabled)
-		return real_isatty(fd);
+		return next_isatty(fd);
 
 	if (fd >= FD_FILE_BASE)
 		/* non-terminal */
 		return 0;
 	else
-		return real_isatty(fd);
+		return next_isatty(fd);
 }
 int
 __isatty(int fd) __attribute__((alias("isatty"), leaf, nothrow));
@@ -2967,12 +2949,12 @@ access(const char *path, int mode)
 	char             full_path[DFS_MAX_PATH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_access == NULL) {
-		real_access = dlsym(RTLD_NEXT, "access");
-		assert(real_access != NULL);
+	if (next_access == NULL) {
+		next_access = dlsym(RTLD_NEXT, "access");
+		assert(next_access != NULL);
 	}
 	if (!hook_enabled)
-		return real_access(path, mode);
+		return next_access(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 
@@ -2984,7 +2966,7 @@ access(const char *path, int mode)
 		}
 		return 0;
 	} else {
-		return real_access(path, mode);
+		return next_access(path, mode);
 	}
 }
 
@@ -2994,12 +2976,12 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_faccessat == NULL) {
-		real_faccessat = dlsym(RTLD_NEXT, "faccessat");
-		assert(real_faccessat != NULL);
+	if (next_faccessat == NULL) {
+		next_faccessat = dlsym(RTLD_NEXT, "faccessat");
+		assert(next_faccessat != NULL);
 	}
 	if (!hook_enabled)
-		return real_faccessat(dirfd, path, mode, flags);
+		return next_faccessat(dirfd, path, mode, flags);
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
@@ -3009,7 +2991,7 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	if (idx_dfs >= 0)
 		return access(full_path, mode);
 
-	return real_faccessat(dirfd, path, mode, flags);
+	return next_faccessat(dirfd, path, mode, flags);
 }
 
 int
@@ -3023,16 +3005,16 @@ chdir(const char *path)
 	char             full_path[DFS_MAX_PATH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_chdir == NULL) {
-		real_chdir = dlsym(RTLD_NEXT, "chdir");
-		assert(real_chdir != NULL);
+	if (next_chdir == NULL) {
+		next_chdir = dlsym(RTLD_NEXT, "chdir");
+		assert(next_chdir != NULL);
 	}
 	if (!hook_enabled)
-		return real_chdir(path);
+		return next_chdir(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path) {
-		rc = real_chdir(path);
+		rc = next_chdir(path);
 		if (rc == 0)
 			update_cwd();
 		return rc;
@@ -3062,15 +3044,15 @@ chdir(const char *path)
 int
 fchdir(int dirfd)
 {
-	if (real_fchdir == NULL) {
-		real_fchdir = dlsym(RTLD_NEXT, "fchdir");
-		assert(real_fchdir != NULL);
+	if (next_fchdir == NULL) {
+		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
+		assert(next_fchdir != NULL);
 	}
 	if (!hook_enabled)
-		return real_fchdir(dirfd);
+		return next_fchdir(dirfd);
 
 	if (dirfd < FD_DIR_BASE)
-		return real_fchdir(dirfd);
+		return next_fchdir(dirfd);
 
 	strcpy(cur_dir, dir_list[dirfd - FD_DIR_BASE].path);
 	return 0;
@@ -3086,11 +3068,11 @@ new_unlink(const char *path)
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (!hook_enabled)
-		return real_unlink(path);
+		return libc_unlink(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_unlink(path);
+		return libc_unlink(path);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -3107,12 +3089,12 @@ unlinkat(int dirfd, const char *path, int flags)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_unlinkat == NULL) {
-		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
-		assert(real_unlinkat != NULL);
+	if (next_unlinkat == NULL) {
+		next_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
+		assert(next_unlinkat != NULL);
 	}
 	if (!hook_enabled)
-		return real_unlinkat(dirfd, path, flags);
+		return next_unlinkat(dirfd, path, flags);
 
 	if (path[0] == '/') {
 		/* absolute path, dirfd is ignored */
@@ -3123,22 +3105,20 @@ unlinkat(int dirfd, const char *path, int flags)
 	if (idx_dfs >= 0)
 		return new_unlink(full_path);
 
-	return real_unlinkat(dirfd, path, flags);
+	return next_unlinkat(dirfd, path, flags);
 }
 
 int
 fsync(int fd)
 {
-	if (real_fsync == NULL) {
-		real_fsync = dlsym(RTLD_NEXT, "fsync");
-		assert(real_fsync != NULL);
+	if (next_fsync == NULL) {
+		next_fsync = dlsym(RTLD_NEXT, "fsync");
+		assert(next_fsync != NULL);
 	}
-	if (!hook_enabled)
-		return real_fsync(fd);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_fsync(fd);
 
-	if (fd < FD_FILE_BASE) {
-		return real_fsync(fd);
-	} else if (fd >= FD_DIR_BASE) {
+	if (fd >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -3152,16 +3132,14 @@ ftruncate(int fd, off_t length)
 {
 	int rc;
 
-	if (real_ftruncate == NULL) {
-		real_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
-		assert(real_ftruncate != NULL);
+	if (next_ftruncate == NULL) {
+		next_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
+		assert(next_ftruncate != NULL);
 	}
-	if (!hook_enabled)
-		return real_ftruncate(fd, length);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_ftruncate(fd, length);
 
-	if (fd < FD_FILE_BASE) {
-		return real_ftruncate(fd, length);
-	} else if (fd >= FD_DIR_BASE) {
+	if (fd >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -3185,16 +3163,16 @@ truncate(const char *path, off_t length)
 	char             item_name[MAX_ITEM_LENGTH];
 	char             parent_dir[DFS_MAX_PATH];
 
-	if (real_truncate == NULL) {
-		real_truncate = dlsym(RTLD_NEXT, "truncate");
-		assert(real_truncate != NULL);
+	if (next_truncate == NULL) {
+		next_truncate = dlsym(RTLD_NEXT, "truncate");
+		assert(next_truncate != NULL);
 	}
 	if (!hook_enabled)
-		return real_truncate(path, length);
+		return next_truncate(path, length);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
 	if (!is_target_path)
-		return real_truncate(path, length);
+		return next_truncate(path, length);
 
 	/* rc = dfs_lookup(dfs, full_path, O_RDWR, &file_obj, &mode, NULL); */
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
@@ -3226,13 +3204,13 @@ chmod(const char *path, mode_t mode)
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
-	if (real_chmod == NULL) {
-		real_chmod = dlsym(RTLD_NEXT, "chmod");
-		assert(real_chmod != NULL);
+	if (next_chmod == NULL) {
+		next_chmod = dlsym(RTLD_NEXT, "chmod");
+		assert(next_chmod != NULL);
 	}
 
 	if (!hook_enabled)
-		return real_chmod(path, mode);
+		return next_chmod(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 
@@ -3244,7 +3222,7 @@ chmod(const char *path, mode_t mode)
 		}
 	}
 
-	return real_chmod(path, mode);
+	return next_chmod(path, mode);
 }
 
 int
@@ -3252,17 +3230,15 @@ fchmod(int fd, mode_t mode)
 {
 	int rc;
 
-	if (real_fchmod == NULL) {
-		real_fchmod = dlsym(RTLD_NEXT, "fchmod");
-		assert(real_fchmod != NULL);
+	if (next_fchmod == NULL) {
+		next_fchmod = dlsym(RTLD_NEXT, "fchmod");
+		assert(next_fchmod != NULL);
 	}
 
-	if (!hook_enabled)
-		return real_fchmod(fd, mode);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_fchmod(fd, mode);
 
-	if (fd < FD_FILE_BASE) {
-		return real_fchmod(fd, mode);
-	} else if (fd >= FD_DIR_BASE) {
+	if (fd >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -3284,13 +3260,13 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_fchmodat == NULL) {
-		real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
-		assert(real_fchmodat != NULL);
+	if (next_fchmodat == NULL) {
+		next_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
+		assert(next_fchmodat != NULL);
 	}
 
 	if (!hook_enabled)
-		return real_fchmodat(dirfd, path, mode, flag);
+		return next_fchmodat(dirfd, path, mode, flag);
 
 	if (path[0] == '/')
 		return chmod(path, mode);
@@ -3299,7 +3275,7 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	if (idx_dfs >= 0)
 		return chmod(full_path, mode);
 
-	return real_fchmodat(dirfd, path, mode, flag);
+	return next_fchmodat(dirfd, path, mode, flag);
 }
 
 int
@@ -3314,16 +3290,16 @@ utime(const char *path, const struct utimbuf *times)
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
-	if (real_utime == NULL) {
-		real_utime = dlsym(RTLD_NEXT, "utime");
-		assert(real_utime != NULL);
+	if (next_utime == NULL) {
+		next_utime = dlsym(RTLD_NEXT, "utime");
+		assert(next_utime != NULL);
 	}
 	if (!hook_enabled)
-		return real_utime(path, times);
+		return next_utime(path, times);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path)
-		return real_utime(path, times);
+		return next_utime(path, times);
 
 	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
@@ -3373,16 +3349,16 @@ utimes(const char *path, const struct timeval times[2])
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
-	if (real_utimes == NULL) {
-		real_utimes = dlsym(RTLD_NEXT, "utimes");
-		assert(real_utimes != NULL);
+	if (next_utimes == NULL) {
+		next_utimes = dlsym(RTLD_NEXT, "utimes");
+		assert(next_utimes != NULL);
 	}
 	if (!hook_enabled)
-		return real_utimes(path, times);
+		return next_utimes(path, times);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 	if (!is_target_path)
-		return real_utimes(path, times);
+		return next_utimes(path, times);
 
 	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
@@ -3439,7 +3415,7 @@ utimens_timespec(const char *path, const struct timespec times[2])
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
 		times_us[1].tv_sec  = times[1].tv_sec;
 		times_us[1].tv_usec = times[1].tv_nsec / 100;
-		return real_utimes(path, times_us);
+		return next_utimes(path, times_us);
 	}
 
 	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
@@ -3494,12 +3470,12 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
-	if (real_utimensat == NULL) {
-		real_utimensat = dlsym(RTLD_NEXT, "utimensat");
-		assert(real_utimensat != NULL);
+	if (next_utimensat == NULL) {
+		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
+		assert(next_utimensat != NULL);
 	}
 	if (!hook_enabled)
-		return real_utimensat(dirfd, path, times, flags);
+		return next_utimensat(dirfd, path, times, flags);
 
 	if (path == NULL) {
 		errno = EINVAL;
@@ -3514,7 +3490,7 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	if (idx_dfs >= 0)
 		return utimens_timespec(full_path, times);
 
-	return real_utimensat(dirfd, path, times, flags);
+	return next_utimensat(dirfd, path, times, flags);
 }
 
 int
@@ -3524,15 +3500,12 @@ futimens(int fd, const struct timespec times[2])
 	struct timespec times_loc;
 	struct stat     stbuf;
 
-	if (real_futimens == NULL) {
-		real_futimens = dlsym(RTLD_NEXT, "futimens");
-		assert(real_futimens != NULL);
+	if (next_futimens == NULL) {
+		next_futimens = dlsym(RTLD_NEXT, "futimens");
+		assert(next_futimens != NULL);
 	}
-	if (!hook_enabled)
-		return real_futimens(fd, times);
-
-	if (fd < FD_FILE_BASE)
-		return real_futimens(fd, times);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_futimens(fd, times);
 
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc);
@@ -3586,7 +3559,7 @@ new_fcntl(int fd, int cmd, ...)
 		va_end(arg);
 
 		if (!hook_enabled)
-			return real_fcntl(fd, cmd, param);
+			return libc_fcntl(fd, cmd, param);
 
 		if (cmd == F_GETFL) {
 			if (fd_Directed >= FD_DIR_BASE)
@@ -3594,7 +3567,7 @@ new_fcntl(int fd, int cmd, ...)
 			else if (fd_Directed >= FD_FILE_BASE)
 				return file_list[fd_Directed - FD_FILE_BASE].open_flag;
 			else
-				return real_fcntl(fd, cmd);
+				return libc_fcntl(fd, cmd);
 		}
 
 		fd_dup2ed_Dest = query_fd_forward_dest(fd_Directed);
@@ -3646,7 +3619,7 @@ new_fcntl(int fd, int cmd, ...)
 		/**		else if (cmd == F_GETFL)	{
 		 *		}
 		 */
-		return real_fcntl(fd, cmd, param);
+		return libc_fcntl(fd, cmd, param);
 	case F_SETLK:
 	case F_SETLKW:
 	case F_GETLK:
@@ -3660,14 +3633,14 @@ new_fcntl(int fd, int cmd, ...)
 		va_end(arg);
 
 		if (!hook_enabled)
-			return real_fcntl(fd, cmd, param);
+			return libc_fcntl(fd, cmd, param);
 
-		return real_fcntl(fd, cmd, param);
+		return libc_fcntl(fd, cmd, param);
 	default:
-		return real_fcntl(fd, cmd);
+		return libc_fcntl(fd, cmd);
 	}
 
-	return real_fcntl(fd, cmd);
+	return libc_fcntl(fd, cmd);
 }
 
 int
@@ -3680,15 +3653,12 @@ ioctl(int fd, unsigned long request, ...)
 	param = va_arg(arg, void *);
 	va_end(arg);
 
-	if (real_ioctl == NULL) {
-		real_ioctl = dlsym(RTLD_NEXT, "ioctl");
-		assert(real_ioctl != NULL);
+	if (next_ioctl == NULL) {
+		next_ioctl = dlsym(RTLD_NEXT, "ioctl");
+		assert(next_ioctl != NULL);
 	}
-	if (!hook_enabled)
-		return real_ioctl(fd, request, param);
-
-	if (fd < FD_FILE_BASE)
-		return real_ioctl(fd, request, param);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_ioctl(fd, request, param);
 
 	printf("Not implemented yet for ioctl().\n");
 	errno = ENOTSUP;
@@ -3701,12 +3671,12 @@ dup(int oldfd)
 {
 	int fd_Directed, fd, idx;
 
-	if (real_dup == NULL) {
-		real_dup = dlsym(RTLD_NEXT, "dup");
-		assert(real_dup != NULL);
+	if (next_dup == NULL) {
+		next_dup = dlsym(RTLD_NEXT, "dup");
+		assert(next_dup != NULL);
 	}
 	if (!hook_enabled)
-		return real_dup(oldfd);
+		return next_dup(oldfd);
 
 	if (oldfd >= FD_FILE_BASE) {
 		fd  = allocate_a_fd_from_kernel();
@@ -3737,7 +3707,7 @@ dup(int oldfd)
 			return idx;
 		}
 	} else {
-		return real_dup(oldfd);
+		return next_dup(oldfd);
 	}
 
 	return -1;
@@ -3748,21 +3718,21 @@ dup2(int oldfd, int newfd)
 {
 	int fd, fd_Directed, idx, rc;
 
-	if (real_dup2 == NULL) {
-		real_dup2 = dlsym(RTLD_NEXT, "dup2");
-		assert(real_dup2 != NULL);
+	if (next_dup2 == NULL) {
+		next_dup2 = dlsym(RTLD_NEXT, "dup2");
+		assert(next_dup2 != NULL);
 	}
 	if (!hook_enabled)
-		return real_dup2(oldfd, newfd);
+		return next_dup2(oldfd, newfd);
 
 	if (oldfd == newfd) {
 		if (oldfd < FD_FILE_BASE)
-			return real_dup2(oldfd, newfd);
+			return next_dup2(oldfd, newfd);
 		else
 			return newfd;
 	}
 	if ((oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
-		return real_dup2(oldfd, newfd);
+		return next_dup2(oldfd, newfd);
 
 	fd_Directed = query_fd_forward_dest(newfd);
 	if (fd_Directed >= FD_FILE_BASE) {
@@ -3794,7 +3764,7 @@ dup2(int oldfd, int newfd)
 				return idx;
 			}
 		} else {
-			real_dup2(oldfd, newfd);
+			next_dup2(oldfd, newfd);
 		}
 	}
 	return -1;
@@ -3867,9 +3837,9 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	void            *addr_ret;
 
 	if (!hook_enabled || fd < FD_FILE_BASE)
-		return real_mmap(addr, length, prot, flags, fd, offset);
+		return next_mmap(addr, length, prot, flags, fd, offset);
 
-	addr_ret = real_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
+	addr_ret = next_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
 	if (addr_ret == MAP_FAILED)
 		return (void *)(-1);
 
@@ -3963,7 +3933,7 @@ new_munmap(void *addr, size_t length)
 	int i, rc;
 
 	if (!hook_enabled)
-		return real_munmap(addr, length);
+		return next_munmap(addr, length);
 
 	for (i = 0; i <= last_map; i++) {
 		if (mmap_list[i].addr == addr) {
@@ -3977,25 +3947,22 @@ new_munmap(void *addr, size_t length)
 			D_FREE(mmap_list[i].updated);
 			free_map(i);
 
-			return real_munmap(addr, length);
+			return next_munmap(addr, length);
 		}
 	}
 
-	return real_munmap(addr, length);
+	return next_munmap(addr, length);
 }
 
 int
 posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
-	if (real_posix_fadvise == NULL) {
-		real_posix_fadvise = dlsym(RTLD_NEXT, "posix_fadvise");
-		assert(real_posix_fadvise != NULL);
+	if (next_posix_fadvise == NULL) {
+		next_posix_fadvise = dlsym(RTLD_NEXT, "posix_fadvise");
+		assert(next_posix_fadvise != NULL);
 	}
-	if (!hook_enabled)
-		return real_posix_fadvise(fd, offset, len, advice);
-
-	if (fd < FD_FILE_BASE)
-		return real_posix_fadvise(fd, offset, len, advice);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_posix_fadvise(fd, offset, len, advice);
 
 	printf("Error: DAOS does not support posix_fadvise yet.\n");
 	errno = ENOTSUP;
@@ -4008,15 +3975,12 @@ posix_fadvise64(int fd, off_t offset, off_t len, int advice)
 int
 flock(int fd, int operation)
 {
-	if (real_flock == NULL) {
-		real_flock = dlsym(RTLD_NEXT, "flock");
-		assert(real_flock != NULL);
+	if (next_flock == NULL) {
+		next_flock = dlsym(RTLD_NEXT, "flock");
+		assert(next_flock != NULL);
 	}
-	if (!hook_enabled)
-		return real_flock(fd, operation);
-
-	if (fd < FD_FILE_BASE)
-		return real_flock(fd, operation);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_flock(fd, operation);
 
 	printf("Error: DAOS does not support flock yet.\n");
 	errno = ENOTSUP;
@@ -4026,15 +3990,12 @@ flock(int fd, int operation)
 int
 fallocate(int fd, int mode, off_t offset, off_t len)
 {
-	if (real_fallocate == NULL) {
-		real_fallocate = dlsym(RTLD_NEXT, "fallocate");
-		assert(real_fallocate != NULL);
+	if (next_fallocate == NULL) {
+		next_fallocate = dlsym(RTLD_NEXT, "fallocate");
+		assert(next_fallocate != NULL);
 	}
-	if (!hook_enabled)
-		return real_fallocate(fd, mode, offset, len);
-
-	if (fd < FD_FILE_BASE)
-		return real_fallocate(fd, mode, offset, len);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_fallocate(fd, mode, offset, len);
 
 	printf("Error: DAOS does not support fallocate yet.\n");
 	errno = ENOTSUP;
@@ -4044,15 +4005,12 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 int
 posix_fallocate(int fd, off_t offset, off_t len)
 {
-	if (real_posix_fallocate == NULL) {
-		real_posix_fallocate = dlsym(RTLD_NEXT, "posix_fallocate");
-		assert(real_posix_fallocate != NULL);
+	if (next_posix_fallocate == NULL) {
+		next_posix_fallocate = dlsym(RTLD_NEXT, "posix_fallocate");
+		assert(next_posix_fallocate != NULL);
 	}
-	if (!hook_enabled)
-		return real_posix_fallocate(fd, offset, len);
-
-	if (fd < FD_FILE_BASE)
-		return real_posix_fallocate(fd, offset, len);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_posix_fallocate(fd, offset, len);
 
 	printf("Error: DAOS does not support posix_fallocate yet.\n");
 	errno = ENOTSUP;
@@ -4062,15 +4020,12 @@ posix_fallocate(int fd, off_t offset, off_t len)
 int
 posix_fallocate64(int fd, off64_t offset, off64_t len)
 {
-	if (real_posix_fallocate64 == NULL) {
-		real_posix_fallocate64 = dlsym(RTLD_NEXT, "posix_fallocate64");
-		assert(real_posix_fallocate64 != NULL);
+	if (next_posix_fallocate64 == NULL) {
+		next_posix_fallocate64 = dlsym(RTLD_NEXT, "posix_fallocate64");
+		assert(next_posix_fallocate64 != NULL);
 	}
-	if (!hook_enabled)
-		return real_posix_fallocate64(fd, offset, len);
-
-	if (fd < FD_FILE_BASE)
-		return real_posix_fallocate64(fd, offset, len);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_posix_fallocate64(fd, offset, len);
 
 	printf("Error: DAOS does not support posix_fallocate64 yet.\n");
 	errno = ENOTSUP;
@@ -4080,15 +4035,12 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 int
 tcgetattr(int fd, void *termios_p)
 {
-	if (real_tcgetattr == NULL) {
-		real_tcgetattr = dlsym(RTLD_NEXT, "tcgetattr");
-		assert(real_tcgetattr != NULL);
+	if (next_tcgetattr == NULL) {
+		next_tcgetattr = dlsym(RTLD_NEXT, "tcgetattr");
+		assert(next_tcgetattr != NULL);
 	}
-	if (!hook_enabled)
-		return real_tcgetattr(fd, termios_p);
-
-	if (fd < FD_FILE_BASE)
-		return real_tcgetattr(fd, termios_p);
+	if (!hook_enabled || fd < FD_FILE_BASE)
+		return next_tcgetattr(fd, termios_p);
 
 	printf("Error: DAOS does not support tcgetattr yet.\n");
 	errno = ENOTSUP;
@@ -4170,7 +4122,8 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	length = addr_max - addr_min;
 	length = (length & (page_size - 1) ? (length + page_size - (length & (page_size - 1))) :
 		(length));
-	/* Restore the read & write permission on page */
+	/* Restore the read & write permission on page.                                     */
+	/* Need more work here! App may read first, write later. We do label the page dirty. */
 	rc = mprotect((void *)addr_min, length, PROT_READ | PROT_WRITE);
 	if (rc < 0) {
 		snprintf(err_msg, 256, "Error in mprotect() in signal handler. %s\n",
@@ -4258,19 +4211,19 @@ init_myhook(void)
 	register_a_hook("libpthread", "lseek64", (void *)new_lseek_pthread,
 			(long int *)(&pthread_lseek));
 
-	register_a_hook("libc", "unlink", (void *)new_unlink, (long int *)(&real_unlink));
+	register_a_hook("libc", "unlink", (void *)new_unlink, (long int *)(&libc_unlink));
 
-	register_a_hook("libc", "__fxstat", (void *)new_fxstat, (long int *)(&real_fxstat));
-	register_a_hook("libc", "__xstat", (void *)new_xstat, (long int *)(&real_xstat));
+	register_a_hook("libc", "__fxstat", (void *)new_fxstat, (long int *)(&next_fxstat));
+	register_a_hook("libc", "__xstat", (void *)new_xstat, (long int *)(&next_xstat));
 	/* Many variants for lxstat: _lxstat, __lxstat, ___lxstat, __lxstat64 */
 	register_a_hook("libc", "__lxstat", (void *)new_lxstat, (long int *)(&real_lxstat));
-	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&real_fxstatat));
-	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&real_readdir));
+	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&next_fxstatat));
+	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&next_readdir));
 
-	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&real_fcntl));
+	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
 
-	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&real_mmap));
-	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&real_munmap));
+	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
+	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
 	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
 	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
