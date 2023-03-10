@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -134,15 +134,26 @@ class DmgStorageQuery(ControlTestBase):
         for device in device_info:
             self.log.info("Health Info for %s:", device['uuid'])
             for key in sorted(device['health']):
-                self.log.info("  %s: %s", key, device['health'][key])
-                if 'temp' in key:
+                if key == 'temperature':
+                    self.log.info("  %s: %s", key, device['health'][key])
                     # Verify temperature, convert from Kelvins to Celsius
                     celsius = int(device['health'][key]) - 273.15
                     if not 0.00 <= celsius <= 71.00:
                         self.log.info("    Out of range (0-71 C) temperature detected: %s", celsius)
                         errors.append(key)
+                elif key == 'temp_warn':
+                    self.log.info("  %s: %s", key, device['health'][key])
+                    if device['health'][key]:
+                        self.log.info("    Temperature warning detected: %s", device['health'][key])
+                        errors.append(key)
+                elif 'temp_time' in key:
+                    self.log.info("  %s: %s", key, device['health'][key])
+                    if device['health'][key] != 0:
+                        self.log.info(
+                            "    Temperature time issue detected: %s", device['health'][key])
+                        errors.append(key)
         if errors:
-            self.fail("Bad temperature on SSDs: {}".format(list_to_str(errors)))
+            self.fail("Temperature error detected on SSDs: {}".format(list_to_str(errors)))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):

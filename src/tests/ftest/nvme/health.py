@@ -93,14 +93,14 @@ class NvmeHealth(ServerFillUp):
                 for devices in info.values():
                     for device in devices:
                         try:
-                            if device['uuid'] == device and device['dev_state'] == 'NORMAL':
+                            if device['uuid'] == uuid and device['dev_state'] == 'NORMAL':
                                 passed = True
                         except KeyError as error:
                             self.fail(
                                 "Error parsing dmg.storage_query_device_health() output: {}".format(
                                     error))
                 if not passed:
-                    self.fail("device {} on host {} is not NORMAL".format(device, host))
+                    self.fail("device {} on host {} is not NORMAL".format(uuid, host))
 
         # Get the nvme-health
         try:

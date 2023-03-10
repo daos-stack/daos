@@ -5,7 +5,7 @@
 """
 
 from daos_core_base import DaosCoreBase
-from dmg_utils import get_storage_query_device_uuids, get_dmg_smd_info
+from dmg_utils import get_dmg_smd_info
 from general_utils import get_log_file
 
 
@@ -29,18 +29,16 @@ class CsumErrorLog(DaosCoreBase):
         Returns:
             int: the number of checksum errors on the device
         """
-        checksum_errs = 0
         info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=device_id)
         for devices in info.values():
             for device in devices:
                 try:
                     if device['uuid'] == device_id:
-                        checksum_errs = device['health']['checksum_errs']
-                        break
+                        return device['health']['checksum_errs']
                 except KeyError as error:
                     self.fail(
                         'Error parsing dmg storage query device-health output: {}'.format(error))
-        return checksum_errs
+        return 0
 
     def test_csum_error_logging(self):
         """Jira ID: DAOS-3927
@@ -55,19 +53,25 @@ class CsumErrorLog(DaosCoreBase):
         """
         dmg = self.get_dmg_command()
         dmg.hostlist = self.hostlist_servers[0]
-        dev_uuids = get_storage_query_device_uuids(self, dmg)
-        self.log.info("dev_uuids: %s", dev_uuids)
-        for host_uuid_list in dev_uuids.values():
-            for device_id in host_uuid_list:
-                if device_id is None:
-                    self.fail("Device id undefined")
-                self.log.info("dev_id: %s", device_id)
-                csum = self.get_checksum_error_value(dmg, device_id)
+        host_devices = get_dmg_smd_info(self, dmg.storage_query_list_devices, 'devices')
+        for host, devices in host_devices.items():
+            for device in devices:
+                if 'tgt_ids' not in device or 'uuid' not in device:
+                    self.fail(
+                        'Missing uuid and/or tgt_ids info from dmg storage query list devices')
+                self.log.info(
+                    "Host %s device: uuid=%s, targets=%s", host, device['uuid'], device['tgt_ids'])
+                if not device['tgt_ids']:
+                    self.log.info('Skipping device without targets on %s', device['uuid'])
+                    continue
+                if not device['uuid']:
+                    self.fail("Device uuid undefined")
+                check_sum = self.get_checksum_error_value(dmg, device['uuid'])
                 dmg.copy_certificates(get_log_file("daosCA/certs"), self.hostlist_clients)
                 dmg.copy_configuration(self.hostlist_clients)
-                self.log.info("Checksum Errors before: %d", csum)
+                self.log.info("Checksum Errors before: %d", check_sum)
                 self.run_subtest()
-                csum_latest = self.get_checksum_error_value(dmg, device_id)
-                self.log.info("Checksum Errors after:  %d", csum_latest)
-                self.assertTrue(csum_latest > csum, "Checksum Error Log not incremented")
+                check_sum_latest = self.get_checksum_error_value(dmg, device['uuid'])
+                self.log.info("Checksum Errors after:  %d", check_sum_latest)
+                self.assertTrue(check_sum_latest > check_sum, "Checksum Error Log not incremented")
         self.log.info("Checksum Error Logging Test Passed")
