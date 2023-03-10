@@ -21,10 +21,8 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: DEBUG,MEM=ERR
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
-        - CRT_CREDIT_EP_CTX=16
       storage:
         0:
           class: dcpm
@@ -36,10 +34,8 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: DEBUG,MEM=ERR
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
-        - CRT_CREDIT_EP_CTX=16
       storage:
         0:
           class: dcpm
@@ -72,5 +68,5 @@ daos_tests:
     test_daos_dfs_sys: 1
   test_log_mask:
     test_daos_dfs_unit: INFO
-    test_daos_dfs_parallel: DEBUG,MEM=ERR
+    test_daos_dfs_parallel: INFO
     test_daos_dfs_sys: INFO
