@@ -238,6 +238,7 @@ jobs:
              ssh -oPasswordAuthentication=false -v root@${NODESTRING%%vm*} \
                  "POOL=${{ env.cp_PROVISIONING_POOL }}
                   NODESTRING=$NODESTRING
+                  NODELIST=$NODESTRING
                   $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master
