@@ -277,7 +277,10 @@ jobs:
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
-             rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
+             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
+                id;
+                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }};
+             fi;
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files
         if: always()
