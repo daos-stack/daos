@@ -233,7 +233,7 @@ jobs:
                  sleep 1;
              done;
              NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
-             NODELIST="$NODESTRING"
+             NODELIST="$NODESTRING";
              echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
              ssh -oPasswordAuthentication=false -v root@${NODESTRING%%vm*} \
                  "POOL=${{ env.cp_PROVISIONING_POOL }}
