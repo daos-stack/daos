@@ -250,12 +250,14 @@ jobs:
         #    #   Host *
         #    #   ConnectTimeout=420
         #    script: timeout=$((SECONDS+420));
-        run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x; timeout=$((SECONDS+420));
-                  while [ \$SECONDS -lt \$timeout ]; do
+        run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x;
+                  waited=0;
+                  while [ \$waited -lt 420 ]; do
                       if [ -d /var/chef/reports ]; then
                           exit 0;
                       fi;
                       sleep 10;
+                      (( $waited +=10 )) || true;
                   done;
                   exit 1"
       - name: Post-provision cluster
@@ -280,7 +282,7 @@ jobs:
         run: . ci/gha_functions.sh;
              if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
                 id;
-                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }};
+                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
              fi;
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files
