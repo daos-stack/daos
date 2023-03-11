@@ -235,6 +235,7 @@ jobs:
              NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
              NODELIST="$NODESTRING";
              echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
+             echo "NODELIST=$NODELIST" >> $GITHUB_ENV;
              ssh -oPasswordAuthentication=false -v root@${NODESTRING%%vm*} \
                  "POOL=${{ env.cp_PROVISIONING_POOL }}
                   NODESTRING=$NODESTRING
