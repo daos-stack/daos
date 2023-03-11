@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,6 +75,8 @@ extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 extern int  dt_obj_class;
 extern unsigned int dt_cell_size;
+extern int dt_redun_lvl;
+extern int dt_redun_fac;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -451,8 +453,13 @@ int rebuild_pool_connect_internal(void *data);
 
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_rf1_setup(void **state);
+int rebuild_sub_rf0_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+int rebuild_small_sub_rf1_setup(void **state);
+int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,

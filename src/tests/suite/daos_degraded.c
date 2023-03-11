@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -250,8 +250,8 @@ static const struct CMUnitTest degraded_tests[] = {
 static int
 degraded_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  0, NULL);
+	return rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF3);
 }
 
 static int
