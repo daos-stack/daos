@@ -626,7 +626,7 @@ class DmgCommand(DmgCommandBase):
         """Query a pool with the dmg command.
 
         Args:
-            uuid (str): Pool UUID to query.
+            pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
             show_disabled (bool, optional): Display disabled ranks.
 
@@ -676,6 +676,24 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
                                      show_enabled=show_enabled, show_disabled=show_disabled)
+
+    def pool_query_targets(self, pool, rank=None, target_idx=None):
+        """Call dmg pool query-targets.
+
+        Args:
+            pool (str): Pool UUID or label
+            rank (str, optional): Engine rank of the targets to be queried
+            target_idx (str, optional): Comma-separated list of target idx(s) to be queried
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("pool", "query-targets"), pool=pool,
+                                     rank=rank, target_idx=target_idx)
 
     def pool_destroy(self, pool, force=True, recursive=True):
         """Destroy a pool with the dmg command.
