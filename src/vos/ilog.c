@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,6 +85,19 @@ struct ilog_context {
 
 D_CASSERT(sizeof(struct ilog_id) == sizeof(struct ilog_tree));
 D_CASSERT(sizeof(struct ilog_root) == sizeof(struct ilog_df));
+
+static inline struct vos_container *
+ilog_ctx2cont(struct ilog_context *lctx)
+{
+	daos_handle_t	coh;
+
+	if (lctx->ic_cbs.dc_is_same_tx_args == NULL)
+		return NULL;
+
+	coh.cookie = (unsigned long)lctx->ic_cbs.dc_is_same_tx_args;
+
+	return vos_hdl2cont(coh);
+}
 
 /**
  * Customized functions for btree.
@@ -575,7 +588,7 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out, const struct ilog
 			D_DEBUG(DB_IO, "No entry found, done\n");
 			return 0;
 		}
-		if (id_in->id_tx_id == DTX_LID_COMMITTED) {
+		if (dtx_is_committed(id_in->id_tx_id, ilog_ctx2cont(lctx), id_in->id_epoch)) {
 			/** Need to differentiate between updates that are
 			 * overwrites and others that are conflicts.  Return
 			 * a different error code in this case if the result
