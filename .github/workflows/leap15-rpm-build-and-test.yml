@@ -1,4 +1,4 @@
-name: RPM Build and Test
+name: Leap 15 RPM Build and Test
 
 on:
   workflow_dispatch:
@@ -74,15 +74,15 @@ jobs:
     needs: [Import-commit-pragmas]
     # Map a step output to a job output
     outputs:
-      skip-func-test-el8: ${{ steps.skip-func-test-el8.outputs.text }}
+      skip-func-test-leap15: ${{ steps.skip-func-test-leap15.outputs.text }}
       rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
       pr-repos: ${{ steps.pr-repos.outputs.text }}
     steps:
-      - name: Set skip-func-test-el8 variable
-        id: skip-func-test-el8
+      - name: Set skip-func-test-leap15 variable
+        id: skip-func-test-leap15
         run: set -x;
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
-             echo "text=$SKIP_FUNC_TEST_EL8" >> $GITHUB_OUTPUT;
+             echo "text=$SKIP_FUNC_TEST_LEAP15" >> $GITHUB_OUTPUT;
              cat $GITHUB_OUTPUT
       - name: Set rpm-test-version variable
         id: rpm-test-version
@@ -97,8 +97,8 @@ jobs:
              echo "text=$PR_REPOS" >> $GITHUB_OUTPUT;
              cat $GITHUB_OUTPUT
 
-  Build-EL8-RPM:
-    name: Build RPM on EL 8
+  Build-LEAP15-RPM:
+    name: Build RPM on Leap 15
     runs-on: [self-hosted, mockbuilder]
     needs: [Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
     # yamllint disable-line rule:line-length
@@ -108,7 +108,7 @@ jobs:
       BUILD_CHROOT: /var/lib/mock/rocky+epel-8-x86_64-${{ github.run_id }}/
       DAOS_EMAIL: brian.murrell@intel.com
       DAOS_FULLNAME: daos-stack
-      DISTRO: el8
+      DISTRO: leap15
       DISTRO_REPOS: disabled
       DISTRO_VERSION: 8
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
@@ -118,8 +118,8 @@ jobs:
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       RPM_BUILD_OPTIONS: --define "relval .8836.g3c16ca3d" --define "scons_args BUILD_TYPE=dev"
       RUN_ID: ${{ github.run_id }}
-      STAGE_NAME: Build RPM on EL 8
-      TARGET: el8
+      STAGE_NAME: Build RPM on Leap 15
+      TARGET: leap15
     steps:
       # - name: Show most recent commit
       #   run: echo "${{ needs.Import-commit-message.outputs.message }}"
@@ -164,14 +164,14 @@ jobs:
              rm -f ${REPO_PATH}lastSuccessfulBuild;
              ln -s $(get_repo_serial) ${REPO_PATH}lastSuccessfulBuild
 
-  Functional-EL8:
-    name: Functional on EL 8
+  Functional-LEAP15:
+    name: Functional on Leap 15
     runs-on: [self-hosted, ci_vm9]
-    needs: [Build-EL8-RPM, Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
+    needs: [Build-LEAP15-RPM, Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
       !failure() && !cancelled() &&
-      needs.Import-commit-pragmas2.outputs.skip-func-test-el8 != 'true'
+      needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 != 'true'
     env:
       TEST_TAG: pr,-hw
       # yamllint disable-line rule:line-length
@@ -191,12 +191,12 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
-      DISTRO: EL_8
+      DISTRO: LEAP_15
       DAOS_STACK_EL_7_LOCAL_REPO: repository/daos-stack-el-7-x86_64-stable-local
-      DAOS_STACK_EL_8_LOCAL_REPO: repository/daos-stack-el-8-x86_64-stable-local
+      DAOS_STACK_LEAP_15_LOCAL_REPO: repository/daos-stack-el-8-x86_64-stable-local
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # REMOTE_ACCT: ${REMOTE_ACCT:-"vagrant"}
-      STAGE_NAME: Functional on EL 8
+      STAGE_NAME: Functional on Leap 15
       # use to generate a launch.py junit failure
       # FTEST_ARG: --nvme=auto
     steps:
@@ -209,8 +209,8 @@ jobs:
              sed -e 's/^/cp_/' >> $GITHUB_ENV
       # - name: Show env
       #   run: env | sort
-      # - name: Show Skip-func-test-el8 commit pragma
-      #   run: echo '${{ needs.Import-commit-pragmas2.outputs.skip-func-test-el8 }}'
+      # - name: Show Skip-func-test-leap15 commit pragma
+      #   run: echo '${{ needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 }}'
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -302,21 +302,21 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          check_name: Functional on EL 8 Test Results (old)
+          check_name: Functional on Leap 15 Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          junit_files: Functional on EL 8/**/results.xml
+          junit_files: Functional on Leap 15/**/results.xml
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
         if: always()
         with:
-          name: Functional on EL 8 Test Results (new)
-          path: Functional on EL 8/**/results.xml
+          name: Functional on Leap 15 Test Results (new)
+          path: Functional on Leap 15/**/results.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Functional on EL 8 artifacts
-          path: Functional on EL 8/**
+          name: Functional on Leap 15 artifacts
+          path: Functional on Leap 15/**
