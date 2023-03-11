@@ -67,40 +67,63 @@ class NvmeHealth(ServerFillUp):
         dmg = self.get_dmg_command()
 
         # List all pools
+        errors = 0
         for host in self.hostlist_servers:
+            self.log.info('Pools found on %s', host)
             dmg.hostlist = host
-            host_pool_uuids = []
-            pool_info = get_storage_query_pool_info(self, dmg)
-            for pool in pool_info:
+            pool_uuids = [pool.uuid.lower() for pool in pool_list]
+            for pool in get_storage_query_pool_info(self, dmg):
                 try:
-                    host_pool_uuids.append(pool['uuid'])
+                    try:
+                        pool_uuids.pop(pool_uuids.index(pool['uuid']))
+                        error_msg = ''
+                    except ValueError:
+                        error_msg = ' <== ERROR: DOES NOT MATCH A CREATED POOL UUID'
+                        errors += 1
+                    self.log.info('  %s%s', pool['uuid'], error_msg)
                 except KeyError as error:
                     self.fail(
-                        "Error parsing dmg.storage_query_list_pools() output: {}".format(error))
-            for pool in pool_list:
-                if pool.uuid.lower() not in host_pool_uuids:
-                    self.fail('Pool uuid {} not found in smd query'.format(pool.uuid.lower()))
+                        'Error parsing dmg.storage_query_list_pools() output: {}'.format(error))
+            if pool_uuids:
+                self.log.info('Pools not found on %s', host)
+                for uuid in pool_uuids:
+                    self.log.info('  %s', uuid)
+                    errors += 1
+        if errors:
+            self.fail(
+                'Detected {} error(s) verifying dmg storage query list-pools output'.format(errors))
 
         # Get the device ID from all the servers.
         device_ids = get_device_ids(self, dmg, self.hostlist_servers)
 
         # Get the device health
-        for host, dev_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
+        errors = 0
+        for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
             dmg.hostlist = host
-            for uuid in dev_list:
+            for uuid in uuid_list:
                 info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=uuid)
-                passed = False
+                self.log.info('Verifying the health of devices on %s', host)
                 for devices in info.values():
                     for device in devices:
                         try:
-                            if device['uuid'] == uuid and device['dev_state'] == 'NORMAL':
-                                passed = True
+                            error_msg = ''
+                            if device['uuid'] != uuid:
+                                error_msg = '  <== ERROR: UNEXPECTED DEVICE UUID'
+                                errors += 1
+                            elif device['dev_state'].lower() != 'normal':
+                                error_msg = '  <== ERROR: STATE NOT NORMAL'
+                                errors += 1
+                            self.log.info(
+                                '  health is %s for %s%s',
+                                device['uuid'], device['dev_state'], error_msg)
                         except KeyError as error:
                             self.fail(
                                 "Error parsing dmg.storage_query_device_health() output: {}".format(
                                     error))
-                if not passed:
-                    self.fail("device {} on host {} is not NORMAL".format(uuid, host))
+        if errors:
+            self.fail(
+                'Detected {} error(s) verifying dmg storage query device-health output'.format(
+                    errors))
 
         # Get the nvme-health
         try:

@@ -30,13 +30,11 @@ def get_device_ids(test, dmg, servers):
 
     """
     devices = {}
-    # dmg.set_sub_command("storage")
-    # dmg.sub_command_class.set_sub_command("query")
-    # dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
     for host in servers:
         dmg.hostlist = host
-        host_uuids = get_storage_query_device_uuids(test, dmg)
-        devices[host] = list(host_uuids.values())
+        devices[host] = []
+        for uuid_list in get_storage_query_device_uuids(test, dmg).values():
+            devices[host].extend(uuid_list)
     return devices
 
 
