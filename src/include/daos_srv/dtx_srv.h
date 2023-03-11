@@ -217,6 +217,8 @@ enum dtx_flags {
 	DTX_DROP_CMT		= (1 << 8),
 };
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
