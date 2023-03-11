@@ -1,4 +1,4 @@
-name: Leap 15 RPM Build and Test
+name: Leap 15.4 RPM Build and Test
 
 on:
   workflow_dispatch:
@@ -98,7 +98,7 @@ jobs:
              cat $GITHUB_OUTPUT
 
   Build-LEAP15-RPM:
-    name: Build RPM on Leap 15
+    name: Build RPM on Leap 15.4
     runs-on: [self-hosted, mockbuilder]
     needs: [Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
     # yamllint disable-line rule:line-length
@@ -118,7 +118,7 @@ jobs:
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       RPM_BUILD_OPTIONS: --define "relval .8836.g3c16ca3d" --define "scons_args BUILD_TYPE=dev"
       RUN_ID: ${{ github.run_id }}
-      STAGE_NAME: Build RPM on Leap 15
+      STAGE_NAME: Build RPM on Leap 15.4
       TARGET: leap15
     steps:
       # - name: Show most recent commit
@@ -165,7 +165,7 @@ jobs:
              ln -s $(get_repo_serial) ${REPO_PATH}lastSuccessfulBuild
 
   Functional-LEAP15:
-    name: Functional on Leap 15
+    name: Functional on Leap 15.4
     runs-on: [self-hosted, ci_vm9]
     needs: [Build-LEAP15-RPM, Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
@@ -196,7 +196,7 @@ jobs:
       DAOS_STACK_LEAP_15_LOCAL_REPO: repository/daos-stack-sl-15-x86_64-stable-local
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # REMOTE_ACCT: ${REMOTE_ACCT:-"vagrant"}
-      STAGE_NAME: Functional on Leap 15
+      STAGE_NAME: Functional on Leap 15.4
       # use to generate a launch.py junit failure
       # FTEST_ARG: --nvme=auto
     steps:
@@ -302,7 +302,7 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          check_name: Functional on Leap 15 Test Results (old)
+          check_name: Functional on Leap 15.4 Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
           junit_files: Functional on Leap 15/**/results.xml
       - name: Test Report
@@ -310,7 +310,7 @@ jobs:
         id: test-report               # Set ID reference for step
         if: always()
         with:
-          name: Functional on Leap 15 Test Results (new)
+          name: Functional on Leap 15.4 Test Results (new)
           path: Functional on Leap 15/**/results.xml
           reporter: java-junit        # Format of test results
 
@@ -318,5 +318,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Functional on Leap 15 artifacts
+          name: Functional on Leap 15.4 artifacts
           path: Functional on Leap 15/**
