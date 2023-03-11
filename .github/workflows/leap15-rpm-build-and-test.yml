@@ -105,12 +105,12 @@ jobs:
     if: needs.Import-commit-pragmas2.outputs.rpm-test-version == '' && !contains(needs.Import-commit-pragmas2.outputs.pr-repos, 'daos@')
     env:
       ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
-      BUILD_CHROOT: /var/lib/mock/rocky+epel-8-x86_64-${{ github.run_id }}/
+      BUILD_CHROOT: /var/lib/mock/opensuse-leap-15.4-x86_64-${{ github.run_id }}/
       DAOS_EMAIL: brian.murrell@intel.com
       DAOS_FULLNAME: daos-stack
       DISTRO: leap15
       DISTRO_REPOS: disabled
-      DISTRO_VERSION: 8
+      DISTRO_VERSION: 15.4
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
       PR_NUM: ${{ github.event.pull_request.number }}
       # yamllint disable-line rule:line-length
@@ -193,7 +193,7 @@ jobs:
       REMOVE_EXISTING_RPMS: false
       DISTRO: LEAP_15
       DAOS_STACK_EL_7_LOCAL_REPO: repository/daos-stack-el-7-x86_64-stable-local
-      DAOS_STACK_LEAP_15_LOCAL_REPO: repository/daos-stack-el-8-x86_64-stable-local
+      DAOS_STACK_LEAP_15_LOCAL_REPO: repository/daos-stack-sl-15-x86_64-stable-local
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # REMOTE_ACCT: ${REMOTE_ACCT:-"vagrant"}
       STAGE_NAME: Functional on Leap 15
