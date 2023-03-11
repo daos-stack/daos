@@ -200,10 +200,13 @@ jobs:
       # use to generate a launch.py junit failure
       # FTEST_ARG: --nvme=auto
     steps:
-      # - name: Dump GitHub context
-      #   env:
-      #     GITHUB_CONTEXT: ${{ toJSON(github) }}
-      #   run: echo "$GITHUB_CONTEXT"
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: echo "$GITHUB_CONTEXT"
+      - name: See if we can reduce job name duplication
+        run: echo ${{ github.job }};
+             echo ${{ github.${{ github.job }}.name }};
       - name: Import commit pragmas
         run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
@@ -291,7 +294,7 @@ jobs:
         run: . ci/gha_functions.sh;
              hostname;
              pwd;
-             find Functional\ on\ EL\ 8 -type f
+             find Functional\ on\ Leap\ 15.4 -type f
       # - name: Debug Publish NLT test results
       #   if: always()
       #   run: pwd;
@@ -304,14 +307,14 @@ jobs:
         with:
           check_name: Functional on Leap 15.4 Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          junit_files: Functional on Leap 15/**/results.xml
+          junit_files: Functional on Leap 15.4/**/results.xml
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
         if: always()
         with:
           name: Functional on Leap 15.4 Test Results (new)
-          path: Functional on Leap 15/**/results.xml
+          path: Functional on Leap 15.4/**/results.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
@@ -319,4 +322,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Functional on Leap 15.4 artifacts
-          path: Functional on Leap 15/**
+          path: Functional on Leap 15.4/**
