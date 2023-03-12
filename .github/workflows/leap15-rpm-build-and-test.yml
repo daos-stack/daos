@@ -205,7 +205,8 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: echo "$GITHUB_CONTEXT"
       - name: See if we can reduce job name duplication
-        run: echo ${{ github.job }}
+        run: set -x;
+             echo "${{ github.job }}"
       - name: Import commit pragmas
         run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
@@ -242,6 +243,7 @@ jobs:
                  "POOL=${{ env.cp_PROVISIONING_POOL }}
                   NODESTRING=$NODESTRING
                   NODELIST=$NODESTRING
+                  DISTRO="leap15.4"
                   $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master

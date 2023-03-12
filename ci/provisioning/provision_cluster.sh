@@ -19,9 +19,10 @@ wait_nodes() {
     exit 0
 }
 
-if ! POOL="${POOL:-}" restore_vm_snapshot.sh daos_ci-el8 "$NODESTRING"; then
+#shellcheck disable=SC2153
+if ! POOL="${POOL:-}" restore_vm_snapshot.sh daos_ci-"$DISTRO" "$NODESTRING"; then
     rc=${PIPESTATUS[0]}
-    distro=el8
+    distro="$DISTRO"
     while [[ $distro = *.* ]]; do
         distro=${distro%.*}
         if ! POOL="" restore_vm_snapshot.sh daos_ci-${distro} "$NODESTRING"; then
