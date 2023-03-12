@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2407,29 +2407,31 @@ abort:
 	if (err == 0)
 		err = vos_ioc_mark_agg(ioc);
 
+	if (err == 0)
+		vos_ts_set_upgrade(ioc->ic_ts_set);
+
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0)
+		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+
+	if (err == 0)
+		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
-	if (err == 0) {
-		vos_ts_set_upgrade(ioc->ic_ts_set);
-		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-					    dth->dth_dti_cos_count,
-					    false, false);
+	if (err == 0)
+		vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries, false);
+
+	if (dtx_is_valid_handle(dth)) {
+		if (err == 0)
 			dth->dth_cos_done = 1;
-		}
-		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
-				  &ioc->ic_dedup_entries, false);
-	} else if (daes != NULL) {
-		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-				    dth->dth_dti_cos_count, false, true);
-		dth->dth_cos_done = 0;
+		else
+			dth->dth_cos_done = 0;
+
+		if (daes != NULL)
+			vos_dtx_post_handle(ioc->ic_cont, daes, dces, dth->dth_dti_cos_count,
+					    false, err != 0);
 	}
 
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-		if (err == 0)
-			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-	}
 
 	if (err != 0)
 		update_cancel(ioc);
@@ -2477,6 +2479,17 @@ vos_check_akeys(int iod_nr, daos_iod_t *iods)
 	return 0;
 }
 
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth)
+{
+	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
+
+	D_ASSERT(dtx_is_valid_handle(dth));
+
+	ioc->ic_epr.epr_hi = dth->dth_epoch;
+	ioc->ic_bound = MAX(dth->dth_epoch_bound, ioc->ic_epr.epr_hi);
+}
+
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -2489,9 +2502,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+	if (dtx_is_valid_handle(dth))
+		epoch = dth->dth_epoch;
+
+	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "
+		DF_X64", flags="DF_X64"\n", DP_UOID(oid), iod_nr, epoch, flags);
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {
