@@ -249,7 +249,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return err
 		}
 
-		// Archive the logs on Server node via gRPC incase of rsync failure and logs can not be
+		// Archive the logs on Server node via gRPC in case of rsync failure and logs can not be
 		// copied to central/Admin node.
 		if rsyncerr != nil {
 			err = cmd.archLogsOnServer()
