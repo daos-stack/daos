@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/dustin/go-humanize"
@@ -37,7 +38,8 @@ type (
 )
 
 func run(log logging.Logger, cmd string) (string, error) {
-	out, err := exec.Command("bash", "-c", cmd).Output()
+	cmdArgs := strings.Fields(cmd)
+	out, err := exec.Command(cmdArgs[0], cmdArgs[1:len(cmdArgs)-1]...).Output()
 	if err != nil {
 		return "", errors.Wrapf(&system.RunCmdError{
 			Wrapped: err,
