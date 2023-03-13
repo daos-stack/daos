@@ -316,7 +316,7 @@ class Common(CommonBase):
         self._debug('Output file: {0}'.format(file_name))
 
     def _dump_yaml(self, yaml_str):
-        return yaml.safe_dump(yaml_str, default_flow_style=False)
+        return yaml.safe_dump(yaml_str, default_flow_style=False, sort_keys=False)
 
     def _load_yaml_from_file(self, file_name):
         self._debug('loading yaml file {0}'.format(file_name))
