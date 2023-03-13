@@ -620,25 +620,23 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	return rc;
 }
 
+/*
+ * Calculate a reasonable WAL size based on following assumptions:
+ * - Single target update IOPS can be upto 65k;
+ * - Each TX consumes 2 WAL blocks in average;
+ * - Checkpointing interval is 5 seconds, and the WAL should have at least
+ *   half free space before next checkpoint;
+ */
 uint64_t
 default_wal_sz(uint64_t meta_sz)
 {
-	uint64_t wal_sz;
+	uint64_t wal_sz = (6ULL << 30);	/* 6GB */
 
 	/* The WAL size could be larger than meta size for tiny pool */
-	if (meta_sz <= (256ULL << 20) /* 256MB */)
+	if ((meta_sz * 2) <= wal_sz)
 		return meta_sz * 2;
 
-	/*
-	 * Calculate a reasonable WAL size based on following assumptions:
-	 * - Single target update IOPS can be upto 65k;
-	 * - Each TX consumes 2 WAL blocks in average;
-	 * - Checkpointing interval is 5 seconds, and the WAL should have at least
-	 *   half free space before next checkpoint;
-	 */
-	wal_sz = (6ULL << 30);	/* 6GB */
-
-	return meta_sz > wal_sz ? wal_sz : meta_sz;
+	return wal_sz;
 }
 
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
