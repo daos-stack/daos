@@ -138,9 +138,10 @@ const (
 	cmdRemoveRegions     = "ipmctl create -f -goal%sMemoryMode=100"
 	cmdDeleteGoals       = "ipmctl delete -goal"
 
-	outNoCLIPerms    = "ipmctl command you have attempted to execute requires root privileges"
-	outNoPMemModules = "No PMem modules in the system"
-	outNoPMemRegions = "no Regions defined in the system"
+	outNoCLIPerms          = "ipmctl command you have attempted to execute requires root privileges"
+	outNoPMemModules       = "No PMem modules in the system"
+	outNoPMemRegions       = "no Regions defined in the system"
+	outNoPMemRegionResults = "<Results>\n<Result>\n</Result>\n</Results>"
 )
 
 var (
@@ -195,19 +196,6 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	})
 
 	return
-}
-
-func (cr *cmdRunner) showRegions(sockID int) (string, error) {
-	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
-		return "", errors.WithMessage(err, "checkIpmctl")
-	}
-
-	cmd := cmdShowRegions
-	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
-	}
-
-	return cr.runCmd(cr.log, cmd)
 }
 
 func (cr *cmdRunner) createRegions(sockID int) error {
@@ -290,9 +278,18 @@ func mapRegionsToSocket(regions Regions) (socketRegionMap, error) {
 
 // getRegions takes nvmxml output from ipmctl tool and returns PMem region details.
 func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
-	out, err := cr.showRegions(sockID)
+	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
+		return nil, errors.WithMessage(err, "checkIpmctl")
+	}
+
+	cmd := cmdShowRegions
+	if sockID != sockAny {
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
+	}
+
+	out, err := cr.runCmd(cr.log, cmd)
 	if err != nil {
-		return nil, errors.WithMessage(err, "showRegions")
+		return nil, err
 	}
 
 	switch {
@@ -301,6 +298,9 @@ func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
 	case strings.Contains(out, outNoPMemModules):
 		return nil, errNoPMemModules
 	case strings.Contains(out, outNoPMemRegions):
+		return Regions{}, nil
+	// Command output when specifying socket in cmd and no regions for that socket.
+	case strings.Contains(out, outNoPMemRegionResults):
 		return Regions{}, nil
 	}
 

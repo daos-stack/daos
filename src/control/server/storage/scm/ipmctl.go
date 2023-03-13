@@ -359,6 +359,8 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, storage.FaultScmInvalidPMem(err.Error())
 	}
 
+	cr.log.Info("Finished. If prompted then reboot and rerun command.")
+
 	return resp, nil
 }
 
@@ -431,6 +433,8 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if err := cr.removeRegions(sockSelector); err != nil {
 		return nil, err
 	}
+
+	cr.log.Info("Finished")
 
 	return resp, nil
 }
