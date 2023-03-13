@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -722,14 +722,6 @@ func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) 
 	engineCfg.Fabric.NumaNodeIndex = *engineCfg.PinnedNumaNode
 	engineCfg.Storage.NumaNodeIndex = *engineCfg.PinnedNumaNode
 
-	// TODO: Remove this special case when we have removed first_core as an exposed config
-	// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
-	// so that the engine uses its legacy core allocation algorithm.
-	if engineCfg.ServiceThreadCore != 0 {
-		log.Debugf("engine is pinned to core %d; not setting NUMA affinity", engineCfg.ServiceThreadCore)
-		engineCfg.PinnedNumaNode = nil
-	}
-
 	return nil
 }
 
@@ -737,7 +729,23 @@ func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) 
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
 	defaultAffinity := uint(0)
 
+	// Detect legacy mode by checking if first_core is being used.
+	legacyMode := false
+	for _, engineCfg := range cfg.Engines {
+		if engineCfg.ServiceThreadCore != 0 {
+			legacyMode = true
+			break
+		}
+	}
+
+	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
+		if legacyMode {
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
+			engineCfg.PinnedNumaNode = nil
+			continue
+		}
+
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
 		if err != nil {
 			if err != ErrNoAffinityDetected {
@@ -750,11 +758,11 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
 		}
 
-		// Special case: If only one engine is defined and engine's detected NUMA node is zero,
-		// don't pin the engine to any NUMA node in order to enable the engine's legacy core
-		// allocation algorithm.
-		if len(cfg.Engines) == 1 && numaAffinity == 0 {
-			log.Debug("enabling single-engine legacy core allocation algorithm")
+		// Special case: If only one engine is defined, NUMA is not pinned and engine's
+		// detected NUMA node is zero, don't pin the engine to any NUMA node in order to
+		// enable the engine's legacy core allocation algorithm.
+		if len(cfg.Engines) == 1 && engineCfg.PinnedNumaNode == nil && numaAffinity == 0 {
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
 			continue
 		}
 

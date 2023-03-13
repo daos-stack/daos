@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import convert_list
+from general_utils import list_to_str
 from dfuse_test_base import DfuseTestBase
 from macsio_test_base import MacsioTestBase
 
@@ -45,7 +45,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.log.info("Running MACSio")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks), processes, self.container.uuid),
+                self.pool.uuid, list_to_str(self.pool.svc_ranks), processes, self.container.uuid),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
@@ -88,7 +88,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.log.info("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks), processes, self.container.uuid,
+                self.pool.uuid, list_to_str(self.pool.svc_ranks), processes, self.container.uuid,
                 plugin_path),
             self.hostlist_clients)
         if status:

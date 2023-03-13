@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,7 +29,7 @@ from fault_config_utils import FaultInjection
 from general_utils import \
     stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
-    set_avocado_config_value, nodeset_append_suffix
+    set_avocado_config_value, nodeset_append_suffix, dict_to_str
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
@@ -400,11 +400,9 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
-                kwargs_str = ", ".join(
-                    ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
                 errors.append(
                     "Unhandled exception when calling {}({}): {}".format(
-                        str(cleanup["method"]), kwargs_str, str(error)))
+                        str(cleanup["method"]), dict_to_str(cleanup["kwargs"]), str(error)))
         return errors
 
     def register_cleanup(self, method, **kwargs):
@@ -414,8 +412,8 @@ class Test(avocadoTest):
             method (str): method to call with the kwargs
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
-        kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
-        self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
+        self.log.debug(
+            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
