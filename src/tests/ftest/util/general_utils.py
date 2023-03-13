@@ -12,6 +12,7 @@ import random
 import string
 import time
 import ctypes
+import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
@@ -865,58 +866,6 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     return result
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
-    """Stop the processes on each hosts that match the pattern.
-
-    Args:
-        hosts (NodeSet): hosts on which to stop the processes
-        pattern (str): regular expression used to find process names to stop
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to 60
-            seconds.
-        added_filter (str, optional): negative filter to better identify
-            processes.
-
-    Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
-            Return code keys:
-                0   No processes matched the criteria / No processes killed.
-                1   One or more processes matched the criteria and a kill was
-                    attempted.
-
-    """
-    result = {}
-    log = getLogger()
-    log.info("Killing any processes on %s that match: %s", hosts, pattern)
-
-    if added_filter:
-        ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
-            pattern, added_filter)
-    else:
-        ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
-
-    if hosts is not None:
-        commands = [
-            "rc=0",
-            "if " + ps_cmd,
-            "then rc=1",
-            "sudo /usr/bin/pkill {}".format(pattern),
-            "sleep 5",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
-            "sleep 1",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
-            "fi",
-            "fi",
-            "fi",
-            "exit $rc",
-        ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
-    return result
-
-
 def get_log_file(name):
     """Get the full log file name and path.
 
@@ -1377,13 +1326,18 @@ def percent_change(val1, val2):
         val1 (float): first value.
         val2 (float): second value.
 
+    Raises:
+        ValueError: if either val is not a number
+
     Returns:
         float: decimal percent change.
+        math.nan: if val1 is 0
 
     """
-    if val1 and val2:
+    try:
         return (float(val2) - float(val1)) / float(val1)
-    return 0.0
+    except ZeroDivisionError:
+        return math.nan
 
 
 def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):

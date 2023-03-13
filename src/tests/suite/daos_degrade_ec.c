@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,8 +28,8 @@ degrade_small_sub_setup(void **state)
 	test_arg_t *arg;
 	int rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			DEGRADE_SMALL_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
+	rc = rebuild_sub_setup_common(state, DEGRADE_SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF2);
 	if (rc) {
 		print_message("It can not create the pool with 6 ranks"
 			      " probably due to not enough ranks %d\n", rc);
@@ -49,8 +49,26 @@ degrade_sub_setup(void **state)
 	test_arg_t *arg;
 	int rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			DEGRADE_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
+	rc = rebuild_sub_setup_common(state, DEGRADE_POOL_SIZE, 0,
+				      DAOS_PROP_CO_REDUN_RF2);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
+	return rc;
+}
+
+int
+degrade_sub_rf1_setup(void **state)
+{
+	test_arg_t *arg;
+	int rc;
+
+	rc = rebuild_sub_setup_common(state, DEGRADE_POOL_SIZE, 0,
+				      DAOS_PROP_CO_REDUN_RF1);
 	if (rc)
 		return rc;
 
@@ -370,6 +388,7 @@ degrade_multi_conts_agg(void **state)
 	fail_shards[0] = 0;
 	fail_shards[1] = 2;
 
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF2;
 	memset(args, 0, sizeof(args[0]) * CONT_PER_POOL);
 	for (i = 0; i < CONT_PER_POOL; i++) {
 		rc = test_setup((void **)&args[i], SETUP_CONT_CONNECT,
@@ -412,7 +431,6 @@ degrade_multi_conts_agg(void **state)
 		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
 						      fail_shards[i]);
 	rebuild_pools_ranks(&args[0], 1, fail_ranks, shards_nr, false);
-
 re_test:
 	if (!parity_checked)
 		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC,
@@ -800,7 +818,7 @@ static const struct CMUnitTest degrade_tests[] = {
 	{"DEGRADE25: degrade ec aggregation",
 	 degrade_ec_agg, degrade_sub_setup, test_teardown},
 	{"DEGRADE26: degrade ec update",
-	 degrade_ec_update, degrade_sub_setup, test_teardown},
+	 degrade_ec_update, degrade_sub_rf1_setup, test_teardown},
 	{"DEGRADE27: degrade ec update punch aggregation parity fail",
 	 degrade_ec_agg_punch_fail_parity, degrade_sub_setup, test_teardown},
 	{"DEGRADE28: degrade ec update punch aggregation data fail",

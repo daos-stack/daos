@@ -6,7 +6,7 @@
 from socket import gethostname
 import subprocess   # nosec
 import shlex
-
+import time
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -348,3 +348,70 @@ def find_command(source, pattern, depth, other=None):
     elif isinstance(other, str):
         command.append(other)
     return " ".join(command)
+
+
+def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to stop any processes matching the pattern
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
+        exclude (str, optional): negative filter to better identify processes. Defaults to None.
+        force (bool, optional): if set use the KILL signal to immediately stop any running
+            processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
+            signal, and finally with the KILL signal.
+
+    Returns:
+        tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
+            matching the pattern were initially detected and the second NodeSet indicates on which
+            hosts the processes matching the pattern are still running (will be empty if every
+            process was killed or no process matching the pattern were found).
+
+    """
+    processes_detected = NodeSet()
+    processes_running = NodeSet()
+    command = f"/usr/bin/pgrep --list-full {pattern}"
+    pattern_match = str(pattern)
+    if exclude:
+        command = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
+        pattern_match += " and doesn't match " + str(exclude)
+
+    # Search for any active processes
+    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
+    result = run_remote(log, hosts, command, verbose, timeout)
+    if not result.passed_hosts:
+        log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
+        return processes_detected, processes_running
+
+    # Indicate on which hosts processes matching the pattern were found running in the return status
+    processes_detected.add(result.passed_hosts)
+
+    # Initialize on which hosts the processes matching the pattern are still running
+    processes_running.add(result.passed_hosts)
+
+    # Attempt to kill any processes found on any of the hosts with increasing force
+    steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
+    if force:
+        steps = [(" --signal KILL", 5)]
+    while steps and result.passed_hosts:
+        step = steps.pop(0)
+        log.debug(
+            "Killing%s any processes on %s that match %s and then waiting %s seconds",
+            step[0], result.passed_hosts, pattern_match, step[1])
+        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
+        time.sleep(step[1])
+        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+        if not result.passed_hosts:
+            # Indicate all running processes matching the pattern were stopped in the return status
+            log.debug(
+                "All processes running on %s that match %s have been stopped.",
+                result.failed_hosts, pattern_match)
+        # Update the set of hosts on which the processes matching the pattern are still running
+        processes_running.difference_update(result.failed_hosts)
+    if processes_running:
+        log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
+    return processes_detected, processes_running
