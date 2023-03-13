@@ -43,12 +43,13 @@ is_ownership_valid(struct d_ownership *ownership);
  * \param[in]	user_info		User whose permissions we are getting
  * \param[in]	min_owner_perms		Special permissions granted to the owner, if any
  * \param[out]	permissions		The user's calculated permissions (DAOS_ACL_PERM_*)
+ * \param[out]	is_owner		Whether the user is the owner
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
  */
 int
 get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
-		    uint64_t min_owner_perms, uint64_t *permissions);
+		    uint64_t min_owner_perms, uint64_t *permissions, bool *is_owner);
 
 #endif

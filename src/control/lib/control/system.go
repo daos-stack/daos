@@ -46,6 +46,14 @@ var (
 	errMSConnectionFailure = errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 )
 
+// IsMSConnectionFailure checks whether the error is an MS connection failure.
+func IsMSConnectionFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Cause(err).Error() == errMSConnectionFailure.Error()
+}
+
 type sysRequest struct {
 	Ranks ranklist.RankSet
 	Hosts hostlist.HostSet

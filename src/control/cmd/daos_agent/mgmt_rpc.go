@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -135,9 +135,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq)
-	if fault.IsFaultCode(err, code.ServerWrongSystem) {
+	switch {
+	case fault.IsFaultCode(err, code.ServerWrongSystem):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
-	} else if err != nil {
+	case fault.IsFaultCode(err, code.SecurityInvalidCert):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)}
+	case control.IsMSConnectionFailure(err):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)}
+	case err != nil:
 		return nil, err
 	}
 
