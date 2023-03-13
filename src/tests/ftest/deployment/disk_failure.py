@@ -80,9 +80,14 @@ class DiskFailureTest(OSAUtils):
 
             # Now replace the faulty NVME device.
             self.log.info("Replacing evicted target: %s", evict_device["uuid"])
-            get_dmg_response(
-                self, self.dmg_command.storage_replace_nvme,
-                old_uuid=evict_device["uuid"], new_uuid=evict_device["uuid"])
+            original_hostlist = self.dmg_command.hostlist
+            try:
+                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
+                get_dmg_response(
+                    self, self.dmg_command.storage_replace_nvme,
+                    old_uuid=evict_device["uuid"], new_uuid=evict_device["uuid"])
+            finally:
+                self.dmg_command.hostlist = original_hostlist
             time.sleep(10)
             self.log.info(
                 "Reintegrating evicted target: uuid=%s, rank=%s, targets=%s",
