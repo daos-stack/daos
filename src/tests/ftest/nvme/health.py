@@ -68,27 +68,32 @@ class NvmeHealth(ServerFillUp):
 
         # List all pools
         errors = 0
-        for host in self.hostlist_servers:
-            self.log.info('Pools found on %s', host)
+        for host in self.server_managers[0].hosts:
             dmg.hostlist = host
-            pool_uuids = [pool.uuid.lower() for pool in pool_list]
+            expected_uuids = {}
+            for rank in self.server_managers[0].ranks.keys():
+                expected_uuids[rank] = [pool.uuid.lower() for pool in pool_list]
             for pool in get_storage_query_pool_info(self, dmg):
+                self.log.info('Pools found on %s', host)
                 try:
                     try:
-                        pool_uuids.pop(pool_uuids.index(pool['uuid']))
+                        uuid_index = expected_uuids[pool['rank']].index(pool['uuid'])
+                        expected_uuids[pool['rank']].pop(uuid_index)
                         error_msg = ''
                     except ValueError:
-                        error_msg = ' <== ERROR: DOES NOT MATCH A CREATED POOL UUID'
+                        error_msg = ' <== ERROR: DOES NOT MATCH A CREATED POOL ON RANK {}'.format(
+                            pool['rank'])
                         errors += 1
-                    self.log.info('  %s%s', pool['uuid'], error_msg)
+                    self.log.info('  uuid=%s, rank=%s%s', pool['uuid'], pool['rank'], error_msg)
                 except KeyError as error:
                     self.fail(
                         'Error parsing dmg.storage_query_list_pools() output: {}'.format(error))
-            if pool_uuids:
-                self.log.info('Pools not found on %s', host)
-                for uuid in pool_uuids:
-                    self.log.info('  %s', uuid)
-                    errors += 1
+            for rank in self.server_managers[0].ranks.keys():
+                if expected_uuids[rank]:
+                    self.log.info('Pools not found on %s on rank %s', host, rank)
+                    for uuid in expected_uuids[rank]:
+                        self.log.info('  %s', uuid)
+                        errors += 1
         if errors:
             self.fail(
                 'Detected {} error(s) verifying dmg storage query list-pools output'.format(errors))

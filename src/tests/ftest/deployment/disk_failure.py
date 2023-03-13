@@ -65,10 +65,14 @@ class DiskFailureTest(OSAUtils):
             # Evict a random target from the system
             evict_device = random.choice(device_info)  # nosec
             self.log.info("Evicting random target: %s", evict_device["uuid"])
+            original_hostlist = self.dmg_command.hostlist
             try:
+                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
                 self.dmg_command.storage_set_faulty(uuid=evict_device["uuid"])
             except CommandFailure:
                 self.fail("Error evicting target {}".format(evict_device["uuid"]))
+            finally:
+                self.dmg_command.hostlist = original_hostlist
             done = "Completed setting all devices to fault"
             self.print_and_assert_on_rebuild_failure(done)
             for thread in threads:
