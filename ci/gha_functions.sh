@@ -25,6 +25,19 @@ get_repo_serial() {
     echo "$serial"
 }
 
+get_repo_path() {
+    local serial_file=$REPO_PATH/serial
+    local serial
+    serial=$(get_repo_serial)
+    mkdir -p "$REPO_PATH"
+    echo "$serial" > "$serial_file"
+    repo_path="$REPO_PATH$serial/"
+    mkdir -p "$repo_path"
+
+    echo "$repo_path"
+
+}
+
 repo_serial_increment() {
     local serial_file=$REPO_PATH/serial
     local serial
