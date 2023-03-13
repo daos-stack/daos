@@ -35,13 +35,15 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException, \
+    stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
+from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
     YamlException    # noqa: E402
+from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -62,7 +64,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+PROCS_TO_CLEANUP = [
+    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
@@ -499,7 +502,13 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
-        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+        info = {}
+        for key in self.YAML_INFO_KEYS:
+            # Get the unique values with lists flattened
+            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], (str, list))))
+            if values:
+                # Use single value if list only contains 1 element
+                info[key] = values if len(values) > 1 else values[0]
 
         logger.debug("Test yaml information for %s:", self.test_file)
         for key in self.YAML_INFO_KEYS:
@@ -540,9 +549,7 @@ class TestInfo():
 
         """
         yaml_data = get_yaml_data(self.yaml_file)
-        client_users = find_values(yaml_data, ["client_users"], val_type=list)
-        client_users = client_users['client_users'] if client_users else []
-        return client_users
+        return list_flatten(dict_extract_values(yaml_data, ["client_users"], list))
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -1550,10 +1557,17 @@ class Launch():
         engine_storage_yaml = {}
         for test in self.tests:
             yaml_data = get_yaml_data(test.yaml_file)
-            info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
-            logger.debug("Checking for auto-storage request in %s: %s", test.yaml_file, info)
-            if "storage" in info and info["storage"] == "auto":
-                engines = info["engines_per_host"]
+            logger.debug("Checking for auto-storage request in %s", test.yaml_file)
+
+            storage = dict_extract_values(yaml_data, ["storage"])
+            if "auto" in storage:
+                if len(list_unique(storage)) > 1:
+                    raise StorageException("storage: auto only supported for all or no engines")
+                engines = list_unique(dict_extract_values(yaml_data, ["engines_per_host"]))
+                if len(engines) > 1:
+                    raise StorageException(
+                        "storage: auto not supported for varying engines_per_host")
+                engines = engines[0]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
@@ -2424,19 +2438,13 @@ class Launch():
 
         proc_pattern = "|".join(PROCS_TO_CLEANUP)
         logger.debug("Looking for running processes: %s", proc_pattern)
-        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
-        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
-        if pgrep_result.passed_hosts:
-            any_found = True
-            logger.debug("Killing running processes: %s", proc_pattern)
-            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
-            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
-            if pkill_result.failed_hosts:
-                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-            else:
-                message = f"Running processes found on {pgrep_result.passed_hosts}"
-                self._warn_test(self.result.tests[-1], "Process", message)
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
+        if running:
+            message = f"Failed to kill processes on {running}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+        elif detected:
+            message = f"Running processes found on {detected}"
+            self._warn_test(self.result.tests[-1], "Process", message)
 
         logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging

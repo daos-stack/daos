@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,7 @@ import time
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from general_utils import stop_processes
+from run_utils import stop_processes
 
 
 def get_hostname(host_addr):
@@ -206,7 +206,7 @@ class ManagementServiceResilience(TestWithServers):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
         self.log.info("*** stopping leader (%s) + %d others: %s", leader, N - 1, kill_list)
-        stop_processes(kill_list, self.server_managers[0].manager.job.command_regex)
+        stop_processes(self.log, kill_list, self.server_managers[0].manager.job.command_regex)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
         self.assertGreaterEqual(len(kill_ranks), len(kill_list),
@@ -283,7 +283,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Finally, restart the dead servers and verify that quorum is
         # regained, which should allow for write operations to succeed again.
-        self.server_managers[0].restart(list(kill_list), wait=True)
+        self.server_managers[0].restart(kill_list, wait=True)
         self.verify_leader(replicas)
 
         # Dump the current system state.

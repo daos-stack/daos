@@ -42,6 +42,10 @@ class DfuseMUMount(DfuseTestBase):
         self.dfuse.update_params(pool=pool.identifier, cont=cont.label.value)
         root_dir = self.dfuse.mount_dir.value
 
+        # Use a different log file for each user
+        root_log_file = self.dfuse.env["D_LOG_FILE"] + ".root"
+        dfuse_user_log_file = self.dfuse.env["D_LOG_FILE"] + "." + getuser()
+
         # For verifying expected permission failure
         def _check_fail(result):
             for stdout in result.all_stdout.values():
@@ -51,18 +55,21 @@ class DfuseMUMount(DfuseTestBase):
         self.log.info('Verify root cannot mount the container without ACLs in single-user mode')
         self.dfuse.update_params(multi_user=False)
         self.dfuse.run_user = 'root'
+        self.dfuse.env["D_LOG_FILE"] = root_log_file
         self.dfuse.run(check=False, mount_callback=_check_fail)
         self.dfuse.stop()
 
         self.log.info('Verify root cannot mount the container without ACLs in multi-user mode')
         self.dfuse.update_params(multi_user=True)
         self.dfuse.run_user = 'root'
+        self.dfuse.env["D_LOG_FILE"] = root_log_file
         self.dfuse.run(check=False, mount_callback=_check_fail)
         self.dfuse.stop()
 
         self.log.info('Mounting dfuse in single-user mode')
         self.dfuse.update_params(multi_user=False)
         self.dfuse.run_user = None  # Current user
+        self.dfuse.env["D_LOG_FILE"] = dfuse_user_log_file
         self.dfuse.run()
 
         self.log.info('Verify stat as dfuse user in single-user mode succeeds')
@@ -102,12 +109,14 @@ class DfuseMUMount(DfuseTestBase):
         self.log.info('Verify root can mount the container with ACLs in single-user mode')
         self.dfuse.update_params(multi_user=False)
         self.dfuse.run_user = 'root'
+        self.dfuse.env["D_LOG_FILE"] = root_log_file
         self.dfuse.run()
         self.dfuse.stop()
 
         self.log.info('Verify root can mount the container with ACLs in muli-user mode')
         self.dfuse.update_params(multi_user=True)
         self.dfuse.run_user = 'root'
+        self.dfuse.env["D_LOG_FILE"] = dfuse_user_log_file
         self.dfuse.run()
         self.dfuse.stop()
 

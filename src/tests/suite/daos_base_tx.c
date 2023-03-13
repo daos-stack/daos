@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -881,6 +881,26 @@ dtx_21(void **state)
 	ioreq_fini(&req);
 }
 
+static int
+dtx_base_rf0_setup(void **state)
+{
+	int	rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF0);
+	return rc;
+}
+
+static int
+dtx_base_rf1_setup(void **state)
+{
+	int	rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF1);
+	return rc;
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -921,9 +941,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX19: DTX resend during bulk data transfer - multiple reps",
 	 dtx_19, NULL, test_case_teardown},
 	{"DTX20: race between DTX refresh and DTX resync",
-	 dtx_20, NULL, test_case_teardown},
+	 dtx_20, dtx_base_rf1_setup, test_case_teardown},
 	{"DTX21: do not abort partially committed DTX",
-	 dtx_21, NULL, test_case_teardown},
+	 dtx_21, dtx_base_rf0_setup, test_case_teardown},
 };
 
 static int
