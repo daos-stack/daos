@@ -465,10 +465,11 @@ def scons():
 
     env.compiler_setup()
     build_prefix = prereqs.get_src_build_dir()
+    comp_prefix = prereqs.get_build_dir()
 
     args = GetOption('analyze_stack')
     if args is not None:
-        env.Tool('stack_analyzer', prefix=build_prefix, args=args)
+        env.Tool('stack_analyzer', daos_prefix=build_prefix, comp_prefix=comp_prefix, args=args)
 
     Export('env', 'base_env', 'base_env_mpi', 'prereqs', 'conf_dir')
 

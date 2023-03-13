@@ -552,7 +552,7 @@ sched_info_init(struct dss_xstream *dx)
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("Create sched pool hash failed. "DF_RC".\n", DP_RC(rc));
+		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 

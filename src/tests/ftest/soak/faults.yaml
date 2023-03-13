@@ -27,7 +27,7 @@ server_config:
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
       storage: auto
     1:
       pinned_numa_node: 1
@@ -37,27 +37,22 @@ server_config:
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 30GB
-  nvme_size: 500GB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
   control_method: daos
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 faults:
   fault_list:
@@ -124,9 +119,7 @@ ior_faults:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - 'RP_2G1'
-  dfs_dir_oclass:
-    - 'RP_2G1'
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true

@@ -39,6 +39,7 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_get_acl_inputs,test_get_acl_valid
         """
@@ -85,6 +86,7 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_get_acl_noperms,test_no_user_permissions
         """

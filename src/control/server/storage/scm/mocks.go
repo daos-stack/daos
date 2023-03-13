@@ -134,16 +134,24 @@ type MockBackendConfig struct {
 
 type MockBackend struct {
 	sync.RWMutex
-	cfg          MockBackendConfig
-	PrepareCalls []storage.ScmPrepareRequest
-	ResetCalls   []storage.ScmPrepareRequest
+	cfg                MockBackendConfig
+	PrepareCalls       []storage.ScmPrepareRequest
+	ResetCalls         []storage.ScmPrepareRequest
+	GetModulesCalls    []int
+	GetNamespacesCalls []int
 }
 
-func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
+func (mb *MockBackend) getModules(sockID int) (storage.ScmModules, error) {
+	mb.Lock()
+	mb.GetModulesCalls = append(mb.GetModulesCalls, sockID)
+	mb.Unlock()
 	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
-func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
+func (mb *MockBackend) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
+	mb.Lock()
+	mb.GetNamespacesCalls = append(mb.GetNamespacesCalls, sockID)
+	mb.Unlock()
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 

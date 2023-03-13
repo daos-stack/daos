@@ -807,7 +807,7 @@ split_cmd_args(const char *arg0, const char *cmd)
 	char  *dest;
 	char  *src;
 	char   last;
-	char  *saveptr;
+	char  *saveptr = NULL;
 	char **newptr;
 
 	memset(&args, 0, sizeof(args));

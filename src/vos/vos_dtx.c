@@ -913,7 +913,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
-		D_ERROR("No space when create actvie DTX table.\n");
+		D_ERROR("No space when create active DTX table.\n");
 		return -DER_NOSPACE;
 	}
 
@@ -2286,7 +2286,8 @@ vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t f
 	if (DAE_FLAGS(dae) & flags)
 		goto out;
 
-	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
+	if ((dae->dae_committable && (flags & (DTE_CORRUPTED | DTE_ORPHAN))) ||
+	    dae->dae_committed || dae->dae_aborted) {
 		D_ERROR("Not allow to set flag %s on the %s DTX entry "DF_DTI"\n",
 			vos_dtx_flags2name(flags), dae->dae_committable ? "committable" :
 			dae->dae_committed ? "committed (2)" : "aborted", DP_DTI(dti));
