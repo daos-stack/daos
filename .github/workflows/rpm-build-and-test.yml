@@ -93,8 +93,9 @@ jobs:
             UC_DISTRO: LEAP15
     # Map a step output to a job output
     outputs:
+      # https://github.com/orgs/community/discussions/26428
       # yamllint disable-line rule:line-length
-      skip-func-test-${{ matrix.distro }}: ${{ steps.skip-func-test-${{ matrix.distro }}.outputs.text }}
+      skip-func-test-${{ matrix.distro }}: ${{ format('steps.skip-func-test-{0}.outputs.text', matrix.distro) }}
       rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
       pr-repos: ${{ steps.pr-repos.outputs.text }}
     steps:
