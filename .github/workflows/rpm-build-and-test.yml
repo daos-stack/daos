@@ -88,9 +88,9 @@ jobs:
         distro: [el8, leap15]
         include:
           - distro: el8
-            DISTRO: EL8
+            UC_DISTRO: EL8
           - distro: leap15
-            DISTRO: LEAP15
+            UC_DISTRO: LEAP15
     # Map a step output to a job output
     outputs:
       # yamllint disable-line rule:line-length
@@ -102,7 +102,7 @@ jobs:
         id: skip-func-test-${{ matrix.distro }}
         run: set -x;
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
-             echo "text=$SKIP_FUNC_TEST_${{ matrix.DISTRO }}" >> $GITHUB_OUTPUT;
+             echo "text=$SKIP_FUNC_TEST_${{ matrix.UC_DISTRO }}" >> $GITHUB_OUTPUT;
              cat $GITHUB_OUTPUT
       - name: Set rpm-test-version variable
         id: rpm-test-version
@@ -126,12 +126,10 @@ jobs:
         distro: [el8, leap15]
         include:
           - distro: el8
-            DISTRO: EL8
             chroot_name: opensuse-leap-15.4
             distro_version: 8
             distro_name: EL
           - distro: leap15
-            DISTRO: LEAP15
             chroot_name: rocky+epel-8-x86_64
             distro_version: 15.4
             distro_name: Leap
@@ -207,7 +205,6 @@ jobs:
         distro: [el8, leap15]
         include:
           - distro: el8
-            DISTRO: EL8
             DISTRO_with_underscore: EL_8
             chroot_name: opensuse-leap-15.4
             distro_version: 8
@@ -215,7 +212,6 @@ jobs:
             distro_name: EL
             openmpi: openmpi
           - distro: leap15
-            DISTRO: LEAP15
             DISTRO_with_underscore: LEAP_15
             chroot_name: rocky+epel-8-x86_64
             distro_version: 15.4
@@ -246,10 +242,10 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
-      DISTRO: ${{ DISTRO_with_underscore }}
+      DISTRO: ${{ matrix.DISTRO_with_underscore }}
       DAOS_STACK_EL_7_LOCAL_REPO: repository/daos-stack-el-7-x86_64-stable-local
       # yamllint disable-line rule:line-length
-      DAOS_STACK_${{ DISTRO_with_underscore }}_LOCAL_REPO: repository/daos-stack-sl-15-x86_64-stable-local
+      DAOS_STACK_${{ matrix.DISTRO_with_underscore }}_LOCAL_REPO: repository/daos-stack-sl-15-x86_64-stable-local
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # REMOTE_ACCT: ${REMOTE_ACCT:-"vagrant"}
       STAGE_NAME: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }}
