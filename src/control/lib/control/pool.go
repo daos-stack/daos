@@ -1289,8 +1289,8 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
-	// Check if DAOS system is ready. If it's not, we should fail the Pool create.
-	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true}); err != nil {
+	// Verify that the DAOS system is ready before attempting to query storage.
+	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
 		return 0, 0, err
 	}
 
