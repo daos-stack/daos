@@ -308,6 +308,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.OverwriteAclSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
+            elif self.sub_command.value == "query-targets":
+                self.sub_command_class = self.QueryTargetsSubCommand()
             elif self.sub_command.value == "set-prop":
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
@@ -432,6 +434,16 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
                 self.show_disabled = FormattedParameter("--show-disabled", False)
+
+        class QueryTargetsSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool query-targets command."""
+
+            def __init__(self):
+                """Create a dmg pool query-targets command object."""
+                super().__init__("/run/dmg/pool/query-targets/*", "query-targets")
+                self.pool = BasicParameter(None, position=1)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.target_idx = FormattedParameter("--target-idx={}", None)
 
         class ReintegrateSubCommand(CommandWithParameters):
             """Defines an object for dmg pool reintegrate command."""
