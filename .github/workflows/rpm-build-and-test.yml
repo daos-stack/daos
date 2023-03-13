@@ -218,7 +218,7 @@ jobs:
             distro_version: 15.4
             distro_with_version: leap15.4
             distro_name: Leap
-            openmpi: ${{ matrix.openmpi }}
+            openmpi: openmpi3
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
       !failure() && !cancelled() &&
@@ -249,7 +249,7 @@ jobs:
       DAOS_STACK_${{ matrix.DISTRO_with_underscore }}_LOCAL_REPO: repository/daos-stack-sl-15-x86_64-stable-local
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # REMOTE_ACCT: ${REMOTE_ACCT:-"vagrant"}
-      STAGE_NAME: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }}
+      STAGE_NAME: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }}
       # use to generate a launch.py junit failure
       # FTEST_ARG: --nvme=auto
     steps:
@@ -361,24 +361,24 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           # yamllint disable-line rule:line-length
-          check_name: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }} Test Results (old)
+          check_name: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }} Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # yamllint disable-line rule:line-length
-          junit_files: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }}/**/results.xml
+          junit_files: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }}/**/results.xml
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
         if: always()
         with:
           # yamllint disable-line rule:line-length
-          name: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }} Test Results (new)
+          name: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }} Test Results (new)
           # yamllint disable-line rule:line-length
-          path: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }}/**/results.xml
+          path: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }}/**/results.xml
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }} artifacts
-          path: Functional on ${{ matrix.distro_name }} ${{ matrix.$distro_with_version }}/**
+          name: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }} artifacts
+          path: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }}/**
