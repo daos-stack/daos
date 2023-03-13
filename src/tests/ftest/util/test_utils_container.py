@@ -1012,3 +1012,17 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             raise DaosTestError("Undefined daos command")
         return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, entry=entry, acl_file=acl_file)
+
+    def set_attr(self, *args, **kwargs):
+        """Call daos container set-attr.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_attr
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_attr
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.daos.container_set_attr(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
