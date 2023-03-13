@@ -7006,8 +7006,9 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 			obj->cob_shards->do_shards[shard_idx].do_shard_idx);
 		if (!obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) &&
 		    !obj->cob_shards->do_shards[shard_idx].do_reintegrating) {
-			*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
-				 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
+			if (shard != NULL)
+				*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
+					 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
 			D_GOTO(out_put, rc = 1);
 		}
 	}
