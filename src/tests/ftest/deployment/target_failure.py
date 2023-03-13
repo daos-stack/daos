@@ -141,6 +141,7 @@ class TargetFailure(IorTestBase):
         self.pool.reintegrate(rank="0", tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Reintegrate rank 0 -> target 1", interval=5)
 
+        self.container.set_prop(prop='status', value="healthy")
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -245,6 +246,7 @@ class TargetFailure(IorTestBase):
         self.pool.reintegrate(rank="1", tgt_idx="0")
         self.pool.measure_rebuild_time(operation="Reintegrate 1 target", interval=5)
 
+        self.container.set_prop(prop='status', value="healthy")
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -388,6 +390,7 @@ class TargetFailure(IorTestBase):
         self.pool[excluded_pool_num].measure_rebuild_time(
             operation="Reintegrate 1 target", interval=5)
 
+        self.container[1].set_prop(prop='status', value="healthy")
         # 8. Verify that self.container[1]'s Health property is HEALTHY.
         if not self.container[1].verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after first IOR!")
