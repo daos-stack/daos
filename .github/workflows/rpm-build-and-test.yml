@@ -95,12 +95,12 @@ jobs:
     outputs:
       # https://github.com/orgs/community/discussions/26428
       # yamllint disable-line rule:line-length
-      skip-func-test-${{ matrix.distro }}: ${{ format('steps.skip-func-test-{0}.outputs.text', matrix.distro) }}
+      skip-func-test: ${{ steps.skip-func-test.outputs.text }}
       rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
       pr-repos: ${{ steps.pr-repos.outputs.text }}
     steps:
-      - name: Set skip-func-test-${{ matrix.distro }} variable
-        id: skip-func-test-${{ matrix.distro }}
+      - name: Set skip-func-test variable
+        id: skip-func-test
         run: set -x;
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=$SKIP_FUNC_TEST_${{ matrix.UC_DISTRO }}" >> $GITHUB_OUTPUT;
@@ -222,7 +222,7 @@ jobs:
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
       !failure() && !cancelled() &&
-      needs.Import-commit-pragmas2.outputs.skip-func-test-${{ matrix.distro }} != 'true'
+      needs.Import-commit-pragmas2.outputs.skip-func-test != 'true'
     env:
       TEST_TAG: pr,-hw
       # yamllint disable-line rule:line-length
@@ -265,9 +265,9 @@ jobs:
              sed -e 's/^/cp_/' >> $GITHUB_ENV
       # - name: Show env
       #   run: env | sort
-      # - name: Show Skip-func-test-${{ matrix.distro }} commit pragma
+      # - name: Show Skip-func-test commit pragma
       # yamllint disable-line rule:line-length
-      #   run: echo '${{ needs.Import-commit-pragmas2.outputs.skip-func-test-${{ matrix.distro }} }}'
+      #   run: echo '${{ needs.Import-commit-pragmas2.outputs.skip-func-test }}'
       - name: Checkout code
         uses: actions/checkout@v3
         with:
