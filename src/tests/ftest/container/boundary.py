@@ -50,7 +50,7 @@ class BoundaryTest(TestWithServers):
             TestPool: the created test pool object.
 
         """
-        pool = self.get_pool()
+        pool = self.get_pool(dmg=self.dmg.copy())
         self.pool.append(pool)
         return pool
 

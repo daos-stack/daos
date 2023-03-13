@@ -302,6 +302,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "get-acl":
                 self.sub_command_class = self.GetAclSubCommand()
+            elif self.sub_command.value == "get-prop":
+                self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "list":
                 self.sub_command_class = self.ListSubCommand()
             elif self.sub_command.value == "overwrite-acl":
@@ -405,6 +407,15 @@ class DmgCommandBase(YamlCommand):
                 self.outfile = FormattedParameter("--outfile={}", None)
                 self.force = FormattedParameter("--force", False)
                 self.verbose = FormattedParameter("--verbose", False)
+
+        class GetPropSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool get-prop command."""
+
+            def __init__(self):
+                """Create a dmg pool get-prop command object."""
+                super().__init__("/run/dmg/pool/get-prop/*", "get-prop")
+                self.pool = BasicParameter(None, position=1)
+                self.name = BasicParameter(None, position=2)
 
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool list command."""
@@ -611,6 +622,8 @@ class DmgCommandBase(YamlCommand):
                     self.sub_command_class = self.ListPoolsSubCommand()
                 elif self.sub_command.value == "target-health":
                     self.sub_command_class = self.TargetHealthSubCommand()
+                elif self.sub_command.value == "usage":
+                    self.sub_command_class = self.UsageSubCommand()
                 else:
                     self.sub_command_class = None
 
@@ -650,6 +663,13 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/query/target-health/*", "target-health")
                     self.rank = FormattedParameter("-r {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
+
+            class UsageSubCommand(CommandWithParameters):
+                """Defines a dmg storage query usage object."""
+
+                def __init__(self):
+                    """Create a dmg storage query usage object."""
+                    super().__init__("/run/dmg/storage/query/usage/*", "usage")
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""
@@ -830,3 +850,11 @@ class DmgCommandBase(YamlCommand):
             """Create a dmg version subcommand object."""
             super(DmgCommandBase.VersionSubCommand, self).__init__(
                 "/run/dmg/version/*", "version")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgCommandBase: a new DmgCommandBase object
+        """
+        return DmgCommandBase(self._path, self.yaml, self.hostlist_suffix)

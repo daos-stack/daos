@@ -106,11 +106,10 @@ class ControlTestBase(TestWithServers):
             data = manager.dmg.storage_scan(verbose=True)
 
             if manager.dmg.result.exit_status == 0:
-                expected_hosts = NodeSet().fromlist(manager.hosts)
                 for struct_hash in data["response"]["HostStorage"]:
                     hash_dict = data["response"]["HostStorage"][struct_hash]
                     hosts = NodeSet(hash_dict["hosts"].split(":")[0])
-                    if hosts in expected_hosts:
+                    if hosts in manager.hosts:
                         errors.extend(verify_method(hash_dict["storage"]))
             else:
                 errors.append("dmg storage scan failed!")
