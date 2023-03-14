@@ -3365,17 +3365,6 @@ def setup_log_test(conf):
     nlt_lt.wf = conf.wf
 
 
-# https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
-def sizeof_fmt(num, suffix='B'):
-    """Return size as a human readable string"""
-    # pylint: disable=consider-using-f-string
-    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f%s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f%s%s" % (num, 'Yi', suffix)
-
-
 def log_timer(func):
     """Wrapper around the log_test function to measure how long it takes"""
 
@@ -3406,6 +3395,17 @@ def log_test(conf,
     """Run the log checker on filename, logging to stdout"""
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
+
+    # https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+    def sizeof_fmt(num, suffix='B'):
+        """Return size as a human readable string"""
+        # pylint: disable=consider-using-f-string
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+            if abs(num) < 1024.0:
+                return "%3.1f%s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f%s%s" % (num, 'Yi', suffix)
+
     if os.path.exists(f'{filename}.old'):
         raise NLTestFail('Log file exceeded max size')
     fstat = os.stat(filename)
