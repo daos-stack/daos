@@ -89,8 +89,8 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 			// Specify socket ID for region ID in command as region parameter in ndctl
 			// is zero-based, not one-based like in ipmctl.
 			cmd := cmdCreateNamespace
-			cmd.Args = append(cmd.Args, fmt.Sprintf("--region %d", sid),
-				fmt.Sprintf("--size %d", pmemBytes))
+			cmd.Args = append(cmd.Args, "--region", fmt.Sprintf("%d", sid), "--size",
+				fmt.Sprintf("%d", pmemBytes))
 			if _, err := cr.runCmd(cr.log, cmd); err != nil {
 				return errors.WithMessagef(err, "socket %d", sid)
 			}
@@ -145,7 +145,7 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 
 	cmd := cmdListNamespaces
 	if sockID != sockAny {
-		cmd.Args = append(cmd.Args, fmt.Sprintf("--numa-node %d", sockID))
+		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", sockID))
 	}
 	out, err := cr.runCmd(cr.log, cmd)
 	if err != nil {

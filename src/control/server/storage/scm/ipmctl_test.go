@@ -63,8 +63,8 @@ func mockCmdCreateNamespace(sid int, bytes int) pmemCmd {
 	return pmemCmd{
 		BinaryName: "ndctl",
 		Args: []string{
-			"create-namespace", fmt.Sprintf("--region %d", sid),
-			fmt.Sprintf("--size %d", bytes),
+			"create-namespace", "--region", fmt.Sprintf("%d", sid),
+			"--size", fmt.Sprintf("%d", bytes),
 		},
 	}
 }
