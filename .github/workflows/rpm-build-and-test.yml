@@ -277,9 +277,9 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: echo "$GITHUB_CONTEXT"
-      - name: See if we can reduce job name duplication
-        run: set -x;
-             echo "${{ github.job }}"
+      # - name: See if we can reduce job name duplication
+      #   run: set -x;
+      #        echo "${{ github.job }}"
       - name: Import commit pragmas
         run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
