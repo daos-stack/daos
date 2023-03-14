@@ -626,7 +626,10 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
-        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
+
+        # Maintain backwards compatibility with v2.6.1, where this does not exist
+        if "memfile_per_rank" in output["response"]:
+            data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 

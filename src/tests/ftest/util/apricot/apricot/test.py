@@ -915,23 +915,27 @@ class TestWithServers(TestWithoutServers):
             self.register_cleanup(self.stop_servers)
         return force_agent_start
 
-    def restart_servers(self):
+    def restart_servers(self, stop=True):
         """Stop and start the servers without reformatting the storage.
+
+        Args:
+            stop (bool, optional): whether to stop first. Defaults to True.
 
         Returns:
             list: a list of strings identifying an errors found restarting the servers.
 
         """
-        self.log.info("-" * 100)
-        self.log.info("--- STOPPING SERVERS ---")
         errors = []
-        status = self.check_running("servers", self.server_managers)
-        if status["restart"] and not status["expected"]:
-            errors.append(
-                "ERROR: At least one multi-variant server was not found in its expected state "
-                "prior to stopping all servers")
-        self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
-        errors.extend(self._stop_managers(self.server_managers, "servers"))
+        if stop:
+            self.log.info("-" * 100)
+            self.log.info("--- STOPPING SERVERS ---")
+            status = self.check_running("servers", self.server_managers)
+            if status["restart"] and not status["expected"]:
+                errors.append(
+                    "ERROR: At least one multi-variant server was not found in its expected state "
+                    "prior to stopping all servers")
+            self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
+            errors.extend(self._stop_managers(self.server_managers, "servers"))
 
         self.log.info("-" * 100)
         self.log.debug("--- RESTARTING SERVERS ---")
@@ -996,7 +1000,7 @@ class TestWithServers(TestWithoutServers):
                     self.hostfile_clients_slots,
                     info["mgmt_svc_replicas"])
 
-    def setup_servers(self, server_groups=None):
+    def setup_servers(self, server_groups=None, version=None):
         """Start the daos_server processes.
 
         Args:
@@ -1006,6 +1010,8 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name, all
                 of the server hosts, and the MS replicas from the test's yaml
                 file to define a single server group entry.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -1031,7 +1037,7 @@ class TestWithServers(TestWithoutServers):
             for group, info in list(server_groups.items()):
                 self.add_server_manager(
                     group, info["svr_config_file"], info["dmg_config_file"],
-                    info["svr_config_temp"], info["dmg_config_temp"])
+                    info["svr_config_temp"], info["dmg_config_temp"], version)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -1102,7 +1108,7 @@ class TestWithServers(TestWithoutServers):
 
     def add_server_manager(self, group=None, svr_config_file=None,
                            dmg_config_file=None, svr_config_temp=None,
-                           dmg_config_temp=None):
+                           dmg_config_temp=None, version=None):
         """Add a new daos server manager object to the server manager list.
 
         Args:
@@ -1117,6 +1123,8 @@ class TestWithServers(TestWithoutServers):
             dmg_config_temp (str, optional): file name and path used to generate
                 the dmg configuration file locally and copy it to all the hosts
                 using the config_file specification. Defaults to None.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error specifying
@@ -1157,7 +1165,8 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class, mgmt_svc_replicas_suffix=self.mgmt_svc_replicas_suffix)
+                self.server_manager_class, mgmt_svc_replicas_suffix=self.mgmt_svc_replicas_suffix,
+                version=version)
         )
         if self.server_config_namespace is not None:
             self.log.debug(
