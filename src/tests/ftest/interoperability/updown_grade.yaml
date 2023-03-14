@@ -1,19 +1,29 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 950
+timeout: 2000
+setup:
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 1
-  servers:
+  engines:
     0:
-      targets: 1
-      log_mask: DEBUG
+      targets: 4
+      nr_xs_helpers: 0
+      log_mask: INFO
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 80
       env_vars:
-        - DD_MASK=mgmt,md,dsms,any
-        - D_LOG_FLUSH=DEBUG
+        # - DD_MASK=mgmt,md,dsms,any
+        - DD_MASK=all
+        - D_LOG_MASK=INFO
 pool:
-  scm_size: 5G
+  size: 40G  # NOTE: might need to increase
   name: daos_server
 container:
   control_method: daos
@@ -25,23 +35,33 @@ dfuse:
   mount_dir: "/tmp/daos_dfuse1/"
   disable_caching: True
 ior:
-  ior_timeout: 180
+  ior_timeout: 180  # TODO increase?
   client_processes:
-    np: 2
+    np: 4
   test_file: daos:/testFile
-  api: DFS   # POSIX HDF5
-  dfs_oclass: "SX"  # "RP_2GX"
+  api: DFS  # DFS   # POSIX HDF5
+  dfs_oclass: EC_2P1GX # "SX"  # "RP_2GX"
+  # dfs_oclass: RP_3GX # "SX"  # "RP_2GX"
   transfer_size: '1M'
-  block_size: '128M'
-  iorflags:
-    write_flg: "-w -W -k -G 1 -i 1"
-    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+  # block_size: '1024M' # 1 np
+  # block_size: '32M' # 32 np * 32M = 1024M
+  # block_size: '22M' # 48 np * 22M = 1056M
+  # block_size: '64M'  # 16 np * 64M = 1024M
+  block_size: '512M'  # 4 np * 512M = 2048M
+  # block_size: '1M'  # 16 np * 1M = 16M
+  # block_size: '1M'  # 1 np * 1M = 1M
+  write_flags: "-w -W -k -G 1 -i 1"
+  read_flags: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+  # write_flags: "-w -W -k -G 1 -i 1 -F"
+  # read_flags: "-C -k -e -r -R -g -G 1 -Q 1 -vv -F"
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 interop:
-  # Example of upgrade/downgrade RPMs from local tar file
-  # upgrade_rpms: ["/home/dinghwah/RPM/2.1.104/daos-2.1.104-1.el8.x86_64.rpm"]
-  # downgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc4.signed/daos-2.0.3-5.el8.x86_64.rpm"]
-  # upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
-  downgrade_repo: "/etc/yum.repos.d/test22-1.repo"
-  upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
+  old_version: "2.2.0-4.el8"
+  new_version: "2.4.1-1.el8"
+
+client:
+  env_vars:
+    - DD_MASK=all
+    - D_LOG_MASK=INFO
+skip_add_log_msg: True

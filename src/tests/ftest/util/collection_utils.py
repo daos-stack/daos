@@ -458,7 +458,7 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
         return return_code
 
     # Move all the source files matching the pattern into the temporary remote directory
-    other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
+    other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}cp '{{}}' '{tmp_copy_dir}'/"
     result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = (f"Error moving files to temporary remote copy directory '{tmp_copy_dir}' on "

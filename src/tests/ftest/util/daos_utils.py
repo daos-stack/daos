@@ -105,11 +105,12 @@ class DaosCommand(DaosCommandBase):
 
         """
         # Default to RANK fault domain (rd_lvl:1) when not specified
-        if properties:
-            if ('rd_lvl' not in properties) and ('rf_lvl' not in properties):
-                properties += ',rd_lvl:1'
-        else:
-            properties = 'rd_lvl:1'
+        # TODO proper way to skip this for upgrade/downgrade tests
+        # if properties:
+        #     if ('rd_lvl' not in properties) and ('rf_lvl' not in properties):
+        #         properties += ',rd_lvl:1'
+        # else:
+        #     properties = 'rd_lvl:1'
         return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name, path=path,
             type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,

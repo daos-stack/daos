@@ -33,9 +33,8 @@ ior:
   dfs_oclass: "SX"  # "RP_2GX"
   transfer_size: '1M'
   block_size: '128M'
-  iorflags:
-    write_flg: "-w -W -k -G 1 -i 1"
-    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+  write_flags: "-w -W -k -G 1 -i 1"
+  read_flags: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 interop:
