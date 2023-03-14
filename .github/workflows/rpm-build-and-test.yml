@@ -131,7 +131,7 @@ jobs:
             distro_version: 8
             distro_name: EL
           - distro: leap15
-            chroot_name: opensuse-leap-15.4
+            chroot_name: opensuse-leap-15.4-x86_64
             distro_version: 15.4
             distro_name: Leap
     # yamllint disable-line rule:line-length
@@ -165,6 +165,11 @@ jobs:
              sed -e 's/^/cp_/' >> $GITHUB_ENV
       # - name: Show env
       #   run: env | sort
+      - name: Create lastBuild symlink
+        if: steps.test-repo.outcome == 'success'
+        run: . ci/gha_functions.sh;
+             rm -f ${REPO_PATH}lastBuild;
+             ln -s $(get_repo_serial) ${REPO_PATH}lastBuild
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -196,6 +201,9 @@ jobs:
         run: . ci/gha_functions.sh;
              rm -f ${REPO_PATH}lastSuccessfulBuild;
              ln -s $(get_repo_serial) ${REPO_PATH}lastSuccessfulBuild
+
+  # TODO: update lastSuccessfulBuild symlink here only if all RPM
+  #       builds are successful
 
   Functional:
     name: Functional Testing
