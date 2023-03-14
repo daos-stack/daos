@@ -288,8 +288,10 @@ extern "C" {
 	       NVMe I/O error)						\
 	ACTION(DER_NO_CERT,		(DER_ERR_DAOS_BASE + 43),	\
 	       Unable to access one or more certificates)		\
+	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
+	       Invalid x509 certificate)				\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 44),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 45),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

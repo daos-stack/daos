@@ -3142,3 +3142,21 @@ bool is_pool_map_adding(struct pool_map *map, uint32_t version)
 {
 	return map->po_in_ver != (uint32_t)(-1) && version >= map->po_in_ver;
 }
+
+int
+pool_map_failure_domain_level(struct pool_map *map, uint32_t level)
+{
+	struct pool_domain *tree = map->po_tree;
+
+	D_ASSERT(tree != NULL);
+
+	for (; tree != NULL; tree = tree[0].do_children) {
+		if (tree->do_comp.co_type == level)
+			return level;
+
+		if (tree->do_children == NULL)
+			return tree->do_comp.co_type;
+	}
+
+	return -DER_INVAL;
+}

@@ -655,9 +655,12 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	 * shard, which might cause parity corruption.
 	 */
 	obj = obj_hdl2ptr(oh);
-	if (daos_oclass_is_ec(&mrone->mo_oca) && iods[0].iod_type != DAOS_IOD_SINGLE &&
-	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard))
+	if (iods[0].iod_type != DAOS_IOD_SINGLE &&
+	    daos_oclass_is_ec(&mrone->mo_oca) &&
+	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard) &&
+	    obj_ec_parity_alive(oh, mrone->mo_dkey_hash, NULL))
 		flags |= DIOF_FOR_FORCE_DEGRADE;
+
 	obj_decref(obj);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -205,6 +205,15 @@ or query/manage an object inside a container.`
 		}
 
 		return nil
+	}
+
+	// Configure DAOS client logging to stderr if no log file
+	// is specified. This is to avoid polluting the JSON output.
+	if os.Getenv("D_LOG_FILE") == "" {
+		os.Setenv("D_LOG_FILE", "/dev/null")
+		if os.Getenv("DD_STDERR") == "" {
+			os.Setenv("DD_STDERR", "debug")
+		}
 	}
 
 	// Initialize the daos debug system first so that

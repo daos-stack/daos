@@ -188,7 +188,6 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -256,6 +255,10 @@ int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
+
+typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
+int ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
+int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
 
 int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop);
 

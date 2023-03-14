@@ -368,6 +368,10 @@ enum ds_pool_tgt_status {
 	DS_POOL_TGT_NORMAL
 };
 
+struct rdb_tx;
+int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+			    d_iov_t *cred);
+
 /**
  * Pool clue
  *
