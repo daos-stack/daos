@@ -73,9 +73,9 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 	}
 
 	pbReq := &mgmtpb.ModifyACLReq{
-		Sys: req.getSystem(rpcClient),
-		Id:  req.ID,
-		ACL: req.ACL.Entries,
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, pbReq)
@@ -116,9 +116,9 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 	}
 
 	pbReq := &mgmtpb.ModifyACLReq{
-		Sys: req.getSystem(rpcClient),
-		Id:  req.ID,
-		ACL: req.ACL.Entries,
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, pbReq)

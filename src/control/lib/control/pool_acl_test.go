@@ -59,7 +59,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
 					OwnerUser:  MockACL.Owner,
 					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Entries:    MockACL.Entries,
 				}),
 			},
 			req: &PoolGetACLReq{
@@ -131,7 +131,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
 					OwnerUser:  MockACL.Owner,
 					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Entries:    MockACL.Entries,
 				}),
 			},
 			req: &PoolOverwriteACLReq{
@@ -204,7 +204,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
 					OwnerUser:  MockACL.Owner,
 					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Entries:    MockACL.Entries,
 				}),
 			},
 			req: &PoolUpdateACLReq{

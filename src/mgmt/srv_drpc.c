@@ -1281,11 +1281,11 @@ free_ace_list(char **list, size_t len)
 static void
 free_resp_acl(Mgmt__ACLResp *resp)
 {
-	if (resp->owneruser && resp->owneruser[0] != '\0')
-		D_FREE(resp->owneruser);
-	if (resp->ownergroup && resp->ownergroup[0] != '\0')
-		D_FREE(resp->ownergroup);
-	free_ace_list(resp->acl, resp->n_acl);
+	if (resp->owner_user && resp->owner_user[0] != '\0')
+		D_FREE(resp->owner_user);
+	if (resp->owner_group && resp->owner_group[0] != '\0')
+		D_FREE(resp->owner_group);
+	free_ace_list(resp->entries, resp->n_entries);
 }
 
 static int
@@ -1305,8 +1305,8 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 		return rc;
 	}
 
-	resp->n_acl = ace_nr;
-	resp->acl = ace_list;
+	resp->n_entries = ace_nr;
+	resp->entries = ace_list;
 
 	return 0;
 }
@@ -1328,13 +1328,13 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->owneruser, entry->dpe_str,
+		D_STRNDUP(resp->owner_user, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->ownergroup, entry->dpe_str,
+		D_STRNDUP(resp->owner_group, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	return 0;
@@ -1436,7 +1436,7 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, acl_out);
+	rc = daos_acl_from_strs((const char **)req->entries, req->n_entries, acl_out);
 	if (rc != 0) {
 		D_ERROR("Couldn't parse requested ACL strings to DAOS ACL, "
 			"rc="DF_RC"\n", DP_RC(rc));

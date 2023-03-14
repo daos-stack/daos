@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package control
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,33 +21,6 @@ type AccessControlList struct {
 	Entries    []string `json:"entries"`     // Access Control Entries in short string format
 	Owner      string   `json:"owner_user"`  // User that owns the resource
 	OwnerGroup string   `json:"owner_group"` // Group that owns the resource
-}
-
-func (acl *AccessControlList) UnmarshalJSON(data []byte) error {
-	type fromJSON AccessControlList
-	from := &struct {
-		ACLEntries    []string `json:"ACL"`
-		ACLOwnerUser  string   `json:"OwnerUser"`
-		ACLOwnerGroup string   `json:"OwnerGroup"`
-		*fromJSON
-	}{
-		fromJSON: (*fromJSON)(acl),
-	}
-
-	if err := json.Unmarshal(data, &from); err != nil {
-		return err
-	}
-
-	if from.ACLEntries == nil && from.ACLOwnerUser == "" && from.ACLOwnerGroup == "" {
-		// extra fields weren't used
-		return nil
-	}
-
-	acl.Entries = from.ACLEntries
-	acl.Owner = from.ACLOwnerUser
-	acl.OwnerGroup = from.ACLOwnerGroup
-
-	return nil
 }
 
 // Empty checks whether there are any entries in the AccessControlList

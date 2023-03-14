@@ -258,7 +258,7 @@ func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
 		return &common.AccessControlList{}
 	}
 	return &common.AccessControlList{
-		Entries:    pbACL.ACL,
+		Entries:    pbACL.Entries,
 		Owner:      pbACL.OwnerUser,
 		OwnerGroup: pbACL.OwnerGroup,
 	}

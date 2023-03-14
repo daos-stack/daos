@@ -202,36 +202,36 @@ static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ACL",
+    "entries",
     2,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__ACLResp, n_acl),
-    offsetof(Mgmt__ACLResp, acl),
+    offsetof(Mgmt__ACLResp, n_entries),
+    offsetof(Mgmt__ACLResp, entries),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ownerUser",
+    "owner_user",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ACLResp, owneruser),
+    offsetof(Mgmt__ACLResp, owner_user),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ownerGroup",
+    "owner_group",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ACLResp, ownergroup),
+    offsetof(Mgmt__ACLResp, owner_group),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -239,9 +239,9 @@ static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
   },
 };
 static const unsigned mgmt__aclresp__field_indices_by_name[] = {
-  1,   /* field[1] = ACL */
-  3,   /* field[3] = ownerGroup */
-  2,   /* field[2] = ownerUser */
+  1,   /* field[1] = entries */
+  3,   /* field[3] = owner_group */
+  2,   /* field[2] = owner_user */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__aclresp__number_ranges[1 + 1] =
@@ -299,7 +299,7 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[3] =
     offsetof(Mgmt__GetACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -355,12 +355,12 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ACL",
+    "entries",
     3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__ModifyACLReq, n_acl),
-    offsetof(Mgmt__ModifyACLReq, acl),
+    offsetof(Mgmt__ModifyACLReq, n_entries),
+    offsetof(Mgmt__ModifyACLReq, entries),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -375,12 +375,12 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     offsetof(Mgmt__ModifyACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__modify_aclreq__field_indices_by_name[] = {
-  2,   /* field[2] = ACL */
+  2,   /* field[2] = entries */
   1,   /* field[1] = id */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
@@ -452,7 +452,7 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[4] 
     offsetof(Mgmt__DeleteACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
