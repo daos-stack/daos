@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,8 +12,12 @@ from grp import getgrgid
 from pwd import getpwnam
 
 from ClusterShell.NodeSet import NodeSet
+
 # pylint: disable=import-error,no-name-in-module
-from util.run_utils import run_remote
+try:
+    from util.run_utils import run_remote
+except (ImportError, ModuleNotFoundError):
+    from run_utils import run_remote
 
 
 def get_primary_group(user=None):
