@@ -3043,20 +3043,73 @@ class PosixTests():
 
     def test_dfuse_perms(self):
         """Test permissions caching for DAOS-12577"""
+        cache_time = 10
+
         cont_attrs = {}
         cont_attrs['dfuse-data-cache'] = False
-        cont_attrs['dfuse-attr-time'] = 1
-        cont_attrs['dfuse-dentry-time'] = 1
-        cont_attrs['dfuse-ndentry-time'] = 1
+        cont_attrs['dfuse-attr-time'] = cache_time
+        cont_attrs['dfuse-dentry-time'] = cache_time
+        cont_attrs['dfuse-ndentry-time'] = cache_time
 
         self.container.set_attrs(cont_attrs)
 
-        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
-        side_dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        side_dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
         dfuse.start()
-        side_dfuse.start()
+        side_dfuse.start(v_hint='side')
+
+        test_file = join(dfuse.dir, 'test-file')
+        side_test_file = join(side_dfuse.dir, 'test-file')
+
+        # Create a file.
+        with open(test_file, 'w') as fd:
+            fd.write('data')
+
+        # Read it through both.
+        with open(test_file, 'r') as fd:
+            data = fd.read()
+            assert data == 'data'
+        with open(side_test_file, 'r') as fd:
+            data = fd.read()
+            assert data == 'data'
+
+        # Remove all permissions on the file.
+        print(os.stat(side_test_file))
+        os.chmod(side_test_file, 0)
+        print(os.stat(side_test_file))
+
+        # Read it through the caching=False side.
+        try:
+            with open(side_test_file, 'r') as fd:
+                data = fd.read()
+                assert False
+        except PermissionError:
+            pass
+
+        # Read it through the cache, this should work.
+        with open(test_file, 'r') as fd:
+            data = fd.read()
+            assert data == 'data'
+
+        # Let the cache expire.
+        time.sleep(cache_time * 2)
+
+        try:
+            with open(side_test_file, 'r') as fd:
+                data = fd.read()
+                assert False
+        except PermissionError:
+            pass
+
+        # Read it through the cache, this should now fail as the cache has expired.
+        try:
+            with open(test_file, 'r') as fd:
+                data = fd.read()
+                assert False
+        except PermissionError:
+            pass
 
         if dfuse.stop():
             self.fatal_errors = True
