@@ -166,7 +166,6 @@ jobs:
       # - name: Show env
       #   run: env | sort
       - name: Create lastBuild symlink
-        if: steps.test-repo.outcome == 'success'
         run: . ci/gha_functions.sh;
              rm -f ${REPO_PATH}lastBuild;
              ln -s $(get_repo_serial) ${REPO_PATH}lastBuild
@@ -196,22 +195,25 @@ jobs:
         with:
           name: build.log
           path: ${{ env.BUILD_CHROOT }}result/build.log
+      - name: Debug steps.build-rpm.outcome
+        continue-on-error: true
+        run: echo ${{ steps.build-rpm.outcome }}
       - name: Create Repo
         id: create-repo
-        if: job.build-rpm.outcome == 'success'
+        if: steps.build-rpm.outcome == 'success'
         continue-on-error: true
         run: env >&2;
              CHROOT_NAME=${{ matrix.chroot_name }} ci/rpm/create_repo.sh
       - name: Test Repo
         id: test-repo
-        if: job.create-repo.outcome == 'success'
+        if: steps.create-repo.outcome == 'success'
         continue-on-error: true
         run: . ci/gha_functions.sh;
              dnf --disablerepo=\*
                  --repofrompath testrepo,file://${REPO_PATH}$(get_repo_serial)/$TARGET
                  repoquery -a
       - name: Remove lastSuccessfulBuild link
-        if: job.test-repo.outcome != 'success'
+        if: steps.test-repo.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
 
   Functional:
