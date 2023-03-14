@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,8 @@
 #include <vos_layout.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
+
+#define VPOOL_TEST_WAL_SZ	(1ULL << 25) /* default_cluster_sz(): DAOS_BS_CLUSTER_SZ: 32MB */
 
 struct vp_test_args {
 	char			**fname;
@@ -188,17 +190,20 @@ pool_ops_run(void **state)
 					ret =
 					vts_pool_fallocate(&arg->fname[j]);
 					assert_int_equal(ret, 0);
-					ret = vos_pool_create(arg->fname[j],
+					ret = vos_pool_create_ex(arg->fname[j],
 							      arg->uuid[j],
-							      0, 0, 0, poh);
+							      0, 0,
+							      VPOOL_TEST_WAL_SZ,
+							      0, poh);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
-					ret = vos_pool_create(arg->fname[j],
+					ret = vos_pool_create_ex(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_256M, 0, 0,
-							      poh);
+							      VPOOL_256M, 0,
+							      VPOOL_TEST_WAL_SZ,
+							      0, poh);
 				}
 				break;
 			case OPEN:
@@ -303,6 +308,15 @@ pool_unit_teardown(void **state)
 	int			i;
 
 	for (i = 0; i < arg->nfiles; i++) {
+		int cnt =  arg->seq_cnt[i];
+
+		/** Call vos_pool_kill() here to reclaim SMD_DEV space
+		 * by deleting pool blobs if pool was not destroyed yet.
+		 */
+		D_ASSERT(cnt > 0 && cnt <= QUERY);
+		if (arg->ops_seq[i][--cnt] != DESTROY)
+			vos_pool_kill(arg->uuid[i], 0);
+
 		if (vts_file_exists(arg->fname[i]))
 			assert_int_equal(remove(arg->fname[i]), 0);
 		if (arg->fname[i])
@@ -340,6 +354,8 @@ create_pools_test_construct(struct vp_test_args **arr,
 
 	/** Create number of files as CPUs */
 	nfiles = sysconf(_SC_NPROCESSORS_ONLN);
+	/* Limit to 16 to save file space when bdev=aio */
+	nfiles = min(nfiles, 16);
 	pool_allocate_params(nfiles, 1, arg);
 	arg->nfiles = nfiles;
 	print_message("Pool construct test with %d files\n",
