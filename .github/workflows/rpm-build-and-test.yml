@@ -170,6 +170,10 @@ jobs:
         run: . ci/gha_functions.sh;
              rm -f ${REPO_PATH}lastBuild;
              ln -s $(get_repo_serial) ${REPO_PATH}lastBuild
+      - name: Create lastSuccessfulBuild symlink
+        run: . ci/gha_functions.sh;
+             rm -f ${REPO_PATH}lastSuccessfulBuild;
+             ln -s $(get_repo_serial) ${REPO_PATH}lastSuccessfulBuild
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -177,33 +181,38 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Build RPM
+        id: build-rpm
+        continue-on-error: true
         run: ci/rpm/build.sh
       - name: Save root.log
+        continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
           name: root.log
           path: ${{ env.BUILD_CHROOT }}result/root.log
       - name: Save build.log
+        continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
           name: build.log
           path: ${{ env.BUILD_CHROOT }}result/build.log
       - name: Create Repo
+        id: create-repo
+        if: job.build-rpm.outcome == 'success'
+        continue-on-error: true
         run: env >&2;
-             ci/rpm/create_repo.sh
+             CHROOT_NAME=${{ matrix.chroot_name }} ci/rpm/create_repo.sh
       - name: Test Repo
+        id: test-repo
+        if: job.create-repo.outcome == 'success'
+        continue-on-error: true
         run: . ci/gha_functions.sh;
              dnf --disablerepo=\*
                  --repofrompath testrepo,file://${REPO_PATH}$(get_repo_serial)/$TARGET
-                 repoquery -a;
-             echo $?
-      - name: Create lastSuccessfulBuild symlink
-        run: . ci/gha_functions.sh;
-             rm -f ${REPO_PATH}lastSuccessfulBuild;
-             ln -s $(get_repo_serial) ${REPO_PATH}lastSuccessfulBuild
-
-  # TODO: update lastSuccessfulBuild symlink here only if all RPM
-  #       builds are successful
+                 repoquery -a
+      - name: Remove lastSuccessfulBuild link
+        if: job.test-repo.outcome != 'success'
+        run: rm -f ${REPO_PATH}lastSuccessfulBuild;
 
   Functional:
     name: Functional Testing
