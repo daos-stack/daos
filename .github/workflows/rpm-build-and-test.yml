@@ -84,6 +84,7 @@ jobs:
     runs-on: [self-hosted, mockbuilder]
     needs: [Import-commit-pragmas]
     strategy:
+      fail-fast: false
       matrix:
         distro: [el8, leap15]
         include:
@@ -371,7 +372,7 @@ jobs:
         run: . ci/gha_functions.sh;
              hostname;
              pwd;
-             find Functional\ on\ \* -type f
+             find Functional\ on\ * -type f
       # - name: Debug Publish NLT test results
       #   if: always()
       #   run: pwd;
