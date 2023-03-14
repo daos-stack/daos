@@ -367,7 +367,7 @@ jobs:
                 ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
              fi
       - name: Debug - find junit files
-        if: always()
+        if: steps.run-test.outcome != 'skipped'
         run: . ci/gha_functions.sh;
              hostname;
              pwd;
@@ -379,7 +379,7 @@ jobs:
       #        echo mkdir -p ../../_temp/_github_home;
       #        ls -l ../../{,_temp/{,_github_workflow/}}
       - name: Publish test results
-        if: always()
+        if: steps.run-test.outcome != 'skipped'
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           # yamllint disable-line rule:line-length
@@ -390,7 +390,7 @@ jobs:
       - name: Test Report
         uses: phoenix-actions/test-reporting@v8
         id: test-report               # Set ID reference for step
-        if: always()
+        if: steps.run-test.outcome != 'skipped'
         with:
           # yamllint disable-line rule:line-length
           name: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }} Test Results (new)
@@ -399,7 +399,7 @@ jobs:
           reporter: java-junit        # Format of test results
 
       - name: Publish artifacts
-        if: always()
+        if: steps.run-test.outcome != 'skipped'
         uses: actions/upload-artifact@v3
         with:
           name: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }} artifacts
