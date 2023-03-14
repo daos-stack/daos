@@ -4,6 +4,8 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import re
+
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import command_as_user, run_remote
 
@@ -63,3 +65,65 @@ def remove_packages(log, hosts, packages, user=None, timeout=600):
     log.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)
     return run_remote(log, hosts, command, timeout=timeout)
+
+
+class DaosVersion():
+    """Class representing a DAOS version."""
+
+    def __init__(self, version):
+        """Initialize DaosVersion.
+
+        Args:
+            version (str/list): the major.minor.patch version
+
+        Raises:
+            ValueError: if the version is malformatted
+        """
+        if isinstance(version, DaosVersion):
+            self.__version = repr(version)
+        elif isinstance(version, (list, tuple)):
+            self.__version = '.'.join(map(str, version))
+        else:
+            self.__version = str(version)
+
+        try:
+            version_match = re.match(r'^v?([0-9]+)\.([0-9]+)\.([0-9]+)', self.__version)
+            self.major = version_match.group(1)
+            self.minor = version_match.group(2)
+            self.patch = version_match.group(3)
+        except (AttributeError, IndexError) as error:
+            raise ValueError(f'Invalid version string {self.__version}') from error
+
+    def __str__(self):
+        """Version as 'major.minor.patch'"""
+        return f'{self.major}.{self.minor}.{self.patch}'
+
+    def __repr__(self):
+        """Full version used in init."""
+        return self.__version
+
+    def __iter__(self):
+        """Version as [major, minor, patch]"""
+        yield self.major
+        yield self.minor
+        yield self.patch
+
+    def __eq__(self, other):
+        """self == other"""
+        return list(self) == list(DaosVersion(other))
+
+    def __gt__(self, other):
+        """self > other"""
+        return list(self) > list(DaosVersion(other))
+
+    def __ge__(self, other):
+        """self >= other"""
+        return list(self) >= list(DaosVersion(other))
+
+    def __lt__(self, other):
+        """self < other"""
+        return list(self) < list(DaosVersion(other))
+
+    def __le__(self, other):
+        """self <= other"""
+        return list(self) <= list(DaosVersion(other))

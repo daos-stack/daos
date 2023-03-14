@@ -210,7 +210,8 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), self.dmg.temporary_file_hosts or get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
