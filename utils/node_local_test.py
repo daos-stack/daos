@@ -3409,8 +3409,9 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception(f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
-                        '{sizeof_fmt(conf.max_log_size}')
+        message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
+                   + sizeof_fmt(conf.max_log_size))
+        conf.wf.add_test_case('logfile_size', failure=message)
 
     return lto.fi_location
 
