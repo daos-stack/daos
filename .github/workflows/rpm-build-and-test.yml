@@ -127,11 +127,11 @@ jobs:
         distro: [el8, leap15]
         include:
           - distro: el8
-            chroot_name: opensuse-leap-15.4
+            chroot_name: rocky+epel-8-x86_64
             distro_version: 8
             distro_name: EL
           - distro: leap15
-            chroot_name: rocky+epel-8-x86_64
+            chroot_name: opensuse-leap-15.4
             distro_version: 15.4
             distro_name: Leap
     # yamllint disable-line rule:line-length
@@ -207,14 +207,14 @@ jobs:
         include:
           - distro: el8
             DISTRO_with_underscore: EL_8
-            chroot_name: opensuse-leap-15.4
+            chroot_name: rocky+epel-8-x86_64
             distro_version: 8
             distro_with_version: el8
             distro_name: EL
             openmpi: openmpi
           - distro: leap15
             DISTRO_with_underscore: LEAP_15
-            chroot_name: rocky+epel-8-x86_64
+            chroot_name: opensuse-leap-15.4
             distro_version: 15.4
             distro_with_version: leap15.4
             distro_name: Leap
