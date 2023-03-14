@@ -92,7 +92,7 @@ class NvmeHealth(ServerFillUp):
                 except KeyError as error:
                     self.fail(
                         'Error parsing dmg.storage_query_list_pools() output: {}'.format(error))
-                    
+
         # If each pool was found on each rank expected_uuids should be empty
         for rank in self.server_managers[0].ranks.keys():
             if expected_uuids[rank]:
