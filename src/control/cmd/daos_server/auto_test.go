@@ -386,7 +386,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				return tc.hf, tc.hfErr
 			}
 
-			gs := func(_ context.Context, _ logging.Logger) (*control.HostStorage, error) {
+			gs := func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
 				return tc.hs, tc.hsErr
 			}
 

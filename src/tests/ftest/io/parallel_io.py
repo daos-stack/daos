@@ -244,9 +244,9 @@ class ParallelIo(FioBase, IorTestBase):
             self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
-        # be parallelised as different container create could complete at
+        # be parallelized as different container create could complete at
         # different times and get appended in the self.container variable in
-        # unorderly manner, causing problems during the write process.
+        # unordered manner, causing problems during the write process.
         for _, pool in enumerate(self.pool):
             self.add_container_qty(self.cont_count, pool)
 
