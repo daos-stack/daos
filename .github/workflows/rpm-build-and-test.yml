@@ -84,7 +84,6 @@ jobs:
     runs-on: [self-hosted, mockbuilder]
     needs: [Import-commit-pragmas]
     strategy:
-      fail-fast: false
       matrix:
         distro: [el8, leap15]
         include:
@@ -222,6 +221,7 @@ jobs:
     runs-on: [self-hosted, ci_vm9]
     needs: [Build-RPM, Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
     strategy:
+      fail-fast: false
       matrix:
         distro: [el8, leap15]
         include:
