@@ -7,6 +7,7 @@
 package scm
 
 import (
+	"fmt"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -33,22 +34,40 @@ const (
 )
 
 type (
-	runCmdFn   func(logging.Logger, string) (string, error)
+	pmemCmd struct {
+		BinaryName string
+		Args       []string
+	}
+	runCmdFn   func(logging.Logger, pmemCmd) (string, error)
 	lookPathFn func(string) (string, error)
 )
 
-func run(log logging.Logger, cmd string) (string, error) {
-	cmdArgs := strings.Fields(cmd)
-	out, err := exec.Command(cmdArgs[0], cmdArgs[1:len(cmdArgs)-1]...).Output()
-	if err != nil {
-		return "", errors.Wrapf(&system.RunCmdError{
-			Wrapped: err,
-			Stdout:  string(out),
-		}, "cmd %q", cmd)
-	}
-	log.Debugf("%q cmd returned: %q", cmd, string(out))
+func (pc *pmemCmd) String() string {
+	return fmt.Sprintf("cmd %s, args %v", pc.BinaryName, pc.Args)
+}
 
-	return string(out), nil
+func run(log logging.Logger, cmd pmemCmd) (string, error) {
+	var bytes []byte
+	var err error
+
+	if cmd.BinaryName == "" || strings.Contains(cmd.BinaryName, " ") {
+		return "", errors.Errorf("invalid binary name %q", cmd.BinaryName)
+	} else if len(cmd.Args) == 0 {
+		bytes, err = exec.Command(cmd.BinaryName).Output()
+	} else {
+		bytes, err = exec.Command(cmd.BinaryName, cmd.Args...).Output()
+	}
+	out := string(bytes)
+
+	if err != nil {
+		return "", errors.Wrap(&system.RunCmdError{
+			Wrapped: err,
+			Stdout:  out,
+		}, cmd.String())
+	}
+	log.Debugf("%s returned: %q", cmd.String(), out)
+
+	return out, nil
 }
 
 type cmdRunner struct {

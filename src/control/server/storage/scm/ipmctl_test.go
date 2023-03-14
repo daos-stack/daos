@@ -37,6 +37,50 @@ var (
 	sock1 = uint(1)
 )
 
+func mockCmdShowRegionsWithSock(sid int) pmemCmd {
+	cmd := cmdShowRegions
+	cmd.Args = append(cmd.Args, fmt.Sprintf("-socket %d", sid))
+	return cmd
+}
+
+func mockCmdDeleteGoalsWithSock(sid int) pmemCmd {
+	cmd := cmdDeleteGoals
+	cmd.Args = append(cmd.Args, fmt.Sprintf("-socket %d", sid))
+	return cmd
+}
+
+func mockCmdCreateRegionsWithSock(sid int) pmemCmd {
+	return pmemCmd{
+		BinaryName: "ipmctl",
+		Args: []string{
+			"create", "-f", "-goal", fmt.Sprintf("-socket %d", sid),
+			"PersistentMemoryType=AppDirect",
+		},
+	}
+}
+
+func mockCmdCreateNamespace(sid int, bytes int) pmemCmd {
+	return pmemCmd{
+		BinaryName: "ndctl",
+		Args: []string{
+			"create-namespace", fmt.Sprintf("--region %d", sid),
+			fmt.Sprintf("--size %d", bytes),
+		},
+	}
+}
+
+func mockCmdDisableNamespace(name string) pmemCmd {
+	cmd := cmdDisableNamespace
+	cmd.Args = append(cmd.Args, name)
+	return cmd
+}
+
+func mockCmdDestroyNamespace(name string) pmemCmd {
+	cmd := cmdDestroyNamespace
+	cmd.Args = append(cmd.Args, name)
+	return cmd
+}
+
 func genNsJSON(t *testing.T, numa, nsNum, size, id string) string {
 	t.Helper()
 	nsName := fmt.Sprintf("%s.%s", numa, nsNum)
@@ -146,7 +190,7 @@ func TestIpmctl_prep(t *testing.T) {
 		runErr      []error
 		expErr      error
 		expPrepResp *storage.ScmPrepareResponse
-		expCalls    []string
+		expCalls    []pmemCmd
 	}{
 		"nil scan response": {
 			nilScanResp: true,
@@ -166,7 +210,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "not-interleaved"),
 			},
 			expErr: storage.FaultScmNotInterleaved(sock0),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -175,7 +219,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "unhealthy-2nd-sock"),
 			},
 			expErr: storage.FaultScmNotHealthy(sock1),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -184,7 +228,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "part-free"),
 			},
 			expErr: storage.FaultScmPartialCapacity(sock0),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -193,7 +237,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "unknown-memtype"),
 			},
 			expErr: storage.FaultScmUnknownMemoryMode(sock0),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -207,9 +251,9 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 				RebootRequired: true,
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				fmt.Sprintf(cmdCreateRegions, " "),
+				cmdCreateRegions,
 			},
 		},
 		"no regions; sock selected": {
@@ -226,10 +270,9 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 				RebootRequired: true,
 			},
-			expCalls: []string{
-				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals + " -socket 1",
-				fmt.Sprintf(cmdCreateRegions, " -socket 1 "),
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
+				mockCmdDeleteGoalsWithSock(1), mockCmdCreateRegionsWithSock(1),
 			},
 		},
 		"no regions; delete goals fails": {
@@ -239,8 +282,8 @@ func TestIpmctl_prep(t *testing.T) {
 			runErr: []error{
 				nil, nil, errors.New("fail"),
 			},
-			expErr: errors.Errorf("cmd %q: fail", cmdDeleteGoals),
-			expCalls: []string{
+			expErr: errors.Errorf("%s: fail", cmdDeleteGoals.String()),
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -251,10 +294,10 @@ func TestIpmctl_prep(t *testing.T) {
 			runErr: []error{
 				nil, nil, nil, errors.New("fail"),
 			},
-			expErr: errors.Errorf("cmd %q: fail", fmt.Sprintf(cmdCreateRegions, " ")),
-			expCalls: []string{
+			expErr: errors.Errorf("%s: fail", cmdCreateRegions.String()),
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				fmt.Sprintf(cmdCreateRegions, " "),
+				cmdCreateRegions,
 			},
 		},
 		"no free capacity": {
@@ -271,7 +314,7 @@ func TestIpmctl_prep(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -292,7 +335,7 @@ func TestIpmctl_prep(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -313,7 +356,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "dual-sock"), "",
 			},
 			expErr: errors.New("namespace major versions (1) to equal num regions (2)"),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -344,7 +387,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "dual-sock"), "",
 			},
 			expErr: errors.New("namespaces on numa 0, want 2 got 1"),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -378,7 +421,7 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -457,7 +500,7 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -475,10 +518,10 @@ func TestIpmctl_prep(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				"ndctl create-namespace --region 0 --size 1082331758592",
-				"ndctl create-namespace --region 1 --size 1082331758592",
+				mockCmdCreateNamespace(0, 1082331758592),
+				mockCmdCreateNamespace(1, 1082331758592),
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
@@ -499,12 +542,12 @@ func TestIpmctl_prep(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				"ndctl create-namespace --region 0 --size 541165879296",
-				"ndctl create-namespace --region 0 --size 541165879296",
-				"ndctl create-namespace --region 1 --size 541165879296",
-				"ndctl create-namespace --region 1 --size 541165879296",
+				mockCmdCreateNamespace(0, 541165879296),
+				mockCmdCreateNamespace(0, 541165879296),
+				mockCmdCreateNamespace(1, 541165879296),
+				mockCmdCreateNamespace(1, 541165879296),
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
@@ -518,21 +561,21 @@ func TestIpmctl_prep(t *testing.T) {
 			runErr: []error{
 				nil, nil, nil, errors.New("fail"),
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				"ndctl create-namespace --region 0 --size 1082331758592",
+				mockCmdCreateNamespace(0, 1082331758592),
 			},
-			expErr: errors.New(`"ndctl create-namespace --region 0 --size 1082331758592": fail`),
+			expErr: errors.New("fail"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			var calls []string
+			var calls []pmemCmd
 			var callIdx int
 
-			mockRun := func(_ logging.Logger, cmd string) (string, error) {
+			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -546,7 +589,7 @@ func TestIpmctl_prep(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, errors.Wrapf(e, "cmd %q", cmd)
+				return o, errors.Wrap(e, cmd.String())
 			}
 
 			mockLookPath := func(string) (string, error) {
@@ -596,7 +639,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 		runErr      []error
 		expPrepResp *storage.ScmPrepareResponse
 		expErr      error
-		expCalls    []string
+		expCalls    []pmemCmd
 	}{
 		"nil scan response": {
 			nilScanResp: true,
@@ -621,8 +664,8 @@ func TestIpmctl_prepReset(t *testing.T) {
 				verStr, `text that is invalid xml`,
 			},
 			expErr: errors.New("parse show region cmd"),
-			expCalls: []string{
-				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
 			},
 		},
 		"get pmem state fails": {
@@ -630,7 +673,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 				verStr, mockXMLRegions(t, "same-sock"),
 			},
 			expErr: errors.New("multiple regions assigned to the same socket"),
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -641,8 +684,8 @@ func TestIpmctl_prepReset(t *testing.T) {
 			runErr: []error{
 				nil, nil, errors.New("fail"),
 			},
-			expErr: errors.New(cmdDeleteGoals),
-			expCalls: []string{
+			expErr: errors.Errorf("%s: fail", cmdDeleteGoals.String()),
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -656,7 +699,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 					State: storage.ScmNoRegions,
 				},
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -674,9 +717,9 @@ func TestIpmctl_prepReset(t *testing.T) {
 					State:    storage.ScmNoRegions,
 				},
 			},
-			expCalls: []string{
-				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals + " -socket 1",
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
+				mockCmdDeleteGoalsWithSock(1),
 			},
 		},
 		"remove regions; without namespaces": {
@@ -690,9 +733,9 @@ func TestIpmctl_prepReset(t *testing.T) {
 				},
 				RebootRequired: true,
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				fmt.Sprintf(cmdRemoveRegions, " "),
+				cmdRemoveRegions,
 			},
 		},
 		"remove regions; with namespaces": {
@@ -710,11 +753,13 @@ func TestIpmctl_prepReset(t *testing.T) {
 				},
 				RebootRequired: true,
 			},
-			expCalls: []string{
+			expCalls: []pmemCmd{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				"ndctl disable-namespace namespace0.0", "ndctl destroy-namespace namespace0.0",
-				"ndctl disable-namespace namespace1.0", "ndctl destroy-namespace namespace1.0",
-				fmt.Sprintf(cmdRemoveRegions, " "),
+				mockCmdDisableNamespace("namespace0.0"),
+				mockCmdDestroyNamespace("namespace0.0"),
+				mockCmdDisableNamespace("namespace1.0"),
+				mockCmdDestroyNamespace("namespace1.0"),
+				cmdRemoveRegions,
 			},
 		},
 	} {
@@ -731,10 +776,10 @@ func TestIpmctl_prepReset(t *testing.T) {
 				}
 			}
 
-			var calls []string
+			var calls []pmemCmd
 			var callIdx int
 
-			mockRun := func(_ logging.Logger, cmd string) (string, error) {
+			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -748,7 +793,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, errors.Wrapf(e, "cmd %q", cmd)
+				return o, errors.Wrap(e, cmd.String())
 			}
 
 			mockLookPath := func(string) (string, error) {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,14 +18,32 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-var nsMajMinRegex = regexp.MustCompile(`namespace([0-9]).([0-9])`)
+const ndctlName = "ndctl"
 
-// Constants for ndctl commandline calls.
-const (
-	cmdCreateNamespace  = "ndctl create-namespace"  // returns ns info in json
-	cmdListNamespaces   = "ndctl list -N -v"        // returns ns info in json
-	cmdDisableNamespace = "ndctl disable-namespace" // expect device name param
-	cmdDestroyNamespace = "ndctl destroy-namespace" // expect device name param
+var (
+	nsMajMinRegex = regexp.MustCompile(`namespace([0-9]).([0-9])`)
+
+	// Cmd structs for ndctl commandline calls.
+
+	cmdCreateNamespace = pmemCmd{
+		BinaryName: ndctlName,
+		Args:       []string{"create-namespace"},
+	}
+	// expects device name param
+	cmdDisableNamespace = pmemCmd{
+		BinaryName: ndctlName,
+		Args:       []string{"disable-namespace"},
+	}
+	// expects device name param
+	cmdDestroyNamespace = pmemCmd{
+		BinaryName: ndctlName,
+		Args:       []string{"destroy-namespace"},
+	}
+	// returns ns info in json
+	cmdListNamespaces = pmemCmd{
+		BinaryName: ndctlName,
+		Args:       []string{"list", "-N", "-v"},
+	}
 )
 
 func (cr *cmdRunner) checkNdctl() (errOut error) {
@@ -70,8 +88,10 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 		for j := uint(0); j < nrNsPerSock; j++ {
 			// Specify socket ID for region ID in command as region parameter in ndctl
 			// is zero-based, not one-based like in ipmctl.
-			if _, err := cr.runCmd(cr.log, fmt.Sprintf("%s --region %d --size %d",
-				cmdCreateNamespace, sid, pmemBytes)); err != nil {
+			cmd := cmdCreateNamespace
+			cmd.Args = append(cmd.Args, fmt.Sprintf("--region %d", sid),
+				fmt.Sprintf("--size %d", pmemBytes))
+			if _, err := cr.runCmd(cr.log, cmd); err != nil {
 				return errors.WithMessagef(err, "socket %d", sid)
 			}
 			cr.log.Debugf("created namespace on socket %d (same region index) size %s",
@@ -89,12 +109,14 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 
 	cr.log.Debugf("removing pmem namespace %q", devName)
 
-	cmd := fmt.Sprintf("%s %s", cmdDisableNamespace, devName)
+	cmd := cmdDisableNamespace
+	cmd.Args = append(cmd.Args, devName)
 	if _, err := cr.runCmd(cr.log, cmd); err != nil {
 		return err
 	}
 
-	cmd = fmt.Sprintf("%s %s", cmdDestroyNamespace, devName)
+	cmd = cmdDestroyNamespace
+	cmd.Args = append(cmd.Args, devName)
 	_, err := cr.runCmd(cr.log, cmd)
 	return err
 }
@@ -123,7 +145,7 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 
 	cmd := cmdListNamespaces
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --numa-node %d", cmd, sockID)
+		cmd.Args = append(cmd.Args, fmt.Sprintf("--numa-node %d", sockID))
 	}
 	out, err := cr.runCmd(cr.log, cmd)
 	if err != nil {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,7 +51,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(_ logging.Logger, in string) (string, error) {
+			mockRun := func(_ logging.Logger, _ pmemCmd) (string, error) {
 				return preTxt + tc.verOut, nil
 			}
 
@@ -209,8 +209,8 @@ func TestIpmctl_getRegions(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(_ logging.Logger, inCmd string) (string, error) {
-				if inCmd == cmdShowIpmctlVersion {
+			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
+				if diff := cmp.Diff(cmdShowIpmctlVersion, cmd); diff == "" {
 					return verStr, nil
 				}
 				return tc.cmdOut, tc.cmdErr
@@ -354,7 +354,7 @@ func TestIpmctl_getPMemState(t *testing.T) {
 
 			callIdx := 0
 
-			mockRun := func(_ logging.Logger, in string) (string, error) {
+			mockRun := func(_ logging.Logger, _ pmemCmd) (string, error) {
 				out := ""
 				if len(tc.runOut) > callIdx {
 					out = tc.runOut[callIdx]

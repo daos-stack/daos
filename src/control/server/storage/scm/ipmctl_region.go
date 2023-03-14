@@ -128,23 +128,42 @@ func (rh regionHealth) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 	return e.EncodeElement(ipmctl.PMemRegionHealth(rh).String(), start)
 }
 
-// constants for ipmctl commandline calls
-//
-// Manage AppDirect/Interleaved memory allocation goals across all DCPMMs on a system.
 const (
-	cmdShowIpmctlVersion = "ipmctl version"
-	cmdShowRegions       = "ipmctl show -o nvmxml -region" // returns region info in xml
-	cmdCreateRegions     = "ipmctl create -f -goal%sPersistentMemoryType=AppDirect"
-	cmdRemoveRegions     = "ipmctl create -f -goal%sMemoryMode=100"
-	cmdDeleteGoals       = "ipmctl delete -goal"
+	ipmctlName = "ipmctl"
 
-	outNoCLIPerms          = "ipmctl command you have attempted to execute requires root privileges"
-	outNoPMemModules       = "No PMem modules in the system"
-	outNoPMemRegions       = "no Regions defined in the system"
+	outNoCLIPerms    = "ipmctl command you have attempted to execute requires root privileges"
+	outNoPMemModules = "No PMem modules in the system"
+	outNoPMemRegions = "no Regions defined in the system"
+	// Command output when specifying socket in cmd and no regions for that socket.
 	outNoPMemRegionResults = "<Results>\n<Result>\n</Result>\n</Results>"
 )
 
 var (
+	// Cmd structs for ipmctl commandline calls to manage AppDirect/Interleaved memory
+	// allocation goals across PMem modules.
+
+	cmdShowIpmctlVersion = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"version"},
+	}
+	cmdCreateRegions = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"create", "-f", "-goal", "PersistentMemoryType=AppDirect"},
+	}
+	cmdRemoveRegions = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"create", "-f", "-goal", "MemoryMode=100"},
+	}
+	cmdDeleteGoals = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"delete", "-goal"},
+	}
+	// returns region info in xml
+	cmdShowRegions = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"show", "-o nvmxml", "-region"},
+	}
+
 	errNoPMemModules = errors.New(outNoPMemModules)
 	errNoPMemRegions = errors.New(outNoPMemRegions)
 
@@ -175,7 +194,8 @@ func validateSemVer(sv semVer, badList []semVer) error {
 // checkIpmctl verifies ipmctl application version is acceptable.
 func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	cr.checkOnce.Do(func() {
-		cmdOut, err := cr.runCmd(cr.log, cmdShowIpmctlVersion)
+		cmd := cmdShowIpmctlVersion
+		cmdOut, err := cr.runCmd(cr.log, cmd)
 		if err != nil {
 			errOut = errors.WithMessage(err, "show version cmd")
 			return
@@ -198,21 +218,39 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	return
 }
 
+func (cr *cmdRunner) runRegionCmd(sockID int, cmd pmemCmd) (string, error) {
+	cmdTmp := cmd
+
+	// Insert socket ID arg after -goal flag if present otherwise at end.
+	if sockID != sockAny {
+		sockArg := fmt.Sprintf("-socket %d", sockID)
+		for i, arg := range cmdTmp.Args {
+			if i == len(cmdTmp.Args)-1 {
+				cmdTmp.Args = append(cmdTmp.Args, sockArg)
+				break
+			}
+			if arg == "-goal" {
+				// Extend slice by one.
+				cmdTmp.Args = append(cmdTmp.Args, "")
+				// Shift along elements after index found to add space.
+				copy(cmdTmp.Args[i+2:], cmdTmp.Args[i+1:])
+				// Insert new element into space between.
+				cmdTmp.Args[i+1] = sockArg
+				break
+			}
+		}
+	}
+
+	return cr.runCmd(cr.log, cmdTmp)
+}
+
 func (cr *cmdRunner) createRegions(sockID int) error {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		return errors.WithMessage(err, "checkIpmctl")
 	}
-
 	cr.log.Debug("set interleaved appdirect goal to create regions")
 
-	cmd := cmdCreateRegions
-	opt := " "
-	if sockID != sockAny {
-		opt = fmt.Sprintf(" -socket %d ", sockID)
-	}
-	cmd = fmt.Sprintf(cmd, opt)
-
-	_, err := cr.runCmd(cr.log, cmd)
+	_, err := cr.runRegionCmd(sockID, cmdCreateRegions)
 	return err
 }
 
@@ -220,17 +258,9 @@ func (cr *cmdRunner) removeRegions(sockID int) error {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		return errors.WithMessage(err, "checkIpmctl")
 	}
-
 	cr.log.Debug("set memory mode goal to remove regions")
 
-	cmd := cmdRemoveRegions
-	opt := " "
-	if sockID != sockAny {
-		opt = fmt.Sprintf(" -socket %d ", sockID)
-	}
-	cmd = fmt.Sprintf(cmd, opt)
-
-	_, err := cr.runCmd(cr.log, cmd)
+	_, err := cr.runRegionCmd(sockID, cmdRemoveRegions)
 	return err
 }
 
@@ -238,15 +268,9 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		return errors.WithMessage(err, "checkIpmctl")
 	}
-
 	cr.log.Debug("delete any existing memory allocation goals")
 
-	cmd := cmdDeleteGoals
-	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
-	}
-
-	_, err := cr.runCmd(cr.log, cmd)
+	_, err := cr.runRegionCmd(sockID, cmdDeleteGoals)
 	return err
 }
 
@@ -282,24 +306,18 @@ func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
 		return nil, errors.WithMessage(err, "checkIpmctl")
 	}
 
-	cmd := cmdShowRegions
-	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
-	}
-
-	out, err := cr.runCmd(cr.log, cmd)
+	out, err := cr.runRegionCmd(sockID, cmdShowRegions)
 	if err != nil {
 		return nil, err
 	}
 
 	switch {
 	case strings.Contains(out, outNoCLIPerms):
-		return nil, errors.Errorf("insufficient permissions to run %q", cmdShowRegions)
+		return nil, errors.Errorf("insufficient permissions to run %s", cmdShowRegions)
 	case strings.Contains(out, outNoPMemModules):
 		return nil, errNoPMemModules
 	case strings.Contains(out, outNoPMemRegions):
 		return Regions{}, nil
-	// Command output when specifying socket in cmd and no regions for that socket.
 	case strings.Contains(out, outNoPMemRegionResults):
 		return Regions{}, nil
 	}

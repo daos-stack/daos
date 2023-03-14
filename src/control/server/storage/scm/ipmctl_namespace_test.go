@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,7 +96,7 @@ func TestIpmctl_parseNamespaces(t *testing.T) {
 // TestIpmctl_getNamespaces tests the internals of prepScm, pass in mock runCmd to verify
 // behavior. Don't use mockPrepScm as we want to test prepScm logic.
 func TestIpmctl_getNamespaces(t *testing.T) {
-	commands := []string{} // external commands issued
+	commands := []pmemCmd{} // external commands issued
 	// ndctl create-namespace command return json format
 	nsOut := `{
    "dev":"namespace%d.0",
@@ -119,25 +119,25 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 		expErrMsg      string
 		cmdOut         string
 		expNamespaces  storage.ScmNamespaces
-		expCommands    []string
+		expCommands    []pmemCmd
 		lookPathErrMsg string
 	}{
 		{
 			desc:          "no namespaces",
 			cmdOut:        "",
-			expCommands:   []string{cmdListNamespaces},
+			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: storage.ScmNamespaces{},
 		},
 		{
 			desc:          "single pmem device",
 			cmdOut:        fmt.Sprintf(nsOut, 1, 1, 0),
-			expCommands:   []string{cmdListNamespaces},
+			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: oneNs,
 		},
 		{
 			desc:          "two pmem device",
 			cmdOut:        twoNsJSON,
-			expCommands:   []string{cmdListNamespaces},
+			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
 		{
@@ -159,8 +159,8 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 				return
 			}
 
-			mockRun := func(_ logging.Logger, in string) (string, error) {
-				commands = append(commands, in)
+			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
+				commands = append(commands, cmd)
 				return tt.cmdOut, nil
 			}
 
