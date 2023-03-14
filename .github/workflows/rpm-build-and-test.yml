@@ -347,6 +347,7 @@ jobs:
           fi
           INST_REPOS="$inst_repos" ci/provisioning/post_provision_config.sh
       - name: Run Test
+        id: run-test
         run: |
           . ci/gha_functions.sh
           test_tags=()
@@ -356,13 +357,15 @@ jobs:
           done
           TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
       - name: Job cleanup
-        if: always()
+        if: steps.run-test.outcome != 'skipped'
         run: . ci/gha_functions.sh;
-             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
+             ci/functional/job_cleanup.sh
+      - name: Return Cluster
+        if: always()
+        run: if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
                 id;
                 ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
-             fi;
-             ci/functional/job_cleanup.sh
+             fi
       - name: Debug - find junit files
         if: always()
         run: . ci/gha_functions.sh;
