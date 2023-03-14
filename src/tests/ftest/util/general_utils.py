@@ -469,7 +469,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
