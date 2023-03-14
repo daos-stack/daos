@@ -92,6 +92,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
                 self.pool.display_pool_daos_space("Pool space: Beginning")
+                # Get initial total free space (scm+nvme)
+                initial_free_space = self.pool.get_total_free_space(refresh=True)
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if self.test_during_aggregation is True and index == 0:
@@ -107,11 +109,14 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     continue
                 output = self.pool.drain(rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
+                free_space_after_drain = self.pool.get_total_free_space(refresh=True)
 
                 pver_drain = self.pool.get_version(True)
                 self.log.info("Pool Version after drain %d", pver_drain)
                 # Check pool version incremented after pool drain
                 self.assertTrue(pver_drain > (pver_begin + 1), "Pool Version Error:  After drain")
+                self.assertTrue(initial_free_space > free_space_after_drain,
+                                "Free Space error after drain")
                 if num_pool > 1:
                     output = self.pool.reintegrate(rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
@@ -119,6 +124,10 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     # Reintegrate rank 3
                     output = self.pool.reintegrate("3")
                     self.print_and_assert_on_rebuild_failure(output)
+                free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
+                if self.test_during_aggregation is True:
+                    self.assertTrue(initial_free_space == free_space_after_reintegration,
+                                    "Free Space error after reintegration")
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
