@@ -283,7 +283,7 @@ to securely store and access blob of data.  Recording a tarball containing the D
 certificates could be done in the following way:
 ```bash
 docker swarm init
-docker secret create daos_agent-certs <TARBALL PATH>
+docker secret create daos_agent-certs <DAOS_AGENT_CERTS_TXZ>
 ```
 
 As soon as the Docker secret has been created, an application such as `daos pool autotest`
