@@ -187,13 +187,13 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: root.log
+          name: ${{ matrix.distro }}-root.log
           path: ${{ env.BUILD_CHROOT }}result/root.log
       - name: Save build.log
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: build.log
+          name: ${{ matrix.distro }}-build.log
           path: ${{ env.BUILD_CHROOT }}result/build.log
       - name: Debug steps.build-rpm.outcome
         continue-on-error: true
@@ -398,7 +398,9 @@ jobs:
           # yamllint disable-line rule:line-length
           path: Functional on ${{ matrix.distro_name }} ${{ matrix.distro_with_version }}/**/results.xml
           reporter: java-junit        # Format of test results
-
+      - name: Debug Publish artifacts
+        if: always()
+        run: echo "${{ steps.run-test.outcome != 'skipped' }}"
       - name: Publish artifacts
         if: steps.run-test.outcome != 'skipped'
         uses: actions/upload-artifact@v3
