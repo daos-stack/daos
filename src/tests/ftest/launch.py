@@ -2331,7 +2331,7 @@ class Launch():
         ]
         # Predefine the sub directories used to collect the files process()/_archive_files()
         for directory in self.RESULTS_DIRS:
-            commands.append(f"mkdir -p {user_dir}/{directory}")
+            commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
