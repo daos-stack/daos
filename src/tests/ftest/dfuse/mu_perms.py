@@ -5,6 +5,7 @@
 import os
 from itertools import product
 import time
+import re
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -113,7 +114,7 @@ class DfuseMUPerms(DfuseTestBase):
             verify_perms_cmd.run()
             self.log.info('Passed real %s permissions on %s', _type, path)
 
-        # Stop dfuse instances. Needed until containers are cleanup with with register_cleanup
+        # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
         dfuse.stop()
 
     def _create_dir_and_chown(self, client, path, create_as, owner, group=None):
@@ -248,3 +249,167 @@ class DfuseMUPerms(DfuseTestBase):
         # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
         dfuse1.stop()
         dfuse2.stop()
+
+    def test_dfuse_mu_perms_il(self):
+        """Jira ID: DAOS-10857.
+
+        Test Description:
+            Verify dfuse multi-user rwx permissions with the interception library.
+        Use cases:
+            Create a pool.
+            Create a container.
+            Mount dfuse in multi-user mode.
+            Create a file and directory in dfuse.
+            Revoke "other" file and directory permissions.
+            Verify other users do not have access with or without IL.
+            Grant "other" file and directory permissions.
+            Verify other users have access with or without IL.
+            Grant other users pool 'r' and container 'rwt' ACLs.
+            Verify other users have access with or without IL.
+            Revoke "other" file and directory permissions.
+            Verify other users do not have access with or without IL.
+            For each case, verify IL debug messages for files.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_il
+        """
+        # Setup the verify command. Only test with the owner and group_user
+        verify_perms_cmd = VerifyPermsCommand(self.hostlist_clients)
+        verify_perms_cmd.get_params(self)
+        verify_perms_cmd.update_params(group_user=None, verify_mode='real', no_chmod=True)
+
+        # Use the owner to mount dfuse
+        dfuse_user = verify_perms_cmd.owner.value
+
+        # Create a pool and give dfuse_user access
+        pool = self.get_pool(connect=False)
+        pool.update_acl(False, 'A::{}@:rw'.format(dfuse_user))
+
+        # Create a container as dfuse_user
+        daos_command = self.get_daos_command()
+        daos_command.run_user = dfuse_user
+        cont = self.get_container(pool, daos_command=daos_command)
+
+        # Run dfuse as dfuse_user
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        dfuse.run_user = dfuse_user
+        start_dfuse(self, dfuse, pool=pool, container=cont)
+
+        # The user we'll be changing permissions for
+        other_user = verify_perms_cmd.other_user.value
+
+        env_without_il = verify_perms_cmd.env.copy()
+        env_with_il = env_without_il.copy()
+        env_with_il.update({
+            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            'D_IL_REPORT': -1  # Log all intercepted calls
+        })
+
+        def _verify(use_il, expected_il_messages, expect_der_no_perm):
+            """Verify permissions for a given configuration.
+
+            Args:
+                use_il (bool): whether to use the interception library
+                expected_il_messages (int): the number of expected interception messages.
+                    Overwritten to 0 for directories
+                expect_der_no_perm (bool): whether DER_NO_PERM is expected
+                    through the interception library. Overwritten to False for directories
+
+            """
+            verify_perms_cmd.env = env_with_il if use_il else env_without_il
+            result = verify_perms_cmd.run()
+
+            num_il_messages = 0
+            found_der_no_perm = False
+            for stdout in result.all_stdout.values():
+                num_il_messages += len(re.findall(r'\[libioil\] Intercepting', stdout))
+                found_der_no_perm = found_der_no_perm or ('DER_NO_PERM' in stdout)
+
+            # Only IO is intercepted, so IL with directories should be silent
+            if entry_type == 'dir':
+                expected_il_messages = 0
+                expect_der_no_perm = False
+
+            self.assertEqual(
+                expected_il_messages, num_il_messages,
+                'Expected {} IL messages but got {}'.format(expected_il_messages, num_il_messages))
+
+            if expect_der_no_perm and not found_der_no_perm:
+                self.fail('Expected DER_NO_PERM with IL in stdout')
+            elif found_der_no_perm and not expect_der_no_perm:
+                self.fail('Unexpected DER_NO_PERM with IL found in stdout')
+
+        # Verify file and dir permissions
+        for entry_type in ('file', 'dir'):
+            dfuse_entry_path = os.path.join(dfuse.mount_dir.value, entry_type)
+            create_cmd = 'touch' if entry_type == 'file' else 'mkdir'
+
+            self.log.info('Creating a test %s in dfuse', entry_type)
+            command = command_as_user('{} "{}"'.format(create_cmd, dfuse_entry_path), dfuse_user)
+            if not run_remote(self.log, self.hostlist_clients, command).passed:
+                self.fail('Failed to create test {}'.format(entry_type))
+
+            verify_perms_cmd.update_params(path=dfuse_entry_path)
+
+            # Revoke POSIX permissions
+            posix_perms = {'file': '600', 'dir': '600'}[entry_type]
+            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            command = command_as_user(
+                'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
+            if not run_remote(self.log, self.hostlist_clients, command).passed:
+                self.fail('Failed to chmod test {}'.format(entry_type))
+
+            # Without pool/container ACLs, access is based on POSIX perms,
+            # which the user also doesn't have
+            verify_perms_cmd.update_params(perms=posix_perms)
+            self.log.info('Verify - no perms - not using IL')
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            self.log.info('Verify - no perms - using IL')
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+
+            # Give the user POSIX perms
+            posix_perms = {'file': '606', 'dir': '505'}[entry_type]
+            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            command = command_as_user(
+                'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
+            if not run_remote(self.log, self.hostlist_clients, command).passed:
+                self.fail('Failed to chmod test {}'.format(entry_type))
+
+            # With POSIX perms only, access is based on POSIX perms whether using IL or not
+            verify_perms_cmd.update_params(perms=posix_perms)
+            self.log.info('Verify - POSIX perms only - not using IL')
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            self.log.info('Verify - POSIX perms only - using IL')
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=True)
+
+            # Give the user pool/container ACL perms
+            self.log.info('Giving %s pool "r" ACL permissions', other_user)
+            pool.update_acl(use_acl=False, entry="A::{}@:r".format(other_user))
+            self.log.info('Giving %s container "rwt" ACL permissions', other_user)
+            cont.update_acl(entry="A::{}@:rwt".format(other_user))
+
+            # With POSIX perms and ACLs, open is based on POSIX, but IO is based on ACLs
+            self.log.info('Verify - POSIX and ACL perms - not using IL')
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            self.log.info('Verify - POSIX and ACL perms - using IL')
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
+
+            # Revoke POSIX permissions
+            posix_perms = {'file': '600', 'dir': '00'}[entry_type]
+            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            command = command_as_user(
+                'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
+            if not run_remote(self.log, self.hostlist_clients, command).passed:
+                self.fail('Failed to chmod test {}'.format(entry_type))
+
+            # Without POSIX permissions, pool/container ACLs don't matter since open requires POSIX
+            verify_perms_cmd.update_params(perms=posix_perms)
+            self.log.info('Verify - ACLs only - not using IL')
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            self.log.info('Verify - ACLs only - using IL')
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+
+        # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
+        dfuse.stop()
