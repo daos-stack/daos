@@ -41,7 +41,7 @@ static bool verbose;
 
 /**
  * -----------------------------------------------------------------------------
- * Setup some fake functions and veriables to track how the functions are
+ * Setup some fake functions and variables to track how the functions are
  * called. Will be used for checksummer testing.
  * -----------------------------------------------------------------------------
  */

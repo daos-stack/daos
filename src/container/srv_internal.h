@@ -272,7 +272,7 @@ int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
 				  int sync_mode);
 int cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid,
 		       daos_prop_t *cont_prop);
-int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
+int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);

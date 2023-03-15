@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -275,7 +275,7 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 {
 	struct vos_pool_space	vps = { 0 };
 	daos_size_t		space_est[DAOS_MEDIA_MAX] = { 0, 0 };
-	daos_size_t		scm_left, nvme_left;
+	daos_size_t		scm_left, nvme_left, rb_reserve;
 	int			rc;
 
 	rc = vos_space_query(pool, &vps, false);
@@ -303,19 +303,42 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	if (scm_left < space_est[DAOS_MEDIA_SCM])
 		goto error;
 
-	/* If NVMe isn't configured or this update doesn't use NVMe space */
-	if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
-		goto success;
+	/* If NVMe is configured and this update uses NVMe space */
+	if (pool->vp_vea_info != NULL && space_est[DAOS_MEDIA_NVME] != 0) {
+		nvme_left = NVME_FREE(&vps);
 
-	nvme_left = NVME_FREE(&vps);
-	if (nvme_left < NVME_SYS(&vps))
-		goto error;
+		if (nvme_left < NVME_SYS(&vps))
+			goto error;
 
-	nvme_left -= NVME_SYS(&vps);
-	/* 'NVMe held' has already been excluded from 'NVMe free' */
+		nvme_left -= NVME_SYS(&vps);
+		/* 'NVMe held' has already been excluded from 'NVMe free' */
 
-	if (nvme_left < space_est[DAOS_MEDIA_NVME])
-		goto error;
+		if (nvme_left < space_est[DAOS_MEDIA_NVME])
+			goto error;
+	}
+
+	/* Check space reserve for rebuild */
+	if (!(flags & VOS_OF_REBUILD) && pool->vp_space_rb != 0) {
+		rb_reserve = SCM_TOTAL(&vps) * pool->vp_space_rb / 100;
+
+		if (SCM_FREE(&vps) < (rb_reserve + POOL_SCM_HELD(pool) +
+				      space_est[DAOS_MEDIA_SCM])) {
+			D_ERROR("Insufficient SCM space due to check "DF_U64" bytes (%u percent) "
+				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
+			goto error;
+		}
+
+		if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
+			goto success;
+
+		rb_reserve = NVME_TOTAL(&vps) * pool->vp_space_rb / 100;
+		/* 'NVMe held' has already been excluded from 'NVMe free' */
+		if (NVME_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_NVME])) {
+			D_ERROR("Insufficient NVMe space due to check "DF_U64" bytes (%u percent) "
+				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
+			goto error;
+		}
+	}
 
 success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];
@@ -325,12 +348,12 @@ success:
 
 	return 0;
 error:
-	D_ERROR("Pool:"DF_UUID" is full. SCM: free["DF_U64"], sys["DF_U64"], "
-		"hld["DF_U64"], est["DF_U64"] NVMe: free["DF_U64"], "
-		"sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
-		DP_UUID(pool->vp_id), SCM_FREE(&vps), SCM_SYS(&vps),
-		POOL_SCM_HELD(pool), space_est[DAOS_MEDIA_SCM],
-		NVME_FREE(&vps), NVME_SYS(&vps), POOL_NVME_HELD(pool),
+	D_ERROR("Pool:"DF_UUID" is full. space_rb:%u\n", DP_UUID(pool->vp_id), pool->vp_space_rb);
+	D_ERROR("SCM:  free["DF_U64"/"DF_U64"], sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
+		SCM_FREE(&vps), SCM_TOTAL(&vps), SCM_SYS(&vps), POOL_SCM_HELD(pool),
+		space_est[DAOS_MEDIA_SCM]);
+	D_ERROR("NVMe: free["DF_U64"/"DF_U64"], sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
+		NVME_FREE(&vps), NVME_TOTAL(&vps), NVME_SYS(&vps), POOL_NVME_HELD(pool),
 		space_est[DAOS_MEDIA_NVME]);
 
 	return -DER_NOSPACE;

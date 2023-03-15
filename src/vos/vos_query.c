@@ -49,7 +49,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, query->qt_bound, &query->qt_punch, NULL,
+			    epr.epr_hi, query->qt_bound, false, &query->qt_punch, NULL,
 			    &query->qt_info);
 	if (rc != 0)
 		return rc;
@@ -672,7 +672,7 @@ query_write:
 			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
-		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
+		LOG_RC(rc, "Could not hold object: " DF_RC "\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -721,7 +721,7 @@ query_write:
 		rc = open_and_query_key(query, dkey, VOS_GET_DKEY,
 					&query->qt_dkey_anchor);
 		if (rc != 0) {
-			LOG_RC(rc, "Could not query dkey: %s\n", d_errstr(rc));
+			LOG_RC(rc, "Could not query dkey: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
 
@@ -738,8 +738,7 @@ query_write:
 			rc = open_and_query_key(query, akey, VOS_GET_AKEY,
 						&query->qt_akey_anchor);
 			if (rc != 0) {
-				LOG_RC(rc, "Could not query akey: %s\n",
-				       d_errstr(rc));
+				LOG_RC(rc, "Could not query akey: " DF_RC "\n", DP_RC(rc));
 				break;
 			}
 
@@ -749,8 +748,7 @@ query_write:
 			rc = query_recx(query, recx);
 
 			if (rc != 0) {
-				LOG_RC(rc, "Could not query recx: %s\n",
-				       d_errstr(rc));
+				LOG_RC(rc, "Could not query recx: " DF_RC "\n", DP_RC(rc));
 				if (rc == -DER_NONEXIST &&
 				    query->qt_flags & VOS_GET_AKEY) {
 					/* Reset the epoch range to last dkey */
