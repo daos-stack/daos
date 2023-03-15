@@ -93,8 +93,7 @@ class IorPerRank(IorTestBase):
                               Large transfer size: 1M
                               Small transfer size: 256B
                           Compare results and isolate bad nodes.
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=manual
         :avocado: tags=ior,deployment
         :avocado: tags=ior_per_rank,test_ior_per_rank
         """
