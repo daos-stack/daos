@@ -51,7 +51,7 @@ class DmgSystemReformatTest(TestWithServers):
             pools[-1].create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
-            if "-1007" not in dmg.result.stderr_text:
+            if "-1007" not in str(error):
                 self.fail("Pool create did not fail due to DER_NOSPACE!")
         dmg.exit_status_exception = True
 
