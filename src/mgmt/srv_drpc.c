@@ -1281,11 +1281,14 @@ free_ace_list(char **list, size_t len)
 static void
 free_resp_acl(Mgmt__ACLResp *resp)
 {
-	if (resp->owner_user && resp->owner_user[0] != '\0')
-		D_FREE(resp->owner_user);
-	if (resp->owner_group && resp->owner_group[0] != '\0')
-		D_FREE(resp->owner_group);
-	free_ace_list(resp->entries, resp->n_entries);
+	if (resp->acl != NULL) {
+		if (resp->acl->owner_user && resp->acl->owner_user[0] != '\0')
+			D_FREE(resp->acl->owner_user);
+		if (resp->acl->owner_group && resp->acl->owner_group[0] != '\0')
+			D_FREE(resp->acl->owner_group);
+		free_ace_list(resp->acl->entries, resp->acl->n_entries);
+		D_FREE(resp->acl);
+	}
 }
 
 static int
@@ -1305,8 +1308,8 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 		return rc;
 	}
 
-	resp->n_entries = ace_nr;
-	resp->entries = ace_list;
+	resp->acl->n_entries = ace_nr;
+	resp->acl->entries = ace_list;
 
 	return 0;
 }
@@ -1316,6 +1319,11 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 {
 	struct daos_prop_entry	*entry;
 	int			rc = 0;
+
+	D_ALLOC_PTR(resp->acl);
+	if (resp->acl == NULL)
+		return -DER_NOMEM;
+	mgmt__access_control_list__init(resp->acl);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
@@ -1328,13 +1336,13 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->owner_user, entry->dpe_str,
+		D_STRNDUP(resp->acl->owner_user, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->owner_group, entry->dpe_str,
+		D_STRNDUP(resp->acl->owner_group, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	return 0;

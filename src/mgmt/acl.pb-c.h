@@ -15,6 +15,7 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
+typedef struct _Mgmt__AccessControlList Mgmt__AccessControlList;
 typedef struct _Mgmt__ACLResp Mgmt__ACLResp;
 typedef struct _Mgmt__GetACLReq Mgmt__GetACLReq;
 typedef struct _Mgmt__ModifyACLReq Mgmt__ModifyACLReq;
@@ -27,15 +28,11 @@ typedef struct _Mgmt__DeleteACLReq Mgmt__DeleteACLReq;
 /* --- messages --- */
 
 /*
- * Response to ACL-related requests includes the command status and current ACL
+ * Access control list and ownership information
  */
-struct  _Mgmt__ACLResp
+struct  _Mgmt__AccessControlList
 {
   ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
   /*
    * List of ACEs in short string format
    */
@@ -50,9 +47,26 @@ struct  _Mgmt__ACLResp
    */
   char *owner_group;
 };
+#define MGMT__ACCESS_CONTROL_LIST__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__access_control_list__descriptor) \
+    , 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+/*
+ * Response to ACL-related requests includes the command status and current ACL
+ */
+struct  _Mgmt__ACLResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  Mgmt__AccessControlList *acl;
+};
 #define MGMT__ACLRESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__aclresp__descriptor) \
-    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, NULL }
 
 
 /*
@@ -140,6 +154,25 @@ struct  _Mgmt__DeleteACLReq
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
+/* Mgmt__AccessControlList methods */
+void   mgmt__access_control_list__init
+                     (Mgmt__AccessControlList         *message);
+size_t mgmt__access_control_list__get_packed_size
+                     (const Mgmt__AccessControlList   *message);
+size_t mgmt__access_control_list__pack
+                     (const Mgmt__AccessControlList   *message,
+                      uint8_t             *out);
+size_t mgmt__access_control_list__pack_to_buffer
+                     (const Mgmt__AccessControlList   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__AccessControlList *
+       mgmt__access_control_list__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__access_control_list__free_unpacked
+                     (Mgmt__AccessControlList *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__ACLResp methods */
 void   mgmt__aclresp__init
                      (Mgmt__ACLResp         *message);
@@ -218,6 +251,9 @@ void   mgmt__delete_aclreq__free_unpacked
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
+typedef void (*Mgmt__AccessControlList_Closure)
+                 (const Mgmt__AccessControlList *message,
+                  void *closure_data);
 typedef void (*Mgmt__ACLResp_Closure)
                  (const Mgmt__ACLResp *message,
                   void *closure_data);
@@ -236,6 +272,7 @@ typedef void (*Mgmt__DeleteACLReq_Closure)
 
 /* --- descriptors --- */
 
+extern const ProtobufCMessageDescriptor mgmt__access_control_list__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__aclresp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_aclreq__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__modify_aclreq__descriptor;

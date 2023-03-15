@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1428,8 +1428,10 @@ func TestPoolGetACL_Success(t *testing.T) {
 	addTestPools(t, svc.sysdb, mockUUID)
 
 	expectedResp := &mgmtpb.ACLResp{
-		Status:  0,
-		Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Status: 0,
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1554,8 +1556,10 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 	addTestPools(t, svc.sysdb, mockUUID)
 
 	expectedResp := &mgmtpb.ACLResp{
-		Status:  0,
-		Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Status: 0,
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1632,8 +1636,10 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 	addTestPools(t, svc.sysdb, mockUUID)
 
 	expectedResp := &mgmtpb.ACLResp{
-		Status:  0,
-		Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Status: 0,
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1718,8 +1724,10 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	addTestPools(t, svc.sysdb, mockUUID)
 
 	expectedResp := &mgmtpb.ACLResp{
-		Status:  0,
-		Entries: []string{"A::OWNER@:rw", "A:G:readers@:r"},
+		Status: 0,
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:G:readers@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
