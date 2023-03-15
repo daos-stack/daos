@@ -1449,7 +1449,7 @@ func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
 type containerEvictCmd struct {
 	existingContainerCmd
 
-	EvictAll bool `long:"evict-all" short:"a" description:"evict all handles from all users"`
+	All bool `long:"all" short:"a" description:"evict all handles from all users"`
 }
 
 func (cmd *containerEvictCmd) Execute(_ []string) (err error) {
@@ -1460,7 +1460,7 @@ func (cmd *containerEvictCmd) Execute(_ []string) (err error) {
 	defer deallocCmdArgs()
 
 	var co_flags C.uint
-	if cmd.EvictAll {
+	if cmd.All {
 		co_flags = C.DAOS_COO_EVICT_ALL | C.DAOS_COO_EX
 	} else {
 		co_flags = C.DAOS_COO_EVICT | C.DAOS_COO_RO
