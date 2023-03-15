@@ -135,6 +135,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
+	ie->ie_stat = entry.attr;
+
 	if (fi_out) {
 		/* Now set the value of keep_cache, this is for creat where we need to do the hash
 		 * table lookup before setting this value.
