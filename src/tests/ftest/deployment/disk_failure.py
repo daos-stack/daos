@@ -7,6 +7,8 @@ import random
 import threading
 import time
 
+from ClusterShell.NodeSet import NodeSet
+
 from dmg_utils import get_storage_query_device_info, get_dmg_response
 from exception_utils import CommandFailure
 from general_utils import list_to_str
@@ -135,9 +137,14 @@ class DiskFailureTest(OSAUtils):
         """
         device_info = get_storage_query_device_info(self, self.dmg_command)
         for index, device in enumerate(device_info):
-            self.log.info("Device %s:", index)
+            host = device["hosts"].split(":")[0]
+            self.log.info("Device %s on host %s:", index, host)
             for key in sorted(device):
                 self.log.info("  %s: %s", key, device[key])
-            get_dmg_response(
-                self, self.dmg_command.storage_replace_nvme,
-                old_uuid=device["uuid"], new_uuid=device["uuid"])
+            try:
+                self.dmg_command.hostlist = NodeSet(host)
+                get_dmg_response(
+                    self, self.dmg_command.storage_replace_nvme,
+                    old_uuid=device["uuid"], new_uuid=device["uuid"])
+            finally:
+                self.dmg_command.hostlist = self.server_managers[0].hosts

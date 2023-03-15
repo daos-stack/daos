@@ -74,8 +74,11 @@ class NvmeHealth(ServerFillUp):
         # List all pools
         errors = 0
         for host in self.server_managers[0].hosts:
-            dmg.hostlist = host
-            pool_info = get_storage_query_pool_info(self, dmg)
+            try:
+                dmg.hostlist = host
+                pool_info = get_storage_query_pool_info(self, dmg)
+            finally:
+                dmg.hostlist = None
             self.log.info('Pools found on %s', host)
             for pool in pool_info:
                 try:
@@ -110,9 +113,13 @@ class NvmeHealth(ServerFillUp):
         # Get the device health
         errors = 0
         for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
-            dmg.hostlist = host
             for uuid in uuid_list:
-                info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=uuid)
+                try:
+                    dmg.hostlist = host
+                    info = get_dmg_smd_info(
+                        self, dmg.storage_query_device_health, 'devices', uuid=uuid)
+                finally:
+                    dmg.hostlist = None
                 self.log.info('Verifying the health of devices on %s', host)
                 for devices in info.values():
                     for device in devices:
@@ -126,7 +133,7 @@ class NvmeHealth(ServerFillUp):
                                 errors += 1
                             self.log.info(
                                 '  health is %s for %s%s',
-                                device['uuid'], device['dev_state'], error_msg)
+                                device['dev_state'], device['uuid'], error_msg)
                         except KeyError as error:
                             self.fail(
                                 "Error parsing dmg.storage_query_device_health() output: {}".format(
