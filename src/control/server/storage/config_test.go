@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -477,6 +477,147 @@ acceleration:
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
 				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_TierConfigs_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expTiers TierConfigs
+		expErr   error
+	}{
+		"single tier": {
+			input: `
+storage:
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+			},
+		},
+		"empty tier first": {
+			input: `
+storage:
+-
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+-
+  class: dcpm
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+				&TierConfig{
+					Tier:  1,
+					Class: ClassDcpm,
+				},
+			},
+		},
+		"empty tier middle": {
+			input: `
+storage:
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+-
+-
+  class: dcpm
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+				&TierConfig{
+					Tier:  1,
+					Class: ClassDcpm,
+				},
+			},
+		},
+		"empty tier last": {
+			input: `
+storage:
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+-
+  class: dcpm
+-
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+				&TierConfig{
+					Tier:  1,
+					Class: ClassDcpm,
+				},
+			},
+		},
+		"two empty tiers last": {
+			input: `
+storage:
+-
+  class: ram
+  scm_mount: /mnt/daos/1
+  scm_size: 16
+-
+  class: dcpm
+-
+-
+`,
+			expTiers: TierConfigs{
+				&TierConfig{
+					Class: ClassRam,
+					Scm: ScmConfig{
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
+					},
+				},
+				&TierConfig{
+					Tier:  1,
+					Class: ClassDcpm,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := new(Config)
+			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expTiers, cfg.Tiers, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad props (-want +got):\n%s", diff)
 			}
 		})
 	}

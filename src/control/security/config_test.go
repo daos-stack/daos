@@ -9,8 +9,12 @@ package security
 import (
 	"bytes"
 	"crypto"
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
@@ -70,15 +74,44 @@ func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 	}
 }
 
+func getCert(t *testing.T, path string) *x509.Certificate {
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	block, _ := pem.Decode(buf)
+	if block == nil {
+		t.Fatal("failed to parse test certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return cert
+}
+
+func setValidVerifyTime(t *testing.T, cfg *TransportConfig) {
+	if cfg.AllowInsecure {
+		return
+	}
+	cert := getCert(t, cfg.CertificatePath)
+	cfg.CertificateConfig.verifyTime = cert.NotBefore
+}
+
+func setExpiredVerifyTime(t *testing.T, cfg *TransportConfig) {
+	if cfg.AllowInsecure {
+		return
+	}
+	cert := getCert(t, cfg.CertificatePath)
+	cfg.CertificateConfig.verifyTime = cert.NotAfter.Add(time.Second)
+}
+
 func TestPreLoadCertData(t *testing.T) {
-	insecureTC := InsecureTC()
-	serverTC := ServerTC()
-	badTC := BadTC()
-
-	clientDirTC := ServerTC()
-	clientDirTC.ClientCertDir = "testdata/badperms"
-
 	for name, tc := range map[string]struct {
+		getCfg    func(t *testing.T) *TransportConfig
 		setup     func(t *testing.T)
 		config    *TransportConfig
 		expLoaded bool
@@ -88,42 +121,62 @@ func TestPreLoadCertData(t *testing.T) {
 			expErr: errors.New("nil"),
 		},
 		"insecure": {
-			config: insecureTC,
+			getCfg: func(t *testing.T) *TransportConfig {
+				return InsecureTC()
+			},
 		},
 		"cert success": {
-			setup: func(t *testing.T) {
+			getCfg: func(t *testing.T) *TransportConfig {
+				serverTC := ServerTC()
+				setValidVerifyTime(t, serverTC)
 				SetupTCFilePerms(t, serverTC)
+				return serverTC
 			},
-			config:    serverTC,
 			expLoaded: true,
 		},
 		"bad cert": {
-			setup: func(t *testing.T) {
+			getCfg: func(t *testing.T) *TransportConfig {
+				badTC := BadTC()
 				SetupTCFilePerms(t, badTC)
+				return badTC
 			},
-			config: badTC,
 			expErr: errors.New("insecure permissions"),
 		},
 		"bad client dir": {
-			setup: func(t *testing.T) {
+			getCfg: func(t *testing.T) *TransportConfig {
+				clientDirTC := ServerTC()
+				setValidVerifyTime(t, clientDirTC)
+				clientDirTC.ClientCertDir = "testdata/badperms"
 				SetupTCFilePerms(t, clientDirTC)
+				return clientDirTC
 			},
-			config: clientDirTC,
-			expErr: FaultUnreadableCertFile(clientDirTC.ClientCertDir),
+			expErr: FaultUnreadableCertFile("testdata/badperms"),
+		},
+		"expired cert": {
+			getCfg: func(t *testing.T) *TransportConfig {
+				serverTC := ServerTC()
+				setExpiredVerifyTime(t, serverTC)
+				SetupTCFilePerms(t, serverTC)
+				return serverTC
+			},
+			expLoaded: true,
+			expErr:    FaultInvalidCertFile(ServerTC().CertificatePath, nil),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.setup != nil {
-				tc.setup(t)
+			var cfg *TransportConfig
+			if tc.getCfg != nil {
+				cfg = tc.getCfg(t)
 			}
-			err := tc.config.PreLoadCertData()
+
+			err := cfg.PreLoadCertData()
 
 			test.CmpErr(t, tc.expErr, err)
-			if tc.config == nil {
+			if cfg == nil {
 				return
 			}
-			test.AssertEqual(t, tc.expLoaded, tc.config.tlsKeypair != nil, "")
-			test.AssertEqual(t, tc.expLoaded, tc.config.caPool != nil, "")
+			test.AssertEqual(t, tc.expLoaded, cfg.tlsKeypair != nil, "")
+			test.AssertEqual(t, tc.expLoaded, cfg.caPool != nil, "")
 		})
 	}
 }
@@ -136,6 +189,7 @@ func TestReloadCertData(t *testing.T) {
 	SetupTCFilePerms(t, serverTC)
 	SetupTCFilePerms(t, agentTC)
 
+	setValidVerifyTime(t, testTC)
 	err := testTC.PreLoadCertData()
 	if err != nil {
 		t.Fatal(err)
@@ -145,6 +199,7 @@ func TestReloadCertData(t *testing.T) {
 	testTC.CertificatePath = agentTC.CertificatePath
 	testTC.PrivateKeyPath = agentTC.PrivateKeyPath
 
+	setValidVerifyTime(t, testTC)
 	err = testTC.ReloadCertData()
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +247,8 @@ func TestPrivateKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testname, func(t *testing.T) {
+			setValidVerifyTime(t, tc.config)
+
 			key, err := tc.config.PrivateKey()
 			tc.Validate(t, key, err)
 		})
@@ -233,6 +290,8 @@ func TestPublicKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testname, func(t *testing.T) {
+			setValidVerifyTime(t, tc.config)
+
 			key, err := tc.config.PublicKey()
 			tc.Validate(t, key, err)
 		})

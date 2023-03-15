@@ -1,6 +1,6 @@
 """Build test suite"""
 import sys
-import subprocess
+import subprocess  # nosec
 
 TEST_CMOCKA_SKIP = """
 #include <stdarg.h>
@@ -38,7 +38,7 @@ def CheckCmockaSkip(context):
         return rc
     prog = context.lastTarget
     pname = prog.get_abspath()
-    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"},
+    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, shell=False,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # in case of abort rc is -6 instead of 134 (128+6) with shell ...
     if rc == -6:

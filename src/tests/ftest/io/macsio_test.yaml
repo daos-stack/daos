@@ -21,7 +21,6 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  control_method: dmg
   scm_size: 5G
   nvme_size: 10G
 container:
@@ -54,5 +53,3 @@ job_manager: !mux
     timeout:
       test_macsio: 10
       test_macsio_daos_vol: 20
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
