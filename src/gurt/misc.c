@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -160,6 +160,9 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
 				"identical rank[%d](%d).\n", __FILE__, __LINE__,
 				rank_list, i, rank_tmp);
+
+			i--;
+			rank_num--;
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
