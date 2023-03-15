@@ -540,8 +540,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("server", "set-logmasks"),
                                      raise_exception=raise_exception, **kwargs)
 
-    def support_collect_log(self, stop=None, target=None, archive=None,
-                            custom_logs=None, raise_exception=None):
+    def support_collect_log(self, stop=None, target_folder=None, archive=None,
+                            custom_logs=None, target_host=None, raise_exception=None):
         """Collect logs for debug purpose.
 
         Args:
@@ -570,9 +570,10 @@ class DmgCommand(DmgCommandBase):
 
         kwargs = {
             "stop": stop,
-            "target": target,
+            "target_folder": target_folder,
             "archive": archive,
             "custom_logs": custom_logs,
+            "target_host": target_host,
         }
 
         return self._get_json_result(("support", "collect-log"),

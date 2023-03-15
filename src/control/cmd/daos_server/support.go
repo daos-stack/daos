@@ -61,7 +61,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.ExtraLogsDir = cmd.ExtraLogsDir
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
-			cmd.Debugf("Log Function Enum = %s -- Log Collect Cmd %s ", logFunc, logCmd)
+			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
 			params.LogFunction = logFunc
 			params.LogCmd = logCmd
 

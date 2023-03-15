@@ -183,12 +183,12 @@ func getRunningConf(log logging.Logger) (string, error) {
 func getServerConf(log logging.Logger, opts ...CollectLogsParams) (string, error) {
 	cfgPath, err := getRunningConf(log)
 
-	if err != nil {
-		return "", err
-	}
-
 	if cfgPath == "" {
 		cfgPath = filepath.Join(config.DefaultServer().SocketDir, config.ConfigOut)
+	}
+
+	if err != nil {
+		return cfgPath, nil
 	}
 
 	log.Debugf(" -- Server Config File is %s", cfgPath)
@@ -210,12 +210,11 @@ func cpLogFile(src, dst string, log logging.Logger) error {
 
 // Create the local folder on each servers
 func createFolder(target string, log logging.Logger) error {
-	// Create the folder if it's not exist
-	if _, err := os.Stat(target); os.IsNotExist(err) {
+	if _, err := os.Stat(target); err != nil {
 		log.Debugf("Log folder is not Exists, so creating %s", target)
 
-		if err := os.MkdirAll(target, 0777); err != nil && !os.IsExist(err) {
-			return errors.Wrapf(err, "failed to create log directory %s", target)
+		if err := os.MkdirAll(target, 0777); err != nil {
+			return err
 		}
 	}
 
@@ -246,6 +245,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, target)
 	cmd := strings.ReplaceAll(cp[0].cmd, " -", "_")
 	cmd = strings.ReplaceAll(cmd, " ", "_")
+
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
 	}
@@ -349,11 +349,12 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	}
 
 	cmd := strings.Join([]string{
-		"rsync",
+		"'rsync",
 		"-av",
 		"--blocking-io",
 		targetLocation,
-		opts[0].TargetHost + ":" + opts[0].TargetFolder}, " ")
+		opts[0].TargetHost + ":" + opts[0].TargetFolder,
+		"'"}, " ")
 
 	rsyncCmd := exec.Command("sh", "-c", cmd)
 	var stdout, stderr bytes.Buffer
@@ -595,6 +596,10 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
+		if len(serverConfig.Engines) == 0 {
+			return errors.New("Engine count is 0 from ser ver config")
+		}
+
 		for i := range serverConfig.Engines {
 			matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
 			for _, logfile := range matches {
@@ -680,6 +685,13 @@ func collectDaosServerCmd(log logging.Logger, opts ...CollectLogsParams) error {
 		}
 		defer f.Close()
 		hardware.PrintTopology(topo, f)
+	default:
+		daos := logCopy{}
+		daos.cmd = opts[0].LogCmd
+		_, err := cpOutputToFile(daosNodeLocation, log, daos)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
