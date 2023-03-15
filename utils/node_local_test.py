@@ -1346,6 +1346,7 @@ def run_daos_cmd(conf,
                  valgrind=True,
                  log_check=True,
                  use_json=False,
+                 log_mask=None,
                  cwd=None):
     """Run a DAOS command
 
@@ -1389,6 +1390,8 @@ def run_daos_cmd(conf,
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
+    if log_mask:
+        cmd_env['D_LOG_MASK'] = log_mask
     rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         env=cmd_env, check=False, cwd=cwd)
 
@@ -3021,13 +3024,21 @@ class PosixTests():
 
         destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
-    @needs_dfuse_with_opt(caching=False)
     def test_daos_fs_check(self):
         """Test DAOS FS Checker"""
-
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         pool = self.pool.id()
         cont = self.container
-        path = self.dfuse.dir
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
         dirname = join(path, 'test_dir')
         os.mkdir(dirname)
         fname = join(dirname, 'f1')
@@ -3102,6 +3113,7 @@ class PosixTests():
         dirname = join(path, 'test_dir')
         shutil.copytree(dirname, dirname2)
 
+        # punch a few directories and files
         daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
         cmd_env = get_base_env()
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
@@ -3115,7 +3127,7 @@ class PosixTests():
         cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir/1d1/"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+                            env=cmd_env, check=False, cwd=dfuse.dir)
         if rc.stderr != b'':
             print('Stderr from command')
             print(rc.stderr.decode('utf-8').strip())
@@ -3130,13 +3142,27 @@ class PosixTests():
         cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+                            env=cmd_env, check=False, cwd=dfuse.dir)
         if rc.stderr != b'':
             print('Stderr from command')
             print(rc.stderr.decode('utf-8').strip())
         if rc.stdout != b'':
             print(rc.stdout.decode('utf-8').strip())
         assert rc.returncode == 0
+
+        # run the checker while dfuse is still mounted (should fail - EX open)
+        cmd = ['fs', 'check', pool, cont, '--flags', 'print', '--dir-name', 'lf1']
+        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        print(rc)
+        assert rc.returncode != 0
+        output = rc.stderr.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'ERROR: daos: failed fs check: errno 16 (Device or resource busy)':
+            raise NLTestFail('daos fs check should fail with EBUSY')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
 
         # fs check with relink should find the 2 leaked directories.
         # Everything under them should be relinked but not reported as leaked.
@@ -3158,6 +3184,16 @@ class PosixTests():
         line = output.splitlines()
         if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
 
         dir1 = join(path, 'lost+found/lf1/')
         dir_list = os.listdir(dir1)
@@ -3189,13 +3225,17 @@ class PosixTests():
         cmd = [daos_mw_fi, pool, cont, "punch_obj", "/test_dir2"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=self.dfuse.dir)
+                            env=cmd_env, check=False, cwd=dfuse.dir)
         if rc.stderr != b'':
             print('Stderr from command')
             print(rc.stderr.decode('utf-8').strip())
         if rc.stdout != b'':
             print(rc.stdout.decode('utf-8').strip())
         assert rc.returncode == 0
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
 
         # fs check with relink should find 3 leaked dirs and 1 leaked file that were directly under
         # test_dir2. Everything under those leaked dirs are relinked but not reported as leaked.
@@ -3218,6 +3258,16 @@ class PosixTests():
         if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
+
         dir2 = join(path, 'lost+found/lf2/')
         dir_list = os.listdir(dir2)
         nr_entries = len(dir_list)
@@ -3236,6 +3286,10 @@ class PosixTests():
             raise NLTestFail('Wrong number of sub-files in lost+found')
         if dir_nr != 12:
             raise NLTestFail('Wrong number of sub-directories in lost+found')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_daos_fs_fix(self):
         """Test DAOS FS Fix Tool"""
@@ -3311,6 +3365,21 @@ class PosixTests():
         except OSError as error:
             assert error.errno == errno.EINVAL
 
+        # fix corrupted entries while dfuse is running - should fail
+        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
+               '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        print(rc)
+        assert rc.returncode != 0
+        output = rc.stderr.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+            raise NLTestFail('daos fs fix-entry /test_dir/f1')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
+
         # fix corrupted entries
         cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
                '--chunk-size', '1048576']
@@ -3340,6 +3409,21 @@ class PosixTests():
         line = output.splitlines()
         if line[-1] != 'Setting entry type to S_IFDIR':
             raise NLTestFail('daos fs fix-entry /test_dir/1d2')
+
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_fix_test')
+        path = dfuse.dir
+        dirname = join(path, 'test_dir')
+        dirname1 = join(path, 'test_dir/1d1/')
+        fname1 = join(dirname, 'f1')
+        fname3 = join(dirname1, 'f3')
+        dirname2 = join(path, 'test_dir/1d2/')
 
         # Check entries after fixing
         cmd = ['fs', 'get-attr', '--path', fname1]

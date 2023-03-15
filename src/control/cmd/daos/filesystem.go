@@ -282,8 +282,9 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 type fsCheckCmd struct {
 	existingContainerCmd
 
-	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, or verify"`
+	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, verify, evict"`
 	DirName   string      `long:"dir-name" short:"n" description:"directory name under lost+found to store leaked oids (a timestamp dir would be created if this is not specified)"`
+	Evict     bool        `long:"evict" short:"e" description:"evict all open handles on the container"`
 }
 
 func (cmd *fsCheckCmd) Execute(_ []string) error {
@@ -308,9 +309,10 @@ func (cmd *fsCheckCmd) Execute(_ []string) error {
 		dirName = C.CString(cmd.DirName)
 		defer freeString(dirName)
 	}
+
 	rc := C.dfs_cont_check(cmd.cPoolHandle, &ap.cont_str[0], cmd.FsckFlags.Flags, dirName)
 	if err := dfsError(rc); err != nil {
-		return errors.Wrapf(err, "failed filesystem check")
+		return errors.Wrapf(err, "failed fs check")
 	}
 	return nil
 }
@@ -329,12 +331,12 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
+	flags := C.uint(C.DAOS_COO_EX)
 
 	ap.fs_op = C.FS_CHECK
 	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed fs fix-entry")
 	}
 	defer cleanup()
 
@@ -344,7 +346,7 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 
 	if err := dfsError(C.fs_fix_entry_hdlr(ap, C.bool(cmd.Type))); err != nil {
-		return errors.Wrapf(err, "Fix Entry failed")
+		return errors.Wrapf(err, "failed filesystem fix-entry")
 	}
 
 	return nil
@@ -368,7 +370,7 @@ func (cmd *fsFixSBCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
+	flags := C.uint(C.DAOS_COO_EX)
 
 	ap.fs_op = C.FS_CHECK
 	cleanup, err := cmd.resolveAndConnect(flags, ap)
@@ -415,7 +417,7 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
+	flags := C.uint(C.DAOS_COO_EX)
 
 	ap.fs_op = C.FS_CHECK
 	cleanup, err := cmd.resolveAndConnect(flags, ap)

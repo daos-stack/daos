@@ -520,6 +520,20 @@ func TestFlags_FsCheckFlag(t *testing.T) {
 				Flags: 13,
 			},
 		},
+		"valid16": {
+			arg: "evict",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 16,
+			},
+		},
+		"valid29": {
+			arg: "print,verify,relink,evict",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 29,
+			},
+		},
 		"untrimmed, upper case": {
 			arg: "print, VeRiFy,relink",
 			expFlag: &FsCheckFlag{

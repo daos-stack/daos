@@ -2442,7 +2442,6 @@ dfs_test_checker(void **state)
 
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
-
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 
@@ -2506,6 +2505,9 @@ dfs_test_checker(void **state)
 
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
+	/** have to call fini to release the cached container handle for the checker to work */
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
 
 	/*
 	 * Using lower level obj API, punch 10 files and 10 directory entries leaving orphaned
@@ -2529,6 +2531,11 @@ dfs_test_checker(void **state)
 		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
 		assert_rc_equal(rc, 0);
 	}
+	/** run the checker before the container is closed, without evict - should fail */
+	rc = dfs_cont_check(arg->pool.poh, cname,
+			    DFS_CHECK_PRINT | DFS_CHECK_REMOVE | DFS_CHECK_VERIFY, NULL);
+	assert_int_equal(rc, EBUSY);
+	/** close the container */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2568,22 +2575,25 @@ dfs_test_checker(void **state)
 		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container before invoking the checker */
 	get_nr_oids(arg->pool.poh, cname, &nr_oids);
 	/** should be 270 + SB + root object */
 	assert_int_equal((int)nr_oids, 272);
 
+	/** run the checker before the container is closed, with evict - should succeed */
 	rc = dfs_cont_check(arg->pool.poh, cname,
-			    DFS_CHECK_PRINT | DFS_CHECK_RELINK | DFS_CHECK_VERIFY, "tlf");
+			    DFS_CHECK_PRINT | DFS_CHECK_RELINK | DFS_CHECK_EVICT_ALL, "tlf");
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container after invoking the checker */
 	get_nr_oids(arg->pool.poh, cname, &nr_oids);
 	/** should be 274 (270 + SB + root object + LF dir + timestamp dir) */
 	assert_int_equal((int)nr_oids, 274);
+
+	/** close the handle - required to avoid resource leak even though it has been evicted */
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
 
 	/** readdir of /lost+found/tlf confirming there are 10 files and dirs */
 	int			num_files = 0;
@@ -2593,6 +2603,8 @@ dfs_test_checker(void **state)
 	struct dirent		ents[10];
 	struct stat		stbufs[10];
 
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_lookup(dfs, "/lost+found/tlf", O_RDWR, &lf, NULL, NULL);
@@ -2740,7 +2752,6 @@ dfs_test_fix_chunk_size(void **state)
 
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
-
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 
@@ -2793,7 +2804,11 @@ dfs_test_fix_chunk_size(void **state)
 		rc = dfs_release(files[i]);
 		assert_int_equal(rc, 0);
 	}
+
 	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	/** have to call fini to release the cached container handle for the checker to work */
+	rc = dfs_fini();
 	assert_int_equal(rc, 0);
 
 	/** Using lower level obj API, punch all the files created. */
@@ -2827,6 +2842,8 @@ dfs_test_fix_chunk_size(void **state)
 	/** should be NR_FILES + SB + root object + LF dir + timestamp dir */
 	assert_int_equal((int)nr_oids, 9);
 
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 
