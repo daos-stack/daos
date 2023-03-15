@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,19 +9,19 @@
 #include <daos/dtx.h>
 #include "smd_internal.h"
 
-char *TABLE_TGTS[SMD_DEV_TYPE_MAX] = {
+char TABLE_TGTS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"target",	/* compatible with old version */
 	"meta_target",
 	"wal_target",
 };
 
-char *TABLE_POOLS[SMD_DEV_TYPE_MAX] = {
+char TABLE_POOLS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"pool",
 	"meta_pool",
 	"wal_pool",
 };
 
-char *TABLE_RDBS[SMD_DEV_TYPE_MAX] = {
+char TABLE_RDBS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"rdb_data",
 	"rdb_meta",
 	"rdb_wal",
@@ -87,7 +87,7 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		pool.sp_tgts[pool.sp_tgt_cnt] = tgt_id;
 		pool.sp_blobs[pool.sp_tgt_cnt] = blob_id;
 		pool.sp_tgt_cnt += 1;
-		if (!strcmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META]))
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
 			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else if (rc == -DER_NONEXIST) {
@@ -96,7 +96,7 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		pool.sp_tgt_cnt	 = 1;
 		pool.sp_blob_sz  = blob_sz;
 		pool.sp_flags = 0;
-		if (!strcmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META]))
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
 			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else {
