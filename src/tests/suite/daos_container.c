@@ -721,7 +721,7 @@ co_acl(void **state)
 	daos_prop_t		*prop_in;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
-	char		 	 exp_owner[] = "fictionaluser@";
+	char			 exp_owner[] = "fictionaluser@";
 	char			 exp_owner_grp[] = "admins@";
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl = NULL;
