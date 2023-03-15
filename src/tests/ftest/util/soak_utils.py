@@ -796,7 +796,7 @@ def cleanup_dfuse(self):
         self.log.info("Dfuse mount points not deleted Error")
 
 
-def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
+def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None, container=None):
     """Create an IOR cmdline to run in slurm batch.
 
     Args:
@@ -806,6 +806,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
         pool (obj):       TestPool obj
         ppn(int):         number of tasks to run on each node
         nodesperjob(int): number of nodes per job
+        oclass(list):     list of file_oclass and dir_oclass params
+        container (obj)   TestContainer obj
 
     Returns:
         cmd: cmdline string
@@ -819,7 +821,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     api_list = self.params.get("api", ior_params)
     tsize_list = self.params.get("transfer_size", ior_params)
     bsize_list = self.params.get("block_size", ior_params)
-    oclass_list = self.params.get("dfs_oclass", ior_params)
+    if not oclass_list:
+        oclass_list = self.params.get("dfs_oclass", ior_params)
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
@@ -862,9 +865,11 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    add_containers(self, pool, file_oclass, dir_oclass)
+                    if not container:
+                        add_containers(self, pool, file_oclass, dir_oclass)
+                        container = self.container[-1]
                     ior_cmd.set_daos_params(
-                        self.server_group, pool, self.container[-1].uuid)
+                        self.server_group, pool, container.uuid)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size,
                         file_oclass, nodesperjob * ppn, nodesperjob, ppn)
@@ -876,7 +881,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     # include dfuse cmdlines
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+                            self, pool, container, name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
@@ -1239,6 +1244,48 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if mpi_module != self.mpi_module:
             mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
             mpirun_cmd.get_params(self)
+    return commands
+
+
+def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create datamover cmdlines for job script.
+
+        self (obj): soak obj
+        job_spec (str):   datamover job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+    """
+    commands = []
+    dm_params = os.path.join(os.sep, "run", job_spec, "*")
+    oclass_list = self.params.get("oclass", dm_params)
+    for file_oclass, dir_oclass in oclass_list:
+        log_name = f"{job_spec}_{file_oclass}_{nodesperjob * ppn}_{nodesperjob}_{ppn}"
+        ior_spec = os.path.join(os.sep, "run", job_spec, "ior_write", "*")
+        add_containers(self, pool, file_oclass, dir_oclass)
+        cont_1 = self.container[-1]
+        dm_commands = create_ior_cmdline(
+            self, ior_spec, pool, ppn, nodesperjob, [file_oclass, dir_oclass], cont_1)
+
+        sbatch_cmds = dm_commands[0]
+
+        add_containers(self, pool, file_oclass, dir_oclass)
+        cont_2 = self.container[-1]
+
+        fscopy_cmd = FsCopy(self.get_daos_command(), self.log)
+        dst_file = f"daos://{pool.label.value}/{cont_2.label.value}"
+        src_file = f"daos://{pool.label.value}/{cont_1.label.value}"
+        fscopy_cmd.set_params(src=src_file, dst=dst_file)
+        sbatch_cmds.append(str(fscopy_cmd))
+
+        ior_spec = os.path.join(os.sep, "run", job_spec, "ior_read", "*")
+        dm_commands = create_ior_cmdline(
+            self, ior_spec, pool, ppn, nodesperjob, [file_oclass, dir_oclass], cont_2)
+        sbatch_cmds.extend(dm_commands[0])
+        self.log.info("<<DATA_MOVER cmdlines>>:")
+        for cmd in sbatch_cmds:
+            self.log.info("%s", cmd)
+        commands.append([sbatch_cmds, log_name])
     return commands
 
 
