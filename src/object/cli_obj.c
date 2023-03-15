@@ -965,7 +965,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 DF_OID" obj_shard_open %u opc %u, rc "DF_RC".\n",
+			 DF_OID " obj_shard_open %u opc %u, rc " DF_RC "\n",
 			 DP_OID(obj->cob_md.omd_id), obj_auxi->opc, shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -1786,8 +1786,9 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 			obj->cob_shards->do_shards[shard_idx].do_shard_idx);
 		if (!obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) &&
 		    !obj->cob_shards->do_shards[shard_idx].do_reintegrating) {
-			*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
-				 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
+			if (shard != NULL)
+				*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
+					 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
 			D_GOTO(out_put, rc = 1);
 		}
 	}
@@ -2912,8 +2913,9 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	 * shard if leader switched. That is why the resend logic
 	 * is handled at object layer rather than shard layer.
 	 */
-	if (obj_auxi->io_retry)
+	if (obj_auxi->io_retry && !obj_auxi->tx_renew)
 		obj_auxi->flags |= ORF_RESEND;
+	obj_auxi->tx_renew = 0;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
@@ -3650,7 +3652,8 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 			   !obj_is_modification_opc(obj_auxi->opc) &&
 			   !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
 			   !obj_auxi->spec_group && !obj_auxi->to_leader &&
-			   ret != -DER_TX_RESTART && !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
+			   ret != -DER_TX_RESTART && ret != -DER_RF &&
+			   !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to
@@ -4445,6 +4448,7 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 {
 	tse_task_t	 *task = obj_auxi->obj_task;
 	struct dc_object *obj = obj_auxi->obj;
+	bool		  data_recov = false;
 
 	D_ASSERT(obj_auxi->is_ec_obj);
 
@@ -4471,14 +4475,18 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 	if (obj_ec_should_recover_data(obj_auxi)) {
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
-		if (!obj_auxi->reasb_req.orr_size_fetch)
+		if (!obj_auxi->reasb_req.orr_size_fetch) {
 			obj_ec_recov_data(&obj_auxi->reasb_req, args->nr);
-	} else if ((task->dt_result == 0 || task->dt_result == -DER_REC2BIG) &&
-		    obj_auxi->opc == DAOS_OBJ_RPC_FETCH && obj_auxi->req_reasbed) {
+			data_recov = true;
+		}
+	}
+	if ((task->dt_result == 0 || task->dt_result == -DER_REC2BIG) &&
+	    obj_auxi->opc == DAOS_OBJ_RPC_FETCH && obj_auxi->req_reasbed) {
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
 		obj_ec_update_iod_size(&obj_auxi->reasb_req, args->nr);
-		if (obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_usgls != NULL)
+		if ((obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_usgls != NULL) ||
+		    data_recov)
 			obj_ec_fetch_set_sgl(obj, &obj_auxi->reasb_req,
 					     obj_auxi->dkey_hash, args->nr);
 	}
@@ -4633,42 +4641,41 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
-	if (unlikely(task->dt_result == -DER_TX_ID_REUSED)) {
-		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+	if (unlikely(task->dt_result == -DER_TX_ID_REUSED || task->dt_result == -DER_EP_OLD)) {
+		struct dtx_id	*new_dti;
+		struct dtx_id	 old_dti;
+		uint64_t	 api_flags;
 
-		if (obj_auxi->retry_cnt != 0)
+		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+		D_ASSERT(obj_is_modification_opc(obj_auxi->opc));
+
+		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
 			D_ASSERTF(0,
 				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
 				  obj_auxi->flags, task, obj_auxi->retry_cnt);
 
-		/* For non-retry case, restart TX with new TX ID. */
-		switch (obj_auxi->opc) {
-		case DAOS_OBJ_RPC_UPDATE: {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			daos_obj_rw_t		*api_args = dc_task_get_args(obj_auxi->obj_task);
 			struct shard_rw_args	*rw_arg = &obj_auxi->rw_args;
 
-			D_INFO("DTX ID "DF_DTI" for update is reused, re-generate\n",
-			       DP_DTI(&rw_arg->dti));
-			daos_dti_gen(&rw_arg->dti, false);
-			obj_auxi->io_retry = 1;
-			break;
-		}
-		case DAOS_OBJ_RPC_PUNCH:
-			/* fall through */
-		case DAOS_OBJ_RPC_PUNCH_DKEYS:
-			/* fall through */
-		case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+			api_flags = api_args->flags;
+			new_dti = &rw_arg->dti;
+		} else {
+			daos_obj_punch_t	*api_args = dc_task_get_args(obj_auxi->obj_task);
 			struct shard_punch_args	*punch_arg = &obj_auxi->p_args;
 
-			D_INFO("DTX ID "DF_DTI" for punch (%u) is reused, re-generate\n",
-			       DP_DTI(&punch_arg->pa_dti), obj_auxi->opc);
-			daos_dti_gen(&punch_arg->pa_dti, false);
-			obj_auxi->io_retry = 1;
-			break;
+			api_flags = api_args->flags;
+			new_dti = &punch_arg->pa_dti;
 		}
-		default:
-			D_ASSERTF(0, "Unexpected opc %u for '-DER_TX_ID_REUSED'\n", obj_auxi->opc);
-			break;
+
+		if (task->dt_result == -DER_TX_ID_REUSED || !obj_req_with_cond_flags(api_flags)) {
+			daos_dti_copy(&old_dti, new_dti);
+			daos_dti_gen(new_dti, false);
+			obj_auxi->io_retry = 1;
+			obj_auxi->tx_renew = 1;
+			D_DEBUG(DB_IO, "refresh DTX ID opc %d (err %d) from "DF_DTI" to "DF_DTI"\n",
+				obj_auxi->opc, task->dt_result, DP_DTI(&old_dti), DP_DTI(new_dti));
 		}
 	}
 

@@ -211,6 +211,40 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Create pool with fine-grained tier-ratios (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 3.23,96.77", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.0323, 0.9677},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with really fine-grained tier-ratios (auto; rounded)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 23.725738953,76.274261047", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.2373, 0.7626999999999999},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with incompatible arguments (manual)",
 			fmt.Sprintf("pool create label --scm-size %s --nranks 42", testSizeStr),
 			"",
@@ -584,7 +618,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("must not be empty"),
+			errors.New("invalid property"),
 		},
 		{
 			"Set pool property bad value",

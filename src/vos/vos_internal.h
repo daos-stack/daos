@@ -233,6 +233,8 @@ struct vos_pool {
 	uint32_t		 vp_dtx_committed_count;
 	/** Tiering policy */
 	struct policy_desc_t	vp_policy_desc;
+	/** Space (in percentage) reserved for rebuild */
+	unsigned int		vp_space_rb;
 };
 
 /**
@@ -280,6 +282,8 @@ struct vos_container {
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
 	uint64_t		vc_io_nospc_ts;
+	/* The (next) position for committed DTX entries reindex. */
+	umem_off_t		vc_cmt_dtx_reindex_pos;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -306,7 +310,7 @@ struct vos_dtx_act_ent {
 	/* If single object is modified and if it is the same as the
 	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
 	 *
-	 * If the single object is differet from 'dae_base::dae_oid',
+	 * If the single object is different from 'dae_base::dae_oid',
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
