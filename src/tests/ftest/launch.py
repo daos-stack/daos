@@ -3064,14 +3064,22 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+            logger.debug(
+                "Skipping checking core file detection for %s as it is not supported on this OS",
+                str(test))
+            return 0
+
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
+
         if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256
+
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
