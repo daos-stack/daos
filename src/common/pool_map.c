@@ -503,7 +503,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	parent->do_comp.co_status = PO_COMP_ST_UPIN;
 	if (buf->pb_domain_nr == 0) {
 		/* nodes are directly attached under the root */
-		parent->do_target_nr = buf->pb_target_nr;
+		parent->do_target_nr = buf->pb_node_nr;
 		parent->do_child_nr = buf->pb_node_nr;
 	} else {
 		comp = &buf->pb_comps[0];

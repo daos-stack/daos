@@ -225,6 +225,7 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	uint32_t		nr_grps;
 
 	jmop->jmop_pd_ptrs = NULL;
+	jmop->jmop_root = NULL;
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
@@ -278,12 +279,6 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	D_ASSERT(jmop->jmop_grp_size > 0);
 
 	rc = jm_obj_pd_init(jmap, md, root, jmop);
-	if (rc == 0)
-		D_DEBUG(DB_PL, "obj="DF_OID"/ grp_size=%u grp_nr=%d, pd_nr=%u pd_grp_size=%u\n",
-			DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr,
-			jmop->jmop_pd_nr, jmop->jmop_pd_grp_size);
-	else
-		D_ERROR("obj="DF_OID", jm_obj_pd_init failed, "DF_RC"\n", DP_OID(oid), DP_RC(rc));
 
 	return rc;
 }
