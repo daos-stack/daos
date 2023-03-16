@@ -23,6 +23,7 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 2
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
@@ -32,6 +33,7 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 2
+      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
@@ -121,7 +123,7 @@ ior_stress:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 fio_stress:
   job_timeout: 30
   names:
@@ -159,7 +161,7 @@ fio_stress:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 daos_racer:
   runtime: 120
 vpic_stress:
@@ -190,7 +192,7 @@ lammps_stress:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 mdtest_stress:
@@ -229,7 +231,7 @@ mdtest_stress:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -260,7 +262,7 @@ macsio_stress:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:
