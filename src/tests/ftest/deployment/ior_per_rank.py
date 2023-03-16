@@ -68,8 +68,8 @@ class IorPerRank(IorTestBase):
                                      "Max Read Diff too large for rank: {}".format(rank))
                 # collect list of good nodes
                 good_node = self.server_managers[0].get_host(rank)
-                if ((good_node not in self.good_nodes) and
-                        (good_node not in self.failed_nodes.keys())):
+                if ((good_node not in self.good_nodes)
+                        and (good_node not in self.failed_nodes)):
                     self.good_nodes.append(good_node)
             except (TestFail, DaosTestError) as _error:
                 # collect bad nodes
