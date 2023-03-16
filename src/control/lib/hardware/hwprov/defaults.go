@@ -13,7 +13,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
-	"github.com/daos-stack/daos/src/control/lib/hardware/ucx"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -41,7 +40,6 @@ func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterf
 	return []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
 		sysfs.NewProvider(log),
-		ucx.NewProvider(log),
 	}
 }
 
@@ -78,7 +76,6 @@ func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider
 func Init(log logging.Logger) (func(), error) {
 	initFns := []func() (func(), error){
 		libfabric.Load,
-		ucx.Load,
 	}
 
 	cleanupFns := make([]func(), 0)

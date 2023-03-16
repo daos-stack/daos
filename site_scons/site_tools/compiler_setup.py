@@ -15,7 +15,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
-                      '-fwrapv'])
+                      '-fwrapv', '-fsanitize=thread'])
 
 # Compiler flags for stack hardening
 DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
@@ -54,6 +54,8 @@ def _base_setup(env):
                         '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+
+    env.Append(LINKFLAGS=['-fsanitize=thread'])
 
     if build_type == 'debug':
         if compiler == 'gcc':

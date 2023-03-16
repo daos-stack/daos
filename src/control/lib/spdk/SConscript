@@ -26,6 +26,8 @@ def scons():
 
     nc_obj = senv.Object("src/nvme_control.c")
     ncc_obj = senv.Object("src/nvme_control_common.c")
+    senv['CCFLAGS'].remove('-fsanitize=thread')
+    senv['LINKFLAGS'].remove('-fsanitize=thread')
     senv.d_static_library("nvme_control", [nc_obj, ncc_obj, control_tgts], LIBS=libs)
 
     if prereqs.test_requested():

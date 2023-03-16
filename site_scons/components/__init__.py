@@ -195,7 +195,7 @@ def define_mercury(reqs):
                      '-DNA_USE_OFI=ON',
                      '-DBUILD_DOCUMENTATION=OFF',
                      '-DBUILD_SHARED_LIBS=ON',
-                     '-DNA_USE_UCX=ON',
+                     '-DNA_USE_UCX=OFF',
                      '../mercury']
 
     if reqs.target_type == 'debug':
