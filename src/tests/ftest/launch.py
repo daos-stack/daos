@@ -35,7 +35,8 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException, \
+    stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
@@ -63,7 +64,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+PROCS_TO_CLEANUP = [
+    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
@@ -571,6 +573,9 @@ class TestInfo():
 
 class Launch():
     """Class to launch avocado tests."""
+
+    RESULTS_DIRS = (
+        "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
     def __init__(self, name, mode):
         """Initialize a Launch object.
@@ -2030,6 +2035,9 @@ class Launch():
             f"ls -al {test_dir}",
             f"mkdir -p {user_dir}"
         ]
+        # Predefine the sub directories used to collect the files process()/_archive_files()
+        for directory in self.RESULTS_DIRS:
+            commands.append(f"mkdir -p {user_dir}/{directory}")
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
@@ -2184,7 +2192,7 @@ class Launch():
             remote_files = OrderedDict()
             remote_files["local configuration files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
                 "depth": 1,
@@ -2192,7 +2200,7 @@ class Launch():
             }
             remote_files["remote configuration files"] = {
                 "source": os.path.join(os.sep, "etc", "daos"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "daos_*.yml",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2200,7 +2208,7 @@ class Launch():
             }
             remote_files["daos log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[1]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2208,7 +2216,7 @@ class Launch():
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[2]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 2,
@@ -2216,7 +2224,7 @@ class Launch():
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[3]),
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2224,7 +2232,7 @@ class Launch():
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
-                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[4]),
                 "pattern": "valgrind*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2233,7 +2241,8 @@ class Launch():
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
-                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
                     "pattern": core_files[hosts]["pattern"],
                     "hosts": NodeSet(hosts),
                     "depth": 1,
@@ -2422,19 +2431,13 @@ class Launch():
 
         proc_pattern = "|".join(PROCS_TO_CLEANUP)
         logger.debug("Looking for running processes: %s", proc_pattern)
-        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
-        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
-        if pgrep_result.passed_hosts:
-            any_found = True
-            logger.debug("Killing running processes: %s", proc_pattern)
-            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
-            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
-            if pkill_result.failed_hosts:
-                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-            else:
-                message = f"Running processes found on {pgrep_result.passed_hosts}"
-                self._warn_test(self.result.tests[-1], "Process", message)
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
+        if running:
+            message = f"Failed to kill processes on {running}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+        elif detected:
+            message = f"Running processes found on {detected}"
+            self._warn_test(self.result.tests[-1], "Process", message)
 
         logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging
@@ -2715,7 +2718,7 @@ class Launch():
             tmp_copy_dir = os.path.join(source, tmp_copy_dir)
             sudo_command = ""
 
-        # Create a temporary remote directory
+        # Create a temporary remote directory - should already exist, see _setup_test_directory()
         command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
@@ -2776,14 +2779,22 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+            logger.debug(
+                "Skipping checking core file detection for %s as it is not supported on this OS",
+                str(test))
+            return 0
+
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
+
         if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256
+
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):

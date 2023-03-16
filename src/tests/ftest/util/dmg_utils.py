@@ -83,6 +83,14 @@ class DmgCommand(DmgCommandBase):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgCommand: a new DmgCommand object
+        """
+        return DmgCommand(self._path, self.yaml, self.hostlist_suffix)
+
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
 
@@ -866,8 +874,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-prop command fails.
 
         """
-        return self._get_json_result(
-            ("pool", "get-prop {} {}".format(pool, name)))
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
     def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.

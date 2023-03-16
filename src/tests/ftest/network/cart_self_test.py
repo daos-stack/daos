@@ -8,6 +8,7 @@ from apricot import TestWithServers
 from command_utils_base import EnvironmentVariables, FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
+from host_utils import get_local_host
 from job_manager_utils import get_job_manager
 
 
@@ -94,6 +95,7 @@ class CartSelfTest(TestWithServers):
         """
         # Setup the orterun command
         orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")
+        orterun.assign_hosts(get_local_host(), hostfile=False)
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 

@@ -22,7 +22,7 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
     Args:
@@ -31,14 +31,17 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
             POOL_NAMESPACE.
         create (bool, optional): should the pool be created. Defaults to True.
         connect (bool, optional): should the pool be connected. Defaults to True.
-        index (int, optional): Server index for dmg command. Defaults to 0.
+        dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+            calls test.get_dmg_command().
 
     Returns:
         TestPool: the new pool object
 
     """
+    if not dmg:
+        dmg = test.get_dmg_command()
     pool = TestPool(
-        namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
+        namespace=namespace, context=test.context, dmg_command=dmg,
         label_generator=test.label_generator)
     pool.get_params(test)
     if params:
@@ -389,13 +392,13 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        if self.set_logmasks is True:
+        if self.set_logmasks.value is True:
             self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            if self.set_logmasks is True:
+            if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
@@ -494,7 +497,7 @@ class TestPool(TestDaosApiBase):
 
                 # Destroy the pool with the dmg command.
                 # Elevate log_mask to DEBUG, then restore after pool destroy
-                if self.set_logmasks is True:
+                if self.set_logmasks.value is True:
                     self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                     self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
                     self.dmg.server_set_logmasks(raise_exception=False)
