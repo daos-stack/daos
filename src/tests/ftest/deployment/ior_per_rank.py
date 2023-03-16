@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,9 +35,9 @@ class IorPerRank(IorTestBase):
         self.add_pool(connect=False, target_list=[rank])
 
         # execute ior on given rank for different transfer sizes and collect the results
-        for idx, _ in enumerate(self.transfer_sizes):
+        for idx, transfer_size in enumerate(self.transfer_sizes):
             try:
-                self.ior_cmd.transfer_size.update(self.transfer_sizes[idx])
+                self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(self.write_flags)
                 dfs_out = self.run_ior_with_pool(fail_on_warning=self.log.info)
                 dfs_perf_write = IorCommand.get_ior_metrics(dfs_out)
