@@ -12,7 +12,7 @@ index bfdbebb..783cf1e 100644
      ABTD_ythread_context ctx; /* Context */
      void *p_stack;            /* Stack address */
 diff --git a/src/include/abti_mem.h b/src/include/abti_mem.h
-index b958e40..040f84a 100644
+index b958e40..593dbc7 100644
 --- a/src/include/abti_mem.h
 +++ b/src/include/abti_mem.h
 @@ -259,7 +259,7 @@ ABTU_ret_err static inline int ABTI_mem_alloc_ythread_mempool_desc(
@@ -24,15 +24,23 @@ index b958e40..040f84a 100644
          int abt_errno =
              ABTI_mem_alloc_nythread(p_local, (ABTI_thread **)&p_ythread);
          ABTI_CHECK_ERROR(abt_errno);
-@@ -314,7 +314,7 @@ static inline void ABTI_mem_free_thread(ABTI_global *p_global,
+@@ -314,11 +314,13 @@ static inline void ABTI_mem_free_thread(ABTI_global *p_global,
          ABTU_free(p_ythread->p_stack);
      } else {
          ABTI_ASSERT(p_thread->type & ABTI_THREAD_TYPE_MEM_MALLOC_DESC);
 -        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
 +        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 8192);
          ABTI_ythread *p_ythread = ABTI_thread_get_ythread_or_null(p_thread);
-         if (p_ythread)
+-        if (p_ythread)
++        if (p_ythread) {
              ABTI_mem_unregister_stack(p_ythread->p_stack);
+-        ABTU_free(p_thread);
++            ABTU_free(p_ythread);
++        } else
++            ABTU_free(p_thread);
+     }
+ }
+ 
 diff --git a/src/include/abti_thread.h b/src/include/abti_thread.h
 index 1466e83..28dfee7 100644
 --- a/src/include/abti_thread.h
