@@ -174,7 +174,7 @@ pipeline {
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
-               defaultValue: 'auto_md_on_ssd',
+               defaultValue: '',
                description: 'The launch.py --nvme argument to use for the Functional test ' +
                             'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
                             '0000:81:00.0, etc.)')
