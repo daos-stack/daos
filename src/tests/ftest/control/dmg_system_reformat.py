@@ -101,7 +101,7 @@ class DmgSystemReformatTest(TestWithServers):
                 dmg.result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        pools.append(add_pool(self, connect=False), dmg=dmg)
+        pools.append(add_pool(self, connect=False, dmg=dmg))
 
         # Lastly, verify that last created pool is in the list
         pool_uuids = dmg.get_pool_list_uuids()
