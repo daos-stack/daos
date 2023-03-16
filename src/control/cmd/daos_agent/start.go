@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -82,7 +82,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.Debug("Local fabric interface caching has been disabled")
 	}
 
-	cmd.Debug("initializing hardware providers")
 	hwprovInitStart := time.Now()
 	hwprovFini, err := hwprov.Init(cmd.Logger)
 	if err != nil {
@@ -91,13 +90,11 @@ func (cmd *startCmd) Execute(_ []string) error {
 	defer hwprovFini()
 	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
 
-	cmd.Debug("starting process monitor")
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
-	cmd.Debug("creating fabric cache")
 	fabricCacheStart := time.Now()
 	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
@@ -108,7 +105,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("created fabric cache: %s", time.Since(fabricCacheStart))
 
-	cmd.Debug("registering dRPC modules")
 	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
@@ -125,7 +121,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	})
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))
 
-	cmd.Debug("querying and caching hwloc content")
 	hwlocStart := time.Now()
 	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
 	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.Logger)
@@ -135,7 +130,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	defer hwloc.Cleanup(hwlocCtx)
 	cmd.Debugf("cached hwloc content: %s", time.Since(hwlocStart))
 
-	cmd.Debug("starting dRPC server")
 	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
