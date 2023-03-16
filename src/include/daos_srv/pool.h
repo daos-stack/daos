@@ -338,5 +338,8 @@ int
 ds_start_chkpt_ult(struct ds_pool_child *child);
 void
 ds_stop_chkpt_ult(struct ds_pool_child *child);
+struct rdb_tx;
+int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+			    d_iov_t *cred);
 
 #endif /* __DAOS_SRV_POOL_H__ */

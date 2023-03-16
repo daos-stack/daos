@@ -783,7 +783,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 				return -DER_FETCH_AGAIN;
 			}
 			D_ERROR("got different parity recx in EC data recovery\n");
-			return -DER_IO;
+			return -DER_DATA_LOSS;
 		}
 		if (list_1->re_nr == 0)
 			continue;
@@ -793,7 +793,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			    (list_1->re_items[j].re_recx.rx_nr !=
 			     list_2->re_items[j].re_recx.rx_nr)) {
 				D_ERROR("got different parity recx in EC data recovery\n");
-				return -DER_IO;
+				return -DER_DATA_LOSS;
 			}
 			if (list_1->re_items[j].re_ep != list_2->re_items[j].re_ep)
 				return -DER_FETCH_AGAIN;

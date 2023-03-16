@@ -443,6 +443,8 @@ class DFS(CommonBase):
         return oid
 
     def create_file_obj(self, file_size, identical_files=1):
+        if file_size == 0:
+            return
         parity_stats = CellStats(self._verbose)
 
         self._debug(
