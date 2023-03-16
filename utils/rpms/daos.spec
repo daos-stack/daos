@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       6%{?relval}%{?dist}
+Version:       2.3.106
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -553,8 +553,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 
-* Wed Feb 24 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.103-7
+* Thu Mar 16 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.106-2
 - Update libfabric to version v1.17.0
+
+* Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
+- Bump version to be higher than TB5
 
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556
