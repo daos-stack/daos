@@ -629,7 +629,7 @@ install_hook(void)
 	}
 	cs_opt_skipdata skipdata = {
 		.mnemonic = "db",
-	}
+	};
 	cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 	cs_option(handle, CS_OPT_SKIPDATA_SETUP, (size_t)&skipdata);
 
