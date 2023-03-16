@@ -25,14 +25,24 @@ extern "C" {
 
 #include <daos_security.h>
 
-/** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
+/**
+ * Opens the container for reading only. This flag conflicts with DAOS_COO_RW
+ * and DAOS_COO_EX.
+ */
 #define DAOS_COO_RO		(1U << 0)
 
-/** Opens the container for reading and writing. This flag conflicts with DAOS_COO_RO. */
+/**
+ * Opens the container for reading and writing. This flag conflicts with
+ * DAOS_COO_RO and DAOS_COO_EX.
+ */
 #define DAOS_COO_RW		(1U << 1)
 
-/** Disables the automatic epoch slip at epoch commit time. See daos_epoch_commit(). */
-#define DAOS_COO_NOSLIP		(1U << 2)
+/**
+ * Opens the container for exclusive reading and writing. This flag conflicts
+ * with DAOS_COO_RO and DAOS_COO_RW. The current user must be the owner of the
+ * container.
+ */
+#define DAOS_COO_EX		(1U << 2)
 
 /** Skips the check to see if the pool meets the redundancy factor/level requirements of the
  * container.
@@ -42,8 +52,29 @@ extern "C" {
 /** Skips container metadata time updates on DAOS_COO_RO open, and subsequent close */
 #define DAOS_COO_RO_MDSTATS	(1U << 4)
 
+/**
+ * Before opening the container, evict current user's handles. This flag
+ * conflicts with DAOS_COO_EVICT_ALL. This flag can only be used with
+ * DAOS_COO_RO or DAOS_COO_RW at the moment.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT		(1U << 5)
+
+/**
+ * Before opening the container, evict all handles, including other users'.
+ * This flag conflicts with DAOS_COO_EVICT. This flag can only be used with
+ * DAOS_COO_EX at the moment. The current user must be the owner of the
+ * container.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT_ALL	(1U << 6)
+
 /** Number of bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_NBITS	(5)
+#define DAOS_COO_NBITS	(7)
 
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
@@ -172,7 +203,8 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[in]	flags	Open flags (DAOS_COO_RO, etc.). Must include one of
+ *			DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX.
  * \param[out]	coh	Returned open handle.
  * \param[out]	info	Optional, return container information
  * \param[in]	ev	Completion event, it is optional and can be NULL.

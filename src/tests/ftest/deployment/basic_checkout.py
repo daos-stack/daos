@@ -120,6 +120,7 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/ior_dm/client_processes/*')
+        self.ior_ppn = self.ppn
 
         # create pool and container
         pool = self.create_pool()
