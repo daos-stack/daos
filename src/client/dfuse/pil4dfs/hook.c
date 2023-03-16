@@ -627,6 +627,11 @@ install_hook(void)
 		printf("ERROR: Failed to initialize engine!\n");
 		exit(1);
 	}
+	cs_opt_skipdata skipdata = {
+		.mnemonic = "db",
+	}
+	cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
+	cs_option(handle, CS_OPT_SKIPDATA_SETUP, (size_t)&skipdata);
 
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		tramp_list =

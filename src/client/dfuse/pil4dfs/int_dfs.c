@@ -29,6 +29,7 @@
 #include <gurt/hash.h>
 #include <daos.h>
 #include <daos_fs.h>
+#include <daos_uns.h>
 #include <dfuse_ioctl.h>
 #include <daos_prop.h>
 #include "dfs_internal.h"
@@ -49,9 +50,6 @@
 
 /* The max number of mount points for DAOS mounted simultaneously */
 #define MAX_DAOS_MT         (8)
-
-/* Max length of item length */
-#define MAX_ITEM_LENGTH     (256)
 
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (8)
@@ -110,7 +108,7 @@ struct FILESTATUS {
 	int              fd_dup_next;
 	unsigned int     st_ino;
 	off_t            offset;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 };
 
 /* structure allocated for a FD for a dir */
@@ -412,7 +410,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 static void
 remove_dot_dot(char szPath[]);
 static int
-remove_dot(char szPath[]);
+remove_dot_and_cleanup(char szPath[]);
 
 static struct FILESTATUS *file_list;
 static struct DIRSTATUS  *dir_list;
@@ -497,7 +495,7 @@ discover_daos_mount(void)
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strlen(fs_root);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		printf("Warning: len_fs_root >= DFS_MAX_PATH\n");
+		printf("Warning: DAOS_MOUNT_POINT is too long. It is ignored.\n");
 		return;
 	}
 
@@ -557,7 +555,8 @@ retrieve_handles_from_fuse(int idx)
 	struct dfuse_hs_reply hs_reply;
 	int                   fd, cmd, rc;
 	d_iov_t               iov = {};
-	char                  buff[2048];
+	char                  *buff = NULL;
+	size_t                buff_size;
 
 	fd = libc_open(dfs_list[idx].fs_root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0) {
@@ -570,6 +569,15 @@ retrieve_handles_from_fuse(int idx)
 	if (rc != 0) {
 		printf("Error in querying size info from dfuse with ioctl().\n");
 		goto err;
+	}
+
+	/* To determine the size of buffer we need to accommodate the data from fuse */
+	buff_size = max(hs_reply.fsr_pool_size, hs_reply.fsr_cont_size);
+	buff_size = max(buff_size, hs_reply.fsr_dfs_size);
+	D_ALLOC(buff, buff_size);
+	if (buff == NULL) {
+		printf("Failed to allocate %zu bytes memory. Quit.\n", buff_size);
+		exit(1);
 	}
 
 	iov.iov_buf = buff;
@@ -620,12 +628,16 @@ retrieve_handles_from_fuse(int idx)
 
 err:
 	libc_close(fd);
+	D_FREE(buff);
 }
 
 /* Check whether path starts with "DAOS://" */
 inline bool
-is_path_start_with_daos(const char *path)
+is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_path)
 {
+	int rc;
+	struct duns_attr_t attr = {0};
+
 	if (path[0] != 'D' && path[0] != 'd')
 		return false;
 	if (path[1] != 'A' && path[1] != 'a')
@@ -635,36 +647,21 @@ is_path_start_with_daos(const char *path)
 	if (path[3] != 'S' && path[3] != 's')
 		return false;
 
-	/* The path starts with "DAOS://". */
-	if (path[4] == ':' || path[5] == '/' || path[6] == '/')
-		return true;
+	/* The path does not start with "DAOS://". */
+	if (path[4] != ':' || path[5] != '/' || path[6] != '/')
+		return false;
 
-	return false;
-}
+	attr.da_flags = DUNS_NO_CHECK_PATH;
+	rc = duns_resolve_path(path, &attr);
+	if (rc)
+		return false;
 
-/* Extract pool and cont info */
-static char *
-get_pool_cont(const char *path, char *pool, char *cont)
-{
-	char *pos_cont_s = NULL, *pos_cont_e = NULL;
+	strncpy(pool, attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+	strncpy(cont, attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+	/* attr.da_rel_path is allocated dynamically. It should be freed later. */
+	*rel_path = attr.da_rel_path;
 
-	pool[0] = 0;
-	cont[0] = 0;
-
-	pos_cont_s = strstr(path + 7, "/");
-	if (pos_cont_s == NULL)
-		return NULL;
-
-	memcpy(pool, path + 7, (long int)(pos_cont_s - path - 7));
-	pool[(long int)(pos_cont_s - path - 7)] = 0;
-
-	pos_cont_e = strstr(pos_cont_s + 1, "/");
-	if (pos_cont_e == NULL)
-		return NULL;
-	memcpy(cont, pos_cont_s + 1, (long int)(pos_cont_e - pos_cont_s - 1));
-	cont[(long int)(pos_cont_e - pos_cont_s) - 1] = 0;
-
-	return pos_cont_e;
+	return true;
 }
 
 /* standarlize and determine whether a path is a target path or not */
@@ -681,13 +678,10 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char  *rel_path = NULL;
 	int    idx_dfs;
 
-	with_daos_prefix = is_path_start_with_daos(szInput);
-
+	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
 	if (with_daos_prefix) {
-		rel_path = get_pool_cont(szInput, pool, cont);
-		printf("DBG> rel_path = %s\n", rel_path);
+		/* TO DO. Need more work!!! query_dfs_pool_cont(pool, cont)*/
 		*is_target_path = 0;
-		/* TO DO */
 		return;
 	}
 	/* absolute path */
@@ -704,8 +698,11 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		}
 	}
 
+	/* Assume full_path_loc[] = "/A/B/C/../D/E", it will be "/A/B/D/E" after remove_dot_dot. */
 	remove_dot_dot(full_path_loc);
-	len = remove_dot(full_path_loc);
+
+	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
+	len = remove_dot_and_cleanup(full_path_loc);
 
 	idx_dfs = query_dfs_mount(full_path_loc);
 
@@ -810,8 +807,9 @@ remove_dot_dot(char szPath[])
 	pNewStr[nNonZero] = 0;
 }
 
+/* Remove '/./'. Replace '//' with '/'. Remove '/' at the end of path. */
 static int
-remove_dot(char szPath[])
+remove_dot_and_cleanup(char szPath[])
 {
 	char *p_Offset_Dots, *p_Offset_Slash, *pNewStr;
 	int   i, nLen, nNonZero = 0;
@@ -1279,7 +1277,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 {
 	unsigned int     mode     = 0664;
 	int              two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 	dfs_obj_t       *file_obj;
@@ -1318,8 +1316,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 
 	if (rc) {
-		printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s rc = %d\n", pathname,
-		       rc);
+		printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s, %s\n", pathname,
+		       strerror(rc));
 		errno = rc;
 		return (-1);
 	}
@@ -1592,8 +1590,10 @@ pread(int fd, void *buf, size_t size, off_t offset)
 
 	return (ssize_t)bytes_read;
 }
+
 ssize_t
 pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
+
 ssize_t
 __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
 
@@ -1660,8 +1660,10 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 
 	return size;
 }
+
 ssize_t
 pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
+
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
 
@@ -1698,7 +1700,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -1806,7 +1808,7 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -1888,7 +1890,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_statfs == NULL) {
@@ -1919,8 +1921,10 @@ statfs(const char *pathname, struct statfs *sfs)
 		rc = -1;
 	return rc;
 }
+
 int
 statfs64(const char *pathname, struct statfs64 *sfs) __attribute__((alias("statfs")));
+
 int
 __statfs(const char *pathname, struct statfs *sfs)
 	__attribute__((alias("statfs"), leaf, nonnull, nothrow));
@@ -1932,7 +1936,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_statvfs == NULL) {
@@ -1965,6 +1969,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	}
 	return rc;
 }
+
 int
 statvfs64(const char *__restrict pathname, struct statvfs64 *__restrict svfs)
 	__attribute__((alias("statvfs")));
@@ -1976,7 +1981,7 @@ opendir(const char *path)
 	dfs_obj_t       *parent, *dir_obj;
 	mode_t           mode;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -2032,21 +2037,6 @@ opendir(const char *path)
 		exit(1);
 	}
 
-	/**
-	 *	ent_list = dir_list[idx_dirfd].ents;
-	 *
-	 *	ent_list[0].d_ino = 0;
-	 *	ent_list[0].d_off = 0;
-	 *	ent_list[0].d_reclen = 0;
-	 *	ent_list[0].d_type = DT_DIR;
-	 *	strcpy(ent_list[0].d_name, ".");
-	 *
-	 *	ent_list[1].d_ino = 0;
-	 *	ent_list[1].d_off = 0;
-	 *	ent_list[1].d_reclen = 0;
-	 *	ent_list[1].d_type = DT_DIR;
-	 *	strcpy(ent_list[1].d_name, "..");
-	 */
 	return (DIR *)(&dir_list[idx_dirfd]);
 }
 
@@ -2110,6 +2100,7 @@ org_func:
 	else
 		return next_openat(dirfd, path, oflags, mode);
 }
+
 int
 openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__((alias("openat")));
 
@@ -2205,12 +2196,6 @@ out_readdir:
 }
 
 /**
- *char* envp_lib[] = {
- *	"LD_PRELOAD=/scratch/leihuan1/tickets/12142/latest/daos/install/lib64/libpil4dfs.so",
- *	"DAOS_POOL=testpool",
- *	"DAOS_CONTAINER=testcont",
- *	"DAOS_MOUNT_POINT=/dfs", NULL };
- *
  *static char** pre_envp(char *const envp[])
  *{
  *	int	i, num_entry = 0;
@@ -2274,13 +2259,14 @@ out_readdir:
  *	}
  *}
  */
+
 int
 mkdir(const char *path, mode_t mode)
 {
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_mkdir == NULL) {
@@ -2332,7 +2318,7 @@ rmdir(const char *path)
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_rmdir == NULL) {
@@ -2361,7 +2347,7 @@ symlink(const char *symvalue, const char *path)
 	int              is_target_path, rc;
 	dfs_obj_t       *parent, *obj;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_symlink == NULL) {
@@ -2420,7 +2406,7 @@ readlink(const char *path, char *buf, size_t size)
 	dfs_obj_t       *parent, *obj;
 	struct DFSMOUNT *dfs_mt;
 	daos_size_t      str_len = size;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_readlink == NULL) {
@@ -2477,31 +2463,6 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	return next_readlinkat(dirfd, path, buf, size);
 }
 
-/**
- *static ssize_t
- *read_all(int fd, void *buf, size_t count)
- *{
- *	ssize_t	rc, byte_read = 0;
- *	char	*p_buf = (char *)buf;
- *
- *	if (fd >= FD_FILE_BASE)
- *		return read(fd, buf, count);
- *
- *	while (count != 0 && (rc = read(fd, p_buf, count)) != 0) {
- *		if (rc == -1) {
- *			if (errno == EINTR)
- *				continue;
- *			printf("Error in read_all: %s\n", strerror(errno));
- *			return -1;
- *		}
- *		byte_read += rc;
- *		count -= rc;
- *		p_buf += rc;
- *	}
- *	return byte_read;
- *}
- */
-
 static ssize_t
 write_all(int fd, const void *buf, size_t count)
 {
@@ -2545,7 +2506,7 @@ rename(const char *old_name, const char *new_name)
 	daos_size_t      link_len;
 	int              fd, errno_save;
 	FILE            *fIn = NULL;
-	char             item_name_old[MAX_ITEM_LENGTH], item_name_new[MAX_ITEM_LENGTH];
+	char             item_name_old[DFS_MAX_NAME], item_name_new[DFS_MAX_NAME];
 	char             parent_dir_old[DFS_MAX_PATH], parent_dir_new[DFS_MAX_PATH];
 	char             symlink_value[DFS_MAX_PATH];
 
@@ -2936,6 +2897,7 @@ isatty(int fd)
 	else
 		return next_isatty(fd);
 }
+
 int
 __isatty(int fd) __attribute__((alias("isatty"), leaf, nothrow));
 
@@ -2945,7 +2907,7 @@ access(const char *path, int mode)
 	dfs_obj_t       *parent;
 	int              rc, is_target_path;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             full_path[DFS_MAX_PATH];
 	char             parent_dir[DFS_MAX_PATH];
 
@@ -3001,7 +2963,7 @@ chdir(const char *path)
 	dfs_obj_t       *parent;
 	struct stat      stat_buf;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             full_path[DFS_MAX_PATH];
 	char             parent_dir[DFS_MAX_PATH];
 
@@ -3064,7 +3026,7 @@ new_unlink(const char *path)
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (!hook_enabled)
@@ -3160,7 +3122,7 @@ truncate(const char *path, off_t length)
 	dfs_obj_t       *parent, *file_obj;
 	mode_t           mode;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 
 	if (next_truncate == NULL) {
@@ -3200,7 +3162,7 @@ chmod(const char *path, mode_t mode)
 	int              rc, is_target_path;
 	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -3286,7 +3248,7 @@ utime(const char *path, const struct utimbuf *times)
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -3345,7 +3307,7 @@ utimes(const char *path, const struct timeval times[2])
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -3405,7 +3367,7 @@ utimens_timespec(const char *path, const struct timespec times[2])
 	struct timespec  times_loc;
 	struct timeval   times_us[2];
 	struct DFSMOUNT *dfs_mt;
-	char             item_name[MAX_ITEM_LENGTH];
+	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
@@ -3769,8 +3731,10 @@ dup2(int oldfd, int newfd)
 	}
 	return -1;
 }
+
 int
 __dup2(int oldfd, int newfd) __attribute__((alias("dup2"), leaf, nothrow));
+
 /**
  *int
  *dup3(int oldfd, int newfd, int flags)
@@ -3968,6 +3932,7 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	errno = ENOTSUP;
 	return -1;
 }
+
 int
 posix_fadvise64(int fd, off_t offset, off_t len, int advice)
 	__attribute__((alias("posix_fadvise")));
@@ -4142,6 +4107,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
 		exit(1);
 	}
+#if defined(__x86_64__)
 	if (context->uc_mcontext.gregs[REG_ERR] & 0x2) {
 		/* Write fault, set flag for dirty page which will be written to file later */
 		idx_page = (addr_min - (size_t)mmap_list[idx_map].addr) / page_size;
@@ -4151,6 +4117,10 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	} else if (context->uc_mcontext.gregs[REG_ERR] & 0x1) {
 		/* Read fault, do nothing */
 	}
+#elif defined(__aarch64__)
+#else
+#error Unsupported architecture. Only x86_64 and aarch64 are supported.
+#endif
 }
 
 static void
