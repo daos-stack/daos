@@ -4837,7 +4837,7 @@ out:
 /* check and upgrade the object layout if needed. */
 static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
-				 bool *schedule_layout_upgrade)
+				 bool *scheduled_layout_upgrade)
 {
 	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
@@ -4856,7 +4856,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
 					 RB_OP_UPGRADE, 0);
 		if (rc == 0)
-			*schedule_layout_upgrade = true;
+			*scheduled_layout_upgrade = true;
 	}
 	return rc;
 }
@@ -4903,15 +4903,15 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
 	int				rc;
-	bool				schedule_layout_upgrade = false;
-	bool				need_put_leader = false;
-	bool				schedule_upgrade = false;
+	bool				scheduled_layout_upgrade = false;
+	bool				dmg_upgrade_cmd = false;
+	bool				request_schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
 		if (rc != 0)
 			return rc;
-		need_put_leader = true;
+		dmg_upgrade_cmd = true;
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
@@ -4948,7 +4948,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_tx, rc);
 	} else if (rc == -DER_NONEXIST) {
-		if (!need_put_leader)
+		if (!dmg_upgrade_cmd)
 			D_GOTO(out_tx, rc = 0);
 		D_GOTO(out_upgrade, rc);
 	} else {
@@ -4969,7 +4969,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
 			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     need_put_leader) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -4983,7 +4983,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
-			if (need_put_leader)
+			if (dmg_upgrade_cmd)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -4995,7 +4995,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
 					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
-			} else if (need_put_leader) { /* not from resume */
+			} else if (dmg_upgrade_cmd) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
 			} else {
 				D_GOTO(out_upgrade, rc = 0);
@@ -5008,7 +5008,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
-	schedule_upgrade = true;
+	request_schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5016,7 +5016,7 @@ out_upgrade:
 	if (rc)
 		D_GOTO(out_tx, rc);
 
-	rc = pool_check_upgrade_object_layout(&tx, svc, &schedule_layout_upgrade);
+	rc = pool_check_upgrade_object_layout(&tx, svc, &scheduled_layout_upgrade);
 	if (rc < 0)
 		D_GOTO(out_tx, rc);
 
@@ -5024,10 +5024,10 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 
-	if (schedule_upgrade && !schedule_layout_upgrade) {
+	if (request_schedule_upgrade && !scheduled_layout_upgrade) {
 		int rc1;
 
-		if (rc == 0 && need_put_leader &&
+		if (rc == 0 && dmg_upgrade_cmd &&
 		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
 			D_GOTO(out_put_leader, rc = -DER_AGAIN);
 		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
@@ -5035,7 +5035,7 @@ out_tx:
 			rc = rc1;
 	}
 out_put_leader:
-	if (need_put_leader) {
+	if (dmg_upgrade_cmd) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
 		pool_svc_put_leader(svc);
 	}
