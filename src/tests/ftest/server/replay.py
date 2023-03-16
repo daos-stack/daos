@@ -1,0 +1,66 @@
+"""
+  (C) Copyright 2019-2023 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+
+from apricot import TestWithServers
+from ior_utils import run_ior
+from job_manager_utils import get_job_manager
+from test_utils_pool import add_pool
+
+
+class ReplayTests(TestWithServers):
+    """Shutdown/restart/replay test cases.
+
+    Restarting engines with volatile SCM will include loading the blob from the SSD and re-applying
+    any changes from the WAL.
+
+    :avocado: recursive
+    """
+
+    def test_restart(self):
+        """Verify data access after engine restart w/ WAL replay + w/ check pointing.
+
+        Tests un-synchronized WAL & VOS
+
+        Steps:
+            0) Start 2 DAOS servers with 1 engines on each server (setup)
+            1) Create a single pool and container
+            2) Run ior w/ DFS to populate the container with data
+            3) After ior has completed, shutdown every engine cleanly (dmg system stop)
+            4) Remove VOS file manually/temporarily (umount tmpfs; remount tmpfs)
+            5) Restart each engine (dmg system start)
+            6) Verify the previously written data matches with an ior read
+
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
+        :avocado: tags=server,replay
+        :avocado: tags=ReplayTests,test_restart
+        """
+        processes = self.params.get('/run/ior_write/*', 'ppn', 1)
+        self.log_step('Creating a pool and container')
+        pool = add_pool(self)
+        container = self.get_container(pool)
+
+        self.log_step('Populating the container with data via ior')
+        job_manager = get_job_manager(self, subprocess=False, timeout=60)
+        ior_log = '_'.join(
+            [self.test_id, pool.identifier, container.identifier, 'ior', 'write.log'])
+        run_ior(
+            self, job_manager, ior_log, self.hostlist_clients, self.workdir, None,
+            self.server_group, container.pool, container, processes, namespace='/run/ior_write/*')
+
+        self.log_step('Shutting down the engines')
+        self.get_dmg_command().system_stop(True)
+
+        self.log_step('Restarting the engines')
+        self.get_dmg_command().system_start()
+
+        self.log_step('Verifying the container data previous written via ior')
+        ior_log = '_'.join([self.test_id, pool.identifier, container.identifier, 'ior', 'read.log'])
+        run_ior(
+            self, job_manager, ior_log, self.hostlist_clients, self.workdir, None,
+            self.server_group, container.pool, container, processes, namespace='/run/ior_read/*')
+
+        self.log_step('Test passed')
