@@ -3080,7 +3080,7 @@ class PosixTests():
         os.chmod(side_test_file, 0)
         print(os.stat(side_test_file))
 
-        # Read it through the caching=False side.
+        # Read it through the second channel.
         try:
             with open(side_test_file, 'r') as fd:
                 data = fd.read()
@@ -3088,7 +3088,7 @@ class PosixTests():
         except PermissionError:
             pass
 
-        # Read it through the cache, this should work.
+        # Read it through first instance, this should work as the contents are cached.
         with open(test_file, 'r') as fd:
             data = fd.read()
             assert data == 'data'
@@ -3103,7 +3103,7 @@ class PosixTests():
         except PermissionError:
             pass
 
-        # Read it through the cache, this should now fail as the cache has expired.
+        # Read it through the first dfuse, this should now fail as the cache has expired.
         try:
             with open(test_file, 'r') as fd:
                 data = fd.read()

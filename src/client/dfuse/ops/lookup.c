@@ -135,10 +135,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-#if 0
-	ie->ie_stat = entry.attr;
-#endif
-
 	if (fi_out)
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
