@@ -74,11 +74,8 @@ class NvmeHealth(ServerFillUp):
         # List all pools
         errors = 0
         for host in self.server_managers[0].hosts:
-            try:
-                dmg.hostlist = host
-                pool_info = get_storage_query_pool_info(self, dmg)
-            finally:
-                dmg.hostlist = None
+            dmg.hostlist = host
+            pool_info = get_storage_query_pool_info(self, dmg)
             self.log.info('Pools found on %s', host)
             for pool in pool_info:
                 try:
@@ -114,12 +111,8 @@ class NvmeHealth(ServerFillUp):
         errors = 0
         for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
             for uuid in uuid_list:
-                try:
-                    dmg.hostlist = host
-                    info = get_dmg_smd_info(
-                        self, dmg.storage_query_device_health, 'devices', uuid=uuid)
-                finally:
-                    dmg.hostlist = None
+                dmg.hostlist = host
+                info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=uuid)
                 self.log.info('Verifying the health of devices on %s', host)
                 for devices in info.values():
                     for device in devices:
@@ -145,6 +138,7 @@ class NvmeHealth(ServerFillUp):
 
         # Get the nvme-health
         try:
+            dmg.hostlist = self.server_managers[0].hosts
             dmg.storage_scan_nvme_health()
         except CommandFailure as error:
             self.fail("dmg storage scan --nvme-health failed {}".format(error))
