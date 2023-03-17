@@ -109,7 +109,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=telemetry
-        :avocado: tags=telemetry_pool_space_metrics,test_telemetry_pool_space_metrics
+        :avocado: tags=TelemetryPoolSpaceMetrics,test_telemetry_pool_space_metrics
         """
 
         for namespace in ["/run/pool_scm/*", "/run/pool_scm_nvme/*"]:
@@ -119,13 +119,9 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
             self.add_container(pool=self.pool)
 
             # Run ior command.
-            try:
-                self.update_ior_cmd_with_pool(create_cont=False)
-                self.run_ior_with_pool(
-                    timeout=200, create_pool=False, create_cont=False)
-            except TestFail as error:
-                self.log.info("ior command failed: %s", str(error))
-                raise
+            self.update_ior_cmd_with_pool(create_cont=False)
+            self.run_ior_with_pool(
+                timeout=200, create_pool=False, create_cont=False)
 
             # collect pool space metric data after write
             metrics = self.get_metrics(self.metric_names)
