@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -199,8 +199,8 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			struct stat attr = {};
 
 			rc = dfs_ostat(inode->ie_dfs->dfs_ns, inode->ie_obj, &attr);
-			D_ASSERT(rc);
-			D_ASSERT(attr.st_size == inode->ie_stat.st_size);
+			if (rc == 0)
+				D_ASSERT(attr.st_size == inode->ie_stat.st_size);
 #endif
 
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
