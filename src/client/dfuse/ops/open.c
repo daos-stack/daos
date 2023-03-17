@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,17 +110,25 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
 
-	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
-		if (oh->doh_caching)
+	/* If the file was read from then set the cache time for future use, however if the
+	 * file was written to then evict the cache.
+	 * The problem here is that if the file was written to then the contents will be in the
+	 * kernel cache however dfuse has no visibility over file size and before replying with
+	 * data from the cache the kernel will call stat() to get an up-to-date file size, so
+	 * after write dfuse may continue to tell the kernel incorrect file sizes.  The fix
+	 * would be to store metadata but not cache data.
+	 */
+	if (atomic_load_relaxed(&oh->doh_write_count) == 0) {
+		if (oh->doh_caching && !oh->doh_keep_cache)
 			dfuse_cache_set_time(oh->doh_ie);
+	} else {
+		if (oh->doh_caching)
+			dfuse_cache_evict(oh->doh_ie);
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	}
-
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0) {
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
-	if (oh->doh_caching && !oh->doh_keep_cache)
-		dfuse_cache_set_time(oh->doh_ie);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);
