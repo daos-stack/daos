@@ -538,7 +538,7 @@ filter_cont_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 	if (flags & DAOS_COO_RO)
 		*capas &= CONT_CAPAS_RO_MASK;
 	else if (!(*capas & CONT_CAPAS_RO_MASK) ||
-		 !(*capas & ~CONT_CAPAS_RO_MASK))
+		 !(*capas & CONT_CAPAS_W_MASK))
 		/*
 		 * User requested RW - if they don't have permissions for both
 		 * read and write capas of some kind, we won't grant them any.
