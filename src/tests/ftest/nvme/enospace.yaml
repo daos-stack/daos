@@ -14,36 +14,22 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       targets: 1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       targets: 1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
   scm_size: 5G
   nvme_size: 5G
@@ -55,13 +41,13 @@ ior:
   api: "DFS"
   client_processes:
     np: 32
-  daos_destroy: False
+  daos_destroy: false
   iorflags:
     flags: "-w -F -k -G 1"
     read_flags: "-r -R -F -k -G 1"
   test_file: /testFile
   transfersize_blocksize:
     2K:
-      transfer_size: 2048 #2K
+      transfer_size: 2048  # 2K
     16M:
-      nvme_transfer_size: 16777216 #16M
+      nvme_transfer_size: 16777216  # 16M

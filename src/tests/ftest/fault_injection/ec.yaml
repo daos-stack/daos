@@ -3,8 +3,8 @@ hosts:
   test_clients: 1
 timeout: 300
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -15,32 +15,17 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   control_method: dmg
-  scm_size: 50%
-  nvme_size: 93%
+  size: 93%
   properties: ec_cell_sz:64KiB
 container:
   type: POSIX
@@ -50,7 +35,7 @@ ior:
   api: "DFS"
   client_processes:
     np: 16
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     flags: "-w -r -R -G 1 -k -vv"
   test_file: /testFile

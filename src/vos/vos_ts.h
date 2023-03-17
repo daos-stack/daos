@@ -14,8 +14,8 @@
 #define __VOS_TS__
 
 #include <daos/dtx.h>
-#include <lru_array.h>
-#include <vos_tls.h>
+#include "lru_array.h"
+#include "vos_tls.h"
 
 struct vos_ts_table;
 struct vos_ts_entry;
@@ -650,13 +650,12 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 
 /** Free an allocated timestamp set
  *
+ * Implemented as a macro to improve logging.
+ *
  * \param[in]	ts_set	Set to free
  */
-static inline void
-vos_ts_set_free(struct vos_ts_set *ts_set)
-{
-	D_FREE(ts_set);
-}
+
+#define vos_ts_set_free(ts_set) D_FREE(ts_set)
 
 /** Internal API to copy timestamp */
 static inline void

@@ -8,17 +8,9 @@ server_config:
   engines:
     0:
       log_mask: ERR
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 16
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
-  scm_size: 20%
-  nvme_size: 50%
+  size: 50%
   svcn: 1
   control_method: dmg
 container:
@@ -28,9 +20,9 @@ ior:
   api: "DFS"
   client_processes:
     np: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
-      flags: "-w -k"
+    flags: "-w -k"
   repetitions: 1
   transfersize_blocksize:
     4K:

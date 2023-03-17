@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -133,13 +133,19 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	return tc
 }
 
+// WithScmDisableHugepages disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+	tc.Scm.DisableHugepages = true
+	return tc
+}
+
 // WithScmMountPoint sets the path to the device used for SCM storage.
 func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	tc.Scm.MountPoint = scmPath
 	return tc
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	tc.Scm.RamdiskSize = size
@@ -279,22 +285,28 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	tid := 0
+	tmp2 := make([]*TierConfig, 0, len(tmp))
 	for i := range tmp {
-		if tmp[i].Tier == 0 {
-			tmp[i].Tier = i
+		if tmp[i] == nil {
+			continue
 		}
+		tmp[i].Tier = tid
+		tmp2 = append(tmp2, tmp[i])
+		tid++
 	}
-	*tcs = tmp
+	*tcs = tmp2
 
 	return nil
 }
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint    string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize   uint     `yaml:"scm_size,omitempty"`
-	DeviceList    []string `yaml:"scm_list,omitempty"`
-	NumaNodeIndex uint     `yaml:"-"`
+	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DeviceList       []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex    uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -310,6 +322,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
+		}
+		if sc.DisableHugepages {
+			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
 		if sc.RamdiskSize == 0 {
@@ -739,13 +754,21 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// SpdkRpcServer struct describes settings for an optional SPDK JSON-RPC server instance that can
+// run in the engine process.
+type SpdkRpcServer struct {
+	Enable   bool   `yaml:"enable,omitempty" json:"enable"`
+	SockAddr string `yaml:"sock_addr,omitempty" json:"sock_addr"`
+}
+
 type Config struct {
-	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool        `yaml:"-"`
-	NumaNodeIndex    uint        `yaml:"-"`
-	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool          `yaml:"-"`
+	NumaNodeIndex    uint          `yaml:"-"`
+	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {

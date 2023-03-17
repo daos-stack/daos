@@ -203,6 +203,9 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 			     daos_recx_t *recx, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
+dc_obj_query_max_epoch_task_create(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch,
+				   daos_event_t *ev, tse_sched_t *tse, tse_task_t **task);
+int
 dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task);
@@ -248,6 +251,10 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_anchor_t *akey_anchor, bool incr_order,
 			    daos_event_t *ev, tse_sched_t *tse,
 			    d_iov_t *csum, tse_task_t **task);
+int
+dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
+			      daos_key_t *akey, daos_anchor_t *anchor, daos_event_t *ev,
+			      tse_sched_t *tse, tse_task_t **task);
 
 int
 dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh, daos_handle_t th,

@@ -4,21 +4,24 @@ hosts:
 timeout: 5000
 server_config:
   name: daos_server
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
 pool:
-  scm_size: 40G
-  nvme_size: 400G
-  control_method: dmg
+  size: 95%
 container:
   type: POSIX
   control_method: daos
@@ -31,15 +34,14 @@ largefilecount:
     - EC_2P1GX
 ior:
   np: 30
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
   block_size: '7G'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 
 mdtest:
   client_processes:
@@ -47,7 +49,7 @@ mdtest:
   num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096

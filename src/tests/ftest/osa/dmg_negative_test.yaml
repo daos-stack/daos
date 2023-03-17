@@ -22,14 +22,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -39,14 +32,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 6000000000
   nvme_size: 54000000000
@@ -57,16 +43,16 @@ container:
     enable_checksum: true
 test_sequence:
   dmg_cmd_test:
-  # Rank list, target_list, Pass/Fail Condition
-  # Invalid Rank list
+    # Rank list, target_list, Pass/Fail Condition
+    # Invalid Rank list
     - ["7", "0,1", "Fail"]
-  # Invalid Target list
+    # Invalid Target list
     - ["1", "0,10", "Fail"]
     - ["2", "10", "Fail"]
     - ["3", "10", "Fail"]
-  # Invalid rank, target
+    # Invalid rank, target
     - ["7", "11", "Fail"]
-  # Valid Rank and Target
+    # Valid Rank and Target
     - ["0", "1,2", "Pass"]
     - ["4", "0,2", "Pass"]
     - ["5", "1,2", "Pass"]

@@ -74,7 +74,7 @@ struct ilog_context {
 	/** umem offset of root pointer */
 	umem_off_t			 ic_root_off;
 	/** umem instance */
-	struct umem_instance		 ic_umm;
+	struct umem_instance            *ic_umm;
 	/** ref count for iterator */
 	uint32_t			 ic_ref;
 	/** In pmdk transaction marker */
@@ -99,7 +99,7 @@ ilog_is_same_tx(struct ilog_context *lctx, const struct ilog_id *id, bool *same)
 	if (!cbs->dc_is_same_tx_cb)
 		return 0;
 
-	return cbs->dc_is_same_tx_cb(&lctx->ic_umm, id->id_tx_id, id->id_epoch, same,
+	return cbs->dc_is_same_tx_cb(lctx->ic_umm, id->id_tx_id, id->id_epoch, same,
 				     cbs->dc_is_same_tx_args);
 }
 
@@ -115,7 +115,7 @@ ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t in
 	if (!cbs->dc_log_status_cb)
 		return ILOG_COMMITTED;
 
-	rc = cbs->dc_log_status_cb(&lctx->ic_umm, id->id_tx_id, id->id_epoch, intent, retry,
+	rc = cbs->dc_log_status_cb(lctx->ic_umm, id->id_tx_id, id->id_epoch, intent, retry,
 				   cbs->dc_log_status_args);
 
 	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH)
@@ -134,8 +134,8 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 	if (!cbs->dc_log_add_cb)
 		return 0;
 
-	rc = cbs->dc_log_add_cb(&lctx->ic_umm, lctx->ic_root_off, &id->id_tx_id,
-				id->id_epoch, cbs->dc_log_add_args);
+	rc = cbs->dc_log_add_cb(lctx->ic_umm, lctx->ic_root_off, &id->id_tx_id, id->id_epoch,
+				cbs->dc_log_add_args);
 	if (rc != 0) {
 		D_ERROR("Failed to register incarnation log entry: "DF_RC"\n",
 			DP_RC(rc));
@@ -158,8 +158,8 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id,
 	if (!cbs->dc_log_del_cb || !id->id_tx_id)
 		return 0;
 
-	rc = cbs->dc_log_del_cb(&lctx->ic_umm, lctx->ic_root_off, id->id_tx_id,
-				id->id_epoch, deregister, cbs->dc_log_del_args);
+	rc = cbs->dc_log_del_cb(lctx->ic_umm, lctx->ic_root_off, id->id_tx_id, id->id_epoch,
+				deregister, cbs->dc_log_del_args);
 	if (rc != 0) {
 		D_ERROR("Failed to deregister incarnation log entry: "DF_RC"\n",
 			DP_RC(rc));
@@ -228,7 +228,7 @@ ilog_tx_begin(struct ilog_context *lctx)
 	if (lctx->ic_in_txn)
 		return 0;
 
-	rc = umem_tx_begin(&lctx->ic_umm, NULL);
+	rc = umem_tx_begin(lctx->ic_umm, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -248,7 +248,7 @@ ilog_tx_end(struct ilog_context *lctx, int rc)
 		goto done;
 
 	if (lctx->ic_ver_inc) {
-		rc = umem_tx_add_ptr(&lctx->ic_umm, &lctx->ic_root->lr_magic,
+		rc = umem_tx_add_ptr(lctx->ic_umm, &lctx->ic_root->lr_magic,
 				     sizeof(lctx->ic_root->lr_magic));
 		if (rc != 0) {
 			D_ERROR("Failed to add to undo log: "DF_RC"\n",
@@ -261,7 +261,7 @@ ilog_tx_end(struct ilog_context *lctx, int rc)
 
 done:
 	lctx->ic_in_txn = false;
-	return umem_tx_end(&lctx->ic_umm, rc);
+	return umem_tx_end(lctx->ic_umm, rc);
 }
 
 static inline bool
@@ -291,13 +291,12 @@ ilog_ctx_create(struct umem_instance *umm, struct ilog_root *root,
 {
 	D_ALLOC_PTR(*lctxp);
 	if (*lctxp == NULL) {
-		D_ERROR("Could not allocate memory for open incarnation log\n");
 		return -DER_NOMEM;
 	}
 
 	(*lctxp)->ic_root = root;
 	(*lctxp)->ic_root_off = umem_ptr2off(umm, root);
-	(*lctxp)->ic_umm = *umm;
+	(*lctxp)->ic_umm      = umm;
 	(*lctxp)->ic_cbs = *cbs;
 	ilog_addref(*lctxp);
 	return 0;
@@ -337,12 +336,11 @@ ilog_ptr_set_full(struct ilog_context *lctx, void *dest, const void *src,
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		goto done;
 	}
 
-	rc = umem_tx_add_ptr(&lctx->ic_umm, dest, len);
+	rc = umem_tx_add_ptr(lctx->ic_umm, dest, len);
 	if (rc != 0) {
 		D_ERROR("Failed to add to undo log\n");
 		goto done;
@@ -359,12 +357,12 @@ done:
 int
 ilog_create(struct umem_instance *umm, struct ilog_df *root)
 {
-	struct ilog_context	lctx = {
-		.ic_root = (struct ilog_root *)root,
-		.ic_root_off = umem_ptr2off(umm, root),
-		.ic_umm = *umm,
-		.ic_ref = 0,
-		.ic_in_txn = 0,
+	struct ilog_context lctx = {
+	    .ic_root     = (struct ilog_root *)root,
+	    .ic_root_off = umem_ptr2off(umm, root),
+	    .ic_umm      = umm,
+	    .ic_ref      = 0,
+	    .ic_in_txn   = 0,
 	};
 	struct ilog_root	tmp = {0};
 	int			rc = 0;
@@ -432,7 +430,7 @@ ilog_log2cache(struct ilog_context *lctx, struct ilog_array_cache *cache)
 		cache->ac_array = NULL;
 		cache->ac_nr = 0;
 	} else if (!lctx->ic_root->lr_tree.it_embedded) {
-		array = umem_off2ptr(&lctx->ic_umm, lctx->ic_root->lr_tree.it_root);
+		array             = umem_off2ptr(lctx->ic_umm, lctx->ic_root->lr_tree.it_root);
 		cache->ac_array = array;
 		cache->ac_entries = &array->ia_id[0];
 		cache->ac_nr = array->ia_len;
@@ -448,13 +446,13 @@ int
 ilog_destroy(struct umem_instance *umm,
 	     struct ilog_desc_cbs *cbs, struct ilog_df *root)
 {
-	struct ilog_context	lctx = {
-		.ic_root = (struct ilog_root *)root,
-		.ic_root_off = umem_ptr2off(umm, root),
-		.ic_umm = *umm,
-		.ic_ref = 1,
-		.ic_cbs = *cbs,
-		.ic_in_txn = 0,
+	struct ilog_context lctx = {
+	    .ic_root     = (struct ilog_root *)root,
+	    .ic_root_off = umem_ptr2off(umm, root),
+	    .ic_umm      = umm,
+	    .ic_ref      = 1,
+	    .ic_cbs      = *cbs,
+	    .ic_in_txn   = 0,
 	};
 	uint32_t		 tmp = 0;
 	int			 i;
@@ -465,8 +463,7 @@ ilog_destroy(struct umem_instance *umm,
 
 	rc = ilog_tx_begin(&lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -515,17 +512,16 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0) {
-		D_ERROR("Failed to start PMDK transaction: rc = %s\n",
-			d_errstr(rc));
+		D_ERROR("Failed to start PMDK transaction: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
-	tree_root = umem_zalloc(&lctx->ic_umm, ILOG_ARRAY_CHUNK_SIZE);
+	tree_root = umem_zalloc(lctx->ic_umm, ILOG_ARRAY_CHUNK_SIZE);
 
 	if (tree_root == UMOFF_NULL)
-		return lctx->ic_umm.umm_nospc_rc;
+		return lctx->ic_umm->umm_nospc_rc;
 
-	array = umem_off2ptr(&lctx->ic_umm, tree_root);
+	array = umem_off2ptr(lctx->ic_umm, tree_root);
 
 	lctx->ic_ver_inc = true;
 
@@ -688,7 +684,7 @@ reset_root(struct ilog_context *lctx, struct ilog_array_cache *cache, int i)
 		return rc;
 
 	if (tree != UMOFF_NULL)
-		return umem_free(&lctx->ic_umm, tree);
+		return umem_free(lctx->ic_umm, tree);
 
 	return 0;
 }
@@ -716,7 +712,7 @@ remove_entry(struct ilog_context *lctx, struct ilog_array_cache *cache, int i)
 	/** Just remove the entry at i */
 	array = cache->ac_array;
 	if (i + 1 != cache->ac_nr) {
-		rc = umem_tx_add_ptr(&lctx->ic_umm, &array->ia_id[i],
+		rc = umem_tx_add_ptr(lctx->ic_umm, &array->ia_id[i],
 				     sizeof(array->ia_id[0]) * (cache->ac_nr - i));
 		if (rc != 0)
 			return rc;
@@ -813,11 +809,11 @@ insert:
 		new_len = (cache.ac_nr + 1) * 2 - 1;
 		new_size = sizeof(*cache.ac_array) + sizeof(cache.ac_entries[0]) * new_len;
 		D_ASSERT((new_size & (ILOG_ARRAY_CHUNK_SIZE - 1)) == 0);
-		new_array = umem_zalloc(&lctx->ic_umm, new_size);
+		new_array = umem_zalloc(lctx->ic_umm, new_size);
 		if (new_array == UMOFF_NULL)
-			return lctx->ic_umm.umm_nospc_rc;
+			return lctx->ic_umm->umm_nospc_rc;
 
-		array = umem_off2ptr(&lctx->ic_umm, new_array);
+		array             = umem_off2ptr(lctx->ic_umm, new_array);
 		array->ia_len = cache.ac_nr + 1;
 		array->ia_max_len = new_len;
 		if (i != 0) {
@@ -839,12 +835,12 @@ insert:
 		if (rc != 0)
 			return rc;
 
-		return umem_free(&lctx->ic_umm, umem_ptr2off(&lctx->ic_umm, cache.ac_array));
+		return umem_free(lctx->ic_umm, umem_ptr2off(lctx->ic_umm, cache.ac_array));
 	}
 
 	array = cache.ac_array;
-	rc = umem_tx_add_ptr(&lctx->ic_umm, &array->ia_id[i],
-			     sizeof(array->ia_id[0]) * (cache.ac_nr - i + 1));
+	rc    = umem_tx_add_ptr(lctx->ic_umm, &array->ia_id[i],
+				sizeof(array->ia_id[0]) * (cache.ac_nr - i + 1));
 	if (rc != 0)
 		return rc;
 
@@ -962,10 +958,9 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_TRACE, "%s in incarnation log "DF_X64
-		" status: rc=%s tree_version: %d\n",
-		opc_str[opc], id_in->id_epoch, d_errstr(rc),
-		ilog_mag2ver(lctx->ic_root->lr_magic));
+	D_DEBUG(DB_TRACE,
+		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
+		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
 
 	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
 	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
@@ -1081,13 +1076,19 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
 }
 
 static void
-ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
+ilog_status_refresh(struct ilog_context *lctx, uint32_t intent, bool has_cond,
 		    struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_entry	 entry;
 	int32_t			 status;
 	bool			 same_intent = (intent == priv->ip_intent);
+	bool			 retry;
+
+	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH) && !has_cond)
+		retry = false;
+	else
+		retry = true;
 
 	priv->ip_intent = intent;
 	priv->ip_rc = 0;
@@ -1096,9 +1097,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		    (entry.ie_status == ILOG_COMMITTED ||
 		     entry.ie_status == ILOG_REMOVED))
 			continue;
-		status = ilog_status_get(lctx, &entry.ie_id, intent,
-					 (intent == DAOS_INTENT_UPDATE ||
-					  intent == DAOS_INTENT_PUNCH) ? false : true);
+		status = ilog_status_get(lctx, &entry.ie_id, intent, retry);
 		if (status < 0 && status != -DER_INPROGRESS) {
 			priv->ip_rc = status;
 			return;
@@ -1110,7 +1109,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 
 static bool
 ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
-		  const struct ilog_desc_cbs *cbs, uint32_t intent,
+		  const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 		  struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
@@ -1129,13 +1128,13 @@ ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
 		return true;
 
 	D_ASSERT(entries->ie_ids != NULL);
-	ilog_status_refresh(&priv->ip_lctx, intent, entries);
+	ilog_status_refresh(&priv->ip_lctx, intent, has_cond, entries);
 
 	return true;
 reset:
 	lctx->ic_root = root;
 	lctx->ic_root_off = umem_ptr2off(umm, root);
-	lctx->ic_umm = *umm;
+	lctx->ic_umm      = umm;
 	lctx->ic_cbs = *cbs;
 	lctx->ic_ref = 0;
 	lctx->ic_in_txn = false;
@@ -1179,7 +1178,7 @@ done:
 
 int
 ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
-	   const struct ilog_desc_cbs *cbs, uint32_t intent,
+	   const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 	   struct ilog_entries *entries)
 {
 	struct ilog_context	*lctx;
@@ -1190,12 +1189,13 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	int			 i;
 	int			 status;
 	int			 rc = 0;
+	bool			 retry;
 
 	ILOG_ASSERT_VALID(root_df);
 
 	root = (struct ilog_root *)root_df;
 
-	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
+	if (ilog_fetch_cached(umm, root, cbs, intent, has_cond, entries)) {
 		if (priv->ip_rc == -DER_NONEXIST)
 			return priv->ip_rc;
 		if (priv->ip_rc < 0) {
@@ -1219,11 +1219,14 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	if (rc != 0)
 		goto fail;
 
+	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH) && !has_cond)
+		retry = false;
+	else
+		retry = true;
+
 	for (i = 0; i < cache.ac_nr; i++) {
 		id = &cache.ac_entries[i];
-		status = ilog_status_get(lctx, id, intent,
-					 (intent == DAOS_INTENT_UPDATE ||
-					  intent == DAOS_INTENT_PUNCH) ? false : true);
+		status = ilog_status_get(lctx, id, intent, retry);
 		if (status < 0 && status != -DER_INPROGRESS)
 			D_GOTO(fail, rc = status);
 		entries->ie_info[entries->ie_num_entries].ii_removed = 0;
@@ -1432,17 +1435,14 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache,
 
 		dest = &cache->ac_entries[i];
 
-		D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
-			dest->id_epoch);
+		D_DEBUG(DB_TRACE, "Removing ilog entry at " DF_X64 "\n", dest->id_epoch);
 
 		rc = ilog_log_del(lctx, dest, true);
 		if (rc != 0) {
-			D_ERROR("Could not remove entry from tree: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Could not remove entry from tree: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
-		D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64"\n",
-			dest->id_epoch);
+		D_DEBUG(DB_TRACE, "Removed ilog entry at " DF_X64 "\n", dest->id_epoch);
 	}
 	if (cache->ac_nr == removed)
 		return reset_root(lctx, cache, -1);
@@ -1456,7 +1456,7 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache,
 		D_ASSERT(0);
 	}
 
-	rc = umem_tx_add_ptr(&lctx->ic_umm, array,
+	rc = umem_tx_add_ptr(lctx->ic_umm, array,
 			     sizeof(*array) + sizeof(array->ia_id[0]) * (cache->ac_nr - removed));
 	if (rc != 0)
 		return rc;
@@ -1506,7 +1506,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
 	 */
-	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, entries);
+	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, false, entries);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_TRACE, "log is empty\n");
 		/* Log is empty */

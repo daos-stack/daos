@@ -1,13 +1,11 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
-from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials
+from command_utils_base import BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DaosAgentTransportCredentials(TransportCredentials):
@@ -15,16 +13,23 @@ class DaosAgentTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super().__init__(
-            "/run/agent_config/transport_config/*", "transport_config", log_dir)
+        super().__init__("/run/agent_config/transport_config/*", "transport_config", log_dir)
 
         # Additional daos_agent transport credential parameters:
         #   - server_name: <str>, e.g. "daos_server"
         #       Name of server according to its certificate [daos_agent only]
         #
         self.server_name = BasicParameter(None, None)
-        self.cert = LogParameter(log_dir, None, "agent.crt")
-        self.key = LogParameter(log_dir, None, "agent.key")
+        self.cert = LogParameter(self._log_dir, None, "agent.crt")
+        self.key = LogParameter(self._log_dir, None, "agent.key")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosAgentTransportCredentials: a new DaosAgentTransportCredentials object
+        """
+        return DaosAgentTransportCredentials(self._log_dir)
 
 
 class DaosAgentYamlParameters(YamlParameters):
@@ -35,7 +40,7 @@ class DaosAgentYamlParameters(YamlParameters):
 
         Args:
             filename (str): yaml configuration file name
-            common_yaml (YamlParameters): [description]
+            common_yaml (YamlParameters): yaml configuration common to daos servers and agents
         """
         super().__init__("/run/agent_config/*", filename, None, common_yaml)
 
@@ -68,3 +73,11 @@ class DaosAgentYamlParameters(YamlParameters):
         """
         if name is not None:
             self.log_file.update(name, "agent_config.log_file")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosAgentYamlParameters: a new DaosAgentYamlParameters object
+        """
+        return DaosAgentYamlParameters(self.filename, None)

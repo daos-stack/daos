@@ -3,7 +3,7 @@ hosts:
   test_clients: 3
 timeout: 1300
 setup:
-  start_servers_once: False
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -18,14 +18,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       targets: 8
       pinned_numa_node: 1
@@ -36,17 +29,9 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
-  scm_size: 30%
-  nvme_size: 40%
+  size: 40%
   svcn: 1
   control_method: dmg
 container:
@@ -56,7 +41,7 @@ ior:
   client_processes:
     np: 12
   test_file: /testFile
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -w -W -r -R -k"
   api: DFS
   transfer_size: '1M'
@@ -64,4 +49,4 @@ ior:
   dfs_oclass: "EC_2P1G1"
   dfs_dir_oclass: "EC_2P1G1"
 runtime:
-  total_runtime: 800 # total seconds to run
+  total_runtime: 800  # total seconds to run

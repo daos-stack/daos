@@ -5,8 +5,8 @@ hosts:
   test_clients: 1
 timeout: 2400
 setup:
-  start_servers_once: False
-skip_add_log_msg: True
+  start_servers_once: false
+skip_add_log_msg: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -20,14 +20,7 @@ server_config:
       log_mask: INFO,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,14 +30,7 @@ server_config:
       log_mask: INFO,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 12000000000
   nvme_size: 108000000000
@@ -82,9 +68,9 @@ ior:
     dfs_oclass: RP_3G6
     dfs_dir_oclass: RP_3G6
   ior_test_sequence:
-  # - [scmsize, nvmesize, transfersize, blocksize]
-  #   The values are set to be in the multiples of 10.
-  #   Values are appx GB.
+    # - [scmsize, nvmesize, transfersize, blocksize]
+    #   The values are set to be in the multiples of 10.
+    #   Values are appx GB.
     - [12000000000, 108000000000, 500000, 500000000]
 mdtest:
   api: DFS
@@ -93,7 +79,7 @@ mdtest:
   num_of_files_dirs: 4067         # creating total of 120K files
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   dfs_oclass: RP_3G6
   dfs_dir_oclass: RP_3G6
   manager: "MPICH"
@@ -110,15 +96,15 @@ test_obj_class:
     - RP_4G1
     - EC_2P1G1
 aggregation:
-  test_with_aggregation: True
+  test_with_aggregation: true
 rebuild:
-  test_with_rebuild: True
+  test_with_rebuild: true
 checksum:
-  test_with_checksum: False
+  test_with_checksum: false
 snapshot:
-  test_with_snapshot: True
+  test_with_snapshot: true
 test_ranks:
-  rank_list: ["2","5"]
+  rank_list: ["2", "5"]
 pool_capacity:
   pool_fillup: 10
   pool_test_oclass: RP_2GX

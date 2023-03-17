@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -20,16 +19,16 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, convert_list
+    run_pcmd, list_to_str, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
-from daos_utils import DaosCommand
+from run_utils import run_remote
 from test_utils_container import TestContainer
-from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
 from oclass_utils import extract_redundancy_factor
+from duns_utils import format_path
 
 H_LOCK = threading.Lock()
 
@@ -67,13 +66,13 @@ def add_pools(self, pool_names):
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
-def add_containers(self, pool, oclass=None, path="/run/container/*"):
+def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/container/*"):
     """Create a list of containers that the various jobs use for storage.
 
     Args:
         pool: pool to create container
-        oclass: object class of container
-
+        file_oclass: file oclass for daos container cmd
+        dir oclass: directory oclass for daos container cmd
 
     """
     rd_fac = None
@@ -82,11 +81,13 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
-    # include rd_fac based on the class
-    if oclass:
-        self.container[-1].oclass.update(oclass)
-        redundancy_factor = extract_redundancy_factor(oclass)
+    # include rd_fac based on the oclass
+    if file_oclass:
+        self.container[-1].file_oclass.update(file_oclass)
+        redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+    if dir_oclass:
+        self.container[-1].dir_oclass.update(dir_oclass)
     properties = self.container[-1].properties.value
     cont_properties = (",").join(filter(None, [properties, rd_fac]))
     if cont_properties is not None:
@@ -134,7 +135,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         self (obj): soak obj
         source_dir (str): Source directory to archive
         dest_dir (str): Destination directory
-        host_list (list): list of hosts
+        host_list (NodeSet): list of hosts
 
     Raises:
         SoakTestError: if there is an error with the remote copy
@@ -154,12 +155,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             # tagged with the hostname
             command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
                 source_dir, shared_dir_tmp)
-            try:
-                slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params, timeout=300)
-            except DaosTestError as error:
+            result = run_remote(self.log, host, command, timeout=300)
+            if not result.passed:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
-                        host)) from error
+                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
             try:
                 run_command(command, timeout=30)
@@ -170,14 +169,12 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
 
     else:
         # copy the remote dir on all client nodes to a shared directory
-        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
-            source_dir, shared_dir)
-        try:
-            slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params, timeout=300)
-        except DaosTestError as error:
+        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(source_dir, shared_dir)
+        result = run_remote(self.log, host_list, command, timeout=300)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
-                    host_list)) from error
+                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+
         # copy the local logs and the logs in the shared dir to avocado dir
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
@@ -191,7 +188,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
-        slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
+        result = run_remote(self.log, host_list, command)
+        if not result.passed:
+            raise SoakTestError(
+                "<<FAILED: Soak logfiles removal failed>>: {} on {}".format(directory, host_list))
         # remove the local log for this pass
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
@@ -293,20 +293,18 @@ def get_daos_server_logs(self):
 
     Args:
         self (obj): soak obj
-
     """
-    for host in self.hostlist_servers:
-        daos_dir = self.outputsoak_dir + "/daos_logs-" + "{}".format(host)
-        if not os.path.exists(daos_dir):
-            os.mkdir(daos_dir)
-            commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
-                        "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
-            for command in commands:
-                try:
-                    run_command(command, timeout=30)
-                except DaosTestError as error:
-                    raise SoakTestError(
-                        "<<FAILED: daos logs file from {} not copied>>".format(host)) from error
+    daos_dir = self.outputsoak_dir + "/daos_server_logs"
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/var/tmp/daos_testing/")
+    hosts = self.hostlist_servers
+    if not os.path.exists(daos_dir):
+        os.mkdir(daos_dir)
+        command = ["clush", "-w", str(hosts), "-v", "--rcopy", logs_dir, "--dest", daos_dir]
+        try:
+            run_command(" ".join(command), timeout=600)
+        except DaosTestError as error:
+            raise SoakTestError(
+                "<<FAILED: daos logs file from {} not copied>>".format(hosts)) from error
 
 
 def run_monitor_check(self):
@@ -386,23 +384,20 @@ def wait_for_pool_rebuild(self, pool, name):
 
     """
     rebuild_status = False
-    self.log.info(
-        "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
+    self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
     try:
         # # Wait for rebuild to start
-        # pool.wait_for_rebuild(True)
+        # pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        pool.wait_for_rebuild(False)
+        pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
-        self.log.error(
-            "<<<FAILED:{} rebuild timed out: {}".format(
-                name, error), exc_info=error)
+        self.log.error("<<<FAILED:{} rebuild timed out: {}".format(name, error), exc_info=error)
         rebuild_status = False
     except TestFail as error1:
         self.log.error(
-            "<<<FAILED:{} rebuild failed due to test issue: {}".format(
-                name, error1), exc_info=error1)
+            "<<<FAILED:{} rebuild failed due to test issue: {}".format(name, error1),
+            exc_info=error1)
     return rebuild_status
 
 
@@ -523,8 +518,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             pool.exclude(rank, tgt_idx=tgt_idx)
             status = True
         except TestFail as error:
-            self.log.error(
-                "<<<FAILED:dmg pool exclude failed", exc_info=error)
+            self.log.error("<<<FAILED:dmg pool exclude failed", exc_info=error)
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
@@ -538,8 +532,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
                 pool.reintegrate(rank, tgt_idx=tgt_idx)
                 status = True
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg pool reintegrate failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
                 status = False
             if status:
                 status = wait_for_pool_rebuild(self, pool, name)
@@ -597,8 +590,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     pool.drain(rank)
                 except TestFail as error:
                     self.log.error(
-                        "<<<FAILED:dmg pool {} drain failed".format(
-                            pool.uuid), exc_info=error)
+                        "<<<FAILED:dmg pool {} drain failed".format(pool.uuid), exc_info=error)
                     status = False
                 drain_status &= status
                 if drain_status:
@@ -611,8 +603,7 @@ def launch_server_stop_start(self, pools, name, results, args):
             try:
                 self.dmg_command.system_stop(force=True, ranks=rank)
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg system stop failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
             time.sleep(30)
             if not drain:
@@ -734,21 +725,20 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
-
+    dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
     mount_dir = dfuse.mount_dir.value + unique
-    dfuse.mount_dir.update(mount_dir)
-    dfuse.set_dfuse_params(pool)
-    dfuse.set_dfuse_cont_param(container)
+    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.uuid)
     dfuse_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     module_load = "module load {}".format(self.mpi_module)
+
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
         "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
@@ -797,20 +787,12 @@ def cleanup_dfuse(self):
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
-    try:
-        slurm_utils.srun(
-            NodeSet.fromlist(
-                self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params, timeout=600)
-    except slurm_utils.SlurmFailed as error:
-        self.log.info("Dfuse processes not stopped Error:%s", error)
-    try:
-        slurm_utils.srun(
-            NodeSet.fromlist(
-                self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params, timeout=600)
-    except slurm_utils.SlurmFailed as error:
-        self.log.info("Dfuse mountpoints not deleted Error:%s", error)
+    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd), timeout=600)
+    if not result.passed:
+        self.log.info("Dfuse processes not stopped Error")
+    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd2), timeout=600)
+    if not result.passed:
+        self.log.info("Dfuse mount points not deleted Error")
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -842,21 +824,21 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     for api in api_list:
         for b_size in bsize_list:
             for t_size in tsize_list:
-                for o_type in oclass_list:
+                for file_oclass, dir_oclass in oclass_list:
                     # Cancel for ticket DAOS-6095
                     if (api in ["HDF5-VOL", "HDF5", "POSIX"]
                             and t_size == "4k"
-                            and o_type in ["RP_2G1", 'RP_2GX']):
+                            and file_oclass in ["RP_2G1", 'RP_2GX']):
                         self.add_cancel_ticket(
                             "DAOS-6095",
                             "IOR -a {} with -t {} and -o {}".format(
-                                api, t_size, o_type))
+                                api, t_size, file_oclass))
                         continue
                     # Cancel for ticket DAOS-6308
-                    if api == "MPIIO" and o_type == "RP_2GX":
+                    if api == "MPIIO" and file_oclass == "RP_2GX":
                         self.add_cancel_ticket(
                             "DAOS-6308",
-                            "IOR -a {} with -o {}".format(api, o_type))
+                            "IOR -a {} with -o {}".format(api, file_oclass))
                         continue
                     if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
                         continue
@@ -874,20 +856,20 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.dfs_oclass.update(None)
                         ior_cmd.dfs_dir_oclass.update(None)
                     else:
-                        ior_cmd.dfs_oclass.update(o_type)
-                        ior_cmd.dfs_dir_oclass.update(o_type)
+                        ior_cmd.dfs_oclass.update(file_oclass)
+                        ior_cmd.dfs_dir_oclass.update(dir_oclass)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    add_containers(self, pool, o_type)
+                    add_containers(self, pool, file_oclass, dir_oclass)
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size,
-                        o_type, nodesperjob * ppn, nodesperjob, ppn)
+                        file_oclass, nodesperjob * ppn, nodesperjob, ppn)
                     daos_log = os.path.join(
-                        self.soaktest_dir, self.test_name + "_" + log_name +
-                        "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                        self.soaktest_dir, self.test_name + "_" + log_name
+                        + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                     env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
                     sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
@@ -941,16 +923,16 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update macsio cmdline for each additional MACsio obj
     for api in api_list:
-        for o_type in oclass_list:
-            add_containers(self, pool, o_type)
+        for file_oclass, dir_oclass in oclass_list:
+            add_containers(self, pool, file_oclass, dir_oclass)
             macsio = MacsioCommand()
             macsio.namespace = macsio_params
-            macsio.get_params(self)
             macsio.daos_pool = pool.uuid
-            macsio.daos_svcl = convert_list(pool.svc_ranks)
+            macsio.daos_svcl = list_to_str(pool.svc_ranks)
             macsio.daos_cont = self.container[-1].uuid
+            macsio.get_params(self)
             log_name = "{}_{}_{}_{}_{}_{}".format(
-                job_spec, api, o_type, nodesperjob * ppn, nodesperjob, ppn)
+                job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
                 self.soaktest_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
@@ -962,7 +944,9 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
-            env = macsio.get_environment("mpirun", log_file=daos_log)
+            env = macsio.env.copy()
+            env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
+            env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
@@ -1024,7 +1008,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
                 for depth in depth_list:
-                    for oclass in oclass_list:
+                    for file_oclass, dir_oclass in oclass_list:
                         # Get the parameters for Mdtest
                         mdtest_cmd = MdtestCommand()
                         mdtest_cmd.namespace = mdtest_params
@@ -1035,28 +1019,19 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.depth.update(depth)
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
-                        mdtest_cmd.dfs_oclass.update(oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(oclass)
-                        if "EC" in oclass:
-                            # oclass_dir can not be EC must be RP based on rf
-                            rf = extract_redundancy_factor(oclass)
-                            if rf >= 2:
-                                mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
-                            elif rf == 1:
-                                mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
-                            else:
-                                mdtest_cmd.dfs_dir_oclass.update("SX")
-                        add_containers(self, pool, oclass)
+                        mdtest_cmd.dfs_oclass.update(file_oclass)
+                        mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
+                        add_containers(self, pool, file_oclass, dir_oclass)
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
-                            oclass, nodesperjob * ppn, nodesperjob,
+                            file_oclass, nodesperjob * ppn, nodesperjob,
                             ppn)
                         daos_log = os.path.join(
-                            self.soaktest_dir, self.test_name + "_" + log_name +
-                            "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                            self.soaktest_dir, self.test_name + "_" + log_name
+                            + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                         env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
                         sbatch_cmds = [
                             "module purge", "module load {}".format(self.mpi_module)]
@@ -1066,8 +1041,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             dfuse, dfuse_start_cmdlist = start_dfuse(
                                 self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                             sbatch_cmds.extend(dfuse_start_cmdlist)
-                            mdtest_cmd.test_dir.update(
-                                dfuse.mount_dir.value)
+                            mdtest_cmd.test_dir.update(dfuse.mount_dir.value)
                         mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.get_params(self)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1096,7 +1070,7 @@ def create_racer_cmdline(self, job_spec):
 
     """
     commands = []
-    #daos_racer needs its own pool; does not run using jobs pool
+    # daos_racer needs its own pool; does not run using jobs pool
     add_pools(self, ["pool_racer"])
     add_containers(self, self.pool[-1], "SX")
     racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
@@ -1110,11 +1084,10 @@ def create_racer_cmdline(self, job_spec):
         self.soaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
-    env = daos_racer.get_environment(self.server_managers[0], racer_log)
-    daos_racer.set_environment(env)
+    daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
     log_name = job_spec
     cmds = []
-    cmds.append(str(daos_racer))
+    cmds.append(str(daos_racer.with_exports))
     cmds.append("status=$?")
     # add exit code
     commands.append([cmds, log_name])
@@ -1154,7 +1127,7 @@ def create_fio_cmdline(self, job_spec, pool):
     for blocksize in bs_list:
         for size in size_list:
             for rw in rw_list:
-                for o_type in oclass_list:
+                for file_oclass, dir_oclass in oclass_list:
                     # update fio params
                     fio_cmd.update(
                         "global", "blocksize", blocksize,
@@ -1170,14 +1143,10 @@ def create_fio_cmdline(self, job_spec, pool):
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        add_containers(self, pool, o_type)
-                        daos_cmd = DaosCommand(self.bin)
-                        daos_cmd.container_set_attr(pool.uuid,
-                                                    self.container[-1].uuid,
-                                                    'dfuse-direct-io-disable',
-                                                    'on')
+                        add_containers(self, pool, file_oclass, dir_oclass)
+                        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
                         log_name = "{}_{}_{}_{}_{}".format(
-                            job_spec, blocksize, size, rw, o_type)
+                            job_spec, blocksize, size, rw, file_oclass)
                         dfuse, cmds = start_dfuse(
                             self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                     # Update the FIO cmdline
@@ -1186,8 +1155,10 @@ def create_fio_cmdline(self, job_spec, pool):
                         dfuse.mount_dir.value,
                         "fio --name=global --directory")
                     # add fio cmdline
+                    cmds.append("cd {};".format(dfuse.mount_dir.value))
                     cmds.append(str(fio_cmd))
                     cmds.append("status=$?")
+                    cmds.append("cd -")
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
                         cmds.extend(stop_dfuse(dfuse))
@@ -1216,7 +1187,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
-    app_cmd = self.params.get("cmdline", app_params, default=None)
+    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
     posix = self.params.get("posix", app_params, default=False)
     if app_cmd is None:
@@ -1225,11 +1196,11 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         return commands
 
     oclass_list = self.params.get("oclass", app_params)
-    for oclass in oclass_list:
-        add_containers(self, pool, oclass)
+    for file_oclass, dir_oclass in oclass_list:
+        add_containers(self, pool, file_oclass, dir_oclass)
         sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
         log_name = "{}_{}_{}_{}_{}".format(
-            job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
+            job_spec, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
         # include dfuse cmdlines
         if posix:
             dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1255,7 +1226,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if posix:
             if mpi_module != self.mpi_module:
                 sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
-                sbatch_cmds.extend(stop_dfuse(dfuse))
+            sbatch_cmds.extend(stop_dfuse(dfuse))
         commands.append([sbatch_cmds, log_name])
         self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
         for cmd in sbatch_cmds:
@@ -1282,7 +1253,7 @@ def build_job_script(self, commands, job, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    prepend_cmds = ["set -e",
+    prepend_cmds = ["set +e",
                     "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
                     "daos pool query {} ".format(self.pool[1].uuid),
                     "daos pool query {} ".format(self.pool[0].uuid)]

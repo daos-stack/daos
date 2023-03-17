@@ -3,7 +3,7 @@ hosts:
   test_clients: 1
 timeout: 150
 setup:
-  start_servers_once: False
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -17,14 +17,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -34,22 +27,15 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
   scm_size: 6000000000
   nvme_size: 54000000000
@@ -66,10 +52,10 @@ ior:
   ior_timeout: 60
   client_processes:
     np_16:
-        np: 2
+      np: 2
   test_file: daos:testFile
   repetitions: 2
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     ior_flags:
       - "-v -W -w -r -R -k"

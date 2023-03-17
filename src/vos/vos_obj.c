@@ -15,7 +15,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 /** Ensure the values of recx flags map to those exported by evtree */
 D_CASSERT((uint32_t)VOS_VIS_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
@@ -23,6 +23,8 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_COVERED == (uint32_t)EVT_COVERED);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
+
+bool vos_dkey_punch_propagate;
 
 struct vos_key_info {
 	umem_off_t		*ki_known_key;
@@ -189,8 +191,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** For now, don't propagate the punch to object layer */
-		return 0;
+		if (!vos_dkey_punch_propagate)
+			return 0; /** Unless we explicitly enable it, disable punch propagation */
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -583,6 +585,10 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		return rc;
 	}
 
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
+
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
 		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
@@ -631,7 +637,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return 0;
 
 	if (rc) {
-		D_ERROR("Failed to hold object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to hold object: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -641,7 +647,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 
 	rc = vos_oi_delete(cont, obj->obj_id);
 	if (rc)
-		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
 
 	rc = umem_tx_end(umm, rc);
 
@@ -667,7 +673,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE | VOS_OBJ_KILL_DKEY,
 			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
@@ -730,7 +736,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound, false,
 			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)

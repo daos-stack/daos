@@ -4,9 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""
-This provides consistency checking for CaRT log files.
-"""
+"""This provides consistency checking for CaRT log files."""
 
 import re
 import sys
@@ -26,6 +24,7 @@ except ImportError:
 
 class LogCheckError(Exception):
     """Error in the log parsing code"""
+
     def __str__(self):
         return self.__doc__
 
@@ -52,6 +51,7 @@ class LogError(LogCheckError):
 
 class RegionContig():
     """Class to represent a memory region"""
+
     def __init__(self, start, end):
         self.start = start
         self.end = end
@@ -77,6 +77,7 @@ def _ts_to_float(times):
 
 class RegionCounter():
     """Class to represent regions read/written to a file"""
+
     def __init__(self, start, end, times):
         self.start = start
         self.end = end
@@ -150,7 +151,6 @@ wf = None  # pylint: disable=invalid-name
 
 def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
-
     # Only report each individual line once.
 
     log = "{}:{}:1: {}: {} '{}'".format(line.filename,
@@ -221,15 +221,8 @@ class LogTest():
         self.log_locs = Counter()
         self.log_fac = Counter()
         self.log_levels = Counter()
-        self.nil_frees = Counter()
         self.log_count = 0
         self._common_shown = False
-
-    def save_nill_free(self, line):
-        """Save the location of a nill free call"""
-        loc = '{}:{}'.format(line.filename, line.lineno)
-
-        self.nil_frees[loc] += 1
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
@@ -273,11 +266,6 @@ class LogTest():
                                             100 * count / self.log_count))
         self._common_shown = True
 
-        for (loc, count) in self.nil_frees.most_common(10):
-            if count < 10:
-                break
-            print('Null was freed {} times at {}'.format(count, loc))
-
     def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""
         to_raise = None
@@ -296,7 +284,6 @@ class LogTest():
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
-
         for pid in self._li.get_pids():
 
             client_pids = OrderedDict()
@@ -325,7 +312,6 @@ class LogTest():
     # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
         """Check a pid from a single log file for consistency"""
-
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -484,8 +470,11 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.calloc_pointer()
                     if pointer in regions:
+                        # Report both the old and new allocation points here.
                         show_line(regions[pointer], 'NORMAL',
-                                  'new allocation seen for same pointer')
+                                  'new allocation seen for same pointer (old)')
+                        show_line(line, 'NORMAL',
+                                  'new allocation seen for same pointer (new)')
                         err_count += 1
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
@@ -500,6 +489,8 @@ class LogTest():
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
                     elif pointer != '(nil)':
+                        # Logs no longer contain free(NULL) however old logs might so continue
+                        # to handle this case.
                         if pointer in old_regions:
                             show_line(old_regions[pointer][0], 'ERROR',
                                       'double-free allocation point')
@@ -508,8 +499,6 @@ class LogTest():
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
-                    else:
-                        self.save_nill_free(line)
                 elif line.is_realloc():
                     (new_pointer, old_pointer) = line.realloc_pointers()
                     (new_size, old_size) = line.realloc_sizes()
@@ -605,7 +594,6 @@ class RpcReporting():
 
     def add_line(self, line):
         """Parse a output line"""
-
         try:
             if line.function not in self.known_functions:
                 return
@@ -656,7 +644,6 @@ class RpcReporting():
 
     def report(self):
         """Print report to stdout"""
-
         if not bool(self._op_state_counters):
             return
 

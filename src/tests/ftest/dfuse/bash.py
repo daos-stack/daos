@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ from exception_utils import CommandFailure
 
 
 class Cmd(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Cmd test class.
 
     :avocado: recursive
@@ -48,10 +47,10 @@ class Cmd(DfuseTestBase):
               Remove renamed file
               Remove a directory
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,small
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=bashcmd
+        :avocado: tags=Cmd,test_bashcmd
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')
@@ -105,8 +104,8 @@ class Cmd(DfuseTestBase):
                                     [str(node_set) for code, node_set in
                                      list(ret_code.items()) if code != 0]))
                             raise CommandFailure(
-                                "Error running '{}' on the following "
-                                "hosts: {}".format(cmd, error_hosts))
+                                "Error running '{}' on the following hosts: {}".format(
+                                    cmd, error_hosts))
                     # report error if any command fails
                     except CommandFailure as error:
                         self.log.error("BashCmd Test Failed: %s",

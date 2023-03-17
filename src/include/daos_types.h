@@ -95,9 +95,7 @@ daos_handle_is_valid(daos_handle_t hdl)
  *
  * DAOS_PC_RW connects to the pool for reading and writing.
  *
- * DAOS_PC_EX connects to the pool for reading and writing exclusively. In the
- * presence of an exclusive pool handle, no connection with DSM_PC_RW is
- * permitted.
+ * DAOS_PC_EX connects to the pool for reading and writing exclusively.
  *
  * The three flags above are mutually exclusive.
  */
@@ -125,6 +123,23 @@ typedef struct {
 
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
+
+/** Container information */
+typedef struct {
+	/** Container UUID */
+	uuid_t			ci_uuid;
+	/** Epoch of latest persistent snapshot */
+	daos_epoch_t		ci_lsnapshot;
+	/** Number of open handles */
+	uint32_t		ci_nhandles;
+	/** Number of snapshots */
+	uint32_t		ci_nsnapshots;
+	/** Latest open time (hybrid logical clock) */
+	uint64_t		ci_md_otime;
+	/** Latest close/modify time (hybrid logical clock) */
+	uint64_t		ci_md_mtime;
+	/* TODO: add more members, e.g., size, # objects, uid, gid... */
+} daos_cont_info_t;
 
 typedef d_iov_t daos_key_t;
 

@@ -205,7 +205,7 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 // The VMD addresses are validated against the input request allow and block lists.
 // The output allow list will only contain VMD addresses if either both input allow
 // and block lists are empty or if included in allow and not included in block lists.
-func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware.PCIAddressSet) (allow, block *hardware.PCIAddressSet, err error) {
+func vmdFilterAddresses(log logging.Logger, inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware.PCIAddressSet) (allow, block *hardware.PCIAddressSet, err error) {
 	var inAllowList, inBlockList *hardware.PCIAddressSet
 
 	inAllowList, err = hardware.NewPCIAddressSetFromString(inReq.PCIAllowList)
@@ -213,6 +213,19 @@ func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware
 		return
 	}
 	inBlockList, err = hardware.NewPCIAddressSetFromString(inReq.PCIBlockList)
+	if err != nil {
+		return
+	}
+
+	// Convert any VMD backing device addresses to endpoint addresses as the input vmdPCIAddrs
+	// are what we are using for filters and these are VMD endpoint addresses.
+	// FIXME: This imposes a limitation in that individual backing devices cannot be allowed or
+	//        blocked independently, see if this can be mitigated against.
+	inAllowList, err = inAllowList.BackingToVMDAddresses(log)
+	if err != nil {
+		return
+	}
+	inBlockList, err = inBlockList.BackingToVMDAddresses(log)
 	if err != nil {
 		return
 	}
@@ -253,7 +266,7 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 	}
 	log.Debugf("volume management devices found: %v", vmdPCIAddrs)
 
-	allowList, blockList, err := vmdFilterAddresses(req, vmdPCIAddrs)
+	allowList, blockList, err := vmdFilterAddresses(log, req, vmdPCIAddrs)
 	if err != nil {
 		return errors.Wrap(err, "vmd address filtering")
 	}

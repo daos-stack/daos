@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,6 +191,18 @@ struct daos_pool_cont_info {
 	uuid_t		pci_uuid;
 	/** Container label */
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
+};
+
+/** DAOS pool container information (extended), used with daos_pool_filter_cont() API */
+struct daos_pool_cont_info2 {
+	/** Basic identifying information */
+	struct daos_pool_cont_info	pci_id;
+
+	/** Standard container information (same as would be returned by daos_cont_query) */
+	daos_cont_info_t		pci_cinfo;
+
+	/** Reserved for future use: container properties, other information, etc. */
+	void				*pci_reserved[2];
 };
 
 #define DAOS_SYS_NAME_MAX_LEN 127
@@ -448,6 +460,175 @@ daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
 int
 daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
+
+/** Logical function to apply to a container metadata key (current value <func> specified-value). */
+enum daos_pool_cont_filter_func {
+	/** key's current value equals filter-specified value parameter */
+	PCF_FUNC_EQ = 0,
+	/** key's current value does not equal filter-specified value parameter */
+	PCF_FUNC_NE,
+	/** key's current value is less than the filter-specified value parameter */
+	PCF_FUNC_LT,
+	/** key's current value is less than or equal to the filter-specified value parameter */
+	PCF_FUNC_LE,
+	/** key's current value is greater than the filter-specified value parameter */
+	PCF_FUNC_GT,
+	/** key's current value is greater than or equal to the filter-specified value parameter */
+	PCF_FUNC_GE,
+	/* future: add more functions */
+	PCF_FUNC_MAX
+};
+
+/** Convert logical function numeric identifier into printable string */
+static inline const char *
+daos_pool_cont_filter_func_str(enum daos_pool_cont_filter_func f)
+{
+	switch(f) {
+	case PCF_FUNC_EQ:
+		return "==";
+	case PCF_FUNC_NE:
+		return "!=";
+	case PCF_FUNC_LT:
+		return "<";
+	case PCF_FUNC_LE:
+		return "<=";
+	case PCF_FUNC_GT:
+		return ">";
+	case PCF_FUNC_GE:
+		return ">=";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+/** container metadata key numeric identifier (specify in daos_pool_cont_filter_part_t.pcfp_key) */
+enum daos_pool_cont_filter_key {
+	/** container metadata open time (use with daos_pool_cont_filter_part_t.pcfp_val64) */
+	PCF_KEY_MD_OTIME = 0,
+	/** container metadata modify time (use with daos_pool_cont_filter_part_t.pcfp_val64) */
+	PCF_KEY_MD_MTIME,
+	/** container number of snapshots (use with daos_pool_cont_filter_part_t.pcfp_val64) */
+	PCF_KEY_NUM_SNAPSHOTS,
+	/** number of open handles (use with daos_pool_cont_filter_part_t.pcfp_val64) */
+	PCF_KEY_NUM_HANDLES,
+	PCF_KEY_MAX
+};
+
+/** Convert metadata key numeric identifier into printable string */
+static inline const char *
+daos_pool_cont_filter_key_str(enum daos_pool_cont_filter_key k)
+{
+	switch(k) {
+	case PCF_KEY_MD_OTIME:
+		return "md_open_time";
+	case PCF_KEY_MD_MTIME:
+		return "md_modify_time";
+	case PCF_KEY_NUM_SNAPSHOTS:
+		return "num_snapshots";
+	case PCF_KEY_NUM_HANDLES:
+		return "num_handles";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+/** Logical condition part of a filter of a pool's containers. */
+typedef struct daos_pool_cont_filter_part {
+	/** logical function to apply (e.g., <, >, ==). See daos_pool_cont_filter_func) */
+	uint32_t			pcfp_func;
+
+	/** key identifier. See daos_pool_cont_filter_key) */
+	uint32_t			pcfp_key;
+
+	/** value to compare current metadata value with */
+	union {
+		uint64_t		pcfp_val64;
+		d_string_t		pcfp_valstr;
+	};
+} daos_pool_cont_filter_part_t;
+
+/** Logical operation to combine match results of all  filter parts */
+enum daos_pool_cont_filter_combine {
+	/** combine all filter part results with logical AND. */
+	PCF_COMBINE_LOGICAL_AND = 0,
+	/** combine all filter part results with logical OR. */
+	PCF_COMBINE_LOGICAL_OR,
+};
+
+/** Filter matching specification for containers in a pool, consisting of zero or more parts */
+typedef struct daos_pool_cont_filter {
+	/** How to combine results of all filter parts (see daos_pool_cont_filter_combine). */
+	uint32_t				pcf_combine_func;
+	/** number of logical condition parts of this filter. */
+	uint32_t				pcf_nparts;
+	/** logical conditions comprising this filter. */
+	struct daos_pool_cont_filter_part     **pcf_parts;
+} daos_pool_cont_filter_t;
+
+/** maximum number of conditions (parts) supported for a multi-part filter */
+#define DAOS_POOL_CONT_FILTER_MAX_NPARTS (8)
+
+/**
+ * Initialize an empty pool container filter structure.
+ */
+int
+daos_pool_cont_filter_init(daos_pool_cont_filter_t *filt, uint32_t combine_func);
+
+/**
+ * Dynamically add a part to an existing pool container filter.
+ * Note: this function takes ownership of \a part (it is referenced within \a filt).
+ */
+int
+daos_pool_cont_filter_add(daos_pool_cont_filter_t *filt, daos_pool_cont_filter_part_t *part);
+
+/** Finalize a pool container filter structure and free the filter parts. */
+void
+daos_pool_cont_filter_fini(daos_pool_cont_filter_t *filt);
+
+/**
+ * List a pool's containers that meet specified filtering criteria.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	filter	Filter criteria, identifying what container metadata keys
+ *			to inspect, and what values to compare to when building the
+ *			list of matching containers.
+ * \param[in,out]
+ *		ncont	[in] \a cbuf length in items.
+ *			[out] Number of containers in the pool that match \a filter criteria.
+ * \param[out]	cbuf	Array of container information structures.
+ *			NULL is permitted in which case only the number
+ *			of matching containers will be returned in \a ncont.
+ * \param[in]	ev	Completion event. Optional and can be NULL.
+ *			The function will run in blocking mode
+ *			if \a ev is NULL.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	invalid argument, such as \a filter number of parts exceeds
+ *					limit (DAOS_POOL_CONT_FILTER_MAX_NPARTS)
+ *			-DER_TRUNC	\a cbuf cannot hold \a ncont items
+ */
+int
+daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
+		      daos_size_t *ncont, struct daos_pool_cont_info2 *cbuf, daos_event_t *ev);
+
+/**
+ * Fetch a user's permissions for a specific pool.
+ *
+ * \param[in]	pool_prop	Pool property containing DAOS_PROP_PO_ACL/OWNER/OWNER_GROUP entries
+ * \param[in]	uid		User's local uid
+ * \param[in]	gids		Gids of the user's groups
+ * \param[in]	nr_gids		Length of the gids list
+ * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
+ *				in enum daos_acl_perm.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID or GID not found on the system
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+		    uint64_t *perms);
 
 #if defined(__cplusplus)
 }

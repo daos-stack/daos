@@ -120,8 +120,9 @@ func (p *Provider) MountScm() error {
 	switch cfg.Class {
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
-			Size:     cfg.Scm.RamdiskSize,
-			NUMANode: cfg.Scm.NumaNodeIndex,
+			Size:             cfg.Scm.RamdiskSize,
+			NUMANode:         cfg.Scm.NumaNodeIndex,
+			DisableHugepages: cfg.Scm.DisableHugepages,
 		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
@@ -154,14 +155,15 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 	switch class {
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
-			Size:     scmCfg.RamdiskSize,
-			NUMANode: scmCfg.NumaNodeIndex,
+			Size:             scmCfg.RamdiskSize,
+			NUMANode:         scmCfg.NumaNodeIndex,
+			DisableHugepages: scmCfg.DisableHugepages,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
 			return nil, ErrInvalidDcpmCount
 		}
-		req.Dcpm = &DcpmParams{
+		req.Dcpm = &DeviceParams{
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
@@ -392,6 +394,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		VMDEnabled:       vmdEnabled,
 		TierProps:        []BdevTierProperties{},
 		AccelProps:       cfg.AccelProps,
+		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
@@ -407,6 +410,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		}
 	}
 
+	log.Debugf("BdevWriteConfigRequest: %+v", req)
 	return req, nil
 }
 

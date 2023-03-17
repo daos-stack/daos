@@ -1,11 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 import base64
+from apricot import TestWithServers
 
 
 class QueryAttributeTest(TestWithServers):
@@ -40,7 +39,7 @@ class QueryAttributeTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_query
+        :avocado: tags=pool,pool_query,daos_cmd
         :avocado: tags=pool_query_attr,test_query_attr
         """
         errors = []
@@ -55,7 +54,7 @@ class QueryAttributeTest(TestWithServers):
         query_result = daos_cmd.pool_query(pool=self.pool.uuid)
         actual_uuid = query_result["response"]["uuid"]
         actual_size = query_result["response"]["tier_stats"][0]["total"]
-        actual_size_roundup = int(actual_size/100000)*100000
+        actual_size_roundup = int(actual_size / 100000) * 100000
 
         expected_uuid = self.pool.uuid.lower()
         if expected_uuid != actual_uuid:
@@ -76,9 +75,9 @@ class QueryAttributeTest(TestWithServers):
         sample_vals = []
 
         # Create 5 attributes.
-        for i in range(5):
-            sample_attr = "attr" + str(i)
-            sample_val = "val" + str(i)
+        for idx in range(5):
+            sample_attr = "attr" + str(idx)
+            sample_val = "val" + str(idx)
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
@@ -100,14 +99,14 @@ class QueryAttributeTest(TestWithServers):
             errors.append(msg)
 
         # Get each attribute's value and compare against those set.
-        for i in range(5):
+        for idx in range(5):
             output = daos_cmd.pool_get_attr(
-                pool=self.pool.uuid, attr=sample_attrs[i])
+                pool=self.pool.uuid, attr=sample_attrs[idx])
             actual_val = base64.b64decode(output["response"]["value"]).decode()
-            if sample_vals[i] != actual_val:
+            if sample_vals[idx] != actual_val:
                 msg = "Unexpected attribute value! " +\
                     "Expected = {}; Actual = {}".format(
-                        sample_vals[i], actual_val)
+                        sample_vals[idx], actual_val)
                 errors.append(msg)
 
         if errors:

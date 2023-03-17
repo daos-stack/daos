@@ -145,6 +145,7 @@ struct cont_iv_prop {
 	uint32_t	cip_ec_pda;
 	uint32_t	cip_rp_pda;
 	uint32_t	cip_global_version;
+	uint32_t	cip_obj_version;
 	uint64_t	cip_valid_bits;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
@@ -252,8 +253,7 @@ int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
-int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
-				 uint32_t pm_ver);
+int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
 /* oid_iv.c */
 int ds_oid_iv_init(void);
@@ -272,7 +272,7 @@ int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
 				  int sync_mode);
 int cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid,
 		       daos_prop_t *cont_prop);
-int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
+int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);

@@ -74,7 +74,7 @@ if ! [ -e "$USR_SPDK/scripts/common.sh" ]; then
         ln -sf "$SL_SPDK_PREFIX/share/spdk/scripts/common.sh" "$USR_SPDK/scripts"
 fi
 if ! [ -e "$USR_SPDK/include" ]; then
-        ln -s "$SL_PREFIX/include" "$USR_SPDK"/include
+        ln -s "$SL_SPDK_PREFIX/include" "$USR_SPDK"/include
 fi
 if ! [ -e "$USR_CTL/setup_spdk.sh" ]; then
 	ln -s "$SL_PREFIX/share/daos/control/setup_spdk.sh" "$USR_CTL"

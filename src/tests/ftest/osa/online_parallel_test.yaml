@@ -4,7 +4,7 @@ hosts:
 timeout: 1110
 job_manager:
   manager_timeout: 400
-skip_add_log_msg: True
+skip_add_log_msg: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -18,14 +18,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -35,14 +28,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 12000000000
   nvme_size: 108000000000
@@ -59,7 +45,7 @@ ior:
     np: 2
   test_file: /testFile
   repetitions: 10
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     ior_flags:
       - "-w -r -R -k -G 1"
@@ -68,10 +54,10 @@ ior:
     obj_class:
       - "RP_2G1"
   ior_test_sequence:
-  # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
-  #   The values are set to be in the multiples of 10.
-  #   Values are appx GB.
-    - [4000000000, 18000000000, 4000, 50000000, PASS]          #[4G, 18G, 4K, 51M, PASS]
+    # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
+    #   The values are set to be in the multiples of 10.
+    #   Values are appx GB.
+    - [4000000000, 18000000000, 4000, 50000000, PASS]  # [4G, 18G, 4K, 51M, PASS]
 daos_racer:
   runtime: 480
   clush_timeout: 1000

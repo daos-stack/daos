@@ -1,13 +1,11 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
-from avocado import fail_on
 from collections import defaultdict
+from ClusterShell.NodeSet import NodeSet
+from avocado import fail_on
 from apricot import TestWithServers
 from exception_utils import CommandFailure
 
@@ -34,7 +32,6 @@ def cleanup_output(output):
 
 
 class ControlTestBase(TestWithServers):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Defines common methods for control tests.
     :avocado: recursive
     """
@@ -109,11 +106,10 @@ class ControlTestBase(TestWithServers):
             data = manager.dmg.storage_scan(verbose=True)
 
             if manager.dmg.result.exit_status == 0:
-                expected_hosts = NodeSet().fromlist(manager.hosts)
                 for struct_hash in data["response"]["HostStorage"]:
                     hash_dict = data["response"]["HostStorage"][struct_hash]
                     hosts = NodeSet(hash_dict["hosts"].split(":")[0])
-                    if hosts in expected_hosts:
+                    if hosts in manager.hosts:
                         errors.extend(verify_method(hash_dict["storage"]))
             else:
                 errors.append("dmg storage scan failed!")

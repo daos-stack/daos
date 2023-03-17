@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1444,8 +1444,11 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	void              *k;
 	uint64_t	key;
 
-	if (!leaf) {
-		key_rec = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+	if (!leaf && (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY)) {
+		struct btr_node	*nd = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+		char		*addr = (char *)&nd[1];
+
+		key_rec = (struct btr_record *)&addr[0];
 		key_ir  = umem_off2ptr(&tins->ti_umm, key_rec->rec_off);
 	}
 
@@ -1602,8 +1605,11 @@ ifv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf, cha
 	void              *k;
 	uint64_t           key;
 
-	if (!leaf) {
-		key_rec = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+	if (!leaf && (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY)) {
+		struct btr_node	*nd = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+		char		*addr = (char *)&nd[1];
+
+		key_rec = (struct btr_record *)&addr[0];
 		key_ir  = umem_off2ptr(&tins->ti_umm, key_rec->rec_off);
 	}
 
