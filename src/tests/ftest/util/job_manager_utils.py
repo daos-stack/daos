@@ -295,6 +295,7 @@ class Orterun(JobManager):
             "oob": "tcp",
             "pml": "ob1",
             "btl_tcp_if_include": "eth0",
+            "coll": "^hcoll",
         }
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
@@ -411,6 +412,7 @@ class Mpirun(JobManager):
                 "oob": "tcp",
                 "pml": "ob1",
                 "btl_tcp_if_include": "eth0",
+                "coll": "^hcoll",
             }
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
