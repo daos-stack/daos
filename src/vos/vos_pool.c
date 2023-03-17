@@ -151,6 +151,23 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
+	struct bio_wal_info wal_info;
+	struct vos_pool    *pool;
+
+	pool = store->vos_priv;
+
+	if (unlikely(pool == NULL))
+		goto reserve; /** In case there is any race for checkpoint init. */
+
+	/** Update checkpoint state before reserve to ensure we activate checkpointing if there
+	 *  is any space pressure in the WAL.
+	 */
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
+			   wal_info.wi_tot_blks);
+
+reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
 	return bio_wal_reserve(store->stor_priv, tx_id);
 }
@@ -158,21 +175,23 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	int rc;
-	struct vos_pool    *pool;
 	struct bio_wal_info wal_info;
+	struct vos_pool    *pool;
+	int                 rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
 
 	pool = store->vos_priv;
+	if (unlikely(pool == NULL))
+		return rc; /** In case there is any race for checkpoint init. */
 
-	if (pool == NULL)
-		return rc;
-
+	/** Update checkpoint state after commit in case there is an active checkpoint waiting
+	 *  for this commit to finish.
+	 */
 	bio_wal_query(store->stor_priv, &wal_info);
 
-	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_ckp_id, wal_info.wi_used_blks,
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
 	return rc;
@@ -231,7 +250,7 @@ vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
 	bio_wal_query(store->stor_priv, &wal_info);
 
 	/** Set the initial values */
-	update_cb(arg, wal_info.wi_ckp_id, wal_info.wi_used_blks, wal_info.wi_tot_blks);
+	update_cb(arg, wal_info.wi_commit_id, wal_info.wi_used_blks, wal_info.wi_tot_blks);
 }
 
 void
@@ -295,6 +314,12 @@ vos_pool_checkpoint(daos_handle_t poh)
 
 	if (rc == 0)
 		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
+
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	/* Update the used block info post checkpoint */
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
+			   wal_info.wi_tot_blks);
 
 	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
 	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));

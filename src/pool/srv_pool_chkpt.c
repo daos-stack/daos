@@ -12,8 +12,6 @@
 #include <daos_prop.h>
 #include "srv_internal.h"
 
-#define C_TRACE(...) D_DEBUG(DB_TRACE, __VA_ARGS__)
-
 struct chkpt_ctx {
 	struct dss_module_info *cc_dmi;
 	uuid_t                  cc_pool_uuid;
@@ -119,16 +117,14 @@ update_cb(void *arg, uint64_t id, uint32_t used_blocks, uint32_t total_blocks)
  *  returns false.
  */
 static bool
-need_checkpoint(struct ds_pool_child *child, struct chkpt_ctx *ctx, int64_t *slept_ns,
-		struct timespec *start)
+need_checkpoint(struct ds_pool_child *child, struct chkpt_ctx *ctx, uint64_t *start)
 {
 	uint32_t        sleep_time = 60000; /* Set default to 60 seconds */
-	struct timespec current;
+	uint64_t        elapsed;
 	struct ds_pool *pool = child->spc_pool;
 
 	if (pool->sp_checkpoint_mode == DAOS_CHECKPOINT_DISABLED) {
-		*slept_ns  = 1;
-		d_gettime(start);
+		*start = daos_getmtime_coarse();
 		goto do_sleep;
 	}
 
@@ -142,15 +138,13 @@ need_checkpoint(struct ds_pool_child *child, struct chkpt_ctx *ctx, int64_t *sle
 		return true;
 
 	if (pool->sp_checkpoint_mode == DAOS_CHECKPOINT_LAZY) {
-		*slept_ns  = 1;
-		d_gettime(start);
+		*start = daos_getmtime_coarse();
 		goto do_sleep;
 	}
 
 	sleep_time = 1000 * pool->sp_checkpoint_freq;
-	if (*slept_ns == 0) {
-		*slept_ns = 1;
-		d_gettime(start);
+	if (*start == 0) {
+		*start = daos_getmtime_coarse();
 		goto do_sleep;
 	}
 	/** If we've awoken from a prior sleep, we either have slept for the appropriate time or we
@@ -158,13 +152,18 @@ need_checkpoint(struct ds_pool_child *child, struct chkpt_ctx *ctx, int64_t *sle
 	 *  such, we need to check to see if we've actually slept the expected amount of time before
 	 *  triggering a checkpoint.
 	 */
-	d_gettime(&current);
-	*slept_ns += d_timediff_ns(start, &current);
-	if (sleep_time >= *slept_ns / NSEC_PER_MSEC)
+	elapsed = daos_getmtime_coarse() - *start;
+	if (elapsed >= sleep_time)
 		return true;
 
-	sleep_time -= *slept_ns / NSEC_PER_MSEC;
+	sleep_time -= elapsed;
 do_sleep:
+	D_DEBUG(DB_IO,
+		"Checkpoint ULT to sleep for %d ms. Used blocks %d/%d, threshold=%d, mode=%s\n",
+		sleep_time, ctx->cc_used_blocks, ctx->cc_total_blocks, ctx->cc_max_used_blocks,
+		pool->sp_checkpoint_mode == DAOS_CHECKPOINT_TIMED
+		    ? "timed"
+		    : (pool->sp_checkpoint_mode == DAOS_CHECKPOINT_LAZY ? "lazy" : "disabled"));
 	ctx->cc_sleeping = 1;
 	sched_req_sleep(child->spc_chkpt_req, sleep_time);
 	ctx->cc_sleeping = 0;
@@ -180,9 +179,8 @@ chkpt_ult(void *arg)
 	struct ds_pool_child *child = arg;
 	uuid_t                pool_uuid;
 	daos_handle_t         poh;
-	struct timespec       start;
+	uint64_t              start = 0;
 	int                   rc;
-	int64_t               slept_ns = 0;
 
 	poh = child->spc_hdl;
 	uuid_copy(pool_uuid, child->spc_uuid);
@@ -205,7 +203,7 @@ chkpt_ult(void *arg)
 	vos_pool_checkpoint_init(poh, update_cb, wait_cb, &ctx, &ctx.cc_store);
 
 	while (!dss_ult_exiting(child->spc_chkpt_req)) {
-		if (!need_checkpoint(child, &ctx, &slept_ns, &start))
+		if (!need_checkpoint(child, &ctx, &start))
 			continue;
 
 		rc = vos_pool_checkpoint(poh);
@@ -218,7 +216,7 @@ chkpt_ult(void *arg)
 			D_ERROR("Issue with VOS checkpoint (tgt_id: %d): " DF_RC "\n",
 				ctx.cc_dmi->dmi_tgt_id, DP_RC(rc));
 		}
-		slept_ns = 0;
+		start = 0;
 	}
 	vos_pool_checkpoint_fini(poh);
 	ABT_eventual_free(&ctx.cc_eventual);
