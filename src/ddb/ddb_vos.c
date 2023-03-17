@@ -1204,7 +1204,6 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	struct vos_container		*cont;
 	int				 rc;
 	struct committed_dtx_cb_arg	 cb_arg = {0};
-	uint64_t			 hint = 0;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_INVAL;
@@ -1219,7 +1218,7 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	 * within one block, so must loop until all are done (rc == 1)
 	 */
 	do {
-		rc = vos_dtx_cmt_reindex(coh, &hint);
+		rc = vos_dtx_cmt_reindex(coh);
 	} while (rc >= 0 && rc != 1);
 	if (rc < 0)
 		return rc;
