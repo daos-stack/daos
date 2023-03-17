@@ -20,12 +20,9 @@ import (
 type GetMemInfoFn func() (*MemInfo, error)
 
 const (
-	// MinTargetHugePageSize is the minimum amount of hugepage space that
-	// can be requested for each target.
-	MinTargetHugePageSize = 1 << 30 // 1GiB
-	// ExtraHugePages is the number of extra hugepages to request beyond
-	// the minimum required, often one or two are not reported as available.
-	ExtraHugePages = 2
+	// minHugePageMemPerTarget is the minimum amount of hugepage memory (in bytes) needed
+	// for each target.
+	minHugePageMemPerTarget = 1 << 30 // 1GiB
 )
 
 // MemInfo contains information about system hugepages.
@@ -128,7 +125,7 @@ func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 	if hugepageSizeBytes == 0 {
 		return 0, errors.New("invalid system hugepage size")
 	}
-	minHugePageBytes := MinTargetHugePageSize * numTargets
+	minHugePageBytes := minHugePageMemPerTarget * numTargets
 
 	return minHugePageBytes / hugepageSizeBytes, nil
 }

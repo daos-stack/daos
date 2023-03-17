@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -511,20 +511,22 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigBadTelemetryPort
 	}
 
-	cfgHasBdevs := false
-	cfgTargetCount := 0
+	var cfgTargetCount int
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		cfgTargetCount += ec.TargetCount
 
 		ec.ConvertLegacyStorage(log, idx)
 
 		if ec.Storage.Tiers.HaveBdevs() {
-			cfgHasBdevs = true
+			cfgTargetCount += ec.TargetCount
 			if ec.TargetCount == 0 {
 				return errors.Errorf("engine %d: Target count cannot be zero if "+
 					"bdevs have been assigned in config", idx)
+			}
+			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+				// MD-on-SSD has extra sys-xstream for rdb.
+				cfgTargetCount++
 			}
 		}
 
@@ -542,7 +544,8 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
-	if cfgHasBdevs {
+	// Calculate hugepages based on total target count if bdevs in config.
+	if cfgTargetCount > 0 {
 		if cfg.DisableHugepages {
 			return FaultConfigHugepagesDisabled
 		}

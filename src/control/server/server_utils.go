@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
+
+// extraHugePages is the number of extra hugepages to request beyond the minimum required, often
+// one or two are not reported as available.
+const extraHugePages = 2
 
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
@@ -304,7 +308,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// Request a few more hugepages than actually required for each NUMA node
 		// allocation as some overhead may result in one or two being unavailable.
 		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
-		prepReq.HugePageCount += common.ExtraHugePages
+		prepReq.HugePageCount += extraHugePages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
