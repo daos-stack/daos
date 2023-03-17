@@ -194,6 +194,15 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		double timeout;
 
 		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			/* Enable this to double check attributes are correct */
+#if 1
+			struct stat attr = {};
+
+			rc = dfs_ostat(inode->ie_dfs->dfs_ns, inode->ie_obj, &attr);
+			D_ASSERT(rc);
+			D_ASSERT(attr.st_size == inode->ie_stat.st_size);
+#endif
+
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
 			D_GOTO(done, 0);
 		}
