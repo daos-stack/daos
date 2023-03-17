@@ -44,6 +44,11 @@ var (
 		BinaryName: ndctlName,
 		Args:       []string{"list", "-N", "-v"},
 	}
+	// returns region info in json
+	cmdListNdctlRegions = pmemCmd{
+		BinaryName: ndctlName,
+		Args:       []string{"list", "-R", "-v"},
+	}
 )
 
 func (cr *cmdRunner) checkNdctl() (errOut error) {
@@ -72,30 +77,54 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	cr.log.Debugf("creating %d namespaces on each of the following sockets: %v", nrNsPerSock,
 		sockIDs)
 
+	// As the selector is socket, the correct thing to do is look up the ndctl region with the
+	// same ISetID as the ipmctl region with specified socket ID. This may not work when the
+	// ISetID overflows. If all sockIDs can be mapped to existent entries in ndctl regions by
+	// isetid keys then use region IDs from ndctl regions, otherwise fall-back to using socket
+	// ID as region index.
+	regionSizes := make(map[string]int)
+
+	ndctlRegions, err := cr.getNdctlRegions(sockAny)
+	if err != nil {
+		return err
+	}
 	for _, sid := range sockIDs {
-		region := regionPerSocket[sid]
-		cr.log.Debugf("creating namespaces on region %d, socket %d", region.ID, sid)
+		for _, nr := range ndctlRegions {
+			if nr.ISetID == regionsPerSocket[sid].ISetID {
+				regionSizes[nr.Dev] = nr.AvailableSize
+			}
+		}
+	}
+	if len(regionNames) != nrRegions {
+		regionSizes = make(map[string]int)
+		for _, sid := range sockIDs {
+			name := fmt.Sprintf("region%d", sid)
+			regionSizes[name] = regionsPerSocket[sid].FreeCapacity
+		}
+	}
+
+	for name, availSize := range regionSizes {
+		cr.log.Debugf("creating namespaces on region %s", name)
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
-		pmemBytes := uint64(region.FreeCapacity) / uint64(nrNsPerSock)
+		pmemBytes := uint64(availSize) / uint64(nrNsPerSock)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
-			return errors.Errorf("socket %d: free region size (%s) is not %s aligned", sid,
-				humanize.Bytes(pmemBytes), humanize.Bytes(alignmentBoundaryBytes))
+			return errors.Errorf("region %s: free region size (%s) is not %s aligned",
+				name, humanize.Bytes(pmemBytes),
+				humanize.Bytes(alignmentBoundaryBytes))
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
 		for j := uint(0); j < nrNsPerSock; j++ {
-			// Specify socket ID for region ID in command as region parameter in ndctl
-			// is zero-based, not one-based like in ipmctl.
 			cmd := cmdCreateNamespace
-			cmd.Args = append(cmd.Args, "--region", fmt.Sprintf("%d", sid), "--size",
+			cmd.Args = append(cmd.Args, "--region", name, "--size",
 				fmt.Sprintf("%d", pmemBytes))
 			if _, err := cr.runCmd(cr.log, cmd); err != nil {
-				return errors.WithMessagef(err, "socket %d", sid)
+				return errors.WithMessagef(err, "%s", name)
 			}
-			cr.log.Debugf("created namespace on socket %d (same region index) size %s",
-				sid, humanize.Bytes(pmemBytes))
+			cr.log.Debugf("created namespace on %s size %s", name,
+				humanize.Bytes(pmemBytes))
 		}
 	}
 
@@ -159,4 +188,56 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 	cr.log.Debugf("discovered %d pmem namespaces", len(nss))
 
 	return nss, nil
+}
+
+type (
+	NdctlRegion struct {
+		UUID        string         `json:"uuid" hash:"ignore"`
+		BlockDevice string         `json:"blockdev"`
+		Name        string         `json:"dev"`
+		NumaNode    uint32         `json:"numa_node"`
+		Size        uint64         `json:"size"`
+		Mount       *ScmMountPoint `json:"mount"`
+	}
+
+	NdctlRegions []*NdctlRegion
+)
+
+func parseNdctlRegions(jsonData string) (NdctlRegions, error) {
+	nrs := NdctlRegions{}
+
+	// turn single entries into arrays
+	if !strings.HasPrefix(jsonData, "[") {
+		jsonData = "[" + jsonData + "]"
+	}
+
+	if err := json.Unmarshal([]byte(jsonData), &nrs); err != nil {
+		return nil, err
+	}
+
+	return nrs, nil
+}
+
+// getNdctlRegions calls ndctl to list pmem regions and returns NdctlRegions.
+func (cr *cmdRunner) getNdctlRegions(sockID int) (NdctlRegions, error) {
+	if err := cr.checkNdctl(); err != nil {
+		return nil, err
+	}
+
+	cmd := cmdListNdctlRegions
+	if sockID != sockAny {
+		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", sockID))
+	}
+	out, err := cr.runCmd(cr.log, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	nrs, err := parseNdctlRegions(out)
+	if err != nil {
+		return nil, err
+	}
+	cr.log.Debugf("discovered %d ndctl pmem regions", len(nrs))
+
+	return nrs, nil
 }
