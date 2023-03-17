@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,7 +38,7 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_restart
         """
-        processes = self.params.get('/run/ior_write/*', 'ppn', 1)
+        processes = self.params.get('ppn', '/run/ior_write/*', 1)
         self.log_step('Creating a pool and container')
         pool = add_pool(self)
         container = self.get_container(pool)
