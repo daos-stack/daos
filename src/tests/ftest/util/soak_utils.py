@@ -1156,7 +1156,7 @@ def create_fio_cmdline(self, job_spec, pool):
                         "fio --name=global --directory")
                     # add fio cmdline
                     cmds.append("cd {};".format(dfuse.mount_dir.value))
-                    cmds.append(str(fio_cmd.with_exports))
+                    cmds.append(str(fio_cmd))
                     cmds.append("status=$?")
                     cmds.append("cd -")
                     # If posix, add the srun dfuse stop cmds
