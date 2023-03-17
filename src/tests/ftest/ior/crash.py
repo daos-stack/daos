@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,6 +62,15 @@ class IorCrash(IorTestBase):
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
+        # Verify container handle opened by ior is closed (by daos_agent after ior crash).
+        # Expect one handle (associated with this process check_container_info below).
+        # Note: it is possible query may run before handles are closed, and fail this test.
+        # Though, let us assume the dmg system query command above will take up sufficient time.
+        checks = {
+            "ci_nhandles": 1}
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info nhandles")
+
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
         # Assumes Write and Read performance are about the same.
@@ -74,6 +83,12 @@ class IorCrash(IorTestBase):
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
+        # Verify container handle opened by ior is closed (by daos_agent after ior crash)
+        checks = {
+            "ci_nhandles": 1}
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info nhandles")
+
         # Run IOR and verify it completes successfully
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
@@ -81,3 +96,9 @@ class IorCrash(IorTestBase):
         scan_info = self.dmg.system_query(verbose=True)
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
+
+        # Verify container handle opened by ior is closed (by ior before its graceful exit)
+        checks = {
+            "ci_nhandles": 1}
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info nhandles")
