@@ -477,7 +477,7 @@ class DaosCont():
 
     # pylint: disable-next=invalid-name
     def id(self):
-        """Return the pool ID (label if set; UUID otherwise)"""
+        """Return the container ID (label if set; UUID otherwise)"""
         if self.label:
             return self.label
         return self.uuid
@@ -490,12 +490,16 @@ class DaosCont():
         """
         if not isinstance(self.pool, DaosPool):
             raise NLTestFail('No pool passed when creating container')
+
+        kvs = []
         for key, value in attrs.items():
-            rc = run_daos_cmd(self.pool.conf, ['container', 'set-attr', self.pool.id(), self.uuid,
-                                               f'{key}:{value}'],
-                              show_stdout=True)
-            print(rc)
-            assert rc.returncode == 0, rc
+            kvs.append(f'{key}:{value}')
+
+        cmd = ['container', 'set-attr', self.pool.id(), self.id(), ','.join(kvs)]
+
+        rc = run_daos_cmd(self.pool.conf, cmd, show_stdout=True)
+        print(rc)
+        assert rc.returncode == 0, rc
 
     def destroy(self, valgrind=True, log_check=True):
         """Destroy the container
