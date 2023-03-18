@@ -1,5 +1,6 @@
 name: Landings
 
+#
 # Run on landings, or when this action itself is changed.
 on:
   push:
