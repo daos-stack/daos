@@ -162,12 +162,12 @@ if [ -d "/mnt/daos" ]; then
         fi
 
         COMP="UTEST_vos_nvme_md_on_ssd"
-        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -A 50"; then
+        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -w"; then
             rm -f "${AIO_DEV}"
             dd if=/dev/zero of="${AIO_DEV}" bs=1G count=13
             sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
-            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -A 50
+            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -w
         fi
         COMP="UTEST_nvme_bio_wal"
         if run_test_filter "sudo -E ${SL_PREFIX}/bin/bio_ut"; then

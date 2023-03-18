@@ -549,6 +549,7 @@ setup_wal_io(void **state)
 	if (rc == -1)
 		return rc;
 
+	test_args_reset((struct io_test_args *)*state, VPOOL_2G);
 	wal_args_reset((struct io_test_args *)*state);
 	return 0;
 }
