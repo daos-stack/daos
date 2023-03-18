@@ -1465,18 +1465,20 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 		expErr       error
 	}{
 		"no engines": {
-			expErr: errors.New("numTargets must be > 0"),
+			expErr: errors.New("expected non-zero"),
 		},
 		"no hugepage size": {
 			threadCounts: &threadCounts{16, 0},
-			ecs:          []*engine.Config{testEngineCfg(0)},
+			ecs:          []*engine.Config{exmplEngineCfg0},
 			expErr:       errors.New("invalid system hugepage size"),
 		},
 		"no provider in engine config": {
 			threadCounts: &threadCounts{16, 0},
-			ecs:          []*engine.Config{testEngineCfg(0)},
-			hpSize:       defHpSizeKb,
-			expErr:       errors.New("provider not specified"),
+			ecs: []*engine.Config{
+				MockEngineCfg(0, 0, 1, 2).WithFabricProvider(""),
+			},
+			hpSize: defHpSizeKb,
+			expErr: errors.New("provider not specified"),
 		},
 		"single engine config": {
 			threadCounts: &threadCounts{16, 0},

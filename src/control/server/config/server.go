@@ -518,6 +518,16 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 
 		ec.ConvertLegacyStorage(log, idx)
 
+		ec.Fabric.Update(cfg.Fabric)
+
+		if err := ec.Validate(); err != nil {
+			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
+		}
+
+		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
+			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+
+		// Calculate overall target count if NVMe is enabled.
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgTargetCount += ec.TargetCount
 			if ec.TargetCount == 0 {
@@ -525,19 +535,13 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 					"bdevs have been assigned in config", idx)
 			}
 			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				cfgTargetCount++
 			}
 		}
 
-		ec.Fabric.Update(cfg.Fabric)
-
-		if err := ec.Validate(); err != nil {
-			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
-		}
-
-		log.Debugf("engine %d fabric numa %d, storage numa %d", idx,
-			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+		log.Debug(msg)
 	}
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {

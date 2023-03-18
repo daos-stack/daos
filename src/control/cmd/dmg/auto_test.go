@@ -244,7 +244,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithNrHugePages(16384).
+				WithNrHugePages(17408).
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 	} {
