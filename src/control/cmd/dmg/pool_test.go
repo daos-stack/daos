@@ -211,6 +211,40 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Create pool with fine-grained tier-ratios (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 3.23,96.77", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.0323, 0.9677},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with really fine-grained tier-ratios (auto; rounded)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 23.725738953,76.274261047", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.2373, 0.7626999999999999},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with incompatible arguments (manual)",
 			fmt.Sprintf("pool create label --scm-size %s --nranks 42", testSizeStr),
 			"",
@@ -584,7 +618,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("must not be empty"),
+			errors.New("invalid property"),
 		},
 		{
 			"Set pool property bad value",
@@ -1387,7 +1421,18 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockInvokerConfig := new(control.MockInvokerConfig)
+			mockInvokerConfig := &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					{
+						Responses: []*control.HostResponse{
+							{
+								Addr:    "foo",
+								Message: &mgmtpb.SystemQueryResp{},
+							},
+						},
+					},
+				},
+			}
 
 			unaryResponse := new(control.UnaryResponse)
 			for _, hostStorageConfig := range tc.HostsConfigArray {
@@ -1421,7 +1466,11 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
 			poolCreateCmd.SetLog(log)
-			poolCreateCmd.Size = tc.StorageRatio
+			if tc.StorageRatio != "" {
+				if err := poolCreateCmd.Size.UnmarshalFlag(tc.StorageRatio); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if tc.TgtRanks != "" {
 				if err := poolCreateCmd.RankList.UnmarshalFlag(tc.TgtRanks); err != nil {
 					t.Fatal(err)
@@ -1435,16 +1484,20 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
 				test.AssertTrue(t, err == nil, fmt.Sprintf("Expected no error: err=%q\n", err))
-				test.AssertEqual(t, len(mockInvoker.Requests), 2, "Invalid number of request sent")
+				test.AssertEqual(t, len(mockInvoker.Requests), 3, "Invalid number of request sent")
 				test.AssertTrue(t,
-					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
-					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
+					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.SystemQueryReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.SystemQueryReq{}).String()+
 						" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
 				test.AssertTrue(t,
-					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.PoolCreateReq{}),
-					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
+					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.StorageScanReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
 						" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
-				poolCreateRequest := mockInvoker.Requests[1].(*control.PoolCreateReq)
+				test.AssertTrue(t,
+					reflect.TypeOf(mockInvoker.Requests[2]) == reflect.TypeOf(&control.PoolCreateReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
+						" got="+reflect.TypeOf(mockInvoker.Requests[2]).String())
+				poolCreateRequest := mockInvoker.Requests[2].(*control.PoolCreateReq)
 				test.AssertEqual(t,
 					poolCreateRequest.TierBytes[0],
 					tc.ExpectedOutput.PoolConfig.ScmBytes,
@@ -1475,7 +1528,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					strings.ReplaceAll(tc.StorageRatio, " ", ""))
 				test.AssertTrue(t,
 					strings.Contains(buf.String(), msg),
-					"missing success message: Creating DAOS pool with with <ratio>% of all storage")
+					fmt.Sprintf("missing success message: %q", msg))
 				if tc.ExpectedOutput.WarningMsg != "" {
 					test.AssertTrue(t,
 						strings.Contains(buf.String(), tc.ExpectedOutput.WarningMsg),

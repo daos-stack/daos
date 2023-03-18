@@ -12,6 +12,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/fs"
+	"os"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -53,6 +55,7 @@ type CertificateConfig struct {
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
 	maxKeyPerms     fs.FileMode      `yaml:"-"`
+	verifyTime      time.Time        `yaml:"-"` // for testing
 }
 
 // DefaultAgentTransportConfig provides a default transport config disabling
@@ -112,7 +115,7 @@ func DefaultServerTransportConfig() *TransportConfig {
 }
 
 // PreLoadCertData reads the certificate files in and parses them into TLS key
-// pair and Certificate pool to provide a mechanism for detecting certificate/
+// pair and Certificate pool to provide a mechanism for detecting certificate
 // error before first use.
 func (tc *TransportConfig) PreLoadCertData() error {
 	if tc == nil {
@@ -120,9 +123,16 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	}
 	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure {
 		// In this case the data is already preloaded.
-		// In order to reload data use ReloadCertDatA
+		// In order to reload data use ReloadCertData
 		return nil
 	}
+
+	if tc.ClientCertDir != "" {
+		if _, err := os.ReadDir(tc.ClientCertDir); err != nil {
+			return FaultUnreadableCertFile(tc.ClientCertDir)
+		}
+	}
+
 	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath, tc.maxKeyPerms)
 	if err != nil {
 		return err
@@ -134,6 +144,16 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	// Pre-parse the Leaf Certificate
 	tc.tlsKeypair.Leaf, err = x509.ParseCertificate(tc.tlsKeypair.Certificate[0])
 	if err != nil {
+		return err
+	}
+
+	if _, err = tc.tlsKeypair.Leaf.Verify(x509.VerifyOptions{
+		CurrentTime: tc.CertificateConfig.verifyTime, // for testing - by default this is 0, which is treated as current time
+		Roots:       certPool,
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}); isInvalidCert(err) {
+		return FaultInvalidCertFile(tc.CertificatePath, err)
+	} else if err != nil {
 		return err
 	}
 

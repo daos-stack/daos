@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
+# One of the dfuse tests intermittently creates core files which is known so make a special case
+# for that test.
+CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
+
 
 class CoreFileException(Exception):
     """Base exception for this module."""
@@ -41,7 +45,7 @@ class CoreFileProcessing():
         self.log = log
         self.distro_info = detect()
 
-    def process_core_files(self, directory, delete):
+    def process_core_files(self, directory, delete, test=None):
         """Process any core files found in the 'stacktrace*' sub-directories of the specified path.
 
         Generate a stacktrace for each detected core file and then remove the core file.
@@ -50,6 +54,7 @@ class CoreFileProcessing():
             directory (str): location of the stacktrace* directories containing the core files to
                 process
             delete (bool): delete the core files.
+            test (str, optional): The name of the test
 
         Raises:
             CoreFileException: if there is an error processing core files.
@@ -101,8 +106,14 @@ class CoreFileProcessing():
                         command = ["lbzip2", "-d", "-v", os.path.join(core_dir, core_name)]
                         run_local(self.log, " ".join(command))
                         core_name = os.path.splitext(core_name)[0]
-                    self._create_stacktrace(core_dir, core_name)
-                    corefiles_processed += 1
+                    exe_name = self._get_exe_name(os.path.join(core_dir, core_name))
+                    self._create_stacktrace(core_dir, core_name, exe_name)
+                    if test in CORE_FILES_IGNORE and exe_name in CORE_FILES_IGNORE[test]:
+                        self.log.debug(
+                            'Excluding the %s core file (%s) detected while running %s from '
+                            'the processed core count', core_name, exe_name, test)
+                    else:
+                        corefiles_processed += 1
                     self.log.debug(
                         "Successfully processed core file %s", os.path.join(core_dir, core_name))
                 except Exception as error:      # pylint: disable=broad-except
@@ -122,12 +133,13 @@ class CoreFileProcessing():
             raise CoreFileException("Errors detected processing core files")
         return corefiles_processed
 
-    def _create_stacktrace(self, core_dir, core_name):
+    def _create_stacktrace(self, core_dir, core_name, exe_name):
         """Create a stacktrace from the specified core file.
 
         Args:
             core_dir (str): location of the core file
             core_name (str): name of the core file
+            exe_name (str): name of the executable
 
         Raises:
             RunException: if there is an error creating a stacktrace
@@ -147,7 +159,7 @@ class CoreFileProcessing():
                 "-ex", "'thread apply all bt full'",
                 "-ex", "detach",
                 "-ex", "quit",
-                self._get_exe_name(core_full), core_name
+                exe_name, core_name
             ]
 
         except RunException as error:
@@ -182,14 +194,14 @@ class CoreFileProcessing():
         result = run_local(self.log, " ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
-        cmd = last_line[7:-1]
+        cmd = last_line[7:]
         self.log.debug("  last_line[7:-1]: %s", cmd)
         # assume there are no arguments on cmd
         find_char = "'"
         if cmd.find(" ") > -1:
             # there are arguments on cmd
             find_char = " "
-        exe_name = cmd[0:cmd.find(find_char)]
+        exe_name = cmd[:cmd.find(find_char)]
         self.log.debug("  executable name: %s", exe_name)
         return exe_name
 
@@ -249,8 +261,7 @@ class CoreFileProcessing():
             rpm_version = output.stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
-                + ["daos-client-" + rpm_version, "daos-server-" + rpm_version,
-                   "daos-tests-" + rpm_version])
+                + ["daos-" + rpm_version, "daos-*-" + rpm_version])
         # else:
         #     # We're not using the yum API to install packages
         #     # See the comments below.

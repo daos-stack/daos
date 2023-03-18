@@ -9,8 +9,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -50,62 +50,132 @@ type tierRatioFlag struct {
 	ratios []float64
 }
 
-func (tr *tierRatioFlag) IsSet() bool {
-	return len(tr.ratios) > 0
+func (trf *tierRatioFlag) IsSet() bool {
+	return len(trf.ratios) > 0
 }
 
-func (tr tierRatioFlag) Ratios() []float64 {
-	if tr.IsSet() {
-		return tr.ratios
+func (trf tierRatioFlag) Ratios() []float64 {
+	if trf.IsSet() {
+		return trf.ratios
 	}
 
 	// Default to 6% SCM:94% NVMe
 	return []float64{0.06, 0.94}
 }
 
-func (tr tierRatioFlag) String() string {
+func (trf tierRatioFlag) String() string {
 	var ratioStrs []string
-	for _, ratio := range tr.Ratios() {
+	for _, ratio := range trf.Ratios() {
 		ratioStrs = append(ratioStrs, fmt.Sprintf("%.2f", ratio))
 	}
 	return strings.Join(ratioStrs, ",")
 }
 
-func (tr *tierRatioFlag) UnmarshalFlag(fv string) error {
+func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	if fv == "" {
 		return errors.New("no tier ratio specified")
 	}
 
-	var ratios []uint64
+	roundFloatTo := func(f float64, places int) float64 {
+		if f <= 0 && f >= 100 {
+			return f
+		}
+		shift := math.Pow(10, float64(places))
+		return math.Round(f*shift) / shift
+	}
+
 	for _, trStr := range strings.Split(fv, ",") {
-		trUint, err := strconv.ParseUint(strings.TrimSpace(trStr), 10, 64)
+		tr, err := strconv.ParseFloat(strings.TrimSpace(trStr), 64)
 		if err != nil {
 			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
 		}
-		ratios = append(ratios, trUint)
+		trf.ratios = append(trf.ratios, roundFloatTo(tr, 2)/100)
 	}
 
 	// Handle single tier ratio as a special case and fill
 	// second tier with remainder (-t 6 will assign 6% of total
 	// storage to tier0 and 94% to tier1).
-	if len(ratios) == 1 && ratios[0] < 100 {
-		ratios = append(ratios, 100-ratios[0])
+	if len(trf.ratios) == 1 && trf.ratios[0] < 1 {
+		trf.ratios = append(trf.ratios, 1-trf.ratios[0])
 	}
 
-	tr.ratios = make([]float64, len(ratios))
-	var totalRatios uint64
-	for tierIdx, ratio := range ratios {
-		if ratio > 100 {
+	var totalRatios float64
+	for _, ratio := range trf.ratios {
+		if ratio > 1 {
 			return errors.New("Storage tier ratio must be a value between 0-100")
 		}
 		totalRatios += ratio
-		tr.ratios[tierIdx] = float64(ratio) / 100
 	}
-	if totalRatios != 100 {
-		return errors.New("Storage tier ratios must add up to 100")
+	if math.Abs(totalRatios-1) > 0.01 {
+		return errors.Errorf("Storage tier ratios must add up to 100 (got %f)", totalRatios*100)
 	}
 
 	return nil
+}
+
+type sizeFlag struct {
+	bytes uint64
+}
+
+func (sf sizeFlag) IsSet() bool {
+	return sf.bytes > 0
+}
+
+func (sf sizeFlag) String() string {
+	return humanize.Bytes(sf.bytes)
+}
+
+func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
+	if fv == "" {
+		return errors.New("no size specified")
+	}
+
+	sf.bytes, err = humanize.ParseBytes(fv)
+	if err != nil {
+		return errors.Wrapf(err, "invalid size %q", fv)
+	}
+
+	return nil
+}
+
+type poolSizeFlag struct {
+	sizeFlag
+	availRatio uint64
+}
+
+func (psf poolSizeFlag) IsRatio() bool {
+	return psf.availRatio > 0
+}
+
+func (psf poolSizeFlag) IsSet() bool {
+	return psf.sizeFlag.IsSet() || psf.IsRatio()
+}
+
+func (psf poolSizeFlag) String() string {
+	if psf.IsRatio() {
+		return fmt.Sprintf("%d%%", psf.availRatio)
+	}
+
+	return psf.sizeFlag.String()
+}
+
+func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
+	trimmed := strings.TrimSpace(fv)
+	if strings.HasSuffix(trimmed, "%") {
+		ratioStr := strings.TrimSpace(strings.TrimSuffix(trimmed, "%"))
+		ratio, err := strconv.ParseUint(ratioStr, 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid pool size ratio %q", fv)
+		}
+		if ratio <= 0 || ratio > 100 {
+			return errors.Errorf("Creating DAOS pool with invalid full size ratio %s:"+
+				" allowed range 0 < ratio <= 100", fv)
+		}
+		psf.availRatio = ratio
+		return nil
+	}
+
+	return psf.sizeFlag.UnmarshalFlag(fv)
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -118,28 +188,25 @@ type PoolCreateCmd struct {
 	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile    string              `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size       string              `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
+	Size       poolSizeFlag        `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
 	TierRatio  tierRatioFlag       `short:"t" long:"tier-ratio" description:"Percentage of storage tiers for pool storage (auto; default: 6,94)"`
 	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize    string              `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
-	NVMeSize   string              `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
-		PoolLabel string `positional-arg-name:"<pool label>"`
-	} `positional-args:"yes" required:"1"`
+		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
+	} `positional-args:"yes"`
 }
-
-// Regexp allowing to define the size of a new pool as the percentage of the overall available storage
-var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
+	if cmd.Size.IsSet() && (cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet()) {
 		return errIncompatFlags("size", "scm-size", "nvme-size")
 	}
-	if cmd.Size == "" && cmd.ScmSize == "" {
+	if !cmd.Size.IsSet() && !cmd.ScmSize.IsSet() {
 		return errors.New("either --size or --scm-size must be supplied")
 	}
 
@@ -171,21 +238,13 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	switch {
-	case allFlagPattern.MatchString(cmd.Size):
+	case cmd.Size.IsRatio():
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("size", "nranks")
 		}
 
 		if cmd.TierRatio.IsSet() {
 			return errIncompatFlags("size=%", "tier-ratio")
-		}
-
-		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
-		storageRatio, _ := strconv.ParseInt(storageRatioString, 10, 32)
-		if storageRatio <= 0 || storageRatio > 100 {
-			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
-			msg += " allowed range 0 < ratio <= 100"
-			return errors.Errorf(msg, storageRatio)
 		}
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
@@ -199,26 +258,22 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return err
 		}
 
-		if storageRatio != 100 {
-			scmBytes = uint64(storageRatio) * scmBytes / uint64(100)
-			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
+		if cmd.Size.availRatio < 100 {
+			scmBytes = cmd.Size.availRatio * scmBytes / 100
+			nvmeBytes = cmd.Size.availRatio * nvmeBytes / 100
 		}
 
 		if scmBytes == 0 {
-			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
-				"SCM storage capacity or ratio should be increased",
-				storageRatio)
+			return errors.Errorf("Not enough SCM storage available with ratio %s: "+
+				"SCM storage capacity or ratio should be increased", cmd.Size)
 		}
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
-	case cmd.Size != "":
+		cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
+	case !cmd.Size.IsRatio() && cmd.Size.IsSet():
 		// auto-selection of storage values
-		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse pool size")
-		}
+		req.TotalBytes = cmd.Size.bytes
 
 		if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 			return errIncompatFlags("nranks", "ranks")
@@ -237,19 +292,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("tier-ratio", "scm-size")
 		}
 
-		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse pool SCM size")
-		}
-
-		var nvmeBytes uint64
-		if cmd.NVMeSize != "" {
-			nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
-			if err != nil {
-				return errors.Wrap(err, "failed to parse pool NVMe size")
-			}
-		}
-
+		scmBytes := cmd.ScmSize.bytes
+		nvmeBytes := cmd.NVMeSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
 		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
@@ -361,8 +405,8 @@ type poolCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool label or UUID>"`
-	} `positional-args:"yes" required:"1"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolCmd) PoolID() *PoolID {
@@ -631,8 +675,8 @@ type PoolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>"`
-	} `positional-args:"yes" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.

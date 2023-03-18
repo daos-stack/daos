@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -298,12 +298,18 @@ dtx_cleanup(void *arg)
 	struct dtx_partial_cmt_item	*dpci;
 	struct dtx_entry		*dte;
 	struct dtx_cleanup_cb_args	 dcca;
+	d_list_t			 cmt_list;
+	d_list_t			 abt_list;
+	d_list_t			 act_list;
 	int				 count;
 	int				 rc;
 
 	if (dbca->dbca_cleanup_req == NULL)
 		goto out;
 
+	D_INIT_LIST_HEAD(&cmt_list);
+	D_INIT_LIST_HEAD(&abt_list);
+	D_INIT_LIST_HEAD(&act_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
 	dcca.dcca_st_count = 0;
@@ -332,10 +338,14 @@ dtx_cleanup(void *arg)
 		 * even if some former ones hit failure.
 		 */
 		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
-					  NULL, NULL, NULL, false);
+					  &cmt_list, &abt_list, &act_list, false);
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
+
+	D_ASSERT(d_list_empty(&cmt_list));
+	D_ASSERT(d_list_empty(&abt_list));
+	D_ASSERT(d_list_empty(&act_list));
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list) &&
@@ -642,7 +652,7 @@ dtx_batched_commit(void *arg)
 	while (1) {
 		struct ds_cont_child	*cont;
 		struct dtx_stat		 stat = { 0 };
-		int			 sleep_time = 10; /* ms */
+		int			 sleep_time = 50; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
 			goto check;
@@ -700,7 +710,6 @@ dtx_batched_commit(void *arg)
 		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
 		    DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
-			sleep_time = 0;
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);
@@ -1580,14 +1589,13 @@ dtx_reindex_ult(void *arg)
 {
 	struct ds_cont_child		*cont	= arg;
 	struct dss_module_info		*dmi	= dss_get_module_info();
-	uint64_t			 hint	= 0;
 	int				 rc	= 0;
 
 	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
 	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
 		if (rc != 0)
 			break;
 
@@ -1609,7 +1617,11 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 
-	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
+	/* Someone is trying to stop former DTX reindex ULT, wait until its done. */
+	while (cont->sc_dtx_reindex_abort)
+		ABT_thread_yield();
+
+	if (cont->sc_dtx_reindex)
 		return 0;
 
 	ds_cont_child_get(cont);
@@ -1628,7 +1640,12 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 void
 stop_dtx_reindex_ult(struct ds_cont_child *cont)
 {
-	if (!cont->sc_dtx_reindex || dtx_cont_opened(cont))
+	/* DTX reindex has been done or not has not been started. */
+	if (!cont->sc_dtx_reindex)
+		return;
+
+	/* Do not stop DTX reindex if the container is still opened. */
+	if (dtx_cont_opened(cont))
 		return;
 
 	/* Do not stop DTX reindex if DTX resync is still in-progress. */

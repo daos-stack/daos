@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -777,7 +777,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	test_rebuild_wait(&arg, 1);
 
 	print_message("lookup 100 dkeys\n");
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 100 && oclass != OC_SX; i++) {
 		char buffer[32];
 
 		memset(buffer, 0, 32);
@@ -787,8 +787,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 		 * data anyway, so it may lose data here, so do not need verify data
 		 * for SX object. Incremental reintegration might fix this.
 		 */
-		if (oclass != OC_SX)
-			assert_string_equal(buffer, rec);
+		assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
 }
@@ -848,6 +847,34 @@ rebuild_large_object(void **state)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+}
+
+int
+rebuild_small_pool_n4_rf1_setup(void **state)
+{
+	test_arg_t	*arg;
+	int rc;
+
+	save_group_state(state);
+	rc = rebuild_sub_setup_common(state, REBUILD_SMALL_POOL_SIZE, 4, DAOS_PROP_CO_REDUN_RF1);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, 4, NULL);
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
@@ -1188,6 +1215,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
 	reintegrate_single_pool_rank(arg, rank, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);
@@ -1201,7 +1229,6 @@ rebuild_with_dfs_open_create_punch(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	daos_cont_status_clear(co_hdl, NULL);
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -1222,11 +1249,12 @@ rebuild_wait_reset_fail_cb(void *data)
 {
 	test_arg_t	*arg = data;
 
-	print_message("wait 120 seconds for rebuild/reclaim/retry....");
-	sleep(120);
+	print_message("wait 300 seconds for rebuild/reclaim/retry....");
+	sleep(60);
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
 
 	return 0;
 }
@@ -1235,26 +1263,25 @@ static void
 rebuild_many_objects_with_failure(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	int		tgt = DEFAULT_FAIL_TGT;
+	daos_obj_id_t	*oids;
+	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 4))
+	if (!test_runable(arg, 6))
 		return;
 
-	for (i = 0; i < 15000; i++) {
-		char buffer[16];
+	D_ALLOC_ARRAY(oids, 8000);
+	for (i = 0; i < 8000; i++) {
+		char buffer[256];
 		daos_recx_t recx;
 		struct ioreq req;
 
-		oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0, arg->myrank);
-		oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-		oid = dts_oid_set_tgt(oid, DEFAULT_FAIL_TGT);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-		memset(buffer, 'a', 16);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		memset(buffer, 'a', 256);
 		recx.rx_idx = 0;
-		recx.rx_nr = 16;
-		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer, 16, &req);
+		recx.rx_nr = 256;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer, 256, &req);
 
 		ioreq_fini(&req);
 	}
@@ -1262,15 +1289,20 @@ rebuild_many_objects_with_failure(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 100,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 50,
 				      0, NULL);
 	}
 
 	arg->rebuild_cb = rebuild_wait_reset_fail_cb;
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	rebuild_single_pool_target(arg, 3, -1, false);
 
-	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
+	for (i = 0; i < 8000; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	D_FREE(oids);
 }
 
 /** create a new pool/container for each test */
@@ -1298,25 +1330,25 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
-	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	 rebuild_sx_object, rebuild_small_sub_rf0_setup, test_teardown},
 	{"REBUILD13: rebuild xsf object",
 	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD14: rebuild large stripe object",
-	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_large_object, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD16: rebuild with full stripe",
-	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_full_shards, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD17: rebuild with punch recxs",
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD18: rebuild with multiple group",
-	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	 rebuild_multiple_group, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD19: rebuild with large offset",
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD20: rebuild with large key",
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
-	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD22: rebuild lot of objects with failure",
 	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
 };
