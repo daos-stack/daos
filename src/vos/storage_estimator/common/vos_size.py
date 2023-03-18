@@ -10,7 +10,7 @@ import math
 def convert(stat):
     """Convert byte value to pretty string"""
     size = 1024 * 1024 * 1024 * 1024 * 1024
-    for mag in ['P', 'T', 'G', 'M', 'K']:
+    for mag in ['PiB', 'TiB', 'GiB', 'MiB', 'KiB', '  B']:
         if stat > size:
             return "%10.2f %s" % (float(stat) / size, mag)
         size = size / 1024
@@ -304,10 +304,13 @@ class MetaOverhead():
             overhead = tree_nodes * leaf_size + rec_overhead
         if key in ("akey", "single_value", "array"):
             # key refers to child tree
+            parent = "akey"
+            if key == "akey":
+                parent = "dkey"
             if tree["overhead"] == "user":
                 tree_stats.add_user_meta(num_values * tree["size"])
             else:
-                tree_stats.add_meta(key, num_values * tree["size"])
+                tree_stats.add_meta(parent, num_values * tree["size"])
             overhead += self.csum_size * num_values
         tree_stats.add_meta(key, overhead)
         if key in ("array", "single_value"):
