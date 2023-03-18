@@ -5,6 +5,7 @@
 # environment for building the DAOS project.
 #
 
+#
 # Pull base image
 ARG BASE_DISTRO=ubuntu:22.04
 FROM $BASE_DISTRO

@@ -2,6 +2,7 @@
 
 cd daos
 
+#
 # Probably not needed now, but leave on PRs until we have confidence of landings builds.
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
