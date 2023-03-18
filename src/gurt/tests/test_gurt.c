@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2123,6 +2123,85 @@ test_hash_perf(void **state)
 		hash_perf(HASH_JCH, 1 << i, el << i);
 }
 
+static void
+verify_rank_list_dup_uniq(int *src_ranks, int num_src_ranks,
+			  int *exp_ranks, int num_exp_ranks)
+{
+	d_rank_list_t	*orig_list;
+	d_rank_list_t	*ret_list = NULL;
+	int		rc;
+	int		i;
+
+	orig_list = d_rank_list_alloc(num_src_ranks);
+	assert_non_null(orig_list);
+
+	fprintf(stdout, "dup_uniq: [");
+	for (i = 0; i < num_src_ranks; i++) {
+		fprintf(stdout, "%d%s", src_ranks[i], i == num_src_ranks - 1 ? "" : ",");
+		orig_list->rl_ranks[i] = src_ranks[i];
+	}
+	fprintf(stdout, "] -> ");
+
+	rc = d_rank_list_dup_sort_uniq(&ret_list, orig_list);
+	assert_int_equal(rc, 0);
+	assert_non_null(ret_list);
+	assert_int_equal(ret_list->rl_nr, num_exp_ranks);
+
+	fprintf(stdout, "[");
+	for (i  = 0; i < ret_list->rl_nr; i++) {
+		fprintf(stdout, "%d%s", exp_ranks[i], i == ret_list->rl_nr - 1 ? "" : ",");
+		assert_int_equal(ret_list->rl_ranks[i], exp_ranks[i]);
+	}
+	fprintf(stdout, "]\n");
+
+	d_rank_list_free(ret_list);
+	d_rank_list_free(orig_list);
+}
+
+static void
+test_d_rank_list_dup_sort_uniq(void **state)
+{
+	{
+		int	src_ranks[] = {0, 0, 0, 1, 1};
+		int	exp_ranks[] = {0, 1};
+
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
+	}
+
+	{
+		int	src_ranks[] = {0, 0, 0, 0, 1};
+		int	exp_ranks[] = {0, 1};
+
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
+	}
+
+	{
+		int	src_ranks[] = {0, 0, 0, 1, 1, 1, 2, 3, 3, 5};
+		int	exp_ranks[] = {0, 1, 2, 3, 5};
+
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
+	}
+
+	{
+		int	src_ranks[] = {1, 2, 1, 3, 1, 5};
+		int	exp_ranks[] = {1, 2, 3, 5};
+
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
+	}
+
+	{
+		int	src_ranks[] = {5, 5, 2, 2, 1, 3, 4, 1, 1, 2};
+		int	exp_ranks[] = {1, 2, 3, 4, 5};
+
+		verify_rank_list_dup_uniq(src_ranks, ARRAY_SIZE(src_ranks),
+					  exp_ranks, ARRAY_SIZE(exp_ranks));
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2144,6 +2223,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 		cmocka_unit_test(test_gurt_atomic),
 		cmocka_unit_test(test_gurt_string_buffer),
+		cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
 		cmocka_unit_test(test_hash_perf),
 	};
 
