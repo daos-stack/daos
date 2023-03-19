@@ -902,12 +902,13 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
-	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
+	if (obj_auxi->req_reasbed) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n", DP_OID(oid));
 		D_ASSERTF(reasb_req->orr_iod_nr == args->nr, "%d != %d.\n",
 			  reasb_req->orr_iod_nr, args->nr);
 		memset(reasb_req->orr_fetch_stat, 0, args->nr * sizeof(*reasb_req->orr_fetch_stat));
-		return 0;
+		if (!reasb_req->orr_size_fetched)
+			return 0;
 	}
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
