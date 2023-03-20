@@ -104,6 +104,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 	int                   rc;
+	uint32_t              il_calls;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -118,18 +119,30 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * data from the cache the kernel will call stat() to get an up-to-date file size, so
 	 * after write dfuse may continue to tell the kernel incorrect file sizes.  The fix
 	 * would be to store metadata but not cache data.
+	 *
+	 * Additionally, with caching enabled then dfuse may see create(), release(), open() calls
+	 * and neither release nor open update the cache, so do not set it valid on read.
 	 */
 	if (atomic_load_relaxed(&oh->doh_write_count) == 0) {
+#if 0
 		if (oh->doh_caching && !oh->doh_keep_cache)
 			dfuse_cache_set_time(oh->doh_ie);
+#endif
+		;
 	} else {
-		if (oh->doh_caching)
+		if (oh->doh_caching) {
+			DFUSE_TRA_DEBUG(oh, "Evicting cache");
 			dfuse_cache_evict(oh->doh_ie);
+		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	}
-	if (atomic_load_relaxed(&oh->doh_il_calls) != 0) {
-		if (oh->doh_caching)
+	il_calls = atomic_load_relaxed(&oh->doh_il_calls);
+	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
+	if (il_calls != 0) {
+		if (oh->doh_caching) {
+			DFUSE_TRA_DEBUG(oh, "Evicting cache");
 			dfuse_cache_evict(oh->doh_ie);
+		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
