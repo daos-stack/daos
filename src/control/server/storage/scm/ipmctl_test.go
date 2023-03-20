@@ -39,13 +39,13 @@ var (
 
 func mockCmdShowRegionsWithSock(sid int) pmemCmd {
 	cmd := cmdShowRegions
-	cmd.Args = append(cmd.Args, fmt.Sprintf("-socket %d", sid))
+	cmd.Args = append(cmd.Args, "-socket", fmt.Sprintf("%d", sid))
 	return cmd
 }
 
 func mockCmdDeleteGoalsWithSock(sid int) pmemCmd {
 	cmd := cmdDeleteGoals
-	cmd.Args = append(cmd.Args, fmt.Sprintf("-socket %d", sid))
+	cmd.Args = append(cmd.Args, "-socket", fmt.Sprintf("%d", sid))
 	return cmd
 }
 
@@ -53,7 +53,7 @@ func mockCmdCreateRegionsWithSock(sid int) pmemCmd {
 	return pmemCmd{
 		BinaryName: "ipmctl",
 		Args: []string{
-			"create", "-f", "-goal", fmt.Sprintf("-socket %d", sid),
+			"create", "-f", "-goal", "-socket", fmt.Sprintf("%d", sid),
 			"PersistentMemoryType=AppDirect",
 		},
 	}
@@ -525,7 +525,7 @@ func TestIpmctl_prep(t *testing.T) {
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
-		"free capacity; multiple namespaces requested": {
+		"free capacity; two namespaces per socket requested": {
 			prepReq: &storage.ScmPrepareRequest{
 				NrNamespacesPerSocket: 2,
 			},
@@ -551,18 +551,44 @@ func TestIpmctl_prep(t *testing.T) {
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
+		//		"free capacity; four namespaces per socket requested": {
+		//			prepReq: &storage.ScmPrepareRequest{
+		//				NrNamespacesPerSocket: 4,
+		//			},
+		//			scanResp: &storage.ScmScanResponse{
+		//				Modules: testModules,
+		//			},
+		//			runOut: []string{
+		//				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "", "", "",
+		//				ndctlDualNsPerSockStr, mockXMLRegions(t, "dual-sock-no-free"),
+		//			},
+		//			expPrepResp: &storage.ScmPrepareResponse{
+		//				Namespaces: dualNSPerSock,
+		//				Socket: &storage.ScmSocketState{
+		//					State: storage.ScmNoFreeCap,
+		//				},
+		//			},
+		//			expCalls: []pmemCmd{
+		//				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+		//				mockCmdCreateNamespace(0, 541165879296),
+		//				mockCmdCreateNamespace(0, 541165879296),
+		//				mockCmdCreateNamespace(1, 541165879296),
+		//				mockCmdCreateNamespace(1, 541165879296),
+		//				cmdListNamespaces, cmdShowRegions,
+		//			},
+		//		},
 		"free capacity; create namespace fails": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "",
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", ndctlRegionsDual,
 			},
 			runErr: []error{
-				nil, nil, nil, errors.New("fail"),
+				nil, nil, nil, nil, errors.New("fail"),
 			},
 			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
 				mockCmdCreateNamespace(0, 1082331758592),
 			},
 			expErr: errors.New("fail"),

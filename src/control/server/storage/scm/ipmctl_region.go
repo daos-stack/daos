@@ -236,19 +236,20 @@ func (cr *cmdRunner) runRegionCmd(sockID int, cmd pmemCmd) (string, error) {
 
 	// Insert socket ID arg after -goal flag if present otherwise at end.
 	if sockID != sockAny {
-		sockArg := fmt.Sprintf("-socket %d", sockID)
+		sockArg := fmt.Sprintf("%d", sockID)
 		for i, arg := range cmdTmp.Args {
 			if i == len(cmdTmp.Args)-1 {
-				cmdTmp.Args = append(cmdTmp.Args, sockArg)
+				cmdTmp.Args = append(cmdTmp.Args, "-socket", sockArg)
 				break
 			}
 			if arg == "-goal" {
-				// Extend slice by one.
-				cmdTmp.Args = append(cmdTmp.Args, "")
+				// Extend slice by two.
+				cmdTmp.Args = append(cmdTmp.Args, "", "")
 				// Shift along elements after index found to add space.
-				copy(cmdTmp.Args[i+2:], cmdTmp.Args[i+1:])
+				copy(cmdTmp.Args[i+3:], cmdTmp.Args[i+1:])
 				// Insert new element into space between.
-				cmdTmp.Args[i+1] = sockArg
+				cmdTmp.Args[i+1] = "-socket"
+				cmdTmp.Args[i+2] = sockArg
 				break
 			}
 		}

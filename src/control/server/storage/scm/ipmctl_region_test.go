@@ -92,6 +92,7 @@ func mockXMLRegions(t *testing.T, variant string) string {
 	case "sock-one":
 		rl.Regions[0].ID = 2
 		rl.Regions[0].SocketID = 1
+		rl.Regions[0].ISetID++
 	case "unhealthy":
 		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
 	case "not-interleaved":
@@ -106,13 +107,16 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
 	case "dual-sock-full-free":
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
 	case "same-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ISetID++
 	case "unhealthy-2nd-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
@@ -147,6 +151,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
 			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			ISetID:               13312958398157623568,
 		},
 		1: {
 			XMLName: xml.Name{
@@ -158,6 +163,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
 			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			ISetID:               13312958398157623569,
 		},
 	}
 
