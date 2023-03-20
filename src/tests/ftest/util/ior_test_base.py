@@ -318,7 +318,7 @@ class IorTestBase(DfuseTestBase):
                     flags_w += " -k"
                 elif api == "POSIX+IL":
                     api = "POSIX"
-                    intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                    intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
                 self.ior_cmd.flags.update(flags_w, "ior.flags")
                 self.ior_cmd.api.update(api)
                 for test in transfer_block_size:

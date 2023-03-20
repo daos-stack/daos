@@ -303,7 +303,7 @@ class DfuseMUPerms(DfuseTestBase):
         env_without_il = verify_perms_cmd.env.copy()
         env_with_il = env_without_il.copy()
         env_with_il.update({
-            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', 'libpil4dfs.so'),
             'D_IL_REPORT': -1  # Log all intercepted calls
         })
 

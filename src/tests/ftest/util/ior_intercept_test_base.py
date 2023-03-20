@@ -45,7 +45,7 @@ class IorInterceptTestBase(IorTestBase):
         # Run IOR with dfuse + IL
         self.ior_cmd.api.update("POSIX")
         dfuse_out = self.run_ior_with_pool(
-            intercept=os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            intercept=os.path.join(self.prefix, 'lib64', 'libpil4dfs.so'),
             fail_on_warning=self.log.info)
         dfuse_perf = IorCommand.get_ior_metrics(dfuse_out)
 

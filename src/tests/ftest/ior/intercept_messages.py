@@ -36,7 +36,7 @@ class IorInterceptMessages(IorTestBase):
         :avocado: tags=IorInterceptMessages,test_ior_intercept_messages
         """
         d_il_report_value = self.params.get("value", "/run/tests/D_IL_REPORT/*")
-        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+        intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
 
         # D_IL_REPORT VALUES
         #     -1: All printed calls # This needs its own test case
