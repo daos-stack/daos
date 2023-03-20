@@ -18,13 +18,13 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <uuid/uuid.h>
-#include "../acl.pb-c.h"
-#include "../pool.pb-c.h"
-#include "../cont.pb-c.h"
-#include "../svc.pb-c.h"
-#include "../server.pb-c.h"
-#include "../srv_internal.h"
-#include "../drpc_internal.h"
+#include "acl.pb-c.h"
+#include "pool.pb-c.h"
+#include "cont.pb-c.h"
+#include "svc.pb-c.h"
+#include "server.pb-c.h"
+#include "srv_internal.h"
+#include "drpc_internal.h"
 #include "mocks.h"
 
 #define TEST_UUID	"12345678-1234-1234-1234-123456789abc"

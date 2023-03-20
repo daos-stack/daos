@@ -8,8 +8,8 @@
  * Mocks for DAOS mgmt unit tests
  */
 
-#include "../svc.pb-c.h"
-#include "../srv_internal.h"
+#include "svc.pb-c.h"
+#include "srv_internal.h"
 #include "mocks.h"
 
 /*
