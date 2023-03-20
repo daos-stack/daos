@@ -23,9 +23,9 @@ class DaosServerTransportCredentials(TransportCredentials):
         #   - client_cert_dir: <str>, e.g. "".daos/clients"
         #       Location of client certificates [daos_server only]
         #
-        self.client_cert_dir = LogParameter(log_dir, None, "clients")
-        self.cert = LogParameter(log_dir, None, "server.crt")
-        self.key = LogParameter(log_dir, None, "server.key")
+        self.client_cert_dir = LogParameter(self._log_dir, None, "clients")
+        self.cert = LogParameter(self._log_dir, None, "server.crt")
+        self.key = LogParameter(self._log_dir, None, "server.key")
 
     def get_certificate_data(self, name_list):
         """Get certificate data.
@@ -47,6 +47,14 @@ class DaosServerTransportCredentials(TransportCredentials):
             else:
                 data[self.client_cert_dir.value].append("agent.crt")
         return data
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosServerTransportCredentials: a new DaosServerTransportCredentials object
+        """
+        return DaosServerTransportCredentials(self._log_dir)
 
 
 class DaosServerYamlParameters(YamlParameters):
@@ -333,6 +341,14 @@ class DaosServerYamlParameters(YamlParameters):
         else:
             self.engines_per_host.update(0, "engines_per_host")
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosServerYamlParameters: a new DaosServerYamlParameters object
+        """
+        return DaosServerYamlParameters(self.filename, None)
+
 
 class EngineYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for a single server engine."""
@@ -362,8 +378,10 @@ class EngineYamlParameters(YamlParameters):
                 Defaults to MAX_STORAGE_TIERS.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
+        self._base_namespace = base_namespace
         self._index = index
         self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
+        self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
         # Use environment variables to get default parameters
@@ -561,6 +579,15 @@ class EngineYamlParameters(YamlParameters):
         self.log.info("Overriding engine %s config with external data", self._index)
         self.storage.override_params(data)
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            EngineYamlParameters: a new EngineYamlParameters object
+        """
+        return EngineYamlParameters(
+            self._base_namespace, self._index, self._provider, self._max_storage_tiers)
+
 
 class StorageYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for all of the storage tiers for an engine."""
@@ -736,6 +763,14 @@ class StorageYamlParameters(YamlParameters):
                     self.storage_tiers.append(StorageTierYamlParameters(self.namespace, tier))
                     self.storage_tiers[-1].override_params(storage_data)
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            StorageYamlParameters: a new StorageYamlParameters object
+        """
+        return StorageYamlParameters(self.namespace, self._max_tiers)
+
 
 class StorageTierYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for each storage tier for an engine."""
@@ -748,6 +783,7 @@ class StorageTierYamlParameters(YamlParameters):
             tier (int) index number for the storage tier namespace path.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["storage", str(tier), "*"]
+        self._base_namespace = base_namespace
         self._tier = tier
         super().__init__(os.path.join(*namespace))
 
@@ -823,3 +859,11 @@ class StorageTierYamlParameters(YamlParameters):
             name = param.yaml_key or name
             if name in data:
                 param.update(data[name], name)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            StorageTierYamlParameters: a new StorageTierYamlParameters object
+        """
+        return StorageTierYamlParameters(self._base_namespace, self._tier)

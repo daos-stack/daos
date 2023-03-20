@@ -54,7 +54,7 @@ func (l *LibHandle) GetSymbolPointer(symbol string) (unsafe.Pointer, error) {
 	C.dlerror()
 	p := C.dlsym(l.Handle, sym)
 	e := C.dlerror()
-	if e != nil {
+	if p == nil && e != nil {
 		return nil, fmt.Errorf("error resolving symbol %q: %v", symbol, errors.New(C.GoString(e)))
 	}
 

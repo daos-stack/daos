@@ -505,8 +505,8 @@ type poolSetAttrCmd struct {
 	poolBaseCmd
 
 	Args struct {
-		Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
-	} `positional-args:"yes" required:"yes"`
+		Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolSetAttrCmd) Execute(_ []string) error {
@@ -539,8 +539,8 @@ type poolDelAttrCmd struct {
 	poolBaseCmd
 
 	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+		Name string `positional-arg-name:"<attribute name>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolDelAttrCmd) Execute(_ []string) error {

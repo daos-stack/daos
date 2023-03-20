@@ -89,8 +89,8 @@ daos-server RPM.
 
 ## Hardware Provisioning
 
-In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
-SSDs will be prepared and configured to be used by DAOS.
+In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
+used by DAOS and NVME SSDs will be identified.
 
 1. Prepare the pmem devices on Server nodes:
 
@@ -127,12 +127,7 @@ SSDs will be prepared and configured to be used by DAOS.
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-4. Prepare the NVME devices on Server nodes:
-
-		daos_server nvme prepare -u root
-		Preparing locally-attached NVMe storage\...
-
-5. Scan the available storage on the Server nodes:
+4. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
 		Scanning locally-attached storage\...
