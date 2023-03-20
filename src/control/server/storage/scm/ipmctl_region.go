@@ -28,6 +28,7 @@ type (
 	regionType     ipmctl.PMemRegionType
 	regionCapacity uint64
 	regionHealth   ipmctl.PMemRegionHealth
+	regionISetID   uint64
 
 	// RegionList struct contains all the PMemRegions.
 	RegionList struct {
@@ -44,40 +45,52 @@ type (
 		Capacity             regionCapacity `xml:"Capacity"`
 		FreeCapacity         regionCapacity `xml:"FreeCapacity"`
 		Health               regionHealth   `xml:"HealthState"`
+		ISetID               regionISetID   `xml:"ISetID"`
 	}
 
 	// Regions is an alias for a Region slice.
 	Regions []Region
 )
 
-func (ri *regionID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func xmlStrToHex(d *xml.Decoder, start xml.StartElement) (uint64, error) {
 	var s string
 	if err := d.DecodeElement(&s, &start); err != nil {
-		return err
+		return 0, err
 	}
 
-	n, err := strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 16) // 4-character hex field
+	if strings.Contains(s, "0x") {
+		return strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 64)
+	}
+	return strconv.ParseUint(s, 10, 64)
+}
+
+func (ri *regionID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	n, err := xmlStrToHex(d, start)
 	if err != nil {
-		return errors.Wrapf(err, "region id %q could not be parsed", s)
+		return errors.Wrap(err, "region id could not be parsed")
 	}
-
 	*ri = regionID(n)
+	fmt.Printf("XXX RegionID: %d XXX", ri)
 
 	return nil
 }
 
 func (rsi *regionSocketID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var s string
-	if err := d.DecodeElement(&s, &start); err != nil {
-		return err
-	}
-
-	n, err := strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 16) // 4-character hex field
+	n, err := xmlStrToHex(d, start)
 	if err != nil {
-		return errors.Wrapf(err, "socket id %q could not be parsed", s)
+		return errors.Wrap(err, "region socket id could not be parsed")
 	}
-
 	*rsi = regionSocketID(n)
+
+	return nil
+}
+
+func (rii *regionISetID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	n, err := xmlStrToHex(d, start)
+	if err != nil {
+		return errors.Wrap(err, "region iset id could not be parsed")
+	}
+	*rii = regionISetID(n)
 
 	return nil
 }

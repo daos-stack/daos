@@ -18,7 +18,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const ndctlName = "ndctl"
+const (
+	ndctlName         = "ndctl"
+	ndctlRegionType   = "pmem"
+	ndctlRegionDomain = "memory_controller"
+)
 
 var (
 	nsMajMinRegex = regexp.MustCompile(`namespace([0-9]).([0-9])`)
@@ -77,12 +81,13 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	cr.log.Debugf("creating %d namespaces on each of the following sockets: %v", nrNsPerSock,
 		sockIDs)
 
-	// As the selector is socket, the correct thing to do is look up the ndctl region with the
-	// same ISetID as the ipmctl region with specified socket ID. This may not work when the
-	// ISetID overflows. If all sockIDs can be mapped to existent entries in ndctl regions by
-	// isetid keys then use region IDs from ndctl regions, otherwise fall-back to using socket
-	// ID as region index.
-	regionSizes := make(map[string]int)
+	// As the selector is socket, look up the ndctl region with the same ISetID as the ipmctl
+	// region with specified socket ID. This may not work when the ISetID overflows in ndctl
+	// output. If all sockIDs can be mapped to existent entries in ndctl regions by isetid
+	// keys then use region IDs from ndctl regions, otherwise fall-back to using socket ID as
+	// region index.
+
+	regionSizes := make(map[string]uint64)
 
 	ndctlRegions, err := cr.getNdctlRegions(sockAny)
 	if err != nil {
@@ -90,16 +95,35 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	}
 	for _, sid := range sockIDs {
 		for _, nr := range ndctlRegions {
-			if nr.ISetID == regionsPerSocket[sid].ISetID {
+			if nr.ISetID < 0 {
+				cr.log.Noticef("region %s isetid negative, possible overflow",
+					nr.Dev)
+				break
+			}
+			if nr.Type != ndctlRegionType {
+				cr.log.Debugf("region %s unexpected type, want %s got %s",
+					nr.Dev, ndctlRegionType, nr.Type)
+				break
+			}
+			if nr.PersistenceDomain != ndctlRegionDomain {
+				cr.log.Debugf("region %s unexpected persistence domain, want %s got %s",
+					nr.Dev, ndctlRegionDomain, nr.PersistenceDomain)
+				break
+			}
+			if uint64(nr.ISetID) == uint64(regionPerSocket[sid].ISetID) {
 				regionSizes[nr.Dev] = nr.AvailableSize
+			}
+			if nr.NumaNode != uint32(sid) {
+				cr.log.Noticef("region %s on numa node %d doesn't match socket ID %d",
+					nr.Dev, nr.NumaNode, sid)
 			}
 		}
 	}
-	if len(regionNames) != nrRegions {
-		regionSizes = make(map[string]int)
+	if len(regionSizes) != nrRegions {
+		regionSizes = make(map[string]uint64)
 		for _, sid := range sockIDs {
 			name := fmt.Sprintf("region%d", sid)
-			regionSizes[name] = regionsPerSocket[sid].FreeCapacity
+			regionSizes[name] = uint64(regionPerSocket[sid].FreeCapacity)
 		}
 	}
 
@@ -192,12 +216,14 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 
 type (
 	NdctlRegion struct {
-		UUID        string         `json:"uuid" hash:"ignore"`
-		BlockDevice string         `json:"blockdev"`
-		Name        string         `json:"dev"`
-		NumaNode    uint32         `json:"numa_node"`
-		Size        uint64         `json:"size"`
-		Mount       *ScmMountPoint `json:"mount"`
+		Dev               string `json:"dev"`
+		Size              uint64 `json:"size"`
+		AvailableSize     uint64 `json:"available_size"`
+		Align             uint64 `json:"align"`
+		NumaNode          uint32 `json:"numa_node"`
+		ISetID            int64  `json:"iset_id"`
+		Type              string `json:"type"`
+		PersistenceDomain string `json:"persistence_domain"`
 	}
 
 	NdctlRegions []*NdctlRegion

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,43 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
+)
+
+const (
+	// JSON output from "ndctl list -Rv"
+	ndctlRegionsDual = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":4213998300795769104,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":334147221714768144,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
+	// Stdout from "ipmctl show -region"
+	ipmctlRegionsDual = ` SocketID | ISetID             | PersistentMemoryType | Capacity     | FreeCapacity | HealthState
+==================================================================================================
+ 0x0000   | 0x04a32120b4fe1110 | AppDirect            | 1008.000 GiB | 1008.000 GiB | Healthy
+ 0x0001   | 0x3a7b2120bb081110 | AppDirect            | 1008.000 GiB | 1008.000 GiB | Healthy
+`
 )
 
 type (

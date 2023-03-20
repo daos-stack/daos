@@ -114,54 +114,47 @@ func TestNdctl_getNamespaces(t *testing.T) {
 	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
 	twoNs, _ := parseNamespaces(twoNsJSON)
 
-	tests := []struct {
-		desc           string
+	for name, tc := range map[string]struct {
 		expErrMsg      string
 		cmdOut         string
 		expNamespaces  storage.ScmNamespaces
 		expCommands    []pmemCmd
 		lookPathErrMsg string
 	}{
-		{
-			desc:          "no namespaces",
+		"no namespaces": {
 			cmdOut:        "",
 			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: storage.ScmNamespaces{},
 		},
-		{
-			desc:          "single pmem device",
+		"single pmem device": {
 			cmdOut:        fmt.Sprintf(nsOut, 1, 1, 0),
 			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: oneNs,
 		},
-		{
-			desc:          "two pmem device",
+		"two pmem device": {
 			cmdOut:        twoNsJSON,
 			expCommands:   []pmemCmd{cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
-		{
-			desc:           "ndctl not installed",
+		"ndctl not installed": {
 			lookPathErrMsg: FaultMissingNdctl.Error(),
 			expErrMsg:      FaultMissingNdctl.Error(),
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
-				if tt.lookPathErrMsg != "" {
-					err = errors.New(tt.lookPathErrMsg)
+				if tc.lookPathErrMsg != "" {
+					err = errors.New(tc.lookPathErrMsg)
 				}
 				return
 			}
 
 			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
 				commands = append(commands, cmd)
-				return tt.cmdOut, nil
+				return tc.cmdOut, nil
 			}
 
 			commands = nil // reset to initial values between tests
@@ -181,114 +174,89 @@ func TestNdctl_getNamespaces(t *testing.T) {
 
 			namespaces, err := cr.getNamespaces(sockAny)
 			if err != nil {
-				if tt.lookPathErrMsg != "" {
-					test.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+				if tc.lookPathErrMsg != "" {
+					test.ExpectError(t, err, tc.lookPathErrMsg, name)
 					return
 				}
-				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
+				t.Fatal(name + ": GetPmemNamespaces: " + err.Error())
 			}
 
-			test.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
-			test.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+			test.AssertEqual(t, commands, tc.expCommands, name+": unexpected list of commands run")
+			test.AssertEqual(t, namespaces, tc.expNamespaces, name+": unexpected list of pmem device file names")
 		})
 	}
 }
 
 func TestNdctl_getNdctlRegions(t *testing.T) {
 	commands := []pmemCmd{} // external commands issued
-	// ndctl create-namespace command return json format
-	nsOut := `{
-   "dev":"namespace%d.0",
-   "mode":"fsdax",
-   "map":"dev",
-   "size":3183575302144,
-   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
-   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
-   "sector_size":512,
-   "blockdev":"pmem%d",
-   "numa_node":%d
-}
-`
-	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-	twoNs, _ := parseNamespaces(twoNsJSON)
-
-	tests := []struct {
-		desc           string
-		expErrMsg      string
-		cmdOut         string
-		expNamespaces  storage.ScmNamespaces
-		expCommands    []pmemCmd
-		lookPathErrMsg string
+	for name, tc := range map[string]struct {
+		expErr      error
+		cmdOut      string
+		expRegions  NdctlRegions
+		expCommands []pmemCmd
+		lookPathErr error
 	}{
-		{
-			desc:          "no namespaces",
-			cmdOut:        "",
-			expCommands:   []pmemCmd{cmdListNamespaces},
-			expNamespaces: storage.ScmNamespaces{},
+		"ndctl not installed": {
+			lookPathErr: FaultMissingNdctl,
+			expErr:      FaultMissingNdctl,
 		},
-		{
-			desc:          "single pmem device",
-			cmdOut:        fmt.Sprintf(nsOut, 1, 1, 0),
-			expCommands:   []pmemCmd{cmdListNamespaces},
-			expNamespaces: oneNs,
+		"no regions": {
+			cmdOut:      "",
+			expCommands: []pmemCmd{cmdListNdctlRegions},
+			expRegions:  NdctlRegions{},
 		},
-		{
-			desc:          "two pmem device",
-			cmdOut:        twoNsJSON,
-			expCommands:   []pmemCmd{cmdListNamespaces},
-			expNamespaces: twoNs,
+		"two regions": {
+			cmdOut:      ndctlRegionsDual,
+			expCommands: []pmemCmd{cmdListNdctlRegions},
+			expRegions: NdctlRegions{
+				{
+					Dev:               "region1",
+					Size:              1082331758592,
+					Align:             16777216,
+					AvailableSize:     1082331758592,
+					Type:              "pmem",
+					NumaNode:          0,
+					ISetID:            4213998300795769104,
+					PersistenceDomain: "memory_controller",
+				},
+				{
+					Dev:               "region0",
+					Size:              1082331758592,
+					Align:             16777216,
+					AvailableSize:     1082331758592,
+					Type:              "pmem",
+					NumaNode:          1,
+					ISetID:            334147221714768144,
+					PersistenceDomain: "memory_controller",
+				},
+			},
 		},
-		{
-			desc:           "ndctl not installed",
-			lookPathErrMsg: FaultMissingNdctl.Error(),
-			expErrMsg:      FaultMissingNdctl.Error(),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockLookPath := func(string) (s string, err error) {
-				if tt.lookPathErrMsg != "" {
-					err = errors.New(tt.lookPathErrMsg)
-				}
-				return
+			mockLookPath := func(string) (string, error) {
+				return "", tc.lookPathErr
 			}
 
 			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
 				commands = append(commands, cmd)
-				return tt.cmdOut, nil
+				return tc.cmdOut, nil
 			}
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := newMockIpmctl(&mockIpmctlCfg{
-				getModulesErr: nil,
-				modules:       []ipmctl.DeviceDiscovery{mockDiscovery()},
-			})
-			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if _, err := cr.getModules(sockAny); err != nil {
-				t.Fatal(err)
+			gotRegions, gotErr := cr.getNdctlRegions(sockAny)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if diff := cmp.Diff(tc.expRegions, gotRegions); diff != "" {
+				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
-
-			namespaces, err := cr.getNamespaces(sockAny)
-			if err != nil {
-				if tt.lookPathErrMsg != "" {
-					test.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
-					return
-				}
-				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
-			}
-
-			test.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
-			test.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
 		})
 	}
 }
