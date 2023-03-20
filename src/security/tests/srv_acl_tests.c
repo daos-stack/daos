@@ -1750,11 +1750,6 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_SET_ACL |
 				     CONT_CAPA_GET_ACL |
 				     CONT_CAPA_SET_OWNER);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ |
-				     DAOS_ACL_PERM_DEL_CONT,
-				     DAOS_COO_RW,
-				     CONT_CAPA_READ_DATA |
-				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
 				     CONT_CAPAS_ALL);
@@ -1776,6 +1771,7 @@ test_cont_get_capas_denied(void **state)
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, DAOS_COO_RW, 0);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW, 0);
 }
 
 
