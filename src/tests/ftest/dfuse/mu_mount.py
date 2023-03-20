@@ -10,6 +10,8 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from run_utils import command_as_user, run_remote
 
+# Dummy change
+
 
 class DfuseMUMount(DfuseTestBase):
     """Verifies multi-user dfuse mounting"""

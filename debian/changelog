@@ -1,4 +1,10 @@
-daos (2.5.100-10) unstable; urgency=medium
+daos (2.5.100-11) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Add tags.py
+
+ -- Dalton Bohning <dalton.bohning@intel.com>  Wed, 08 Nov 2023 12:00:00 -0500
+
+ daos (2.5.100-10) unstable; urgency=medium
   [ Phillip Henderson ]
   * Move verify_perms.py location
 

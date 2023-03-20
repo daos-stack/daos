@@ -326,7 +326,7 @@ pipeline {
         stage('Get Commit Message') {
             steps {
                 script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
+                    env.COMMIT_MESSAGE = sh(script: 'ci/get_commit_message.py --target origin/' + target_branch,
                                             returnStdout: true).trim()
                     Map pragmas = [:]
                     // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/

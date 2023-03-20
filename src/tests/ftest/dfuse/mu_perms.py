@@ -13,6 +13,8 @@ from dfuse_utils import VerifyPermsCommand, get_dfuse, start_dfuse
 from run_utils import command_as_user, run_remote
 from user_utils import get_chown_command
 
+# Dummy change
+
 
 class DfuseMUPerms(DfuseTestBase):
     """Verify dfuse multi-user basic permissions."""
