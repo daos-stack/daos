@@ -1,8 +1,14 @@
-daos (2.3.103-7) unstable; urgency=medium
+daos (2.3.106-2) unstable; urgency=medium
   [ Lei Huang ]
   * Add libcapstone as a new prerequisite package
 
- -- Lei Huang <lei.huang@intel.com>  Fri, 3 Mar 2023 16:00:00 -0600
+ -- Lei Huang <lei.huang@intel.com>  Mon, 20 Mar 2023 16:00:00 -0600
+
+daos (2.3.106-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Bump version to be higher than TB5
+
+ -- Brian J. Murrell <brian.murrell@intel.com> Tue, 14 Mar 2023 12:02:23 -0500
 
 daos (2.3.103-6) unstable; urgency=medium
   [ Li Wei ]
