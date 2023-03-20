@@ -9,7 +9,7 @@ orterun:
   allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
-timeout: 48H15M
+timeout: 48H30M
 setup:
   start_servers: true
   start_agents: true
