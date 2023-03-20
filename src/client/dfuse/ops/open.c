@@ -84,6 +84,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
 			D_GOTO(err, rc);
+		dfuse_cache_evict(oh->doh_ie);
 	}
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
