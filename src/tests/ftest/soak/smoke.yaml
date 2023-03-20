@@ -164,7 +164,8 @@ vpic_smoke:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
-  oclass: ["EC_2P1GX", "RP_2GX"]
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
 lammps_smoke:
   job_timeout: 10
   nodesperjob:

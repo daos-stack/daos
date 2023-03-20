@@ -795,7 +795,7 @@ def cleanup_dfuse(self):
         self.log.info("Dfuse mount points not deleted Error")
 
 
-def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None, container=None):
+def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None, cont=None):
     """Create an IOR cmdline to run in slurm batch.
 
     Args:
@@ -806,7 +806,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
         ppn(int):         number of tasks to run on each node
         nodesperjob(int): number of nodes per job
         oclass(list):     list of file_oclass and dir_oclass params
-        container (obj)   TestContainer obj
+        cont (obj)        TestContainer obj
 
     Returns:
         cmd: cmdline string
@@ -864,9 +864,11 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    if not container:
+                    if not cont:
                         add_containers(self, pool, file_oclass, dir_oclass)
                         container = self.container[-1]
+                    else:
+                        container = cont
                     ior_cmd.set_daos_params(
                         self.server_group, pool, container.uuid)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
@@ -1272,8 +1274,8 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         dcp_cmd = DcpCommand(hosts=None, tmp=None)
         dcp_cmd.namespace = os.path.join(os.sep, "run", job_spec, "dcp")
         dcp_cmd.get_params(self)
-        dst_file = f"daos://{pool.label.value}/{cont_2.label.value}"
-        src_file = f"daos://{pool.label.value}/{cont_1.label.value}"
+        dst_file = f"daos://{pool.label.value}/{cont_2.uuid}"
+        src_file = f"daos://{pool.label.value}/{cont_1.uuid}"
         dcp_cmd.set_params(src=src_file, dst=dst_file)
         env_vars = {
             "D_LOG_FILE": os.path.join(self.soaktest_dir, self.test_name + "_"

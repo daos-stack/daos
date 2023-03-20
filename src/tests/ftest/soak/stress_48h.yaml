@@ -9,7 +9,7 @@ orterun:
   allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
-timeout: 48H15M
+timeout: 48H30M
 setup:
   start_servers: true
   start_agents: true
@@ -81,6 +81,7 @@ soak_stress:
     - vpic_stress
     - lammps_stress
     - macsio_stress
+    - datamover_stress
   ignore_soak_errors: false
 # Commandline parameters
 # Benchmark and application params
@@ -263,6 +264,47 @@ macsio_stress:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+datamover_stress:
+  job_timeout: 10
+  nodesperjob:
+    - 1
+    - 4
+    - 8
+  taskspernode:
+    - 16
+    - 32
+  oclass:
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
+  dcp:
+    bufsize: 4M
+    chunksize: 128M
+  ior_write:
+    api:
+      - DFS
+    flags: "-w -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
+  ior_read:
+    api:
+      - DFS
+    flags: "-r -R -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:
