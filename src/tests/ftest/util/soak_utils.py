@@ -10,6 +10,7 @@ import time
 import random
 import threading
 import re
+import json
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from mdtest_utils import MdtestCommand
@@ -377,11 +378,9 @@ def wait_for_pool_rebuild(self, pool, name):
     """Launch the rebuild process with system.
 
     Args:
-
         self (obj): soak obj
         pools (obj): TestPool obj
         name (str): name of soak harasser
-
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
@@ -405,11 +404,9 @@ def launch_snapshot(self, pool, name):
     """Create a basic snapshot of the reserved pool.
 
     Args:
-
         self (obj): soak obj
         pool (obj): TestPool obj
         name (str): harasser
-
     """
     self.log.info(
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
@@ -476,6 +473,55 @@ def launch_snapshot(self, pool, name):
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
+def launch_vmd_identify_check(self, name, results, args):
+    """Run dmg cmds to blink/check VMD leds.
+
+    Args:
+        self (obj): soak obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    status = True
+    self.dmg_command.json.value = True
+    failing_vmd = []
+    result = self.dmg_command.storage_query_list_devices()
+
+    data = json.loads(result.stdout_text)
+    resp = data['response']
+    uuids = []
+    for value in list(resp['host_storage_map'].values()):
+        if value['storage']['smd_info']['devices']:
+            for device in value['storage']['smd_info']['devices']:
+                uuids.append(device['uuid'])
+
+    self.log.info("VMD device UUIDs: %s", uuids)
+
+    for uuid in uuids:
+        # Blink led
+        self.dmg_command.storage_led_identify(ids=uuid)
+        time.sleep(5)
+        # check if led is blinking
+        result = self.dmg_command.storage_led_check(ids=uuid)
+        # determine if leds are blinking as expected
+        for value in list(result['response']['host_storage_map'].values()):
+            if value['storage']['smd_info']['devices']:
+                for device in value['storage']['smd_info']['devices']:
+                    if device['led_state'] != "QUICK_BLINK":
+                        failing_vmd.append([device['tr_addr'], value['hosts']])
+                        status = False
+    params = {"name": name,
+              "status": status,
+              "vars": {"failing_vmd_devices": failing_vmd}}
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
