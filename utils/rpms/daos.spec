@@ -573,7 +573,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 * Wed Feb 8 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-2
 - Change ipmctl requirement from v2 to v3
->>>>>>> master
 
 * Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
 - Bump version to 2.3.103
