@@ -81,6 +81,11 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &count,
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
+	if (rc) {
+		DFUSE_TRA_ERROR(oh, "dfs_iterate() returned %d", rc);
+		return rc;
+	}
+
 	hdl->drh_anchor_index += count;
 	hdl->drh_dre_index      = 0;
 	hdl->drh_dre_last_index = count;
@@ -436,7 +441,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					    &duns_xattr_name, (void **)&outp, &attr_len);
 
 					if (rc != 0) {
-						DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+						DFUSE_TRA_ERROR(oh, "Problem finding file %d", rc);
 						D_GOTO(reply, 0);
 					}
 					/* Check oid is the same! */
@@ -634,7 +639,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
 			} else if (rc != 0) {
-				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+				DFUSE_TRA_ERROR(oh, "Problem finding file %d", rc);
 				D_GOTO(reply, rc);
 			}
 
