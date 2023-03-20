@@ -110,10 +110,9 @@ given set of hosts either through the `dmg` or `daos_server` tools.
 To generate a configuration file for a single storage server, run the `daos_server config generate`
 command locally. In this case, the `daos_server` service should not be running on the local host.
 
-`daos_server nvme prepare` should be run prior to `daos_server config generate` if the intent is to
-use NVMe and likewise `daos_server scm prepare` should be run prior to `daos_server config generate`
-if the intent is to use PMem for SCM. This will allow the relevant storage to be available for
-detection when attempting to generate the configuration files.
+`daos_server scm prepare` should be run prior to `daos_server config generate` if the intent is to
+use PMem for SCM. This will allow the relevant storage to be available for detection when
+attempting to generate the configuration files.
 
 ```bash
 $ daos_server config generate --help
@@ -660,8 +659,8 @@ Once the DAOS server started, the storage and network can be configured on the
 storage nodes via the dmg utility.
 
 !!! note
-    `daos_server storage` commands are not config aware meaning they will not
-    read parameters from the server configuration file.
+    `daos_server (nvme|scm)` commands are config aware meaning they will read parameters from the
+    server configuration file unless the `--ignore-config` flag is supplied.
 
 ### SCM Preparation
 
@@ -767,8 +766,8 @@ The server configuration file gives an administrator the ability to control
 storage selection.
 
 !!! note
-    `daos_server storage` commands are not config aware meaning they will not
-    read parameters from the server configuration file.
+    `daos_server (nvme|scm)` commands are config aware meaning they will read parameters from the
+    server configuration file unless the `--ignore-config` flag is supplied.
 
 #### Discovery
 
@@ -777,15 +776,15 @@ DAOS tools will discover NVMe SSDs and Persistent Memory Modules using the stora
 `dmg storage scan` can be run to query remote running `daos_server` processes over the management
 network.
 
-`daos_server storage scan` can be used to query storage on the local host directly.
+`daos_server (nvme|scm) scan` can be used to query storage on the local host directly.
 
-!!! warning
-    'daos_server' should not be running (e.g. as a systemd service under the 'daos_server'
-    userid) when the `daos_server storage scan` command is executed, as the NVMe SSDs will then
-    already be bound to the 'daos_server' processes and trying to access them (as a
-    non-'daos_server' user, even as root) will cause access failures.
+!!! note
+    'daos_server' commands will refuse to run if a process with the same name exists (e.g. as a
+    systemd service under the 'daos_server' userid).
 
-NVMe SSDs need to be made accessible first by running `daos_server nvme prepare`.
+NVMe SSDs no longer need to be made accessible first by running `daos_server nvme prepare`,
+`daos_server nvme scan` will take the necessary steps to prepare the devices unless `--skip-prep`
+flag is supplied.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `--disable-vfio` in the nvme prepare command to
@@ -828,7 +827,19 @@ For further info on dmg storage command usage run `dmg storage --help`.
 
 To release the NVMe drives from the user-space drivers and bind them back to the kernel "nvme"
 driver so they can be used by the OS (and reappear as /dev/nvme\* block devices), run
-`daos_server nvme reset` with any relevant options (see command help for details).
+`daos_server nvme reset` with any relevant options (see command help for details). The reset
+command will also release any hugepages used by no-longer-active SPDK processes.
+
+`daos_server nvme scan` will perform a subsequent reset implicitly so manual reset is not required
+but a stopped `daos_server` may not reset device bindings and hugepage resources and may require a
+manual reset to do so.
+
+!!! warning
+    Due to [SPDK issue 2926](https://github.com/spdk/spdk/issues/2926), if VMD is enabled and
+    PCI_ALLOWED list is set to a subset of available VMD controllers (as specified in the server
+    config file) then the backing devices of the unselected VMD controllers will be bound to no
+    driver and therefore inaccessible from both OS and SPDK. Workaround is to run
+    `daos_server nvme scan --ignore-config` to reset driver bindings for all VMD controllers.
 
 #### Health
 

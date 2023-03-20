@@ -83,6 +83,14 @@ class DmgCommand(DmgCommandBase):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgCommand: a new DmgCommand object
+        """
+        return DmgCommand(self._path, self.yaml, self.hostlist_suffix)
+
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
 
@@ -321,23 +329,40 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
-    def storage_identify_vmd(self, uuid, verbose=False):
-        """Get the result of the 'dmg storage identify vmd".
+    def storage_led_identify(self, timeout=None, reset=False, ids=None):
+        """Get the result of the 'dmg storage led identify".
 
         Args:
-            uuid (str): Device UUID to query.
-            verbose (bool, optional): create verbose output. Defaults to False.
+            timeout (str, optional): Length of time for LED to blink. Defaults to None.
+            reset (bool, optional): Reset the LED status to previous state. Defaults to False.
+            ids (str, optional): Comma separated device id. Defaults to None.
 
         Returns:
             dict: JSON formatted dmg command result.
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg storage led identify command fails.
 
         """
         return self._get_json_result(
-            ("storage", "identify", "vmd"), uuid=uuid,
-            verbose=verbose)
+            ("storage", "led", "identify"), timeout=timeout,
+            reset=reset, ids=ids)
+
+    def storage_led_check(self, ids=None):
+        """Get the result of the 'dmg storage led check".
+
+        Args:
+            ids (str, optional): Comma separated device id. Defaults to None.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage led check command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "led", "check"), ids=ids)
 
     def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
         """Get the result of the 'dmg storage replace nvme' command.
@@ -609,7 +634,7 @@ class DmgCommand(DmgCommandBase):
         """Query a pool with the dmg command.
 
         Args:
-            uuid (str): Pool UUID to query.
+            pool (str): Pool UUID or label to query.
             show_enabled (bool, optional): Display enabled ranks.
             show_disabled (bool, optional): Display disabled ranks.
 
@@ -659,6 +684,24 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
                                      show_enabled=show_enabled, show_disabled=show_disabled)
+
+    def pool_query_targets(self, pool, rank=None, target_idx=None):
+        """Call dmg pool query-targets.
+
+        Args:
+            pool (str): Pool UUID or label
+            rank (str, optional): Engine rank of the targets to be queried
+            target_idx (str, optional): Comma-separated list of target idx(s) to be queried
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("pool", "query-targets"), pool=pool,
+                                     rank=rank, target_idx=target_idx)
 
     def pool_destroy(self, pool, force=True, recursive=True):
         """Destroy a pool with the dmg command.
@@ -831,8 +874,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-prop command fails.
 
         """
-        return self._get_json_result(
-            ("pool", "get-prop {} {}".format(pool, name)))
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
 
     def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.
