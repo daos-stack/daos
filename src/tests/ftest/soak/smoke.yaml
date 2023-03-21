@@ -244,8 +244,8 @@ datamover_smoke:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
   dcp:
-    bufsize: 4M
-    chunksize: 128M
+    bufsize: 1M
+    chunksize: 1M
   ior_write:
     api:
       - DFS

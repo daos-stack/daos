@@ -281,8 +281,8 @@ datamover_stress:
     #  - ["EC_8P2G1", "RP_3GX"]
     #  - ["EC_16P2GX", "RP_3GX"]
   dcp:
-    bufsize: 4M
-    chunksize: 128M
+    bufsize: 1M
+    chunksize: 1M
   ior_write:
     api:
       - DFS
