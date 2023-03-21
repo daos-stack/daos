@@ -6,6 +6,7 @@
 import random
 import threading
 import time
+import json
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -144,11 +145,16 @@ class DiskFailureTest(OSAUtils):
             try:
                 self.dmg_command.hostlist = NodeSet(host)
                 # Set the device as faulty
-                get_dmg_response(self, self.dmg_command.storage_set_faulty,
-                                 uuid=device["uuid"])
-                # Replace the device with same uuid.
-                get_dmg_response(
-                    self, self.dmg_command.storage_replace_nvme,
-                    old_uuid=device["uuid"], new_uuid=device["uuid"])
+                self.dmg_command.json.value = True
+                result = self.dmg_command.storage_set_faulty(uuid=device["uuid"])
+                data = json.loads(result.stdout_text)
+                self.dmg_command.json.value = False
+                if data["error"]:
+                    self.fail("Test failed to set the NVMe faulty bit")
+                else:
+                    # Replace the device with same uuid.
+                    get_dmg_response(
+                        self, self.dmg_command.storage_replace_nvme,
+                        old_uuid=device["uuid"], new_uuid=device["uuid"])
             finally:
                 self.dmg_command.hostlist = self.server_managers[0].hosts
