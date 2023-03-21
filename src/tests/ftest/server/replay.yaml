@@ -12,7 +12,9 @@ server_config:
       storage: auto
 
 pool:
-  size: 50%
+  # size: 50%
+  scm_size: 1G
+  nvme_size: 4G
 
 container:
   control_method: daos
@@ -21,8 +23,10 @@ ior: &ior_base
   client_processes:
     ppn: 4
   api: DFS
-  transfer_size: 512K
-  block_size: 1G
+  # transfer_size: 512K
+  # block_size: 1G
+  transfer_size: '1K'
+  block_size: '512M'
   dfs_oclass: SX
 
 ior_write:
