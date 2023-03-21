@@ -181,7 +181,6 @@ Requires: fuse3 >= 3
 Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
 %endif
-Requires: numactl
 %{?systemd_requires}
 
 %description client
@@ -555,7 +554,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
-- Add numactl requires for server and agent
+- Add numactl requires for server package
 
 * Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
 - Bump version to be higher than TB5

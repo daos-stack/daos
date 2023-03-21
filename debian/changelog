@@ -1,6 +1,6 @@
 daos (2.3.106-2) unstable; urgency=medium
   [ Tom Nabarro ]
-  * Add numactl requires for server and agent
+  * Add numactl requires for server package
 
  -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 17 Mar 2023 12:43:00 -0400
 
