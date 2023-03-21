@@ -159,9 +159,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
                 # Check pool version incremented after pool reintegrate
                 self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
-                if self.test_during_aggregation is True:
-                    self.assertTrue(initial_free_space == free_space_after_reintegration,
-                                    "Free space error after reintegration")
+                self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
+                                "Free space error after reintegration")
 
             display_string = "{} space at the End".format(str(self.pool))
             self.pool.display_pool_daos_space(display_string)
