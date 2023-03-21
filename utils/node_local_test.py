@@ -3435,6 +3435,7 @@ class PosixTests():
         with open(fname1, 'rb') as fd:
             data = fd.read()
             data = data.decode('utf-8-sig').strip()
+            print(data)
             if data != 'test1':
                 raise NLTestFail('/test_dir/f1 data is corrupted')
 
