@@ -1,5 +1,6 @@
 """Build Blob I/O tests"""
 
+
 def scons():
     """Execute build"""
     Import('denv')
@@ -13,6 +14,7 @@ def scons():
     bio_ut_src = ['bio_ut.c', 'wal_ut.c']
     bio_ut = env.d_test_program('bio_ut', bio_ut_src, LIBS=libraries)
     env.Install('$PREFIX/bin/', bio_ut)
+
 
 if __name__ == "SCons.Script":
     scons()

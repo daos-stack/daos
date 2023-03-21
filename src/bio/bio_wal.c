@@ -1734,9 +1734,11 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 	if (rc)	/* Flush the WAL header anyway */
 		D_ERROR("Unmap checkpointed region failed. "DF_RC"\n", DP_RC(rc));
 
-	/* Flush the WAL header */
 	si->si_ckp_id = tx_id;
 	si->si_ckp_blks = blk_desc.bd_blks;
+	wakeup_reserve_waiters(si, false);
+
+	/* Flush the WAL header */
 	rc = bio_wal_flush_header(mc);
 	if (rc)
 		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));

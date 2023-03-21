@@ -45,8 +45,8 @@ def build_daos_common(denv, client, prereqs):
         prereqs.require(benv, 'argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files +
-                            stack_mmap_files + sys_lmdb_files, LIBS=common_libs)
+    common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files
+                            + sys_lmdb_files, LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 

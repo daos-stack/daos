@@ -151,35 +151,48 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
+	struct bio_wal_info wal_info;
+	struct vos_pool    *pool;
+
+	pool = store->vos_priv;
+
+	if (unlikely(pool == NULL))
+		goto reserve; /** In case there is any race for checkpoint init. */
+
+	/** Update checkpoint state before reserve to ensure we activate checkpointing if there
+	 *  is any space pressure in the WAL.
+	 */
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
+			   wal_info.wi_tot_blks);
+
+reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
 	return bio_wal_reserve(store->stor_priv, tx_id);
-}
-
-static void
-vos_wal_on_commit(struct umem_store *store, uint64_t id)
-{
-	struct chkpt_ctx *ctx = store->chkpt_ctx;
-
-	if (ctx == NULL)
-		return; /** Checkpointing not active */
-
-	ctx->cc_commit_id = id;
-
-	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0) {
-		ctx->cc_wake_fn(ctx);
-		store->chkpt_ctx = NULL;
-	}
 }
 
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	int rc;
+	struct bio_wal_info wal_info;
+	struct vos_pool    *pool;
+	int                 rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
 
-	vos_wal_on_commit(store, wal_tx->utx_id);
+	pool = store->vos_priv;
+	if (unlikely(pool == NULL))
+		return rc; /** In case there is any race for checkpoint init. */
+
+	/** Update checkpoint state after commit in case there is an active checkpoint waiting
+	 *  for this commit to finish.
+	 */
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
+			   wal_info.wi_tot_blks);
 
 	return rc;
 }
@@ -200,27 +213,6 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 	return bio_wal_id_cmp(store->stor_priv, id1, id2);
 }
 
-static void
-chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
-{
-	struct chkpt_ctx *ctx = arg;
-
-	if (store->stor_ops->so_wal_id_cmp(store, chkpt_tx, ctx->cc_commit_id) <= 0) {
-		/** Sometimes we may need to yield here to make progress such as when we need
-		 *  more DMA buffers to prepare entries.
-		 */
-		if (!ctx->cc_is_idle_fn())
-			ctx->cc_yield_fn(ctx);
-		goto done;
-	}
-
-	ctx->cc_wait_id = chkpt_tx;
-	store->chkpt_ctx = ctx;
-	ctx->cc_wait_fn(ctx);
-done:
-	*committed_tx = ctx->cc_commit_id;
-}
-
 struct umem_store_ops vos_store_ops = {
     .so_read       = vos_meta_readv,
     .so_write      = vos_meta_writev,
@@ -232,6 +224,53 @@ struct umem_store_ops vos_store_ops = {
     .so_wal_replay = vos_wal_replay,
     .so_wal_id_cmp = vos_wal_id_cmp,
 };
+
+void
+vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
+			 vos_chkpt_wait_cb_t wait_cb, void *arg, struct umem_store **storep)
+{
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	struct umem_store    *store;
+	struct bio_wal_info   wal_info;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	umm   = vos_pool2umm(pool);
+	store = &umm->umm_pool->up_store;
+
+	pool->vp_update_cb = update_cb;
+	pool->vp_wait_cb   = wait_cb;
+	pool->vp_chkpt_arg = arg;
+	store->vos_priv    = pool;
+
+	*storep = store;
+
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	/** Set the initial values */
+	update_cb(arg, wal_info.wi_commit_id, wal_info.wi_used_blks, wal_info.wi_tot_blks);
+}
+
+void
+vos_pool_checkpoint_fini(daos_handle_t poh)
+{
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	struct umem_store    *store;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	umm   = vos_pool2umm(pool);
+	store = &umm->umm_pool->up_store;
+
+	pool->vp_update_cb = NULL;
+	pool->vp_wait_cb   = NULL;
+	pool->vp_chkpt_arg = NULL;
+	store->vos_priv    = NULL;
+}
 
 bool
 vos_pool_needs_checkpoint(daos_handle_t poh)
@@ -246,7 +285,7 @@ vos_pool_needs_checkpoint(daos_handle_t poh)
 }
 
 int
-vos_pool_checkpoint(struct chkpt_ctx *ctx)
+vos_pool_checkpoint(daos_handle_t poh)
 {
 	struct vos_pool      *pool;
 	uint64_t              tx_id;
@@ -255,7 +294,7 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	struct bio_wal_info   wal_info;
 	int                   rc;
 
-	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
+	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
 	umm   = vos_pool2umm(pool);
@@ -270,12 +309,17 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
 	       DP_UUID(pool->vp_id), tx_id);
-	ctx->cc_commit_id = tx_id;
 
-	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
+	rc = umem_cache_checkpoint(store, pool->vp_wait_cb, pool->vp_chkpt_arg, &tx_id);
 
 	if (rc == 0)
 		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
+
+	bio_wal_query(store->stor_priv, &wal_info);
+
+	/* Update the used block info post checkpoint */
+	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
+			   wal_info.wi_tot_blks);
 
 	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
 	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
