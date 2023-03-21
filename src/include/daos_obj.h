@@ -95,7 +95,12 @@ enum daos_otype_t {
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
 
-	DAOS_OT_MAX		= 13,
+	/**
+	 * Second version of Object ID table.
+	 */
+	DAOS_OT_OIT_V2		= 14,
+
+	DAOS_OT_MAX		= 14,
 
 	/**
 	 * reserved: Multi Dimensional Array

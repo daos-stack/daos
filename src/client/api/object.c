@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -360,10 +360,14 @@ int
 daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 	      daos_handle_t *oh, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	daos_obj_id_t	 oid;
-	uint32_t	 cont_rf;
-	int		 rc;
+	tse_task_t		     *task;
+	daos_obj_id_t		      oid;
+	uint32_t		      oit_oid_ver;
+	uint32_t		      cont_rf;
+	uint32_t		      co_global_ver;
+	int			      rc;
+	struct daos_task_args	     *task_args;
+	daos_cont_snap_oit_oid_get_t *goo_args;
 
 	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
 	if (rc) {
@@ -371,7 +375,35 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 		return rc;
 	}
 
-	oid = daos_oit_gen_id(epoch, cont_rf);
+	rc = dc_cont_hdl2globalver(coh, &co_global_ver);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2globalver failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (co_global_ver < 2) {
+		oid = daos_oit_gen_id(epoch, cont_rf);
+		goto open;
+	}
+
+	rc = dc_task_create(dc_cont_snap_oit_oid_get, NULL, NULL, &task);
+	if (rc)
+		return rc;
+
+	task_args = tse_task_buf_embedded(task, sizeof(struct daos_task_args));
+	goo_args = (void *)&task_args->ta_u;
+	goo_args->coh = coh;
+	goo_args->epoch = epoch;
+	goo_args->oid = &oid;
+	goo_args->ver = &oit_oid_ver;
+
+	rc = dc_task_schedule(task, true);
+	if (rc) {
+		tse_task_complete(task, rc);
+		return rc;
+	}
+
+open:
 	rc = dc_obj_open_task_create(coh, oid, DAOS_OO_RW, oh, ev, NULL, &task);
 	if (rc)
 		return rc;
@@ -397,21 +429,49 @@ struct oit_args {
 	daos_key_desc_t		*oa_kds;
 	d_sg_list_t		 oa_sgl;
 	daos_key_t		 oa_dkey;
-	/* A bucket is just an integer dkey for OI object, the current
-	 * implementation only has one bucket (dkey).
+	/* A bucket is just an integer dkey for OI object.
 	 */
 	uint32_t		 oa_bucket;
-	int			 oa_nr;
+	uint32_t		 oa_want_nr;
+	uint32_t		 oa_listed_nr;
 };
 
-static int
-oit_list_cb(tse_task_t *task, void *args)
+static void
+anchor2buckets(daos_anchor_t *anchor, uint32_t *cur_bucket)
 {
-	struct oit_args	*oa = *(struct oit_args **)args;
+	char *ptr = (char *)&anchor->da_buf[DAOS_ANCHOR_BUF_MAX - 4];
 
-	d_sgl_fini(&oa->oa_sgl, false);
-	D_FREE(oa->oa_kds);
-	D_FREE(oa);
+	memcpy((char *)cur_bucket, ptr, 4);
+}
+
+static void
+buckets2anchor(daos_anchor_t *anchor, uint32_t cur_bucket)
+{
+	char *ptr = (char *)&anchor->da_buf[DAOS_ANCHOR_BUF_MAX - 4];
+
+	memcpy(ptr, (char *)&cur_bucket, 4);
+}
+
+static int
+oit_max_bucket(daos_handle_t oh, uint32_t *max_bucket)
+{
+	daos_handle_t	coh;
+	uint32_t	globalver;
+	int		rc;
+
+	coh = dc_obj_hdl2cont_hdl(oh);
+	if (!daos_handle_is_valid(coh))
+		return -DER_INVAL;
+
+	rc = dc_cont_hdl2globalver(coh, &globalver);
+	if (rc)
+		return rc;
+
+	if (globalver < 2)
+		*max_bucket = 1;
+	else
+		*max_bucket = DAOS_OIT_BUCKET_MAX;
+
 	return 0;
 }
 
@@ -419,53 +479,88 @@ int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev)
 {
-	struct oit_args	*oa;
-	tse_task_t	*task;
 	int		 i;
-	int		 rc;
+	int		 rc = 0;
+	uint32_t	 max_bucket;
+	uint32_t	 bucket;
+	struct oit_args	*oa;
 
 	if (daos_handle_is_inval(oh) ||
 	    oids == NULL || oids_nr == NULL || *oids_nr <= 0 || !anchor)
 		return -DER_INVAL;
 
+	rc = oit_max_bucket(oh, &max_bucket);
+	if (rc)
+		return rc;
+
+	anchor2buckets(anchor, &bucket);
+	if (bucket >= max_bucket) {
+		*oids_nr = 0;
+		if (ev)
+			daos_event_complete(ev, 0);
+		return 0;
+	}
+
 	D_ALLOC_PTR(oa);
 	if (!oa)
 		return -DER_NOMEM;
 
-	oa->oa_nr = *oids_nr;
-	D_ALLOC_ARRAY(oa->oa_kds, oa->oa_nr);
+	oa->oa_want_nr = *oids_nr;
+	oa->oa_listed_nr = 0;
+	oa->oa_bucket = bucket;
+	D_ALLOC_ARRAY(oa->oa_kds, oa->oa_want_nr);
 	if (!oa->oa_kds)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
-	rc = d_sgl_init(&oa->oa_sgl, oa->oa_nr);
+	rc = d_sgl_init(&oa->oa_sgl, oa->oa_want_nr);
 	if (rc)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
-	for (i = 0; i < oa->oa_nr; i++)
-		d_iov_set(&oa->oa_sgl.sg_iovs[i], &oids[i], sizeof(oids[i]));
+	anchor2buckets(anchor, &oa->oa_bucket);
+	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &oa->oa_bucket);
+	while (1) {
+		for (i = 0; i < *oids_nr; i++)
+			d_iov_set(&oa->oa_sgl.sg_iovs[i], &oids[i + oa->oa_listed_nr],
+				  sizeof(oids[i + oa->oa_listed_nr]));
 
-	/* all OIDs are stored under one dkey for now */
-	d_iov_set(&oa->oa_dkey, &oa->oa_bucket, sizeof(oa->oa_bucket));
-	rc = dc_obj_list_akey_task_create(oh, DAOS_TX_NONE, &oa->oa_dkey,
-					  oids_nr, oa->oa_kds, &oa->oa_sgl,
-					  anchor, ev, NULL, &task);
-	if (rc)
-		D_GOTO(failed, rc);
+		rc = daos_obj_list_akey(oh, DAOS_TX_NONE, &oa->oa_dkey, oids_nr,
+					oa->oa_kds, &oa->oa_sgl, anchor, NULL);
+		if (rc)
+			D_GOTO(failed, rc);
 
-	rc = tse_task_register_comp_cb(task, oit_list_cb, &oa, sizeof(oa));
-	if (rc) {
-		tse_task_complete(task, rc);
-		D_GOTO(failed, rc);
+		oa->oa_listed_nr += *oids_nr;
+		/* we are done, move to next if needed */
+		if (oa->oa_listed_nr >= oa->oa_want_nr) {
+			if (oa->oa_bucket < max_bucket - 1 &&
+			    daos_anchor_is_eof(anchor)) {
+				memset(anchor, 0, sizeof(*anchor));
+				buckets2anchor(anchor, oa->oa_bucket + 1);
+			}
+			*oids_nr = oa->oa_listed_nr;
+			break;
+		}
+
+		if (daos_anchor_is_eof(anchor)) {
+			if (oa->oa_bucket == max_bucket - 1) {
+				*oids_nr = oa->oa_listed_nr;
+				break;
+			}
+			memset(anchor, 0, sizeof(*anchor));
+			oa->oa_bucket++;
+			buckets2anchor(anchor, oa->oa_bucket);
+		}
+		*oids_nr = oa->oa_want_nr - oa->oa_listed_nr;
 	}
-
-	return dc_task_schedule(task, true);
 
 failed:
 	/* NB: OK to call with empty sgl */
 	d_sgl_fini(&oa->oa_sgl, false);
 	D_FREE(oa->oa_kds);
 	D_FREE(oa);
+	if (ev)
+		daos_event_complete(ev, rc);
 	return rc;
+
 }
 
 struct oit_mark_arg {
@@ -486,7 +581,7 @@ oit_mark_arg_free(struct oit_mark_arg *arg)
 }
 
 static struct oit_mark_arg *
-oit_mark_arg_alloc(daos_obj_id_t oid, d_iov_t *marker)
+oit_mark_arg_alloc(daos_obj_id_t oid, d_iov_t *marker, uint32_t bid)
 {
 	struct oit_mark_arg	*arg;
 	void			*buf, *ptr, *val;
@@ -505,7 +600,7 @@ oit_mark_arg_alloc(daos_obj_id_t oid, d_iov_t *marker)
 	arg = (struct oit_mark_arg *)ptr;
 	arg->oma_buf = buf;
 	arg->oma_oid = oid;
-	arg->oma_bid = 0;
+	arg->oma_bid = bid;
 	DAOS_OIT_DKEY_SET(&arg->oma_dkey, &arg->oma_bid);
 	ptr += roundup(sizeof(struct oit_mark_arg), 8);
 	arg->oma_sgl = (d_sg_list_t *)ptr;
@@ -549,13 +644,23 @@ daos_oit_mark(daos_handle_t oh, daos_obj_id_t oid, d_iov_t *marker, daos_event_t
 	struct oit_mark_arg	*arg = NULL;
 	tse_task_t		*task;
 	int			 rc;
+	daos_handle_t		 coh;
+	uint32_t		 bid;
 
 	if (daos_handle_is_inval(oh) ||
 	    (marker != NULL && (marker->iov_buf == NULL || marker->iov_len == 0 ||
 	     marker->iov_len > marker->iov_buf_len || marker->iov_len > DAOS_OIT_MARKER_MAX_LEN)))
 		return -DER_INVAL;
 
-	arg = oit_mark_arg_alloc(oid, marker);
+	coh = dc_obj_hdl2cont_hdl(oh);
+	if (!daos_handle_is_valid(coh))
+		return -DER_INVAL;
+
+	rc = dc_cont_oid2bid(coh, oid, &bid);
+	if (rc)
+		return rc;
+
+	arg = oit_mark_arg_alloc(oid, marker, bid);
 	if (arg == NULL)
 		return -DER_NOMEM;
 
@@ -586,7 +691,8 @@ struct oit_filter_arg {
 	d_sg_list_t		 oa_sgl;
 	daos_key_t		 oa_dkey;
 	uint32_t		 oa_bucket;
-	int			 oa_nr;
+	int			 oa_listed_nr;
+	int			 oa_want_nr;
 	void			*oa_fbuf;
 	daos_iod_t		*oa_fiods;
 	d_sg_list_t		*oa_fsgls;
@@ -655,9 +761,8 @@ oit_filter_arg_free(struct oit_filter_arg *oa)
 }
 
 static int
-oit_filter_cb(tse_task_t *task, void *args)
+oit_filter_oids(struct oit_filter_arg *oa)
 {
-	struct oit_filter_arg	*oa = *(struct oit_filter_arg **)args;
 	daos_oit_filter_cb	*filter = oa->oa_filter;
 	daos_obj_id_t		*oids = oa->oa_oids;
 	uint32_t		*oids_nr = oa->oa_oids_nr;
@@ -665,12 +770,8 @@ oit_filter_cb(tse_task_t *task, void *args)
 	int			 i, j, iov_idx;
 	int			 rc = 0;
 
-	if (task->dt_result != 0) {
-		oit_filter_arg_free(oa);
+	if (*oids_nr == 0)
 		return 0;
-	}
-
-	D_ASSERT(*oids_nr > 0);
 
 	for (i = 0, iov_idx = 0; i < *oids_nr; i++) {
 		iov = &iovs[iov_idx++];
@@ -701,74 +802,8 @@ oit_filter_cb(tse_task_t *task, void *args)
 			continue;
 		}
 	}
-	oit_filter_arg_free(oa);
+
 	return rc;
-}
-
-static int
-oit_filter_list_cb(tse_task_t *task, void *args)
-{
-	struct oit_filter_arg	*oa = *(struct oit_filter_arg **)args;
-	uint32_t		*oids_nr = oa->oa_oids_nr;
-	tse_task_t		*ftask = NULL;
-	struct daos_task_args	*task_args;
-	daos_obj_fetch_t	*fargs;
-	int			 rc = 0;
-
-	if (task->dt_result != 0 || *oids_nr == 0) {
-		oit_filter_arg_free(oa);
-		return 0;
-	}
-
-	rc = oit_filter_fetch_init(oa);
-	if (rc) {
-		oit_filter_arg_free(oa);
-		return rc;
-	}
-
-	/* create fetch task to get back marker data, cannot directly call dc_obj_fetch_task_create
-	 * here to avoid dc_task_create() -> daos_event_priv_get() failure.
-	 */
-	DAOS_API_ARG_ASSERT(*fargs, OBJ_FETCH);
-	rc = tse_task_create(dc_obj_fetch_task, tse_task2sched(task), NULL, &ftask);
-	if (rc) {
-		oit_filter_arg_free(oa);
-		return rc;
-	}
-	task_args = tse_task_buf_embedded(ftask, sizeof(struct daos_task_args));
-	task_args->ta_magic = DAOS_TASK_MAGIC;
-	fargs = (void *)&task_args->ta_u;
-	fargs->oh		= oa->oa_oh;
-	fargs->th		= DAOS_TX_NONE;
-	fargs->flags		= 0;
-	fargs->dkey		= &oa->oa_dkey;
-	fargs->nr		= *oids_nr;
-	fargs->extra_flags	= 0;
-	fargs->iods		= oa->oa_fiods;
-	fargs->sgls		= oa->oa_fsgls;
-	fargs->ioms		= NULL;
-	fargs->extra_arg	= NULL;
-	fargs->csum_iov		= NULL;
-
-	rc = tse_task_register_deps(task, 1, &ftask);
-	if (rc != 0) {
-		tse_task_complete(ftask, rc);
-		oit_filter_arg_free(oa);
-		return rc;
-	}
-
-	rc = tse_task_register_comp_cb(task, oit_filter_cb, &oa, sizeof(oa));
-	if (rc) {
-		tse_task_complete(ftask, rc);
-		oit_filter_arg_free(oa);
-		return rc;
-	}
-
-	rc = tse_task_schedule(ftask, 0);
-	if (rc)
-		tse_task_complete(ftask, rc);
-
-	return 0;
 }
 
 int
@@ -776,53 +811,93 @@ daos_oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 		     daos_anchor_t *anchor, daos_oit_filter_cb filter, daos_event_t *ev)
 {
 	struct oit_filter_arg	*oa;
-	tse_task_t		*task;
 	int			 i;
 	int			 rc;
+	uint32_t		 max_bucket;
 
 	if (daos_handle_is_inval(oh) || oids == NULL || oids_nr == NULL || *oids_nr == 0 ||
 	    anchor == NULL || filter == NULL)
 		return -DER_INVAL;
 
+	rc = oit_max_bucket(oh, &max_bucket);
+	if (rc)
+		return rc;
+
 	D_ALLOC_PTR(oa);
 	if (!oa)
 		return -DER_NOMEM;
 
-	oa->oa_oh	= oh;
-	oa->oa_oids	= oids;
-	oa->oa_oids_nr	= oids_nr;
-	oa->oa_ev	= ev;
-	oa->oa_filter	= filter;
-	oa->oa_nr	= *oids_nr;
-	D_ALLOC_ARRAY(oa->oa_kds, oa->oa_nr);
+	oa->oa_oh	  = oh;
+	oa->oa_oids	  = oids;
+	oa->oa_oids_nr	  = oids_nr;
+	oa->oa_ev	  = ev;
+	oa->oa_filter	  = filter;
+	oa->oa_want_nr	  = *oids_nr;
+	oa->oa_listed_nr  = 0;
+	D_ALLOC_ARRAY(oa->oa_kds, oa->oa_want_nr);
 	if (!oa->oa_kds)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
-	rc = d_sgl_init(&oa->oa_sgl, oa->oa_nr);
+	rc = d_sgl_init(&oa->oa_sgl, oa->oa_want_nr);
 	if (rc)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
-	for (i = 0; i < oa->oa_nr; i++)
-		d_iov_set(&oa->oa_sgl.sg_iovs[i], &oids[i], sizeof(oids[i]));
-
-	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &oa->oa_bucket);
-	rc = dc_obj_list_akey_task_create(oh, DAOS_TX_NONE, &oa->oa_dkey,
-					  oids_nr, oa->oa_kds, &oa->oa_sgl,
-					  anchor, ev, NULL, &task);
+	rc = oit_filter_fetch_init(oa);
 	if (rc)
-		D_GOTO(failed, rc);
+		D_GOTO(failed, rc = -DER_NOMEM);
 
-	rc = tse_task_register_comp_cb(task, oit_filter_list_cb, &oa, sizeof(oa));
-	if (rc) {
-		tse_task_complete(task, rc);
-		D_GOTO(failed, rc);
+	anchor2buckets(anchor, &oa->oa_bucket);
+	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &oa->oa_bucket);
+	while (1) {
+		for (i = 0; i < *oa->oa_oids_nr; i++)
+			d_iov_set(&oa->oa_sgl.sg_iovs[i], &oa->oa_oids[i + oa->oa_listed_nr],
+				  sizeof(oa->oa_oids[0]));
+
+		rc = daos_obj_list_akey(oh, DAOS_TX_NONE, &oa->oa_dkey, oids_nr,
+					oa->oa_kds, &oa->oa_sgl, anchor, NULL);
+		if (rc)
+			D_GOTO(failed, rc);
+
+		/* fetch if needed for this akeys */
+		if (*oids_nr > 0) {
+			rc = daos_obj_fetch(oa->oa_oh, DAOS_TX_NONE, 0,
+					    &oa->oa_dkey, *oids_nr,
+					    oa->oa_fiods + oa->oa_listed_nr,
+					    oa->oa_fsgls + oa->oa_listed_nr, NULL, NULL);
+			if (rc)
+				D_GOTO(failed, rc);
+		}
+
+		oa->oa_listed_nr += *oa->oa_oids_nr;
+		/* we are done, move to next if needed */
+		if (oa->oa_listed_nr >= oa->oa_want_nr) {
+			if (oa->oa_bucket < max_bucket - 1 &&
+			    daos_anchor_is_eof(anchor)) {
+				memset(anchor, 0, sizeof(*anchor));
+				buckets2anchor(anchor, oa->oa_bucket + 1);
+			}
+			*oa->oa_oids_nr = oa->oa_listed_nr;
+			break;
+		}
+
+		if (daos_anchor_is_eof(anchor)) {
+			if (oa->oa_bucket == max_bucket - 1) {
+				*oa->oa_oids_nr = oa->oa_listed_nr;
+				break;
+			}
+			memset(anchor, 0, sizeof(*anchor));
+			oa->oa_bucket++;
+			buckets2anchor(anchor, oa->oa_bucket);
+		}
+		*oa->oa_oids_nr = oa->oa_want_nr - oa->oa_listed_nr;
 	}
 
-	return dc_task_schedule(task, true);
-
+	rc = oit_filter_oids(oa);
 failed:
 	/* NB: OK to call with empty sgl */
 	oit_filter_arg_free(oa);
+	if (ev)
+		daos_event_complete(ev, rc);
 	return rc;
 }
 
