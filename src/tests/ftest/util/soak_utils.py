@@ -17,6 +17,7 @@ from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import Dfuse
+from dmg_utils import get_storage_query_device_info
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
@@ -487,17 +488,9 @@ def launch_vmd_identify_check(self, name, results, args):
         args (queue): multiprocessing queue
     """
     status = True
-    self.dmg_command.json.value = True
     failing_vmd = []
-    result = self.dmg_command.storage_query_list_devices()
-
-    data = json.loads(result.stdout_text)
-    resp = data['response']
-    uuids = []
-    for value in list(resp['host_storage_map'].values()):
-        if value['storage']['smd_info']['devices']:
-            for device in value['storage']['smd_info']['devices']:
-                uuids.append(device['uuid'])
+    device_info = get_storage_query_device_info(self, self.dmg_command)
+    uuids = [device['uuid'] for device in device_info]
 
     self.log.info("VMD device UUIDs: %s", uuids)
 
