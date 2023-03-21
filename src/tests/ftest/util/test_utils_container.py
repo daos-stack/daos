@@ -276,7 +276,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
-        self.label = BasicParameter(None)
+        self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
 
         self.container = None
@@ -359,6 +359,10 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.container = DaosContainer(self.pool.context)
 
         if self.control_method.value == self.USE_API:
+            # pydaos.raw doesn't support create with a label
+            self.log.info("Ignoring label for container created with API")
+            self.label.update(None)
+
             # Create a container with the API method
             kwargs = {"poh": self.pool.pool.handle}
             if uuid is not None:
