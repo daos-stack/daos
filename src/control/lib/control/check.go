@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -422,6 +424,12 @@ func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
 }
 
+func (r *SystemCheckReport) IsRemovedPool() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
+		(r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE ||
+			r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS)
+}
+
 func (r *SystemCheckReport) Resolution() string {
 	msg := SystemCheckRepairAction(r.Action).String()
 	if len(r.ActMsgs) == 1 {
@@ -438,9 +446,26 @@ type SystemCheckPoolInfo struct {
 	Label       string        `json:"label"`
 	Status      string        `json:"status"`
 	Phase       string        `json:"phase"`
-	StartTime   time.Time     `json:"start_time"`
-	Remaining   time.Duration `json:"remaining"`
-	Elapsed     time.Duration `json:"elapsed"`
+	StartTime   time.Time     `json:"-"`
+	Remaining   time.Duration `json:"-"`
+	Elapsed     time.Duration `json:"-"`
+}
+
+func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckPoolInfo
+	return json.Marshal(&struct {
+		*toJSON
+		RankCount int     `json:"rank_count"`
+		StartTime string  `json:"start_time"`
+		Remaining float64 `json:"remaining"`
+		Elapsed   float64 `json:"elapsed"`
+	}{
+		toJSON:    (*toJSON)(p),
+		RankCount: len(p.RawRankInfo),
+		StartTime: common.FormatTime(p.StartTime),
+		Remaining: p.Remaining.Seconds(),
+		Elapsed:   p.Elapsed.Seconds(),
+	})
 }
 
 func (p *SystemCheckPoolInfo) String() string {
@@ -450,8 +475,12 @@ func (p *SystemCheckPoolInfo) String() string {
 	} else if p.Remaining > 0 {
 		remOrElapsed = fmt.Sprintf(" remaining: %s", p.Remaining)
 	}
-	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s, started: %s%s",
-		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, p.StartTime, remOrElapsed)
+	timeStr := ""
+	if !p.StartTime.IsZero() {
+		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remOrElapsed)
+	}
+	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
+		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) Unchecked() bool {
@@ -505,6 +534,17 @@ type SystemCheckQueryResp struct {
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
+}
+
+func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckQueryResp
+	return json.Marshal(struct {
+		StartTime string `json:"start_time"`
+		*toJSON
+	}{
+		StartTime: common.FormatTime(r.StartTime),
+		toJSON:    (*toJSON)(r),
+	})
 }
 
 // SystemCheckQuery queries the system checker status.

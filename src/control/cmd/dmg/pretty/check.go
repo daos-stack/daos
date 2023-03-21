@@ -9,9 +9,11 @@ package pretty
 import (
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/dustin/go-humanize/english"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -51,16 +53,25 @@ func countResultPools(resp *control.SystemCheckQueryResp) int {
 		}
 		poolMap[pool.UUID] = struct{}{}
 	}
+	for _, report := range resp.Reports {
+		if report.IsRemovedPool() && report.PoolUuid != "" {
+			poolMap[report.PoolUuid] = struct{}{}
+		}
+	}
 
 	return len(poolMap)
 }
 
 func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verbose bool) {
 	fmt.Fprintln(out, "DAOS System Checker Info")
+	if resp == nil {
+		fmt.Fprintln(out, "  No results found.")
+		return
+	}
 
 	statusMsg := fmt.Sprintf("Current status: %s", resp.Status)
 	if resp.Status > control.SystemCheckStatusInit && resp.Status < control.SystemCheckStatusCompleted {
-		statusMsg += fmt.Sprintf(" (started at: %s)", resp.StartTime)
+		statusMsg += fmt.Sprintf(" (started at: %s)", common.FormatTime(resp.StartTime))
 	}
 	fmt.Fprintf(out, "  %s\n", statusMsg)
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())
@@ -77,18 +88,23 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(poolCount, "pool", ""))
 	}
 
-	if len(resp.Pools) > 0 {
-		if verbose {
-			fmt.Fprintln(out, "\nPer-Pool Checker Info:")
-			for _, pool := range resp.Pools {
-				fmt.Fprintf(out, "  %+v\n", pool)
-			}
+	if len(resp.Pools) > 0 && verbose {
+		pools := make([]*control.SystemCheckPoolInfo, 0, len(resp.Pools))
+		for _, pool := range resp.Pools {
+			pools = append(pools, pool)
 		}
-		fmt.Fprintln(out)
+		sort.Slice(pools, func(i, j int) bool {
+			return pools[i].UUID < pools[j].UUID
+		})
+		fmt.Fprintln(out, "\nPer-Pool Checker Info:")
+		for _, pool := range pools {
+			fmt.Fprintf(out, "  %+v\n", pool)
+		}
 	}
 
+	fmt.Fprintln(out)
 	if len(resp.Reports) == 0 {
-		fmt.Fprintln(out, "No reports to display")
+		fmt.Fprintln(out, "No reports to display.")
 		return
 	}
 
