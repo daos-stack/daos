@@ -1487,7 +1487,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
-				}).WithNrHugePages(8192).WithAccessPoints("hostX:10002"),
+				}).
+				// 16 targets * 1 engine * 512 pages
+				WithNrHugePages(16 * 512).
+				WithAccessPoints("hostX:10001"),
 		},
 		"dual engine config": {
 			threadCounts: &threadCounts{16, 0},
@@ -1500,7 +1503,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 					exmplEngineCfg1.WithHelperStreamCount(0),
-				}).WithNrHugePages(16384).WithAccessPoints("hostX:10002"),
+				}).
+				// 16 targets * 2 engines * 512 pages
+				WithNrHugePages(16 * 2 * 512).
+				WithAccessPoints("hostX:10002"),
 		},
 		"bad accesspoint port": {
 			accessPoints: []string{"hostX:-10001"},

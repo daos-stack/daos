@@ -512,6 +512,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 
 	var cfgTargetCount int
+	var sysXSCount int
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
@@ -537,7 +538,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			if ec.Storage.Tiers.HaveBdevRoleMeta() {
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
-				cfgTargetCount++
+				sysXSCount++
 			}
 		}
 
@@ -555,7 +556,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		}
 
 		// Calculate minimum number of hugepages for all configured engines.
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
+		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount+sysXSCount)
 		if err != nil {
 			return err
 		}
@@ -563,8 +564,12 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
 		// that the configured amount is sufficient.
 		if cfg.NrHugepages == 0 {
-			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
-				cfgTargetCount)
+			var msgSysXS string
+			if sysXSCount > 0 {
+				msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+			}
+			log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugePages,
+				cfgTargetCount, msgSysXS)
 			cfg.NrHugepages = minHugePages
 		}
 
