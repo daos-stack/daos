@@ -144,7 +144,8 @@ class DiskFailureTest(OSAUtils):
             try:
                 self.dmg_command.hostlist = NodeSet(host)
                 # Set the device as faulty
-                get_dmg_response(self.dmg_command.storage_set_faulty(uuid=device["uuid"]))
+                get_dmg_response(self, self.dmg_command.storage_set_faulty,
+                                 uuid=device["uuid"])
                 # Replace the device with same uuid.
                 get_dmg_response(
                     self, self.dmg_command.storage_replace_nvme,
