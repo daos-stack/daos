@@ -16,8 +16,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       7%{?relval}%{?dist}
+Version:       2.3.106
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -567,11 +567,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Feb 24 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-7
+* Tue Mar 21 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-2
 - Install a systemd-coredump configuration file to allow for 64GB
   core files
 - Set /etc/security/limits.d/ and core_pattern to allow core dumps
   to be created
+
+* Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
+- Bump version to be higher than TB5
 
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556

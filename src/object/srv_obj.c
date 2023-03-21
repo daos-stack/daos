@@ -1422,7 +1422,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
 				if (shadows == NULL) {
-					rc = -DER_IO;
+					rc = -DER_DATA_LOSS;
 					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
 						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
 						DP_RC(rc));
@@ -1539,8 +1539,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
 			rc = csum_add2iods(ioh,
 					   orw->orw_iod_array.oia_iods,
-					   orw->orw_iod_array.oia_iod_nr,
-					   ioc->ioc_coc->sc_csummer,
+					   iods_nr, ioc->ioc_coc->sc_csummer,
 					   orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
 			if (rc) {
@@ -1591,8 +1590,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto post;
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
-					 biod, ioc->ioc_coc->sc_csummer,
-					 orw->orw_iod_array.oia_iod_nr);
+					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
 		if (rc != 0)
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
 				DF_RC"\n",
@@ -1698,12 +1696,6 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			D_ALLOC_ARRAY(*csums, oiod_nr);
 			if (*csums == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			for (i = 0; i < oiod_nr &&
-			     iod_array->oia_iods[i].iod_type == DAOS_IOD_SINGLE; i++) {
-				D_ALLOC_PTR((*csums)[i].ic_data);
-				if ((*csums)[i].ic_data == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
-			}
 		}
 	}
 
@@ -1736,8 +1728,8 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			(*iods)[idx].iod_recxs = &iod_parent->iod_recxs[siod->siod_idx];
 			(*iods)[idx].iod_nr = siod->siod_nr;
 			if (csums != NULL) {
-				(*csums)[i].ic_data = &iod_pcsum->ic_data[siod->siod_idx];
-				(*csums)[i].ic_nr = siod->siod_nr;
+				(*csums)[idx].ic_data = &iod_pcsum->ic_data[siod->siod_idx];
+				(*csums)[idx].ic_nr = siod->siod_nr;
 			}
 		} else {
 			if (iod_parent->iod_recxs != NULL)
@@ -1745,11 +1737,15 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			else
 				(*iods)[idx].iod_recxs = NULL;
 			(*iods)[idx].iod_nr = 1;
-			if (csums != NULL) {
+			if (csums != NULL && iod_pcsum->ic_nr > 0) {
 				struct dcs_csum_info	*ci, *split_ci;
 
 				D_ASSERT(iod_pcsum->ic_nr == 1);
 				ci = &iod_pcsum->ic_data[0];
+				D_ALLOC_PTR((*csums)[idx].ic_data);
+				if ((*csums)[idx].ic_data == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+
 				split_ci = (*csums)[idx].ic_data;
 				*split_ci = *ci;
 				if (ci->cs_nr > 1) {
@@ -1838,20 +1834,19 @@ again:
 	}
 
 out:
-	if (iods != NULL && iods != &iod && iods != orw->orw_iod_array.oia_iods)
-		D_FREE(iods);
-	if (offs != NULL && offs != &off && offs != orw->orw_iod_array.oia_offs)
-		D_FREE(offs);
 	if (csums != NULL && csums != &csum && csums != orw->orw_iod_array.oia_iod_csums) {
 		int i;
 
-		for (i = 0; i < orw->orw_iod_array.oia_oiod_nr &&
-		     orw->orw_iod_array.oia_iods[i].iod_type == DAOS_IOD_SINGLE; i++) {
-			if (csums[i].ic_data != NULL)
+		for (i = 0; i < nr; i++) {
+			if (iods[i].iod_type == DAOS_IOD_SINGLE && csums[i].ic_data != NULL)
 				D_FREE(csums[i].ic_data);
 		}
 		D_FREE(csums);
 	}
+	if (iods != NULL && iods != &iod && iods != orw->orw_iod_array.oia_iods)
+		D_FREE(iods);
+	if (offs != NULL && offs != &off && offs != orw->orw_iod_array.oia_offs)
+		D_FREE(offs);
 
 	return rc;
 }
@@ -4348,9 +4343,9 @@ out:
 			struct dcs_iod_csums	*csum = pcsums[i];
 			int j;
 
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr &&
-			     dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE; i++) {
-				if (csum[j].ic_data != NULL)
+			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
+				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL)
 					D_FREE(csum[j].ic_data);
 			}
 

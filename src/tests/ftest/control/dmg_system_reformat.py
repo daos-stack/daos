@@ -39,25 +39,27 @@ class DmgSystemReformatTest(TestWithServers):
         :avocado: tags=control,dmg,system_reformat
         :avocado: tags=DmgSystemReformatTest,test_dmg_system_reformat
         """
+        dmg = self.get_dmg_command().copy()
+
         # Create pool using 90% of the available NVMe capacity
-        pools = [add_pool(self)]
+        pools = [add_pool(self, dmg=dmg)]
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
-        self.get_dmg_command().exit_status_exception = False
+        dmg.exit_status_exception = False
         pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
         try:
             pools[-1].create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
-            if "-1007" not in self.get_dmg_command().result.stderr_text:
+            if "-1007" not in str(error):
                 self.fail("Pool create did not fail due to DER_NOSPACE!")
-        self.get_dmg_command().exit_status_exception = True
+        dmg.exit_status_exception = True
 
         self.log.info("Stop running engine instances: 'dmg system stop'")
-        self.get_dmg_command().system_stop(force=True)
-        if self.get_dmg_command().result.exit_status != 0:
+        dmg.system_stop(force=True)
+        if dmg.result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
-                self.get_dmg_command().result.stderr_text))
+                dmg.result.stderr_text))
 
         # Remove pools and disable removing pools that about to be removed by formatting
         for pool in pools:
@@ -66,10 +68,10 @@ class DmgSystemReformatTest(TestWithServers):
 
         # Perform a dmg system erase to allow the dmg storage format to succeed
         self.log.info("Perform dmg system erase on all system ranks:")
-        self.get_dmg_command().system_erase()
-        if self.get_dmg_command().result.exit_status != 0:
+        dmg.system_erase()
+        if dmg.result.exit_status != 0:
             self.fail("Issues performing system erase: {}".format(
-                self.get_dmg_command().result.stderr_text))
+                dmg.result.stderr_text))
 
         self.log.info("Perform dmg storage format on all system ranks:")
 
@@ -78,11 +80,11 @@ class DmgSystemReformatTest(TestWithServers):
         count = 0
         while count < 4:
             try:
-                self.get_dmg_command().storage_format(force=True)
-                if self.get_dmg_command().result.exit_status != 0:
+                dmg.storage_format(force=True)
+                if dmg.result.exit_status != 0:
                     self.fail(
                         "Issues performing storage format --force: {}".format(
-                            self.get_dmg_command().result.stderr_text))
+                            dmg.result.stderr_text))
                 break
             except CommandFailure as error:
                 self.log.info("Storage format failed. Wait 10 sec and retry. %s", error)
@@ -94,14 +96,14 @@ class DmgSystemReformatTest(TestWithServers):
         self.server_managers[-1].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list
-        if self.get_dmg_command().get_pool_list_uuids():
+        if dmg.get_pool_list_uuids():
             self.fail("Detected pools in storage after reformat: {}".format(
-                self.get_dmg_command().result.stdout_text))
+                dmg.result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        pools.append(add_pool(self, connect=False))
+        pools.append(add_pool(self, connect=False, dmg=dmg))
 
         # Lastly, verify that last created pool is in the list
-        pool_uuids = self.get_dmg_command().get_pool_list_uuids()
+        pool_uuids = dmg.get_pool_list_uuids()
         self.assertEqual(
             pool_uuids[0].lower(), pools[-1].uuid.lower(), "{} missing from list".format(pools[-1]))
