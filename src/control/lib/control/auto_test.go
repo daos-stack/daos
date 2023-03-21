@@ -1490,7 +1490,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				}).
 				// 16 targets * 1 engine * 512 pages
 				WithNrHugePages(16 * 512).
-				WithAccessPoints("hostX:10001"),
+				WithAccessPoints("hostX:10002"),
 		},
 		"dual engine config": {
 			threadCounts: &threadCounts{16, 0},
