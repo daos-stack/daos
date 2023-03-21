@@ -8,7 +8,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -150,6 +149,7 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
+	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
 	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
@@ -163,9 +163,8 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 
 type legacyScanCmd struct {
 	cmdutil.LogCmd
-
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_server_helper binary."`
-	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
+	helperLogCmd
+	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
@@ -173,11 +172,8 @@ func (cmd *legacyScanCmd) Execute(args []string) error {
 		return err
 	}
 	cmd.Notice("storage scan subcommand is deprecated, use nvme or scm subcommands instead")
-
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
 	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)

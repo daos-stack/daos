@@ -507,8 +507,12 @@ class VerifyPermsCommand(ExecutableCommand):
         Raises:
             CommandFailure: If the command fails
 
+        Returns:
+            RemoteCommandResult: result from run_remote
+
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result

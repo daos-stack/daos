@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 reply:
 	DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
+	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_handle->dpi_read_slab, ev);
 }
 
@@ -96,6 +97,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	if (ev)
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
 		d_slab_release(fs_handle->dpi_read_slab, ev);
+	}
 }
