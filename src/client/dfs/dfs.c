@@ -1409,7 +1409,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
-		D_ERROR("fetch_entry %s failed %d.\n", dir->name, rc);
+		D_ERROR("fetch_entry %s failed" DF_RC ", \n", dir->name, DP_RC(rc));
 		return rc;
 	}
 

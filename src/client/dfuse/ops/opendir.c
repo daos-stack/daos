@@ -12,6 +12,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 {
 	struct dfuse_obj_hdl *oh     = NULL;
 	struct fuse_file_info fi_out = {0};
+	const struct fuse_ctx *ctx    = fuse_req_ctx(req);
 	int                   rc;
 
 	D_ALLOC_PTR(oh);
@@ -21,6 +22,8 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
 	dfuse_open_handle_init(oh, ie);
+
+	DFUSE_TRA_INFO(ie, "oh %p opendir for pid %d", oh, ctx->pid);
 
 	fi_out.fh = (uint64_t)oh;
 
