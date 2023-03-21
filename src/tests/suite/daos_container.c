@@ -1143,6 +1143,10 @@ co_open_access(void **state)
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
 				-DER_NO_PERM);
 
+	print_message("cont ACL gives the user RO + DEL, they want RW\n");
+	expect_cont_open_access(arg, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW,
+				-DER_NO_PERM);
+
 	print_message("cont ACL gives the user RO, they want RO\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RO,
 				0);
@@ -2401,10 +2405,10 @@ co_rf_simple(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	print_message("obj update should success after re-integrate\n");
+	print_message("obj update should still fail with DER_RF after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			     NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, -DER_RF);
 
 	/* clear the UNCLEAN status */
 	rc = daos_cont_status_clear(arg->coh, NULL);
@@ -2840,9 +2844,9 @@ co_redun_lvl(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	print_message("obj update should success after re-integrate\n");
+	print_message("obj update should still fail with DER_RF after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, -DER_RF);
 
 	rc = daos_obj_close(io_oh, NULL);
 	assert_rc_equal(rc, 0);
