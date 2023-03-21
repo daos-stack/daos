@@ -152,11 +152,26 @@ func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regi
 		return nil, nil, errors.Wrap(err, "mapRegionsToSocket")
 	}
 
-	if err := cr.createNamespaces(regionPerSocket, nrNsPerSock); err != nil {
+	numaIDs, err := cr.createNamespaces(regionPerSocket, nrNsPerSock)
+	if err != nil {
 		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
-	nss, err := cr.getNamespaces(sockSelector)
+	numaSelector := sockAny
+	switch len(numaIDs) {
+	case 0:
+		return nil, nil, errors.New("no numa nodes were processed")
+	case 1:
+		numaSelector = numaIDs[0]
+	default:
+		if sockSelector != sockAny {
+			return nil, nil,
+				errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
+					len(numaIDs))
+		}
+	}
+
+	nss, err := cr.getNamespaces(numaSelector)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "getNamespaces")
 	}

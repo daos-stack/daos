@@ -70,7 +70,6 @@ func (ri *regionID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return errors.Wrap(err, "region id could not be parsed")
 	}
 	*ri = regionID(n)
-	fmt.Printf("XXX RegionID: %d XXX", ri)
 
 	return nil
 }

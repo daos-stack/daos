@@ -59,11 +59,12 @@ func mockCmdCreateRegionsWithSock(sid int) pmemCmd {
 	}
 }
 
-func mockCmdCreateNamespace(sid int, bytes int) pmemCmd {
+func mockCmdCreateNamespace(regionID int, bytes int) pmemCmd {
 	return pmemCmd{
 		BinaryName: "ndctl",
 		Args: []string{
-			"create-namespace", "--region", fmt.Sprintf("%d", sid),
+			"create-namespace", "--region",
+			fmt.Sprintf("region%d", regionID),
 			"--size", fmt.Sprintf("%d", bytes),
 		},
 	}
@@ -78,6 +79,12 @@ func mockCmdDisableNamespace(name string) pmemCmd {
 func mockCmdDestroyNamespace(name string) pmemCmd {
 	cmd := cmdDestroyNamespace
 	cmd.Args = append(cmd.Args, name)
+	return cmd
+}
+
+func mockCmdListNamespacesWithNUMA(numaID int) pmemCmd {
+	cmd := cmdListNamespaces
+	cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", numaID))
 	return cmd
 }
 
@@ -463,7 +470,7 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock"), "", "",
+				verStr, mockXMLRegions(t, "dual-sock"), "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Socket: &storage.ScmSocketState{
@@ -509,8 +516,8 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "",
-				ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual,
+				"", "", ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNS,
@@ -519,7 +526,7 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 			},
 			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
 				mockCmdCreateNamespace(0, 1082331758592),
 				mockCmdCreateNamespace(1, 1082331758592),
 				cmdListNamespaces, cmdShowRegions,
@@ -533,8 +540,9 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "", "", "",
-				ndctlDualNsPerSockStr, mockXMLRegions(t, "dual-sock-no-free"),
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual,
+				"", "", "", "", ndctlDualNsPerSockStr,
+				mockXMLRegions(t, "dual-sock-no-free"),
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNSPerSock,
@@ -543,7 +551,8 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 			},
 			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				cmdShowIpmctlVersion, cmdShowRegions,
+				cmdDeleteGoals, cmdListNdctlRegions,
 				mockCmdCreateNamespace(0, 541165879296),
 				mockCmdCreateNamespace(0, 541165879296),
 				mockCmdCreateNamespace(1, 541165879296),
@@ -551,38 +560,40 @@ func TestIpmctl_prep(t *testing.T) {
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
-		//		"free capacity; four namespaces per socket requested": {
-		//			prepReq: &storage.ScmPrepareRequest{
-		//				NrNamespacesPerSocket: 4,
-		//			},
-		//			scanResp: &storage.ScmScanResponse{
-		//				Modules: testModules,
-		//			},
-		//			runOut: []string{
-		//				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "", "", "",
-		//				ndctlDualNsPerSockStr, mockXMLRegions(t, "dual-sock-no-free"),
-		//			},
-		//			expPrepResp: &storage.ScmPrepareResponse{
-		//				Namespaces: dualNSPerSock,
-		//				Socket: &storage.ScmSocketState{
-		//					State: storage.ScmNoFreeCap,
-		//				},
-		//			},
-		//			expCalls: []pmemCmd{
-		//				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-		//				mockCmdCreateNamespace(0, 541165879296),
-		//				mockCmdCreateNamespace(0, 541165879296),
-		//				mockCmdCreateNamespace(1, 541165879296),
-		//				mockCmdCreateNamespace(1, 541165879296),
-		//				cmdListNamespaces, cmdShowRegions,
-		//			},
-		//		},
+		"free capacity; two namespaces per socket requested; iset id match": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerSocket: 2,
+				SocketID:              &sock1,
+			},
+			scanResp: &storage.ScmScanResponse{
+				Modules: testModules,
+			},
+			runOut: []string{
+				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsDual,
+				"", "", ndctlNamespaceDual, mockXMLRegions(t, "sock-one"),
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: getNsFromJSON(t, ndctlNamespaceDual),
+				Socket: &storage.ScmSocketState{
+					State:    storage.ScmNoFreeCap,
+					SocketID: &sock1,
+				},
+			},
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
+				mockCmdDeleteGoalsWithSock(1), cmdListNdctlRegions,
+				mockCmdCreateNamespace(1, 541165879296),
+				mockCmdCreateNamespace(1, 541165879296),
+				mockCmdListNamespacesWithNUMA(0),
+				mockCmdShowRegionsWithSock(1),
+			},
+		},
 		"free capacity; create namespace fails": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", ndctlRegionsDual,
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual, "",
 			},
 			runErr: []error{
 				nil, nil, nil, nil, errors.New("fail"),
@@ -637,7 +648,18 @@ func TestIpmctl_prep(t *testing.T) {
 			}
 
 			resp, err := cr.prep(*tc.prepReq, tc.scanResp)
-			log.Debugf("calls made %+q", calls)
+			if len(tc.runOut) != len(calls) {
+				t.Fatal("runOut slice has different number of entries than calls made")
+			}
+			if len(tc.runErr) > 0 && len(tc.runErr) != len(calls) {
+				t.Fatal("runErr slice has different number of entries than calls made")
+			}
+			for i, s := range calls {
+				log.Debugf("call made: %v", s)
+				if tc.runOut[i] != "" {
+					log.Debugf("output: %s", tc.runOut[i])
+				}
+			}
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {

@@ -216,7 +216,7 @@ func TestNdctl_getNdctlRegions(t *testing.T) {
 					AvailableSize:     1082331758592,
 					Type:              "pmem",
 					NumaNode:          0,
-					ISetID:            4213998300795769104,
+					ISetID:            13312958398157623569,
 					PersistenceDomain: "memory_controller",
 				},
 				{
@@ -226,7 +226,7 @@ func TestNdctl_getNdctlRegions(t *testing.T) {
 					AvailableSize:     1082331758592,
 					Type:              "pmem",
 					NumaNode:          1,
-					ISetID:            334147221714768144,
+					ISetID:            13312958398157623568,
 					PersistenceDomain: "memory_controller",
 				},
 			},

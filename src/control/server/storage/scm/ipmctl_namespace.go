@@ -65,20 +65,20 @@ func (cr *cmdRunner) checkNdctl() (errOut error) {
 	return
 }
 
-// For each region, create <nrNsPerSocket> namespaces.
-func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSock uint) error {
+// For each region, create <nrNsPerSocket> namespaces. Return slice indicating which NUMA nodes the
+// name spaces were created on.
+func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSock uint) ([]int, error) {
 	if nrNsPerSock < minNrNssPerSocket || nrNsPerSock > maxNrNssPerSocket {
-		return errors.Errorf("unexpected number of namespaces requested per socket: want [%d-%d], got %d",
+		return nil, errors.Errorf("unexpected number of namespaces requested per socket: want [%d-%d], got %d",
 			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSock)
 	}
 
-	// For the moment assume 1:1 mapping of sockets to regions so nrRegions == nrSockets.
-	nrRegions := len(regionPerSocket)
-	if nrRegions == 0 {
-		return errors.New("expected non-zero number of pmem regions")
-	}
+	// For the moment assume 1:1 mapping of sockets to regions
 	sockIDs := regionPerSocket.keys()
-	cr.log.Debugf("creating %d namespaces on each of the following sockets: %v", nrNsPerSock,
+	if len(sockIDs) == 0 {
+		return nil, errors.New("expected non-zero number of pmem regions in input map")
+	}
+	cr.log.Debugf("creating %d namespaces on each of the following socket(s): %v", nrNsPerSock,
 		sockIDs)
 
 	// As the selector is socket, look up the ndctl region with the same ISetID as the ipmctl
@@ -87,72 +87,80 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 	// keys then use region IDs from ndctl regions, otherwise fall-back to using socket ID as
 	// region index.
 
-	regionSizes := make(map[string]uint64)
+	regionsToPrep := NdctlRegions{}
 
 	ndctlRegions, err := cr.getNdctlRegions(sockAny)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, sid := range sockIDs {
 		for _, nr := range ndctlRegions {
-			if nr.ISetID < 0 {
-				cr.log.Noticef("region %s isetid negative, possible overflow",
-					nr.Dev)
+			if nr.ISetID <= 0 {
+				cr.log.Noticef("%s isetid invalid, possible overflow", nr.Dev)
 				break
 			}
 			if nr.Type != ndctlRegionType {
-				cr.log.Debugf("region %s unexpected type, want %s got %s",
-					nr.Dev, ndctlRegionType, nr.Type)
+				cr.log.Debugf("%s unexpected type, want %s got %s", nr.Dev,
+					ndctlRegionType, nr.Type)
 				break
 			}
 			if nr.PersistenceDomain != ndctlRegionDomain {
-				cr.log.Debugf("region %s unexpected persistence domain, want %s got %s",
+				cr.log.Debugf("%s unexpected persistence domain, want %s got %s",
 					nr.Dev, ndctlRegionDomain, nr.PersistenceDomain)
 				break
 			}
 			if uint64(nr.ISetID) == uint64(regionPerSocket[sid].ISetID) {
-				regionSizes[nr.Dev] = nr.AvailableSize
+				cr.log.Debugf("%s matches requested socket %d with isetid %d",
+					nr.Dev, sid, nr.ISetID)
+				regionsToPrep = append(regionsToPrep, nr)
 			}
 			if nr.NumaNode != uint32(sid) {
-				cr.log.Noticef("region %s on numa node %d doesn't match socket ID %d",
+				cr.log.Noticef("%s on numa node %d doesn't match socket ID %d",
 					nr.Dev, nr.NumaNode, sid)
 			}
 		}
 	}
-	if len(regionSizes) != nrRegions {
-		regionSizes = make(map[string]uint64)
+	if len(regionsToPrep) != len(sockIDs) {
+		cr.log.Debug("regions could not be mapped by isetid, using ipmctl socket ID instead")
+
+		regionsToPrep = NdctlRegions{}
 		for _, sid := range sockIDs {
-			name := fmt.Sprintf("region%d", sid)
-			regionSizes[name] = uint64(regionPerSocket[sid].FreeCapacity)
+			regionsToPrep = append(regionsToPrep, &NdctlRegion{
+				Dev:           fmt.Sprintf("region%d", sid),
+				AvailableSize: uint64(regionPerSocket[sid].FreeCapacity),
+			})
 		}
 	}
 
-	for name, availSize := range regionSizes {
-		cr.log.Debugf("creating namespaces on region %s", name)
+	var numaNodesPrepped []int
+	for _, region := range regionsToPrep {
+		cr.log.Debugf("creating namespaces on %q", region.Dev)
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
-		pmemBytes := uint64(availSize) / uint64(nrNsPerSock)
+		pmemBytes := uint64(region.AvailableSize) / uint64(nrNsPerSock)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
-			return errors.Errorf("region %s: free region size (%s) is not %s aligned",
-				name, humanize.Bytes(pmemBytes),
+			return nil, errors.Errorf("%s: available size (%s) is not %s aligned",
+				region.Dev, humanize.Bytes(pmemBytes),
 				humanize.Bytes(alignmentBoundaryBytes))
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
 		for j := uint(0); j < nrNsPerSock; j++ {
 			cmd := cmdCreateNamespace
-			cmd.Args = append(cmd.Args, "--region", name, "--size",
+			cmd.Args = append(cmd.Args, "--region", region.Dev, "--size",
 				fmt.Sprintf("%d", pmemBytes))
 			if _, err := cr.runCmd(cr.log, cmd); err != nil {
-				return errors.WithMessagef(err, "%s", name)
+				return nil, errors.WithMessagef(err, "%s", region.Dev)
 			}
-			cr.log.Debugf("created namespace on %s size %s", name,
+			cr.log.Debugf("created namespace on %s size %s", region.Dev,
 				humanize.Bytes(pmemBytes))
 		}
+
+		numaNodesPrepped = append(numaNodesPrepped, int(region.NumaNode))
 	}
 
-	return nil
+	return numaNodesPrepped, nil
 }
 
 func (cr *cmdRunner) removeNamespace(devName string) error {
@@ -191,14 +199,14 @@ func parseNamespaces(jsonData string) (storage.ScmNamespaces, error) {
 
 // getNamespaces calls ndctl to list pmem namespaces and returns converted
 // native storage types.
-func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) getNamespaces(numaID int) (storage.ScmNamespaces, error) {
 	if err := cr.checkNdctl(); err != nil {
 		return nil, err
 	}
 
 	cmd := cmdListNamespaces
-	if sockID != sockAny {
-		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", sockID))
+	if numaID != sockAny {
+		cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", numaID))
 	}
 	out, err := cr.runCmd(cr.log, cmd)
 	if err != nil {
@@ -221,7 +229,7 @@ type (
 		AvailableSize     uint64 `json:"available_size"`
 		Align             uint64 `json:"align"`
 		NumaNode          uint32 `json:"numa_node"`
-		ISetID            int64  `json:"iset_id"`
+		ISetID            uint64 `json:"iset_id"`
 		Type              string `json:"type"`
 		PersistenceDomain string `json:"persistence_domain"`
 	}
