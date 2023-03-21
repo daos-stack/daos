@@ -56,7 +56,7 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
-        # timeout-minutes: 60
+        timeout-minutes: 60
         run: |
              ulimit -c unlimited
              sudo bash -c 'echo /tmp/core > /proc/sys/kernel/core_pattern'
