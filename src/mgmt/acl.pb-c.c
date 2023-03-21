@@ -7,6 +7,51 @@
 #endif
 
 #include "acl.pb-c.h"
+void   mgmt__access_control_list__init
+                     (Mgmt__AccessControlList         *message)
+{
+  static const Mgmt__AccessControlList init_value = MGMT__ACCESS_CONTROL_LIST__INIT;
+  *message = init_value;
+}
+size_t mgmt__access_control_list__get_packed_size
+                     (const Mgmt__AccessControlList *message)
+{
+  assert(message->base.descriptor == &mgmt__access_control_list__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__access_control_list__pack
+                     (const Mgmt__AccessControlList *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__access_control_list__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__access_control_list__pack_to_buffer
+                     (const Mgmt__AccessControlList *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__access_control_list__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__AccessControlList *
+       mgmt__access_control_list__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__AccessControlList *)
+     protobuf_c_message_unpack (&mgmt__access_control_list__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__access_control_list__free_unpacked
+                     (Mgmt__AccessControlList *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__access_control_list__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__aclresp__init
                      (Mgmt__ACLResp         *message)
 {
@@ -187,7 +232,71 @@ void   mgmt__delete_aclreq__free_unpacked
   assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__access_control_list__field_descriptors[3] =
+{
+  {
+    "entries",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__AccessControlList, n_entries),
+    offsetof(Mgmt__AccessControlList, entries),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "owner_user",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__AccessControlList, owner_user),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "owner_group",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__AccessControlList, owner_group),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__access_control_list__field_indices_by_name[] = {
+  0,   /* field[0] = entries */
+  2,   /* field[2] = owner_group */
+  1,   /* field[1] = owner_user */
+};
+static const ProtobufCIntRange mgmt__access_control_list__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__access_control_list__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.AccessControlList",
+  "AccessControlList",
+  "Mgmt__AccessControlList",
+  "mgmt",
+  sizeof(Mgmt__AccessControlList),
+  3,
+  mgmt__access_control_list__field_descriptors,
+  mgmt__access_control_list__field_indices_by_name,
+  1,  mgmt__access_control_list__number_ranges,
+  (ProtobufCMessageInit) mgmt__access_control_list__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[2] =
 {
   {
     "status",
@@ -202,52 +311,26 @@ static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ACL",
+    "acl",
     2,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__ACLResp, n_acl),
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
     offsetof(Mgmt__ACLResp, acl),
+    &mgmt__access_control_list__descriptor,
     NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "ownerUser",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ACLResp, owneruser),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "ownerGroup",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ACLResp, ownergroup),
-    NULL,
-    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__aclresp__field_indices_by_name[] = {
-  1,   /* field[1] = ACL */
-  3,   /* field[3] = ownerGroup */
-  2,   /* field[2] = ownerUser */
+  1,   /* field[1] = acl */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__aclresp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
 {
@@ -257,7 +340,7 @@ const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
   "Mgmt__ACLResp",
   "mgmt",
   sizeof(Mgmt__ACLResp),
-  4,
+  2,
   mgmt__aclresp__field_descriptors,
   mgmt__aclresp__field_indices_by_name,
   1,  mgmt__aclresp__number_ranges,
@@ -299,7 +382,7 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[3] =
     offsetof(Mgmt__GetACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -355,12 +438,12 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ACL",
+    "entries",
     3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__ModifyACLReq, n_acl),
-    offsetof(Mgmt__ModifyACLReq, acl),
+    offsetof(Mgmt__ModifyACLReq, n_entries),
+    offsetof(Mgmt__ModifyACLReq, entries),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -375,12 +458,12 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     offsetof(Mgmt__ModifyACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__modify_aclreq__field_indices_by_name[] = {
-  2,   /* field[2] = ACL */
+  2,   /* field[2] = entries */
   1,   /* field[1] = id */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
@@ -452,7 +535,7 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[4] 
     offsetof(Mgmt__DeleteACLReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
