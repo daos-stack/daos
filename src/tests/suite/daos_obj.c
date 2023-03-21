@@ -4903,7 +4903,7 @@ oit_list_filter(void **state)
 		oids_nr = OIT_TEST_OID_NR;
 		rc = daos_oit_list(toh, oid_list, &oids_nr, &anchor, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
@@ -4938,16 +4938,18 @@ oit_list_filter(void **state)
 		oids_nr = OIT_TEST_OID_NR;
 		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR - 4);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 4);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[15], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[15], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
@@ -4963,16 +4965,18 @@ oit_list_filter(void **state)
 		oids_nr = OIT_TEST_OID_NR;
 		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR - 3);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 3);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
-		D_ASSERT(oid_in_list(oid[15], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
+			D_ASSERT(oid_in_list(oid[15], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
@@ -4986,14 +4990,16 @@ oit_list_filter(void **state)
 		rc = daos_oit_list_filter(toh, oid_list, &oids_nr, &anchor, oit_get_markdata_as1,
 					  NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, 2);
+		assert_int_equal(oids_nr + total, 2);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(oid_in_list(oid[1], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(oid_in_list(oid[1], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
