@@ -82,22 +82,8 @@ class VmdLedStatus(OSAUtils):
         if device_id is None:
             self.fail("No device id provided")
 
-        self.dmg.json.value = True
-        try:
-            result = self.dmg.storage_set_faulty(uuid=device_id)
-        except CommandFailure as details:
-            self.fail("dmg command failed: {}".format(details))
-        finally:
-            self.dmg.json.value = False
-
-        data = json.loads(result.stdout_text)
-        resp = data['response']
-        if data['error'] or len(resp['host_errors']) > 0:
-            if data['error']:
-                self.fail("dmg command failed: {}".format(data['error']))
-            else:
-                self.fail("dmg command failed: {}".format(resp['host_errors']))
-        return resp
+        return get_dmg_response(
+            self, self.dmg_command.storage_set_faulty, uuid=device_id)
 
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
