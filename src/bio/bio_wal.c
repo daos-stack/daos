@@ -1898,6 +1898,9 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	if (fi->fi_wal_size < WAL_MIN_CAPACITY) {
 		D_ERROR("WAL size "DF_U64" is too small\n", fi->fi_wal_size);
 		return -DER_INVAL;
+	} else if (fi->fi_wal_size > ((uint64_t)WAL_BLK_SZ * UINT32_MAX)) {
+		D_ERROR("WAL size "DF_U64" is too large\n", fi->fi_wal_size);
+		return -DER_INVAL;
 	}
 
 	rc = meta_csum_init(mc, HASH_TYPE_CRC32);
@@ -1926,6 +1929,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	meta_hdr->mh_hdr_blks = META_HDR_BLKS;
 	meta_hdr->mh_tot_blks = (fi->fi_meta_size / META_BLK_SZ) - META_HDR_BLKS;
 	meta_hdr->mh_vos_id = fi->fi_vos_id;
+	meta_hdr->mh_flags = META_HDR_FL_EMPTY;
 
 	rc = write_header(mc, mc->mc_meta, meta_hdr, sizeof(*meta_hdr), &meta_hdr->mh_csum);
 	if (rc) {
@@ -1961,4 +1965,31 @@ bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info)
 	info->wi_ckp_id = si->si_ckp_id;
 	info->wi_commit_id = si->si_commit_id;
 	info->wi_unused_id = si->si_unused_id;
+}
+
+bool
+bio_meta_is_empty(struct bio_meta_context *mc)
+{
+	struct meta_header	*hdr = &mc->mc_meta_hdr;
+
+	return hdr->mh_flags & META_HDR_FL_EMPTY;
+}
+
+int
+bio_meta_clear_empty(struct bio_meta_context *mc)
+{
+	struct meta_header	*hdr = &mc->mc_meta_hdr;
+	int			 rc;
+
+	if (!bio_meta_is_empty(mc))
+		return 0;
+
+	hdr->mh_flags &= ~META_HDR_FL_EMPTY;
+	rc = write_header(mc, mc->mc_meta, hdr, sizeof(*hdr), &hdr->mh_csum);
+	if (rc) {
+		hdr->mh_flags |= META_HDR_FL_EMPTY;
+		D_ERROR("Write meta header failed. "DF_RC"\n", DP_RC(rc));
+	}
+
+	return rc;
 }

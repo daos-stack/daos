@@ -1053,4 +1053,15 @@ struct bio_wal_info {
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 
+/*
+ * Check if the meta blob is empty, paired with bio_meta_clear_empty() for avoid
+ * loading a newly created meta blob.
+ */
+bool bio_meta_is_empty(struct bio_meta_context *mc);
+
+/*
+ * Mark the meta blob as non-empty.
+ */
+int bio_meta_clear_empty(struct bio_meta_context *mc);
+
 #endif /* __BIO_API_H__ */
