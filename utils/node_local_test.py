@@ -462,7 +462,7 @@ class DaosPool():
             return []
 
         containers = []
-        for cont in data['response']:
+        for cont in data['test']:
             containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
@@ -1467,8 +1467,9 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     """
     cmd = ['container', 'create']
 
-    assert isinstance(pool, DaosPool)
-    cmd.append(pool.id())
+    if not path:
+        assert isinstance(pool, DaosPool)
+        cmd.append(pool.id())
 
     if label:
         cmd.append(label)
@@ -1817,13 +1818,13 @@ class PosixTests():
             assert rc.returncode == 0, rc
 
         child_path = join(self.dfuse.dir, 'new_cont')
-        new_cont1 = create_cont(self.conf, self.pool.uuid, path=child_path)
+        new_cont1 = create_cont(self.conf, self.pool, path=child_path)
         print(new_cont1)
 
         # Check that cont create works with relative paths where there is no directory part,
         # this is important as duns inspects the path and tries to access the parent directory.
         child_path_cwd = join(self.dfuse.dir, 'new_cont_2')
-        new_cont_cwd = create_cont(self.conf, self.pool.uuid, path='new_cont_2', cwd=self.dfuse.dir)
+        new_cont_cwd = create_cont(self.conf, self.pool, path='new_cont_2', cwd=self.dfuse.dir)
         print(new_cont_cwd)
 
         _check_cmd(child_path)
