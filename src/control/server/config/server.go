@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -511,22 +511,13 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigBadTelemetryPort
 	}
 
-	cfgHasBdevs := false
-	cfgTargetCount := 0
+	var cfgTargetCount int
+	var sysXSCount int
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		cfgTargetCount += ec.TargetCount
 
 		ec.ConvertLegacyStorage(log, idx)
-
-		if ec.Storage.Tiers.HaveBdevs() {
-			cfgHasBdevs = true
-			if ec.TargetCount == 0 {
-				return errors.Errorf("engine %d: Target count cannot be zero if "+
-					"bdevs have been assigned in config", idx)
-			}
-		}
 
 		ec.Fabric.Update(cfg.Fabric)
 
@@ -534,21 +525,38 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 
-		log.Debugf("engine %d fabric numa %d, storage numa %d", idx,
+		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+
+		// Calculate overall target count if NVMe is enabled.
+		if ec.Storage.Tiers.HaveBdevs() {
+			cfgTargetCount += ec.TargetCount
+			if ec.TargetCount == 0 {
+				return errors.Errorf("engine %d: Target count cannot be zero if "+
+					"bdevs have been assigned in config", idx)
+			}
+			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
+				// MD-on-SSD has extra sys-xstream for rdb.
+				sysXSCount++
+			}
+		}
+
+		log.Debug(msg)
 	}
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
-	if cfgHasBdevs {
+	// Calculate hugepages based on total target count if bdevs in config.
+	if cfgTargetCount > 0 {
 		if cfg.DisableHugepages {
 			return FaultConfigHugepagesDisabled
 		}
 
 		// Calculate minimum number of hugepages for all configured engines.
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
+		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount+sysXSCount)
 		if err != nil {
 			return err
 		}
@@ -556,8 +564,12 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
 		// that the configured amount is sufficient.
 		if cfg.NrHugepages == 0 {
-			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
-				cfgTargetCount)
+			var msgSysXS string
+			if sysXSCount > 0 {
+				msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+			}
+			log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugePages,
+				cfgTargetCount, msgSysXS)
 			cfg.NrHugepages = minHugePages
 		}
 

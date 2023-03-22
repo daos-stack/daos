@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,7 +52,7 @@ var (
 	)
 	FaultConfigNoProvider = serverConfigFault(
 		code.ServerConfigBadProvider,
-		"provider not specified in configuration",
+		"provider not specified in server configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
 	FaultConfigNoEngines = serverConfigFault(

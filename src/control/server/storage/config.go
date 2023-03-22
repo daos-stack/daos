@@ -287,12 +287,24 @@ func (tcs TierConfigs) HaveEmulatedNVMe() bool {
 	return tcs.checkBdevs(false, true)
 }
 
+func (tcs TierConfigs) HaveBdevRoleMeta() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		bits := bc.Bdev.DeviceRoles.OptionBits
+		if (bits & BdevRoleMeta) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (tcs TierConfigs) Validate() error {
 	for _, cfg := range tcs {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
 		}
 	}
+
 	return nil
 }
 
