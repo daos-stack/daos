@@ -6,7 +6,7 @@
 import json
 import time
 
-from dmg_utils import get_storage_query_device_uuids
+from dmg_utils import get_storage_query_device_uuids, get_dmg_response
 from exception_utils import CommandFailure
 from osa_utils import OSAUtils
 
@@ -125,7 +125,7 @@ class VmdLedStatus(OSAUtils):
         """Jira ID: DAOS-11284
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,mediumcd 
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
