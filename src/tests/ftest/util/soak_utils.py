@@ -70,29 +70,21 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     """Create a list of containers that the various jobs use for storage.
 
     Args:
-        pool: pool to create container
-        file_oclass: file oclass for daos container cmd
-        dir oclass: directory oclass for daos container cmd
-
+        pool (TestPool obj): pool to read/write random data file
+        file_oclass (str): file oclass for daos container cmd
+        dir oclass (str): directory oclass for daos container cmd
+        path (str): namespace for container
     """
-    rd_fac = None
-    # Create a container and add it to the overall list of containers
-    self.container.append(
-        TestContainer(pool, daos_command=self.get_daos_command()))
-    self.container[-1].namespace = path
-    self.container[-1].get_params(self)
-    # include rd_fac based on the oclass
+    kwargs = {}
     if file_oclass:
-        self.container[-1].file_oclass.update(file_oclass)
+        kwargs['file_oclass'] = file_oclass
+        properties = self.params.get('properties', path, "")
         redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+        kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
     if dir_oclass:
-        self.container[-1].dir_oclass.update(dir_oclass)
-    properties = self.container[-1].properties.value
-    cont_properties = (",").join(filter(None, [properties, rd_fac]))
-    if cont_properties is not None:
-        self.container[-1].properties.update(cont_properties)
-    self.container[-1].create()
+        kwargs['dir_oclass'] = dir_oclass
+    self.container.append(self.get_container(pool, path, **kwargs))
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
