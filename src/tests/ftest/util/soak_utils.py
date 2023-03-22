@@ -14,7 +14,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
-from data_mover_utils import FsCopy
+from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
@@ -795,7 +795,7 @@ def cleanup_dfuse(self):
         self.log.info("Dfuse mount points not deleted Error")
 
 
-def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
+def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None, cont=None):
     """Create an IOR cmdline to run in slurm batch.
 
     Args:
@@ -805,6 +805,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
         pool (obj):       TestPool obj
         ppn(int):         number of tasks to run on each node
         nodesperjob(int): number of nodes per job
+        oclass(list):     list of file_oclass and dir_oclass params
+        cont (obj)        TestContainer obj
 
     Returns:
         cmd: cmdline string
@@ -818,7 +820,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     api_list = self.params.get("api", ior_params)
     tsize_list = self.params.get("transfer_size", ior_params)
     bsize_list = self.params.get("block_size", ior_params)
-    oclass_list = self.params.get("dfs_oclass", ior_params)
+    if not oclass_list:
+        oclass_list = self.params.get("dfs_oclass", ior_params)
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
@@ -861,21 +864,26 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    add_containers(self, pool, file_oclass, dir_oclass)
+                    if not cont:
+                        add_containers(self, pool, file_oclass, dir_oclass)
+                        container = self.container[-1]
+                    else:
+                        container = cont
                     ior_cmd.set_daos_params(
-                        self.server_group, pool, self.container[-1].uuid)
+                        self.server_group, pool, container.uuid)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
-                        job_spec, api, b_size, t_size,
+                        job_spec.replace("/", "_"), api, b_size, t_size,
                         file_oclass, nodesperjob * ppn, nodesperjob, ppn)
                     daos_log = os.path.join(
                         self.soaktest_dir, self.test_name + "_" + log_name
                         + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                     env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
+                    env["D_LOG_FILE_APPEND_PID"] = "1"
                     sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+                            self, pool, container, name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
@@ -946,6 +954,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.env.copy()
             env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
+            env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
@@ -1033,6 +1042,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             self.soaktest_dir, self.test_name + "_" + log_name
                             + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                         env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
+                        env["D_LOG_FILE_APPEND_PID"] = "1"
                         sbatch_cmds = [
                             "module purge", "module load {}".format(self.mpi_module)]
                         # include dfuse cmdlines
@@ -1215,6 +1225,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             # Pass pool and container information to the commands
             env = EnvironmentVariables()
             env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool.uuid, self.container[-1].uuid)
+            env["D_LOG_FILE_APPEND_PID"] = "1"
             mpirun_cmd.assign_environment(env, True)
         mpirun_cmd.assign_processes(nodesperjob * ppn)
         mpirun_cmd.ppn.update(ppn)
@@ -1234,6 +1245,59 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if mpi_module != self.mpi_module:
             mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
             mpirun_cmd.get_params(self)
+    return commands
+
+
+def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create datamover cmdlines for job script.
+
+        self (obj): soak obj
+        job_spec (str):   datamover job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+    """
+    commands = []
+    dm_params = os.path.join(os.sep, "run", job_spec, "*")
+    oclass_list = self.params.get("oclass", dm_params)
+    for file_oclass, dir_oclass in oclass_list:
+        log_name = f"{job_spec}_{file_oclass}_{nodesperjob * ppn}_{nodesperjob}_{ppn}"
+        ior_spec = "/".join([job_spec, "ior_write"])
+        add_containers(self, pool, file_oclass, dir_oclass)
+        cont_1 = self.container[-1]
+        dm_commands = create_ior_cmdline(
+            self, ior_spec, pool, ppn, nodesperjob, [[file_oclass, dir_oclass]], cont_1)
+        sbatch_cmds = dm_commands[0][0]
+        add_containers(self, pool, file_oclass, dir_oclass)
+        cont_2 = self.container[-1]
+
+        dcp_cmd = DcpCommand(hosts=None, tmp=None)
+        dcp_cmd.namespace = os.path.join(os.sep, "run", job_spec, "dcp")
+        dcp_cmd.get_params(self)
+        dst_file = f"daos://{pool.label.value}/{cont_2.uuid}"
+        src_file = f"daos://{pool.label.value}/{cont_1.uuid}"
+        dcp_cmd.set_params(src=src_file, dst=dst_file)
+        env_vars = {
+            "D_LOG_FILE": os.path.join(self.soaktest_dir, self.test_name + "_"
+                                       + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log"),
+            "D_LOG_FILE_APPEND_PID": "1"
+        }
+        mpirun_cmd = Mpirun(dcp_cmd, mpi_type=self.mpi_module)
+        mpirun_cmd.get_params(self)
+        mpirun_cmd.assign_processes(nodesperjob * ppn)
+        mpirun_cmd.assign_environment(EnvironmentVariables(env_vars), True)
+        mpirun_cmd.ppn.update(ppn)
+        sbatch_cmds.append(str(mpirun_cmd))
+        sbatch_cmds.append("status=$?")
+
+        ior_spec = "/".join([job_spec, "ior_read"])
+        dm_commands = create_ior_cmdline(
+            self, ior_spec, pool, ppn, nodesperjob, [[file_oclass, dir_oclass]], cont_2)
+        sbatch_cmds.extend(dm_commands[0][0])
+        self.log.info("<<DATA_MOVER cmdlines>>:")
+        for cmd in sbatch_cmds:
+            self.log.info("%s", cmd)
+        commands.append([sbatch_cmds, log_name])
     return commands
 
 
