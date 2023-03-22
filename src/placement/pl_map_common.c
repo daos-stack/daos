@@ -378,21 +378,23 @@ grp_map_is_set(uint32_t *grp_map, uint32_t grp_map_size, uint32_t tgt_id)
 	return false;
 }
 
-uint32_t*
+static uint32_t*
 grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 {
 	uint32_t *new_grp_map;
 	uint32_t new_grp_size = *grp_map_size + STACK_TGTS_SIZE;
 	int	 i;
 
-	if (*grp_map_size > STACK_TGTS_SIZE)
+	if (*grp_map_size > STACK_TGTS_SIZE) {
 		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
 				new_grp_size);
-	else
+	} else {
 		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
+		memcpy(new_grp_map, grp_map, *grp_map_size * sizeof(*grp_map));
+	}
 
 	for (i = *grp_map_size; i < new_grp_size; i++)
-		grp_map[i] = -1;
+		new_grp_map[i] = -1;
 
 	*grp_map_size = new_grp_size;
 	return new_grp_map;
