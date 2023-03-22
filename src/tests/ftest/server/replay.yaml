@@ -13,7 +13,7 @@ server_config:
 
 pool:
   # size: 50%
-  size: 17G
+  size: 50G
 
 container:
   control_method: daos
@@ -22,10 +22,8 @@ ior: &ior_base
   client_processes:
     ppn: 4
   api: DFS
-  # transfer_size: 512K
-  # block_size: 1G
-  transfer_size: '1K'
-  block_size: '512M'
+  transfer_size: 512K
+  block_size: 1G
   dfs_oclass: SX
 
 ior_write:
