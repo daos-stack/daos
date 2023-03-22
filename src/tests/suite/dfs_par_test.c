@@ -252,7 +252,6 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	int			i, rc;
 
 	par_barrier(PAR_COMM_WORLD);
-	D_EMIT("Short read begin\n");
 	D_ALLOC(wbuf, buf_size);
 	assert_non_null(wbuf);
 	for (i = 0; i < buf_size / sizeof(int); i++)
@@ -273,27 +272,21 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 		assert_int_equal(rc, 0);
 	}
 
-	D_EMIT("Object share begin\n");
 	dfs_test_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
-	D_EMIT("Object share end\n");
 
 	/** reading empty file should return 0 */
 	rsgl.sg_nr = 1;
 	d_iov_set(&iov, rbuf[0], buf_size);
 	rsgl.sg_iovs = &iov;
-	D_EMIT("dfs_read 1 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
-	D_EMIT("dfs_read 1 end\n");
 
 	/** write strided pattern and check read size with segmented buffers */
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		D_EMIT("dfs_write 1 begin\n");
 		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
 		assert_int_equal(rc, 0);
-		D_EMIT("dfs_write 1 end\n");
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -301,11 +294,9 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	rsgl.sg_nr = 1;
 	d_iov_set(&iov, rbuf[0], buf_size + 100);
 	rsgl.sg_iovs = &iov;
-	D_EMIT("dfs_read 2 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);
-	D_EMIT("dfs_read 2 end\n");
 
 	/* reset write iov */
 	d_iov_set(&iov, wbuf, buf_size);
@@ -317,39 +308,29 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	for (i = 0; i < NUM_SEGS; i++)
 		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
 
-	D_EMIT("dfs_read 3 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);
-	D_EMIT("dfs_read 3 end\n");
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		D_EMIT("dfs_write 2 begin\n");
 		rc = dfs_write(dfs_mt, obj, &wsgl, 2 * buf_size, NULL);
 		assert_int_equal(rc, 0);
-		D_EMIT("dfs_write 2 end\n");
 	}
 	par_barrier(PAR_COMM_WORLD);
-	D_EMIT("dfs_read 4 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 3);
-	D_EMIT("dfs_read 4 end\n");
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		D_EMIT("dfs_write 3 begin\n");
 		rc = dfs_write(dfs_mt, obj, &wsgl, 5 * buf_size, NULL);
 		assert_int_equal(rc, 0);
-		D_EMIT("dfs_write 3 end\n");
 	}
 	par_barrier(PAR_COMM_WORLD);
-	D_EMIT("dfs_read 5 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 6);
-	D_EMIT("dfs_read 5 end\n");
 
 	/** truncate the buffer to a large size, read should return all */
 	par_barrier(PAR_COMM_WORLD);
@@ -358,11 +339,9 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 		assert_int_equal(rc, 0);
 	}
 	par_barrier(PAR_COMM_WORLD);
-	D_EMIT("dfs_read 6 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
-	D_EMIT("dfs_read 6 end\n");
 
 	/** punch all the data, read should return 0 */
 	par_barrier(PAR_COMM_WORLD);
@@ -378,20 +357,14 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	/** write to 2 chunks with a large gap in the middle */
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		D_EMIT("dfs_write 4 begin\n");
 		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
 		assert_int_equal(rc, 0);
-		D_EMIT("dfs_write 4 end\n");
-		D_EMIT("dfs_write 5 begin\n");
 		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576 * 3, NULL);
 		assert_int_equal(rc, 0);
-		D_EMIT("dfs_write 5 end\n");
 	}
 	par_barrier(PAR_COMM_WORLD);
 	/** reading in between, even holes should not be a short read */
-	D_EMIT("dfs_read 7 begin\n");
 	rc = dfs_read(dfs_mt, obj, &rsgl, 1048576, &read_size, NULL);
-	D_EMIT("dfs_read 7 end\n");
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
