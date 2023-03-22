@@ -12,7 +12,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 {
 	struct dfuse_obj_hdl *oh     = NULL;
 	struct fuse_file_info fi_out = {0};
-	const struct fuse_ctx *ctx    = fuse_req_ctx(req);
 	int                   rc;
 
 	D_ALLOC_PTR(oh);
@@ -37,6 +36,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 			fi_out.keep_cache = 1;
 	}
 #endif
+
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
