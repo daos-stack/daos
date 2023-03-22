@@ -23,6 +23,7 @@ class IorCrash(IorTestBase):
         self.dmg = self.get_dmg_command()
 
     def cont_nhandles_match(self, exp_nhandles=1, attempts=5, delay_sec=2):
+        """Verify container number of handles. If needed, perform multiple queries (with delay)."""
         checks = {
             "ci_nhandles": exp_nhandles}
         chkres = False
@@ -101,4 +102,5 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
-        self.assertTrue(self.cont_nhandles_match(attempts=1, delay_sec=0), "Error confirming container info nhandles")
+        self.assertTrue(self.cont_nhandles_match(attempts=1, delay_sec=0),
+                        "Error confirming container info nhandles")
