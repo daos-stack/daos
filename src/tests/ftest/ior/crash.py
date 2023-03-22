@@ -69,7 +69,7 @@ class IorCrash(IorTestBase):
         checks = {
             "ci_nhandles": 1}
         attempts = 0
-        while (attempts < 5):
+        while attempts < 5:
             attempts += 1
             chkres = self.container.check_container_info(**checks)
             if chkres is True:
@@ -93,7 +93,7 @@ class IorCrash(IorTestBase):
         checks = {
             "ci_nhandles": 1}
         attempts = 0
-        while (attempts < 5):
+        while attempts < 5:
             attempts += 1
             chkres = self.container.check_container_info(**checks)
             if chkres is True:
