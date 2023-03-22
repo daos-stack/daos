@@ -120,16 +120,12 @@ func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
 			contPath: "bad-path",
 			expErr:   errors.New("DER_NONEXIST"),
 		},
-		/* FIXME (DAOS-12468): Temporarily disabled as it seems
-		 * to be failing intermittently in CI with bad fd errors.
-		 * Could be some kind of race in the tests?
 		"valid DUNS path (POSIX)": {
 			contType: "POSIX",
 			contPath: "valid-path",
 			poolID:   test.MockUUID(1),
 			contID:   test.MockUUID(2),
 		},
-		*/
 		"pool UUID + cont UUID": {
 			poolID: test.MockUUID(1),
 			contID: test.MockUUID(2),
