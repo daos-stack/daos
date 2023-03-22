@@ -3618,12 +3618,12 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {}
-        cont_attrs['dfuse-data-cache'] = '1d'
-        cont_attrs['dfuse-attr-time'] = '2d'
-        cont_attrs['dfuse-dentry-time'] = '2d'
-        cont_attrs['dfuse-ndentry-time'] = '2d'
-        # cont_attrs['dfuse-direct-io-disable'] = False
+        cont_attrs = OrderedDict()
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = 60
+        cont_attrs['dfuse-dentry-time'] = 60
+        cont_attrs['dfuse-ndentry-time'] = 60
+        cont_attrs['dfuse-direct-io-disable'] = False
 
         for key, value in cont_attrs.items():
             run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,

@@ -248,9 +248,6 @@ class Dfuse(DfuseCommand):
 
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
-            # self.env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
-            # self.env['DD_MASK'] = 'all'
-            # self.env['DD_SUBSYS'] = 'all'
 
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'

@@ -123,13 +123,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * Additionally, with caching enabled then dfuse may see create(), release(), open() calls
 	 * and neither release nor open update the cache, so do not set it valid on read.
 	 */
-	if (atomic_load_relaxed(&oh->doh_write_count) == 0) {
-#if 0
-		if (oh->doh_caching && !oh->doh_keep_cache)
-			dfuse_cache_set_time(oh->doh_ie);
-#endif
-		;
-	} else {
+	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
 		if (oh->doh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Evicting cache");
 			dfuse_cache_evict(oh->doh_ie);
