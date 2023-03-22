@@ -2745,7 +2745,7 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+        if self.core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
             logger.debug(
                 "Skipping checking core file detection for %s as it is not supported on this OS",
                 str(test))
