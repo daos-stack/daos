@@ -125,7 +125,7 @@ class VmdLedStatus(OSAUtils):
         """Jira ID: DAOS-11284
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,mediumcd 
+        :avocado: tags=hw,medium 
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
