@@ -474,7 +474,8 @@ class DaosCont():
         self.uuid = cont_uuid
         self.label = label
         self.pool = pool
-        assert isinstance(self.pool, DaosPool)
+        if pool is not None:
+            assert isinstance(self.pool, DaosPool)
 
     # pylint: disable-next=invalid-name
     def id(self):
@@ -3231,7 +3232,7 @@ def run_posix_tests(server, conf, test=None):
     out_wrapper = NltStdoutWrapper()
     err_wrapper = NltStderrWrapper()
 
-    pto = PosixTests(server, conf, pool=pool.uuid)
+    pto = PosixTests(server, conf, pool=pool)
     if test:
         function = f'test_{test}'
         obj = getattr(pto, function)
