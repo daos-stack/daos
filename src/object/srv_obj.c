@@ -3720,11 +3720,11 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 	D_ASSERT(okqi != NULL);
 	okqo = crt_reply_get(rpc);
 	D_ASSERT(okqo != NULL);
-
+/*
 	D_EMIT("Object query key invoked for OID: %lu,%lu\n",
 		okqi->okqi_oid.id_pub.hi,
 		okqi->okqi_oid.id_pub.lo);
-
+*/
 	D_DEBUG(DB_IO, "flags = "DF_U64"\n", okqi->okqi_api_flags);
 
 	rc = obj_ioc_begin(okqi->okqi_oid.id_pub, okqi->okqi_map_ver,
@@ -3786,9 +3786,10 @@ failed:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+/*
 	D_EMIT("Object query key completed, with return code: %d, for OID: %lu,%lu\n",
 		rc, okqi->okqi_oid.id_pub.hi, okqi->okqi_oid.id_pub.lo);
-
+*/
 }
 
 void
