@@ -263,7 +263,7 @@ struct obj_ec_fail_info {
 };
 
 int
-obj_ec_grp_start(uint32_t layout_ver, uint64_t hash, uint32_t grp_size);
+obj_ec_grp_start(uint16_t layout_ver, uint64_t hash, uint32_t grp_size);
 
 struct obj_reasb_req;
 
@@ -370,7 +370,7 @@ is_ec_data_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_data_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+is_ec_data_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
 			       struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
@@ -387,7 +387,7 @@ is_ec_parity_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_parity_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+is_ec_parity_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
 				 struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
@@ -783,7 +783,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 				return -DER_FETCH_AGAIN;
 			}
 			D_ERROR("got different parity recx in EC data recovery\n");
-			return -DER_IO;
+			return -DER_DATA_LOSS;
 		}
 		if (list_1->re_nr == 0)
 			continue;
@@ -793,7 +793,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			    (list_1->re_items[j].re_recx.rx_nr !=
 			     list_2->re_items[j].re_recx.rx_nr)) {
 				D_ERROR("got different parity recx in EC data recovery\n");
-				return -DER_IO;
+				return -DER_DATA_LOSS;
 			}
 			if (list_1->re_items[j].re_ep != list_2->re_items[j].re_ep)
 				return -DER_FETCH_AGAIN;

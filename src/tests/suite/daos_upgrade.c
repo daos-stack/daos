@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,8 @@
 #include <daos/mgmt.h>
 #include <daos/container.h>
 
+#define OBJ_NR		10
+
 static void
 upgrade_ec_parity_rotate(void **state)
 {
@@ -24,6 +26,8 @@ upgrade_ec_parity_rotate(void **state)
 	test_arg_t	*new_arg = NULL;
 	struct ioreq	req;
 	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
 	int		rc;
 
 	if (!test_runable(arg, 6))
@@ -49,6 +53,11 @@ upgrade_ec_parity_rotate(void **state)
 	write_ec_full(&req, new_arg->index, 0);
 	ioreq_fini(&req);
 
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G2, 0, 0, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
+
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 					   DAOS_FORCE_OBJ_UPGRADE | DAOS_FAIL_ALWAYS,
@@ -64,6 +73,7 @@ upgrade_ec_parity_rotate(void **state)
 	rebuild_pool_connect_internal(new_arg);
 	ioreq_init(&req, new_arg->coh, oid, DAOS_IOD_ARRAY, new_arg);
 	verify_ec_full(&req, new_arg->index, 0);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 	ioreq_fini(&req);
 
 	if (arg->myrank == 0) {

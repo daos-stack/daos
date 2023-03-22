@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -745,8 +745,13 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		if (sgls[i].sg_iovs[0].iov_len != sgls_verify[i].sg_iovs[0].iov_len ||
 		    memcmp(sgls[i].sg_iovs[0].iov_buf, sgls_verify[i].sg_iovs[0].iov_buf,
 			   sgls[i].sg_iovs[0].iov_len)) {
-			D_WARN(DF_OID" %d shard %u mismatch\n",
-			       DP_OID(obj->cob_md.omd_id), i, dova->current_shard);
+			char *ptr = sgls[i].sg_iovs[0].iov_buf;
+			char *verify_ptr = sgls_verify[i].sg_iovs[0].iov_buf;
+
+			D_ERROR(DF_OID" i %d shard %u mismatch sgl %d/%d verify %d/%d\n",
+				DP_OID(obj->cob_md.omd_id), i, dova->current_shard, (int)(*ptr),
+				(int)sgls[i].sg_iovs[0].iov_len, (int)(*verify_ptr),
+				(int)sgls_verify[i].sg_iovs[0].iov_len);
 
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
@@ -799,6 +804,7 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		oid.id_pub = obj->cob_md.omd_id;
 		oid.id_shard = start + i;
 		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		while (!dova->eof) {
 			rc = dc_obj_verify_list(dova);
 			if (rc < 0) {

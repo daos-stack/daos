@@ -379,6 +379,7 @@ set_oid(daos_unit_oid_t *oid)
 	daos_obj_set_oid(&oid->id_pub, 0, OC_RP_XSF, 0, 0);
 	oid->id_shard  = 0;
 	oid->id_layout_ver = 0;
+	oid->id_padding = 0;
 }
 
 static int
@@ -807,7 +808,7 @@ split_cmd_args(const char *arg0, const char *cmd)
 	char  *dest;
 	char  *src;
 	char   last;
-	char  *saveptr;
+	char  *saveptr = NULL;
 	char **newptr;
 
 	memset(&args, 0, sizeof(args));
