@@ -13,8 +13,7 @@ server_config:
 
 pool:
   # size: 50%
-  scm_size: 1G
-  nvme_size: 4G
+  size: 17G
 
 container:
   control_method: daos
