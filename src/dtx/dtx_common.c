@@ -1570,14 +1570,13 @@ dtx_reindex_ult(void *arg)
 {
 	struct ds_cont_child		*cont	= arg;
 	struct dss_module_info		*dmi	= dss_get_module_info();
-	uint64_t			 hint	= 0;
 	int				 rc	= 0;
 
 	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
 	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
 		if (rc != 0)
 			break;
 
@@ -1599,7 +1598,11 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 
-	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
+	/* Someone is trying to stop former DTX reindex ULT, wait until its done. */
+	while (cont->sc_dtx_reindex_abort)
+		ABT_thread_yield();
+
+	if (cont->sc_dtx_reindex)
 		return 0;
 
 	ds_cont_child_get(cont);
@@ -1618,7 +1621,12 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 void
 stop_dtx_reindex_ult(struct ds_cont_child *cont)
 {
-	if (!cont->sc_dtx_reindex || dtx_cont_opened(cont))
+	/* DTX reindex has been done or not has not been started. */
+	if (!cont->sc_dtx_reindex)
+		return;
+
+	/* Do not stop DTX reindex if the container is still opened. */
+	if (dtx_cont_opened(cont))
 		return;
 
 	/* Do not stop DTX reindex if DTX resync is still in-progress. */
