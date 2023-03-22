@@ -17,6 +17,7 @@ pool:
 
 container:
   control_method: daos
+  type: POSIX
   dfs_oclass: SX
 
 ior: &ior_base

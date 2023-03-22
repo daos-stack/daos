@@ -453,7 +453,7 @@ class Ior:
         self.manager.assign_hosts(hosts, path, slots)
         self.manager.job = IorCommand(namespace)
         self.manager.job.get_params(test)
-        self.manager.output_check = "combined"
+        self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
         self.env = self.command.get_default_env(str(self.manager), log)
 
