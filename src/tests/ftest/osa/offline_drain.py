@@ -120,13 +120,16 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 if num_pool > 1:
                     output = self.pool.reintegrate(rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
+                    free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
+                    self.assertTrue(free_space_after_reintegration > free_space_after_drain,
+                                    "Free Space error after reintegration")
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
                     output = self.pool.reintegrate("3")
                     self.print_and_assert_on_rebuild_failure(output)
-                free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
-                self.assertTrue(free_space_after_reintegration > free_space_after_drain,
-                                "Free Space error after reintegration")
+                    free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
+                    self.assertTrue(free_space_after_reintegration > free_space_after_drain,
+                                    "Free Space error after reintegration")
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
