@@ -1470,6 +1470,8 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if not path:
         assert isinstance(pool, DaosPool)
+
+    if pool:
         cmd.append(pool.id())
 
     if label:
