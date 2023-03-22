@@ -17,7 +17,7 @@ server_config:
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md,io,rebuild
       storage: auto
     1:
       targets: 8
@@ -28,7 +28,7 @@ server_config:
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md,io,rebuild
       storage: auto
   transport_config:
     allow_insecure: true
