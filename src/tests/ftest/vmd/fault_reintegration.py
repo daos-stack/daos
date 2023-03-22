@@ -12,8 +12,8 @@ from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from led import VmdLedStatus
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
+
 
 class NvmeFaultReintegrate(VmdLedStatus):
     # pylint: disable=too-many-ancestors
@@ -102,7 +102,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         self.log.info("==device_info= %s", devices)
         test_dev = devices[0]
         for device in devices:
-            led_identify_result = self.run_vmd_led_identify(device, reset=True)
+            self.run_vmd_led_identify(device, reset=True)
 
         # 2. Check drive status led state
         self.log_step("Check drive status led state.")
@@ -217,7 +217,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         # 10. Reset and cleanup
         self.log_step("Reset and cleanup")
         for device in devices:
-            led_identify_result = self.run_vmd_led_identify(device, reset=True)
+            self.run_vmd_led_identify(device, reset=True)
 
     def test_nvme_fault_reintegration(self):
         """Test ID: DAOS-10034.

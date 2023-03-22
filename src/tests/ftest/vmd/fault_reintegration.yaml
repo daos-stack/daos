@@ -8,7 +8,6 @@ hosts:
 timeout: 1000
 setup:
   start_servers_once: false
-#provider: ofi+tcp;ofi_rxm
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -20,8 +19,8 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       env_vars:
-      - DD_MASK=all
-      - D_LOG_MASK=DEBUG
+        - DD_MASK=all
+        - D_LOG_MASK=DEBUG
       storage:
         0:
           class: dcpm
