@@ -441,7 +441,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					    &duns_xattr_name, (void **)&outp, &attr_len);
 
 					if (rc != 0) {
-						DFUSE_TRA_ERROR(oh, "Problem finding file %d", rc);
+						DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
 						D_GOTO(reply, 0);
 					}
 					/* Check oid is the same! */
@@ -639,7 +639,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
 			} else if (rc != 0) {
-				DFUSE_TRA_ERROR(oh, "Problem finding file %d", rc);
+				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
 				D_GOTO(reply, rc);
 			}
 

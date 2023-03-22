@@ -23,8 +23,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	dfuse_open_handle_init(oh, ie);
 
-	DFUSE_TRA_INFO(ie, "oh %p opendir for pid %d", oh, ctx->pid);
-
 	fi_out.fh = (uint64_t)oh;
 
 	/* Disable kernel caching for testing */
