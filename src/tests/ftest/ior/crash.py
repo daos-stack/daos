@@ -22,6 +22,17 @@ class IorCrash(IorTestBase):
         super().setUp()
         self.dmg = self.get_dmg_command()
 
+    def cont_nhandles_match(self, exp_nhandles=1, attempts=5, delay_sec=2):
+        checks = {
+            "ci_nhandles": exp_nhandles}
+        chkres = False
+        for _ in range(attempts):
+            chkres = self.container.check_container_info(**checks)
+            if chkres is True:
+                break
+            time.sleep(delay_sec)
+        return chkres
+
     def test_ior_crash(self):
         """Jira ID: DAOS-4332.
            Jira ID: DAOS-9946.
@@ -63,19 +74,8 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by daos_agent after ior crash).
-        # Expect one handle (associated with this process check_container_info below).
-        # Note: it is possible query may run before handles are closed, and fail this test.
-        # Though, let us assume the dmg system query command above will take up sufficient time.
-        checks = {
-            "ci_nhandles": 1}
-        attempts = 0
-        while attempts < 5:
-            attempts += 1
-            chkres = self.container.check_container_info(**checks)
-            if chkres is True:
-                break
-            time.sleep(2)
-        self.assertTrue(chkres, "Error confirming container info nhandles")
+        # Expect to find one open handle now (a handle opened for this check)
+        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
 
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
@@ -89,17 +89,8 @@ class IorCrash(IorTestBase):
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
-        # Verify container handle opened by ior is closed (by daos_agent after ior crash)
-        checks = {
-            "ci_nhandles": 1}
-        attempts = 0
-        while attempts < 5:
-            attempts += 1
-            chkres = self.container.check_container_info(**checks)
-            if chkres is True:
-                break
-            time.sleep(2)
-        self.assertTrue(chkres, "Error confirming container info nhandles")
+        # Verify container handle opened by ior is closed (by daos_agent after ior crash).
+        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
 
         # Run IOR and verify it completes successfully
         self.run_ior_with_pool(create_pool=False, create_cont=False)
@@ -110,7 +101,4 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
-        checks = {
-            "ci_nhandles": 1}
-        self.assertTrue(self.container.check_container_info(**checks),
-                        "Error confirming container info nhandles")
+        self.assertTrue(self.cont_nhandles_match(attempts=1, delay_sec=0), "Error confirming container info nhandles")
