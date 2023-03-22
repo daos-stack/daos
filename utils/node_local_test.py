@@ -463,17 +463,18 @@ class DaosPool():
 
         containers = []
         for cont in data['response']:
-            containers.append(DaosCont(cont['uuid'], cont['label']))
+            containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
 
 class DaosCont():
     """Class to store data about daos containers"""
 
-    def __init__(self, cont_uuid, label, pool=None):
+    def __init__(self, cont_uuid, label, pool):
         self.uuid = cont_uuid
         self.label = label
         self.pool = pool
+        assert isinstance(self.pool, DaosPool)
 
     # pylint: disable-next=invalid-name
     def id(self):
@@ -488,9 +489,6 @@ class DaosCont():
         Args:
             attrs (dict): Dictionary of attributes to set.
         """
-        if not isinstance(self.pool, DaosPool):
-            raise NLTestFail('No pool passed when creating container')
-
         kvs = []
         for key, value in attrs.items():
             kvs.append(f'{key}:{value}')
@@ -511,8 +509,6 @@ class DaosCont():
         Raises:
             NLTestFail: If Pool was not provided when object created.
         """
-        if not isinstance(self.pool, DaosPool):
-            raise NLTestFail('No pool passed when creating container')
         destroy_container(self.pool.conf, self.pool.id(), self.id(),
                           valgrind=valgrind, log_check=log_check)
 
@@ -991,26 +987,6 @@ class DaosServer():
             self._make_pool()
 
         return self.test_pool
-
-    def get_test_pool(self):
-        """Return a pool uuid to be used for testing
-
-        Create a pool as required
-        """
-        if self.test_pool is None:
-            self._make_pool()
-
-        return self.test_pool.uuid
-
-    def get_test_pool_id(self):
-        """Return a pool label or uuid to be used for testing
-
-        Create a pool as required
-        """
-        if self.test_pool is None:
-            self._make_pool()
-
-        return self.test_pool.id()
 
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
@@ -1491,14 +1467,8 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     """
     cmd = ['container', 'create']
 
-    pool_obj = None
-
-    if pool:
-        if isinstance(pool, DaosPool):
-            cmd.append(pool.id())
-            pool_obj = pool
-        else:
-            cmd.append(pool)
+    assert isinstance(pool, DaosPool)
+    cmd.append(pool.id())
 
     if label:
         cmd.append(label)
@@ -1545,7 +1515,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         assert label == rc.json['response']['container_label']
     else:
         assert 'container_label' not in rc.json['response'].keys()
-    return DaosCont(rc.json['response']['container_uuid'], label, pool=pool_obj)
+    return DaosCont(rc.json['response']['container_uuid'], label, pool=pool)
 
 
 def destroy_container(conf, pool, container, valgrind=True, log_check=True):
@@ -2272,12 +2242,12 @@ class PosixTests():
     @needs_dfuse
     def test_uns_link(self):
         """Simple test to create a container then create a path for it in dfuse"""
-        container1 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link1')
+        container1 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link1')
         cmd = ['cont', 'query', self.pool.id(), container1.id()]
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
 
-        container2 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link2')
+        container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
         cmd = ['cont', 'query', self.pool.id(), container2.id()]
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
@@ -2717,7 +2687,7 @@ class PosixTests():
         tmp_dir = tempfile.mkdtemp()
 
         cont_path = join(tmp_dir, 'my-cont')
-        create_cont(self.conf, self.pool.uuid, path=cont_path)
+        create_cont(self.conf, self.pool, path=cont_path)
 
         dfuse = DFuse(self.server,
                       self.conf,
@@ -2748,7 +2718,7 @@ class PosixTests():
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep0')
         print('Inserting entry point')
-        uns_container = create_cont(conf, pool=pool, path=uns_path)
+        uns_container = create_cont(conf, pool=self.pool, path=uns_path)
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -2775,7 +2745,7 @@ class PosixTests():
 
         # Make a link within the new container.
         print('Inserting entry point')
-        uns_container_2 = create_cont(conf, pool=pool, path=uns_path)
+        uns_container_2 = create_cont(conf, pool=self.pool, path=uns_path)
 
         # List the root container again.
         print(os.listdir(join(dfuse.dir, pool, container.uuid)))
@@ -2875,7 +2845,7 @@ class PosixTests():
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep1')
         print('Inserting entry point')
-        uns_container = create_cont(conf, pool=pool, path=uns_path)
+        uns_container = create_cont(conf, pool=self.pool, path=uns_path)
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
@@ -3255,13 +3225,12 @@ def run_posix_tests(server, conf, test=None):
         if ptl.fatal_errors:
             pto.fatal_errors = True
 
-    server.get_test_pool()
-    pool = server.test_pool
+    pool = server.get_test_pool_obj()
 
     out_wrapper = NltStdoutWrapper()
     err_wrapper = NltStderrWrapper()
 
-    pto = PosixTests(server, conf, pool=pool)
+    pto = PosixTests(server, conf, pool=pool.uuid)
     if test:
         function = f'test_{test}'
         obj = getattr(pto, function)
@@ -3616,13 +3585,11 @@ def run_duns_overlay_test(server, conf):
     """
     # pylint: disable=consider-using-with
 
-    pool = server.get_test_pool()
-
     parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir, prefix='dnt_uns_')
 
     uns_dir = join(parent_dir.name, 'uns_ep')
 
-    create_cont(conf, pool=pool, path=uns_dir)
+    create_cont(conf, pool=server.get_test_pool_obj(), path=uns_dir)
 
     dfuse = DFuse(server, conf, mount_path=uns_dir, caching=False)
 
@@ -3826,7 +3793,7 @@ def check_readdir_perf(server, conf):
         """Display the results"""
         print(tabulate.tabulate(results, headers=headers, floatfmt=".2f"))
 
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_obj().uuid
 
     container = str(uuid.uuid4())
 
@@ -3945,11 +3912,11 @@ def test_pydaos_kv(server, conf):
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_obj()
 
     cont = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.DCont(pool, cont.uuid)
+    container = daos.DCont(pool.uuid, cont.uuid)
 
     kv = container.dict('my_test_kv')
     kv['a'] = 'a'
@@ -4426,7 +4393,7 @@ def test_alloc_fail_copy(server, conf, wf):
     """
     # pylint: disable=consider-using-with
 
-    pool = server.get_test_pool_id()
+    pool = server.get_test_pool_obj()
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     sub_dir = join(src_dir.name, 'new_dir')
     os.mkdir(sub_dir)
@@ -4444,7 +4411,7 @@ def test_alloc_fail_copy(server, conf, wf):
                 '--src',
                 src_dir.name,
                 '--dst',
-                f'daos://{pool}/container_{cont_id}']
+                f'daos://{pool.id()}/container_{cont_id}']
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.skip_daos_init = False
@@ -4462,13 +4429,13 @@ def test_alloc_cont_create(server, conf, wf):
     This test will create a new uuid per iteration, and the test will then try to create a matching
     container so this is potentially resource intensive.
     """
-    pool = server.get_test_pool_id()
+    pool = server.get_test_pool_obj()
 
     def get_cmd(cont_id):
         return [join(conf['PREFIX'], 'bin', 'daos'),
                 'container',
                 'create',
-                pool,
+                pool.id(),
                 '--properties',
                 f'srv_cksum:on,label:{cont_id}']
 
