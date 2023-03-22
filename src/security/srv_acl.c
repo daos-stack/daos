@@ -11,6 +11,7 @@
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/drpc_modules.h>
+#include <daos/container.h>
 
 #include <daos_srv/pool.h>
 #include <daos_srv/security.h>
@@ -281,7 +282,7 @@ ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 }
 
 static uint64_t
-pool_capas_from_perms(uint64_t perms)
+pool_capas_from_perms(uint64_t perms, bool is_owner)
 {
 	uint64_t capas = 0;
 
@@ -335,9 +336,9 @@ filter_pool_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 }
 
 static int
-get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
-			struct daos_acl *acl, uint64_t owner_min_perms,
-			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
+get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership, struct daos_acl *acl,
+			uint64_t owner_min_perms, uint64_t (*convert_perms)(uint64_t, bool),
+			uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc;
@@ -346,6 +347,7 @@ get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
 	size_t			nr_groups = 0;
 	struct acl_user		user_info = {0};
 	uint64_t		perms = 0;
+	bool			is_owner;
 
 	rc = get_auth_sys_payload(token, &authsys);
 	if (rc != 0)
@@ -372,13 +374,13 @@ get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership,
 	user_info.groups = groups;
 	user_info.nr_groups = nr_groups;
 
-	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms);
+	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms, &is_owner);
 	if (rc != 0) {
 		D_ERROR("failed to get user permissions: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	*capas = convert_perms(perms);
+	*capas = convert_perms(perms, is_owner);
 
 out:
 	D_FREE(groups);
@@ -463,8 +465,8 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int		rc;
-	Auth__Token	*token;
+	int			rc;
+	Auth__Token		*token;
 
 	if (cred == NULL || ownership == NULL || acl == NULL ||
 	    capas == NULL) {
@@ -496,8 +498,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 		return rc;
 	}
 
-	rc = get_sec_capas_for_token(token, ownership, acl,
-				     0, /* no special owner perms */
+	rc = get_sec_capas_for_token(token, ownership, acl, 0 /* no special owner perms */,
 				     pool_capas_from_perms, capas);
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
@@ -507,7 +508,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 }
 
 static uint64_t
-cont_capas_from_perms(uint64_t perms)
+cont_capas_from_perms(uint64_t perms, bool is_owner)
 {
 	uint64_t capas = 0;
 
@@ -528,6 +529,11 @@ cont_capas_from_perms(uint64_t perms)
 	if (perms & DAOS_ACL_PERM_DEL_CONT)
 		capas |= CONT_CAPA_DELETE;
 
+	if (is_owner) {
+		capas |= CONT_CAPA_OPEN_EX;
+		capas |= CONT_CAPA_EVICT_ALL;
+	}
+
 	return capas;
 }
 
@@ -537,27 +543,18 @@ filter_cont_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 	if (flags & DAOS_COO_RO)
 		*capas &= CONT_CAPAS_RO_MASK;
 	else if (!(*capas & CONT_CAPAS_RO_MASK) ||
-		 !(*capas & ~CONT_CAPAS_RO_MASK))
+		 !(*capas & CONT_CAPAS_W_MASK))
 		/*
 		 * User requested RW - if they don't have permissions for both
 		 * read and write capas of some kind, we won't grant them any.
 		 */
 		*capas = 0;
-}
 
-static bool
-container_flags_valid(uint64_t flags)
-{
-	if (flags == 0 || (flags & ~DAOS_COO_MASK))
-		return false;
+	if (!(flags & DAOS_COO_EX))
+		*capas &= ~(uint64_t)CONT_CAPA_OPEN_EX;
 
-	/*
-	 * Read-only and read-write flags conflict
-	 */
-	if ((flags & DAOS_COO_RO) && (flags & DAOS_COO_RW))
-		return false;
-
-	return true;
+	if (!(flags & DAOS_COO_EVICT_ALL))
+		*capas &= ~(uint64_t)CONT_CAPA_EVICT_ALL;
 }
 
 static Auth__Token *
@@ -582,8 +579,7 @@ unpack_token_from_cred(d_iov_t *cred)
 }
 
 int
-ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct d_ownership *ownership,
+ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -601,7 +597,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 		return -DER_INVAL;
 	}
 
-	if (!container_flags_valid(flags)) {
+	if (!dc_cont_open_flags_valid(flags)) {
 		D_ERROR("Invalid flags\n");
 		return -DER_INVAL;
 	}
@@ -623,9 +619,8 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 	if (token == NULL)
 		return -DER_INVAL;
 
-	rc = get_sec_capas_for_token(token, ownership, acl,
-				     owner_min_perms, /* owner access to ACL */
-				     cont_capas_from_perms, capas);
+	rc = get_sec_capas_for_token(token, ownership, acl, owner_min_perms, cont_capas_from_perms,
+				     capas);
 	if (rc == 0)
 		filter_cont_capas_based_on_flags(flags, capas);
 
@@ -677,8 +672,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 	if (pool_flags & DAOS_PC_RW)
 		cont_flags |= DAOS_COO_RW;
 
-	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl,
-					  &capas);
+	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl, &capas);
 	if (rc != 0) {
 		D_ERROR("failed to get container capabilities: %d\n", rc);
 		return false;
@@ -741,6 +735,18 @@ ds_sec_cont_can_read_data(uint64_t cont_capas)
 	return (cont_capas & CONT_CAPA_READ_DATA) != 0;
 }
 
+bool
+ds_sec_cont_can_open_ex(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_OPEN_EX) != 0;
+}
+
+bool
+ds_sec_cont_can_evict_all(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_EVICT_ALL) != 0;
+}
+
 uint64_t
 ds_sec_get_rebuild_cont_capabilities(void)
 {
@@ -758,4 +764,54 @@ ds_sec_get_admin_cont_capabilities(void)
 	 * Internally generated admin container handles can do everything.
 	 */
 	return CONT_CAPAS_ALL;
+}
+
+int
+ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Auth__Token		*token_x;
+	Auth__Token		*token_y;
+	Auth__Sys		*authsys_x;
+	Auth__Sys		*authsys_y;
+	int			rc;
+
+	if (cred_x == NULL || cred_y == NULL || cred_x->iov_buf == NULL ||
+	    cred_y->iov_buf == NULL) {
+		D_ERROR("NULL input\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	token_x = unpack_token_from_cred(cred_x);
+	if (token_x == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	token_y = unpack_token_from_cred(cred_y);
+	if (token_y == NULL) {
+		rc = -DER_INVAL;
+		goto out_token_x;
+	}
+
+	rc = get_auth_sys_payload(token_x, &authsys_x);
+	if (rc != 0)
+		goto out_token_y;
+
+	rc = get_auth_sys_payload(token_y, &authsys_y);
+	if (rc != 0)
+		goto out_authsys_x;
+
+	rc = (strncmp(authsys_x->user, authsys_y->user, DAOS_ACL_MAX_PRINCIPAL_LEN) == 0);
+
+	auth__sys__free_unpacked(authsys_y, &alloc.alloc);
+out_authsys_x:
+	auth__sys__free_unpacked(authsys_x, &alloc.alloc);
+out_token_y:
+	auth__token__free_unpacked(token_y, &alloc.alloc);
+out_token_x:
+	auth__token__free_unpacked(token_x, &alloc.alloc);
+out:
+	return rc;
 }

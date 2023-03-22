@@ -58,7 +58,6 @@ cont:
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
 
-				daos_event_fini(dev[i]);
 				ev = container_of(dev[i], struct dfuse_event, de_ev);
 				ev->de_complete_cb(ev);
 			}

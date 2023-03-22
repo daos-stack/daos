@@ -34,6 +34,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 
 	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
+	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
 
@@ -103,6 +104,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	if (ev)
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
 		d_slab_release(eqt->de_read_slab, ev);
+	}
 }

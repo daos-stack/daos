@@ -527,7 +527,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
-		if (atomic_load_relaxed(&(inode)->ie_open_count) == 0) {                           \
+		if (entry.attr_timeout > 0) {                                                      \
+			(inode)->ie_stat = entry.attr;                                             \
 			dfuse_cache_set_time(inode);                                               \
 		}                                                                                  \
 		__rc = fuse_reply_entry(req, &entry);                                              \

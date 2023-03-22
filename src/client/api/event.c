@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -505,42 +505,39 @@ ev_progress_cb(void *arg)
 	struct ev_progress_arg		*epa = (struct ev_progress_arg  *)arg;
 	struct daos_event_private       *evx = epa->evx;
 	struct daos_eq_private		*eqx = epa->eqx;
+	int				rc;
 
 	tse_sched_progress(evx->evx_sched);
 
+	if (daos_handle_is_inval(evx->evx_eqh))
+		D_MUTEX_LOCK(&evx->evx_lock);
+	else
+		D_MUTEX_LOCK(&eqx->eqx_lock);
+
 	/** If another thread progressed this, get out now. */
 	if (evx->evx_status == DAOS_EVS_READY)
-		return 1;
+		D_GOTO(unlock, rc = 1);
 
 	/** Event is still in-flight */
 	if (evx->evx_status != DAOS_EVS_COMPLETED && evx->evx_status != DAOS_EVS_ABORTED)
-		return 0;
+		D_GOTO(unlock, rc = 0);
 
 	/** If there are children in flight, then return in-flight */
 	if (evx->evx_nchild_running > 0)
-		return 0;
+		D_GOTO(unlock, rc = 0);
 
 	/** Change status of event to INIT only if event is not in EQ and get out. */
 	if (daos_handle_is_inval(evx->evx_eqh)) {
-		D_MUTEX_LOCK(&evx->evx_lock);
 		if (evx->evx_status == DAOS_EVS_COMPLETED || evx->evx_status == DAOS_EVS_ABORTED)
 			evx->evx_status = DAOS_EVS_READY;
-		D_MUTEX_UNLOCK(&evx->evx_lock);
-		return 1;
+		D_GOTO(unlock, rc = 1);
 	}
 
-	/** Grab the lock so we don't race with eq_progress_cb. */
-	D_MUTEX_LOCK(&eqx->eqx_lock);
-
-	/*
-	 * if the EQ was finalized from under us, just update the event status
-	 * and return.
-	 */
+	/** if the EQ was finalized from under us, just update the event status and return. */
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D_ASSERT(d_list_empty(&evx->evx_link));
-		D_MUTEX_UNLOCK(&eqx->eqx_lock);
-		return 1;
+		D_GOTO(unlock, rc = 1);
 	}
 
 	/*
@@ -555,11 +552,15 @@ ev_progress_cb(void *arg)
 		eq->eq_n_comp--;
 		d_list_del_init(&evx->evx_link);
 	}
-
+	rc = 1;
 	D_ASSERT(evx->evx_status == DAOS_EVS_READY);
-	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-	return 1;
+unlock:
+	if (daos_handle_is_inval(evx->evx_eqh))
+		D_MUTEX_UNLOCK(&evx->evx_lock);
+	else
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
+	return rc;
 }
 
 int

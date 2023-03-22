@@ -46,6 +46,11 @@ type PoolCmd struct {
 	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
+var (
+	// Default to 6% SCM:94% NVMe
+	defaultTierRatios = []float64{0.06, 0.94}
+)
+
 type tierRatioFlag struct {
 	ratios []float64
 }
@@ -59,14 +64,13 @@ func (trf tierRatioFlag) Ratios() []float64 {
 		return trf.ratios
 	}
 
-	// Default to 6% SCM:94% NVMe
-	return []float64{0.06, 0.94}
+	return defaultTierRatios
 }
 
 func (trf tierRatioFlag) String() string {
 	var ratioStrs []string
 	for _, ratio := range trf.Ratios() {
-		ratioStrs = append(ratioStrs, fmt.Sprintf("%.2f", ratio))
+		ratioStrs = append(ratioStrs, pretty.PrintTierRatio(ratio))
 	}
 	return strings.Join(ratioStrs, ",")
 }
@@ -85,7 +89,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	}
 
 	for _, trStr := range strings.Split(fv, ",") {
-		tr, err := strconv.ParseFloat(strings.TrimSpace(trStr), 64)
+		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
 		if err != nil {
 			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
 		}
@@ -101,7 +105,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 
 	var totalRatios float64
 	for _, ratio := range trf.ratios {
-		if ratio > 1 {
+		if ratio < 0 || ratio > 1 {
 			return errors.New("Storage tier ratio must be a value between 0-100")
 		}
 		totalRatios += ratio
@@ -197,8 +201,8 @@ type PoolCreateCmd struct {
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
-		PoolLabel string `positional-arg-name:"<pool label>"`
-	} `positional-args:"yes" required:"1"`
+		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -405,8 +409,8 @@ type poolCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool label or UUID>"`
-	} `positional-args:"yes" required:"1"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolCmd) PoolID() *PoolID {
@@ -675,8 +679,8 @@ type PoolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>"`
-	} `positional-args:"yes" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
