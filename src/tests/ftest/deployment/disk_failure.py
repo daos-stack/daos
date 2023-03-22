@@ -6,7 +6,6 @@
 import random
 import threading
 import time
-import json
 
 from ClusterShell.NodeSet import NodeSet
 
