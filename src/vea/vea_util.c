@@ -356,20 +356,6 @@ vea_metrics_count(void)
 	return (sizeof(struct vea_metrics) / sizeof(struct d_tm_node_t *));
 }
 
-void
-vea_metrics_nvme_used_set(void *metrics, struct d_tm_node_t *nvme_used)
-{
-	struct vea_metrics	*vm  = metrics;
-
-	D_ASSERT(vm != NULL);
-
-	if (vm->vm_nvme_used != NULL) {
-		D_WARN("Overload the vea NVME usage metric\n");
-	}
-
-	vm->vm_nvme_used = nvme_used;
-}
-
 static void
 update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool dec)
 {
@@ -409,13 +395,6 @@ update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool de
 		}
 		if (metrics && metrics->vm_free_blks)
 			d_tm_set_gauge(metrics->vm_free_blks, vsi->vsi_stat[type]);
-		if (metrics && metrics->vm_nvme_used) {
-			struct vea_space_df	*vsd = vsi->vsi_md;
-			daos_size_t		 nvme_used;
-
-			nvme_used = (vsd->vsd_tot_blks - vsi->vsi_stat[type]) * vsd->vsd_blk_sz;
-			d_tm_set_gauge(metrics->vm_nvme_used, nvme_used);
-		}
 		break;
 	default:
 		D_ASSERTF(0, "Invalid stat type %u\n", type);

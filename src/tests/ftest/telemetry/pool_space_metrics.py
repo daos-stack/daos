@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 
@@ -40,7 +42,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         self.pool_space_metrics_minmax = {
             "/run/pool_scm/*": {
                 "engine_pool_vos_space_scm_used": (
-                    self.data_size - (self.data_size * self.scm_threshold_percent) / 100,
+                    self.data_size,
                     self.data_size + (self.data_size * self.scm_threshold_percent) / 100
                 ),
                 "engine_pool_vos_space_nvme_used": (0, 0)
@@ -121,6 +123,9 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
             self.update_ior_cmd_with_pool(create_cont=False)
             self.run_ior_with_pool(
                 timeout=200, create_pool=False, create_cont=False)
+
+            self.log.info("Waiting 15s let the vos space metrics to be updated")
+            time.sleep(15)
 
             # collect pool space metric data after write
             metrics = self.get_metrics(self.metric_names)

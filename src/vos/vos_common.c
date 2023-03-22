@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -650,11 +650,11 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	/* VOS space NVME used metric */
 	rc = d_tm_add_metric(&vsm->vsm_nvme_used, D_TM_GAUGE, "NVME space used", "bytes",
 			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
-	if (rc) {
+	if (rc)
 		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
-	} else {
-		vea_metrics_nvme_used_set(vp_metrics->vp_vea_metrics, vsm->vsm_nvme_used);
-	}
+
+	/* Initialize the vos_space_metrics timeout counter */
+	vsm->vsm_last_update_ts = 0;
 
 	return vp_metrics;
 }

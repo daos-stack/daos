@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,7 +89,6 @@ struct vea_metrics {
 	struct d_tm_node_t	*vm_rsrv[STAT_RESRV_TYPE_MAX];
 	struct d_tm_node_t	*vm_frags[STAT_FRAGS_TYPE_MAX];
 	struct d_tm_node_t	*vm_free_blks;
-	struct d_tm_node_t	*vm_nvme_used;
 };
 
 /* In-memory compound index */
