@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 import time
 
 from dmg_utils import get_storage_query_device_uuids, get_dmg_response
