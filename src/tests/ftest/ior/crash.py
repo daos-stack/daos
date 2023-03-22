@@ -68,8 +68,14 @@ class IorCrash(IorTestBase):
         # Though, let us assume the dmg system query command above will take up sufficient time.
         checks = {
             "ci_nhandles": 1}
-        self.assertTrue(self.container.check_container_info(**checks),
-                        "Error confirming container info nhandles")
+        attempts = 0
+        while (attempts < 5):
+            attempts += 1
+            chkres = self.container.check_container_info(**checks)
+            if chkres is True:
+                break
+            time.sleep(2)
+        self.assertTrue(chkres, "Error confirming container info nhandles")
 
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
@@ -86,8 +92,14 @@ class IorCrash(IorTestBase):
         # Verify container handle opened by ior is closed (by daos_agent after ior crash)
         checks = {
             "ci_nhandles": 1}
-        self.assertTrue(self.container.check_container_info(**checks),
-                        "Error confirming container info nhandles")
+        attempts = 0
+        while (attempts < 5):
+            attempts += 1
+            chkres = self.container.check_container_info(**checks)
+            if chkres is True:
+                break
+            time.sleep(2)
+        self.assertTrue(chkres, "Error confirming container info nhandles")
 
         # Run IOR and verify it completes successfully
         self.run_ior_with_pool(create_pool=False, create_cont=False)

@@ -399,7 +399,7 @@ nhandles_ht_rec_decref(struct d_hash_table *ht, d_list_t *link)
 
 	rec->nhr_ref--;
 	D_DEBUG(DB_TRACE, "rec=%p, decremented nhr_ref to %u\n", rec, rec->nhr_ref);
-	return rec->nhr_ref == 0;
+	return (rec->nhr_ref == 0);
 }
 
 static bool
@@ -416,7 +416,7 @@ nhandles_ht_rec_free(struct d_hash_table *htable, d_list_t *link)
 	struct nhandles_ht_rec *rec = nhandles_rec_obj(link);
 
 	D_ASSERT(d_hash_rec_unlinked(&rec->nhr_hlink));
-	D_DEBUG(DB_MD, "free rec=%p\n", rec);
+	D_DEBUG(DB_MD, "Free rec=%p\n", rec);
 	D_FREE(rec);
 }
 
