@@ -70,11 +70,14 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     """Create a list of containers that the various jobs use for storage.
 
     Args:
-        pool: pool to create container
-        file_oclass: file oclass for daos container cmd
-        dir oclass: directory oclass for daos container cmd
-
+        pool (TestPool obj): pool to read/write random data file
+        file_oclass (str): file oclass for daos container cmd
+        dir oclass (str): directory oclass for daos container cmd
+        path (str): namespace for container
     """
+    unique = get_random_string(5, self.used)
+    label = "-".join(["TestContainer", unique])
+    self.used.append(unique)
     rd_fac = None
     # Create a container and add it to the overall list of containers
     self.container.append(
@@ -92,6 +95,7 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     cont_properties = (",").join(filter(None, [properties, rd_fac]))
     if cont_properties is not None:
         self.container[-1].properties.update(cont_properties)
+    self.container[-1].label.update(label)
     self.container[-1].create()
 
 
