@@ -9,5 +9,6 @@ pyelftools
 pyxattr
 pyyaml
 scons        # Works around a bug in scons on EL 8.
+shlib
 tabulate
 wheel

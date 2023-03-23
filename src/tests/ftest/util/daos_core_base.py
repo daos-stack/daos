@@ -1,9 +1,11 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
+import shlib
 from avocado import fail_on
 
 from apricot import TestWithServers
@@ -148,3 +150,9 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         cmocka_utils.run_cmocka_test(self, job)
+
+        try:
+            log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
+            shlib.mv("/tmp/suite_dmg.log", log_path)
+        except IOError as error:
+            print("unable to move dmg log:", error)
