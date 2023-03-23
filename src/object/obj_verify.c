@@ -804,6 +804,7 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		oid.id_pub = obj->cob_md.omd_id;
 		oid.id_shard = start + i;
 		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		while (!dova->eof) {
 			rc = dc_obj_verify_list(dova);
 			if (rc < 0) {
