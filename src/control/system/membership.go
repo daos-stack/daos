@@ -388,7 +388,8 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		// - if transition from current to result state is illegal
 
 		if result.Errored {
-			if result.State != MemberStateErrored {
+			// Check state matches errored flag.
+			if result.State != MemberStateErrored && result.State != MemberStateUnresponsive {
 				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",

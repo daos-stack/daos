@@ -925,7 +925,7 @@ dv_get_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, dv_dump_ilog_ent
 	umm = vos_cont2umm(cont);
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
-	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (rc == -DER_NONEXIST) /* no entries exist ... not an error */
 		return 0;
 	if (!SUCCESS(rc))
@@ -948,7 +948,7 @@ process_ilog_entries(daos_handle_t coh, struct umem_instance *umm, struct ilog_d
 	vos_ilog_desc_cbs_init(&cbs, coh);
 	ilog_fetch_init(&entries);
 
-	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -1050,7 +1050,7 @@ key_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
 
-	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -1204,7 +1204,6 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	struct vos_container		*cont;
 	int				 rc;
 	struct committed_dtx_cb_arg	 cb_arg = {0};
-	uint64_t			 hint = 0;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_INVAL;
@@ -1219,7 +1218,7 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	 * within one block, so must loop until all are done (rc == 1)
 	 */
 	do {
-		rc = vos_dtx_cmt_reindex(coh, &hint);
+		rc = vos_dtx_cmt_reindex(coh);
 	} while (rc >= 0 && rc != 1);
 	if (rc < 0)
 		return rc;

@@ -157,7 +157,8 @@ def define_mercury(reqs):
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'])
+                patch_rpath=['lib'],
+                build_env={'CFLAGS': "-fstack-usage"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -217,57 +218,39 @@ def define_mercury(reqs):
                 pkgconfig='mercury',
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None)
+                package='mercury-devel' if inst(reqs, 'mercury') else None,
+                build_env={'CFLAGS': '-fstack-usage'})
 
 
 def define_common(reqs):
     """Common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
 
-    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
-                package='libunwind-devel')
+    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'], package='libunwind-devel')
 
     reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
 
-    reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
-                package='valgrind-devel')
+    reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'], package='valgrind-devel')
 
-    reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'],
-                package='CUnit-devel')
+    reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
 
-    reqs.define('python34_devel', headers=['python3.4m/Python.h'],
-                package='python34-devel')
-
-    reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
-
-    reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
-
-    reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
-
-    reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-python36-devel')
+    reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
 
-    reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
-                package='openssl-devel')
+    reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
 
-    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'],
-                package='json-c-devel')
+    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'], package='json-c-devel')
 
-    if reqs.get_env('PLATFORM') == 'darwin':
-        reqs.define('uuid', headers=['uuid/uuid.h'])
-    else:
-        reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
-                    package='libuuid-devel')
+    reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
+
+    reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
 
 def define_ompi(reqs):
     """OMPI and related components"""
-    reqs.define('hwloc', headers=['hwloc.h'], libs=['hwloc'],
-                package='hwloc-devel')
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 

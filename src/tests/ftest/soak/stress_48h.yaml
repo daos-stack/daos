@@ -9,7 +9,7 @@ orterun:
   allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
-timeout: 48H15M
+timeout: 48H30M
 setup:
   start_servers: true
   start_agents: true
@@ -22,40 +22,31 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
-      fabric_iface: ib0
+      nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
         - DAOS_MD_CAP=1024
       storage: auto
     1:
       pinned_numa_node: 1
-      nr_xs_helpers: 1
-      fabric_iface: ib1
+      nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
         - DAOS_MD_CAP=1024
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 200GB
-  nvme_size: 1TB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 pool_racer:
-  scm_size: 3GB
-  nvme_size: 10GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -63,7 +54,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -83,12 +75,13 @@ soak_stress:
   test_timeout: 48
   joblist:
     - fio_stress
-    - daos_racer
+    #- daos_racer
     - ior_stress
     - mdtest_stress
     - vpic_stress
     - lammps_stress
     - macsio_stress
+    - datamover_stress
   ignore_soak_errors: false
 # Commandline parameters
 # Benchmark and application params
@@ -121,23 +114,24 @@ ior_stress:
     - '1m'
     - '4k'
   dfs_oclass:
-    - "SX"
-    - "EC_2P1GX"
-    #  - "EC_4P1G1"
-    #  - "EC_4P2GX"
-    #  - "EC_8P2G1"
-    #  - "EC_16P2GX"
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 fio_stress:
   job_timeout: 30
   names:
     - global
     - test
   global:
+    create_serialize: 0
     directory: "/tmp/daos_dfuse/fio/"
     ioengine: 'libaio'
     thread: 1
@@ -146,7 +140,7 @@ fio_stress:
     verify: 'crc64'
     iodepth: 16
   test:
-    numjobs: 16
+    numjobs: 1
   soak:
     blocksize:
       - '64K'
@@ -158,17 +152,17 @@ fio_stress:
       - 'rw'
       - 'randrw'
     oclass:
-      - "SX"
-      - "EC_2P1GX"
-      # - "EC_4P1G1"
-      # - "EC_4P2GX"
-      # - "EC_8P2G1"
-      # - "EC_16P2GX"
+      - ["SX","SX"]
+      - ["EC_2P1GX", "RP_2GX"]
+      #  - ["EC_4P1G1", "RP_2GX"]
+      - ["EC_4P2GX", "RP_3GX"]
+      #  - ["EC_8P2G1", "RP_3GX"]
+      #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 daos_racer:
   runtime: 120
 vpic_stress:
@@ -185,7 +179,7 @@ vpic_stress:
     mount_dir: "/tmp/daos_dfuse/vpic/"
     disable_caching: true
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
   job_timeout: 35
   nodesperjob:
@@ -199,9 +193,9 @@ lammps_stress:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 mdtest_stress:
   # maximum timeout for a single job in test in minutes
   job_timeout: 40
@@ -227,18 +221,18 @@ mdtest_stress:
     - 10
     - 0
   dfs_oclass:
-    - "S1"
-    - "EC_2P1G1"
-    #  - "EC_4P1G1"
-    #  - "EC_4P2G1"
-    #  - "EC_8P2G1"
-    #  - "EC_16P2G1"
+    - ["S1","S1"]
+    - ["EC_2P1G1", "RP_2G1"]
+    #  - ["EC_4P1G1", "RP_2G1"]
+    - ["EC_4P2G1", "RP_3G1"]
+    #  - ["EC_8P2G1", "RP_3G1"]
+    #  - ["EC_16P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -259,17 +253,58 @@ macsio_stress:
   num_dumps: 2
   debug_level: 1
   oclass:
-    - "SX"
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
+datamover_stress:
+  job_timeout: 10
+  nodesperjob:
+    - 1
+    - 4
+    - 8
+  taskspernode:
+    - 16
+    - 32
+  oclass:
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
+  dcp:
+    bufsize: 1M
+    chunksize: 1M
+  ior_write:
+    api:
+      - DFS
+    flags: "-w -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
+  ior_read:
+    api:
+      - DFS
+    flags: "-r -R -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:

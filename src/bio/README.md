@@ -120,13 +120,19 @@ The Amber LED (status LED) is what VMD provides. It represents the LED coming fr
 The status LED on the VMD device has four states: OFF, FAULT, REBUILD, and IDENTIFY. These are communicated by blinking patterns specified in the IBPI standard (SFF-8489).
 ![/docs/graph/VMD_LED_states.png](/docs/graph/VMD_LED_states.png "Status LED states")
 
-#### Locate a Health Device
-Upon issuing a device identify command with a specified device ID, an admin now can quickly identify a device in question. The status LED on the VMD device would be set to an IDENTIFY state, represented by a quick, 4Hz blinking amber light. The device would quickly blink by default for 60 seconds and then return to the default OFF state. The LED event duration can be customized by setting the VMD_LED_PERIOD environment variable if a duration other than the default value is desired.
+#### Locate a Healthy Device
+Upon issuing a device identify command with a specified device ID and optional custom timeout value, an admin now can quickly identify a device in question.
+The timeout value will be 2 minutes if unspecified on the commandline, any value specified should be in units of a minute.
+The status LED on the VMD device would be set to an IDENTIFY state, represented by a quick, 4Hz blinking amber light.
+The device will quickly blink until the timeout value is reached, after which returning to the default OFF state.
+
 #### Locate an Evicted Device
-If an NVMe SSD is evicted, the status LED on the VMD device will be set to a FAULT state, represented by a solidly ON amber light. No additional command apart from the SSD eviction would be needed, and this would visually indicate that the device needs to be replaced and is no longer in use by DAOS. The LED of the VMD device will remain in this state until replaced by a new device.
+If an NVMe SSD is faulty, the status LED on the VMD device will be set to a EVICTED state, represented by a solidly ON amber light.
+This LED activity visually indicates a fault and that the device needs to be replaced and is no longer in use by DAOS.
+The LED of the VMD device will remain in this state until replaced by a new device.
 
  Useful admin command to locate a VMD-enabled NVMe SSD:
-  - <a href="#85">dmg storage identify vmd</a> [used to change the status LED state on the VMD device to quickly blink for 60 seconds]
+  - <a href="#85">dmg storage identify vmd</a> [used to change the status LED state on the VMD device to quickly blink until timeout expires]
 
 <a id="11"></a>
 ## Device States

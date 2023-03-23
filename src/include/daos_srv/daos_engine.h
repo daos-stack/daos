@@ -662,13 +662,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {
@@ -762,21 +762,21 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
 			struct ds_migrate_status *dms);
 int
 ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
+		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
 		       uint32_t new_gl_ver, unsigned int migrate_opc);
 int
 ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
-		  uint32_t version, uint64_t max_eph, uint32_t opc, daos_unit_oid_t *oids,
-		  daos_epoch_t *epochs, daos_epoch_t *punched_epochs, unsigned int *shards,
-		  uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
+		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
+		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
+		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
-ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 int
 obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,

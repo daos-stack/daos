@@ -1,0 +1,23 @@
+hosts:
+  test_servers: 4
+
+timeout: 180
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      nr_xs_helpers: 1
+      storage: auto
+
+# We need to restart servers and clean up after each test because we manually corrupt the
+# pool directory. The tests will have unpredictable behavior if we don't.
+setup:
+  start_servers_once: False
+
+pool:
+  size: 60G
+
+container:
+  control_method: daos

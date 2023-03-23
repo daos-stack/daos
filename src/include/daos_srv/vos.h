@@ -194,15 +194,13 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  * Establish the indexed committed DTX table in DRAM.
  *
  * \param coh	[IN]		Container open handle.
- * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
- *				contains committed DTX entries to be handled.
  *
  * \return	Zero on success, need further re-index.
  *		Positive, re-index is completed.
  *		Negative value if error.
  */
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+vos_dtx_cmt_reindex(daos_handle_t coh);
 
 /**
  * Cleanup local DTX when local modification failed.
@@ -1038,6 +1036,21 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * When the callback executes code that may yield, in some cases, it needs to
+ * verify the value or key it is operating on still exists before continuing.
+ * This function will revalidate from the object layer down.   This is only
+ * supported in conjunction with recursive vos_iterate from VOS_ITER_OBJ.
+ *
+ * \param[in]	ih	The iterator handle
+ *
+ * \return		0 if iterator value is valid
+ *			VOS_ITER_* level that needs probe
+ *			<0 on error
+ */
+int
+vos_iter_validate(daos_handle_t ih);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
@@ -1160,6 +1173,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_RESET_GC,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
+	/** Set space reserve ratio for rebuild */
+	VOS_PO_CTL_SET_SPACE_RB,
 };
 
 /**
@@ -1328,10 +1343,9 @@ struct scrub_ctx {
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
 
-	enum scrub_status	 sc_status;
-	uint8_t			 sc_did_yield:1,
-				 sc_cont_loaded :1, /* Have all the containers been loaded */
-				 sc_first_pass_done:1; /* Is this the first pass of the scrubber */
+	enum scrub_status        sc_status;
+	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
+	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
 };
 
 /*

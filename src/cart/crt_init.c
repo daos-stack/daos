@@ -534,6 +534,11 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	    prov == CRT_PROV_OFI_TCP_RXM) {
 		/* Use shared receive queues to avoid large mem consumption */
 		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
+
+		/* Only apply on the server side */
+		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
+			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
+
 	}
 
 	/* Print notice that "ofi+psm2" will be deprecated*/
@@ -681,12 +686,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			if (tmp)
 				domain_env = tmp;
 		}
-
-		if (domain_env == NULL) {
-			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface_env);
-			domain_env = interface_env;
-		}
-
 
 		if (opt && opt->cio_port)
 			port_str = opt->cio_port;

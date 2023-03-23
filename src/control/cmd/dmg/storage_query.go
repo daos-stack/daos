@@ -287,7 +287,7 @@ type ledManageCmd struct {
 
 type ledIdentifyCmd struct {
 	ledCmd
-	Timeout uint32 `long:"timeout" description:"Length of time to blink the status LED for"`
+	Timeout uint32 `long:"timeout" description:"Number of minutes to blink the status LED for"`
 	Reset   bool   `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
 }
 

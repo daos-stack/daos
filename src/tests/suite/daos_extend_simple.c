@@ -225,7 +225,9 @@ struct extend_cb_arg{
 	daos_obj_id_t	*oids;
 	dfs_t		*dfs_mt;
 	dfs_obj_t	*dir;
+	d_rank_t	rank;
 	int		opc;
+	bool		kill;
 };
 
 enum extend_opc {
@@ -314,7 +316,7 @@ extend_write(dfs_t *dfs_mt, dfs_obj_t *dir)
 }
 
 static int
-extend_cb(void *arg)
+extend_cb_internal(void *arg)
 {
 	test_arg_t		*test_arg = arg;
 	struct extend_cb_arg	*cb_arg = test_arg->rebuild_cb_arg;
@@ -329,8 +331,17 @@ extend_cb(void *arg)
 	int			rc;
 	int			i;
 
-	print_message("sleep 10 seconds to start extend opc %d\n", opc);
+	print_message("sleep 10 seconds then kill/extend %u and start op %d\n",
+		      cb_arg->rank, opc);
 	sleep(10);
+
+	if (cb_arg->kill)
+		daos_kill_server(test_arg, test_arg->pool.pool_uuid, test_arg->group,
+				 test_arg->pool.alive_svc, cb_arg->rank);
+	else
+		dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
+				test_arg->group, &cb_arg->rank, 1);
+	/* Kill another rank during extend */
 	switch(opc) {
 	case EXTEND_PUNCH:
 		print_message("punch objects during extend\n");
@@ -381,7 +392,7 @@ extend_cb(void *arg)
 }
 
 void
-dfs_extend_internal(void **state, int opc)
+dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kill)
 {
 	test_arg_t	*arg = *state;
 	dfs_t		*dfs_mt;
@@ -396,10 +407,12 @@ dfs_extend_internal(void **state, int opc)
 	dfs_attr_t attr = {};
 	int		rc;
 
-	attr.da_props = daos_prop_alloc(1);
+	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF1;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
 	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
@@ -430,6 +443,11 @@ dfs_extend_internal(void **state, int opc)
 	cb_arg.dfs_mt = dfs_mt;
 	cb_arg.dir = dir;
 	cb_arg.opc = opc;
+	cb_arg.kill = kill;
+	if (kill)
+		cb_arg.rank = 2;
+	else
+		cb_arg.rank = 4;
 
 	arg->rebuild_cb = extend_cb;
 	arg->rebuild_cb_arg = &cb_arg;
@@ -439,6 +457,19 @@ dfs_extend_internal(void **state, int opc)
 			      DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 
 	extend_single_pool_rank(arg, 3);
+
+	print_message("sleep 30 secs for rank %u exclude or reintegrate.\n", cb_arg.rank);
+	sleep(30);
+	test_rebuild_wait(&arg, 1);
+
+	if (opc == EXTEND_UPDATE)
+		extend_read_check(dfs_mt, dir);
+
+	print_message("reintegrate rank %u then check\n", cb_arg.rank);
+	arg->rebuild_cb = NULL;
+	arg->rebuild_cb_arg = NULL;
+	if (kill)
+		reintegrate_single_pool_rank(arg, 2, true);
 
 	if (opc == EXTEND_UPDATE)
 		extend_read_check(dfs_mt, dir);
@@ -457,27 +488,116 @@ dfs_extend_internal(void **state, int opc)
 }
 
 void
-dfs_extend_punch(void **state)
+dfs_extend_punch_kill(void **state)
 {
-	dfs_extend_internal(state, EXTEND_PUNCH);
+	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, true);
 }
 
 void
-dfs_extend_stat(void **state)
+dfs_extend_punch_extend(void **state)
 {
-	dfs_extend_internal(state, EXTEND_STAT);
+	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, false);
 }
 
 void
-dfs_extend_enumerate(void **state)
+dfs_extend_stat_kill(void **state)
 {
-	dfs_extend_internal(state, EXTEND_ENUMERATE);
+	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, true);
 }
 
 void
-dfs_extend_fetch(void **state)
+dfs_extend_stat_extend(void **state)
 {
-	dfs_extend_internal(state, EXTEND_FETCH);
+	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, false);
+}
+
+void
+dfs_extend_enumerate_kill(void **state)
+{
+	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, true);
+}
+
+void
+dfs_extend_enumerate_extend(void **state)
+{
+	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, false);
+}
+
+void
+dfs_extend_fetch_kill(void **state)
+{
+	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, true);
+}
+
+void
+dfs_extend_fetch_extend(void **state)
+{
+	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, false);
+}
+
+void
+dfs_extend_write_kill(void **state)
+{
+	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, true);
+}
+
+void
+dfs_extend_write_extend(void **state)
+{
+	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, false);
+}
+
+void
+dfs_extend_fail_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		str[37];
+	dfs_attr_t attr = {};
+	int		rc;
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_EC_2P1GX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	extend_write(dfs_mt, dir);
+	/* extend failure */
+	print_message("first extend will fail then exclude\n");
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+	extend_single_pool_rank(arg, 3);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	extend_read_check(dfs_mt, dir);
+
+	print_message("retry extend\n");
+	/* retry extend */
+	extend_single_pool_rank(arg, 3);
+	extend_read_check(dfs_mt, dir);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
 }
 
 int
@@ -509,14 +629,26 @@ static const struct CMUnitTest extend_tests[] = {
 	 extend_large_rec, extend_small_sub_setup, test_teardown},
 	{"EXTEND5: extend multiple objects",
 	 extend_objects, extend_small_sub_setup, test_teardown},
-	{"EXTEND6: punch object during extend",
-	 dfs_extend_punch, extend_small_sub_setup, test_teardown},
-	{"EXTEND7: stat object during extend",
-	 dfs_extend_stat, extend_small_sub_setup, test_teardown},
-	{"EXTEND8: enumerate object during extend",
-	 dfs_extend_enumerate, extend_small_sub_setup, test_teardown},
-	{"EXTEND9: read object during extend",
-	 dfs_extend_fetch, extend_small_sub_setup, test_teardown},
+	{"EXTEND6: punch object during extend and kill",
+	 dfs_extend_punch_kill, extend_small_sub_setup, test_teardown},
+	{"EXTEND7: punch object during extend and extend",
+	 dfs_extend_punch_extend, extend_small_sub_setup, test_teardown},
+	{"EXTEND8: stat object during extend and kill",
+	 dfs_extend_stat_kill, extend_small_sub_setup, test_teardown},
+	{"EXTEND9: stat object during extend and extend",
+	 dfs_extend_stat_extend, extend_small_sub_setup, test_teardown},
+	{"EXTEND10: enumerate object during extend and kill",
+	 dfs_extend_enumerate_kill, extend_small_sub_setup, test_teardown},
+	{"EXTEND11: enumerate object during extend and extend",
+	 dfs_extend_enumerate_extend, extend_small_sub_setup, test_teardown},
+	{"EXTEND12: read object during extend and kill",
+	 dfs_extend_fetch_kill, extend_small_sub_setup, test_teardown},
+	{"EXTEND13: read object during extend and extend",
+	 dfs_extend_fetch_extend, extend_small_sub_setup, test_teardown},
+	{"EXTEND14: write object during extend and kill",
+	 dfs_extend_write_kill, extend_small_sub_setup, test_teardown},
+	{"EXTEND15: write object during extend and extend",
+	 dfs_extend_write_extend, extend_small_sub_setup, test_teardown},
 };
 
 int

@@ -150,7 +150,7 @@ func (cmd *containerFaultCmd) Execute(_ []string) error {
 		cspCmd := containerSetPropCmd{
 			existingContainerCmd: cmd.existingContainerCmd,
 		}
-		if err := cspCmd.Properties.UnmarshalFlag("label:new-label"); err != nil {
+		if err := cspCmd.Args.Props.UnmarshalFlag("label:new-label"); err != nil {
 			return err
 		}
 		cspCmd.Logger = cmd.Logger
