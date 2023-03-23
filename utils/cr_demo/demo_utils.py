@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,8 +36,7 @@ def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
         ranks (str): Ranks to create pool. Defaults to None.
         nsvc (str): Number of service replicas. Defaults to None.
     """
-    create_pool_cmd = ["dmg", "pool", "create", "--size=" + pool_size,
-                       "--label=" + pool_label]
+    create_pool_cmd = ["dmg", "pool", "create", pool_label, "--size=" + pool_size]
     if ranks:
         create_pool_cmd.append("--ranks=" + ranks)
     if nsvc:
@@ -55,6 +54,7 @@ def list_pool(verbose=False, json=False, no_query=False):
 
     Returns:
         str: If --json is used, return stdout. Otherwise None.
+
     """
     if json:
         list_pool_cmd = ["dmg", "--json", "pool", "list"]
@@ -203,6 +203,7 @@ def check_query(json=False):
 
     Returns:
         str: If --json is used, return stdout. Otherwise None.
+
     """
     if json:
         check_query_cmd = ["dmg", "--json", "check", "query"]
@@ -265,6 +266,7 @@ def system_query(json=False, verbose=False):
 
     Returns:
         str: Command output.
+
     """
     if json:
         system_query_cmd = ["dmg", "--json", "system", "query"]
@@ -291,6 +293,7 @@ def create_uuid_to_seqnum():
     Returns:
         dict: UUID to sequence number mapping for each pool. Sequence number will be used
             during repair.
+
     """
     uuid_to_seqnum = {}
     stdout = check_query(json=True)
@@ -305,6 +308,7 @@ def create_label_to_uuid():
 
     Returns:
         dict: Pool label to UUID.
+
     """
     label_to_uuid = {}
     stdout = list_pool(json=True)
@@ -319,6 +323,7 @@ def get_current_labels():
 
     Returns:
         list: Current pool labels.
+
     """
     pool_labels = []
     stdout = list_pool(json=True)
@@ -327,6 +332,26 @@ def get_current_labels():
         pool_labels.append(pool["label"])
 
     return pool_labels
+
+def convert_list_to_str(original_list, separator):
+    """Convert given list to a string with each item separated by separator.
+
+    Args:
+        original_list (list): List of items.
+        separator (str): Separator to separate each item in the new string list.
+
+    Returns:
+        str: String list.
+
+    """
+    str_list = ""
+    for item in original_list:
+        if str_list == "":
+            str_list = str(item)
+        else:
+            str_list += separator + str(item)
+
+    return str_list
 
 def run_command(command):
     """Print given command and run.

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -83,7 +83,7 @@ clush_ls_cmd = ["clush", "-w", hostlist[1], LS_CMD]
 print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"\n10-F6. {POOL_LABEL_6} has one less ranks (4 -> 3).")
+print(f"\n10-F6. {POOL_LABEL_6} has one less target (64 -> 63).")
 pool_query(pool_label=POOL_LABEL_6)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
@@ -98,7 +98,8 @@ print(f"\n10-F7. Use ddb to verify that the container in {POOL_LABEL_8} is remov
       f"from shards.")
 system_stop()
 pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
-ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos/{pool_uuid_7}/vos-0"
+# ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos0/{pool_uuid_7}/vos-0"
+ddb_cmd = f"sudo ddb /mnt/daos0/{pool_uuid_7}/vos-0 ls"
 # clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
 # print(f"Command: {clush_ddb_cmd}")
 ddb_cmd_list = ddb_cmd.split(" ")

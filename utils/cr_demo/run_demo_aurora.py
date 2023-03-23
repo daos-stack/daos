@@ -14,17 +14,19 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum,\
     pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
     system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
-    check_set_policy
+    check_set_policy, convert_list_to_str
 
+
+# Run this script on Aurora node as user. e.g.,
+# python3 run_demo_aurora.py -l aurora-daos-[0001-0100]
 
 test_cmd = f"sudo date"
 test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
 
-# Need to use at least "scm_size: 15" for server config to create 8 1GB-pools.
 POOL_SIZE = "100GB"
-POOL_SIZE_F5 = "100GB"
+POOL_SIZE_F5 = "3T"
 POOL_LABEL = "tank"
 CONT_LABEL = "bucket"
 
@@ -123,24 +125,14 @@ f2_ranks = []
 f2_ranks.extend(host_to_ranks[hostlist[0]])
 f2_ranks.extend(host_to_ranks[hostlist[1]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
-f2_ranks_str = ""
-for rank in f2_ranks:
-    if f2_ranks_str == "":
-        f2_ranks_str = str(rank)
-    else:
-        f2_ranks_str += "," + str(rank)
+f2_ranks_str = convert_list_to_str(original_list=f2_ranks, separator=",")
 print(f"## f2_ranks_str = {f2_ranks_str}")
 
 # 5. Determine the two ranks in hostlist[0] to create F5 pool.
 f5_ranks = []
 f5_ranks.extend(host_to_ranks[hostlist[0]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
-f5_ranks_str = ""
-for rank in f5_ranks:
-    if f5_ranks_str == "":
-        f5_ranks_str = str(rank)
-    else:
-        f5_ranks_str += "," + str(rank)
+f5_ranks_str = convert_list_to_str(original_list=f5_ranks, separator=",")
 print(f"## f5_ranks_str = {f5_ranks_str}")
 
 # Set up variables to copy pool directory locally. This will crash the node.
@@ -236,8 +228,8 @@ subprocess.run(clush_rm_rank_2, check=False)
 
 # F5: Copy tank_5 pool directory from /mnt/daos1 in hostlist[0] to /mnt/daos0 in
 # hostlist[1]. Match owner. (Mount points are arbitrary.)
-# In order to scp the pool directory without password, there are two things to set up.
-# 1. Since we're running scp as user, update the mode of the source pool directory as
+# In order to copy the pool directory without password, there are two things to set up.
+# 1. Since we're running rsync as user, update the mode of the source pool directory as
 # below.
 # Set 777 for /mnt/daos1 and /mnt/daos1/<pool_5>/* i.e.,
 # chmod 777 /mnt/daos1; chmod -R 777 /mnt/daos1/<pool_5>
@@ -260,14 +252,46 @@ clush_chmod_cmd = ["clush", "-w", hostlist[1], chmod_cmd]
 print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 
-# Run the following scp command on hostlist[0] using clush:
-# scp -rp /mnt/daos1/<pool_uuid_5> root@hostlist[1]:/mnt/daos/
+# Since we're seding each file (vos-0 to 15 + rdb-pool) one at a time rather than the
+# whole pool directory, we need to create the destination fake pool directory first.
+print("(F5: Create a fake pool directory at the destination mount point.)")
+mkdir_cmd = f"sudo mkdir /mnt/daos0/{pool_uuid_5}"
+clush_mkdir_cmd = ["clush", "-w", hostlist[1], mkdir_cmd]
+print(f"Command: {clush_mkdir_cmd}\n")
+subprocess.run(clush_mkdir_cmd, check=False)
+
+print("(F5: Update mode of the fake pool directory at destination.)")
+chmod_cmd = f"sudo chmod 777 /mnt/daos0/{pool_uuid_5}"
+clush_chmod_cmd = ["clush", "-w", hostlist[1], chmod_cmd]
+print(f"Command: {clush_chmod_cmd}\n")
+subprocess.run(clush_chmod_cmd, check=False)
+
+# Run the following xargs + rsync command on hostlist[0] using clush:
+# ls /mnt/daos1/<pool_uuid_5> | xargs --max-procs=16 -I% \
+# rsync -avz /mnt/daos1/<pool_uuid_5>/% hostlist[1]:/mnt/daos0/<pool_uuid_5>
+
+# 1. The initial ls command lists the content of the pool directory, which contains 16 vos
+# files (because there are 16 targets) and rdb-pool file.
+# 2. By using xargs, each item of the ls output is passed into rsync and the rsync
+# commands are executed in parallel. i.e., each file is sent by separate rsync process in
+# parallel.
+
+# * We use --max-procs=16 to support at most 16 rsync processes to run in parallel.
+# * -I% means replace % in the following rsync command by the output of ls. i.e., file
+# name.
+# * rsync -avz means archive, verbose, and compress. By using compress, we can
+# significantly reduce the size of the data and the transfer time.
+# * By running rsync in parallel, we can significantly reduce the transfer time. e.g., For
+# a 2TB pool with 8 targets per engine, each vos file size is about 7G (rdb-pool is
+# smaller). If we run a simple rsync, which runs serially, it takes 1 min 50 sec.
+# However, if we run them in parallel, it's reduced to 24 sec.
 print(f"(F5: Copy pool directory from {hostlist[0]} to {hostlist[1]}.)")
-scp_cmd = (f"scp -rp /mnt/daos1/{pool_uuid_5} "
-           f"{hostlist[1]}:/mnt/daos0/")
-copy_pool_dir = ["clush", "-w", hostlist[0], scp_cmd]
-print(f"Command: {copy_pool_dir}\n")
-subprocess.run(copy_pool_dir, check=False)
+xargs_rsync_cmd = (f"ls /mnt/daos1/{pool_uuid_5} | xargs --max-procs=16 -I% "
+                   f"rsync -avz /mnt/daos1/{pool_uuid_5}/% "
+                   f"{hostlist[1]}:/mnt/daos0/{pool_uuid_5}")
+clush_xargs_rsync_cmd = ["clush", "-w", hostlist[0], xargs_rsync_cmd]
+print(f"Command: {clush_xargs_rsync_cmd}\n")
+subprocess.run(clush_xargs_rsync_cmd, check=False)
 
 print("(F5: Set owner for the copied dir and files to daos_server:daos_server.)")
 chown_cmd = f"sudo chown -R daos_server:daos_server /mnt/daos0/{pool_uuid_5}"
@@ -302,23 +326,16 @@ rm_cmd = f"sudo rm -rf /mnt/daos0/{pool_uuid_6}/vos-0"
 # purpose of testing dangling pool map.
 clush_rm_cmd = ["clush", "-w", rank_to_ip[0], rm_cmd]
 print(f"Command: {clush_rm_cmd}\n")
-# print(f"Command: {rm_cmd}\n")
 subprocess.run(clush_rm_cmd, check=False)
 
 print("F7: Use ddb to show that the container is left in shards.")
 pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
 # Run ddb on /mnt/daos0 of rank 0 node.
-ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos0/{pool_uuid_7}/vos-0"
+ddb_cmd = f"sudo ddb /mnt/daos0/{pool_uuid_7}/vos-0 ls"
 clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
-# print(f"Command: {clush_ddb_cmd}")
-# test_cmd = "sudo ls -l"
-# test_cmd_list = " ".join(test_cmd)
-# print("Running test command: {}".format(test_cmd_list))
-# subprocess.run(test_cmd_list, check=False)
-print(f"Command str: {ddb_cmd}")
-ddb_cmd_list = ddb_cmd.split(" ")
-print(f"Command list: {ddb_cmd_list}")
-subprocess.run(ddb_cmd_list, check=False)
+print(f"Command: {clush_ddb_cmd}\n")
+# System will not start if we run ddb. DAOS-12843
+# subprocess.run(clush_ddb_cmd, check=False)
 
 # (optional) F3: Show pool directory at mount point to verify that the pool exists on
 # engine.
@@ -333,7 +350,7 @@ print(f"6-F1. Show dangling pool entry for {POOL_LABEL_1}.")
 # F3 part 1
 print(f"6-F3. MS doesn't recognize {POOL_LABEL_3}.")
 # F4 part 1
-print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS are corrupted with -fault added.")
+print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS is corrupted with -fault added.")
 list_pool(no_query=True)
 
 # F2: (optional) Try to create a container, which will hang.
@@ -389,7 +406,7 @@ print(f"\n{POOL_LABEL_2} - 2: Start pool service under DICTATE mode from rank 1 
       f"[suggested].")
 check_repair(sequence_num=SEQ_NUM_2, action="2")
 
-# F3:
+# F3:2: Re-add the orphan pool back to MS [suggested].
 print(f"\n{POOL_LABEL_3} - 2: Re-add the orphan pool back to MS [suggested].")
 check_repair(sequence_num=SEQ_NUM_3, action="2")
 
