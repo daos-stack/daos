@@ -135,6 +135,7 @@ class DiskFailureTest(OSAUtils):
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """
+        self.add_pool()
         device_info = get_storage_query_device_info(self, self.dmg_command)
         for index, device in enumerate(device_info):
             host = device["hosts"].split(":")[0]
@@ -146,6 +147,9 @@ class DiskFailureTest(OSAUtils):
                 # Set the device as faulty
                 get_dmg_response(
                     self, self.dmg_command.storage_set_faulty, uuid=device["uuid"])
+                done = "Device to faulty state (evicted)"
+                # Wait for Rebuild to complete
+                self.print_and_assert_on_rebuild_failure(done)
                 # Replace the device with same uuid.
                 get_dmg_response(
                     self, self.dmg_command.storage_replace_nvme,
