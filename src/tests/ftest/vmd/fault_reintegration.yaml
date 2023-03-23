@@ -5,7 +5,7 @@ hosts:
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
-timeout: 1000
+timeout: 360
 setup:
   start_servers_once: false
 server_config:
@@ -18,33 +18,14 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      env_vars:
-        - DD_MASK=all
-        - D_LOG_MASK=DEBUG
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
-          bdev_class: nvme
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
-          bdev_class: nvm
+      storage: auto
 pool:
   size: 90%
   svcn: 3
@@ -70,9 +51,9 @@ ior:
     dfs_oclass: RP_3G1
     dfs_dir_oclass: RP_3G1
     ior_test_sequence:
-      #   - [scm_size, nvme_size, transfersize, blocksize]
+      #   - [transfersize, blocksize]
       #    The values are set to be in the multiples of 10.
-      - [50000000000, 300000000000, 4000, 5000000]          # [4K, 5M]
+      - [4000, 5000000]          # [4K, 5M]
 aggregation:
   test_with_aggregation: true
 rebuild:

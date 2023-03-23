@@ -145,8 +145,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
             "ior_params": {
                 "oclass": oclass,
                 "flags": self.ior_w_flags,
-                "transfer_size": ior_test_seq[2],
-                "block_size": ior_test_seq[3]
+                "transfer_size": ior_test_seq[0],
+                "block_size": ior_test_seq[1]
             }
         }
         kwargs.update(ior_kwargs)
