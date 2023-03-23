@@ -32,7 +32,7 @@ D_CASSERT(sizeof(struct dav_tx) <= UTX_PRIV_SIZE,
 
 struct umem_wal_tx *dav_umem_wtx_new(struct dav_obj *dav_hdl);
 void dav_umem_wtx_cleanup(struct umem_wal_tx *utx);
-int dav_wal_tx_reserve(struct dav_obj *hdl);
+int dav_wal_tx_reserve(struct dav_obj *hdl, uint64_t *id);
 int dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx, void *data);
 int dav_wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t flags);
 int dav_wal_tx_assign(void *hdl, void *addr, uint64_t val);
