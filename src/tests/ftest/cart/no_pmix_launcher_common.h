@@ -26,6 +26,8 @@ enum {
 
 #define CRT_ISEQ_RPC_PING	/* input fields */		 \
 	((uint64_t)		(tag)			CRT_VAR) \
+	((crt_bulk_t)		(bulk_hdl)		CRT_VAR) \
+	((uint64_t)		(delay)			CRT_VAR) \
 	((d_iov_t)		(test_data)		CRT_VAR)
 
 #define CRT_OSEQ_RPC_PING	/* output fields */		 \
@@ -79,6 +81,48 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_base = MY_BASE,
 };
 
+
+char g_iov[TEST_IOV_SIZE_IN];
+
+static int
+bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
+{
+	crt_rpc_t		*rpc;
+	uint64_t		rpcid;
+	int			rc;
+
+	rpc = info->bci_bulk_desc->bd_rpc;
+	crt_req_rpcid_get(rpc, &rpcid);
+
+
+
+	if (info->bci_rc != 0) {
+		DBG_PRINT("[RPCID: 0x%lx] Bulk transfer failed with rc=%d (%s)\n",
+			  rpcid, info->bci_rc, d_errstr(info->bci_rc));
+	} else {
+		DBG_PRINT("[RPCID: 0x%lx] Bulk transfer passed\n", rpcid);
+	}
+
+	crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
+
+	rc = crt_reply_send(rpc);
+	DBG_PRINT("[RPCID: 0x%lx] Responded to rpc, rc=%d\n", rpcid, rc);
+
+
+	int 			i;
+
+	fprintf(stderr, "dma bufer contents:\n");
+	for (i = 0; i < TEST_IOV_SIZE_IN/10; i++) {
+		fprintf(stderr, "%x", g_iov[i]);
+	}
+	fprintf(stderr, "\n\n");
+
+	/* addref in handler_ping() */
+	RPC_PUB_DECREF(rpc);
+	return 0;
+}
+
+
 int handler_ping(crt_rpc_t *rpc)
 {
 	struct RPC_PING_in	*input;
@@ -88,10 +132,18 @@ int handler_ping(crt_rpc_t *rpc)
 	d_rank_t		hdr_dst_rank;
 	uint32_t		hdr_dst_tag;
 	d_rank_t		hdr_src_rank;
+	uint64_t		rpcid;
+	d_sg_list_t		sgl;
+	crt_bulk_t		local_bulk;
+	struct crt_bulk_desc	bulk_desc;
 	int			rc;
 
 	input = crt_req_get(rpc);
-	output = crt_reply_get(rpc);
+
+	rc = crt_req_rpcid_get(rpc, &rpcid);
+	D_ASSERTF(rc == 0, "crt_req_rpcid_get() failed; rc=%d\n", rc);
+
+	DBG_PRINT("[RPCID: 0x%lx] ping handler called with delay: %ld seconds\n", rpcid, input->delay);
 
 	rc = crt_req_src_rank_get(rpc, &hdr_src_rank);
 	D_ASSERTF(rc == 0, "crt_req_src_rank_get() failed; rc=%d\n", rc);
@@ -122,10 +174,40 @@ int handler_ping(crt_rpc_t *rpc)
 	iov.iov_buf_len = TEST_IOV_SIZE_OUT;
 	iov.iov_len = TEST_IOV_SIZE_OUT;
 
+	output = crt_reply_get(rpc);
 	output->test_data = iov;
-	crt_reply_send(rpc);
 
-	D_FREE(iov.iov_buf);
+	rc = d_sgl_init(&sgl, 1);
+	D_ASSERTF(rc == 0, "d_sgl_init() failed; rc=%d\n", rc);
+
+	sgl.sg_iovs[0].iov_buf = g_iov;
+	sgl.sg_iovs[0].iov_buf_len = TEST_IOV_SIZE_IN;
+	sgl.sg_iovs[0].iov_len = TEST_IOV_SIZE_IN;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
+	D_ASSERTF(rc == 0, "crt_bulk_create() failed; rc=%d\n", rc);
+
+
+	RPC_PUB_ADDREF(rpc);
+
+	bulk_desc.bd_rpc = rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_GET;
+	bulk_desc.bd_remote_hdl = input->bulk_hdl;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = local_bulk;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = TEST_IOV_SIZE_IN;
+
+	if (input->delay) {
+		DBG_PRINT("[RPCID: 0x%lx] Delaying bulk transfer by %ld seconds\n", rpcid, input->delay);
+		sleep(input->delay);
+	}
+
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_transfer_done_cb, iov.iov_buf, NULL);
+	D_ASSERTF(rc == 0, "crt_bulk_transfer() failed; rc=%d\n", rc);
+
+
 	return 0;
 }
 

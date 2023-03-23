@@ -97,13 +97,13 @@ int main(int argc, char **argv)
 
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-				       true);
+				       false);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
-	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
+	DBG_PRINT("self_rank=%d uri=%s CRT_L_GRP_CFG=%s\n", my_rank,
 		  my_uri, grp_cfg_file);
 	D_FREE(my_uri);
 

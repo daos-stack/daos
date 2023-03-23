@@ -394,6 +394,18 @@ crt_req_get(crt_rpc_t *rpc)
 }
 
 /**
+ * Return rpcid associated with this rpc
+ *
+ * \param[in] rpc              Pointer to RPC request
+ * \param[out] rpcid           Returned rpcid
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_rpcid_get(crt_rpc_t *rpc, uint64_t *rpcid);
+
+/**
  * Return originator/source rank
  *
  * \param[in] req              Pointer to RPC request

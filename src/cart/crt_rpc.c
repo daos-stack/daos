@@ -1831,6 +1831,30 @@ struct d_binheap_ops crt_timeout_bh_ops = {
 };
 
 int
+crt_req_rpcid_get(crt_rpc_t *rpc, uint64_t *rpcid)
+{
+	struct crt_rpc_priv	*rpc_priv = NULL;
+	int			rc = 0;
+
+	if (rpc == NULL) {
+		D_ERROR("NULL rpc passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rpcid == NULL) {
+		D_ERROR("NULL rpcid passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+
+	*rpcid = rpc_priv->crp_req_hdr.cch_rpcid;
+
+out:
+	return rc;
+}
+
+int
 crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
