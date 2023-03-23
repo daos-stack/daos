@@ -1823,6 +1823,18 @@ class PosixTests():
         # Do not destroy the new containers at this point as dfuse will be holding references.
         # destroy_container(self.conf, self.pool.id(), new_cont)
 
+    @needs_dfuse
+    def test_read(self):
+        """Test a basic read into cache"""
+        file_name = join(self.dfuse.dir, 'file')
+        with open(file_name, 'w') as fd:
+            fd.write('test')
+
+        with open(file_name, 'r') as fd:
+            data = fd.read(16)
+        print(data)
+        assert data == 'test'
+
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
         dfuse0 = DFuse(self.server,

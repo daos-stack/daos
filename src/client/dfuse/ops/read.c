@@ -10,9 +10,22 @@
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
+	struct dfuse_obj_hdl *oh = ev->de_oh;
+
 	if (ev->de_ev.ev_error != 0) {
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(release, 0);
+	}
+
+	if (oh->doh_linear_read) {
+		if (oh->doh_linear_read_pos != ev->de_req_position) {
+			oh->doh_linear_read = false;
+		} else {
+			oh->doh_linear_read_pos = ev->de_req_position + ev->de_len;
+			if (ev->de_len < ev->de_req_len) {
+				oh->doh_linear_read_eof = true;
+			}
+		}
 	}
 
 	if (ev->de_len == 0) {
@@ -20,9 +33,9 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 		D_GOTO(reply, 0);
 	}
 
-	if (ev->de_len < ev->de_iov.iov_len)
-		DFUSE_TRA_DEBUG(ev, "Truncated read, requested %#zx returned %#zx",
-				ev->de_iov.iov_len, ev->de_len);
+	if (ev->de_len < ev->de_req_len)
+		DFUSE_TRA_DEBUG(ev, "Truncated read, requested %#zx returned %#zx", ev->de_req_len,
+				ev->de_len);
 
 reply:
 	DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
@@ -42,6 +55,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_event           *ev;
 
 	D_ASSERT(ino == oh->doh_ie->ie_stat.st_ino);
+
+	DFUSE_TRA_DEBUG(oh, "linear_read %d eof %d pos %#zx, position %#zx", oh->doh_linear_read,
+			oh->doh_linear_read_eof, oh->doh_linear_read_pos, position);
+
+	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
+		DFUSE_TRA_INFO(oh, "Returning EOF early without round trip %#zx", position);
+		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
+		return;
+	}
 
 	ev = d_slab_acquire(fs_handle->dpi_read_slab);
 	if (ev == NULL)
@@ -72,6 +94,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
 	ev->de_sgl.sg_nr    = 1;
+	ev->de_oh           = oh;
+	ev->de_req_len      = len;
+	ev->de_req_position = position;
 
 	if (mock_read) {
 		ev->de_len = len;

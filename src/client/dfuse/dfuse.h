@@ -98,6 +98,12 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint64_t           doh_write_count;
 
+	off_t                     doh_linear_read_pos;
+
+	bool                      doh_linear_read;
+
+	bool                      doh_linear_read_eof;
+
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
@@ -181,6 +187,9 @@ struct dfuse_event {
 	d_sg_list_t                   de_sgl;
 	d_list_t                      de_list;
 	struct dfuse_projection_info *de_handle;
+	struct dfuse_obj_hdl         *de_oh;
+	off_t                         de_req_position; /**< The file position requested by fuse */
+	size_t                        de_req_len;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
