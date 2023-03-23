@@ -600,8 +600,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
-                                                                parallel_build: true,
-                                                                qb: quickBuild()) +
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('el8') + '"' +
@@ -641,8 +640,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
-                                                                parallel_build: true,
-                                                                qb: true) +
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -1181,8 +1179,7 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
