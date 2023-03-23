@@ -133,7 +133,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 self.assertTrue(pver_exclude > (pver_begin + 1),
                                 "Pool Version Error: After exclude")
                 self.assertTrue(initial_free_space > free_space_after_exclude,
-                                "Free space error after exclude")
+                                "Expected free space after exclude is less than initial")
 
             # Reintegrate the ranks which was excluded
             self.log.info(
@@ -160,7 +160,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 # Check pool version incremented after pool reintegrate
                 self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
                 self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
-                                "Free space error after reintegration")
+                                "Expected free space after reintegration is less than exclude")
 
             display_string = "{} space at the End".format(str(self.pool))
             self.pool.display_pool_daos_space(display_string)

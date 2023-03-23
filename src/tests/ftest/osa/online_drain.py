@@ -103,7 +103,7 @@ class OSAOnlineDrain(OSAUtils):
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_drain > pver_begin, "Pool Version Error:  After drain")
             self.assertTrue(initial_free_space > free_space_after_drain,
-                            "Free Space error after drain")
+                            "Expected free space after drain is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

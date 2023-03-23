@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +120,7 @@ class OSAOnlineReintegration(OSAUtils):
             # pver_begin + 8 targets.
             self.assertTrue(pver_exclude > (pver_begin + 8), "Pool Version Error:  After exclude")
             self.assertTrue(initial_free_space > free_space_after_exclude,
-                            "Free space error after exclude")
+                            "Expected space after exclude is less than initial")
             output = self.pool.reintegrate(rank)
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
@@ -131,7 +131,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.assertTrue(pver_reint > (pver_exclude + 1),
                             "Pool Version Error:  After reintegrate")
             self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
-                            "Free space error after reintegration")
+                            "Expected free space after reintegration is less than exclude")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

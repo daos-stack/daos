@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,7 +107,7 @@ class OSAOfflineExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
             self.assertTrue(free_space_after_extend > initial_free_space,
-                            "Free space error after extend")
+                            "Expected free space after extend is less than initial")
 
             if data:
                 # Perform the IOR read using the same
