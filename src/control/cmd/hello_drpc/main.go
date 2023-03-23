@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,7 +98,7 @@ func runDrpcClient(log logging.Logger) error {
 		return errors.Wrap(err, "marshalling the Call body")
 	}
 
-	resp, err := client.SendMsg(message)
+	resp, err := client.SendMsg(context.Background(), message)
 	if err != nil {
 		return errors.Wrap(err, "sending message")
 	}
