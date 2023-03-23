@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -455,6 +455,7 @@ class Ior:
         self.manager.job.get_params(test)
         self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
+        self.label_generator = test.label_generator
         self.env = self.command.get_default_env(str(self.manager), log)
 
     @property
@@ -515,11 +516,18 @@ class Ior:
             else:
                 raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
 
+        if self.manager.job.api.value == "POSIX" or plugin_path:
+            self.manager.job.test_file.update(
+                os.path.join(dfuse.mount_dir.value, self.label_generator.get_label("testfile")))
+        elif self.manager.job.api.value == "DFS":
+            self.manager.job.test_file.update(
+                os.path.join(os.sep, self.label_generator.get_label("testfile")))
+
         if ppn is None:
             self.manager.assign_processes(processes)
         else:
-            self.manager.ppn.update(ppn, "{}.ppn".format(self.manager.command))
-            self.manager.processes.update(None, "{}.np".format(self.manager.command))
+            self.manager.ppn.update(ppn, ".".join([self.manager.command, "ppn"]))
+            self.manager.processes.update(None, ".".join([self.manager.command, "np"]))
 
         self.manager.assign_environment(self.env)
 
