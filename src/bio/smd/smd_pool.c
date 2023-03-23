@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,19 +9,19 @@
 #include <daos/dtx.h>
 #include "smd_internal.h"
 
-char *TABLE_TGTS[SMD_DEV_TYPE_MAX] = {
+char TABLE_TGTS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"target",	/* compatible with old version */
 	"meta_target",
 	"wal_target",
 };
 
-char *TABLE_POOLS[SMD_DEV_TYPE_MAX] = {
+char TABLE_POOLS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"pool",
 	"meta_pool",
 	"wal_pool",
 };
 
-char *TABLE_RDBS[SMD_DEV_TYPE_MAX] = {
+char TABLE_RDBS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
 	"rdb_data",
 	"rdb_meta",
 	"rdb_wal",
@@ -29,7 +29,8 @@ char *TABLE_RDBS[SMD_DEV_TYPE_MAX] = {
 
 struct smd_pool {
 	uint64_t	sp_blob_sz;
-	uint32_t	sp_tgt_cnt;
+	uint16_t	sp_flags;
+	uint16_t	sp_tgt_cnt;
 	uint32_t	sp_tgts[SMD_MAX_TGT_CNT];
 	uint64_t	sp_blobs[SMD_MAX_TGT_CNT];
 };
@@ -86,12 +87,17 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		pool.sp_tgts[pool.sp_tgt_cnt] = tgt_id;
 		pool.sp_blobs[pool.sp_tgt_cnt] = blob_id;
 		pool.sp_tgt_cnt += 1;
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
+			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else if (rc == -DER_NONEXIST) {
 		pool.sp_tgts[0]	 = tgt_id;
 		pool.sp_blobs[0] = blob_id;
 		pool.sp_tgt_cnt	 = 1;
 		pool.sp_blob_sz  = blob_sz;
+		pool.sp_flags = 0;
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
+			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else {
 		D_ERROR("Fetch pool "DF_UUID" failed. "DF_RC"\n",
@@ -213,6 +219,7 @@ smd_pool_alloc_info(struct d_uuid *id, struct smd_pool *pools)
 		}
 		info->spi_blob_sz[st] = pools[st].sp_blob_sz;
 		info->spi_tgt_cnt[st] = pools[st].sp_tgt_cnt;
+		info->spi_flags[st] = pools[st].sp_flags;
 
 		for (i = 0; i < pools[st].sp_tgt_cnt; i++) {
 			info->spi_tgts[st][i] = pools[st].sp_tgts[i];
@@ -301,6 +308,29 @@ int
 smd_rdb_get_blob(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st, uint64_t *blob_id)
 {
 	return pool_get_blob(pool_id, tgt_id, TABLE_RDBS[st], blob_id);
+}
+
+int
+smd_rdb_get_blob_sz(uuid_t pool_id, uint64_t *blob_sz)
+{
+	struct smd_pool	pool;
+	struct d_uuid	id;
+	int		rc = 0;
+
+	uuid_copy(id.uuid, pool_id);
+
+	smd_db_lock();
+	rc = smd_db_fetch(TABLE_RDBS[SMD_DEV_TYPE_META], &id, sizeof(id), &pool, sizeof(pool));
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch pool "DF_UUID" failed. "DF_RC"\n",
+			 DP_UUID(&id.uuid), DP_RC(rc));
+		goto out;
+	}
+	*blob_sz = pool.sp_blob_sz;
+out:
+	smd_db_unlock();
+	return rc;
 }
 
 static int
@@ -406,5 +436,37 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 			DP_UUID(&id.uuid), DP_RC(rc));
 		return rc;
 	}
+	return rc;
+}
+
+int
+smd_pool_mark_ready(uuid_t pool_id)
+{
+	struct smd_pool	pool;
+	struct d_uuid	id;
+	int		rc;
+
+	uuid_copy(id.uuid, pool_id);
+
+	smd_db_lock();
+	rc = smd_db_fetch(TABLE_POOLS[SMD_DEV_TYPE_META], &id, sizeof(id), &pool, sizeof(pool));
+	if (rc == -DER_NONEXIST) {
+		D_GOTO(out, rc = 0);
+	} else if (rc) {
+		D_ERROR("Failed to fetch smd entry of the meta blob for "DF_UUID". "DF_RC"\n",
+			DP_UUID(&id.uuid), DP_RC(rc));
+		goto out;
+	}
+
+	pool.sp_flags &= ~SMD_POOL_IN_CREATION;
+
+	rc = smd_db_upsert(TABLE_POOLS[SMD_DEV_TYPE_META], &id, sizeof(id), &pool, sizeof(pool));
+	if (rc) {
+		D_ERROR("Failed to make pool "DF_UUID" as ready in smd. "DF_RC"\n",
+			DP_UUID(&id.uuid), DP_RC(rc));
+		goto out;
+	}
+out:
+	smd_db_unlock();
 	return rc;
 }

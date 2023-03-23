@@ -99,6 +99,17 @@ func (p *Provider) ControlMetadataNeedsFormat() (bool, error) {
 	return p.metadata.NeedsFormat(req)
 }
 
+// ControlMetadataPathConfigured checks whether metadata section is defined
+func (p *Provider) ControlMetadataPathConfigured() bool {
+	if p == nil {
+		return false
+	}
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return true
+	}
+	return false
+}
+
 // ControlMetadataPath returns the path where control plane metadata is stored.
 func (p *Provider) ControlMetadataPath() string {
 	if p == nil {
@@ -684,6 +695,17 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 func (p *Provider) WithVMDEnabled() *Provider {
 	p.vmdEnabled = true
 	return p
+}
+
+func (p *Provider) BdevRoleMetaConfigured() bool {
+	bdevConfigs := p.GetBdevConfigs()
+	for _, bc := range bdevConfigs {
+		bits := bc.Bdev.DeviceRoles.OptionBits
+		if (bits & BdevRoleMeta) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // QueryBdevFirmware queries NVMe SSD firmware.
