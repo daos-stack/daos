@@ -1,10 +1,6 @@
 hosts:
   test_servers: 2
   test_clients: 1
-# If we define the server under test_servers, launch.py will convert it to the
-# actual server name passed into --test_servers. If above test_servers is hosts,
-# it'll be used as one of the servers at test startup time, so use something
-# other than hosts.
 timeout: 360
 setup:
   start_servers_once: false
@@ -29,7 +25,6 @@ server_config:
 pool:
   size: 90%
   svcn: 3
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
 container:

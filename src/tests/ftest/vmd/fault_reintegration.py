@@ -27,11 +27,9 @@ class NvmeFaultReintegrate(VmdLedStatus):
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.dmg_command = self.get_dmg_command()
         self.daos_command = self.get_daos_command()
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
-        self.dmg_command.exit_status_exception = True
 
     def verify_dev_led_state(self, device, dev_state="NORMAL", led_state="OFF"):
         """Verify device dev_state and led_state.
@@ -41,8 +39,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
             dev_state (str): expect dev_state, default to "NORMAL".
             led_state (str): expect led_state, default to "OFF".
 
-        Return:
-            True if the expected dev_state and led_state.
+        Returns:
+            bool: True if the expected dev_state and led_state.
 
         """
         return self.check_result(self.get_led_status_value(device), dev_state, led_state)
@@ -59,22 +57,21 @@ class NvmeFaultReintegrate(VmdLedStatus):
             True if the expected dev_state and led_state.
 
         """
-        status = False
         if "response" in result.keys():
             for value in list(result['response']['host_storage_map'].values()):
                 if value['storage']['smd_info']['devices']:
                     for device in value['storage']['smd_info']['devices']:
                         if device['dev_state'] == dev_state and device['led_state'] == led_state:
-                            status = True
+                            return True
         elif "host_storage_map" in result.keys():
             for value in list(result['host_storage_map'].values()):
                 if value['storage']['smd_info']['devices']:
                     for device in value['storage']['smd_info']['devices']:
                         if device['dev_state'] == dev_state and device['led_state'] == led_state:
-                            status = True
+                            return True
         else:
             self.log.info("##Unsupported result dictionary %s", result)
-        return status
+        return False
 
     def run_ior_with_nvme_fault(self, oclass=None):
         """Perform ior write with nvme fault testing.
@@ -93,7 +90,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         Args:
             oclass (str, optional): object class (eg: RP_2G8, S1,etc). Defaults to None
         """
-        # 1. Bring up server and reset led of all devices
+        # 1.
         self.log_step("Bring up server and reset led of all devices.")
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -104,7 +101,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         for device in devices:
             self.run_vmd_led_identify(device, reset=True)
 
-        # 2. Check drive status led state
+        # 2.
         self.log_step("Check drive status led state.")
         err_dev = []
         for device in devices:
@@ -113,7 +110,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         if err_dev:
             self.fail("#Device {} not in expected NORMAL, OFF state".format(err_dev))
 
-        # 3. Create the pool and container with RF and start IOR
+        # 3.
         self.log_step("Create the pool and container with RF and start IOR")
         self.add_pool(connect=False)
         self.add_container(self.pool)
@@ -156,7 +153,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         self.log.info("Start IOR thread : %s", thread)
         thread[0].start()
 
-        # 4. While IOR (EC+GX) in progress put single drive to fault mode
+        # 4.
         self.log_step("dmg storage set nvme-faulty and check led state")
         if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
@@ -165,9 +162,9 @@ class NvmeFaultReintegrate(VmdLedStatus):
         if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
             self.fail("#After set_device_fault, device not back to NORMAL, ON state")
 
-        # 5. IOR will halt until rebuild is finished.
+        # 5.
         self.log_step("IOR continue")
-        # 6. Wait until the IOR thread completed and check for error
+        # 6.
         self.log_step("IOR completed and check for error")
         thread[0].join()
         errors = 0
@@ -186,7 +183,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         if errors:
             self.fail("Errors running IOR {} thread".format(errors))
 
-        # 7. Check drive status LED status
+        # 7.
         self.log_step("Check drive status and led status")
         if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
             self.fail(
@@ -200,21 +197,21 @@ class NvmeFaultReintegrate(VmdLedStatus):
             run_ior(**ior_kwargs)
         except CommandFailure as error:
             self.fail("Error in ior read {}.".format(error))
-        kwargs = {"pool": self.pool.uuid,
-                  "cont": self.container.uuid}
+        kwargs = {"pool": self.pool.identifier,
+                  "cont": self.container.identifier}
         output = self.daos_command.container_check(**kwargs)
         self.log.info(output)
 
-        # 8. Replace the same drive back
+        # 8.
         self.log_step("Replace the same drive back.")
         result = self.dmg.storage_replace_nvme(old_uuid=test_dev, new_uuid=test_dev)
 
-        # 9. Drive status LED should be dev_state=NORNAL led_state = OFF
+        # 9.
         self.log_step("Drive status LED should be off indicating good device is plugged-in.")
         if not self.check_result(result, "NORMAL", "OFF"):
             self.fail("#After storage replace nvme, device not in expected NORMAL, OFF state")
 
-        # 10. Reset and cleanup
+        # 10.
         self.log_step("Reset and cleanup")
         for device in devices:
             self.run_vmd_led_identify(device, reset=True)
