@@ -35,15 +35,13 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         super().setUp()
 
         self.data_size = self.ior_cmd.block_size.value
-        self.scm_threshold_percent = self.params.get(
-            "data_size_percent", "/run/scm_metric_thresholds/*")
         self.scm_metadata_max_size = self.params.get(
             "metadata_max_size", "/run/scm_metric_thresholds/*")
         self.pool_space_metrics_minmax = {
             "/run/pool_scm/*": {
                 "engine_pool_vos_space_scm_used": (
                     self.data_size,
-                    self.data_size + (self.data_size * self.scm_threshold_percent) / 100
+                    self.data_size + self.scm_metadata_max_size
                 ),
                 "engine_pool_vos_space_nvme_used": (0, 0)
             },

@@ -47,9 +47,5 @@ mpirun:
   bind_to: socket
 
 scm_metric_thresholds:
-  # The size of the SCM used is not directly managed by DAOS, but through the PMDK library.
-  # Thus, the size of the SCM used metric is not perfectly accurate as for NVME (thanks to VOS).
-  # To cope with this issue an arbitrary threshold of 10% is used .
-  data_size_percent: 10
   # Maximal metadata size is empirically adjusted to 8MiB
   metadata_max_size: 8388608
