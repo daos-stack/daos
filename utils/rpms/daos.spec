@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.106
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -147,6 +147,7 @@ Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
+Requires: numactl
 %{?systemd_requires}
 
 %description server
@@ -553,8 +554,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 
-* Thu Mar 16 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.106-2
+* Thu Mar 23 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.106-3
 - Update libfabric to version v1.17.0
+
+* Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
+- Add numactl requires for server package
 
 * Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
 - Bump version to be higher than TB5
