@@ -402,7 +402,7 @@ static struct umem_store_ops stor_ops = {
 };
 
 static void
-wait_cb(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
+wait_cb(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx)
 {
 	*committed_tx = chkpt_tx;
 }

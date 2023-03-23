@@ -21,6 +21,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/policy.h>
+#include <daos_srv/vos.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -231,6 +232,9 @@ struct vos_pool {
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
 	struct vos_pool_metrics	*vp_metrics;
+	vos_chkpt_update_cb_t    vp_update_cb;
+	vos_chkpt_wait_cb_t      vp_wait_cb;
+	void                    *vp_chkpt_arg;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
 	/** Tiering policy */

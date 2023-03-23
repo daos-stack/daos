@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -578,7 +578,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								WithScmMountPoint("/foo"),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0"),
+								WithBdevDeviceList("0000:81:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleData),
 						),
 					)
 			},
@@ -626,7 +627,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					),
 				),
 		},
-		"zero hugepages set in config; bdevs configured": {
+		"zero hugepages set in config; bdevs configured; implicit role assignment": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -642,7 +643,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expConfig: baseCfg().
 				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(4096).
+				WithNrHugePages(4608).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().
@@ -754,7 +755,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
 				}).
-				WithNrHugePages(8192).
+				WithNrHugePages(9216).
 				WithEngines(
 					defaultEngineCfg().
 						WithFabricInterfacePort(1234).
@@ -805,6 +806,60 @@ func TestServerConfig_Validation(t *testing.T) {
 						)), // NVMe conf should end up in metadata dir
 				),
 		},
+		"md-on-ssd disabled with explicit role assignment": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages().
+									WithScmRamdiskSize(16),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleData),
+							),
+					)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithNrHugePages(4096).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages().
+								WithScmRamdiskSize(16),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleData),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
 		"control metadata has path only": {
 			extraConfig: func(c *Server) *Server {
 				return c.
@@ -831,7 +886,7 @@ func TestServerConfig_Validation(t *testing.T) {
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
 				}).
-				WithNrHugePages(4096).
+				WithNrHugePages(4608).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().

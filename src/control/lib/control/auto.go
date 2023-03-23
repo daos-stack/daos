@@ -16,7 +16,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -1142,24 +1141,20 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 // necessary for optimum performance and populate config parameters. Set NUMA affinity on the
 // generated config and then run through validation.
 func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Config, hugePageSizeKb int, tc *threadCounts) (*config.Server, error) {
-	log.Debugf("setting %d targets and %d helper threads per engine", tc.nrTgts, tc.nrHlprs)
-	var totNumTargets int
-	for _, ec := range ecs {
-		ec.WithTargetCount(tc.nrTgts).WithHelperStreamCount(tc.nrHlprs)
-		totNumTargets += tc.nrTgts
+	if len(ecs) == 0 {
+		return nil, errors.New("expected non-zero number of engine configs")
 	}
 
-	reqHugePages, err := common.CalcMinHugePages(hugePageSizeKb, totNumTargets)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
+	log.Debugf("setting %d targets and %d helper threads per engine", tc.nrTgts, tc.nrHlprs)
+	for _, ec := range ecs {
+		ec.WithTargetCount(tc.nrTgts).WithHelperStreamCount(tc.nrHlprs)
 	}
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
-		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(reqHugePages)
+		WithControlLogFile(defaultControlLogFile)
 
 	if err := cfg.Validate(log, hugePageSizeKb); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
