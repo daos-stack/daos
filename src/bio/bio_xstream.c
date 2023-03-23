@@ -185,7 +185,7 @@ struct bio_faulty_criteria	glb_criteria;
 static inline void
 set_faulty_criteria(void)
 {
-	glb_criteria.fc_enabled = false;
+	glb_criteria.fc_enabled = true;
 	glb_criteria.fc_max_io_errs = 5;
 	glb_criteria.fc_max_csum_errs = 5;
 
