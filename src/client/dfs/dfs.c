@@ -6520,10 +6520,11 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 
 			/** mark oid in the oit table */
 			rc = daos_oit_mark(args->oit, entry_oid, &marker, NULL);
-			if (rc) {
+			if (rc && rc != -DER_NONEXIST) {
 				D_ERROR("daos_oit_mark() failed "DF_RC"\n", DP_RC(rc));
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
 			}
+			rc = 0;
 			ptr += kds[i].kd_key_len;
 		}
 	}
