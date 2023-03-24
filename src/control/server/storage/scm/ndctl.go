@@ -91,7 +91,13 @@ func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSo
 
 	ndctlRegions, err := cr.getNdctlRegions(sockAny)
 	if err != nil {
-		return nil, err
+		var jsonErr *json.UnmarshalTypeError
+		if errors.As(err, &jsonErr) {
+			cr.log.Debugf("bad ndctl region unmarshal %v so fallback to use sock ID", err)
+			ndctlRegions = NdctlRegions{}
+		} else {
+			return nil, err
+		}
 	}
 	for _, sid := range sockIDs {
 		for _, nr := range ndctlRegions {
