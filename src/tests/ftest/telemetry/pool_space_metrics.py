@@ -8,6 +8,13 @@ import time
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 
+# Pretty print constant
+RESULT_OK = "[\033[32m OK\033[0m]"
+RESULT_NOK = "[\033[31mNOK\033[0m]"
+
+# It should take at much 10s for the vos space metrics to be up to date
+TIMEOUT_DEADLINE = 15
+
 
 class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
     # pylint: disable=too-many-ancestors
@@ -111,7 +118,11 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=TelemetryPoolSpaceMetrics,test_telemetry_pool_space_metrics
         """
 
+        test_timeouts = dict()
         for namespace in ["/run/pool_scm/*", "/run/pool_scm_nvme/*"]:
+            test_name = namespace.split("/")[2]
+            self.log.debug("Starting test %s", test_name)
+
             # create pool and container
             self.add_pool(namespace=namespace, create=True, connect=False)
             self.pool.disable_aggregation()
@@ -122,25 +133,43 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
             self.run_ior_with_pool(
                 timeout=200, create_pool=False, create_cont=False)
 
-            self.log.info("Waiting 15s let the vos space metrics to be updated")
-            time.sleep(15)
-
-            # collect pool space metric data after write
-            metrics = self.get_metrics(self.metric_names)
-
+            # Testing VOS space metrics
             expected_values = self.get_expected_values_range(namespace)
-            for name in self.metric_names:
-                val = metrics[name]
-                min_val, max_val = expected_values[name]
-                self.assertTrue(
-                    min_val <= val <= max_val,
-                    "Aggregated value of the metric {} is invalid: got={}, wait_in=[{}, {}]"
-                    .format(name, val, min_val, max_val))
-                self.log.info(
-                    "Successfully check the metric %s: got=%d, wait_in=[%d, %d]",
-                    name, val, min_val, max_val)
+            test_counter = 0
+            timeout = TIMEOUT_DEADLINE
+            while timeout > 0:
+                metrics = self.get_metrics(self.metric_names)
+
+                is_metric_ok = True
+                for name in self.metric_names:
+                    val = metrics[name]
+                    min_val, max_val = expected_values[name]
+                    is_metric_ok &= min_val <= val <= max_val
+                    self.log.debug(
+                        "Check of the metric %s: got=%d, wait_in=[%d, %d], ok=%r, timeout=%d",
+                        name, val, min_val, max_val, is_metric_ok, timeout)
+
+                if is_metric_ok:
+                    test_counter += 1
+
+                if test_counter >= 2:
+                    self.log.info("Test %s sucessfully completed in %d sec",
+                        test_name, TIMEOUT_DEADLINE - timeout)
+                    break
+
+                time.sleep(1)
+                timeout -= 1
+
+            test_timeouts[test_name] = timeout
 
             self.destroy_containers(self.container)
             self.destroy_pools(self.pool)
 
-        self.log.info("------Test passed------")
+        self.log.info("\n############ Test Results ############")
+        for test_name in test_timeouts:
+            self.log.info(
+                "# Test %s:\t%s",
+                test_name, RESULT_OK if test_timeouts[test_name] > 0 else RESULT_NOK)
+        self.log.info("######################################")
+        self.assertTrue(0 not in test_timeouts.values(),
+            "One or more vos space metric tests have failed")
