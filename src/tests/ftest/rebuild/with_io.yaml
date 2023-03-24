@@ -10,17 +10,11 @@ server_config:
     0:
       targets: 2
       nr_xs_helpers: 0
-      env_vars:
-        - D_LOG_FLUSH=DEBUG
-        - FI_LOG_LEVEL=warning
-        - HG_LOG_LEVEL=warning
-        - HG_LOG_SUBSYS=hg,na
-        - D_LOG_STDERR_IN_LOG=1
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 3
+          scm_size: 4
 pool:
   scm_size: 1073741824
   control_method: dmg
