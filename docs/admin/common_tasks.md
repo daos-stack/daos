@@ -5,25 +5,27 @@ This section describes some of the common tasks handled by admins at a high leve
 ## Single host setup with PMEM and NVMe
 
 1. Check PMEM and NVMe are discovered by the system. Format and reset them.
-2. Check network configuration. Check that `ib` interfaces are active.
+2. Check network configuration. Check the `fabric_iface` you want to use is active.
 3. Install `daos-server` and `daos-client` RPMs.
 4. Generate certificate files.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` and adjust it based on the environment. E.g., `access_points`,
 `bdev_class`.
-6. Start `daos_server`.
-7. Use `dmg config generate` to generate the config file that contains PMEM and
+6. Check that directory where the log files will be created exists. E.g.,
+`control_log_file`, `log_file` field in `engines` section.
+7. Start `daos_server`.
+8. Use `dmg config generate` to generate the config file that contains PMEM and
 NVMe.
-8. Define the certificate files in the server config.
-9. Start server with the generated config file.
-10. Check that it's waiting for SCM format. Call dmg storage format.
-11. Create a small pool; ~500MB.
-12. Define the certificate files in the agent config.
-13. Start agent.
-14. Create a POSIX container with daos command.
-15. Mount the container with dfuse.
-16. Add a large file that's less than the 500MB pool size into the container.
-17. Call `dmg pool query` and check that the free size has declined.
+9. Define the certificate files in the server config.
+10. Start server with the generated config file.
+11. Check that it's waiting for SCM format. Call dmg storage format.
+12. Create a small pool; ~500MB.
+13. Define the certificate files in the agent config.
+14. Start agent.
+15. Create a POSIX container with daos command.
+16. Mount the container with dfuse.
+17. Add a large file that's less than the 500MB pool size into the container.
+18. Call `dmg pool query` and check that the free size has declined.
 
 ## Multiple host setup with PMEM and NVMe
 
@@ -37,22 +39,24 @@ hosts.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` of one of the server hosts and adjust it based on the environment.
 E.g., `access_points`, `bdev_class`.
-6. Start `daos_server`.
-7. Use dmg config generate to generate the config file that contains PMEM and
+6. Check that directory where the log files will be created exists. E.g.,
+`control_log_file`, `log_file` field in `engines` section.
+7. Start `daos_server`.
+8. Use dmg config generate to generate the config file that contains PMEM and
 NVMe.
-8. Distribute the config file to `/etc/daos` of all hosts.
-9. Start server on all the hosts.
-10. Check that it's waiting for SCM format. Call `dmg storage format` against all
+9. Distribute the config file to `/etc/daos` of all hosts.
+10. Start server on all the hosts.
+11. Check that it's waiting for SCM format. Call `dmg storage format` against all
 server hosts.
-11. Check that the servers are running on all the hosts with `dmg system query
+12. Check that the servers are running on all the hosts with `dmg system query
 --verbose`.
-12. Create a small pool; ~500MB.
-13. Define the certificate files in the agent config in the client host.
-14. Start agent.
-15. Create a POSIX container with daos command.
-16. Mount the container with dfuse.
-17. Add a large file that's less than the 500MB pool size into the container.
-18. Call dmg pool query and check that the free size has declined.
+13. Create a small pool; ~500MB.
+14. Define the certificate files in the agent config in the client host.
+15. Start agent.
+16. Create a POSIX container with daos command.
+17. Mount the container with dfuse.
+18. Add a large file that's less than the 500MB pool size into the container.
+19. Call dmg pool query and check that the free size has declined.
 
 ## Pool size management
 
@@ -80,7 +84,8 @@ transport_config:
   key: /etc/daos/certs/admin.key
 ```
 `server_host` is the hostname where the server is running. `group_name` is
-usually `daos_server`. Also, adjust port and `transport_config` accordingly.
+usually `daos_server`. Match the `port` field defined in the server config.
+Adjust `transport_config` accordingly.
 
 3. `dmg` should be able to talk to the server.
 
