@@ -545,7 +545,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(ctx)
+	fiSet, err := scanner.Scan(ctx, cfg.Fabric.Provider)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}

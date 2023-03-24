@@ -125,7 +125,7 @@ type MockFabricInterfaceProvider struct {
 	GetFabricErr    error
 }
 
-func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context) (*FabricInterfaceSet, error) {
+func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context, _ string) (*FabricInterfaceSet, error) {
 	return m.GetFabricReturn, m.GetFabricErr
 }
 

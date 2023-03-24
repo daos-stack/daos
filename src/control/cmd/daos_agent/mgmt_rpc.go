@@ -229,7 +229,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 		return nil, err
 	}
 
-	result, err := mod.fabricScanner.Scan(ctx)
+	result, err := mod.fabricScanner.Scan(ctx, provider)
 	if err != nil {
 		return nil, err
 	}
