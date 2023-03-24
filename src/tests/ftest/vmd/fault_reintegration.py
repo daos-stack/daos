@@ -70,6 +70,23 @@ class NvmeFaultReintegrate(VmdLedStatus):
             self.log.info("##Unsupported result dictionary %s", result)
         return False
 
+    def reset_fault_device(self, device):
+        """Call dmg storage led identify to reset the device.
+
+        Args:
+            device (str): device to reset
+
+        Returns:
+            list: a list of any errors detected when removing the pool
+        """
+        error_list = []
+        try:
+            get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
+        except TestFail as error:
+            test.test_log.info("  {}".format(error))
+            error_list.append("Error resetting device {}: {}".format(device, error))
+        return error_list
+
     def run_ior_with_nvme_fault(self, oclass=None):
         """Perform ior write with nvme fault testing.
 
@@ -81,9 +98,9 @@ class NvmeFaultReintegrate(VmdLedStatus):
             5. IOR will halt until rebuild is finished.
             6. IOR should complete without any error.
             7. Drive status LED should be solid Amber ON indicating it’s faulty.
-            8. Replace the same drive back.
-            9. Drive status LED should be off indicating good device is plugged-in.
-           10. Reset and cleanup.
+            8. Verify IOR data and check container.
+            9. Replace the same drive back.
+            10. Drive status LED should be off indicating good device is plugged-in.
         Args:
             oclass (str, optional): object class (eg: RP_2G8, S1,etc). Defaults to None
         """
@@ -159,10 +176,16 @@ class NvmeFaultReintegrate(VmdLedStatus):
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
         if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
+        # Ensure the faulty device is reset in tearDown
+            self.register_cleanup(self.reset_fault_device, device=test_dev)
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
+        # Wait for rebuild to start
+        self.pool.wait_for_rebuild_to_start()
+        # Wait for rebuild to complete
+        self.pool.wait_for_rebuild_to_end()
         # check device state after set nvme-faulty
-        time.sleep(1)
         if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
+            self.register_cleanup(self.reset_fault_device, device=test_dev)
             self.fail("#After set_device_fault, device not back to NORMAL, ON state")
 
         # 5.
@@ -193,8 +216,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
             self.fail(
                 "#After set_device_fault, IOR completed, device not in expected NORMAL, ON state")
 
-        # Verify IOR data and check container
-        self.log.info("Verify IOR data")
+        # 8. Verify IOR data and check container
+        self.log_step("Verify IOR data and check container")
         ior_kwargs["ior_params"]["flags"] = self.ior_r_flags
         ior_kwargs["log"] = "ior_read_pool_test.log"
         try:
@@ -206,19 +229,21 @@ class NvmeFaultReintegrate(VmdLedStatus):
         output = self.daos_command.container_check(**kwargs)
         self.log.info(output)
 
-        # 8.
+        # 9.
         self.log_step("Replace the same drive back.")
         result = self.dmg.storage_replace_nvme(old_uuid=test_dev, new_uuid=test_dev)
-
-        # 9.
-        self.log_step("Drive status LED should be off indicating good device is plugged-in.")
-        if not self.check_result(result, "NORMAL", "OFF"):
-            self.fail("#After storage replace nvme, device not in expected NORMAL, OFF state")
+        # Wait for rebuild to start
+        self.pool.wait_for_rebuild_to_start()
+        # Wait for rebuild to complete
+        self.pool.wait_for_rebuild_to_end()
+        # check device state after set nvme-faulty
 
         # 10.
-        self.log_step("Reset and cleanup")
-        for device in devices:
-            self.run_vmd_led_identify(device, reset=True)
+        self.log_step("Drive status LED should be off indicating good device is plugged-in.")
+        if not self.check_result(result, "NORMAL", "OFF"):
+            self.register_cleanup(self.reset_fault_device, device=test_dev)
+            self.fail("#After storage replace nvme, device not in expected NORMAL, OFF state")
+        self.log.info("Test passed")
 
     def test_nvme_fault_reintegration(self):
         """Test ID: DAOS-10034.
@@ -230,6 +255,6 @@ class NvmeFaultReintegrate(VmdLedStatus):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=vmd,vmd_led,VmdLedStatus
-        :avocado: tags=test_nvme_fault_reintegration
+        :avocado: tags=NvmeFaultReintegrate,test_nvme_fault_reintegration
         """
         self.run_ior_with_nvme_fault()
