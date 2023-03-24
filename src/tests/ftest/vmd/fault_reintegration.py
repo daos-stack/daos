@@ -83,7 +83,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         try:
             get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
         except TestFail as error:
-            self.log.info("  {}".format(error))
+            self.log.info("#  %s", error)
             error_list.append("Error resetting device {}: {}".format(device, error))
         return error_list
 
