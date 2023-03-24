@@ -118,7 +118,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=TelemetryPoolSpaceMetrics,test_telemetry_pool_space_metrics
         """
 
-        test_timeouts = dict()
+        test_timeouts = {}
         for namespace in ["/run/pool_scm/*", "/run/pool_scm_nvme/*"]:
             test_name = namespace.split("/")[2]
             self.log.debug("Starting test %s", test_name)
@@ -153,7 +153,8 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
                     test_counter += 1
 
                 if test_counter >= 2:
-                    self.log.info("Test %s sucessfully completed in %d sec",
+                    self.log.info(
+                        "Test %s successfully completed in %d sec",
                         test_name, TIMEOUT_DEADLINE - timeout)
                     break
 
@@ -166,10 +167,11 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
             self.destroy_pools(self.pool)
 
         self.log.info("\n############ Test Results ############")
-        for test_name in test_timeouts:
+        for test_name, timeout in test_timeouts.items():
             self.log.info(
                 "# Test %s:\t%s",
-                test_name, RESULT_OK if test_timeouts[test_name] > 0 else RESULT_NOK)
+                test_name, RESULT_OK if timeout > 0 else RESULT_NOK)
         self.log.info("######################################")
-        self.assertTrue(0 not in test_timeouts.values(),
+        self.assertTrue(
+            0 not in test_timeouts.values(),
             "One or more vos space metric tests have failed")
