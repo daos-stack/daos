@@ -7,6 +7,9 @@
 
 #include "bio_wal.h"
 
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
+
 #define BIO_META_MAGIC		(0xbc202210)
 #define BIO_META_VERSION	1
 
@@ -1668,7 +1671,14 @@ bio_wal_replay(struct bio_meta_context *mc,
 	unsigned int		 max_blks = WAL_MAX_TRANS_BLKS, blk_off;
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
-	int			 rc;
+	int			 rc, ret;
+	uint64_t		 total_blk = 0;
+	struct d_tm_node_t      *wal_et;
+	struct d_tm_node_t      *wal_sz;
+	uint64_t                 s_us, e_us;
+	struct timespec		 tms;
+	int			 trg = mc->mc_wal->bic_xs_ctxt->bxc_tgt_id;
+	char			 pool[DAOS_UUID_STR_SIZE];
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
@@ -1682,6 +1692,9 @@ bio_wal_replay(struct bio_meta_context *mc,
 
 	tx_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
 	start_id = tx_id;
+
+	clock_gettime(CLOCK_REALTIME, &tms);
+	s_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
 
 load_wal:
 	tight_loop = 0;
@@ -1728,6 +1741,7 @@ load_wal:
 		tight_loop++;
 		nr_replayed++;
 		blk_off += blk_desc.bd_blks;
+		total_blk += blk_off;
 
 		/* Bump last committed tx ID in WAL super info */
 		if (wal_id_cmp(si, tx_id, si->si_commit_id) > 0) {
@@ -1777,6 +1791,24 @@ out:
 		rc = unmap_wal(mc, unmap_start, unmap_end, NULL);
 		if (rc)
 			D_ERROR("Unmap after replay failed. "DF_RC"\n", DP_RC(rc));
+
+		/* create and set replay metrics */
+		clock_gettime(CLOCK_REALTIME, &tms);
+		e_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
+		uuid_unparse_lower(mc->mc_wal->bic_pool_id, pool);
+		ret = d_tm_add_metric(&wal_sz, D_TM_GAUGE, "WAL replay size", "bytes",
+				     "pool/%s/tgt_%d/wal_replay/size", pool, trg);
+		if (ret)
+			D_WARN("Failed to create WAL size replay telemetry: "DF_RC"\n", DP_RC(ret));
+		ret = d_tm_add_metric(&wal_et, D_TM_GAUGE, "WAL replay time", "us",
+				     "pool/%s/tgt_%d/wal_replay/time", pool, trg);
+		if (ret)
+			D_WARN("Failed to create WAL replay ET telemetry: "DF_RC"\n", DP_RC(ret));
+		if (wal_sz)
+			d_tm_set_gauge(wal_sz, total_blk * blk_bytes);
+		if (wal_et)
+			d_tm_set_gauge(wal_et, e_us - s_us);
+
 	} else {
 		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
 	}
