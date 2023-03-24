@@ -4132,7 +4132,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 		/* Fault is not from executing instruction */
 		/* #define ESR_ELx_WNR (UL(1) << 6) */
 		if (context->uc_mcontext.__reserved[0x218] & 0x40) {
-			/* Write fault, set flag for dirty page which will be written to file later */
+			/* Write fault */
 			idx_page = (addr_min - (size_t)mmap_list[idx_map].addr) / page_size;
 			mmap_list[idx_map].updated[idx_page] = true;
 			mmap_list[idx_map].num_dirty_pages++;

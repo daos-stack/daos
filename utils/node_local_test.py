@@ -2174,7 +2174,6 @@ class PosixTests():
         # Read a file with cat.
         ret = pil4dfs_cmd(self.dfuse, ['cat', file2])
         assert ret.returncode == 0
-        print('DBG> cat returns, ', ret.stdout)
 
         # touch a file.
         file3 = join(self.dfuse.dir, 'file3')
