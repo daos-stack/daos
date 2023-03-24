@@ -45,6 +45,7 @@ type ClientConnection struct {
 func (c *ClientConnection) IsConnected() bool {
 	c.connMu.RLock()
 	defer c.connMu.RUnlock()
+
 	return c.conn != nil
 }
 
@@ -55,13 +56,14 @@ func (c *ClientConnection) Connect() error {
 		return nil
 	}
 
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
 	conn, err := c.dialer.dial(c.socketPath)
 	if err != nil {
 		return errors.Wrap(err, "dRPC connect")
 	}
 
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
 	c.conn = conn
 	c.sequence = 0 // reset message sequence number on connect
 	return nil
@@ -74,13 +76,14 @@ func (c *ClientConnection) Close() error {
 		return nil
 	}
 
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
 	err := c.conn.Close()
 	if err != nil {
 		return errors.Wrap(err, "dRPC close")
 	}
 
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
 	c.conn = nil
 	return nil
 }
