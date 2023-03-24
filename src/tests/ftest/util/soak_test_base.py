@@ -29,7 +29,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline
+    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
 
 
 class SoakTestBase(TestWithServers):
@@ -242,6 +242,11 @@ class SoakTestBase(TestWithServers):
             name = "SVR_REINTEGRATE"
             params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "vmd-identify-check":
+            method = launch_vmd_identify_check
+            name = "VMD_LED_CHECK"
+            params = (self, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(
                 "<<FAILED: Harasser {} is not supported. ".format(
@@ -319,8 +324,7 @@ class SoakTestBase(TestWithServers):
                     elif "fio" in job:
                         commands = create_fio_cmdline(self, job, pool)
                     elif "mdtest" in job:
-                        commands = create_mdtest_cmdline(
-                            self, job, pool, ppn, npj)
+                        commands = create_mdtest_cmdline(self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
                     elif "vpic" in job:
@@ -329,6 +333,8 @@ class SoakTestBase(TestWithServers):
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
+                    elif "datamover" in job:
+                        commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))

@@ -1,8 +1,14 @@
-daos (2.3.106-2) unstable; urgency=medium
+daos (2.3.106-3) unstable; urgency=medium
   [ Brian J. Murrell ]
   * NOOP change to keep in parity with RPM version
 
- -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 21 Mar 2023 13:52:43 -0400
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 24 Mar 2023 10:37:51 -0400
+
+daos (2.3.106-2) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Add numactl requires for server package
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 17 Mar 2023 12:43:00 -0400
 
 daos (2.3.106-1) unstable; urgency=medium
   [ Brian J. Murrell ]
