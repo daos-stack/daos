@@ -4,10 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from multiprocessing import Queue
-import time
 import threading
 
-from dmg_utils import get_storage_query_device_info
+from avocado.core.exceptions import TestFail
+from dmg_utils import get_storage_query_device_info, get_dmg_response
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
@@ -83,7 +83,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
         try:
             get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
         except TestFail as error:
-            test.test_log.info("  {}".format(error))
+            self.log.info("  {}".format(error))
             error_list.append("Error resetting device {}: {}".format(device, error))
         return error_list
 
@@ -176,7 +176,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
         if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
-        # Ensure the faulty device is reset in tearDown
+            # Ensure the faulty device is reset in tearDown
             self.register_cleanup(self.reset_fault_device, device=test_dev)
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
         # Wait for rebuild to start
