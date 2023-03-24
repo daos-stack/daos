@@ -41,23 +41,27 @@ type ClientConnection struct {
 	sequence   int64              // Increment each time we send
 }
 
+func (c *ClientConnection) isConnected() bool {
+	return c.conn != nil
+}
+
 // IsConnected indicates whether the client connection is currently active
 func (c *ClientConnection) IsConnected() bool {
 	c.connMu.RLock()
 	defer c.connMu.RUnlock()
 
-	return c.conn != nil
+	return c.isConnected()
 }
 
 // Connect opens a connection to the internal Unix Domain Socket path
 func (c *ClientConnection) Connect() error {
-	if c.IsConnected() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	if c.isConnected() {
 		// Nothing to do
 		return nil
 	}
-
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
 
 	conn, err := c.dialer.dial(c.socketPath)
 	if err != nil {
@@ -71,13 +75,13 @@ func (c *ClientConnection) Connect() error {
 
 // Close shuts down the connection to the Unix Domain Socket
 func (c *ClientConnection) Close() error {
-	if !c.IsConnected() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	if !c.isConnected() {
 		// Nothing to do
 		return nil
 	}
-
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
 
 	err := c.conn.Close()
 	if err != nil {
@@ -90,8 +94,10 @@ func (c *ClientConnection) Close() error {
 
 func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 	// increment sequence every call, always nonzero
+	c.connMu.Lock()
 	c.sequence++
 	msg.Sequence = c.sequence
+	c.connMu.Unlock()
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
