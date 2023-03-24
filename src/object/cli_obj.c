@@ -2076,7 +2076,7 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 static int
 obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		  d_sg_list_t *sgls, bool update, bool size_fetch,
-		  bool spec_shard)
+		  bool spec_shard, bool check_exist)
 {
 	int i, j;
 	int rc;
@@ -2125,9 +2125,10 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		case DAOS_IOD_ARRAY:
 			if (sgls == NULL) {
 				/* size query or punch */
-				if (!update || iods[i].iod_size == DAOS_REC_ANY)
+				if ((iods[i].iod_size == DAOS_REC_ANY) ||
+				    (!update && check_exist))
 					continue;
-				D_ERROR("invalid update req with NULL sgl\n");
+				D_ERROR("invalid req with NULL sgl\n");
 				return -DER_INVAL;
 			}
 			if (!size_fetch &&
@@ -2358,8 +2359,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, f_args->nr,
-					       f_args->iods, f_args->sgls,
-					       false, size_fetch, spec_shard);
+					       f_args->iods, f_args->sgls, false,
+					       size_fetch, spec_shard, check_exist);
 			if (rc)
 				goto out;
 		}
@@ -2399,7 +2400,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, u_args->nr,
 					       u_args->iods, u_args->sgls, true,
-					       false, false);
+					       false, false, false);
 			if (rc)
 				D_GOTO(out, rc);
 		}
