@@ -876,6 +876,17 @@ struct umem_cache {
 	struct umem_page         ca_pages[0];
 };
 
+struct umem_cache_chkpt_stats {
+	/** Last committed checkpoint id */
+	uint64_t	*uccs_chkpt_id;
+	/** Number of pages processed */
+	int		 uccs_nr_pages;
+	/** Number of dirty chunks copied */
+	int		 uccs_nr_dchunks;
+	/** Number of sgl iovs used to copy dirty chunks */
+	int		 uccs_nr_iovs;
+};
+
 static inline uint64_t
 umem_cache_size2pages(uint64_t len)
 {
@@ -1027,12 +1038,13 @@ umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
  * \param[in]		wait_cb		Callback for to wait for wal commit completion
  * \param[in]		arg		argument for wait_cb
  * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
+ * \param[out]		chkpt_stats	check point stats
  *
  * \return 0 on success
  */
 int
 umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
-		      uint64_t *chkpt_id);
+		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
 
 #endif /** DAOS_PMEM_BUILD */
 

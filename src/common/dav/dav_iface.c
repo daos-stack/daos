@@ -114,6 +114,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	void      *base;
 	char      *heap_base;
 	uint64_t   heap_size;
+	uint64_t   num_pages;
 	int        persist_hdr = 0;
 	int        err         = 0;
 	int        rc;
@@ -150,7 +151,8 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
-	rc = umem_cache_map_range(hdl->do_store, 0, base, sz >> UMEM_CACHE_PAGE_SZ_SHIFT);
+	num_pages = (sz + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
+	rc = umem_cache_map_range(hdl->do_store, 0, base, num_pages);
 	if (rc != 0) {
 		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 		err = rc;
@@ -294,7 +296,15 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 		}
 	}
 
-	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, sz, path, store);
+	if (sz < store->stor_size) {
+		ERR("size argument cannot be less then the actual file size\n");
+		errno = EINVAL;
+		close(fd);
+		return NULL;
+	}
+	D_ASSERT(sz >= store->stor_size);
+
+	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, store->stor_size, path, store);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
@@ -323,7 +333,14 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	}
 	size = (size_t)statbuf.st_size;
 
-	hdl = dav_obj_open_internal(fd, 0, size, path, store);
+	if (size < store->stor_size) {
+		ERR("size argument cannot be less then the actual file size\n");
+		errno = EINVAL;
+		close(fd);
+		return NULL;
+	}
+
+	hdl = dav_obj_open_internal(fd, 0, store->stor_size, path, store);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;

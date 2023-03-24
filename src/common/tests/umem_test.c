@@ -443,14 +443,14 @@ test_page_cache(void **state)
 	touch_mem(arg, 3, 2 * UMEM_CACHE_PAGE_SZ + (UMEM_CACHE_CHUNK_SZ * 2) + 1,
 		  UMEM_CACHE_CHUNK_SZ * 80);
 
-	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, 3);
 	check_lists_empty(arg);
 
 	/** This should be a noop so set ta_nr to ridiculous value that will assert */
 	reset_arg(arg);
-	rc                   = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, 3);
 
@@ -459,7 +459,7 @@ test_page_cache(void **state)
 
 	touch_mem(arg, 5, 80, 40);
 
-	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, 5);
 	check_lists_empty(arg);
@@ -507,7 +507,7 @@ test_many_pages(void **state)
 		touch_mem(arg, tx_id, offset + UMEM_CACHE_PAGE_SZ - 20, 10);
 	}
 
-	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, LARGE_NUM_PAGES + 1);
 	check_lists_empty(arg);
@@ -550,7 +550,7 @@ test_many_writes(void **state)
 		offset += UMEM_CACHE_CHUNK_SZ * 3 + 1;
 	}
 
-	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(id, tx_id - 1);
 	check_lists_empty(arg);

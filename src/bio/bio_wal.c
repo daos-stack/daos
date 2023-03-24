@@ -1663,7 +1663,7 @@ off2lba_blk(uint64_t off)
 }
 
 int
-bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
+bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_size)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_trans_head	*hdr;
@@ -1675,6 +1675,7 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 	d_sg_list_t		 unmap_sgl;
 	d_iov_t			*unmap_iov;
 	int			 rc;
+	uint64_t		 unmap_size = 0;
 
 	D_ASSERT(wal_id_cmp(si, si->si_ckp_id, tx_id) < 0);
 	D_ASSERT(wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
@@ -1713,12 +1714,15 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 	if (unmap_end == unmap_start) {
 		unmap_iov->iov_buf = (void *)off2lba_blk(0);
 		unmap_iov->iov_len = tot_blks;
+		unmap_size = tot_blks;
 	} else if (unmap_end > unmap_start) {
 		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
 		unmap_iov->iov_len = unmap_end - unmap_start;
+		unmap_size = unmap_iov->iov_len;
 	} else {
 		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
 		unmap_iov->iov_len = tot_blks - unmap_start;
+		unmap_size = unmap_iov->iov_len;
 
 		if (unmap_end > 0) {
 			unmap_sgl.sg_nr_out = 2;
@@ -1726,6 +1730,7 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 
 			unmap_iov->iov_buf = (void *)off2lba_blk(0);
 			unmap_iov->iov_len = unmap_end;
+			unmap_size += unmap_iov->iov_len;
 		}
 	}
 
@@ -1744,6 +1749,8 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id)
 		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
 out:
 	D_FREE(buf);
+	if (!rc)
+		*purge_size = unmap_size;
 	return rc;
 }
 
