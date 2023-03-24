@@ -1,16 +1,15 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from ior_test_base import IorTestBase
-from mdtest_test_base import MdtestBase
+from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
 
-class BasicCheckout(IorTestBase, MdtestBase):
+
+class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
@@ -20,15 +19,49 @@ class BasicCheckout(IorTestBase, MdtestBase):
     :avocado: recursive
     """
 
-    def test_basic_checkout(self):
+    def test_basiccheckout_sanity(self):
         """
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=dfuse,ior,mdtest
-        :avocado: tags=basiccheckout
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,dfuse,ior,mdtest,basic_checkout
+        :avocado: tags=BasicCheckout,test_basiccheckout_sanity
+        """
+        # ior easy
+        self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
+        if self.verify_oclass_engine_count('EC_16P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
+        elif self.verify_oclass_engine_count('EC_8P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*")
+
+        # mdtest easy
+        self.run_performance_mdtest(namespace="/run/mdtest_dfs_s1/*")
+        if self.verify_oclass_engine_count('EC_16P2G1', fail=False):
+            self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
+        elif self.verify_oclass_engine_count('EC_8P2G1', fail=False):
+            self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_8p2g1/*")
+
+        # run autotest
+        self.log.info("Autotest start")
+        daos_cmd = self.get_daos_command()
+        try:
+            daos_cmd.pool_autotest(pool=self.pool.uuid)
+            self.log.info("daos pool autotest passed.")
+        except CommandFailure as error:
+            self.log.error("Error: %s", error)
+            self.fail("daos pool autotest failed!")
+
+    def test_basiccheckout_ior_mdtest_small(self):
+        """
+        Test Description: Run ior and mdtest small on random racks
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,ior,mdtest,basic_checkout
+        :avocado: tags=BasicCheckout,test_basiccheckout_ior_mdtest_small
         """
         # local param
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
@@ -40,11 +73,11 @@ class BasicCheckout(IorTestBase, MdtestBase):
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
-        #run ior
+        # run ior
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
                                                  flags, dfuse_mount_dir)
 
-        #run ior with different ec oclass
+        # run ior with different ec oclass
         results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
                                                     [transfer_block_size[1]],
                                                     [flags[0]], dfuse_mount_dir)
@@ -58,18 +91,8 @@ class BasicCheckout(IorTestBase, MdtestBase):
         if errors:
             self.fail("Test FAILED")
 
-        #run mdtest
+        # run mdtest
         self.run_mdtest_multiple_variants(mdtest_params)
-
-        #run autotest
-        self.log.info("Autotest start")
-        daos_cmd = self.get_daos_command()
-        try:
-            daos_cmd.pool_autotest(pool=self.pool.uuid)
-            self.log.info("daos pool autotest passed.")
-        except CommandFailure as error:
-            self.log.error("Error: %s", error)
-            self.fail("daos pool autotest failed!")
 
 
 class BasicCheckoutDm(DataMoverTestBase):
@@ -87,14 +110,21 @@ class BasicCheckoutDm(DataMoverTestBase):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
-        :avocado: tags=all,deployment,full_regression
+
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,fs_copy,ior
-        :avocado: tags=basiccheckout,basiccheckout_dm
+        :avocado: tags=deployment,datamover,fs_copy,ior,basic_checkout
+        :avocado: tags=BasicCheckoutDm,test_basic_checkout_dm
         """
         # load ior params for dm test
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/ior_dm/client_processes/*')
-        #run datamover
-        self.run_dm_activities_with_ior("FS_COPY", True)
+        self.ior_ppn = self.ppn
+
+        # create pool and container
+        pool = self.create_pool()
+        cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+        # run datamover
+        self.run_dm_activities_with_ior("FS_COPY", pool, cont, True)

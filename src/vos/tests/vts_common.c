@@ -128,7 +128,6 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		goto failed;
 	}
 
-	vos_pool_features_set(tcx->tc_po_hdl, VOS_POOL_FEAT_AGG_OPT);
 	tcx->tc_step = TCX_READY;
 	return 0;
 
@@ -225,8 +224,7 @@ vts_credits_init(struct credit_context *tsc)
 		memset(cred, 0, sizeof(*cred));
 		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
 		if (!cred->tc_vbuf) {
-			fprintf(stderr, "Cannt allocate buffer size=%d\n",
-				tsc->tsc_cred_vsize);
+			fprintf(stderr, "Cannot allocate buffer size=%d\n", tsc->tsc_cred_vsize);
 			return -1;
 		}
 	}
@@ -311,7 +309,6 @@ cont_init(struct credit_context *tsc)
 	if (rc)
 		goto out;
 
-	vos_pool_features_set(tsc->tsc_poh, VOS_POOL_FEAT_AGG_OPT);
 	tsc->tsc_coh = coh;
  out:
 	return rc;

@@ -9,10 +9,9 @@ package io.daos.fs.hadoop;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import com.google.common.collect.Lists;
 
 import io.daos.*;
 import io.daos.dfs.*;
@@ -72,7 +71,9 @@ public class DaosFileSystem extends FileSystem {
     }
     DunsInfo info = searchUnsPath(name);
     if (info != null) {
-      LOG.info("initializing from uns path, " + name);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("initializing from uns path, " + name);
+      }
       initializeFromUns(name, conf, info);
       return;
     }
@@ -136,7 +137,9 @@ public class DaosFileSystem extends FileSystem {
       daos.mkdir(workPath, true);
       getAndValidateDaosAttrs(name, conf);
       setConf(conf);
-      LOG.info("DaosFileSystem initialized");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem initialized");
+      }
     } catch (Exception e) {
       throw new IOException("failed to initialize " + this.getClass().getName(), e);
     }
@@ -381,7 +384,7 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, false, async),
         statistics);
   }
 
@@ -389,7 +392,14 @@ public class DaosFileSystem extends FileSystem {
   public FSDataOutputStream append(Path f,
                                    int bufferSize,
                                    Progressable progress) throws IOException {
-    throw new IOException("Append is not supported");
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("DaosFileSystem append file , path= " + f.toUri().toString() + ", buffer size = " + bufferSize);
+    }
+    String key = getDaosRelativePath(f);
+
+    DaosFile daosFile = this.daos.getFile(key);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, true, async),
+        statistics);
   }
 
   /**
@@ -591,7 +601,7 @@ public class DaosFileSystem extends FileSystem {
     }
     String path = getDaosRelativePath(f);
     DaosFile file = daos.getFile(path);
-    final List<FileStatus> result = Lists.newArrayList();
+    final List<FileStatus> result = new ArrayList<>();
     try {
       if (file.isDirectory()) {
         String[] children = file.listChildren();

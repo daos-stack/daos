@@ -19,7 +19,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -219,9 +219,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	}
 
 	/** Handle the deferred NVMe cancellations */
-	if (!publish)
-		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
-				   false, VOS_IOS_GENERIC);
+	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
 
 	return 0;
 }
@@ -452,7 +450,7 @@ vos_mod_init(void)
 	int	 rc = 0;
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
-		vos_start_epoch = crt_hlc_get();
+		vos_start_epoch = d_hlc_get();
 
 	rc = vos_pool_settings_init();
 	if (rc != 0) {
@@ -501,6 +499,10 @@ vos_mod_init(void)
 
 	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
+
+	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
+	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
+
 
 	return rc;
 }
@@ -695,6 +697,12 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	if (rc != 0 && rc != -DER_EXIST)
 		goto out;
 
+	/* IFV tree used by VEA */
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		goto out;
+
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
@@ -806,7 +814,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

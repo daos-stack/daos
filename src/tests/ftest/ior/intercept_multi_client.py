@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,8 +27,8 @@ class IorInterceptMultiClient(IorInterceptTestBase):
             Verify performance with DFUSE + IL is similar to DFS.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,large
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
-        :avocado: tags=ior_intercept_multi_client
+        :avocado: tags=IorInterceptMultiClient,test_ior_intercept_multi_client
         """
         self.run_il_perf_check()

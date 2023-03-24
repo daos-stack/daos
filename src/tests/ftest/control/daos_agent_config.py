@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,9 +33,9 @@ class DaosAgentConfigTest(TestWithServers):
         on the system.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,agent_start,basic
-        :avocado: tags=control,daos_agent_config_test
-        :avocado: tags=test_daos_agent_config_basic
+        :avocado: tags=vm
+        :avocado: tags=control,basic
+        :avocado: tags=agent_start,daos_agent_config_test,test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()

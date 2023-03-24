@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +10,6 @@ from general_utils import get_remote_file_size, run_pcmd
 
 
 class POSIXStatTest(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class description:
 
     Requirement: SRS-10-0303
@@ -25,6 +23,7 @@ class POSIXStatTest(IorTestBase):
 
     :avocado: recursive
     """
+
     def test_stat_parameters(self):
         """JIRA ID: DAOS-3769
 
@@ -32,9 +31,9 @@ class POSIXStatTest(IorTestBase):
         time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=stat_parameters
+        :avocado: tags=stat_parameters,test_stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         error_list = []
@@ -42,14 +41,14 @@ class POSIXStatTest(IorTestBase):
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
 
-        i = 1
+        idx = 1
         for block_size in block_sizes:
             self.log.info("Block Size = %s", block_size)
             self.ior_cmd.block_size.update(block_size)
 
             # 1. Verify creation time.
-            test_file_suffix = "_{}".format(i)
-            i += 1
+            test_file_suffix = "_{}".format(idx)
+            idx += 1
 
             # Run ior command.
             try:

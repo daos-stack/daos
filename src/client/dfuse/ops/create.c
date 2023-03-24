@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,9 +156,14 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
-	rc = _dfuse_mode_update(req, parent, &mode);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	dfuse_ie_init(ie);
+	dfuse_open_handle_init(oh, ie);
+
+	if (!fs_handle->dpi_info->di_multi_user) {
+		rc = _dfuse_mode_update(req, parent, &mode);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
 
@@ -167,13 +172,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(err, rc);
 
+	dfuse_cache_evict_dir(fs_handle, parent);
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)
 		D_GOTO(release, rc);
 
-	oh->doh_dfs = dfs->dfs_ns;
-	oh->doh_ie = ie;
 	oh->doh_writeable = true;
 
 	if (dfs->dfc_data_caching) {
@@ -194,7 +199,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);

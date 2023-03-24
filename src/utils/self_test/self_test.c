@@ -61,6 +61,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 static int g_shutdown_flag;
 static bool g_randomize_endpoints;
 static bool g_group_inited;
+static bool g_context_created;
+static bool g_cart_inited;
 
 static void *progress_fn(void *arg)
 {
@@ -111,14 +113,13 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		}
 	}
 
-
 	if (listen)
 		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
-	if (ret != 0) {
-		D_ERROR("crt_init failed; ret = %d\n", ret);
+	if (ret != 0)
 		return ret;
-	}
+
+	g_cart_inited = true;
 
 	if (attach_info_path) {
 		ret = crt_group_config_path_set(attach_info_path);
@@ -131,6 +132,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;
 	}
+	g_context_created = true;
 
 	if (use_daos_agent_vars) {
 		ret = crt_group_view_create(dest_name, srv_grp);
@@ -1053,15 +1055,22 @@ cleanup_nothread:
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
 
-	cleanup_ret = crt_context_destroy(crt_ctx, 0);
-	if (cleanup_ret != 0)
-		D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+	cleanup_ret = 0;
+	if (g_context_created) {
+		cleanup_ret = crt_context_destroy(crt_ctx, 0);
+		if (cleanup_ret != 0)
+			D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+	}
+
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 
-	cleanup_ret = crt_finalize();
-	if (cleanup_ret != 0)
-		D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+	cleanup_ret = 0;
+	if (g_cart_inited) {
+		cleanup_ret = crt_finalize();
+		if (cleanup_ret != 0)
+			D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+	}
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 	return ret;
@@ -1683,12 +1692,10 @@ int parse_message_sizes_string(const char *pch,
 int main(int argc, char *argv[])
 {
 	/* Default parameters */
-	char				 default_msg_sizes_str[] =
-		 "b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
-		 "i1000,i1000 0,0 i1000,0";
-	const int			 default_rep_count = 10000;
-	const int			 default_max_inflight = 1000;
-
+	char				 default_msg_sizes_str[] = "0 0,0 b1048578,b1048578 0";
+	const int			 default_rep_count = 100000;
+	const int			 default_max_inflight = 16;
+	char				*default_dest_name = "daos_server";
 	char				*dest_name = NULL;
 	const char			 tuple_tokens[] = "(),";
 	char				*msg_sizes_str = default_msg_sizes_str;
@@ -1733,10 +1740,11 @@ int main(int argc, char *argv[])
 			{"path", required_argument, 0, 'p'},
 			{"nopmix", no_argument, 0, 'n'},
 			{"use-daos-agent-env", no_argument, 0, 'u'},
+			{"help", no_argument, 0, 'h'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:u",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bthnqp:u",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1746,8 +1754,7 @@ int main(int argc, char *argv[])
 			dest_name = optarg;
 			break;
 		case 'm':
-			parse_endpoint_string(optarg, &ms_endpts,
-					      &num_ms_endpts);
+			parse_endpoint_string(optarg, &ms_endpts, &num_ms_endpts);
 			break;
 		case 'e':
 			parse_endpoint_string(optarg, &endpts, &num_endpts);
@@ -1804,7 +1811,13 @@ int main(int argc, char *argv[])
 		case 'n':
 			printf("Warning: 'n' argument is deprecated\n");
 			break;
+		case 'h':
 		case '?':
+			print_usage(argv[0], default_msg_sizes_str,
+				    default_rep_count,
+				    default_max_inflight);
+			D_GOTO(cleanup, ret = 0);
+			break;
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    default_rep_count,
@@ -1813,10 +1826,39 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (use_daos_agent_vars == false) {
+		char *env;
+		char *attach_path;
+
+		env = getenv("CRT_PHY_ADDR_STR");
+		if (env == NULL) {
+			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
+			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
+			D_GOTO(cleanup, ret = -DER_INVAL);
+		}
+
+		env = getenv("OFI_INTERFACE");
+		if (env == NULL) {
+			printf("Error: interface (OFI_INTERFACE) is not set\n");
+			printf("Example: export OFI_INTERFACE=eth0\n");
+			D_GOTO(cleanup, ret = -DER_INVAL);
+		}
+
+		if (attach_info_path)
+			attach_path = attach_info_path;
+		else {
+			attach_path = getenv("CRT_ATTACH_INFO_PATH");
+			if (!attach_path)
+				attach_path = "/tmp";
+		}
+
+		printf("Warning: running without daos_agent connection (-u option); "
+		       "Using attachment file %s/%s.attach_info_tmp instead\n",
+		       attach_path, dest_name ? dest_name : default_dest_name);
+	}
+
 	/******************** Parse message sizes argument ********************/
 
-	/* repeat rep_count for each endpoint */
-	rep_count = rep_count * num_endpts;
 
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
@@ -1887,17 +1929,33 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Validate arguments ********************/
-	if (dest_name == NULL || crt_validate_grpid(dest_name) != 0) {
+	if (dest_name == NULL) {
+		printf("Warning: no --group-name specified; using '%s'\n",
+		       default_dest_name);
+		dest_name = default_dest_name;
+	}
+
+	if (crt_validate_grpid(dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
+
+
 	if (endpts == NULL || num_endpts == 0) {
-		printf("No endpoints specified\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		printf("Warning: No --endpoint specified; using 0:2 default\n");
+		num_endpts = 1;
+		D_ALLOC_ARRAY(endpts, 1);
+		endpts[0].rank = 0;
+		endpts[0].tag = 2;
 	}
+
+
+	/* repeat rep_count for each endpoint */
+	rep_count = rep_count * num_endpts;
+
 	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",

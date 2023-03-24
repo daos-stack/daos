@@ -1,30 +1,29 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-F
-    - client-G
-    - client-H
-timeout: 240
+  test_servers: 3
+  test_clients: 1
+timeout: 480
 server_config:
   name: daos_server
-  servers:
-    log_mask: ERR
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: ERR
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: ERR
+      storage: auto
 pool:
-  mode: 146
-  name: daos_server
-  scm_size: 1G
-  nvme_size: 10G
-  svcn: 1
-  control_method: dmg
+  size: 60G
 container:
   type: POSIX
   control_method: daos
@@ -33,13 +32,12 @@ mdtest:
     np: 30
   api: DFS
   test_dir: "/"
-  iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   num_of_files_dirs: 1667  # total 50K files and 50K dirs
   mdtest_flags:
-    - "-C"
-    - "-E -X"
+    - "-C -G 27"
+    - "-E -X -G 27"
   depth: 2
   branching_factor: 2
   bytes: 4096
@@ -50,5 +48,4 @@ ddeserialize:
   client_processes:
     np: 16
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true

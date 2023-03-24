@@ -5,7 +5,16 @@
 # just generate noise and extra work for docker.
 *
 !src
-!utils
+!utils/build.config
+!utils/certs
+!utils/ci
+!utils/completion
+!utils/config
+!utils/node_local_test.py
+!utils/nlt_server.yaml
+!utils/setup_daos_server_helper.sh
+!utils/sl/setup_local.sh
+!utils/scripts
 !SConstruct
 !VERSION
 !LICENSE
@@ -30,17 +39,7 @@ config.log
 .sconsign.dblite
 .daos_server.active.yml
 autodocs
-utils/rpms/_topdir
 venv
-
-# Doc isn't required for building.
-doc
-
-# Deny dockerfiles themselves.  Avoid rebuilding deps if only the instructions
-# have changed.
-utils/docker
-utils/sl/fake_scons
-utils/docker_nlt.sh
 
 # Test log files.
 dnt*

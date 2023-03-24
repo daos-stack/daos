@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,10 +47,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		return;
 	}
 
-	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID,
-			DP_UUID(pool));
+	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(pool));
 
-	rc = dfuse_pool_connect(fs_handle, &pool, &dfp);
+	rc = dfuse_pool_get_handle(fs_handle, pool, &dfp);
 	if (rc != 0)
 		goto err;
 
@@ -88,10 +87,11 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
+
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
 
-	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfc;
 
 	prop = daos_prop_alloc(0);

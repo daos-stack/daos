@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,7 +34,9 @@ class Label(TestWithServers):
 
         try:
             if use_dmg:
+                pool.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 pool.dmg.pool_destroy(pool=pool.label.value, force=1)
+                pool.dmg.server_set_logmasks(raise_exception=False)
             else:
                 pool.destroy()
             if failure_expected:
@@ -112,7 +113,7 @@ class Label(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_label
-        :avocado: tags=create_valid_labels
+        :avocado: tags=create_valid_labels,test_valid_labels
         """
         self.pool = []
         errors = []
@@ -134,17 +135,19 @@ class Label(TestWithServers):
         """Test ID: DAOS-7942
 
         Test Description: Create pool with following invalid labels.
+        * The default string for an unset pool label property.
         * UUID format string: 23ab123e-5296-4f95-be14-641de40b4d5a
         * Long label - 128 random chars.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_label
-        :avocado: tags=create_invalid_labels
+        :avocado: tags=create_invalid_labels,test_invalid_labels
         """
         self.pool = []
         errors = []
         label_outs = [
+            ("pool_label_not_set", "Invalid parameters"),
             ("23ab123e-5296-4f95-be14-641de40b4d5a", "invalid label"),
             (get_random_string(128), "invalid label")
         ]
@@ -166,7 +169,7 @@ class Label(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_label
-        :avocado: tags=duplicate_label_create
+        :avocado: tags=duplicate_label_create,test_duplicate_create
         """
         self.pool = []
         label = "TestLabel"
@@ -194,7 +197,7 @@ class Label(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_label
-        :avocado: tags=duplicate_label_destroy
+        :avocado: tags=duplicate_label_destroy,test_duplicate_destroy
         """
         self.pool = []
 
@@ -220,7 +223,7 @@ class Label(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_label
-        :avocado: tags=label_update
+        :avocado: tags=label_update,test_label_update
         """
         self.pool = []
 

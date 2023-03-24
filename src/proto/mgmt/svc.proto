@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ message GroupUpdateReq {
 	message Engine {
 		uint32 rank = 1;
 		string uri = 2;
+		uint64 incarnation = 3;
 	}
 	uint32 map_version = 1;
 	repeated Engine engines = 2;
@@ -77,6 +78,7 @@ message ClientNetHint {
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
 	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+	repeated string env_vars = 8;	// Client-side environment variables to set
 }
 
 message GetAttachInfoResp {
@@ -90,6 +92,7 @@ message GetAttachInfoResp {
 					// libdaos client to aid in CaRT initialization.
 	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
 	ClientNetHint client_net_hint = 4;
+	uint64 data_version = 5; // Version of the system database.
 }
 
 message PrepShutdownReq {

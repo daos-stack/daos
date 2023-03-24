@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,12 @@
  */
 #define DS_POOL_GLOBAL_VERSION		1
 
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+#define DS_POOL_OBJ_VERSION		1
+
 /*
  * Pool object
  *
@@ -42,12 +48,13 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
-	uint32_t		sp_redun_fac;
+	uint64_t		sp_redun_fac;
 	/* Performance Domain Affinity Level of EC object. */
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
 	uint32_t		sp_global_version;
+	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
@@ -68,7 +75,14 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
-				sp_fetch_hdls:1;
+				sp_fetch_hdls:1,
+				sp_disable_rebuild:1,
+				sp_need_discard:1;
+
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
 
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
@@ -81,9 +95,13 @@ struct ds_pool {
 	 * DAOS_SYS_TAG.
 	 */
 	void			*sp_metrics[DAOS_NR_MODULE];
+	/** checksum scrubbing properties */
+	uint64_t		sp_scrub_mode;
+	uint64_t		sp_scrub_freq_sec;
+	uint64_t		sp_scrub_thresh;
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 
@@ -99,6 +117,7 @@ struct ds_pool_hdl {
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
 	uint32_t		sph_global_ver; /* pool global version */
+	uint32_t		sph_obj_ver;	/* pool obj layout version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -138,6 +157,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
+	uint64_t	spc_discard_done:1;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -173,10 +193,12 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    const d_rank_list_t *target_addrs, int ndomains,
+			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int ds_pool_svc_stop(uuid_t pool_uuid);
+int ds_pool_svc_rf_to_nreplicas(int svc_rf);
+int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -189,7 +211,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   const char *principal_name);
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info);
+		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		      uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -219,7 +242,7 @@ struct rsvc_hint;
 int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
-void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank, uint64_t term);
 
 int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
@@ -231,6 +254,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -245,6 +269,8 @@ map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
+int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, int **tgts,
+				 unsigned int *tgts_cnt);
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
@@ -263,14 +289,15 @@ void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
 
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
-
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
+int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
@@ -292,13 +319,18 @@ ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32
 static inline uint32_t
 ds_pool_get_version(struct ds_pool *pool)
 {
-	uint32_t	ver;
+	uint32_t	ver = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	ver = pool_map_get_version(pool->sp_map);
+	if (pool->sp_map != NULL)
+		ver = pool_map_get_version(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return ver;
 }
+
+struct rdb_tx;
+int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+			    d_iov_t *cred);
 
 #endif /* __DAOS_SRV_POOL_H__ */

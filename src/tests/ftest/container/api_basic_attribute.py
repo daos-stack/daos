@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -148,7 +147,7 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,container_attribute
-        :avocado: tags=container_api_basic_attribute_sync
+        :avocado: tags=container_api_basic_attribute_sync,test_basic_attribute_sync
         """
         self.prepare_attribute_test()
 
@@ -215,7 +214,7 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,container_attribute
-        :avocado: tags=container_api_basic_attribute_async
+        :avocado: tags=container_api_basic_attribute_async,test_basic_attribute_async
         """
         self.prepare_attribute_test()
 

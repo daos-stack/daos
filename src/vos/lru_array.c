@@ -113,7 +113,7 @@ sub_find_free(struct lru_array *array, struct lru_sub *sub,
 	entry = &sub->ls_table[tree_idx];
 
 	/** Remove from free list */
-	lrua_remove_entry(sub, &sub->ls_free, entry, tree_idx);
+	lrua_remove_entry(array, sub, &sub->ls_free, entry, tree_idx);
 
 	/** Insert at tail (mru) */
 	lrua_insert(sub, &sub->ls_lru, entry, tree_idx, true);
@@ -137,15 +137,8 @@ manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 
 	/** First search already allocated lists */
 	d_list_for_each_entry(sub, &array->la_free_sub, ls_link) {
-		if (sub_find_free(array, sub, entryp, idx, key)) {
-			if (sub->ls_free == LRU_NO_IDX) {
-				/** Remove the entry from the free sub list so
-				 * we stop looking in it.
-				 */
-				d_list_del(&sub->ls_link);
-			}
+		if (sub_find_free(array, sub, entryp, idx, key))
 			return 0;
-		}
 	}
 
 	/** No free entries */
@@ -223,10 +216,11 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 	entry->le_key = 0;
 
 	/** Remove from active list */
-	lrua_remove_entry(sub, &sub->ls_lru, entry, ent_idx);
+	lrua_remove_entry(array, sub, &sub->ls_lru, entry, ent_idx);
 
 	if (sub->ls_free == LRU_NO_IDX &&
 	    (array->la_flags & LRU_FLAG_EVICT_MANUAL)) {
+		D_ASSERT(d_list_empty(&sub->ls_link));
 		/** Add the entry back to the free list */
 		d_list_add_tail(&sub->ls_link, &array->la_free_sub);
 	}

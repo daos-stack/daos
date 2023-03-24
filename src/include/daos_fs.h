@@ -57,9 +57,9 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
-/** struct holding attributes for a DFS container */
+/** struct holding attributes for a DFS container - all optional */
 typedef struct {
-	/** Optional user ID for DFS container. */
+	/** User ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
@@ -68,11 +68,19 @@ typedef struct {
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
 	/**
-	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
-	 * If set to 0 or more generally not set to balanced explicitly, relaxed
-	 * mode will be used. In the future, Balanced mode will be the default.
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.  If set to 0 or more
+	 * generally not set to balanced explicitly, relaxed mode will be used
 	 */
 	uint32_t		da_mode;
+	/** Default Object Class for all directories in the container */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/** Default Object Class for all files in the container */
+	daos_oclass_id_t	da_file_oclass_id;
+	/**
+	 * Comma separated hints for POSIX container creation of the format: "type:hint".
+	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
+	 */
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -101,7 +109,7 @@ typedef struct {
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_init();
+dfs_init(void);
 
 /**
  * Finalize the DAOS and DFS library. Typically this is called at the end of a user program or in IO
@@ -111,7 +119,7 @@ dfs_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_fini();
+dfs_fini(void);
 
 /**
  * Mount a DFS namespace over the specified pool and container. The container can be optionally
@@ -150,6 +158,25 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
  */
 int
 dfs_disconnect(dfs_t *dfs);
+
+/**
+ * Evict all the container handles from the hashtable and destroy the container.
+ *
+ * \param[in]   pool    Pool label where the container is.
+ * \param[in]	sys	DAOS system name to use for the pool.
+ *			Pass NULL to use the default system.
+ * \param[in]   cont    Container label to destroy.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles from other open calls).
+ *			This parameter will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
@@ -402,6 +429,21 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
 
 /**
+ * Suggest an oclass for creating DFS objects given a hint from the user of the format: obj:val
+ * where obj can be either file or dir/directory and val from:
+ * single: tiny files or directories to be single sharded.
+ * max: large files or directories to be max shared.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	hint	hint from user for a file or directory
+ * \param[out]	cid	object class suggested to use
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid);
+
+/**
  * Create/Open a directory, file, or Symlink.
  * The object must be released with dfs_release().
  *
@@ -602,8 +644,32 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, struct dirent *dirs);
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs);
+
+/**
+ * directory readdir + stat.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		stbufs	[in] preallocated array of struct stat.
+ *			[out]: stat of every entry in \a dirs.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+		struct dirent *dirs, struct stat *stbufs);
 
 /**
  * User callback defined for dfs_readdir_size.
@@ -634,6 +700,19 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
+
+/**
+ * Set the readdir/iterate anchor to start from a specific entry name in a directory object. When
+ * using the anchor in a readdir call, the iteration will start from the position of that entry.
+ *
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	name	Entry name of a file/dir in the open directory where anchor should be set.
+ * \param[out]	anchor	Hash anchor returned for the position of the entry name in \a obj.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
@@ -715,7 +794,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ * \param[out]	oid	Optional: return the internal object ID of the removed obj
  *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -282,8 +282,7 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-
-#define UMM_SLABS_CNT	7
+#define UMM_SLABS_CNT 16
 
 /** attributes to initialize an unified memory class */
 struct umem_attr {
@@ -398,18 +397,20 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size)				\
-({									\
-	umem_off_t	__umoff;					\
-									\
-	__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
-					      UMEM_TYPE_ANY);		\
-	D_ASSERTF(umem_off2flags(__umoff) == 0,				\
-		  "Invalid assumption about allocnot using flag bits");	\
-	D_DEBUG(DB_MEM, "allocate %s umoff "UMOFF_PF" size %zu\n",	\
-		(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size));	\
-	__umoff;							\
-})
+#define umem_alloc_verb(umm, flags, size)                                                          \
+	({                                                                                         \
+		umem_off_t __umoff;                                                                \
+                                                                                                   \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);            \
+		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
+			  "Invalid assumption about allocnot using flag bits");                    \
+		D_DEBUG(DB_MEM,                                                                    \
+			"allocate %s umoff=" UMOFF_PF " size=%zu base=" DF_X64                     \
+			" pool_uuid_lo=" DF_X64 "\n",                                              \
+			(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size), (umm)->umm_base,        \
+			(umm)->umm_pool_uuid_lo);                                                  \
+		__umoff;                                                                           \
+	})
 
 #define umem_alloc(umm, size)						\
 	umem_alloc_verb(umm, 0, size)
@@ -430,13 +431,15 @@ umem_has_tx(struct umem_instance *umm)
 	umem_alloc_noflush(umm, VMEM_FLAG_NO_FLUSH, size)
 #endif
 
-#define umem_free(umm, umoff)						\
-({									\
-	D_DEBUG(DB_MEM, "Free %s umoff "UMOFF_PF"\n",			\
-		(umm)->umm_name, UMOFF_P(umoff));			\
-									\
-	(umm)->umm_ops->mo_tx_free(umm, umoff);				\
-})
+#define umem_free(umm, umoff)                                                                      \
+	({                                                                                         \
+		D_DEBUG(DB_MEM,                                                                    \
+			"Free %s umoff=" UMOFF_PF " base=" DF_X64 " pool_uuid_lo=" DF_X64 "\n",    \
+			(umm)->umm_name, UMOFF_P(umoff), (umm)->umm_base,                          \
+			(umm)->umm_pool_uuid_lo);                                                  \
+                                                                                                   \
+		(umm)->umm_ops->mo_tx_free(umm, umoff);                                            \
+	})
 
 static inline int
 umem_tx_add_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
@@ -527,15 +530,20 @@ umem_tx_end(struct umem_instance *umm, int err)
 			__umoff = (umm)->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);       \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
-		D_DEBUG(DB_MEM, "reserve %s umoff " UMOFF_PF " size %zu\n", (umm)->umm_name,       \
-			UMOFF_P(__umoff), (size_t)(size));                                         \
+		D_DEBUG(DB_MEM,                                                                    \
+			"reserve %s umoff=" UMOFF_PF " size=%zu base=" DF_X64                      \
+			" pool_uuid_lo=" DF_X64 "\n",                                              \
+			(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size), (umm)->umm_base,        \
+			(umm)->umm_pool_uuid_lo);                                                  \
 		__umoff;                                                                           \
 	})
 
 #define umem_defer_free(umm, off, act)                                                             \
 	do {                                                                                       \
-		D_DEBUG(DB_MEM, "Defer free %s umoff " UMOFF_PF "\n", (umm)->umm_name,             \
-			UMOFF_P(off));                                                             \
+		D_DEBUG(DB_MEM,                                                                    \
+			"Defer free %s umoff=" UMOFF_PF "base=" DF_X64 " pool_uuid_lo=" DF_X64     \
+			"\n",                                                                      \
+			(umm)->umm_name, UMOFF_P(off), (umm)->umm_base, (umm)->umm_pool_uuid_lo);  \
 		if ((umm)->umm_ops->mo_defer_free)                                                 \
 			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
 		else                                                                               \

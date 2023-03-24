@@ -26,12 +26,9 @@ class DetectCompiler():
         icx = os.path.join(binp, 'icx')
         self.map = {}
         sys.stdout.flush()
-        # pylint: disable=too-many-boolean-expressions
-        paths = [root, binp, libp, binarch, libarch, include, icx]
-        for path in paths:
+        for path in [root, binp, libp, binarch, libarch, include, icx]:
             if not os.path.exists(path):
                 return
-        # pylint: enable=too-many-boolean-expressions
         self.map = {'root': root,
                     'bin': binp,
                     'lib': libp,
@@ -46,9 +43,7 @@ class DetectCompiler():
 
 
 def generate(env):
-    """Add Builders and construction variables for Intel Oneapi C++C++ compiler
-    to an Environment.
-    """
+    """Add Builders and construction variables for Intel Oneapi C++C++ compiler."""
     SCons.Tool.gcc.generate(env)
 
     detector = DetectCompiler()

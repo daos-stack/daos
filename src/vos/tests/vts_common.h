@@ -37,9 +37,10 @@
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
+#define VPOOL_3G	(3ULL << 30)
 #define VPOOL_10G	(10ULL << 30)
 
-#define VPOOL_SIZE	VPOOL_2G
+#define VPOOL_SIZE	VPOOL_3G
 
 #define	VP_OPS 10
 
@@ -129,6 +130,8 @@ int run_ts_tests(const char *cfg);
 int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
+int
+run_vos_command(const char *arg0, const char *cmd);
 
 void
 vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,

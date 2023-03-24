@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -55,7 +54,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
     def verify_free_space(self, space_tag1, space_tag2):
         """Verify whether the free space is decremented between two IOR runs.
-           Asserts if free sapce with space_tag1 less than free space with
+           Asserts if free space with space_tag1 less than free space with
            space_tag2.
 
         Args:
@@ -63,8 +62,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             space_tag2 : IOR run (1,2,3)
         """
         for pool in self.pool:
-            space_used_by_ior = (self.free_space_dict[pool.uuid][space_tag1] -
-                                 self.free_space_dict[pool.uuid][space_tag2])
+            space_used_by_ior = (self.free_space_dict[pool.uuid][space_tag1]
+                                 - self.free_space_dict[pool.uuid][space_tag2])
             self.log.info("Pool %s Space used by ior = %s", pool.uuid,
                           space_used_by_ior)
             self.assertGreater(self.free_space_dict[pool.uuid][space_tag1],
@@ -82,8 +81,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         start_time = 0
         finish_time = 0
 
-        job_manager = get_job_manager(self, "Mpirun", None, False, "mpich",
-                                      self.get_remaining_time())
+        job_manager = get_job_manager(self, subprocess=False, timeout=self.get_remaining_time())
         # Create requested pools
         self.add_pool_qty(total_pools, connect=False)
         start_time = time.time()
@@ -101,7 +99,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                 self.add_container_qty(total_containers_per_pool, pool)
 
             # Run ior on each container sequentially
-            for i in [1, 2]:
+            for idx in [1, 2]:
                 for container in self.container:
                     ior_log = "{}_{}_{}_ior1.log".format(self.test_id,
                                                          container.pool.uuid,
@@ -114,8 +112,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                         self.log.info(result)
                     except CommandFailure as error:
                         self.log.info(error)
-                self.save_free_space(i, storage_index)
-                self.verify_free_space((i-1), i)
+                self.save_free_space(idx, storage_index)
+                self.verify_free_space((idx - 1), idx)
 
             # Enable the aggregation
             for pool in self.pool:
@@ -132,8 +130,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             # The free space should be equal to the free space almost close
             # to free space after 1st IOR run.
             for pool in self.pool:
-                percentage = int((self.free_space_dict[pool.uuid][1] /
-                                  self.free_space_dict[pool.uuid][3]) * 100)
+                percentage = int((self.free_space_dict[pool.uuid][1]
+                                  / self.free_space_dict[pool.uuid][3]) * 100)
                 self.assertGreater(percentage, 97,
                                    "Aggregation did not reclaim the space")
 
@@ -168,7 +166,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_single_pool
+        :avocado: tags=aggregate_single_pool,test_aggregation_single_pool
         """
         self.longrun_aggregation(1, 2)
 
@@ -194,6 +192,6 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_multiple_pools
+        :avocado: tags=aggregate_multiple_pools,test_aggregation_multiple_pools
         """
         self.longrun_aggregation(2, 3)

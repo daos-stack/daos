@@ -83,13 +83,15 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 	return vmds, nil
 }
 
-// substVMDAddrs replaces VMD PCI addresses in input device list with the PCI
-// addresses of the backing devices behind the VMD.
+// substVMDAddrs replaces VMD endpoint PCI addresses in input device list with the PCI
+// addresses of the backing devices behind the VMD endpoint.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
+//
+// Add addresses that are not VMD endpoints to the output list.
 func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if len(foundCtrlrs) == 0 {
-		return nil, nil
+		return inPCIAddrs, nil
 	}
 
 	vmds, err := mapVMDToBackingAddrs(foundCtrlrs)
@@ -97,7 +99,8 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 		return nil, err
 	}
 
-	// swap input vmd addresses with respective backing addresses
+	// Swap any input VMD endpoint addresses with respective backing device addresses.
+	// inAddr entries that are already backing device addresses will be added to output list.
 	outPCIAddrs := new(hardware.PCIAddressSet)
 	for _, inAddr := range inPCIAddrs.Addresses() {
 		toAdd := []*hardware.PCIAddress{inAddr}
@@ -114,12 +117,16 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 	return outPCIAddrs, nil
 }
 
-// substituteVMDAddresses wraps around substVMDAddrs and takes a BdevScanResponse
-// reference along with a logger.
+// substituteVMDAddresses wraps around substVMDAddrs to substitute VMD addresses with the relevant
+// backing device addresses.
+// Function takes a BdevScanResponse reference to derive address map and a logger.
 func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
+	if inPCIAddrs == nil {
+		return nil, errors.New("nil input PCIAddressSet")
+	}
 	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
 		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
-		return nil, nil
+		return inPCIAddrs, nil
 	}
 
 	msg := fmt.Sprintf("vmd detected, processing addresses (input %v, existing %v)",
@@ -166,7 +173,7 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
 	if vmdCount == 0 {
 		// sometimes the output may not include "0000:" prefix
-		// usually when muliple devices are in PCI_ALLOWED
+		// usually when multiple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
 	} else {
 		prefixIncluded = true
@@ -198,7 +205,7 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 // The VMD addresses are validated against the input request allow and block lists.
 // The output allow list will only contain VMD addresses if either both input allow
 // and block lists are empty or if included in allow and not included in block lists.
-func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware.PCIAddressSet) (allow, block *hardware.PCIAddressSet, err error) {
+func vmdFilterAddresses(log logging.Logger, inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware.PCIAddressSet) (allow, block *hardware.PCIAddressSet, err error) {
 	var inAllowList, inBlockList *hardware.PCIAddressSet
 
 	inAllowList, err = hardware.NewPCIAddressSetFromString(inReq.PCIAllowList)
@@ -206,6 +213,19 @@ func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware
 		return
 	}
 	inBlockList, err = hardware.NewPCIAddressSetFromString(inReq.PCIBlockList)
+	if err != nil {
+		return
+	}
+
+	// Convert any VMD backing device addresses to endpoint addresses as the input vmdPCIAddrs
+	// are what we are using for filters and these are VMD endpoint addresses.
+	// FIXME: This imposes a limitation in that individual backing devices cannot be allowed or
+	//        blocked independently, see if this can be mitigated against.
+	inAllowList, err = inAllowList.BackingToVMDAddresses(log)
+	if err != nil {
+		return
+	}
+	inBlockList, err = inBlockList.BackingToVMDAddresses(log)
 	if err != nil {
 		return
 	}
@@ -246,7 +266,7 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 	}
 	log.Debugf("volume management devices found: %v", vmdPCIAddrs)
 
-	allowList, blockList, err := vmdFilterAddresses(req, vmdPCIAddrs)
+	allowList, blockList, err := vmdFilterAddresses(log, req, vmdPCIAddrs)
 	if err != nil {
 		return errors.Wrap(err, "vmd address filtering")
 	}

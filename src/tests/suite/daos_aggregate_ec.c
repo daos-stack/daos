@@ -125,7 +125,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	int	rc;
 	daos_prop_t *props;
 
-	props = daos_prop_alloc(3);
+	props = daos_prop_alloc(4);
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	props->dpp_entries[0].dpe_val = TEST_EC_CELL_SZ;
@@ -133,6 +133,8 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[3].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
@@ -146,7 +148,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -159,7 +161,7 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	ctx->oh = DAOS_HDL_INVAL;
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 

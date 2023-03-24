@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,11 +14,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/systemd"
 )
 
 type ctxKey string
@@ -43,6 +47,10 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	cmd.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
@@ -55,11 +63,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath)
+	// Agent socket file to be readable and writable by all.
+	createDrpcStart := time.Now()
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath, 0666)
 	if err != nil {
 		cmd.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
+	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
 	aicEnabled := !cmd.attachInfoCacheDisabled()
 	if !aicEnabled {
@@ -71,23 +82,30 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.Debug("Local fabric interface caching has been disabled")
 	}
 
+	hwprovInitStart := time.Now()
 	hwprovFini, err := hwprov.Init(cmd.Logger)
 	if err != nil {
 		return err
 	}
 	defer hwprovFini()
+	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
 
+	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
+	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
-	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled)
+	fabricCacheStart := time.Now()
+	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
 		// Cache is required to use user-defined fabric interfaces
 		fabricCache.enabled.SetTrue()
 		nf := NUMAFabricFromConfig(cmd.Logger, cmd.cfg.FabricInterfaces)
 		fabricCache.Cache(ctx, nf)
 	}
+	cmd.Debugf("created fabric cache: %s", time.Since(fabricCacheStart))
 
+	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:            cmd.Logger,
@@ -101,22 +119,31 @@ func (cmd *startCmd) Execute(_ []string) error {
 		devStateGetter: hwprov.DefaultNetDevStateProvider(cmd.Logger),
 		monitor:        procmon,
 	})
+	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))
 
+	hwlocStart := time.Now()
 	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
 	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.Logger)
 	if err != nil {
 		return err
 	}
 	defer hwloc.Cleanup(hwlocCtx)
+	cmd.Debugf("cached hwloc content: %s", time.Since(hwlocStart))
 
+	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
 		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
 	}
+	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 
 	cmd.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
+	if err := systemd.Ready(); err != nil && err != systemd.ErrSdNotifyNoSocket {
+		return errors.Wrap(err, "unable to notify systemd")
+	}
+	defer systemd.Stopping()
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)

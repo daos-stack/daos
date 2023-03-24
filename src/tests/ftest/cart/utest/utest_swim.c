@@ -33,16 +33,16 @@ test_swim(void **state)
 	rc = crt_rank_self_set(0);
 	assert_int_equal(rc, 0);
 
-	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1);
+	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1, d_hlc_get());
 	assert_int_equal(rc, 0);
 
-	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 2);
+	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 2, d_hlc_get());
 	assert_int_equal(rc, 0);
 
-	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1);
+	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1, d_hlc_get());
 	assert_int_equal(rc, -DER_ALREADY);
 
-	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 0);
+	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 0, d_hlc_get());
 	assert_int_equal(rc, -DER_ALREADY);
 
 	crt_swim_fini();
@@ -56,7 +56,7 @@ init_tests(void **state)
 	unsigned int seed;
 
 	/* Seed the random number generator once per test run */
-	seed = time(NULL);
+	seed = (unsigned int)(time(NULL) & 0x0FFFFFFFFULL);
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 

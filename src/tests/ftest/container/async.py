@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -39,10 +38,13 @@ class ContainerAsync(TestWithServers):
         The negative case is more like a test of the API implementation rather
         than DAOS itself.
 
-        :avocado: tags=all,full_regression,container,cont_create_async
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_create_async,test_create_async
         """
         self.add_pool()
-        ph = self.pool.pool.handle
+        pool_hdl = self.pool.pool.handle
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
@@ -64,7 +66,7 @@ class ContainerAsync(TestWithServers):
             # calls wait, but we're using DaosContainer, so we need to manually
             # call it.
             self.pool.destroy(1)
-            self.container[1].container.create(poh=ph, cb_func=cbh2.callback)
+            self.container[1].container.create(poh=pool_hdl, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
@@ -81,6 +83,7 @@ class ContainerAsync(TestWithServers):
         callback function, so if we try it as it is, the test hangs.
 
         :avocado: tags=all,full_regression,container,cont_destroy_async
+        :avocado: tags=test_destroy_async
         """
         self.add_pool()
 
@@ -109,6 +112,7 @@ class ContainerAsync(TestWithServers):
         callback function, so if we try it as it is, the test hangs.
 
         :avocado: tags=all,full_regression,container,cont_open_async
+        :avocado: tags=test_open_async
         """
         self.add_pool()
 
@@ -135,6 +139,7 @@ class ContainerAsync(TestWithServers):
         Test both positive and negative cases.
 
         :avocado: tags=all,full_regression,container,cont_close_async
+        :avocado: tags=test_close_async
         """
         self.add_pool()
 
@@ -167,8 +172,7 @@ class ContainerAsync(TestWithServers):
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
-                "Async close of non-existing container succeeded! " +
-                "RC = {}".format(cbh2.ret_code))
+                "Async close of non-existing container succeeded! RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -179,6 +183,7 @@ class ContainerAsync(TestWithServers):
         Test both positive and negative cases.
 
         :avocado: tags=all,full_regression,container,cont_query_async
+        :avocado: tags=test_query_async
         """
         self.add_pool()
 
@@ -205,8 +210,7 @@ class ContainerAsync(TestWithServers):
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
-                "Async query of non-existing container succeeded! " +
-                "RC = {}".format(cbh2.ret_code))
+                "Async query of non-existing container succeeded! RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())

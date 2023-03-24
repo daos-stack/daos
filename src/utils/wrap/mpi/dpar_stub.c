@@ -1,3 +1,8 @@
+/**
+ * (C) Copyright 2021-2022 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #include <stdio.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -8,7 +13,7 @@
 #include <daos/dpar.h>
 
 struct par_stubs {
-	uint32_t	(*ps_getversion)(void);
+	bool (*ps_version_compatible)(uint32_t version, uint32_t *libmajor, uint32_t *libminor);
 	int		(*ps_init)(int *argc, char ***argv);
 	int		(*ps_fini)(void);
 	int		(*ps_barrier)(uint32_t);
@@ -31,19 +36,18 @@ struct par_stubs {
 static struct par_stubs	 stubs;
 static void		*stubs_handle;
 
-#define FOREACH_PAR_SYMBOL(ACTION, arg)	\
-	ACTION(getversion, arg)	\
-	ACTION(init, arg)		\
-	ACTION(fini, arg)		\
-	ACTION(barrier, arg)		\
-	ACTION(rank, arg)		\
-	ACTION(size, arg)		\
-	ACTION(reduce, arg)		\
-	ACTION(gather, arg)		\
-	ACTION(allreduce, arg)		\
-	ACTION(allgather, arg)		\
-	ACTION(bcast, arg)		\
-	ACTION(comm_split, arg)		\
+#define FOREACH_PAR_SYMBOL(ACTION, arg)                                                            \
+	ACTION(init, arg)                                                                          \
+	ACTION(fini, arg)                                                                          \
+	ACTION(barrier, arg)                                                                       \
+	ACTION(rank, arg)                                                                          \
+	ACTION(size, arg)                                                                          \
+	ACTION(reduce, arg)                                                                        \
+	ACTION(gather, arg)                                                                        \
+	ACTION(allreduce, arg)                                                                     \
+	ACTION(allgather, arg)                                                                     \
+	ACTION(bcast, arg)                                                                         \
+	ACTION(comm_split, arg)                                                                    \
 	ACTION(comm_free, arg)
 
 #define LOAD_SYM(name, fail)							\
@@ -62,7 +66,8 @@ static void
 init_routine(void)
 {
 	bool		fail = false;
-	uint32_t	version;
+	uint32_t        major = 0;
+	uint32_t        minor = 0;
 
 	stubs_handle = dlopen("libdpar_mpi.so", RTLD_NOW);
 
@@ -71,26 +76,28 @@ init_routine(void)
 		return;
 	}
 
-	FOREACH_PAR_SYMBOL(LOAD_SYM, fail);
+	LOAD_SYM(version_compatible, fail);
+	if (!fail) {
+		if (stubs.ps_version_compatible(DPAR_VERSION, &major, &minor)) {
+			printf("Using compatible version\n");
+		} else {
+			printf("libdpar_mpi.so version %d.%d is not compatible with stub version "
+			       "%d.%d\n",
+			       major, minor, DPAR_MAJOR, DPAR_MINOR);
+			fail = true;
+		}
+	}
 
 	if (!fail) {
-		version = stubs.ps_getversion();
-		if (par_version_compatible(version)) {
-			printf("Using compatible version\n");
-			return;
-		}
-
-		printf("libdpar_mpi.so version %d.%d is not compatible with stub version %d.%d\n",
-		       version >> DPAR_VERSION_SHIFT, version & DPAR_VERSION_MASK,
-		       DPAR_MAJOR, DPAR_MINOR);
-		printf("Continuing with serial library\n");
-		fail = true;
+		/** Load the other symbols now */
+		FOREACH_PAR_SYMBOL(LOAD_SYM, fail);
 	}
 
 	if (fail) {
 		/* Ideally, we would do some check here to ensure we are not running under MPI
 		 * but I don't know of a reliable way, MPI vendor independent way to do that.
 		 */
+		printf("Using serial library\n");
 		memset(&stubs, 0, sizeof(stubs));
 	}
 }
@@ -119,12 +126,6 @@ unload_stubs(void)
 	memset(&stubs, 0, sizeof(stubs));
 }
 
-uint32_t
-par_getversion(void)
-{
-	return DPAR_VERSION;
-}
-
 int
 par_init(int *argc, char ***argv)
 {
@@ -139,7 +140,7 @@ par_init(int *argc, char ***argv)
 int
 par_fini(void)
 {
-	int	rc;
+	int	rc = 0;
 
 	if (stubs.ps_fini)
 		rc = stubs.ps_fini();

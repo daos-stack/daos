@@ -186,7 +186,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "sdb",
 									Type:          "Disk",
-									Size:          468851544,
+									Size:          480103981056,
 									SectorSize:    512,
 									LinuxDeviceID: "8:16",
 									Model:         "LVM PV mak7fx-KZd1-BqaJ-VODO-GudX-kbdj-h86bq6 on /dev/sdb",
@@ -196,7 +196,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "sda",
 									Type:          "Disk",
-									Size:          468851544,
+									Size:          480103981056,
 									SectorSize:    512,
 									LinuxDeviceID: "8:0",
 									Model:         "LVM PV 0IfIxC-S3jO-PW2h-h1a2-5dT8-T2y7-AsiZi5 on /dev/sda",
@@ -206,7 +206,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme0n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:1",
 									Vendor:        "Samsung",
@@ -217,7 +217,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme3n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:8",
 									Vendor:        "Samsung",
@@ -228,7 +228,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme2n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:4",
 									Vendor:        "Samsung",
@@ -239,7 +239,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme1n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:0",
 									Vendor:        "Samsung",
@@ -250,7 +250,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme6n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:7",
 									Vendor:        "Samsung",
@@ -261,7 +261,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme5n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:6",
 									Vendor:        "Samsung",
@@ -272,7 +272,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme4n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:9",
 									Vendor:        "Samsung",
@@ -283,7 +283,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme7n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:10",
 									Vendor:        "Samsung",
@@ -294,7 +294,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "pmem0",
 									Type:          "NVDIMM",
-									Size:          4186568704,
+									Size:          4287046352896,
 									SectorSize:    512,
 									LinuxDeviceID: "259:16",
 								},
@@ -363,7 +363,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme11n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:11",
 									Vendor:        "Samsung",
@@ -374,7 +374,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme9n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:13",
 									Vendor:        "Samsung",
@@ -385,7 +385,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme10n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:5",
 									Vendor:        "Samsung",
@@ -396,7 +396,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme8n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:12",
 									Vendor:        "Samsung",
@@ -407,7 +407,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme15n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:15",
 									Vendor:        "Samsung",
@@ -418,7 +418,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme14n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:2",
 									Vendor:        "Samsung",
@@ -429,7 +429,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme13n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:14",
 									Vendor:        "Samsung",
@@ -440,7 +440,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "nvme12n1",
 									Type:          "Disk",
-									Size:          15000928256,
+									Size:          15360950534144,
 									SectorSize:    512,
 									LinuxDeviceID: "259:3",
 									Vendor:        "Samsung",
@@ -451,7 +451,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:          "pmem1",
 									Type:          "NVDIMM",
-									Size:          4186568704,
+									Size:          4287046352896,
 									SectorSize:    512,
 									LinuxDeviceID: "259:17",
 								},

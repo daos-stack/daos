@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,7 +24,7 @@ class ContainerDestroyTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke
-        :avocado: tags=container_destroy
+        :avocado: tags=container_destroy,test_container_destroy
         """
         expected_for_param = []
         change_result_uuid = self.params.get(

@@ -152,7 +152,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 	hid_t	attr_dspace = 0;
 	hid_t	usr_attr = 0;
 
-	if (entry == NULL || entry->dpe_str == NULL) {
+	if (entry == NULL) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -162,7 +162,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 		D_ERROR("failed to create datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Tset_size(attr_dtype, strlen(entry->dpe_str) + 1);
+	status = H5Tset_size(attr_dtype, (entry->dpe_str ? strlen(entry->dpe_str) : 0) + 1);
 	if (status < 0) {
 		D_ERROR("failed to set datatype size\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -184,7 +184,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 		D_ERROR("failed to create attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str);
+	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str ? entry->dpe_str : "");
 	if (status < 0) {
 		rc = -DER_IO;
 		D_ERROR("failed to write attribute "DF_RC"\n", DP_RC(rc));
@@ -294,6 +294,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
 		return "DAOS_PROP_CO_ROOTS";
+	case DAOS_PROP_CO_SCRUBBER_DISABLED:
+		return "DAOS_PROP_CO_SCRUBBER_DISABLED";
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
@@ -356,7 +358,8 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_EC_PDA ||
 			   type == DAOS_PROP_CO_RP_PDA ||
 			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
-			   type == DAOS_PROP_CO_ALLOCED_OID) {
+			   type == DAOS_PROP_CO_ALLOCED_OID ||
+			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,
 					    prop_str);
@@ -761,6 +764,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 {
 
 	int			rc = 0;
+	int			rc2 = 0;
 	bool			deserialize_label = false;
 	bool			close_cont = true;
 	uint64_t		total_props = 0;
@@ -786,17 +790,22 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(poh, label, DAOS_COO_RW, &coh, &cont_info, NULL);
-		if (rc == -DER_NONEXIST) {
-			/* label doesn't already exist so deserialize */
-			deserialize_label = true;
+		if (label[0]) {
+			rc = daos_cont_open(poh, label, DAOS_COO_RW, &coh, &cont_info, NULL);
+			if (rc == -DER_NONEXIST) {
+				/* label doesn't already exist so deserialize */
+				deserialize_label = true;
+				close_cont = false;
+				/* reset rc */
+				rc = 0;
+			} else if (rc != 0) {
+				D_GOTO(out, rc);
+			}  else {
+				D_PRINT("Container label already exists in pool and "
+					"cannot be set\n");
+			}
+		} else {
 			close_cont = false;
-			/* reset rc */
-			rc = 0;
-		} else if (rc != 0) {
-			D_GOTO(out, rc);
-		}  else {
-			D_PRINT("Container label already exists in pool and cannot be set\n");
 		}
 	}
 
@@ -1036,6 +1045,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			D_GOTO(out, rc);
 		prop_num++;
 	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_SCRUBBER_DISABLED") > 0) {
+		type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;
@@ -1044,10 +1063,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			D_GOTO(out, rc);
 	}
 	*_prop = prop;
+	if (prop->dpp_nr > prop_num) {
+		prop->dpp_nr = prop_num;
+	}
 out:
 	/* close container after checking if label exists in pool */
-	if (close_cont)
-		daos_cont_close(coh, NULL);
+	if (close_cont) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
 	if (rc != 0 && prop != NULL)
 		daos_prop_free(prop);
 	D_FREE(label);

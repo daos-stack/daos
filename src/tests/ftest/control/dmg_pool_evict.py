@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,8 +31,9 @@ class DmgPoolEvictTest(TestWithServers):
         Test Description: Test dmg pool evict.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=control,dmg_pool_evict
+        :avocado: tags=vm
+        :avocado: tags=control,daos_cmd
+        :avocado: tags=dmg_pool_evict,test_dmg_pool_evict
         """
         # Create 2 pools and create a container in each pool.
         self.pool = []

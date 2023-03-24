@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -30,6 +31,9 @@ func NewCommandLineLogger() *LeveledLogger {
 		infoLoggers: []InfoLogger{
 			NewCommandLineInfoLogger(os.Stdout),
 		},
+		noticeLoggers: []NoticeLogger{
+			NewCommandLineNoticeLogger(os.Stderr),
+		},
 		errorLoggers: []ErrorLogger{
 			NewCommandLineErrorLogger(os.Stderr),
 		},
@@ -53,6 +57,9 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 		},
 		infoLoggers: []InfoLogger{
 			NewInfoLogger(prefix, output),
+		},
+		noticeLoggers: []NoticeLogger{
+			NewNoticeLogger(prefix, output),
 		},
 		errorLoggers: []ErrorLogger{
 			NewErrorLogger(prefix, output),

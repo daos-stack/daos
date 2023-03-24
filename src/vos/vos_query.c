@@ -49,7 +49,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, query->qt_bound, &query->qt_punch, NULL,
+			    epr.epr_hi, query->qt_bound, false, &query->qt_punch, NULL,
 			    &query->qt_info);
 	if (rc != 0)
 		return rc;
@@ -573,6 +573,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	struct vos_object	*obj = NULL;
 	struct open_query	*query;
 	daos_epoch_t		 bound;
+	bool                     max_write_only = false;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
 	enum daos_otype_t	 obj_type;
@@ -596,8 +597,12 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	if (!(flags & VOS_GET_MAX) && !(flags & VOS_GET_MIN)) {
+		if (max_write != NULL) {
+			max_write_only = true;
+			goto query_write;
+		}
 		D_ERROR("No query type.  Please select either VOS_GET_MAX"
-			" or VOS_GET_MIN\n");
+			" or VOS_GET_MIN or pass non-NULL max_write\n");
 		return -DER_INVAL;
 	}
 
@@ -606,6 +611,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			" VOS_GET_DKEY, VOS_GET_AKEY, or VOS_GET_RECX\n");
 		return -DER_INVAL;
 	}
+query_write:
 
 	D_ALLOC_PTR(query);
 	if (query == NULL)
@@ -613,35 +619,39 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	query->qt_ts_set = NULL;
 
-	if (flags & VOS_GET_DKEY) {
-		if (dkey == NULL) {
-			D_ERROR("dkey can't be NULL with VOS_GET_DKEY\n");
-			D_GOTO(free_query, rc = -DER_INVAL);
-		}
-		daos_anchor_set_zero(&query->qt_dkey_anchor);
-
+	if (max_write_only) {
 		cflags = VOS_TS_READ_OBJ;
-	}
+	} else {
+		if (flags & VOS_GET_DKEY) {
+			if (dkey == NULL) {
+				D_ERROR("dkey can't be NULL with VOS_GET_DKEY\n");
+				D_GOTO(free_query, rc = -DER_INVAL);
+			}
+			daos_anchor_set_zero(&query->qt_dkey_anchor);
 
-	if (flags & VOS_GET_AKEY) {
-		if (akey == NULL) {
-			D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
-			D_GOTO(free_query, rc = -DER_INVAL);
+			cflags = VOS_TS_READ_OBJ;
 		}
 
-		if (cflags == 0)
-			cflags = VOS_TS_READ_DKEY;
-	}
+		if (flags & VOS_GET_AKEY) {
+			if (akey == NULL) {
+				D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
+				D_GOTO(free_query, rc = -DER_INVAL);
+			}
 
-	if (flags & VOS_GET_RECX) {
-		if (recx == NULL) {
-			D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
-			D_GOTO(free_query, rc = -DER_INVAL);
+			if (cflags == 0)
+				cflags = VOS_TS_READ_DKEY;
 		}
 
-		nr_akeys = 1;
-		if (cflags == 0)
-			cflags = VOS_TS_READ_AKEY;
+		if (flags & VOS_GET_RECX) {
+			if (recx == NULL) {
+				D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
+				D_GOTO(free_query, rc = -DER_INVAL);
+			}
+
+			nr_akeys = 1;
+			if (cflags == 0)
+				cflags = VOS_TS_READ_AKEY;
+		}
 	}
 
 	vos_dth_set(dth);
@@ -662,7 +672,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
-		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
+		LOG_RC(rc, "Could not hold object: " DF_RC "\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -670,6 +680,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		rc = -DER_TX_RESTART;
 		goto out;
 	}
+
+	if (max_write_only)
+		goto out;
 
 	D_ASSERT(obj != NULL);
 	/* only integer keys supported */
@@ -708,7 +721,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		rc = open_and_query_key(query, dkey, VOS_GET_DKEY,
 					&query->qt_dkey_anchor);
 		if (rc != 0) {
-			LOG_RC(rc, "Could not query dkey: %s\n", d_errstr(rc));
+			LOG_RC(rc, "Could not query dkey: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
 
@@ -725,8 +738,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			rc = open_and_query_key(query, akey, VOS_GET_AKEY,
 						&query->qt_akey_anchor);
 			if (rc != 0) {
-				LOG_RC(rc, "Could not query akey: %s\n",
-				       d_errstr(rc));
+				LOG_RC(rc, "Could not query akey: " DF_RC "\n", DP_RC(rc));
 				break;
 			}
 
@@ -736,8 +748,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			rc = query_recx(query, recx);
 
 			if (rc != 0) {
-				LOG_RC(rc, "Could not query recx: %s\n",
-				       d_errstr(rc));
+				LOG_RC(rc, "Could not query recx: " DF_RC "\n", DP_RC(rc));
 				if (rc == -DER_NONEXIST &&
 				    query->qt_flags & VOS_GET_AKEY) {
 					/* Reset the epoch range to last dkey */

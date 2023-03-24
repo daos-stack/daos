@@ -84,7 +84,7 @@ multi_cont_oid_allocator(void **state)
 	uint64_t	oid, prev_oid = 0;
 	int		num_oids = 50;
 	int		i;
-	int		rc = 0, rc_reduce;
+	int		rc = 0, rc2, rc_reduce;
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank != 0)
@@ -115,7 +115,9 @@ multi_cont_oid_allocator(void **state)
 		rc = daos_cont_alloc_oids(coh, num_oids, &oid, NULL);
 		if (rc) {
 			print_message("OID alloc failed (%d)\n", rc);
-			daos_cont_close(coh, NULL);
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2)
+				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
 			goto verify_rc;
 		}
 
@@ -405,8 +407,8 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 int
 oid_alloc_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  0, NULL);
+	return rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF2);
 }
 
 int

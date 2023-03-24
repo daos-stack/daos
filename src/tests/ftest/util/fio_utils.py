@@ -1,13 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import pcmd
+from ClusterShell.NodeSet import NodeSet
 
-from command_utils_base import \
-    BasicParameter, FormattedParameter, CommandWithParameters
+from general_utils import pcmd
+from command_utils_base import BasicParameter, FormattedParameter, CommandWithParameters
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 
@@ -25,7 +24,7 @@ class FioCommand(ExecutableCommand):
         """
         super().__init__("/run/fio/*", "fio", path)
 
-        # fio commandline options
+        # fio command-line options
         self.debug = FormattedParameter("--debug={}")
         self.parse_only = FormattedParameter("--parse-only", False)
         self.output = FormattedParameter("--output={}")
@@ -91,8 +90,8 @@ class FioCommand(ExecutableCommand):
         Args:
             value (list): remote host(s) on which to run the fio command
         """
-        if value is None or isinstance(value, list):
-            self._hosts = value
+        if value is None or isinstance(value, NodeSet):
+            self._hosts = value.copy()
         else:
             self.log.error("Invalid fio host list: %s (%s)", value, type(value))
             self._hosts = None
@@ -138,14 +137,17 @@ class FioCommand(ExecutableCommand):
         else:
             self.log.error("Invalid job name: %s", job_name)
 
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
+    @property
+    def with_bind(self):
+        """Get the command string with bind_cores.
+
+        Also adds fio job parameters.
 
         Returns:
-            str: the command with all the defined parameters
+            str: the command string with bind_cores and fio job parameters.
 
         """
-        command = [super().__str__()]
+        command = [super().with_bind]
         for name in sorted(self._jobs):
             if name == "global":
                 command.insert(1, str(self._jobs[name]))
@@ -153,21 +155,26 @@ class FioCommand(ExecutableCommand):
                 command.append(str(self._jobs[name]))
         return " ".join(command)
 
-    def _run_process(self):
+    def _run_process(self, raise_exception=None):
         """Run the command as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
         """
-        if self._hosts is None:
+        if not self._hosts:
             # Run fio locally
-            self.log.debug("Running: %s", self.__str__())
-            super()._run_process()
+            self.log.debug("Running: %s", str(self))
+            super()._run_process(raise_exception)
         else:
             # Run fio remotely
-            self.log.debug("Running: %s", self.__str__())
-            ret_codes = pcmd(self._hosts, self.__str__())
+            self.log.debug("Running: %s", str(self))
+            ret_codes = pcmd(self._hosts, str(self))
 
             # Report any failures
             if len(ret_codes) > 1 or 0 not in ret_codes:

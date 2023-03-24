@@ -60,6 +60,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_solo = 0;
+	dth->dth_drop_cmt = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_dist = 0;
@@ -69,6 +70,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
+	dth->dth_need_validation = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -104,22 +106,22 @@ vts_dtx_end(struct dtx_handle *dth)
 		while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 
 		while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 
 		while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 
 		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 
 		dth->dth_share_tbd_count = 0;
 	}
@@ -146,7 +148,7 @@ vts_dtx_prep_update(struct io_test_args *args,
 	args->ta_flags = TF_ZERO_COPY;
 	args->otype = DAOS_OT_MULTI_UINT64;
 
-	*epoch = crt_hlc_get();
+	*epoch = d_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
 	set_iov(dkey, dkey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
@@ -474,7 +476,8 @@ dtx_14(void **state)
 	assert_rc_equal(rc, 1);
 
 	/* Double commit the DTX is harmless. */
-	vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -568,7 +571,8 @@ dtx_15(void **state)
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Aborted DTX cannot be committed. */
-	vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -828,7 +832,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -839,7 +843,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
@@ -895,7 +899,7 @@ run_dtx_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS DTX Test %s", cfg);
+	dts_create_config(test_name, "DTX Test %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   dtx_tests, setup_io,
 					   teardown_io);

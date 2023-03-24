@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,7 +196,7 @@ int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
 int d_log_dbg_grp_dealloc(char *grpname);
 
 /**
- * Create an identifier/group name for muliple debug bits
+ * Create an identifier/group name for multiple debug bits
  *
  * \param[in]	dbgmask		mask of all bits in group
  * \param[in]	grpname		debug mask group name

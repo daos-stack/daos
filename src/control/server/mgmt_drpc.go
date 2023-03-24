@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -107,13 +108,13 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 	resp := new(srvpb.GetPoolSvcResp)
 
 	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
-	if err != nil {
+	if err != nil || ps.State != system.PoolServiceStateReady {
 		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
 	}
 
-	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+	resp.Svcreps = ranklist.RanksToUint32(ps.Replicas)
 
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 
@@ -131,13 +132,13 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 	resp := new(srvpb.PoolFindByLabelResp)
 
 	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
-	if err != nil {
+	if err != nil || ps.State != system.PoolServiceStateReady {
 		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
 		return proto.Marshal(resp)
 	}
 
-	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+	resp.Svcreps = ranklist.RanksToUint32(ps.Replicas)
 	resp.Uuid = ps.PoolUUID.String()
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 

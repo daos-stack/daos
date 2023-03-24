@@ -8,9 +8,22 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
-from pylint.lint import Run
-from pylint.reporters.collecting_reporter import CollectingReporter
-from pylint.lint import pylinter
+import json
+for arg in sys.argv:
+    if arg.startswith('--import='):
+        sys.path.append(arg[9:])
+try:
+    from pylint.lint import Run
+    from pylint.reporters.collecting_reporter import CollectingReporter
+    from pylint.constants import full_version
+except ImportError:
+    print('install pylint to enable this check')
+    sys.exit(0)
+
+try:
+    from pylint.lint import pylinter
+except ImportError:
+    import pylint.lint as pylinter
 
 # Pylint checking for the DAOS project.
 
@@ -21,33 +34,39 @@ from pylint.lint import pylinter
 #  Supports minimum python version
 #  Supports python virtual environment usage
 #  Can be used by atom.io live
+#  Can be used by VS Code.
 #  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
-#  Can be used as a commit-hook
-#  flake8 style --diff option
 
-# For now this splits code into one of three types, build (scons), ftest or other.  For build code
-# it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
-# does not warn about f-strings, for others it runs without any special flags.
+# For now this splits code into one of four types, build (scons), fake_scons ftest or other.
+# For build code it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH
+# correctly and does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
 # that currently exist in the code-base we need to restrict this to modified code.  Spellings can
-# also be enabled shortly however we have a number to correct or whitelist before enabling.
+# also be enabled shortly however we have a number to correct or resolve before enabling.
 
 
 class WrapScript():
-    """Create a wrapper for a scons file and maintain a line mapping"""
+    """Create a wrapper for a scons file and maintain a line mapping
 
-    def __init__(self, fname):
+    An update here is needed as files in site_scons/*.py do not automatically import SCons but
+    can do if they wish, this code is importing for all files however.
+    """
+
+    def __init__(self, fname, from_stdin):
 
         self.line_map = {}
         # pylint: disable-next=consider-using-with
         self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
         self.wrap_file = self._outfile.name
-        with open(fname, 'r') as infile:
-            self._read_files(infile, self._outfile)
+        if from_stdin:
+            self._read_files(sys.stdin, self._outfile)
+        else:
+            with open(fname, 'r') as infile:
+                self._read_files(infile, self._outfile)
         self._outfile.flush()
 
     def _read_files(self, infile, outfile):
@@ -121,34 +140,33 @@ class WrapScript():
         newlines = 0
 
         for variable in variables:
+            outfile.write(f'{prefix}# pylint: disable-next=invalid-name\n')
+            newlines += 1
             if variable.upper() == 'PREREQS':
                 newlines += 1
                 outfile.write(
                     f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
-                variables.remove(variable)
-        for variable in variables:
-            if "ENV" in variable.upper():
+            elif "ENV" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = DefaultEnvironment()\n')
             elif "OPTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = Variables()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = Variables()\n')
             elif "PREFIX" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ''\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ""\n')
             elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ["fake"]\n')
             else:
                 newlines += 1
-                outfile.write("%s%s = None\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = None\n')
 
         return newlines
 
     @staticmethod
     def write_header(outfile):
-        """write the header"""
-
+        """Write the header"""
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
@@ -170,24 +188,30 @@ class FileTypeList():
     Consumes a list of file/module names and sorts them into categories so that later on each
     category can be run in parallel.
     """
+
     def __init__(self):
         self.ftest_files = []
         self.scons_files = []
         self.fake_scons = []
         self.files = []
+        self._regions = {}
+        self._reports = []
+
+    def add_regions(self, file, regions):
+        """Mark that only some regions for file should be reported"""
+        self._regions[file] = regions
 
     def file_count(self):
         """Return the number of files to be checked"""
         return len(self.ftest_files) + len(self.scons_files) \
             + len(self.files) + len(self.fake_scons)
 
-    def add(self, file):
+    def add(self, file, force=False):
         """Add a filename to the correct list"""
 
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
-
-            if filename == 'SConstruct' or filename.endswith('SConscript'):
+            if filename.endswith('SConstruct') or filename.endswith('SConscript'):
                 return True
 
             if not file.endswith('.py'):
@@ -199,8 +223,9 @@ class FileTypeList():
             self.scons_files.append(file)
             return
 
-        if not file.endswith('.py'):
-            return
+        if not force:
+            if not file.endswith('.py'):
+                return
 
         # If files are in a subdir under ftest then they need to be treated differently.
         if 'src/tests/ftest/' in file:
@@ -219,6 +244,7 @@ class FileTypeList():
         self.files.append(file)
 
     def __str__(self):
+        """Convert object to a nicely formatted string"""
         desc = "FileTypeList\n"
         if self.files:
             desc += f'files: {",".join(self.files)}\n'
@@ -232,98 +258,129 @@ class FileTypeList():
 
     def run(self, args):
         """Run pylint against all files"""
-        print(self)
+        if args.output_format != 'json':
+            print(self)
+
         failed = False
         if self.files:
-            if parse_file(args, self.files):
+            if self.parse_file(args, self.files):
                 failed = True
         if self.ftest_files:
-            if parse_file(args, self.ftest_files, ftest=True):
+            if self.parse_file(args, self.ftest_files, ftest=True):
                 failed = True
         if self.fake_scons:
-            if parse_file(args, self.fake_scons, fake_scons=True):
+            if self.parse_file(args, self.fake_scons, fake_scons=True):
                 failed = True
         if self.scons_files:
             for file in self.scons_files:
-                if parse_file(args, file, scons=True):
+                if self.parse_file(args, file, scons=True):
                     failed = True
+        if args.output_format == 'json':
+            print(json.dumps(self._reports, indent=4))
         return failed
 
+    def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
+        """Parse a list of targets.
 
-def word_is_allowed(word, code):
-    """Return True is misspelling is permitted"""
+        Returns True if warnings issued to GitHub.
+        """
+        # pylint: disable=too-many-branches,too-many-locals
 
-    # pylint: disable=too-many-return-statements
+        def word_is_allowed(word, code):
+            """Return True if misspelling is permitted"""
+            # pylint: disable=too-many-return-statements
 
-    # Skip the "Fake" annotations from fake scons.
-    if code.startswith(f'Fake {word}'):
-        return True
-    # Skip things that look like function documentation
-    if code.startswith(f'{word} ('):
-        return True
-    # Skip things that look like command options.
-    if f' -{word}' in code or f' --{word}' in code:
-        return True
-    # Skip things which are quoted
-    if f"'{word}'" in code:
-        return True
-    # Skip things which are quoted the other way
-    if f'"{word}"' in code:
-        return True
-    # Skip things which are in braces
-    if f'({word})' in code:
-        return True
-    # Skip words which appear to be part of a path
-    if f'/{word}/' in code:
-        return True
-    # Skip things are followed by open quotes
-    if f'{word}(' in code:
-        return True
-    # Skip things which look like source files.
-    if f'{word}.c' in code:
-        return True
-    # Skip things are followed by open colon
-    if f'{word}:' in code:
-        return True
-    # Skip test files.
-    if f'{word}.txt' in code:
-        return True
-    return False
+            # Skip short words for now to cut down on noise whilst we resolve existing issues.
+            if len(word) < 5:
+                return True
+            # Skip the "Fake" annotations from fake scons.
+            if code.startswith(f'Fake {word}'):
+                return True
+            # Skip things that look like function documentation
+            if code.startswith(f'{word} ('):
+                return True
+            # Skip things that look like command options.
+            if f' -{word}' in code or f' --{word}' in code:
+                return True
+            # Skip things which are quoted
+            if f"'{word}'" in code:
+                return True
+            # Skip things which are quoted the other way
+            if f'"{word}"' in code:
+                return True
+            # Skip things which are in braces
+            if f'({word})' in code:
+                return True
+            # Skip words which appear to be part of a path
+            if f'/{word}/' in code:
+                return True
+            # Skip things are followed by open quotes
+            if f'{word}(' in code:
+                return True
+            # Skip things which look like source files.
+            if f'{word}.c' in code:
+                return True
+            # Skip things are followed by open colon
+            if f'{word}:' in code:
+                return True
+            # Skip test files.
+            if f'{word}.txt' in code:
+                return True
+            return False
 
+        def parse_msg(msg):
+            # Convert from a pylint message into a dict that can be using for printing.
+            vals = {'category': msg.category,
+                    'column': msg.column,
+                    'message-id': msg.msg_id,
+                    'message': msg.msg,
+                    'symbol': msg.symbol,
+                    'msg': msg.msg,
+                    'msg_id': msg.msg_id}
 
-def parse_file(args, target_file, ftest=False, scons=False, fake_scons=False):
-    """Parse a list of targets.
+            if wrapper:
+                vals['path'] = target_file
+                vals['line'] = wrapper.convert_line(msg.line)
+            else:
+                vals['path'] = msg.path
+                vals['line'] = msg.line
+            return vals
 
-    Returns True if warnings issued to GitHub."""
+        def msg_to_github(vals):
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
 
-    failed = False
-    rep = CollectingReporter()
-    wrapper = None
-    init_hook = None
-    if isinstance(target_file, list):
-        target = list(target_file)
-        target.extend(['--jobs', str(min(len(target_file), 20))])
-    elif scons:
-        # Do not warn on module name for SConstruct files, we don't get to pick their name.
-        ignore = ['invalid-name', 'ungrouped-imports']
-        if target_file.endswith('__init__.py'):
-            ignore.append('relative-beyond-top-level')
-        wrapper = WrapScript(target_file)
-        target = [wrapper.wrap_file]
-        target.extend(['--disable', ','.join(ignore)])
-        init_hook = """import sys
+        failed = False
+        rep = CollectingReporter()
+        wrapper = None
+        init_hook = None
+        if isinstance(target_file, list):
+            target = list(target_file)
+            target.extend(['--jobs', str(min(len(target_file), 20))])
+        elif scons:
+            # Do not warn on module name for SConstruct files, we don't get to pick their name.
+            ignore = ['ungrouped-imports']
+            if target_file.endswith('__init__.py'):
+                ignore.append('relative-beyond-top-level')
+            wrapper = WrapScript(target_file, args.from_stdin)
+            target = [wrapper.wrap_file]
+            target.extend(['--disable', ','.join(ignore)])
+            init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
-    else:
-        target = [target_file]
+        else:
+            target = [target_file]
+            if args.from_stdin:
+                target.append('--from-stdin')
 
-    if fake_scons:
-        # Do not warn on module name for fake_scons files, we don't get to pick their name.
-        target.extend(['--disable', 'invalid-name,too-few-public-methods'])
+        if fake_scons:
+            # Do not warn on module name for fake_scons files, we don't get to pick their name.
+            target.extend(['--disable', 'invalid-name,too-few-public-methods'])
 
-    if ftest:
-        target.extend(['--disable', 'consider-using-f-string'])
-        init_hook = """import sys
+        if ftest:
+            target.extend(['--disable', 'consider-using-f-string'])
+            init_hook = """import sys
 sys.path.append('src/tests/ftest')
 sys.path.append('src/tests/ftest/util/apricot')
 sys.path.append('src/tests/ftest/cart/util/')
@@ -331,91 +388,146 @@ sys.path.append('src/tests/ftest/util')
 sys.path.append('src/client')
 sys.path.append('site_scons')"""
 
-    target.extend(['--persistent', 'n'])
-    if init_hook:
-        target.extend(['--init-hook', init_hook])
+        target.extend(['--persistent', 'n'])
+        if init_hook:
+            target.extend(['--init-hook', init_hook])
 
-    if args.rcfile:
-        target.extend(['--rcfile', args.rcfile])
+        if args.rcfile:
+            target.extend(['--rcfile', args.rcfile])
 
-    results = Run(target, reporter=rep, do_exit=False)
+        results = Run(target, reporter=rep, exit=False)
 
-    types = Counter()
-    symbols = Counter()
+        types = Counter()
+        symbols = Counter()
 
-    for msg in results.linter.reporter.messages:
-        vals = {}
-        vals['category'] = msg.category
+        # List of errors that are in modified files but not modified code.
+        file_warnings = []
 
-        # Spelling mistakes. There are a lot of code to silence code blocks and examples
-        # in comments.  Be strict for everything but ftest code currently.
-        if not scons and msg.msg_id in ('C0401', 'C0402'):
-            lines = msg.msg.splitlines()
-            header = lines[0]
-            code = lines[1].strip()
-            components = header.split("'")
-            word = components[1]
-            # Skip test-tags, these are likely not words.
-            if ftest and code.startswith(':avocado: tags='):
+        for msg in results.linter.reporter.messages:
+            promote_to_error = False
+            # Spelling mistakes. There are a lot of code to silence code blocks and examples
+            # in comments.  Be strict for everything but ftest code currently.
+            if not scons and msg.msg_id in ('C0401', 'C0402'):
+                lines = msg.msg.splitlines()
+                header = lines[0]
+                code = lines[1].strip()
+                components = header.split("'")
+                word = components[1]
+                # Skip test-tags, these are likely not words.
+                if ftest and code.startswith(':avocado: tags='):
+                    continue
+                if word_is_allowed(word, code):
+                    continue
+
+                # Finally, promote any spelling mistakes not silenced above or in ftest to error.
+                if not ftest:
+                    promote_to_error = True
+
+            # Inserting code can cause wrong-module-order.
+            if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
-            if word_is_allowed(word, code):
-                continue
 
-            # Finally, promote any spelling mistakes not silenced above or in ftest code to error.
-            if not ftest:
+            vals = parse_msg(msg)
+
+            # Flag some serious warnings as errors
+            if msg.symbol in ('condition-evals-to-constant'):
+                promote_to_error = True
+
+            # All non-scons code should be clean now.
+            if scons:
+                promote_to_error = True
+
+            if promote_to_error:
                 vals['category'] = 'error'
 
-        # Inserting code can cause wrong-module-order.
-        if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
-            continue
+            types[vals['category']] += 1
+            symbols[msg.symbol] += 1
 
-        if wrapper:
-            vals['path'] = target_file
-            vals['line'] = wrapper.convert_line(msg.line)
-        else:
-            vals['path'] = msg.path
-            vals['line'] = msg.line
-        vals['column'] = msg.column
-        vals['message-id'] = msg.msg_id
-        vals['message'] = msg.msg
-        vals['symbol'] = msg.symbol
+            if vals['path'] in self._regions:
+                line_changed = self._regions[vals['path']].in_region(vals['line'])
+                if line_changed:
+                    print('Warning is in modified code:')
+                    vals['category'] = 'error'
+                elif vals['category'] != 'error':
+                    file_warnings.append(msg)
+                    continue
 
-        # Duplicates, needed for message_template.
-        vals['msg'] = msg.msg
-        vals['msg_id'] = msg.msg_id
+            if args.output_format == 'json':
+                report = {'type': vals['category'],
+                          'path': msg.path,
+                          'module': msg.module,
+                          'line': vals['line'],
+                          'column': vals['column'],
+                          'symbol': vals['symbol'],
+                          'message': vals['message'],
+                          'message-id': vals['message-id']}
 
-        # The build/scons code is mostly clean, so only allow f-string warnings.
-        if scons and msg.symbol != 'consider-using-f-string':
-            vals['category'] = 'error'
+                if msg.obj:
+                    report['obj'] = msg.obj
 
-        types[vals['category']] += 1
-        symbols[msg.symbol] += 1
+                if msg.end_line:
+                    if wrapper:
+                        report['endLine'] = wrapper.convert_line(msg.end_line)
+                    else:
+                        report['endLine'] = msg.end_line
 
-        print(args.msg_template.format(**vals))
+                if msg.end_column:
+                    report['endColumn'] = msg.end_column
 
-        if args.format == 'github':
-            if vals['category'] in ('convention', 'refactor'):
-                continue
-            if vals['category'] == 'warning':
-                continue
-            failed = True
-            # pylint: disable-next=consider-using-f-string
-            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                **vals))
+                # VS Code should allow customization of error levels but it appears to not be
+                # working.
+                # https://code.visualstudio.com/docs/python/linting
+                if args.promote_to_error:
+                    report['type'] = 'error'
+                self._reports.append(report)
+            else:
+                print(args.msg_template.format(**vals))
 
-    if not types or args.reports == 'n':
+            if args.format == 'github':
+                if vals['category'] in ('convention', 'refactor'):
+                    continue
+                if vals['category'] == 'warning':
+                    continue
+                failed = True
+                msg_to_github(vals)
+
+        if file_warnings:
+            print('Warnings from modified files:')
+
+            # Low priority warnings, these are reported but are reported last.  As GitHub only
+            # displays 10 annotations at a given severity level this means they will only be shown
+            # to the user if there are no other warnings in modified files.
+            lp_warnings_i = []
+            lp_warnings_f = []
+            for msg in file_warnings:
+                vals = parse_msg(msg)
+                print(args.msg_template.format(**vals))
+                if args.format == 'github':
+                    if msg.symbol == 'invalid-name':
+                        lp_warnings_i.append(msg)
+                    elif msg.symbol == 'consider-using-f-string':
+                        lp_warnings_f.append(msg)
+                    else:
+                        # Report all messages in modified files, but do it at the notice level.
+                        vals['category'] = 'notice'
+                        msg_to_github(vals)
+            for msg in lp_warnings_i + lp_warnings_f:
+                vals = parse_msg(msg)
+                vals['category'] = 'notice'
+                msg_to_github(vals)
+
+        if not types or args.reports == 'n':
+            return failed
+        for (mtype, count) in types.most_common():
+            print(f'{mtype}:{count}')
+
+        for (mtype, count) in symbols.most_common():
+            print(f'{mtype}:{count}')
         return failed
-    for (mtype, count) in types.most_common():
-        print(f'{mtype}:{count}')
-
-    for (mtype, count) in symbols.most_common():
-        print(f'{mtype}:{count}')
-    return failed
 
 
-def run_git_files(args, directory=None):
+def get_git_files(directory=None):
     """Run pylint on contents of 'git ls-files'"""
-
     all_files = FileTypeList()
 
     cmd = ['git', 'ls-files']
@@ -426,32 +538,37 @@ def run_git_files(args, directory=None):
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
-    if all_files.run(args):
-        print('Errors reported to github')
-        sys.exit(1)
+    return all_files
 
 
-def run_input_file(args, input_file):
-    """Run from a input file"""
+class OutPutRegion:
+    """Class for managing file regions"""
 
-    all_files = FileTypeList()
+    def __init__(self):
+        self.regions = []
 
-    with open(input_file, encoding='utf-8') as fd:
-        for file in fd.readlines():
-            all_files.add(file.strip())
+    def add_region(self, base, length):
+        """Add regions to file"""
+        self.regions.append((base, base + length))
 
-    all_files.run(args)
+    def in_region(self, line):
+        """Check if line is in region"""
+        for region in self.regions:
+            if region[0] < line < region[1]:
+                return True
+        return False
 
 
 def main():
     """Main program"""
+    # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
     parser = argparse.ArgumentParser()
 
     # Basic options.
     parser.add_argument('--git', action='store_true')
-    parser.add_argument('--from-file')
+    parser.add_argument('--from-stdin', action='store_true')
 
     spellings = True
     try:
@@ -468,8 +585,14 @@ def main():
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text'])
+    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
+    parser.add_argument('--diff', action='store_true')
+    parser.add_argument('--version', action='store_true')
+    parser.add_argument('--promote-to-error', action='store_true')
+
+    # Args that VS Code uses.
+    parser.add_argument('--import')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
@@ -479,6 +602,13 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
+
+    if args.output_format == 'json':
+        args.reports = 'n'
+
+    if args.version:
+        print(full_version)
+        sys.exit(0)
 
     rc_tmp = None
 
@@ -496,16 +626,58 @@ def main():
         rc_tmp.flush()
         args.rcfile = rc_tmp.name
 
-    if args.git:
-        run_git_files(args)
+    if args.diff:
+        # There are to be two different ways of driving this, for a commit-hook where we only
+        # check files changed and in GitHub actions where we check the entire tree and are more
+        # strict for files which have changed.
+        if args.git:
+            all_files = get_git_files()
+        else:
+            all_files = FileTypeList()
+        regions = None
+        file = None
+        lineno = 0
+        for line in sys.stdin.readlines():
+            lineno += 1
+            if line.startswith('diff --git a/'):
+                parts = line.split(' ')
+                file = parts[3][2:-1]
+                regions = OutPutRegion()
+                all_files.add_regions(file, regions)
+                if not args.git:
+                    if os.path.exists(file):
+                        all_files.add(file)
+                    else:
+                        print(f'Skipping {file} as it does not exist')
+                continue
+            if line.startswith('@@ '):
+                parts = line.split(' ')
+                if parts[2] == '+1':
+                    # Handle new, one line files.
+                    post_start = 0
+                    post_len = 1
+                else:
+                    (post_start, post_len) = parts[2][1:].split(',')
+                regions.add_region(int(post_start), int(post_len))
+                continue
+        if file and regions:
+            all_files.add_regions(file, regions)
+        failed = all_files.run(args)
+        if failed:
+            sys.exit(1)
         return
-    if args.from_file:
-        run_input_file(args, args.from_file)
+    if args.git:
+        all_files = get_git_files()
+        if all_files.run(args):
+            sys.exit(1)
         return
     all_files = FileTypeList()
     all_dirs = []
+
     for file in args.files:
-        if os.path.isfile(file):
+        if args.from_stdin:
+            all_files.add(file, force=True)
+        elif os.path.isfile(file):
             all_files.add(file)
         elif os.path.isdir(file):
             all_dirs.append(file)
@@ -514,7 +686,9 @@ def main():
             sys.exit(1)
     if all_dirs:
         if len(all_dirs) == 1 and all_files.file_count() == 0:
-            run_git_files(args, directory=all_dirs[0])
+            all_files = get_git_files(directory=all_dirs[0])
+            if all_files.run(args):
+                sys.exit(1)
         else:
             print('Only one directory can be shown at once')
             parser.print_usage()

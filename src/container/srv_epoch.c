@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,9 +101,8 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t		 epoch = in->cei_epoch;
 	int			 rc = 0;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -117,11 +116,11 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = -DER_INVAL;
 		goto out;
 	} else if (in->cei_epoch == 0) {
-		epoch = crt_hlc_get();
+		epoch = d_hlc_get();
 	}
 
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: epoch="DF_U64", "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p epoch=" DF_U64 ", " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch, DP_RC(rc));
 	return rc;
 }
@@ -148,7 +147,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	uuid_copy(in->tsi_pool_uuid, cont->c_svc->cs_pool_uuid);
 	uuid_copy(in->tsi_cont_uuid, cont->c_uuid);
 	uuid_copy(in->tsi_coh_uuid, coh_uuid);
-	in->tsi_epoch = crt_hlc_get();
+	in->tsi_epoch = d_hlc_get();
 	in->tsi_opts = opts;
 
 	rc = dss_rpc_send(rpc);
@@ -223,7 +222,7 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -239,9 +238,8 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	uint32_t			 nsnapshots;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
-		rpc, in->cei_epoch);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
 
 	/* Verify the handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -289,7 +287,7 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		in->cei_epoch);
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -389,8 +387,7 @@ out_eventual:
 	}
 
 out_mem:
-	if (snapshots)
-		D_FREE(snapshots);
+	D_FREE(snapshots);
 out:
 	if (rc == 0)
 		*snap_countp = snap_count;
@@ -406,9 +403,9 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int				 snap_count;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid),
-		rpc, DP_UUID(in->sli_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc,
+		DP_UUID(in->sli_op.ci_hdl));
 
 	/* Verify the handle has read access */
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
@@ -424,7 +421,7 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	out->slo_count = snap_count;
 
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -506,14 +503,18 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 		goto out_lock;
 	}
 
-	rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
-				      snapshots, snap_count);
-	if (rc != 0)
-		D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-
-	D_FREE(snapshots);
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
+	if (rc == 0) {
+		rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
+					      snapshots, snap_count);
+		if (rc != 0)
+			D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
+				DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+	}
+
+	if (snapshots != NULL)
+		D_FREE(snapshots);
+
 }
