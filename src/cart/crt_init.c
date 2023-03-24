@@ -539,8 +539,10 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		/* Use shared receive queues to avoid large mem consumption */
 		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
 
-		if (prov == CRT_PROV_OFI_TCP_RXM)
+		/* Only apply on the server side */
+		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
 			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
+
 	}
 
 	/* Print notice that "ofi+psm2" will be deprecated*/
