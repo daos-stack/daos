@@ -195,7 +195,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				// 16 targets * 2 engines * 512 pages
-				WithNrHugePages(16 * 2 * 512).
+				WithNrHugepages(16 * 2 * 512).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -207,7 +207,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				// 16 targets * 2 engines * 512 pages
-				WithNrHugePages(16*2*512).
+				WithNrHugepages(16*2*512).
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -247,7 +247,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
-				WithNrHugePages(17 * 2 * 512).
+				WithNrHugepages(17 * 2 * 512).
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 	} {
@@ -385,7 +385,7 @@ hyperthreads: false
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
-		WithNrHugePages(6144).
+		WithNrHugepages(6144).
 		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().

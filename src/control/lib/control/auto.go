@@ -449,7 +449,7 @@ func (nsm numaSSDsMap) fromNVMe(ssds storage.NvmeControllers) error {
 }
 
 type storageDetails struct {
-	HugePageSize int
+	HugepageSize int
 	MemTotal     int
 	NumaSCMs     numaSCMsMap
 	NumaSSDs     numaSSDsMap
@@ -466,12 +466,12 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 	sd := storageDetails{
 		NumaSCMs:     make(numaSCMsMap),
 		NumaSSDs:     make(numaSSDsMap),
-		HugePageSize: hs.MemInfo.HugePageSizeKb,
+		HugepageSize: hs.MemInfo.HugepageSizeKb,
 		MemTotal:     hs.MemInfo.MemTotal,
 		scmCls:       storage.ClassDcpm,
 	}
-	if sd.HugePageSize == 0 {
-		return nil, errors.New("getStorageDetails() requires nonzero HugePageSize")
+	if sd.HugepageSize == 0 {
+		return nil, errors.New("getStorageDetails() requires nonzero HugepageSize")
 	}
 
 	if err := sd.NumaSSDs.fromNVMe(hs.NvmeDevices); err != nil {
@@ -1156,7 +1156,7 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
 
-	if err := cfg.Validate(log, hugePageSizeKb); err != nil {
+	if err := cfg.Validate(log, sd.HugepageSize); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
 	}
 

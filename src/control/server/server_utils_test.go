@@ -261,14 +261,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		iommuDisabled   bool
 		srvCfgExtra     func(*config.Server) *config.Server
 		getHpiErr       error
-		hugePagesFree   int
+		hugepagesFree   int
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
 		expPrepErr      error
 		expPrepCall     *storage.BdevPrepareRequest
 		expMemChkErr    error
 		expMemSize      int
-		expHugePageSize int
+		expHugepageSize int
 	}{
 		"vfio disabled; non-root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -283,31 +283,31 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(nvmeEngine(0))
 			},
 			overrideUser:  "root",
-			hugePagesFree: 8192,
+			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				DisableVFIO:   true,
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; vfio disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
 					WithEngines(nonNvmeEngine(0))
 			},
-			hugePagesFree: 8192,
+			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 				DisableVFIO:   true,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"iommu disabled": {
 			iommuDisabled: true,
@@ -322,67 +322,67 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithEngines(nvmeEngine(0))
 			},
 			overrideUser:  "root",
-			hugePagesFree: 8192,
+			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				PCIAllowList:  test.MockPCIAddr(0),
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"non-nvme bdevs; iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(nonNvmeEngine(0))
 			},
-			hugePagesFree: 8192,
+			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithDisableHugePages(true).
+				return sc.WithDisableHugepages(true).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 		},
 		"no bdevs configured; nr_hugepages unset": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(0).
+				return sc.WithNrHugepages(0).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: scanMinHugePageCount,
+				HugepageCount: scanMinHugepageCount,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 		},
 		"no bdevs configured; nr_hugepages set": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(1024).
+				return sc.WithNrHugepages(1024).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 1024,
+				HugepageCount: 1024,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 		},
 		"2 engines both numa 0; hugepage alloc only on numa 0": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1).WithPinnedNumaNode(0)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 16386, // 2 extra huge pages requested
+				HugepageCount: 16386, // 2 extra huge pages requested
 				HugeNodes:     "0",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -391,16 +391,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				EnableVMD:    true,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"2 engines both numa 1; hugepage alloc only on numa 1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0).WithPinnedNumaNode(1), nvmeEngine(1))
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 16386,
+				HugepageCount: 16386,
 				HugeNodes:     "1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -408,16 +408,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				EnableVMD: true,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"2 engines; hugepage alloc across numa 0,1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugepageCount: 8194, // 2 extra huge pages requested per-engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -425,16 +425,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				EnableVMD: true,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"2 engines; hugepage alloc across numa 0,1; insufficient free": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
-			hugePagesFree: 8191,
+			hugepagesFree: 8191,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -444,34 +444,34 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemChkErr: errors.New("0: want 16 GiB (8192 hugepages), got 16 GiB (8191"),
 		},
 		"2 engines; scm only; nr_hugepages unset": {
-			hugePagesFree: 128,
+			hugepagesFree: 128,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 128,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 		},
 		"2 engines; scm only; nr_hugepages unset; insufficient free": {
-			hugePagesFree: 0,
+			hugepagesFree: 0,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 128,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
 		"0 engines; nr_hugepages unset": {
-			hugePagesFree: 128,
+			hugepagesFree: 128,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 128,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 		},
 		"0 engines; nr_hugepages unset; insufficient free": {
-			hugePagesFree: 0,
+			hugepagesFree: 0,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 128,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
@@ -480,19 +480,19 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"0 engines; nr_hugepages unset; hpi fetch fails": {
 			getHpiErr: errors.New("could not find hugepage info"),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 128,
+				HugepageCount: 128,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
 		},
 		"1 engine; nr_hugepages unset; hpi fetch fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(8192).
+				return sc.WithNrHugepages(8192).
 					WithEngines(nvmeEngine(0))
 			},
 			getHpiErr: errors.New("could not find hugepage info"),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 				PCIAllowList:  test.MockPCIAddr(0),
@@ -503,16 +503,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		// prepare will continue even if reset fails
 		"reset fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			bmbc: &bdev.MockBackendConfig{
 				ResetErr: errors.New("backed prep reset failed"),
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -521,44 +521,44 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				EnableVMD:    true,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		// VMD not enabled in prepare request.
 		"vmd disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).
+				return sc.WithNrHugepages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
 					WithDisableVMD(true)
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		// VMD not enabled in prepare request.
 		"non-nvme bdevs; vmd enabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(8192).
+				return sc.WithNrHugepages(8192).
 					WithEngines(nonNvmeEngine(0))
 			},
-			hugePagesFree: 8194,
+			hugepagesFree: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
+				HugepageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"4 engines; hugepage alloc across numa 0,1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).WithEngines(
+				return sc.WithNrHugepages(16384).WithEngines(
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
 						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
@@ -573,9 +573,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
 				)
 			},
-			hugePagesFree: 16384,
+			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugepageCount: 8194, // 2 extra huge pages requested per-engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),
@@ -583,11 +583,11 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				EnableVMD: true,
 			},
 			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 		},
 		"4 engines; uneven numa distribution": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(16384).WithEngines(
+				return sc.WithNrHugepages(16384).WithEngines(
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
 						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
@@ -681,10 +681,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			mockGetMemInfo := func() (*common.MemInfo, error) {
-				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
+				t.Logf("returning %d free hugepages from mock", tc.hugepagesFree)
 				return &common.MemInfo{
-					HugePageSizeKb: 2048,
-					HugePagesFree:  tc.hugePagesFree,
+					HugepageSizeKb: 2048,
+					HugepagesFree:  tc.hugepagesFree,
 				}, tc.getHpiErr
 			}
 
@@ -699,7 +699,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			test.AssertEqual(t, tc.expMemSize, ei.runner.GetConfig().MemSize,
 				"unexpected memory size")
-			test.AssertEqual(t, tc.expHugePageSize, ei.runner.GetConfig().HugePageSz,
+			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
 		})
 	}
@@ -744,7 +744,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
-				WithDisableHugePages(tc.disableHugepages)
+				WithDisableHugepages(tc.disableHugepages)
 
 			// test only with 2M hugepage size
 			if err := cfg.Validate(log, 2048); err != nil {

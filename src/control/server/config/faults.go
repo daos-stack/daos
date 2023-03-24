@@ -216,11 +216,11 @@ func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
 	)
 }
 
-// FaultConfigInsufficientHugePages creates a fault for the scenario where the
+// FaultConfigInsufficientHugepages creates a fault for the scenario where the
 // number of configured huge pages is less than required.
-func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
+func FaultConfigInsufficientHugepages(min, req int) *fault.Fault {
 	return serverConfigFault(
-		code.ServerConfigInsufficientHugePages,
+		code.ServerConfigInsufficientHugepages,
 		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)", req, min),
 		"update the 'nr_hugepages' parameter or remove it for automatic configuration",
 	)

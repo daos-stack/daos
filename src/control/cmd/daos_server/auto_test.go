@@ -228,7 +228,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -238,7 +238,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				// 18 targets * 2 engines * 512 pages
-				WithNrHugePages(18 * 2 * 512).
+				WithNrHugepages(18 * 2 * 512).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -256,7 +256,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -266,7 +266,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				// 18 targets * 2 engines * 512 pages
-				WithNrHugePages(18*2*512).
+				WithNrHugepages(18*2*512).
 				WithAccessPoints("localhost:10001").
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
@@ -284,7 +284,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo:     control.MemInfo{HugePageSizeKb: 2048},
+				MemInfo:     control.MemInfo{HugepageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
@@ -303,7 +303,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -327,7 +327,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -364,7 +364,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				// 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512 pages
-				WithNrHugePages(19 * 2 * 512).
+				WithNrHugepages(19 * 2 * 512).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},

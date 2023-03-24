@@ -330,12 +330,12 @@ func (ei *EngineInstance) setMemSize(memSizeMb int) {
 	ei.runner.GetConfig().MemSize = memSizeMb
 }
 
-// setHugePageSz updates hugepage size in engine config.
-func (ei *EngineInstance) setHugePageSz(hpSizeMb int) {
+// setHugepageSz updates hugepage size in engine config.
+func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
 	ei.Lock()
 	defer ei.Unlock()
 
-	ei.runner.GetConfig().HugePageSz = hpSizeMb
+	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
 // setTargetCount updates target count in engine config.

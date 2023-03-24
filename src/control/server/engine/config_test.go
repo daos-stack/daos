@@ -575,7 +575,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
-		WithHugePageSize(hugepageSz).
+		WithHugepageSize(hugepageSz).
 		WithSrxDisabled(true)
 
 	cfg.Index = uint32(index)

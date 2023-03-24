@@ -37,9 +37,9 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-// extraHugePages is the number of extra hugepages to request beyond the minimum required, often
+// extraHugepages is the number of extra hugepages to request beyond the minimum required, often
 // one or two are not reported as available.
-const extraHugePages = 2
+const extraHugepages = 2
 
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
@@ -84,7 +84,7 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
 
-const scanMinHugePageCount = 128
+const scanMinHugepageCount = 128
 
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	var bdevCfgs storage.TierConfigs
@@ -307,25 +307,25 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		// Request a few more hugepages than actually required for each NUMA node
 		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
-		prepReq.HugePageCount += extraHugePages
+		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
+		prepReq.HugepageCount += extraHugepages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
-			prepReq.HugePageCount, numaNodes)
+			prepReq.HugepageCount, numaNodes)
 	} else {
 		if srv.cfg.NrHugepages == 0 {
 			// If nr_hugepages is unset then set minimum needed for scanning in prepare
 			// request.
-			prepReq.HugePageCount = scanMinHugePageCount
+			prepReq.HugepageCount = scanMinHugepageCount
 		} else {
 			// If nr_hugepages has been set manually but no bdevs in config then
 			// allocate on numa node 0 (for example if a bigger number of hugepages are
 			// required in discovery mode for an unusually large number of SSDs).
-			prepReq.HugePageCount = srv.cfg.NrHugepages
+			prepReq.HugepageCount = srv.cfg.NrHugepages
 		}
 
-		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugePageCount)
+		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugepageCount)
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
@@ -453,28 +453,28 @@ func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetM
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMiB := mi.HugePageSizeKb / humanize.KiByte // kib to mib
+	pageSizeMiB := mi.HugepageSizeKb / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
-	memSizeFreeMiB := mi.HugePagesFree * pageSizeMiB
+	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
 		pageSizeMiB, *mi)
 	if memSizeFreeMiB < memSizeReqMiB {
-		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMiB, memSizeFreeMiB,
-			nrPagesRequired, mi.HugePagesFree)
+		return FaultInsufficientFreeHugepageMem(int(ei), memSizeReqMiB, memSizeFreeMiB,
+			nrPagesRequired, mi.HugepagesFree)
 	}
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
 	engine.setMemSize(memSizeReqMiB)
-	engine.setHugePageSz(pageSizeMiB)
+	engine.setHugepageSz(pageSizeMiB)
 
 	return nil
 }
 
-func cleanEngineHugePages(srv *server) error {
+func cleanEngineHugepages(srv *server) error {
 	req := storage.BdevPrepareRequest{
-		CleanHugePagesOnly: true,
+		CleanHugepagesOnly: true,
 	}
 
 	msg := "cleanup hugepages via bdev backend"
@@ -484,7 +484,7 @@ func cleanEngineHugePages(srv *server) error {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 
 	return nil
 }
@@ -511,7 +511,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
 		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugePages(srv); err != nil {
+		if err := cleanEngineHugepages(srv); err != nil {
 			srv.log.Errorf(err.Error())
 		}
 

@@ -103,7 +103,7 @@ func (s *spdkSetupScript) run(args ...string) error {
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 	// Always use min number of hugepages otherwise devices cannot be accessed.
-	nrHugepages := req.HugePageCount
+	nrHugepages := req.HugepageCount
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}

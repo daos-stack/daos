@@ -90,7 +90,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			expPrepSCMCall: &storage.ScmPrepareRequest{NrNamespacesPerSocket: 2},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  spaceSepMultiAddrList,
 				PCIBlockList:  defaultSingleAddrList,
 				DisableVFIO:   true,
@@ -132,7 +132,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				DisableVFIO:   true,
@@ -149,7 +149,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  spaceSepMultiAddrList,
 				PCIBlockList:  defaultSingleAddrList,
 				DisableVFIO:   true,

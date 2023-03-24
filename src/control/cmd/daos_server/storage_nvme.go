@@ -94,8 +94,8 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 
 	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
 
-	if req.HugePageCount == 0 && cfg.NrHugepages > 0 {
-		req.HugePageCount = cfg.NrHugepages
+	if req.HugepageCount == 0 && cfg.NrHugepages > 0 {
+		req.HugepageCount = cfg.NrHugepages
 	}
 
 	if req.PCIAllowList == "" {
@@ -242,7 +242,7 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
 	req := storage.BdevPrepareRequest{
-		HugePageCount: cmd.NrHugepages,
+		HugepageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIAllowList:  cmd.Args.PCIAllowList,
 		PCIBlockList:  cmd.PCIBlockList,
@@ -286,7 +286,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
-		CleanHugePagesOnly: true,
+		CleanHugepagesOnly: true,
 	}
 
 	msg := "cleanup hugepages before nvme reset"
@@ -294,7 +294,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	if resp, err := resetBackend(cleanReq); err != nil {
 		cmd.Errorf("%s", errors.Wrap(err, msg))
 	} else {
-		cmd.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
 	cfgParam := cmd.config
@@ -306,7 +306,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 		return errors.Wrap(err, "processing request parameters")
 	}
 	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
-	resetReq.HugePageCount = 0
+	resetReq.HugepageCount = 0
 
 	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
 

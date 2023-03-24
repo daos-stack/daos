@@ -261,14 +261,14 @@ func (cfg *Server) WithHyperthreads(enabled bool) *Server {
 	return cfg
 }
 
-// WithNrHugePages sets the number of huge pages to be used (total for all engines).
-func (cfg *Server) WithNrHugePages(nr int) *Server {
+// WithNrHugepages sets the number of huge pages to be used (total for all engines).
+func (cfg *Server) WithNrHugepages(nr int) *Server {
 	cfg.NrHugepages = nr
 	return cfg
 }
 
-// WithDisableHugePages disables the use of huge pages.
-func (cfg *Server) WithDisableHugePages(disabled bool) *Server {
+// WithDisableHugepages disables the use of huge pages.
+func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	cfg.DisableHugepages = disabled
 	return cfg
 }
@@ -434,7 +434,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)

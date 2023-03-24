@@ -123,7 +123,7 @@ type Config struct {
 	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
-	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -447,9 +447,9 @@ func (c *Config) WithMemSize(memsize int) *Config {
 	return c
 }
 
-// WithHugePageSize sets the configured hugepage size on this instance.
-func (c *Config) WithHugePageSize(hugepagesz int) *Config {
-	c.HugePageSz = hugepagesz
+// WithHugepageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugepageSize(hugepagesz int) *Config {
+	c.HugepageSz = hugepagesz
 	return c
 }
 

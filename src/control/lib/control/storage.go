@@ -36,7 +36,7 @@ var storageHashOpts = hashstructure.HashOptions{
 // For the purposes of the storage scan, we only care about the system hugepage size and memory
 // available.
 type MemInfo struct {
-	HugePageSizeKb int `json:"hugepage_size_kb"`
+	HugepageSizeKb int `json:"hugepage_size_kb"`
 	MemTotal       int `json:"mem_total" hash:"ignore"`
 	MemFree        int `json:"mem_free" hash:"ignore"`
 	MemAvailable   int `json:"mem_available" hash:"ignore"`
@@ -47,7 +47,7 @@ func (mi *MemInfo) Summary() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
-		humanize.IBytes(uint64(mi.HugePageSizeKb*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.HugepageSizeKb*humanize.KiByte)),
 		humanize.IBytes(uint64(mi.MemTotal*humanize.KiByte)),
 		humanize.IBytes(uint64(mi.MemFree*humanize.KiByte)),
 		humanize.IBytes(uint64(mi.MemAvailable*humanize.KiByte)))

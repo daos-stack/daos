@@ -54,7 +54,7 @@ var (
 	}
 
 	defMemInfo = &common.MemInfo{
-		HugePageSizeKb: 2048,
+		HugepageSizeKb: 2048,
 	}
 )
 
@@ -148,7 +148,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defMemInfo.HugePageSizeKb)
+				err = configA.Validate(log, defMemInfo.HugepageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -179,7 +179,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defMemInfo.HugePageSizeKb)
+				err = configB.Validate(log, defMemInfo.HugepageSizeKb)
 			}
 
 			if err != nil {
@@ -509,19 +509,19 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"out of range hugepages; low": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(-2048)
+				return c.WithNrHugepages(-2048)
 			},
 			expErr: FaultConfigNrHugepagesOutOfRange(-2048, math.MaxInt32),
 		},
 		"out of range hugepages; high": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(math.MaxInt32 + 1)
+				return c.WithNrHugepages(math.MaxInt32 + 1)
 			},
 			expErr: FaultConfigNrHugepagesOutOfRange(math.MaxInt32+1, math.MaxInt32),
 		},
 		"disabled hugepages; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugePages(true).
+				return c.WithDisableHugepages(true).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -538,7 +538,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugePages(true).
+				return c.WithDisableHugepages(true).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -556,7 +556,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithDisableHugePages(true).
+				return c.WithDisableHugepages(true).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -569,7 +569,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"insufficient hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
+				return c.WithNrHugepages(2048).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -583,11 +583,11 @@ func TestServerConfig_Validation(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
+			expErr: FaultConfigInsufficientHugepages(4096, 2048),
 		},
 		"insufficient hugepages set in config; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
+				return c.WithNrHugepages(2048).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -601,11 +601,11 @@ func TestServerConfig_Validation(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
+			expErr: FaultConfigInsufficientHugepages(4096, 2048),
 		},
 		"insufficient hugepages set in config; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
+				return c.WithNrHugepages(2048).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
@@ -617,7 +617,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expConfig: baseCfg().
 				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(2048).
+				WithNrHugepages(2048).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().
@@ -643,7 +643,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expConfig: baseCfg().
 				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(4608).
+				WithNrHugepages(4608).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().
@@ -676,7 +676,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expConfig: baseCfg().
 				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(4096).
+				WithNrHugepages(4096).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().
@@ -755,7 +755,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
 				}).
-				WithNrHugePages(9216).
+				WithNrHugepages(9216).
 				WithEngines(
 					defaultEngineCfg().
 						WithFabricInterfacePort(1234).
@@ -834,7 +834,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					Path:       testMetadataDir,
 					DevicePath: "/dev/something",
 				}).
-				WithNrHugePages(4096).
+				WithNrHugepages(4096).
 				WithEngines(
 					defaultEngineCfg().
 						WithFabricInterfacePort(1234).
@@ -886,7 +886,7 @@ func TestServerConfig_Validation(t *testing.T) {
 				WithControlMetadata(storage.ControlMetadata{
 					Path: testMetadataDir,
 				}).
-				WithNrHugePages(4608).
+				WithNrHugepages(4608).
 				WithEngines(defaultEngineCfg().
 					WithStorage(
 						storage.NewTierConfig().
@@ -938,7 +938,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo.HugePageSizeKb))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo.HugepageSizeKb))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -1273,7 +1273,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo.HugePageSizeKb))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo.HugepageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1476,7 +1476,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defMemInfo.HugePageSizeKb)
+			gotErr := conf.Validate(log, defMemInfo.HugepageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

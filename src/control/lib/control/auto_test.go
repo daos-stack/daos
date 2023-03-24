@@ -510,7 +510,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					MemInfo: MemInfo{
-						HugePageSizeKb: humanize.KiByte * 2,
+						HugepageSizeKb: humanize.KiByte * 2,
 						MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 					},
 				},
@@ -605,7 +605,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			hostResponses: withSSDsNoHugepageSz.resps,
 			useTmpfs:      true,
 			numaCount:     2,
-			expErr:        errors.New("requires nonzero HugePageSize"),
+			expErr:        errors.New("requires nonzero HugepageSize"),
 		},
 		"scm tmpfs; zero memory available": {
 			hostResponses: withSSDsNoMemTotal.resps,
@@ -1345,7 +1345,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				NumaIfaces: tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				HugePageSize: 2048,                          // in kib
+				HugepageSize: 2048,                          // in kib
 				MemTotal:     tc.memTotal / humanize.KiByte, // convert to kib
 				NumaSCMs:     tc.numaPMems,
 				NumaSSDs:     tc.numaSSDs,
@@ -1489,7 +1489,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					exmplEngineCfg0.WithHelperStreamCount(0),
 				}).
 				// 16 targets * 1 engine * 512 pages
-				WithNrHugePages(16 * 512).
+				WithNrHugepages(16 * 512).
 				WithAccessPoints("hostX:10002"),
 		},
 		"dual engine config": {
@@ -1505,7 +1505,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					exmplEngineCfg1.WithHelperStreamCount(0),
 				}).
 				// 16 targets * 2 engines * 512 pages
-				WithNrHugePages(16 * 2 * 512).
+				WithNrHugepages(16 * 2 * 512).
 				WithAccessPoints("hostX:10002"),
 		},
 		"bad accesspoint port": {

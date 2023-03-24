@@ -121,7 +121,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
 			pdc.setIOMMUChecker(cmd.isIOMMUEnabled)
 			req := storage.BdevPrepareRequest{
-				HugePageCount: pdc.NrHugepages,
+				HugepageCount: pdc.NrHugepages,
 				TargetUser:    pdc.TargetUser,
 				PCIAllowList:  pdc.Args.PCIAllowList,
 				PCIBlockList:  pdc.PCIBlockList,
