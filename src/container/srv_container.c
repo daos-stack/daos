@@ -456,32 +456,36 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 	struct nhandles_ht_rec *rec = NULL;
 	struct nhandles_ht_rec *rec_inserted = NULL;
 	bool			do_update = true;
+	uint32_t		pool_global_version = cont->c_svc->cs_pool->sp_global_version;
 	int			rc;
 
-	/* Fetch nhandles value from rdb first. Might be inaccurate if the tx has updated already.
-	 * However, this is necessary e.g., just for the interop check.
-	 */
-	d_iov_set(&value, &lookup_val, sizeof(lookup_val));
-	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
-	if (rc == -DER_NONEXIST)
-		goto out;		/* pool/container has old layout without nhandles */
-	else if (rc != 0) {
-		D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto err;
-	}
+	/* Test if pool/container has old layout without nhandles */
+	if (pool_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES)
+		goto out;
 
 	/* Caller performing multiple updates in the tx: insert into, or get value from HT cache. */
 	if (nhc) {
-		d_list_t *hlink;
+		d_list_t *hlink = d_hash_rec_find(nhc, cont->c_uuid, sizeof(uuid_t));
 
-		hlink = d_hash_rec_find(nhc, cont->c_uuid, sizeof(uuid_t));
 		if (hlink) {
 			rec = nhandles_rec_obj(hlink);
 			lookup_val = rec->nhr_nhandles;
 			d_hash_rec_decref(nhc, &rec->nhr_hlink);
-		} else {
-			/* cache rdb value in new HT record (hold ref ; free in table destroy). */
+		}
+	}
+
+	/* If no cache, or miss, lookup value in rdb. */
+	if (rec == NULL) {
+		d_iov_set(&value, &lookup_val, sizeof(lookup_val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+		if (rc) {
+			D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto err;
+		}
+
+		/* ... and cache it, if applicable. */
+		if (nhc) {
 			D_ALLOC_PTR(rec);
 			if (rec == NULL)
 				D_GOTO(err, rc = -DER_NOMEM);
@@ -489,8 +493,8 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rec);
 			uuid_copy(rec->nhr_cuuid, cont->c_uuid);
 			rec->nhr_nhandles = lookup_val;
-			rc = d_hash_rec_insert(nhc, rec->nhr_cuuid, sizeof(uuid_t),
-					       &rec->nhr_hlink, true);
+			rc = d_hash_rec_insert(nhc, rec->nhr_cuuid, sizeof(uuid_t), &rec->nhr_hlink,
+					       true);
 			if (rc != 0) {
 				D_ERROR(DF_CONT": error inserting into nhandles cache" DF_RC"\n",
 					DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
