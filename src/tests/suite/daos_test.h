@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,6 +75,8 @@ extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 extern int  dt_obj_class;
 extern unsigned int dt_cell_size;
+extern int dt_redun_lvl;
+extern int dt_redun_fac;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -381,6 +383,7 @@ void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       const char *grp, d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
+struct daos_acl *get_daos_acl_with_user_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
 daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
@@ -455,8 +458,13 @@ int rebuild_pool_connect_internal(void *data);
 
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_rf1_setup(void **state);
+int rebuild_sub_rf0_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+int rebuild_small_sub_rf1_setup(void **state);
+int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,

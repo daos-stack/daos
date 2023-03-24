@@ -393,6 +393,7 @@ struct obj_auxi_args {
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
 					 reintegrating:1,
+					 tx_renew:1,
 					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
@@ -612,10 +613,10 @@ int obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, uint32_t tgt_off,
 			   daos_recx_t **recxs_p, daos_epoch_t **recx_ephs_p,
 			   unsigned int *iod_nr);
-int obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint32_t gl_ver, struct daos_oclass_attr *oca,
+int obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 			    uint64_t dkey_hash, daos_iod_t *iod, d_sg_list_t *sgl,
 			    d_iov_t *e_iov);
-int obj_ec_singv_split(daos_unit_oid_t oid, uint32_t gl_ver, struct daos_oclass_attr *oca,
+int obj_ec_singv_split(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 		       uint64_t dkey_hash, daos_size_t iod_size, d_sg_list_t *sgl);
 
 int
@@ -883,7 +884,7 @@ int
 obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
 
 int
-obj_pl_place(struct pl_map *map, uint32_t layout_gl_ver, struct daos_obj_md *md,
+obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
 	     unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp);
 

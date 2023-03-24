@@ -12,6 +12,7 @@ import random
 import string
 import time
 import ctypes
+import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
@@ -865,58 +866,6 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     return result
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
-    """Stop the processes on each hosts that match the pattern.
-
-    Args:
-        hosts (NodeSet): hosts on which to stop the processes
-        pattern (str): regular expression used to find process names to stop
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to 60
-            seconds.
-        added_filter (str, optional): negative filter to better identify
-            processes.
-
-    Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
-            Return code keys:
-                0   No processes matched the criteria / No processes killed.
-                1   One or more processes matched the criteria and a kill was
-                    attempted.
-
-    """
-    result = {}
-    log = getLogger()
-    log.info("Killing any processes on %s that match: %s", hosts, pattern)
-
-    if added_filter:
-        ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
-            pattern, added_filter)
-    else:
-        ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
-
-    if hosts is not None:
-        commands = [
-            "rc=0",
-            "if " + ps_cmd,
-            "then rc=1",
-            "sudo /usr/bin/pkill {}".format(pattern),
-            "sleep 5",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
-            "sleep 1",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
-            "fi",
-            "fi",
-            "fi",
-            "exit $rc",
-        ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
-    return result
-
-
 def get_log_file(name):
     """Get the full log file name and path.
 
@@ -1134,10 +1083,9 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} /usr/bin/mkdir -p {}".format(
-            get_clush_command(hosts, "-S -v", sudo), directory),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
+    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
@@ -1173,10 +1121,9 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} {} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    chown_command = get_chown_command(owner, group, file=filename)
+    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
@@ -1234,8 +1181,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = "{} rm -f {}".format(
-                    get_clush_command(other_hosts, "-S -v", True), source)
+                rm_command = get_clush_command(
+                    other_hosts, args="-S -v", command="rm -f {}".format(source),
+                    command_sudo=True)
                 run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
@@ -1244,15 +1192,15 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if result is None or result.exit_status == 0:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = "{} cp {} {}".format(
-                    get_clush_command(hosts, "-S -v", True), source,
-                    destination)
+                command = get_clush_command(
+                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
+                    command_sudo=True)
                 result = run_command(command, timeout, verbose, raise_exception)
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
-            command = "{} --copy {} --dest {}".format(
-                get_clush_command(hosts, "-S -v", False), source, destination)
+            command = get_clush_command(
+                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
             result = run_command(command, timeout, verbose, raise_exception)
 
         # If requested update the ownership of the destination file
@@ -1297,11 +1245,9 @@ def get_file_listing(hosts, files):
                 pid             - command's pid
 
     """
-    result = run_command(
-        "{} /usr/bin/ls -la {}".format(
-            get_clush_command(hosts, "-S -v", True),
-            convert_string(files, " ")),
-        verbose=False, raise_exception=False)
+    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
+    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
+    result = run_command(command, verbose=False, raise_exception=False)
     return result
 
 
@@ -1380,13 +1326,18 @@ def percent_change(val1, val2):
         val1 (float): first value.
         val2 (float): second value.
 
+    Raises:
+        ValueError: if either val is not a number
+
     Returns:
         float: decimal percent change.
+        math.nan: if val1 is 0
 
     """
-    if val1 and val2:
+    try:
         return (float(val2) - float(val1)) / float(val1)
-    return 0.0
+    except ZeroDivisionError:
+        return math.nan
 
 
 def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):

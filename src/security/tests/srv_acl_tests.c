@@ -18,6 +18,7 @@
 #include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos/drpc_modules.h>
+#include <daos/pool.h>
 #include <daos_srv/security.h>
 
 #include "../srv_internal.h"
@@ -1525,10 +1526,8 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 	init_default_cred(&valid_cred);
 
 	printf("Expecting flags %#lx invalid\n", invalid_flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(invalid_flags,
-						     &valid_cred,
-						     &valid_owner, valid_acl,
-						     &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(invalid_flags, &valid_cred, &valid_owner,
+						     valid_acl, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1541,6 +1540,14 @@ test_cont_get_capas_invalid_flags(void **state)
 	expect_cont_get_capas_flags_invalid(0);
 	expect_cont_get_capas_flags_invalid(1U << DAOS_COO_NBITS);
 	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_RW);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_EX);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EX);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EVICT);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EX | DAOS_COO_EVICT);
 }
 
 static void
@@ -1555,18 +1562,13 @@ test_cont_get_capas_null_inputs(void **state)
 	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL,
-						     &ownership, acl, &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL, &ownership, acl, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred,
-						     NULL, acl, &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, NULL, acl, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred,
-						     &ownership, NULL,
-						     &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, NULL, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred,
-						     &ownership, acl, NULL),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl, NULL),
 			-DER_INVAL);
 
 	daos_acl_free(acl);
@@ -1589,10 +1591,8 @@ expect_cont_get_capas_owner_invalid(char *user, char *group)
 
 	invalid_owner.user = user;
 	invalid_owner.group = group;
-	assert_rc_equal(ds_sec_cont_get_capabilities(valid_flags,
-						     &valid_cred,
-						     &invalid_owner, valid_acl,
-						     &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(valid_flags, &valid_cred, &invalid_owner,
+						     valid_acl, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1624,8 +1624,7 @@ test_cont_get_capas_bad_acl(void **state)
 	D_ALLOC(bad_acl, sizeof(struct daos_acl));
 	assert_non_null(bad_acl);
 
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &cred,
-						     &ownership, bad_acl,
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &cred, &ownership, bad_acl,
 						     &result),
 			-DER_INVAL);
 
@@ -1657,15 +1656,13 @@ test_cont_get_capas_bad_cred(void **state)
 		bad_buf[i] = (uint8_t)i;
 	d_iov_set(&bad_cred, bad_buf, sizeof(bad_buf));
 
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred,
-						     &ownership, acl,
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
 						     &result),
 			-DER_INVAL);
 
 	/* null data */
 	d_iov_set(&bad_cred, NULL, 0);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred,
-						     &ownership, acl,
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
 						     &result),
 			-DER_INVAL);
 
@@ -1678,8 +1675,7 @@ test_cont_get_capas_bad_cred(void **state)
 	D_ALLOC(buf, bufsize);
 	auth__credential__pack(&cred, buf);
 	d_iov_set(&bad_cred, buf, bufsize);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred,
-						     &ownership, acl,
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
 						     &result),
 			-DER_PROTO);
 	D_FREE(buf);
@@ -1705,9 +1701,7 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
-						     acl, &result),
-			0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
 
 	assert_int_equal(result, exp_capas);
 
@@ -1740,14 +1734,9 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_SET_ACL |
 				     CONT_CAPA_GET_ACL |
 				     CONT_CAPA_SET_OWNER);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ |
-				     DAOS_ACL_PERM_DEL_CONT,
-				     DAOS_COO_RW,
-				     CONT_CAPA_READ_DATA |
-				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
-				     CONT_CAPAS_ALL);
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RO,
 				     CONT_CAPAS_RO_MASK);
@@ -1756,16 +1745,36 @@ test_cont_get_capas_success(void **state)
 static void
 test_cont_get_capas_denied(void **state)
 {
+	uint64_t	rw_flags_set[] = {DAOS_COO_RW, DAOS_COO_EX};
+	int		i;
+
 	expect_cont_capas_with_perms(0, DAOS_COO_RO, 0);
 	expect_cont_capas_with_perms(0, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_ACL, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_WRITE, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, DAOS_COO_RW, 0);
+	expect_cont_capas_with_perms(0, DAOS_COO_EX, 0);
+
+	for (i = 0; i < ARRAY_SIZE(rw_flags_set); i++) {
+		uint64_t flags = rw_flags_set[i];
+
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_READ, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_PROP, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_ACL, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_WRITE, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_DEL_CONT, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, flags, 0);
+	}
+
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				     DAOS_COO_EX,
+				     CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_EX,
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 }
 
 
@@ -1787,9 +1796,7 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
-						     acl, &result),
-			0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
 
 	assert_int_equal(result, exp_capas);
 
@@ -1800,11 +1807,17 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 static void
 test_cont_get_capas_owner_implicit_acl_access(void **state)
 {
-	/* Owner can always get/set ACL even if not explicitly granted perms */
+	/*
+	 * Owner can always get/set ACL even if not explicitly granted perms.
+	 * Owner also can always open exclusively and evict all handles.
+	 */
 	expect_cont_capas_with_owner_perms(0, DAOS_COO_RO, CONT_CAPA_GET_ACL);
 	expect_cont_capas_with_owner_perms(0, DAOS_COO_RW,
 					   CONT_CAPA_GET_ACL |
 					   CONT_CAPA_SET_ACL);
+	expect_cont_capas_with_owner_perms(0, DAOS_COO_EX,
+					   CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL |
+					   CONT_CAPA_OPEN_EX);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_READ |
 					   DAOS_ACL_PERM_WRITE,
 					   DAOS_COO_RO,
@@ -1817,12 +1830,24 @@ test_cont_get_capas_owner_implicit_acl_access(void **state)
 					   CONT_CAPA_WRITE_DATA |
 					   CONT_CAPA_GET_ACL |
 					   CONT_CAPA_SET_ACL);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_READ |
+					   DAOS_ACL_PERM_WRITE,
+					   DAOS_COO_EX,
+					   CONT_CAPA_READ_DATA |
+					   CONT_CAPA_WRITE_DATA |
+					   CONT_CAPA_GET_ACL |
+					   CONT_CAPA_SET_ACL |
+					   CONT_CAPA_OPEN_EX);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RW,
-					   CONT_CAPAS_ALL);
+					   CONT_CAPAS_ALL &
+					   ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RO,
 					   CONT_CAPAS_RO_MASK);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
+					   DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+					   CONT_CAPAS_ALL);
 }
 
 /*
@@ -2003,6 +2028,26 @@ test_cont_can_read_data(void **state)
 }
 
 static void
+test_cont_can_open_ex(void **state)
+{
+	assert_false(ds_sec_cont_can_open_ex(0));
+	assert_false(ds_sec_cont_can_open_ex(~CONT_CAPA_OPEN_EX));
+
+	assert_true(ds_sec_cont_can_open_ex(CONT_CAPA_OPEN_EX));
+	assert_true(ds_sec_cont_can_open_ex(CONT_CAPAS_ALL));
+}
+
+static void
+test_cont_can_evict_all(void **state)
+{
+	assert_false(ds_sec_cont_can_evict_all(0));
+	assert_false(ds_sec_cont_can_evict_all(~CONT_CAPA_EVICT_ALL));
+
+	assert_true(ds_sec_cont_can_evict_all(CONT_CAPA_EVICT_ALL));
+	assert_true(ds_sec_cont_can_evict_all(CONT_CAPAS_ALL));
+}
+
+static void
 test_get_rebuild_cont_capas(void **state)
 {
 	assert_int_equal(ds_sec_get_rebuild_cont_capabilities(),
@@ -2177,6 +2222,8 @@ main(void)
 		cmocka_unit_test(test_cont_can_set_owner),
 		cmocka_unit_test(test_cont_can_write_data),
 		cmocka_unit_test(test_cont_can_read_data),
+		cmocka_unit_test(test_cont_can_open_ex),
+		cmocka_unit_test(test_cont_can_evict_all),
 		cmocka_unit_test(test_get_rebuild_cont_capas),
 		cmocka_unit_test(test_get_admin_cont_capas),
 		ACL_UTEST(test_origin_null_cred),
