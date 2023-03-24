@@ -16,7 +16,7 @@ class IorInterceptTestBase(IorTestBase):
     :avocado: recursive
     """
 
-    def run_il_perf_check(self):
+    def run_il_perf_check(self, libname):
         """Verify IOR performance with DFUSE + IL is similar to DFS.
 
         Steps:
@@ -25,6 +25,8 @@ class IorInterceptTestBase(IorTestBase):
             Verify performance with DFUSE + IL is similar to DFS.
 
         """
+        if libname is None:
+            self.fail("libname is not set for function interception.")
         # Write and read performance thresholds
         write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
         read_x = self.params.get("read_x", self.ior_cmd.namespace, None)
@@ -45,7 +47,7 @@ class IorInterceptTestBase(IorTestBase):
         # Run IOR with dfuse + IL
         self.ior_cmd.api.update("POSIX")
         dfuse_out = self.run_ior_with_pool(
-            intercept=os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            intercept=os.path.join(self.prefix, 'lib64', libname),
             fail_on_warning=self.log.info)
         dfuse_perf = IorCommand.get_ior_metrics(dfuse_out)
 

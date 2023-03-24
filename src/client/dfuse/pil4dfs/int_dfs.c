@@ -79,6 +79,8 @@ struct DFSMOUNT {
 	char                 fs_root[DFS_MAX_PATH];
 };
 
+static bool            bLog;
+
 static long int        page_size;
 
 static pthread_mutex_t lock_init;
@@ -656,8 +658,8 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 	if (rc)
 		return false;
 
-	strncpy(pool, attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-	strncpy(cont, attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(pool, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", attr.da_pool);
+	snprintf(cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", attr.da_cont);
 	/* attr.da_rel_path is allocated dynamically. It should be freed later. */
 	*rel_path = attr.da_rel_path;
 
@@ -673,8 +675,8 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	int    pos, len;
 	mode_t mode;
 	bool   with_daos_prefix;
-	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN];
-	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN];
+	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
+	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
 	int    idx_dfs;
 
@@ -1161,6 +1163,7 @@ find_free_fd_dup2_list(void)
 	errno = EMFILE;
 	return (-1);
 }
+
 /**
  * static int
  * is_a_duped_fd(int fd)
@@ -1175,6 +1178,7 @@ find_free_fd_dup2_list(void)
  *	return 0;
  * }
  */
+
 static int
 query_fd_forward_dest(int fd_src)
 {
@@ -1588,6 +1592,9 @@ pread(int fd, void *buf, size_t size, off_t offset)
 		bytes_read = -1;
 	}
 
+	if (bLog)
+		fprintf(stderr, "[libpil4dfs] Intercepting read of size %zu\n", bytes_read);
+
 	return (ssize_t)bytes_read;
 }
 
@@ -1657,6 +1664,8 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 		errno = rc;
 		return (-1);
 	}
+	if (bLog)
+		fprintf(stderr, "[libpil4dfs] Intercepting write of size %zu\n", size);
 
 	return size;
 }
@@ -4092,7 +4101,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	rc = mprotect((void *)addr_min, length, PROT_READ | PROT_WRITE);
 	if (rc < 0) {
 		snprintf(err_msg, 256, "Error in mprotect() in signal handler. %s\n",
-			strerror(errno));
+			 strerror(errno));
 		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
 		exit(1);
 	}
@@ -4103,7 +4112,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 			       (size_t)mmap_list[idx_map].offset, &bytes_read, NULL);
 	if (rc) {
 		snprintf(err_msg, 256, "Error in dfs_read() in signal handler. %s\n",
-			strerror(errno));
+			 strerror(errno));
 		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
 		exit(1);
 	}
@@ -4118,6 +4127,20 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 		/* Read fault, do nothing */
 	}
 #elif defined(__aarch64__)
+	/* #define ESR_ELx_CM (UL(1) << 8) */
+	if (context->uc_mcontext.__reserved[0x219] & 1 == 0) {
+		/* Fault is not from executing instruction */
+		/* #define ESR_ELx_WNR (UL(1) << 6) */
+		if (context->uc_mcontext.__reserved[0x218] & 0x40) {
+			/* Write fault, set flag for dirty page which will be written to file later */
+			idx_page = (addr_min - (size_t)mmap_list[idx_map].addr) / page_size;
+			mmap_list[idx_map].updated[idx_page] = true;
+			mmap_list[idx_map].num_dirty_pages++;
+
+		} else{
+			/* Read fault, do nothing */
+		}
+	}
 #else
 #error Unsupported architecture. Only x86_64 and aarch64 are supported.
 #endif
@@ -4146,6 +4169,7 @@ static __attribute__((constructor)) void
 init_myhook(void)
 {
 	mode_t umask_old;
+	char   *env_log;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -4207,6 +4231,13 @@ init_myhook(void)
 	install_hook();
 
 	hook_enabled = 1;
+
+	env_log = getenv("IL_LOG");
+	if (env_log) {
+		if (strcmp(env_log, "1")==0 || strcmp(env_log, "true")==0 ||
+		    strcmp(env_log, "TRUE")==0 )
+			bLog = true;
+	}
 }
 
 static __attribute__((destructor)) void

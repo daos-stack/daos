@@ -1009,6 +1009,21 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
 
     return ret
 
+def pil4dfs_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
+    """Run a command under the interception library pil4dfs
+    """
+    my_env = get_base_env()
+    prefix = f'dnt_dfuse_pil4dfs_{get_inc_id()}_'
+    with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+        log_name = log_file.name
+    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['D_LOG_MASK'] = 'FATAL'
+    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+    ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=my_env, check=False)
+    print(f'Logged pil4dfs to {log_name}')
+    print(ret)
+    return ret
 
 class ValgrindHelper():
     """Class for running valgrind commands
@@ -2140,6 +2155,43 @@ class PosixTests():
                                   'oflag=direct',
                                   'bs=128k'],
                      check_fstat=False)
+        assert ret.returncode == 0
+
+    @needs_dfuse
+    def test_pil4dfs(self):
+        """Run a basic interception library test for libpil4dfs.so"""
+
+        # Create a file natively.
+        file1 = join(self.dfuse.dir, 'file1')
+        with open(file1, 'w') as fd:
+            fd.write('Hello World!')
+
+        # Copy a file.
+        file2 = join(self.dfuse.dir, 'file2')
+        ret = pil4dfs_cmd(self.dfuse, ['cp', file1, file2])
+        assert ret.returncode == 0
+
+        # Read a file with cat.
+        ret = pil4dfs_cmd(self.dfuse, ['cat', file2])
+        assert ret.returncode == 0
+        print('DBG> cat returns, ', ret.stdout)
+
+        # touch a file.
+        file3 = join(self.dfuse.dir, 'file3')
+        ret = pil4dfs_cmd(self.dfuse, ['touch', file3])
+        assert ret.returncode == 0
+
+        # create a dir.
+        dir1 = join(self.dfuse.dir, 'dir1')
+        ret = pil4dfs_cmd(self.dfuse, ['mkdir', dir1])
+        assert ret.returncode == 0
+
+        # find to list all files/dirs.
+        ret = pil4dfs_cmd(self.dfuse, ['find', self.dfuse.dir])
+        assert ret.returncode == 0
+
+        # remove a file.
+        ret = pil4dfs_cmd(self.dfuse, ['rm', file3])
         assert ret.returncode == 0
 
     @needs_dfuse
