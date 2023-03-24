@@ -28,8 +28,6 @@ class NvmeFaultReintegrate(VmdLedStatus):
         """Set up for test case."""
         super().setUp()
         self.daos_command = self.get_daos_command()
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
 
     def verify_dev_led_state(self, device, dev_state="NORMAL", led_state="OFF"):
         """Verify device dev_state and led_state.
@@ -50,8 +48,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
 
         Args:
             result (dict): return from get_led_status_value for a storage device.
-            dev_state (str): expect dev_state, default to "NORMAL".
-            led_state (str): expect led_state, default to "OFF".
+            dev_state (str): expect dev_state.
+            led_state (str): expect led_state.
 
         Return:
             True if the expected dev_state and led_state.
@@ -96,22 +94,27 @@ class NvmeFaultReintegrate(VmdLedStatus):
             oclass = self.ior_cmd.dfs_oclass.value
         device_info = get_storage_query_device_info(self, self.dmg)
         devices = [device['uuid'] for device in device_info]
-        self.log.info("==device_info= %s", devices)
+        self.log.info("Device information")
+        self.log.info("==================")
+        for index, entry in enumerate(device_info):
+            self.log.info("Device %s:", index)
+            for key in sorted(entry):
+                self.log.info("  %s: %s", key, entry[key])
         test_dev = devices[0]
         for device in devices:
             self.run_vmd_led_identify(device, reset=True)
 
         # 2.
-        self.log_step("Check drive status led state.")
+        self.log_step("Verify that each device is in a 'NORMAL' state and its LED is 'OFF'")
         err_dev = []
         for device in devices:
-            if not self.verify_dev_led_state(device):
+            if not self.verify_dev_led_state(device, 'NORMAL', 'OFF'):
                 err_dev.append(device)
         if err_dev:
             self.fail("#Device {} not in expected NORMAL, OFF state".format(err_dev))
 
         # 3.
-        self.log_step("Create the pool and container with RF and start IOR")
+        self.log_step("Creating a pool and container with RF and starting IOR in a thread")
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
@@ -148,13 +151,14 @@ class NvmeFaultReintegrate(VmdLedStatus):
         }
         kwargs.update(ior_kwargs)
         thread.append(threading.Thread(target=thread_run_ior, kwargs=kwargs))
-
         # Launch the IOR thread
         self.log.info("Start IOR thread : %s", thread)
         thread[0].start()
 
         # 4.
-        self.log_step("dmg storage set nvme-faulty and check led state")
+        self.log_step(
+            "Marking the {} device as faulty and verifying it is 'EVICTED' and its " \
+            "LED is 'ON'".format(test_dev))
         if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
         # check device state after set nvme-faulty
@@ -163,10 +167,11 @@ class NvmeFaultReintegrate(VmdLedStatus):
             self.fail("#After set_device_fault, device not back to NORMAL, ON state")
 
         # 5.
-        self.log_step("IOR continue")
+        self.log_step("Waiting for IOR to complete")
+
         # 6.
-        self.log_step("IOR completed and check for error")
         thread[0].join()
+        self.log_step("IOR completed and check for error")
         errors = 0
         while not thread_queue.empty():
             result = thread_queue.get()
@@ -184,7 +189,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
             self.fail("Errors running IOR {} thread".format(errors))
 
         # 7.
-        self.log_step("Check drive status and led status")
+        self.log_step("Check drive status as 'NORMAL' and led status is 'ON'")
         if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
             self.fail(
                 "#After set_device_fault, IOR completed, device not in expected NORMAL, ON state")
