@@ -12,7 +12,6 @@ from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from led import VmdLedStatus
-from write_host_file import write_host_file
 
 
 class NvmeFaultReintegrate(VmdLedStatus):
@@ -157,7 +156,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
 
         # 4.
         self.log_step(
-            "Marking the {} device as faulty and verifying it is 'EVICTED' and its " \
+            "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
         if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
