@@ -49,16 +49,6 @@ enum {
 	} while (0)
 
 static inline void
-dtx_memcpy_nodrain(struct umem_instance *umm, void *dest, const void *src,
-		   size_t size)
-{
-	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, dest, size, POBJ_XADD_NO_SNAPSHOT);
-
-	pmem_memcpy_nodrain(dest, src, size);
-}
-
-static inline void
 dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
 {
 	uint8_t		flag = 0;
@@ -1733,8 +1723,8 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 
 	DAE_INDEX(dae) = dbd->dbd_index;
 	if (DAE_INDEX(dae) > 0) {
-		rc = umem_tx_add_ptr(umm, umem_off2ptr(umm, dae->dae_df_off),
-				     sizeof(struct vos_dtx_act_ent_df));
+		rc = umem_tx_xadd_ptr(umm, umem_off2ptr(umm, dae->dae_df_off),
+				      sizeof(struct vos_dtx_act_ent_df), POBJ_XADD_NO_SNAPSHOT);
 		if (rc != 0)
 			return rc;
 
@@ -1978,10 +1968,16 @@ again:
 		if (rc1 == 0)
 			rc1 = rc;
 
-		if (dce != NULL)
-			dtx_memcpy_nodrain(umm, &dbd->dbd_committed_data[j++],
-					   &dce->dce_base,
-					   sizeof(struct vos_dtx_cmt_ent_df));
+		if (dce != NULL) {
+			rc = umem_tx_xadd_ptr(umm, &dbd->dbd_committed_data[j],
+					      sizeof(struct vos_dtx_cmt_ent_df),
+					      POBJ_XADD_NO_SNAPSHOT);
+			if (rc != 0)
+				D_GOTO(out, fatal = true);
+
+			memcpy(&dbd->dbd_committed_data[j++], &dce->dce_base,
+			       sizeof(struct vos_dtx_cmt_ent_df));
+		}
 	}
 
 	if (!allocated) {
