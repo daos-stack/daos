@@ -61,6 +61,14 @@ vos_meta_rwv(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *
 	D_ASSERT(iod->io_nr > 0);
 	D_ASSERT(sgl->sg_nr > 0);
 
+	if (update) {
+		rc = bio_meta_clear_empty(store->stor_priv);
+		if (rc)
+			return rc;
+	} else if (bio_meta_is_empty(store->stor_priv)) {
+		return 0;
+	}
+
 	if (iod->io_nr == 1) {
 		bsgl.bs_iovs = &local_biov;
 		bsgl.bs_nr = 1;
@@ -309,6 +317,10 @@ vos_pool_checkpoint(daos_handle_t poh)
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
 	       DP_UUID(pool->vp_id), tx_id);
+
+	rc = bio_meta_clear_empty(store->stor_priv);
+	if (rc)
+		return rc;
 
 	rc = umem_cache_checkpoint(store, pool->vp_wait_cb, pool->vp_chkpt_arg, &tx_id);
 
