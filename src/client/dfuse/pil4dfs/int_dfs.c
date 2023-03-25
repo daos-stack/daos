@@ -2930,7 +2930,10 @@ access(const char *path, int mode)
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 
 	if (is_target_path) {
-		rc = dfs_access(dfs_mt->dfs, parent, item_name, mode);
+		if (!parent && (strncmp(item_name, "/", 2) == 0))
+			rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
+		else
+			rc = dfs_access(dfs_mt->dfs, parent, item_name, mode);
 		if (rc) {
 			errno = rc;
 			return (-1);
@@ -3186,7 +3189,10 @@ chmod(const char *path, mode_t mode)
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
 
 	if (is_target_path) {
-		rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode);
+		if (!parent && (strncmp(item_name, "/", 2) == 0))
+			rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode);
+		else
+			rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode);
 		if (rc) {
 			errno = rc;
 			return (-1);
@@ -3272,8 +3278,11 @@ utime(const char *path, const struct utimbuf *times)
 	if (!is_target_path)
 		return next_utime(path, times);
 
-	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
-	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	else
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
+			      &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
@@ -3331,8 +3340,11 @@ utimes(const char *path, const struct timeval times[2])
 	if (!is_target_path)
 		return next_utimes(path, times);
 
-	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
-	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	else
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
+			      &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
@@ -3389,8 +3401,11 @@ utimens_timespec(const char *path, const struct timespec times[2])
 		return next_utimes(path, times_us);
 	}
 
-	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
-	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+	else
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
+			      &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to dfs_open %s. %s\n", full_path, strerror(rc));
 		errno = rc;
@@ -4234,8 +4249,8 @@ init_myhook(void)
 
 	env_log = getenv("IL_LOG");
 	if (env_log) {
-		if (strcmp(env_log, "1")==0 || strcmp(env_log, "true")==0 ||
-		    strcmp(env_log, "TRUE")==0 )
+		if (strcmp(env_log, "1") == 0 || strcmp(env_log, "true") == 0 ||
+		    strcmp(env_log, "TRUE") == 0)
 			bLog = true;
 	}
 }

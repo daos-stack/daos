@@ -24,6 +24,7 @@ class MdtestBase(DfuseTestBase):
         self.ppn = None
         self.hostfile_clients_slots = None
         self.subprocess = False
+        self.il = False
 
     def setUp(self):
         """Set up each test case."""
@@ -104,6 +105,8 @@ class MdtestBase(DfuseTestBase):
             object: result of job manager run
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
+        if self.il:
+            env['LD_PRELOAD'] = '/usr/lib64/libpil4dfs.so'
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         if self.ppn is None:
             manager.assign_processes(processes)
@@ -158,6 +161,8 @@ class MdtestBase(DfuseTestBase):
                 self.mdtest_cmd.items.update(params[4])
             self.mdtest_cmd.depth.update(params[5])
             self.mdtest_cmd.flags.update(params[6])
+            if params[7]:
+                self.il = True
             # run mdtest
             self.execute_mdtest()
             # re-set mdtest params before next iteration
