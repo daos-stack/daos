@@ -185,15 +185,16 @@ dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx, void *data)
 }
 
 int
-dav_wal_tx_reserve(struct dav_obj *hdl)
+dav_wal_tx_reserve(struct dav_obj *hdl, uint64_t *id)
 {
-	uint64_t id;
 	int rc;
 
-	D_ASSERT(hdl->do_utx->utx_id == ULLONG_MAX);
-	rc = hdl->do_store->stor_ops->so_wal_reserv(hdl->do_store, &id);
+	rc = hdl->do_store->stor_ops->so_wal_reserv(hdl->do_store, id);
+	/* REVISIT:
+	 * Remove this assert once callers of dav_free() and dav_memcpy_persist()
+	 * are modified to handle failures.
+	 */
 	D_ASSERT(rc == 0);
-	hdl->do_utx->utx_id = id;
 	return rc;
 }
 
