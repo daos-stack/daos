@@ -123,7 +123,7 @@ class NvmeEnospace(ServerFillUp):
         count = 1
         while count <= 30:
             try:
-                self.log.info('----Start IOR read loop %s----', count)
+                self.log.info('----Start IOR read loop %d----', count)
                 job_manager.run()
             except (CommandFailure, TestFail):
                 break
@@ -244,7 +244,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_lazy_fg Loop--------- {}".format(_loop))
+            self.log.info("-------enospc_lazy_fg Loop--------- %d".format(_loop))
             # Run IOR to fill the pool.
             self.run_enospace_foreground()
             # Delete all the containers
@@ -308,7 +308,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_time_fg Loop--------- {}".format(_loop))
+            self.log.info("-------enospc_time_fg Loop--------- %d".format(_loop))
             self.log.info(self.pool.pool_percentage_used())
             # Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
@@ -344,7 +344,7 @@ class NvmeEnospace(ServerFillUp):
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
-        self.log.info("IOR Baseline Read MiB {}".format(max_mib_baseline))
+        self.log.info("IOR Baseline Read MiB %s".format(max_mib_baseline))
 
         # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
@@ -353,7 +353,7 @@ class NvmeEnospace(ServerFillUp):
         self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        self.log.info("IOR Latest Read MiB {}".format(max_mib_latest))
+        self.log.info("IOR Latest Read MiB %s".format(max_mib_latest))
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
@@ -393,7 +393,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_no_aggregation Loop--------- {}".format(_loop))
+            self.log.info("-------enospc_no_aggregation Loop--------- %d".format(_loop))
             # Fill 75% of SCM pool
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
 
