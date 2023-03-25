@@ -190,7 +190,7 @@ class NvmeEnospace(ServerFillUp):
         # Run IOR in Foreground
         self.run_enospace_foreground()
 
-        # Wait unitl the IOR Background thread completed
+        # Wait until the IOR Background thread completed
         job.join()
 
         # Verify the background job result has no FAIL for any IOR run
