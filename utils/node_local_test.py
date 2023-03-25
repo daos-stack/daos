@@ -1009,7 +1009,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
 
     return ret
 
-def pil4dfs_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
+
+def pil4dfs_cmd(dfuse, cmd):
     """Run a command under the interception library pil4dfs
     """
     my_env = get_base_env()
@@ -1020,10 +1021,11 @@ def pil4dfs_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True)
     my_env['D_LOG_MASK'] = 'FATAL'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
     ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                env=my_env, check=False)
+                         env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
     return ret
+
 
 class ValgrindHelper():
     """Class for running valgrind commands

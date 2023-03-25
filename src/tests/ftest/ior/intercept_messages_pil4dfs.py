@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,4 +47,3 @@ class IorInterceptMessagesPil4dfs(IorTestBase):
         expected = self.processes * 100
         if num_intercept != expected:
             self.fail('Expected {} intercept messages but got {}'.format(expected, num_intercept))
-
