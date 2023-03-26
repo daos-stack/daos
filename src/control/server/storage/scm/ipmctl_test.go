@@ -560,7 +560,7 @@ func TestIpmctl_prep(t *testing.T) {
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
-		"free capacity; two namespaces per socket requested; iset id match": {
+		"free capacity; two namespaces per socket requested; sock 1 select; iset id match": {
 			prepReq: &storage.ScmPrepareRequest{
 				NrNamespacesPerSocket: 2,
 				SocketID:              &sock1,
@@ -569,11 +569,61 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsDual,
-				"", "", ndctlNamespaceDual, mockXMLRegions(t, "sock-one"),
+				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsSwapISet,
+				"", "", ndctlNamespaceDualR0, mockXMLRegions(t, "sock-one"),
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				Namespaces: getNsFromJSON(t, ndctlNamespaceDual),
+				Namespaces: getNsFromJSON(t, ndctlNamespaceDualR0),
+				Socket: &storage.ScmSocketState{
+					State:    storage.ScmNoFreeCap,
+					SocketID: &sock1,
+				},
+			},
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
+				mockCmdDeleteGoalsWithSock(1), cmdListNdctlRegions,
+				mockCmdCreateNamespace(0, 541165879296),
+				mockCmdCreateNamespace(0, 541165879296),
+				mockCmdListNamespacesWithNUMA(1),
+				mockCmdShowRegionsWithSock(1),
+			},
+		},
+		"free capacity; iset id overflow": {
+			prepReq: &storage.ScmPrepareRequest{},
+			scanResp: &storage.ScmScanResponse{
+				Modules: testModules,
+			},
+			runOut: []string{
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsNegISet,
+				"", "", ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: dualNS,
+				Socket: &storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+			},
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
+				mockCmdCreateNamespace(0, 1082331758592),
+				mockCmdCreateNamespace(1, 1082331758592),
+				cmdListNamespaces, cmdShowRegions,
+			},
+		},
+		"free capacity; two namespaces per socket requested; sock 1 select; iset id overflow": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerSocket: 2,
+				SocketID:              &sock1,
+			},
+			scanResp: &storage.ScmScanResponse{
+				Modules: testModules,
+			},
+			runOut: []string{
+				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsNegISet,
+				"", "", ndctlNamespaceDualR1, mockXMLRegions(t, "sock-one"),
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: getNsFromJSON(t, ndctlNamespaceDualR1),
 				Socket: &storage.ScmSocketState{
 					State:    storage.ScmNoFreeCap,
 					SocketID: &sock1,

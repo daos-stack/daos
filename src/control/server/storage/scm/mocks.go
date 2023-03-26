@@ -107,9 +107,10 @@ func mockXMLRegions(t *testing.T, variant string) string {
 	return string(out)
 }
 
-// JSON output fromm "ndctl list -Rv" and "ndctl list -Nv" illustrating mismatch issue.
-// See: https://github.com/pmem/ndctl/issues/235
-const ndctlRegionsDual = `[
+const (
+	// JSON output fromm "ndctl list -Rv" illustrating mismatch issue.
+	// See: https://github.com/pmem/ndctl/issues/235
+	ndctlRegionsDual = `[
   {
     "dev":"region1",
     "size":1082331758592,
@@ -136,7 +137,10 @@ const ndctlRegionsDual = `[
   }
 ]
 `
-const ndctlNamespaceDual = `[
+
+	// JSON output fromm "ndctl list -Nv" illustrating mismatch issue.
+	// See: https://github.com/pmem/ndctl/issues/235
+	ndctlNamespaceDualR1 = `[
   {
     "dev":"namespace1.0",
     "mode":"fsdax",
@@ -165,6 +169,95 @@ const ndctlNamespaceDual = `[
   }
 ]
 `
+
+	ndctlNamespaceDualR0 = `[
+  {
+    "dev":"namespace0.0",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"8075b7f1-2c68-45b9-81a9-7bc411ca0743",
+    "raw_uuid":"bac5a182-f9c3-49df-93fb-64fb1f7864d4",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem0",
+    "numa_node":1,
+    "target_node":2
+  },
+  {
+    "dev":"namespace0.1",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"1057916f-b8a2-4aba-bd00-0cc9f843b1d9",
+    "raw_uuid":"07df4036-5728-4340-bc6d-b8bd682acd52",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem0.1",
+    "numa_node":1,
+    "target_node":2
+  }
+]
+`
+
+	// iset_ids swapped to illustrate mapping regions by it.
+	ndctlRegionsSwapISet = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":13312958398157623568,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":13312958398157623569,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
+
+	// JSON output fromm "ndctl list -Nv" illustrating ISetID overflow.
+	ndctlRegionsNegISet = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":-1989147235780849392,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":13312958398157623569,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
+)
 
 type (
 	mockIpmctlCfg struct {
