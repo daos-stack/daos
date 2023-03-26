@@ -97,6 +97,7 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.block_size.update(self.ior_cmd.block_size.value)
         ior_bg_cmd.flags.update(self.ior_cmd.flags.value)
         ior_bg_cmd.test_file.update('/testfile_background')
+        bg_read_loop = self.params.get('bg_read_loop', '/run/enospace/*')
 
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_bg_cmd)
@@ -120,14 +121,12 @@ class NvmeEnospace(ServerFillUp):
 
         # run IOR Read Command in loop
         ior_bg_cmd.flags.update(self.ior_read_flags)
-        count = 1
-        while count <= 30:
+        for count in range(1, bg_read_loop+1):
             try:
                 self.log.info('----Start IOR read loop %d----', count)
                 job_manager.run()
             except (CommandFailure, TestFail):
                 break
-            count += 1
 
     def run_enospace_foreground(self):
         """Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling
@@ -220,6 +219,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
+        self.info.log("Test passed")
 
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
