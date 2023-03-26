@@ -219,7 +219,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
-        self.info.log("Test passed")
+        self.log.info("Test passed")
 
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
