@@ -108,7 +108,7 @@ func mockXMLRegions(t *testing.T, variant string) string {
 }
 
 const (
-	// JSON output fromm "ndctl list -Rv" illustrating mismatch issue.
+	// JSON output from "ndctl list -Rv" illustrating mismatch issue.
 	// See: https://github.com/pmem/ndctl/issues/235
 	ndctlRegionsDual = `[
   {
@@ -138,7 +138,7 @@ const (
 ]
 `
 
-	// JSON output fromm "ndctl list -Nv" illustrating mismatch issue.
+	// JSON output from "ndctl list -Nv" illustrating mismatch issue.
 	// See: https://github.com/pmem/ndctl/issues/235
 	ndctlNamespaceDualR1 = `[
   {
@@ -229,7 +229,7 @@ const (
 ]
 `
 
-	// JSON output fromm "ndctl list -Nv" illustrating ISetID overflow.
+	// JSON output from "ndctl list -Nv" illustrating ISetID overflow.
 	ndctlRegionsNegISet = `[
   {
     "dev":"region1",
