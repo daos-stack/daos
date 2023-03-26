@@ -121,7 +121,7 @@ class NvmeEnospace(ServerFillUp):
 
         # run IOR Read Command in loop
         ior_bg_cmd.flags.update(self.ior_read_flags)
-        for count in range(1, bg_read_loop+1):
+        for count in range(1, bg_read_loop + 1):
             try:
                 self.log.info('----Start IOR read loop %d----', count)
                 job_manager.run()
