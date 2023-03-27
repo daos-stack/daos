@@ -3288,6 +3288,7 @@ fetch_replica_unavail(void **state)
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
+		daos_cont_status_clear(arg->coh, NULL);
 	}
 	D_FREE(buf);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -4918,6 +4919,7 @@ obj_setup_internal(void **state)
 	else if (arg->obj_class != OC_UNKNOWN)
 		dts_obj_class = arg->obj_class;
 
+	dt_redun_lvl = DAOS_PROP_CO_REDUN_RANK;
 	return 0;
 }
 

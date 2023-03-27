@@ -256,7 +256,7 @@ rebuild_ec_multi_stripes(void **state)
 }
 
 static int
-rebuild_ec_setup(void  **state, int number)
+rebuild_ec_setup(void  **state, int number, uint32_t rf)
 {
 	test_arg_t	*arg;
 	daos_prop_t	*props = NULL;
@@ -279,7 +279,7 @@ rebuild_ec_setup(void  **state, int number)
 	/* sustain 2 failure here */
 	props = daos_prop_alloc(3);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	props->dpp_entries[0].dpe_val = rf;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
@@ -299,9 +299,15 @@ rebuild_ec_setup(void  **state, int number)
 }
 
 static int
+rebuild_ec_8nodes_rf1_setup(void **state)
+{
+	return rebuild_ec_setup(state, 8, DAOS_PROP_CO_REDUN_RF1);
+}
+
+static int
 rebuild_ec_8nodes_setup(void **state)
 {
-	return rebuild_ec_setup(state, 8);
+	return rebuild_ec_setup(state, 8, DAOS_PROP_CO_REDUN_RF2);
 }
 
 static void
@@ -548,13 +554,21 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	char		*small_vbuf;
 	int		small_buf_size = 32;
 	daos_obj_id_t	oid;
+	dfs_attr_t	attr = {};
 	char		*buf;
 	char		*vbuf;
 	int		i;
 	int		rc;
 
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
-			     &dfs_mt);
+	attr.da_props = daos_prop_alloc(2);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -996,24 +1010,24 @@ rebuild_ec_parity_overwrite(void **state)
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
-	 rebuild_partial_fail_data, rebuild_ec_8nodes_setup, test_teardown},
+	 rebuild_partial_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
 	{"REBUILD1: rebuild partial update with parity tgt fail",
-	 rebuild_partial_fail_parity, rebuild_ec_8nodes_setup, test_teardown},
+	 rebuild_partial_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
 	{"REBUILD2: rebuild full stripe update with data tgt fail",
-	 rebuild_full_fail_data, rebuild_ec_8nodes_setup, test_teardown},
+	 rebuild_full_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
 	{"REBUILD3: rebuild full stripe update with parity tgt fail",
-	 rebuild_full_fail_parity, rebuild_ec_8nodes_setup, test_teardown},
+	 rebuild_full_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
 	{"REBUILD4: rebuild full then partial update with data tgt fail",
-	 rebuild_full_partial_fail_data, rebuild_ec_8nodes_setup,
+	 rebuild_full_partial_fail_data, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD5: rebuild full then partial update with parity tgt fail",
-	 rebuild_full_partial_fail_parity, rebuild_ec_8nodes_setup,
+	 rebuild_full_partial_fail_parity, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD6: rebuild partial then full update with data tgt fail",
-	 rebuild_partial_full_fail_data, rebuild_ec_8nodes_setup,
+	 rebuild_partial_full_fail_data, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD7: rebuild partial then full update with parity tgt fail",
-	 rebuild_partial_full_fail_parity, rebuild_ec_8nodes_setup,
+	 rebuild_partial_full_fail_parity, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD8: rebuild2p partial update with data tgt fail ",
 	 rebuild2p_partial_fail_data, rebuild_ec_8nodes_setup, test_teardown},
@@ -1096,16 +1110,16 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_dfs_fail_seq_p0p1, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD36: rebuild multiple group EC object",
-	 rebuild_multiple_group_ec_object, rebuild_ec_8nodes_setup,
+	 rebuild_multiple_group_ec_object, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD37: rebuild EC dkey enumeration",
-	 rebuild_ec_dkey_enumeration, rebuild_ec_8nodes_setup,
+	 rebuild_ec_dkey_enumeration, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD38: rebuild EC multi-stripes @ different epochs",
 	 rebuild_ec_multi_stripes, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD39: rebuild EC parity with multiple group",
-	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_setup,
+	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_rf1_setup,
 	 test_teardown},
 	{"REBUILD40: rebuild EC snapshot with data shard",
 	 rebuild_ec_snapshot_data_shard, rebuild_ec_8nodes_setup,

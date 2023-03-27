@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -408,8 +408,8 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 int
 oid_alloc_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  0, NULL);
+	return rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF2);
 }
 
 int

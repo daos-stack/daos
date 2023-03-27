@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1405,7 +1405,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD25: rebuild with two failures",
 	 rebuild_multiple_failures, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD26: rebuild fail all replicas before rebuild",
-	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_setup,
+	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_rf1_setup,
 	 rebuild_sub_teardown},
 	{"REBUILD27: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
