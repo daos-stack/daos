@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -135,7 +135,8 @@ daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
  * calling daos_event_abort().
  * The event will be removed from child-list of the parent event if it is
  * initialized with parent. If \a ev itself is a parent event, then this
- * function will finalize all child events and \a ev.
+ * function will finalize all child events and \a ev.  Entries in \a ev
+ * should not be considered valid after this call returns.
  *
  * \param[in] ev	Event to finalize
  *

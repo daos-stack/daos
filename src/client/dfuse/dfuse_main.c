@@ -281,14 +281,18 @@ show_help(char *name)
 	    "checked.  Only one way of setting pool and container data should be used.\n"
 	    "\n"
 	    "The default thread count is one per available core to allow maximum throughput,\n"
-	    "this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
-	    "Each fuse thread will progress one synchronous operation or accept asynchronous\n"
-	    "operations (read/write) for background processing.\n"
-	    "A number of event queues and threads will be started for asynchronous I/O handling,\n"
-	    "the default number of event queues is 1 and a progress thread will be created per\n"
-	    "event queue which reduces the number of fuse threads for a given thread count.\n"
-	    "Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
-	    "threading logic in dfuse so this affects fuse threads but not event queue count.\n"
+	    "this can be modified by running dfuse in a cpuset via numactl or similar tools or\n"
+	    "by using the --thread-count option."
+	    "dfuse has two types of thead, fuse threads which accept requests from the kernel\n"
+	    "and process them, and progress theads which complete asynchronous read/write\n"
+	    "operations.  Each asynchronous thread will have one daos event queue so consume\n"
+	    "additional network resources.  The --thread-count option will control the total\n"
+	    "number of threads, increasing the --eq-count option will reduce the number of\n"
+	    "fuse threads accordingly.  The default value for eq-count is 1.\n"
+	    "As all metadata operations are blocking the level of concurrency is limimted by the\n"
+	    "number of fuse threads."
+	    "Singlethreaded mode will use one thread for handling fuse requests and a second\n"
+	    "thread for a single event queue for a total of two threads\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
@@ -465,6 +469,11 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
+	/* If the number of threads hasn't been set on the command line then query the CPUSET
+	 * which will either return the number of cores on the node or the size of the allocated
+	 * cpuset.  Ideally we'd restrict to 16 threads here if no cpuset exists however the
+	 * getaffinity call does not expose that information.
+	 */
 	if (dfuse_info->di_threaded && !have_thread_count) {
 		cpu_set_t cpuset;
 
