@@ -384,7 +384,7 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, false, async),
         statistics);
   }
 
@@ -392,7 +392,14 @@ public class DaosFileSystem extends FileSystem {
   public FSDataOutputStream append(Path f,
                                    int bufferSize,
                                    Progressable progress) throws IOException {
-    throw new IOException("Append is not supported");
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("DaosFileSystem append file , path= " + f.toUri().toString() + ", buffer size = " + bufferSize);
+    }
+    String key = getDaosRelativePath(f);
+
+    DaosFile daosFile = this.daos.getFile(key);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, true, async),
+        statistics);
   }
 
   /**

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -133,12 +134,19 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
+	var acl []string
+	if pcr.ACL != nil {
+		acl = pcr.ACL.Entries
+	}
+
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
+		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
 		Properties: props,
+		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
 	})
 }
@@ -226,7 +234,7 @@ type (
 		poolRequest
 		User       string
 		UserGroup  string
-		ACL        *AccessControlList
+		ACL        *AccessControlList `json:"-"`
 		NumSvcReps uint32
 		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
@@ -241,6 +249,7 @@ type (
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
 		UUID      string   `json:"uuid"`
+		Leader    uint32   `json:"svc_ldr"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
 		TierBytes []uint64 `json:"tier_bytes"`
@@ -1012,6 +1021,8 @@ type (
 		UUID string `json:"uuid"`
 		// Label is an optional human-friendly identifier for a pool.
 		Label string `json:"label,omitempty"`
+		// ServiceLeader is the current pool service leader.
+		ServiceLeader uint32 `json:"svc_ldr"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
@@ -1191,6 +1202,14 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		p.setUsage(resp)
 	}
 
+	sort.Slice(resp.Pools, func(i int, j int) bool {
+		l, r := resp.Pools[i], resp.Pools[j]
+		if l == nil || r == nil {
+			return false
+		}
+		return l.Label < r.Label
+	})
+
 	for _, p := range resp.Pools {
 		rpcClient.Debugf("DAOS system pool in list-pools response: %+v", p)
 	}
@@ -1277,6 +1296,11 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
+	// Verify that the DAOS system is ready before attempting to query storage.
+	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
+		return 0, 0, err
+	}
+
 	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err

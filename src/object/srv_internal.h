@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,7 @@ struct migrate_pool_tls {
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
 	unsigned int		mpt_version;
+	unsigned int		mpt_generation;
 
 	/* Link to the migrate_pool_tls list */
 	d_list_t		mpt_list;
@@ -90,11 +91,15 @@ struct migrate_pool_tls {
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
+	ABT_cond		mpt_init_cond;
+	ABT_mutex		mpt_init_mutex;
+
 	/* The new layout version for upgrade job */
 	uint32_t		mpt_new_layout_ver;
 
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+				mpt_init_tls:1,
 				mpt_fini:1;
 };
 
@@ -151,7 +156,16 @@ struct obj_tls {
 
 	struct d_tm_node_t	*ot_update_vos_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_vos_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_bio_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bio_lat[NR_LATENCY_BUCKETS];
 };
+
+static inline struct obj_tls *
+obj_tls_get()
+{
+	return dss_module_key_get(dss_tls_get(), &obj_module_key);
+}
 
 static inline unsigned int
 lat_bucket(uint64_t size)
@@ -171,10 +185,53 @@ lat_bucket(uint64_t size)
 	return 56 - nr;
 }
 
-static inline struct obj_tls *
-obj_tls_get()
+enum latency_type {
+	BULK_LATENCY,
+	BIO_LATENCY,
+	VOS_LATENCY,
+};
+
+static inline void
+obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)
 {
-	return dss_module_key_get(dss_tls_get(), &obj_module_key);
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+
+	latency >>= 10; /* convert to micro seconds */
+
+	if (opc == DAOS_OBJ_RPC_FETCH) {
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_fetch_bio_lat[lat_bucket(io_size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+	} else if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE) {
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_update_bio_lat[lat_bucket(io_size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+	} else {
+		/* Ignore other ops for the moment */
+		return;
+	}
+	d_tm_set_gauge(lat, latency);
 }
 
 struct ds_obj_exec_arg {
@@ -417,11 +474,6 @@ fill_oid(daos_unit_oid_t oid, struct ds_obj_enum_arg *arg);
 
 /* srv_ec.c */
 struct obj_rw_in;
-int obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt, struct obj_iod_array *iod_array,
-			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
-			uint32_t leader_id, void *tgt_map, uint32_t map_size,
-			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
-			struct obj_ec_split_req **split_req, struct obj_pool_metrics *opm);
-void obj_ec_split_req_fini(struct obj_ec_split_req *req);
+void obj_ec_metrics_process(struct obj_iod_array *iod_array, struct obj_io_context *ioc);
 
 #endif /* __DAOS_OBJ_SRV_INTENRAL_H__ */

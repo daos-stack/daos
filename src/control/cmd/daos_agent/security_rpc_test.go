@@ -164,7 +164,7 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(daos.InvalidInput), false)
+	expectCredResp(t, respBytes, int32(daos.BadCert), false)
 }
 
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {

@@ -10,23 +10,13 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
-  control_method: dmg
   scm_size: 50G
   nvme_size: 100G
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests: !mux
   test1:
     testname: h5_partest_t_shapesame

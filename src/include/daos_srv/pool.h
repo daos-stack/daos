@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +54,7 @@ struct ds_pool {
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
 	uint32_t		sp_global_version;
+	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
@@ -253,6 +254,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -326,5 +328,9 @@ ds_pool_get_version(struct ds_pool *pool)
 
 	return ver;
 }
+
+struct rdb_tx;
+int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+			    d_iov_t *cred);
 
 #endif /* __DAOS_SRV_POOL_H__ */

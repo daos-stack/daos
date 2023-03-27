@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -175,7 +175,7 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
-        :avocado: tags=DaosCoreTest,test_daos_io
+        :avocado: tags=DaosCoreTest,test_daos_io,test_daos_ec_io
         """
         self.run_subtest()
 
@@ -191,7 +191,7 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
-        :avocado: tags=DaosCoreTest,test_daos_io
+        :avocado: tags=DaosCoreTest,test_daos_io,test_daos_ec_obj
         """
         self.run_subtest()
 
@@ -432,5 +432,20 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_dedup
+        """
+        self.run_subtest()
+
+    def test_daos_upgrade(self):
+        """Jira ID: DAOS-10681
+
+        Test Description:
+            Run daos_test -P
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,test_daos_upgrade
         """
         self.run_subtest()

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,9 +23,9 @@ class DfuseCommand(ExecutableCommand):
         super().__init__(namespace, command, path)
 
         # dfuse options
-        self.pool = FormattedParameter("--pool {}")
-        self.cont = FormattedParameter("--container {}")
-        self.mount_dir = FormattedParameter("--mountpoint {}")
+        self.mount_dir = BasicParameter(None, position=0)
+        self.pool = BasicParameter(None, position=1)
+        self.cont = BasicParameter(None, position=2)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
@@ -73,6 +73,9 @@ class Dfuse(DfuseCommand):
 
         # which fusermount command to use for unmount
         self._fusermount_cmd = ""
+
+        # used by stop() to know cleanup is needed
+        self.__need_cleanup = False
 
     def __del__(self):
         """Destruct the object."""
@@ -224,13 +227,14 @@ class Dfuse(DfuseCommand):
             f"Error removing the {self.mount_dir.value} dfuse mount point with rmdir on the "
             f"following hosts: {rmdir_result.failed_hosts}")
 
-    def run(self, check=True, bind_cores=None):
-        # pylint: disable=arguments-differ
+    def run(self, check=True, mount_callback=None):
+        # pylint: disable=arguments-differ,arguments-renamed
         """Run the dfuse command.
 
         Args:
             check (bool): Check if dfuse mounted properly after mount is executed.
-            bind_cores (str): List of CPU cores to pass to taskset
+            mount_callback (method, optional): method to pass RemoteCommandResult to
+                after mount. Default simply raises an exception on failure.
 
         Raises:
             CommandFailure: In case dfuse run command fails
@@ -258,17 +262,19 @@ class Dfuse(DfuseCommand):
             if not self._fusermount_cmd:
                 raise CommandFailure(f'Failed to get fusermount command on: {self.hosts}')
 
+        # mark the instance as needing cleanup before starting setup
+        self.__need_cleanup = True
+
         # setup the mount point
         self._setup_mount_point()
 
         # run dfuse command
-        if bind_cores:
-            self.bind_cores = bind_cores
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=30)
         self._running_hosts.add(result.passed_hosts)
-        if not result.passed:
-            raise CommandFailure(
-                f"dfuse command failed on hosts {result.failed_hosts}")
+        if mount_callback:
+            mount_callback(result)
+        elif not result.passed:
+            raise CommandFailure(f"dfuse command failed on hosts {result.failed_hosts}")
 
         if check:
             # Dfuse will block in the command for the mount to complete, even
@@ -276,7 +282,7 @@ class Dfuse(DfuseCommand):
             # it immediately after the command returns.
             num_retries = 3
             for retry in range(1, num_retries + 1):
-                if not self.check_running(fail_on_error=(retry == num_retries)):
+                if not self.check_running(fail_on_error=retry == num_retries):
                     self.log.info('Waiting two seconds for dfuse to start')
                     time.sleep(2)
 
@@ -334,7 +340,7 @@ class Dfuse(DfuseCommand):
 
             # Try to unmount dfuse on each host, ignoring errors for now
             _ = self._run_as_owner(
-                self._running_hosts, self._get_umount_command(force=(current_try > 0)))
+                self._running_hosts, self._get_umount_command(force=current_try > 0))
             time.sleep(2)
 
             self._update_mount_state()
@@ -353,6 +359,9 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse stop fails
 
         """
+        if not self.__need_cleanup:
+            return
+
         self.log.info("Stopping dfuse at %s on %s", self.mount_dir.value, self.hosts)
 
         if self.mount_dir.value is None:
@@ -379,6 +388,9 @@ class Dfuse(DfuseCommand):
         if error_list:
             raise CommandFailure("\n".join(error_list))
 
+        # Only assume clean if nothing above failed
+        self.__need_cleanup = False
+
 
 def get_dfuse(test, hosts, namespace=None):
     """Get a new Dfuse instance.
@@ -397,10 +409,13 @@ def get_dfuse(test, hosts, namespace=None):
     else:
         dfuse = Dfuse(hosts, test.tmp, path=test.bin)
     dfuse.get_params(test)
+    dfuse.set_dfuse_exports(test.client_log)
 
-    # Default mount directory to be test-specific
+    # Default mount directory to be test-specific and unique
     if not dfuse.mount_dir.value:
-        dfuse.update_params(mount_dir=os.path.join(os.sep, 'tmp', 'daos_dfuse_' + test.test_id))
+        mount_dir = test.label_generator.get_label(
+            os.path.join(os.sep, 'tmp', 'daos_dfuse_' + test.test_id))
+        dfuse.update_params(mount_dir=mount_dir)
     return dfuse
 
 
@@ -413,6 +428,9 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update
 
+    Raises:
+        CommandFailure: on failure to start dfuse
+
     """
     if pool:
         params['pool'] = pool.identifier
@@ -420,14 +438,35 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         params['cont'] = container.uuid
     if params:
         dfuse.update_params(**params)
-    dfuse.set_dfuse_exports(test.client_log)
 
     # Start dfuse
     try:
-        dfuse.run(bind_cores=test.params.get('cores', dfuse.namespace, None))
+        dfuse.bind_cores = test.params.get('cores', dfuse.namespace, None)
+        dfuse.run()
+        test.register_cleanup(stop_dfuse, test=test, dfuse=dfuse)
     except CommandFailure as error:
         test.log.error("Failed to start dfuse on hosts %s", dfuse.hosts, exc_info=error)
         test.fail("Failed to start dfuse")
+
+
+def stop_dfuse(test, dfuse):
+    """Stop a dfuse instance.
+
+    Args:
+        test (Test): the test from which to stop dfuse
+        dfuse (Dfuse): the dfuse instance to stop
+
+    Returns:
+        list: a list of any errors detected when stopping dfuse
+
+    """
+    error_list = []
+    try:
+        dfuse.stop()
+    except (CommandFailure) as error:
+        test.test_log.info("  {}".format(error))
+        error_list.append("Error stopping dfuse: {}".format(error))
+    return error_list
 
 
 class VerifyPermsCommand(ExecutableCommand):
@@ -452,6 +491,7 @@ class VerifyPermsCommand(ExecutableCommand):
         self.other_user = FormattedParameter("--other-user {}")
         self.verify_mode = FormattedParameter("--verify-mode {}")
         self.create_type = FormattedParameter("--create-type {}")
+        self.no_chmod = FormattedParameter("--no-chmod", False)
 
         # run options
         self.hosts = hosts.copy()
@@ -461,13 +501,18 @@ class VerifyPermsCommand(ExecutableCommand):
         self.run_user = 'root'
 
     def run(self):
+        # pylint: disable=arguments-differ
         """Run the command.
 
         Raises:
             CommandFailure: If the command fails
+
+        Returns:
+            RemoteCommandResult: result from run_remote
 
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result

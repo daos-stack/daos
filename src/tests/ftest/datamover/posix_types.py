@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -196,7 +196,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dcp,test_dm_posix_types_dcp
+        :avocado: tags=DmvrPosixTypesTest,test_dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
 
@@ -208,7 +208,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dsync,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dsync,test_dm_posix_types_dsync
+        :avocado: tags=DmvrPosixTypesTest,test_dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
 
@@ -220,7 +220,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             DAOS-6233: add tests for daos filesystem copy
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior,daos_cmd
+        :avocado: tags=DmvrPosixTypesTest,test_dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

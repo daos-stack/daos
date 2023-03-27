@@ -250,8 +250,8 @@ static const struct CMUnitTest degraded_tests[] = {
 static int
 degraded_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  0, NULL);
+	return rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF3);
 }
 
 static int

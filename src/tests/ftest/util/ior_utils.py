@@ -8,6 +8,7 @@ import re
 import uuid
 from enum import IntEnum
 
+from avocado.utils.process import CmdResult
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
@@ -62,6 +63,62 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning)
+
+
+def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
+                   pool, container, processes, ppn, intercept, plugin_path, dfuse,
+                   display_space, fail_on_warning, namespace, ior_params):
+    # pylint: disable=too-many-arguments
+    """Start an IOR thread with thread queue for failure analysis.
+
+    Args:
+        thread_queue (Queue): Thread queue object.
+        job_id (str): Job identifier.
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        log (str): test log.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        group (str): DAOS server group name
+        pool (TestPool): DAOS test pool object
+        container (TestContainer): DAOS test container object.
+        processes (int): number of processes to run
+        ppn (int, optional): number of processes per node to run.  If specified it will override
+            the processes input. Defaults to None.
+        intercept (str, optional): path to interception library. Defaults to None.
+        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
+            working directory which is needed to run vol connector for DAOS. Default is None.
+        dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
+            Defaults to None.
+        display_space (bool, optional): Whether to display the pool space. Defaults to True.
+        fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
+            is found. Default is False.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Returns:
+        dict: A dictionary containing job_id(str), result(CmdResult) and log(str) keys.
+
+    """
+    thread_result = {
+        "job_id": job_id,
+        "result": None,
+        "log": log
+    }
+    saved_verbose = manager.verbose
+    manager.verbose = False
+    try:
+        thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+                                          pool, container, processes, ppn, intercept,
+                                          plugin_path, dfuse, display_space, fail_on_warning,
+                                          namespace, ior_params)
+    except CommandFailure as error:
+        thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
+    finally:
+        manager.verbose = saved_verbose
+        thread_queue.put(thread_result)
 
 
 class IorCommand(SubProcessCommand):
@@ -348,33 +405,33 @@ class IorMetrics(IntEnum):
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
     # blksiz    xsize aggs(MiB)   API RefNum
-    Operation = 0
-    Max_MiB = 1
-    Min_MiB = 2
-    Mean_MiB = 3
-    StdDev_MiB = 4
-    Max_OPs = 5
-    Min_OPs = 6
-    Mean_OPs = 7
-    StdDev_OPs = 8
-    Mean_seconds = 9
-    Stonewall_seconds = 10
-    Stonewall_MiB = 11
-    Test_No = 12
-    Num_Tasks = 13
-    tPN = 14
-    reps = 15
-    fPP = 16
-    reord = 17
-    reordoff = 18
-    reordrand = 19
-    seed = 20
-    segcnt = 21
-    blksiz = 22
-    xsize = 23
-    aggs_MiB = 24
+    OPERATION = 0
+    MAX_MIB = 1
+    MIN_MIB = 2
+    MEAN_MIB = 3
+    STDDEV_MIB = 4
+    MAX_OPS = 5
+    MIN_OPS = 6
+    MEAN_OPS = 7
+    STDDEV_OPS = 8
+    MEAN_SECONDS = 9
+    STONEWALL_SECONDS = 10
+    STONEWALL_MIB = 11
+    TEST_NO = 12
+    NUM_TASKS = 13
+    TPN = 14
+    REPS = 15
+    FPP = 16
+    REORD = 17
+    REORDOFF = 18
+    REORDRAND = 19
+    SEED = 20
+    SEGCNT = 21
+    BLKSIZ = 22
+    XSIZE = 23
+    AGGS_MIB = 24
     API = 25
-    RefNum = 26
+    REFNUM = 26
 
 
 class Ior:
@@ -409,20 +466,6 @@ class Ior:
 
         """
         return self.manager.job
-
-    @staticmethod
-    def display_pool_space(pool):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
-
-        Args:
-            pool (TestPool): The pool for which to display space.
-        """
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False):
@@ -485,7 +528,7 @@ class Ior:
 
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             result = self.manager.run()
 
         except CommandFailure as error:
@@ -493,7 +536,7 @@ class Ior:
 
         finally:
             if not self.manager.run_as_subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         if error_message:
             raise CommandFailure(error_message)
@@ -519,6 +562,6 @@ class Ior:
                 error_message = "IOR Failed: {}".format(error)
             finally:
                 if pool:
-                    self.display_pool_space(pool)
+                    pool.display_space()
             if error_message:
                 raise CommandFailure(error_message)

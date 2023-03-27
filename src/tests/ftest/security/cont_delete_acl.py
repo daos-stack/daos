@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,7 +43,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
+        :avocado: tags=security,container_acl,daos_cmd
         :avocado: tags=cont_delete_acl_inputs,test_acl_delete_invalid_inputs
         """
         # Get list of invalid ACL principal values
@@ -73,16 +72,15 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command successfully
             removes principal in ACL.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_delete_acl
+        :avocado: tags=all,daily_regression,security,container_acl,daos_cmd
+        :avocado: tags=cont_delete_acl,test_delete_valid_acl
         """
-        for principal in self.principals_table:
+        for principal, entry in self.principals_table.items():
             self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
                 self.container.uuid,
                 principal)
-            if (self.principals_table[principal] in
-                    self.daos_cmd.result.stdout_text):
+            if entry in self.daos_cmd.result.stdout_text:
                 self.fail(
                     "Found acl that was to be deleted in output: {}".format(
                         self.daos_cmd.result.stdout_text))
@@ -94,8 +92,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_delete_acl_noperms
+        :avocado: tags=all,daily_regression,security,container_acl,daos_cmd
+        :avocado: tags=cont_delete_acl_noperms,test_no_user_permissions
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

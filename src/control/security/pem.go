@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	MaxKeyPerm  os.FileMode = 0700
-	MaxCertPerm os.FileMode = 0664
-	MaxDirPerm  os.FileMode = 0700
+	MaxUserOnlyKeyPerm os.FileMode = 0400
+	MaxGroupKeyPerm    os.FileMode = 0440
+	MaxCertPerm        os.FileMode = 0664
+	MaxDirPerm         os.FileMode = 0750
 )
 
 type badPermsError struct {
@@ -47,7 +48,13 @@ func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode)
 	return nil
 }
 
-func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificate, *x509.CertPool, error) {
+func isInvalidCert(err error) bool {
+	_, isCertErr := errors.Cause(err).(x509.CertificateInvalidError)
+
+	return isCertErr
+}
+
+func loadCertWithCustomCA(caRootPath, certPath, keyPath string, maxKeyPerm os.FileMode) (*tls.Certificate, *x509.CertPool, error) {
 	caPEM, err := LoadPEMData(caRootPath, MaxCertPerm)
 	if err != nil {
 		switch {
@@ -55,6 +62,8 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificat
 			return nil, nil, FaultMissingCertFile(caRootPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(caRootPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(caRootPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load caRoot")
 		}
@@ -67,18 +76,22 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificat
 			return nil, nil, FaultMissingCertFile(certPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(certPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(certPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load cert")
 		}
 	}
 
-	keyPEM, err := LoadPEMData(keyPath, MaxKeyPerm)
+	keyPEM, err := LoadPEMData(keyPath, maxKeyPerm)
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
 			return nil, nil, FaultMissingCertFile(keyPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(keyPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(keyPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load key")
 		}
@@ -149,7 +162,7 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 // LoadPrivateKey loads the private key specified at the given path into an
 // crypto.PrivateKey interface compliant object.
 func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
-	pemData, err := LoadPEMData(keyPath, MaxKeyPerm)
+	pemData, err := LoadPEMData(keyPath, MaxUserOnlyKeyPerm)
 
 	if err != nil {
 		return nil, err

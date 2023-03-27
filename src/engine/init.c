@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -260,6 +260,8 @@ dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 	/* at most 2 helper XS per target */
 	if (dss_tgt_offload_xs_nr > 2 * nr)
 		dss_tgt_offload_xs_nr = 2 * nr;
+	else if (dss_tgt_offload_xs_nr == 0)
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 
 	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
 	 * offload XS. Calculate the tgt_nr as the number of main XS based
@@ -558,24 +560,40 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
-	struct engine_metrics	*metrics;
+	struct engine_metrics	*metrics = &dss_engine_metrics;
 
 	/* We only care about dead ranks for now */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
-			src, type);
+	if (type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d\n", src, type);
 		return;
 	}
 
-	metrics = &dss_engine_metrics;
-
-	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank, incarnation);
-	if (rc)
-		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
-			src, type, DP_RC(rc));
+	if (src == CRT_EVS_SWIM) {
+		d_tm_inc_counter(metrics->dead_rank_events, 1);
+		rc = ds_notify_swim_rank_dead(rank, incarnation);
+		if (rc)
+			D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+				src, type, DP_RC(rc));
+	} else if (src == CRT_EVS_GRPMOD) {
+		d_rank_t self_rank = dss_self_rank();
+
+		if (rank == dss_self_rank()) {
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
+			       self_rank);
+			/*
+			 * For now, we just raise a SIGKILL to ourselves; we could
+			 * inform daos_server, who would initiate a termination and
+			 * decide whether to restart us.
+			 */
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+			return;
+		}
+
+	}
 }
 
 static void
@@ -755,13 +773,8 @@ server_init(int argc, char *argv[])
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();

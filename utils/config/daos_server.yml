@@ -102,6 +102,13 @@
 #
 #disable_srx: false
 #
+## CART: Fabric authorization key
+## If the fabric requires an authorization key, set it here to
+## be used on the server and clients.
+#
+#fabric_auth_key: foo:bar
+#
+#
 ## Core Dump Filter
 ## Optional filter to control which mappings are written to the core
 ## dump in the event of a crash. See the following URL for more detail:
@@ -233,6 +240,14 @@
 #telemetry_port: 9191
 #
 #
+## If desired, a set of client-side environment variables may be
+## defined here. Note that these are intended to be defaults and
+## may be overridden by manually-set environment variables when
+## the client application is launched.
+#client_env_vars:
+#  - foo=bar
+#
+#
 ## When per-engine definitions exist, auto-allocation of resources is not
 ## performed. Without per-engine definitions, node resources will
 ## automatically be assigned to engines based on NUMA ratings.
@@ -240,15 +255,6 @@
 #
 #engines:
 #-
-#  # Rank to be assigned as identifier for this engine.
-#  # Immutable after running "dmg storage format".
-#  #
-#  # Optional parameter; must be unique across all engines in the DAOS system.
-#  #
-#  # default: will be auto generated if not supplied.
-#
-#  rank: 0
-#
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
 #  #
@@ -410,15 +416,6 @@
 #
 #
 #-
-#  # Rank to be assigned as identifier for this engine.
-#  # Immutable after running "dmg storage format".
-#  #
-#  # Optional parameter; must be unique across all engines in the DAOS system.
-#  #
-#  # default: will be auto generated if not supplied.
-#
-#  rank: 1
-#
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
 #  #

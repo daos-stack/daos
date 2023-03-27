@@ -70,7 +70,8 @@ struct ds_cont_child {
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
-				 sc_scrubbing:1;
+				 sc_scrubbing:1,
+				 sc_discarding:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -103,7 +104,7 @@ struct ds_cont_child {
 	 * not cross this limit. For simplification purpose, all objects
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
-	uint64_t		sc_ec_agg_eph_boundry;
+	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
 	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
@@ -186,7 +187,6 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -255,4 +255,7 @@ int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
+typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
+int ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
+int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

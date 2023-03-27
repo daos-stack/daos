@@ -165,11 +165,11 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWNOUT:
 			D_ERROR("Can't ADD_IN non-up "DF_TARGET"\n",
 				DP_TARGET(target));
 			return -DER_INVAL;
+		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_NEW:
 			D_DEBUG(DB_MD, "change "DF_TARGET" to UPIN %p\n",
@@ -206,20 +206,29 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_INFO("Skip EXCLUDE_OUT DOWNOUT "DF_TARGET"\n",
 			       DP_TARGET(target));
 			break;
-		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_NEW:
 			D_ERROR("Can't EXCLUDE_OUT non-down "DF_TARGET"\n",
 				DP_TARGET(target));
 			return -DER_INVAL;
+		case PO_COMP_ST_UP:
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p\n",
-				DP_TARGET(target), map);
 			if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
 				target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
-			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			target->ta_comp.co_out_ver = ++(*version);
+			if (target->ta_comp.co_status == PO_COMP_ST_UP &&
+			    target->ta_comp.co_fseq == 1) {
+				D_DEBUG(DB_MD, "change "DF_TARGET" to NEW %p\n",
+					DP_TARGET(target), map);
+				target->ta_comp.co_status = PO_COMP_ST_NEW;
+				target->ta_comp.co_in_ver = 0;
+				++(*version);
+			} else {
+				D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p fseq %u\n",
+					DP_TARGET(target), map, target->ta_comp.co_fseq);
+				target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+				target->ta_comp.co_out_ver = ++(*version);
+			}
 			if (print_changes)
 				D_PRINT(DF_TARGET" is excluded.\n",
 					DP_TARGET(target));
@@ -290,6 +299,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 
 			D_DEBUG(DB_MD, "change rank %u to UP\n", dom->do_comp.co_rank);
 			version++;
+		}
+
+		if (dom->do_comp.co_status == PO_COMP_ST_UP && opc == POOL_EXCLUDE_OUT &&
+		    dom->do_comp.co_fseq == 1) {
+			dom->do_comp.co_status = PO_COMP_ST_NEW;
+			dom->do_comp.co_in_ver = 0;
 		}
 
 		if (exclude_rank &&

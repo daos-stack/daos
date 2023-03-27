@@ -42,7 +42,7 @@ enum dc_tx_status {
 
 /*
  * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
- *	classified and stored separatedly (but adjacent each other). The Read
+ *	classified and stored separately (but adjacent each other). The Read
  *	ones are in front of the write ones. Such layout will simplify server
  *	side CPD RPC processing.
  *
@@ -80,6 +80,7 @@ struct dc_tx {
 				 tx_set_resend:1, /** Set 'resend' flag. */
 				 tx_for_convert:1,
 				 tx_has_cond:1,
+				 tx_renew:1,
 				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -834,7 +835,8 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * The TX epoch hasn't been chosen yet, and nobody is choosing
 		 * it. So this task will be the "epoch task".
 		 */
-		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch\n", th.cookie, task);
+		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch value="DF_U64" first="DF_U64"\n",
+			th.cookie, task, tx->tx_epoch.oe_value, tx->tx_epoch.oe_first);
 		tse_task_addref(task);
 		tx->tx_epoch_task = task;
 		rc = tse_task_register_comp_cb(task, complete_epoch_task, &th,
@@ -984,17 +986,23 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
-	if (unlikely(rc == -DER_TX_ID_REUSED)) {
-		if (tx->tx_retry)
+	if (unlikely(rc == -DER_TX_ID_REUSED ||
+		     (task->dt_result == -DER_EP_OLD && !tx->tx_has_cond))) {
+		struct dtx_id	old_dti;
+
+		if (rc == -DER_TX_ID_REUSED && tx->tx_retry)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
 			D_ASSERTF(0,
 				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
 				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
 
-		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
-		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_copy(&old_dti, &tx->tx_id);
 		daos_dti_gen(&tx->tx_id, false);
 		tx->tx_status = TX_FAILED;
+		tx->tx_renew = 1;
+		D_DEBUG(DB_IO, "refresh CPD DTX ID (err %d) from "DF_DTI" to "DF_DTI"\n",
+			rc, DP_DTI(&old_dti), DP_DTI(&tx->tx_id));
+
 		D_GOTO(out, rc = -DER_TX_RESTART);
 	}
 
@@ -1274,10 +1282,6 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < obj_get_grp_size(obj);
 	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj)),
 	     shard_idx = idx + grp_start) {
-		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
-		    isclr(reasb_req->tgt_bitmap, idx))
-			continue;
-
 		rc = obj_shard_open(obj, shard_idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
@@ -1303,6 +1307,12 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if (rc != 0)
 			goto out;
+
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
+		    isclr(reasb_req->tgt_bitmap, shard->do_shard % daos_oclass_grp_size(oca))) {
+			obj_shard_close(shard);
+			continue;
+		}
 
 		if (shard->do_reintegrating)
 			tx->tx_reintegrating = 1;
@@ -1367,6 +1377,9 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dcri->dcri_req_idx = req_idx;
 		dcri->dcri_padding = 0;
 
+		D_DEBUG(DB_TRACE, "shard idx %u shard id %u tgt id %u cnt r/w %u/%u\n",
+			shard_idx, shard->do_shard, shard->do_target_id, dtrg->dtrg_read_cnt,
+			dtrg->dtrg_write_cnt);
 		if (read)
 			dtrg->dtrg_read_cnt++;
 		else
@@ -2162,7 +2175,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER;
+	if (tx->tx_set_resend && !tx->tx_renew)
+		oci->oci_flags |= ORF_RESEND;
+	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
 

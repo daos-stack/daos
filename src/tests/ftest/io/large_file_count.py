@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from file_count_test_base import FileCountTestBase
@@ -25,7 +24,7 @@ class LargeFileCount(FileCountTestBase):
             Run MDTEST to create 1M files with DFS and POSIX
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=io,daosio,dfuse
         :avocado: tags=LargeFileCount,test_largefilecount
         """

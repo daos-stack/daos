@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,14 +14,6 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_success(r)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != 0)						\
-			fail_msg("Not successful!! Error code: "	\
-				 DF_RC, DP_RC(__rc));			\
-	} while (0)
-
 #define assert_rc_equal(rc, expected_rc)				\
 	do {								\
 		if ((rc) == (expected_rc))				\
@@ -33,6 +25,9 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 		assert_int_equal(rc, expected_rc);			\
 	} while (0)
+
+/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
+#define assert_success(r) assert_rc_equal(r, 0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 
@@ -360,6 +355,25 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  *					expected state
  */
 int verify_blobstore_state(int state, const char *state_str);
+
+/**
+ * Stop a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
+/**
+ * Start a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to start.
+ */
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
 
