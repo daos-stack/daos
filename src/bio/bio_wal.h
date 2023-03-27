@@ -9,6 +9,10 @@
 
 #include "bio_internal.h"
 
+enum meta_hdr_flags {
+	META_HDR_FL_EMPTY	= (1UL << 0),
+};
+
 /* Meta blob header */
 struct meta_header {
 	uint32_t	mh_magic;
@@ -23,7 +27,8 @@ struct meta_header {
 	uint32_t	mh_hdr_blks;		/* Meta blob header size, in blocks */
 	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
 	uint32_t	mh_vos_id;		/* Associated per-engine target ID */
-	uint32_t	mh_padding[6];		/* Reserved */
+	uint32_t	mh_flags;		/* Meta header flags */
+	uint32_t	mh_padding[5];		/* Reserved */
 	uint32_t	mh_csum;		/* Checksum of this header */
 };
 

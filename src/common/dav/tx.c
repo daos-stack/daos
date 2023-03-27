@@ -454,20 +454,19 @@ lw_tx_begin(dav_obj_t *pop)
 {
 	struct umem_wal_tx	*utx = NULL;
 	int			 rc;
+	uint64_t		 wal_id;
 
+	rc = dav_wal_tx_reserve(pop, &wal_id);
+	if (rc) {
+		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 	if (pop->do_utx == NULL) {
 		utx = dav_umem_wtx_new(pop);
 		if (utx == NULL)
 			return obj_tx_fail_err(EINVAL, 0);
 	}
-	rc = dav_wal_tx_reserve(pop);
-	if (rc) {
-		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
-		if (utx) {
-			D_FREE(utx);
-			pop->do_utx = NULL;
-		}
-	}
+	pop->do_utx->utx_id = wal_id;
 	return rc;
 }
 
@@ -495,8 +494,9 @@ lw_tx_end(dav_obj_t *pop, void *data)
 int
 dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 {
-	int err = 0;
-	struct tx *tx = get_tx();
+	int		 err = 0;
+	struct tx	*tx = get_tx();
+	uint64_t	 wal_id;
 
 	enum dav_tx_failure_behavior failure_behavior = DAV_TX_FAILURE_ABORT;
 
@@ -516,6 +516,12 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 		struct umem_wal_tx *utx = NULL;
 
 		DAV_DBG("");
+		err = dav_wal_tx_reserve(pop, &wal_id);
+		if (err) {
+			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
+			goto err_abort;
+		}
+
 		if (pop->do_utx == NULL) {
 			utx = dav_umem_wtx_new(pop);
 			if (utx == NULL) {
@@ -523,15 +529,8 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 				goto err_abort;
 			}
 		}
-		err = dav_wal_tx_reserve(pop);
-		if (err) {
-			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
-			if (utx) {
-				D_FREE(utx);
-				pop->do_utx = NULL;
-			}
-			goto err_abort;
-		}
+		pop->do_utx->utx_id = wal_id;
+
 		tx = get_tx();
 
 		VALGRIND_START_TX;

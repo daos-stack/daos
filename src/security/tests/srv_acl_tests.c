@@ -1519,7 +1519,6 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 	d_iov_t			valid_cred;
 	struct d_ownership	valid_owner;
 	uint64_t		result = 0;
-	bool			is_owner;
 
 	init_default_ownership(&valid_owner);
 	valid_acl = daos_acl_create(NULL, 0);
@@ -1528,7 +1527,7 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 
 	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_rc_equal(ds_sec_cont_get_capabilities(invalid_flags, &valid_cred, &valid_owner,
-						     valid_acl, &result, &is_owner),
+						     valid_acl, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1558,26 +1557,18 @@ test_cont_get_capas_null_inputs(void **state)
 	struct d_ownership	ownership;
 	struct daos_acl		*acl;
 	uint64_t		result;
-	bool			is_owner;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL, &ownership, acl, &result,
-						     &is_owner),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL, &ownership, acl, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, NULL, acl, &result,
-						     &is_owner),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, NULL, acl, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, NULL, &result,
-						     &is_owner),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, NULL, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl, NULL,
-						     &is_owner),
-			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl, &result,
-						     NULL),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl, NULL),
 			-DER_INVAL);
 
 	daos_acl_free(acl);
@@ -1592,7 +1583,6 @@ expect_cont_get_capas_owner_invalid(char *user, char *group)
 	struct d_ownership	invalid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
-	bool			is_owner;
 
 	init_default_cred(&valid_cred);
 
@@ -1602,7 +1592,7 @@ expect_cont_get_capas_owner_invalid(char *user, char *group)
 	invalid_owner.user = user;
 	invalid_owner.group = group;
 	assert_rc_equal(ds_sec_cont_get_capabilities(valid_flags, &valid_cred, &invalid_owner,
-						     valid_acl, &result, &is_owner),
+						     valid_acl, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1626,7 +1616,6 @@ test_cont_get_capas_bad_acl(void **state)
 	d_iov_t			cred;
 	struct d_ownership	ownership;
 	uint64_t		result;
-	bool			is_owner;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -1636,7 +1625,7 @@ test_cont_get_capas_bad_acl(void **state)
 	assert_non_null(bad_acl);
 
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &cred, &ownership, bad_acl,
-						     &result, &is_owner),
+						     &result),
 			-DER_INVAL);
 
 	D_FREE(bad_acl);
@@ -1650,7 +1639,6 @@ test_cont_get_capas_bad_cred(void **state)
 	d_iov_t			bad_cred;
 	struct d_ownership	ownership;
 	uint64_t		result;
-	bool			is_owner;
 	uint8_t			bad_buf[32];
 	size_t			i;
 	Auth__Credential	cred = AUTH__CREDENTIAL__INIT;
@@ -1669,13 +1657,13 @@ test_cont_get_capas_bad_cred(void **state)
 	d_iov_set(&bad_cred, bad_buf, sizeof(bad_buf));
 
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result, &is_owner),
+						     &result),
 			-DER_INVAL);
 
 	/* null data */
 	d_iov_set(&bad_cred, NULL, 0);
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result, &is_owner),
+						     &result),
 			-DER_INVAL);
 
 	/* Junk in token data */
@@ -1688,7 +1676,7 @@ test_cont_get_capas_bad_cred(void **state)
 	auth__credential__pack(&cred, buf);
 	d_iov_set(&bad_cred, buf, bufsize);
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result, &is_owner),
+						     &result),
 			-DER_PROTO);
 	D_FREE(buf);
 
@@ -1703,7 +1691,6 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	d_iov_t			cred;
 	struct d_ownership	ownership;
 	uint64_t		result = -1;
-	bool			is_owner = true;
 
 	/*
 	 * Just a user specific permission, not the owner
@@ -1714,12 +1701,9 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result,
-						     &is_owner),
-			0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
 
 	assert_int_equal(result, exp_capas);
-	assert_false(is_owner);
 
 	daos_acl_free(acl);
 	daos_iov_free(&cred);
@@ -1752,7 +1736,7 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_SET_OWNER);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
-				     CONT_CAPAS_ALL);
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RO,
 				     CONT_CAPAS_RO_MASK);
@@ -1761,17 +1745,36 @@ test_cont_get_capas_success(void **state)
 static void
 test_cont_get_capas_denied(void **state)
 {
+	uint64_t	rw_flags_set[] = {DAOS_COO_RW, DAOS_COO_EX};
+	int		i;
+
 	expect_cont_capas_with_perms(0, DAOS_COO_RO, 0);
 	expect_cont_capas_with_perms(0, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_ACL, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_WRITE, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, DAOS_COO_RW, 0);
-	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW, 0);
+	expect_cont_capas_with_perms(0, DAOS_COO_EX, 0);
+
+	for (i = 0; i < ARRAY_SIZE(rw_flags_set); i++) {
+		uint64_t flags = rw_flags_set[i];
+
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_READ, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_PROP, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_ACL, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_WRITE, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_DEL_CONT, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, flags, 0);
+		expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, flags, 0);
+	}
+
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				     DAOS_COO_EX,
+				     CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_EX,
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+				     CONT_CAPAS_ALL & ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 }
 
 
@@ -1783,7 +1786,6 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	d_iov_t			cred;
 	struct d_ownership	ownership;
 	uint64_t		result = -1;
-	bool			is_owner = false;
 
 	/*
 	 * Owner entry matched by cred
@@ -1794,12 +1796,9 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
-						     acl, &result, &is_owner),
-			0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
 
 	assert_int_equal(result, exp_capas);
-	assert_true(is_owner);
 
 	daos_acl_free(acl);
 	daos_iov_free(&cred);
@@ -1808,11 +1807,17 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 static void
 test_cont_get_capas_owner_implicit_acl_access(void **state)
 {
-	/* Owner can always get/set ACL even if not explicitly granted perms */
+	/*
+	 * Owner can always get/set ACL even if not explicitly granted perms.
+	 * Owner also can always open exclusively and evict all handles.
+	 */
 	expect_cont_capas_with_owner_perms(0, DAOS_COO_RO, CONT_CAPA_GET_ACL);
 	expect_cont_capas_with_owner_perms(0, DAOS_COO_RW,
 					   CONT_CAPA_GET_ACL |
 					   CONT_CAPA_SET_ACL);
+	expect_cont_capas_with_owner_perms(0, DAOS_COO_EX,
+					   CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL |
+					   CONT_CAPA_OPEN_EX);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_READ |
 					   DAOS_ACL_PERM_WRITE,
 					   DAOS_COO_RO,
@@ -1825,12 +1830,24 @@ test_cont_get_capas_owner_implicit_acl_access(void **state)
 					   CONT_CAPA_WRITE_DATA |
 					   CONT_CAPA_GET_ACL |
 					   CONT_CAPA_SET_ACL);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_READ |
+					   DAOS_ACL_PERM_WRITE,
+					   DAOS_COO_EX,
+					   CONT_CAPA_READ_DATA |
+					   CONT_CAPA_WRITE_DATA |
+					   CONT_CAPA_GET_ACL |
+					   CONT_CAPA_SET_ACL |
+					   CONT_CAPA_OPEN_EX);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RW,
-					   CONT_CAPAS_ALL);
+					   CONT_CAPAS_ALL &
+					   ~(CONT_CAPA_OPEN_EX | CONT_CAPA_EVICT_ALL));
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RO,
 					   CONT_CAPAS_RO_MASK);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
+					   DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+					   CONT_CAPAS_ALL);
 }
 
 /*
@@ -2011,6 +2028,26 @@ test_cont_can_read_data(void **state)
 }
 
 static void
+test_cont_can_open_ex(void **state)
+{
+	assert_false(ds_sec_cont_can_open_ex(0));
+	assert_false(ds_sec_cont_can_open_ex(~CONT_CAPA_OPEN_EX));
+
+	assert_true(ds_sec_cont_can_open_ex(CONT_CAPA_OPEN_EX));
+	assert_true(ds_sec_cont_can_open_ex(CONT_CAPAS_ALL));
+}
+
+static void
+test_cont_can_evict_all(void **state)
+{
+	assert_false(ds_sec_cont_can_evict_all(0));
+	assert_false(ds_sec_cont_can_evict_all(~CONT_CAPA_EVICT_ALL));
+
+	assert_true(ds_sec_cont_can_evict_all(CONT_CAPA_EVICT_ALL));
+	assert_true(ds_sec_cont_can_evict_all(CONT_CAPAS_ALL));
+}
+
+static void
 test_get_rebuild_cont_capas(void **state)
 {
 	assert_int_equal(ds_sec_get_rebuild_cont_capabilities(),
@@ -2185,6 +2222,8 @@ main(void)
 		cmocka_unit_test(test_cont_can_set_owner),
 		cmocka_unit_test(test_cont_can_write_data),
 		cmocka_unit_test(test_cont_can_read_data),
+		cmocka_unit_test(test_cont_can_open_ex),
+		cmocka_unit_test(test_cont_can_evict_all),
 		cmocka_unit_test(test_get_rebuild_cont_capas),
 		cmocka_unit_test(test_get_admin_cont_capas),
 		ACL_UTEST(test_origin_null_cred),

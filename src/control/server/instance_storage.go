@@ -99,6 +99,23 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	}
 	ei.log.Debugf("needsScmFormat: %t", needsScmFormat)
 
+	if !needsMetaFormat && ei.storage.ControlMetadataPathConfigured() {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return err
+		}
+		if (cfg.Class == "ram") && ei.storage.BdevRoleMetaConfigured() {
+			ei.log.Debugf("scm class is ram and bdev role meta configured")
+			err := ei.storage.FormatScm(true)
+			if err != nil {
+				ei.log.Errorf("instance %d: failed to setup the scm: %s", idx, err)
+			} else {
+				ei.log.Debugf("remounted scm")
+				needsScmFormat = false
+			}
+		}
+	}
+
 	if !needsMetaFormat && !needsScmFormat {
 		if skipMissingSuperblock {
 			return nil
