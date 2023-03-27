@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,7 +179,8 @@ int main(int argc, char **argv)
 
 				memset(iov.iov_buf, 'a', TEST_IOV_SIZE_IN);
 
-				tag = repeat % 2;
+				tag = 0;
+				//tag = repeat % 2;
 
 				iov.iov_buf_len = TEST_IOV_SIZE_IN;
 				iov.iov_len = TEST_IOV_SIZE_IN;
@@ -227,13 +228,14 @@ int main(int argc, char **argv)
 				rc = crt_req_set_timeout(rpc, 10);
 				D_ASSERTF(rc == 0, "crt_req_set_timeout() failed; rc: %d\n", rc);
 
-				rc = crt_req_send(rpc, rpc_handle_reply, &sem);
-				crtu_sem_timedwait(&sem, 20, __LINE__);
 
+				rc = crt_req_send(rpc, rpc_handle_reply, &sem);
+				DBG_PRINT("[RPCID: 0x%lx] Freeing buffer %d\n", rpcid, repeat);
 				rc = crt_bulk_free(bulk_hdl);
 				D_ASSERTF(rc == 0, "crt_bulk_free() failed; rc: %d\n", rc);
 
-				DBG_PRINT("[RPCID: 0x%lx] Freeing buffer %d\n", rpcid, repeat);
+
+				crtu_sem_timedwait(&sem, 20, __LINE__);
 
 				memset(iov_buff[repeat], 0xc, TEST_IOV_SIZE_IN);
 				D_FREE(iov_buff[repeat]);
