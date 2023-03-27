@@ -470,7 +470,6 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		if (hlink) {
 			rec = nhandles_rec_obj(hlink);
 			lookup_val = rec->nhr_nhandles;
-			d_hash_rec_decref(nhc, &rec->nhr_hlink);
 		}
 	}
 
@@ -489,6 +488,7 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 			D_ALLOC_PTR(rec);
 			if (rec == NULL)
 				D_GOTO(err, rc = -DER_NOMEM);
+			rec->nhr_ref = 1;
 			D_DEBUG(DB_MD, DF_CONT": alloc rec=%p\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rec);
 			uuid_copy(rec->nhr_cuuid, cont->c_uuid);
@@ -535,6 +535,9 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		if (rec)
 			rec->nhr_nhandles = result;
 	}
+
+	if (rec)
+		d_hash_rec_decref(nhc, &rec->nhr_hlink);
 
 out:
 	if (nhandles != NULL)
