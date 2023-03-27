@@ -128,7 +128,7 @@ class NvmeEnospace(ServerFillUp):
             except (CommandFailure, TestFail):
                 self.test_result.append("FAIL - ior read")
                 break
-        stop_looping = event.wait(1)
+            stop_looping = event.wait(1)
 
     def run_enospace_foreground(self):
         """Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling
@@ -219,7 +219,7 @@ class NvmeEnospace(ServerFillUp):
                   continuously.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
         :avocado: tags=NvmeEnospace,test_enospace_lazy_with_bg
         """
@@ -245,7 +245,7 @@ class NvmeEnospace(ServerFillUp):
                   Do this in loop for 10 times and verify space is released.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
         :avocado: tags=NvmeEnospace,test_enospace_lazy_with_fg
         """
@@ -280,7 +280,7 @@ class NvmeEnospace(ServerFillUp):
                   continuously.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
         :avocado: tags=NvmeEnospace,test_enospace_time_with_bg
         """
@@ -308,7 +308,7 @@ class NvmeEnospace(ServerFillUp):
                   Do this in loop for 10 times and verify space is released.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
         :avocado: tags=NvmeEnospace,test_enospace_time_with_fg
         """
@@ -344,7 +344,7 @@ class NvmeEnospace(ServerFillUp):
                   to the number ran prior system storage was full.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_performance
         :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
@@ -389,7 +389,7 @@ class NvmeEnospace(ServerFillUp):
                   free size after container destroy.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=nvme,der_enospace,enospc_no_aggregation
         :avocado: tags=NvmeEnospace,test_enospace_no_aggregation
         """
