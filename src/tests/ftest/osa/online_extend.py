@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -110,13 +110,18 @@ class OSAOnlineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Get initial total free space (scm+nvme)
+            initial_free_space = self.pool.get_total_free_space(refresh=True)
             output = self.pool.extend(self.ranks)
             self.print_and_assert_on_rebuild_failure(output)
+            free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
+            self.assertTrue(free_space_after_extend > initial_free_space,
+                            "Expected free space after extend is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
