@@ -209,7 +209,7 @@ class ServerFillUp(IorTestBase):
         result = self.dmg.storage_query_device_health(disk_id)
         # Check if device state changed to EVICTED.
         if result['response']['host_storage_map']['storage']['smd_info']['devices']['dev_state'] \
-            != 'EVICTED':
+                != 'EVICTED':
             self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
 
         # Wait for rebuild to start
