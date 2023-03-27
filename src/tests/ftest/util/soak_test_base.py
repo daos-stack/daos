@@ -29,7 +29,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline, create_dm_cmdline
+    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
 
 
 class SoakTestBase(TestWithServers):
@@ -241,6 +241,11 @@ class SoakTestBase(TestWithServers):
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
             params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "vmd-identify-check":
+            method = launch_vmd_identify_check
+            name = "VMD_LED_CHECK"
+            params = (self, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(
