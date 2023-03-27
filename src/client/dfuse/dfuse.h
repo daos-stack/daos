@@ -34,6 +34,7 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+	bool                 di_readdir_plus;
 };
 
 struct dfuse_projection_info {

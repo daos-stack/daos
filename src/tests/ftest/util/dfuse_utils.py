@@ -35,6 +35,7 @@ class DfuseCommand(ExecutableCommand):
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
         self.multi_user = FormattedParameter("--multi-user", False)
+        self.no_readdir_plus = FormattedParameter("--no-readdir-plus", False)
 
     def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.

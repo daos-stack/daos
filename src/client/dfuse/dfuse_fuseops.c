@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,8 +64,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 
-	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
-		       conn->proto_minor);
+	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major, conn->proto_minor);
 
 	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
 	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
@@ -81,29 +80,28 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
 #endif
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
-		       conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x", conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
-	conn->want |= FUSE_CAP_READDIRPLUS;
-	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
-
-	conn->time_gran = 1;
+	if (fs_handle->dpi_info->di_readdir_plus) {
+		conn->want |= FUSE_CAP_READDIRPLUS;
+		conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+	}
 
 	if (fs_handle->dpi_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);
 
-	conn->max_background = 16;
+	conn->time_gran            = 1;
+	conn->max_background       = 16;
 	conn->congestion_threshold = 8;
 
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
-	DFUSE_TRA_INFO(fs_handle,
-		       "congestion_threshold %d", conn->congestion_threshold);
+	DFUSE_TRA_INFO(fs_handle, "congestion_threshold %d", conn->congestion_threshold);
 }
 
 void

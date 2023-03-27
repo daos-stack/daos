@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,6 +266,7 @@ show_help(char *name)
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
 	    "	   --disable-caching	Disable all caching\n"
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
+	    "      --no-readdir-plus    Do not use kernel readdirplus feature\n"
 	    "	-o options		mount style options string"
 	    "\n"
 	    "	-h --help		Show this help\n"
@@ -337,6 +338,7 @@ main(int argc, char **argv)
 							{"enable-wb-cache", no_argument, 0, 'F'},
 							{"disable-caching", no_argument, 0, 'A'},
 							{"disable-wb-cache", no_argument, 0, 'B'},
+							{"no-readdir-plus", no_argument, 0, 'R'},
 							{"options", required_argument, 0, 'o'},
 							{"version", no_argument, 0, 'v'},
 							{"help", no_argument, 0, 'h'},
@@ -350,9 +352,10 @@ main(int argc, char **argv)
 	if (dfuse_info == NULL)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
-	dfuse_info->di_threaded = true;
-	dfuse_info->di_caching = true;
-	dfuse_info->di_wb_cache = true;
+	dfuse_info->di_threaded     = true;
+	dfuse_info->di_caching      = true;
+	dfuse_info->di_wb_cache     = true;
+	dfuse_info->di_readdir_plus = true;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
@@ -409,6 +412,9 @@ main(int argc, char **argv)
 			break;
 		case 'o':
 			parse_mount_option(optarg, pool_name, cont_name);
+			break;
+		case 'R':
+			dfuse_info->di_readdir_plus = false;
 			break;
 		case 'h':
 			show_help(argv[0]);
