@@ -121,7 +121,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 	base = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (base == MAP_FAILED) {
-		close(fd);
 		return NULL;
 	}
 
@@ -283,7 +282,6 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 			return NULL;
 		}
 		sz = statbuf.st_size;
-		/* REVISIT: May have to do additional validation */
 	} else {
 		fd = open(path, O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC, mode);
 		if (fd == -1)
@@ -296,13 +294,12 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 		}
 	}
 
-	if (sz < store->stor_size) {
-		ERR("size argument cannot be less then the actual file size\n");
+	if (!store->stor_size || (sz < store->stor_size)) {
+		ERR("Invalid umem_store size");
 		errno = EINVAL;
 		close(fd);
 		return NULL;
 	}
-	D_ASSERT(sz >= store->stor_size);
 
 	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, store->stor_size, path, store);
 	if (hdl == NULL) {
@@ -333,8 +330,8 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	}
 	size = (size_t)statbuf.st_size;
 
-	if (size < store->stor_size) {
-		ERR("size argument cannot be less then the actual file size\n");
+	if (!store->stor_size || (size < store->stor_size)) {
+		ERR("Invalid umem_store size");
 		errno = EINVAL;
 		close(fd);
 		return NULL;

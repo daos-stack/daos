@@ -1029,7 +1029,7 @@ int bio_wal_flush_header(struct bio_meta_context *mc);
  *
  * \param[in]	mc		BIO meta context
  * \param[in]	tx_id		The highest checkpointed transaction ID
- * \param[out]	purge_size	wal size purged
+ * \param[out]	purge_size	Purged WAL blocks
  *
  * \return			Zero on success, negative value on error
  */

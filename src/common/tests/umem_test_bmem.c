@@ -73,7 +73,7 @@ struct umem_store_ops _store_ops = {
 	.so_wal_submit = _persist_submit,
 };
 
-struct umem_store ustore = { .stor_ops = &_store_ops };
+struct umem_store ustore = { .stor_size = POOL_SIZE, .stor_ops = &_store_ops };
 
 int
 teardown_pmem(void **state)
