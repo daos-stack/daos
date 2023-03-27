@@ -658,10 +658,10 @@ For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
 minutes, hours or days.
 
-dfuse-data-cache can be set to a time value or "on", "true", "off" or "false" if set, other values
-will log an error, and result in the cache being off.  The O\_DIRECT flag for open files will be
-honored with this option enabled, files which do not set O\_DIRECT will be cached.  Data caching
-is controlled by dfuse passing a flag to the kernel on open, if data-cache is enabled then it will
+dfuse-data-cache can be set to a time value or "on", "true", "off" or "false". If set, other values
+will log an error and result in the cache being off.  The O\_DIRECT flag for open files will be
+honored with this option enabled. Files which do not set O\_DIRECT will be cached.  Data caching
+is controlled by dfuse passing a flag to the kernel on open. If data-cache is enabled then it will
 be allowed for files if that file is already open, and timeout value will be the duration between
 a previous close call which reduced the open count to zero and the next subsequent call to open.
 
