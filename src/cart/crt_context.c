@@ -1880,7 +1880,7 @@ exit:
 
 /* Execute handling for unreachable rpcs */
 void
-crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
+crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx;
 
