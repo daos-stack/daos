@@ -1960,10 +1960,10 @@ class PosixTests():
                 files2.append(next(second).name)
                 for entry in entries:
                     files.append(entry.name)
-                    assert len(files) < 500
+                    assert len(files) < count + 2
                 for entry in second:
                     files2.append(entry.name)
-                    assert len(files2) < 500
+                    assert len(files2) < count + 2
 
         print('Reads are from list 2, 1, 1, 2.')
         print(files)

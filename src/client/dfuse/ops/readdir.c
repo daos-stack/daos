@@ -379,21 +379,20 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
 			DFUSE_TRA_DEBUG(oh, "Starting on list %#lx %#lx", drc->drc_offset, offset);
+		}
+		if (offset != 0) {
+			/* Whilst there is more list then move forward in the list until the
+			 * offsets match.
+			 */
 
-			if (offset != 0) {
-				/* Whilst there is more list then move forward in the list until the
-				 * offsets match.
-				 */
+			while ((drc != (void *)&hdl->drh_cache_list) &&
+			       (drc->drc_offset != offset)) {
+				D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
-				while ((drc != (void *)&hdl->drh_cache_list) &&
-				       (drc->drc_offset != offset)) {
-					D_ASSERT(drc->drc_magic == DRC_MAGIC);
+				DFUSE_TRA_DEBUG(oh, "Moving along list %#lx %#lx", drc->drc_offset,
+						offset);
 
-					DFUSE_TRA_DEBUG(oh, "Moving along list %#lx %#lx",
-							drc->drc_offset, offset);
-
-					drc = (struct dfuse_readdir_c *)drc->drc_list.next;
-				}
+				drc = (struct dfuse_readdir_c *)drc->drc_list.next;
 			}
 		}
 
@@ -504,7 +503,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 	if (!to_seek) {
 		if (hdl->drh_dre_last_index == 0) {
-			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset)
+			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset &&
+			    hdl->drh_dre[hdl->drh_dre_index].dre_offset != 0)
 				to_seek = true;
 		} else {
 			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset)
@@ -703,6 +703,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			}
 
 			if (drc) {
+				oh->doh_rd_nextc = drc;
 				d_list_add_tail(&drc->drc_list, &hdl->drh_cache_list);
 			}
 
