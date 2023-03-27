@@ -1,3 +1,9 @@
+daos (2.2.0-12) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Pin libfabric to 1.15.1 version
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 27 Mar 2023 12:43:00 -0400
+
 daos (2.2.0-11) unstable; urgency=medium
   [ Tom Nabarro ]
   * Add numactl requires for server package

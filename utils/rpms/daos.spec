@@ -15,7 +15,7 @@
 
 Name:         daos
 Version:      2.2.0
-Release:      11%{?relval}%{?dist}
+Release:      12%{?relval}%{?dist}
 Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -31,7 +31,7 @@ BuildRequires: python36-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel = %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: libpsm2-devel
@@ -166,7 +166,7 @@ Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 Requires: numactl
 %{?systemd_requires}
 Obsoletes: cart < 1000
@@ -185,7 +185,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else
@@ -564,6 +564,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Mar 27 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.2.0-12
+- Pin libfabric to 1.15.1 version
+
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.2.0-11
 - Add numactl requires for server package
 
