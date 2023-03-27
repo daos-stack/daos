@@ -12,7 +12,8 @@ from telemetry_test_base import TestWithTelemetry
 RESULT_OK = "[\033[32m OK\033[0m]"
 RESULT_NOK = "[\033[31mNOK\033[0m]"
 
-# It should take at much 10s for the vos space metrics to be up to date
+# It should take as much as 10s for the vos space metrics to be up to date: it is equal to the idle
+# GC ULT interval time.
 TIMEOUT_DEADLINE = 15
 
 

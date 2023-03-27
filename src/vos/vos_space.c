@@ -15,7 +15,7 @@
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
 /* Minimal seconds interval for updating VOS space metrics */
-#define VOS_SPACE_METRICS_INTV	10
+#define VOS_SPACE_METRICS_INTV	1
 
 /* Extra space being reserved to deal with fragmentation issues */
 static inline daos_size_t
