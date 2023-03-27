@@ -81,10 +81,12 @@ class NvmeEnospace(ServerFillUp):
             kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
-    def ior_bg_thread(self):
+    def ior_bg_thread(self, event):
         """Start IOR Background thread, This will write small data set and
         keep reading it in loop until it fails or main program exit.
 
+        args:
+            event(obj): Event indicator to stop IOR read.
         """
 
         # Define the IOR Command and use the parameter from yaml file.
@@ -97,7 +99,6 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.block_size.update(self.ior_cmd.block_size.value)
         ior_bg_cmd.flags.update(self.ior_cmd.flags.value)
         ior_bg_cmd.test_file.update('/testfile_background')
-        bg_read_loop = self.params.get('bg_read_loop', '/run/enospace/*')
 
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_bg_cmd)
@@ -113,20 +114,21 @@ class NvmeEnospace(ServerFillUp):
         self.log.info('----Run IOR in Background-------')
         # run IOR Write Command
         try:
-            self.log.info('----Start IOR write----')
             job_manager.run()
         except (CommandFailure, TestFail):
-            self.test_result.append("FAIL")
+            self.test_result.append("FAIL ior write")
             return
 
         # run IOR Read Command in loop
         ior_bg_cmd.flags.update(self.ior_read_flags)
-        for count in range(1, bg_read_loop + 1):
+        stop_looping = False
+        while not stop_looping:
             try:
-                self.log.info('----Start IOR read loop %d----', count)
                 job_manager.run()
             except (CommandFailure, TestFail):
+                self.test_result.append("FAIL - ior read")
                 break
+        stop_looping = event.wait(1)
 
     def run_enospace_foreground(self):
         """Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling
@@ -183,11 +185,16 @@ class NvmeEnospace(ServerFillUp):
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
         job = threading.Thread(target=self.ior_bg_thread)
+        stop_ior_read = threading.Event()
+        job = threading.Thread(target=self.ior_bg_thread, args=[stop_ior_read])
         job.daemon = True
         job.start()
 
         # Run IOR in Foreground
         self.run_enospace_foreground()
+
+        # Stop running ior reads in the ior_bg_thread thread
+        stop_ior_read.set()
 
         # Wait until the IOR Background thread completed
         job.join()
@@ -213,7 +220,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg,test_enospace_lazy_with_bg
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
+        :avocado: tags=NvmeEnospace,test_enospace_lazy_with_bg
         """
         self.log.info(self.pool.pool_percentage_used())
 
@@ -238,7 +246,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg,test_enospace_lazy_with_fg
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
+        :avocado: tags=NvmeEnospace,test_enospace_lazy_with_fg
         """
         self.log.info(self.pool.pool_percentage_used())
 
@@ -272,7 +281,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg,test_enospace_time_with_bg
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
+        :avocado: tags=NvmeEnospace,test_enospace_time_with_bg
         """
         self.log.info(self.pool.pool_percentage_used())
 
@@ -299,7 +309,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg,test_enospace_time_with_fg
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
+        :avocado: tags=NvmeEnospace,test_enospace_time_with_fg
         """
         self.log.info(self.pool.pool_percentage_used())
 
@@ -334,7 +345,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_performance,test_performance_storage_full
+        :avocado: tags=nvme,der_enospace,enospc_performance
+        :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
         # Write the IOR Baseline and get the Read BW for later comparison.
         self.log.info(self.pool.pool_percentage_used())
@@ -378,7 +390,8 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_no_aggregation,test_enospace_no_aggregation
+        :avocado: tags=nvme,der_enospace,enospc_no_aggregation
+        :avocado: tags=NvmeEnospace,test_enospace_no_aggregation
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

@@ -51,5 +51,3 @@ ior:
       transfer_size: 2048  # 2K
     16M:
       nvme_transfer_size: 16777216  # 16M
-enospace:
-  bg_read_loop: 15
