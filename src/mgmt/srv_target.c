@@ -732,14 +732,18 @@ tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
 
 	d_list_for_each_entry(entry, head, tvt_link) {
 		rc = pthread_cancel(entry->tvt_tid);
-		if (rc)
+		if (rc) {
+			rc = daos_errno2der(rc);
 			D_ERROR("pthread_cancel failed: "DF_RC"\n", DP_RC(rc));
+		}
 	}
 
 	d_list_for_each_entry(entry, head, tvt_link) {
 		rc = pthread_join(entry->tvt_tid, NULL);
-		if (rc)
+		if (rc) {
+			rc = daos_errno2der(rc);
 			D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+		}
 	}
 }
 
@@ -783,10 +787,10 @@ tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool
 		rc = pthread_create(&entry->tvt_tid, NULL, tgt_vos_preallocate_thrd_func,
 				    &entry->tvt_args);
 		if (rc) {
+			saved_rc = daos_errno2der(rc);
 			D_ERROR(DF_UUID": failed to create thread for target file "
 				"creation: "DF_RC"\n", DP_UUID(uuid),
-				DP_RC(rc));
-			saved_rc = daos_errno2der(rc);
+				DP_RC(saved_rc));
 			goto out;
 		}
 		d_list_add_tail(&entry->tvt_link, &thrds_list_head);
@@ -808,10 +812,12 @@ tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool
 				continue;
 			else if (rc == 0)
 				rc = res;
-			else
+			else {
+				rc = daos_errno2der(rc);
 				D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+			}
 			if (!saved_rc && rc)
-				saved_rc = daos_errno2der(rc);
+				saved_rc = rc;
 			d_list_del(&entry->tvt_link);
 		}
 	}
@@ -1016,7 +1022,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tca.tca_dx = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_create_preallocate, &tca);
 	if (rc) {
-		rc = daos_errno2der(errno);
+		rc = daos_errno2der(rc);
 		D_ERROR(DF_UUID": failed to create thread for target file "
 			"creation: "DF_RC"\n", DP_UUID(tc_in->tc_pool_uuid),
 			DP_RC(rc));
