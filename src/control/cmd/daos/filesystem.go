@@ -370,10 +370,8 @@ func (cmd *fsFixSBCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_EX)
-
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
 	if err != nil {
 		return err
 	}
@@ -417,10 +415,8 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_EX)
-
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
 	if err != nil {
 		return err
 	}
