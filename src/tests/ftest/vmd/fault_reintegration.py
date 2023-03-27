@@ -175,17 +175,18 @@ class NvmeFaultReintegrate(VmdLedStatus):
         self.log_step(
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
-        if not self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON"):
-            # Ensure the faulty device is reset in tearDown
-            self.register_cleanup(self.reset_fault_device, device=test_dev)
+        check = self.check_result(self.set_device_faulty(test_dev), "EVICTED", "ON")
+        # Ensure the faulty device is reset in tearDown
+        self.register_cleanup(self.reset_fault_device, device=test_dev)
+        if not check:
             self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
+
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_end()
         # check device state after set nvme-faulty
         if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
-            self.register_cleanup(self.reset_fault_device, device=test_dev)
             self.fail("#After set_device_fault, device not back to NORMAL, ON state")
 
         # 5.
