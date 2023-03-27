@@ -142,7 +142,7 @@ if [ -d "/mnt/daos" ]; then
         run_test src/common/tests/btree.sh dyn perf ukey -s 20000
         BTREE_SIZE=20000
 
-        COMP="UTEST_vos_nvme"
+        COMP="UTEST_vos_nvme_md_on_ssd_bio_wal_vos_tests"
         if run_test_filter "nvme"; then
             cat /proc/meminfo
             AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
@@ -150,23 +150,24 @@ if [ -d "/mnt/daos" ]; then
             NVME_CONF="/mnt/daos/daos_nvme.conf"
             cp -f src/vos/tests/daos_nvme.conf ${NVME_CONF}
             sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
+            export VOS_BDEV_CLASS="AIO"
         fi
+        COMP="UTEST_vos_nvme"
         if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -a"; then
             cat /proc/meminfo
             # Setup AIO device
             dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
 
-            export VOS_BDEV_CLASS="AIO"
             run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
         fi
 
         COMP="UTEST_vos_nvme_md_on_ssd"
-        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -a"; then
+        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -w"; then
             rm -f "${AIO_DEV}"
-            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
+            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=13
             sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
-            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
+            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -w
         fi
         COMP="UTEST_nvme_bio_wal"
         if run_test_filter "sudo -E ${SL_PREFIX}/bin/bio_ut"; then
@@ -176,6 +177,7 @@ if [ -d "/mnt/daos" ]; then
             run_test "sudo -E ${SL_PREFIX}/bin/bio_ut"
         fi
 
+        COMP="UTEST_vos_nvme_md_on_ssd_bio_wal_vos_tests"
         if run_test_filter "nvme"; then
             unset VOS_BDEV_CLASS
             rm -f "${NVME_CONF}"

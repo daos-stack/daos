@@ -39,7 +39,6 @@
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
 #define VPOOL_3G	(3ULL << 30)
-#define VPOOL_10G	(10ULL << 30)
 
 #define VPOOL_SIZE	VPOOL_3G
 

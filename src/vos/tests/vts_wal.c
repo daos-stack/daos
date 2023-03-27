@@ -549,6 +549,7 @@ setup_wal_io(void **state)
 	if (rc == -1)
 		return rc;
 
+	test_args_reset((struct io_test_args *)*state, VPOOL_2G);
 	wal_args_reset((struct io_test_args *)*state);
 	return 0;
 }
@@ -1149,7 +1150,7 @@ run_wal_tests(const char *cfg)
 		return 0;
 	}
 
-	dts_create_config(test_name, "WAL Pool & container tests %s", cfg);
+	dts_create_config(test_name, "WAL Pool and container tests %s", cfg);
 	D_PRINT("Running %s\n", test_name);
 	rc = cmocka_run_group_tests_name(test_name, wal_tests, setup_wal_test,
 					   teardown_wal_test);

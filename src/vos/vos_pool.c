@@ -678,8 +678,9 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		   daos_size_t nvme_sz, daos_size_t wal_sz,
+		   unsigned int flags, daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
@@ -716,7 +717,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		return daos_errno2der(errno);
 	}
 
-	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, 0, flags, &ph);
+	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, flags, &ph);
 	if (rc) {
 		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64". "DF_RC"\n",
 			path, scm_sz, nvme_sz, DP_RC(rc));
@@ -821,6 +822,14 @@ close:
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
+}
+
+int
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
+{
+	/* create vos pool with default WAL size */
+	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, poh);
 }
 
 /**

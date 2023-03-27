@@ -731,7 +731,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                        label params.CI_NLT_1_LABEL
                     }
                     steps {
                         job_step_update(

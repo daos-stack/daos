@@ -1957,8 +1957,6 @@ many_keys(void **state)
 	if (DAOS_ON_VALGRIND)
 		num_keys /= 500;
 
-	test_args_reset(arg, VPOOL_10G);
-
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
 
