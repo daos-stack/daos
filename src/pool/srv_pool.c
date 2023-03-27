@@ -1035,13 +1035,10 @@ static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
 static void
 handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 {
-	daos_prop_t		prop = {0};
-	struct daos_prop_entry *entry;
-	int			rc;
+	int rc;
 
-	/* Only used for exclude the rank for the moment */
 	if ((event->psv_src != CRT_EVS_GRPMOD && event->psv_src != CRT_EVS_SWIM) ||
-	    event->psv_type != CRT_EVT_DEAD || pool_disable_exclude) {
+	    (event->psv_type == CRT_EVT_DEAD && pool_disable_exclude)) {
 		D_DEBUG(DB_MD, "ignore event: "DF_PS_EVENT" exclude=%d\n", DP_PS_EVENT(event),
 			pool_disable_exclude);
 		goto out;
@@ -1056,30 +1053,59 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
 		DP_PS_EVENT(event));
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			DP_RC(rc));
-		goto out;
-	}
+	if (event->psv_src == CRT_EVS_SWIM && event->psv_type == CRT_EVT_ALIVE) {
+		/*
+		 * Check if the rank is up in the pool map. If in the future we
+		 * add automatic reintegration below, for instance, we may need
+		 * to not only take svc->ps_lock, but also employ an RDB TX by
+		 * the book.
+		 */
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+		rc = ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank);
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		if (!rc)
+			goto out;
 
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
-		D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n", DP_UUID(svc->ps_uuid));
-		goto out_prop;
-	}
+		/*
+		 * The rank is up in the pool map. Request a pool map
+		 * distribution just in case the rank has recently restarted
+		 * and does not have a copy of the pool map.
+		 */
+		ds_rsvc_request_map_dist(&svc->ps_rsvc);
+		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
+	} else if (event->psv_type == CRT_EVT_DEAD) {
+		daos_prop_t		prop = {0};
+		struct daos_prop_entry *entry;
 
-	rc = pool_svc_exclude_rank(svc, event->psv_rank);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			event->psv_rank, DP_RC(rc));
-		goto out_prop;
-	}
+		rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			goto out;
+		}
 
-	D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid), event->psv_rank);
+		entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+		D_ASSERT(entry != NULL);
+		if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+			D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n",
+				DP_UUID(svc->ps_uuid));
+			goto out_prop;
+		}
+
+		rc = pool_svc_exclude_rank(svc, event->psv_rank);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), event->psv_rank, DP_RC(rc));
+			goto out_prop;
+		}
+
+		D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
 out_prop:
-	daos_prop_fini(&prop);
+		daos_prop_fini(&prop);
+	}
+
 out:
 	return;
 }
@@ -6072,9 +6098,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
-			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN | PO_COMP_ST_NEW,
-			       &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATUS, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));

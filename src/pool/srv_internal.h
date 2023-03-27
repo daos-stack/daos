@@ -11,9 +11,13 @@
 #define __POOL_SRV_INTERNAL_H__
 
 #include <gurt/list.h>
+#include <daos/pool_map.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+
+/* Map status of ranks that make up the pool group */
+#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
 
 /**
  * Global pool metrics
@@ -169,6 +173,7 @@ void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
  */
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
+bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			     uint32_t *required_buf_size);

@@ -75,6 +75,24 @@ map_ranks_fini(d_rank_list_t *ranks)
 	}
 }
 
+/**
+ * Is \a rank considered up in \a map? Note that when \a rank does not exist in
+ * \a map, false is returned.
+ */
+bool
+ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
+{
+	struct pool_domain     *node;
+	int			rc;
+
+	rc = pool_map_find_nodes(map, rank, &node);
+	if (rc == 0)
+		return false;
+	D_ASSERTF(rc == 1, "%d\n", rc);
+
+	return node->do_comp.co_status & POOL_GROUP_MAP_STATUS;
+}
+
 int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
