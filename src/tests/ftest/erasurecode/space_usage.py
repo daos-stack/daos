@@ -10,7 +10,6 @@ from oclass_utils import calculate_ec_targets_used
 
 
 class EcodSpaceUsage(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Verifies EC space usage.
 
     Test Description:

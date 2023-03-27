@@ -9,7 +9,6 @@ from avocado.core.exceptions import TestFail
 
 
 class IorSmall(IorTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """Test class Description: Verify basic IOR functionality with various APIs.
 

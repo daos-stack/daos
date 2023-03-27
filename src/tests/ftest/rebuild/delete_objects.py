@@ -8,7 +8,6 @@ from daos_utils import DaosCommand
 
 
 class RbldDeleteObjects(RebuildTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:

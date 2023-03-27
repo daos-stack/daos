@@ -8,7 +8,6 @@ from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrCopyProcs(DataMoverTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover multiple processes.
 
     Test Class Description:

@@ -7,7 +7,7 @@ import time
 from mdtest_test_base import MdtestBase
 
 
-# pylint: disable=too-few-public-methods,too-many-ancestors
+# pylint: disable=too-few-public-methods
 class RbldWidelyStriped(MdtestBase):
     """Rebuild test cases featuring mdtest.
 

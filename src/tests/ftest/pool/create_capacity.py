@@ -11,7 +11,7 @@ from test_utils_pool import add_pool, get_size_params, check_pool_creation, time
 
 
 class PoolCreateTests(TestWithServers):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
+    # pylint: disable=too-few-public-methods
     """Pool create tests.
 
     All of the tests verify pool create performance with 7 servers and 1 client.

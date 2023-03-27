@@ -13,7 +13,6 @@ from test_utils_pool import add_pool, get_size_params
 
 
 class DmgSystemReformatTest(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify dmg storage format reformat option works as expected on a

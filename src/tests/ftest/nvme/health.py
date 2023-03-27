@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 
 
 class NvmeHealth(ServerFillUp):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive

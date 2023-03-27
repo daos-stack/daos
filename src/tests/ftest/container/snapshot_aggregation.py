@@ -10,7 +10,6 @@ from daos_utils import DaosCommand
 
 
 class SnapshotAggregation(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Defines snapshot aggregation test cases.
 
     Test Class Description:

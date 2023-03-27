@@ -10,7 +10,6 @@ from ior_test_base import IorTestBase
 
 
 class CPUUsage(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Start daos_engine and measure CPU usage of daos_engine with target = 16,
     nr_xs_helpers = 16 and verify that it's less than 200%. Run IOR and verify

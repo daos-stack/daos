@@ -10,7 +10,6 @@ from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
-    # pylint: disable=too-many-ancestors
     """Object Data Mover validation for syncing/cloning generic containers
        at the object level.
 

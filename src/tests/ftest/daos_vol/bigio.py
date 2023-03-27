@@ -8,7 +8,7 @@ from job_manager_utils import get_job_manager
 
 
 class DaosVol(VolTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
+    # pylint: disable=too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
 
     :avocado: recursive

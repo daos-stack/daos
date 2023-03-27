@@ -10,7 +10,6 @@ from ior_test_base import IorTestBase
 
 
 class DfuseSpaceCheck(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """DfuseSpaceCheck test class.
 
     :avocado: recursive

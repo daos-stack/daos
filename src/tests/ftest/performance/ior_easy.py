@@ -7,7 +7,6 @@ from performance_test_base import PerformanceTestBase
 
 
 class IorEasy(PerformanceTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """Test class Description: Run IOR Easy
 

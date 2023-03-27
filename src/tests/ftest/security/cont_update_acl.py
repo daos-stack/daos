@@ -13,7 +13,6 @@ from avocado import fail_on
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Test to verify ACL entry update.
     :avocado: recursive

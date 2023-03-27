@@ -16,7 +16,6 @@ from job_manager_utils import get_job_manager
 
 
 class NvmeFragmentation(TestWithServers):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-instance-attributes
     """NVMe drive fragmentation test cases.
 

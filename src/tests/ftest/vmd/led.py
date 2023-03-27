@@ -18,7 +18,7 @@ class VmdLedStatus(OSAUtils):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes,too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
     def setUp(self):
         super().setUp()
         self.dmg = self.get_dmg_command()

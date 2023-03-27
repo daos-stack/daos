@@ -9,7 +9,6 @@ from general_utils import DaosTestError
 
 
 class RbldReadArrayTest(RebuildTestBase):
-    # pylint: disable=too-many-ancestors
     """Run rebuild tests with DAOS servers and clients.
 
     :avocado: recursive

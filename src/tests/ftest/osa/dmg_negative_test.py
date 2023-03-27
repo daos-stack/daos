@@ -8,7 +8,6 @@ from test_utils_pool import add_pool
 
 
 class OSADmgNegativeTest(OSAUtils):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test passes invalid parameters to dmg OSA related commands and
         check whether appropriate errors are returned.

@@ -12,7 +12,6 @@ from duns_utils import format_path
 
 
 class DmvrNegativeTest(DataMoverTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover negative testing.
 
     Test Class Description:

@@ -9,7 +9,6 @@ from ior_test_base import IorTestBase
 
 
 class EcodCellSizeProperty(IorTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """EC IOR class to run tests with different container cell size.
 

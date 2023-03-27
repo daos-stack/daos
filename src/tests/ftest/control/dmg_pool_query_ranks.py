@@ -9,7 +9,6 @@ from control_test_base import ControlTestBase
 
 
 class DmgPoolQueryRanks(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test dmg query ranks enabled/disabled command.
 
     Test Class Description:

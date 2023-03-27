@@ -14,7 +14,6 @@ from job_manager_utils import get_job_manager
 
 
 class DaosCoreTestDfuse(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
 
     :avocado: recursive

@@ -10,7 +10,6 @@ from dmg_utils import check_system_query_status
 
 
 class IoAggregation(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify Aggregation across system shutdown.
 
     :avocado: recursive

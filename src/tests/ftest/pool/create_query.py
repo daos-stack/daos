@@ -8,7 +8,6 @@ from test_utils_pool import add_pool
 
 
 class PoolCreateQueryTests(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Pool create tests.
 
     All of the tests verify pool create response with 4 servers.

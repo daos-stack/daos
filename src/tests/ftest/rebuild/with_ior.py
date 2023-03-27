@@ -8,7 +8,7 @@ from ior_test_base import IorTestBase
 
 
 class RbldWithIOR(IorTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
+    # pylint: disable=too-few-public-methods
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on

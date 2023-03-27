@@ -18,7 +18,6 @@ from ior_test_base import IorTestBase
 
 class UpgradeDowngradeBase(IorTestBase):
     # pylint: disable=global-variable-not-assigned,global-statement
-    # pylint: disable=too-many-ancestors
     """
     Tests DAOS container attribute get/set/list.
     :avocado: recursive

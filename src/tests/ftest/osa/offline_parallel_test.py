@@ -15,7 +15,6 @@ from test_utils_pool import add_pool
 
 
 class OSAOfflineParallelTest(OSAUtils):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     daos_server offline drain,reintegration,

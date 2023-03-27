@@ -8,7 +8,6 @@ from mdtest_test_base import MdtestBase
 
 
 class MdtestSmall(MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify MDTest functionality with various configurations.
 
     :avocado: recursive

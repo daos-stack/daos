@@ -9,7 +9,6 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class TestWithTelemetryBasic(TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
     """Test container telemetry metrics.
 
     :avocado: recursive

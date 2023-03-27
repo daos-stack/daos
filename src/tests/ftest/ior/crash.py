@@ -11,7 +11,6 @@ from dmg_utils import check_system_query_status
 
 
 class IorCrash(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
         Verify DAOS server does not need to be restarted when an application crashes.
     :avocado: recursive

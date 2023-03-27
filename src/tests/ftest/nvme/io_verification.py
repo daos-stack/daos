@@ -11,7 +11,6 @@ from dmg_utils import check_system_query_status
 
 
 class NvmeIoVerification(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:

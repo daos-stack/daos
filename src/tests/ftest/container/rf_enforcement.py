@@ -7,7 +7,6 @@ from container_rf_test_base import ContRedundancyFactor
 
 
 class ContRfEnforce(ContRedundancyFactor):
-    # pylint: disable=too-many-ancestors
     """Test Container redundancy factor enforcement with oclass traffic
        and rebuild.
 

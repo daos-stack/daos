@@ -9,7 +9,7 @@ from telemetry_utils import TelemetryUtils
 
 
 class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
-    # pylint: disable=too-many-ancestors,too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks
     """Test telemetry engine NVMe metrics.
 
     :avocado: recursive

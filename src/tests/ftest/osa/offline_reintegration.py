@@ -12,7 +12,6 @@ from write_host_file import write_host_file
 
 
 class OSAOfflineReintegration(OSAUtils, ServerFillUp):
-    # pylint: disable=too-many-ancestors
     """OSA offline Reintegration test cases.
 
     Test Class Description:
