@@ -328,7 +328,7 @@ struct vos_dtx_act_ent {
 	 */
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
-	daos_epoch_t			 dae_start_time;
+	uint64_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
