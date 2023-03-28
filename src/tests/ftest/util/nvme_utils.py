@@ -9,13 +9,12 @@ import time
 
 from avocado.core.exceptions import TestFail
 
-from dmg_utils import get_storage_query_device_uuids
+from dmg_utils import get_storage_query_device_uuids, get_dmg_smd_info
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from server_utils import ServerFailed
-
 
 def get_device_ids(test, dmg, servers):
     """Get the NVMe Device ID from servers.
@@ -205,10 +204,11 @@ class ServerFillUp(IorTestBase):
             disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
         self.dmg.hostlist = server
-        info = get_dmg_smd_info(self, dmg.storage_set_faulty, 'devices', uuid=uuid)
+        info = get_dmg_smd_info(
+            self, self.dmg.storage_set_faulty(disk_id), 'devices', uuid=disk_id)
         for devices in info.values():
             for device in devices:
-                if device['uuid'] != uuid:
+                if device['uuid'] != disk_id:
                     continue
                 if device['dev_state'].lower() != 'evicted':
                     self.fail(
