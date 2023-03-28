@@ -16,6 +16,7 @@ from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from server_utils import ServerFailed
 
+
 def get_device_ids(test, dmg, servers):
     """Get the NVMe Device ID from servers.
 
