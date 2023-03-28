@@ -257,6 +257,7 @@ teardown_io(void **state)
 
 	assert_ptr_equal(arg, &test_args);
 	vts_ctx_fini(&arg->ctx);
+	sleep(1);
 	return 0;
 }
 
