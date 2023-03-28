@@ -209,6 +209,7 @@ int ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode);
 int ddb_run_help(struct ddb_ctx *ctx);
 int ddb_run_quit(struct ddb_ctx *ctx);
 int ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt);
+bool ddb_pool_is_open(struct ddb_ctx *ctx);
 int ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt);
 int ddb_run_version(struct ddb_ctx *ctx);
 int ddb_run_close(struct ddb_ctx *ctx);
