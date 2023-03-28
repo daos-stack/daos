@@ -2289,6 +2289,11 @@ mkdir(const char *path, mode_t mode)
 	if (!is_target_path)
 		return next_mkdir(path, mode);
 
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		errno = EEXIST;
+		return (-1);
+	}
+
 	rc = dfs_mkdir(dfs_mt->dfs, parent, item_name, mode & mode_not_umask, 0);
 	if (rc) {
 		errno = rc;
@@ -3060,8 +3065,13 @@ new_unlink(const char *path)
 int
 unlinkat(int dirfd, const char *path, int flags)
 {
-	int  idx_dfs;
-	char full_path[DFS_MAX_PATH];
+	int              is_target_path, rc;
+	dfs_obj_t       *parent;
+	struct DFSMOUNT *dfs_mt;
+	int              idx_dfs;
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
+	char             item_name[DFS_MAX_NAME];
 
 	if (next_unlinkat == NULL) {
 		next_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
@@ -3072,7 +3082,17 @@ unlinkat(int dirfd, const char *path, int flags)
 
 	if (path[0] == '/') {
 		/* absolute path, dirfd is ignored */
-		return new_unlink(path);
+		parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+		if (!is_target_path)
+			return next_unlinkat(dirfd, path, flags);
+
+		rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		} else {
+			return 0;
+		}
 	}
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
@@ -3126,6 +3146,9 @@ ftruncate(int fd, off_t length)
 	}
 	return 0;
 }
+
+int
+ftruncate64(int fd, off_t length) __attribute__((alias("ftruncate"), leaf, nothrow));
 
 int
 truncate(const char *path, off_t length)
@@ -3524,9 +3547,6 @@ new_fcntl(int fd, int cmd, ...)
 	int     dup_next;
 	va_list arg;
 
-	fd_Directed = Get_Fd_Redirected(fd);
-	fd_save     = fd_Directed;
-
 	switch (cmd) {
 	case F_DUPFD:
 	case F_DUPFD_CLOEXEC:
@@ -3543,6 +3563,9 @@ new_fcntl(int fd, int cmd, ...)
 		va_start(arg, cmd);
 		param = va_arg(arg, int);
 		va_end(arg);
+
+		fd_Directed = Get_Fd_Redirected(fd);
+		fd_save     = fd_Directed;
 
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
@@ -3617,6 +3640,9 @@ new_fcntl(int fd, int cmd, ...)
 		va_start(arg, cmd);
 		param = va_arg(arg, int);
 		va_end(arg);
+
+		fd_Directed = Get_Fd_Redirected(fd);
+		fd_save     = fd_Directed;
 
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
@@ -3951,6 +3977,10 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	}
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_posix_fadvise(fd, offset, len, advice);
+
+	/* Hint to turn off caching. */
+	if (advice == POSIX_FADV_DONTNEED)
+		return 0;
 
 	printf("Error: DAOS does not support posix_fadvise yet.\n");
 	errno = ENOTSUP;
