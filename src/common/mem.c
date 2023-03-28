@@ -1969,6 +1969,8 @@ struct umem_checkpoint_data {
 	uint64_t                 cd_max_tx;
 	/** Number of pages included in the set */
 	uint32_t                 cd_nr_pages;
+	/** Number of dirty chunks included in the set */
+	uint32_t                 cd_nr_dchunks;
 };
 
 static void
@@ -2021,6 +2023,7 @@ page2chkpt(struct umem_store *store, struct umem_page_info *pinfo,
 			sgl->sg_iovs[nr].iov_len          = sgl->sg_iovs[nr].iov_buf_len =
 			    count << UMEM_CACHE_CHUNK_SZ_SHIFT;
 			sgl->sg_iovs[nr].iov_buf = page_addr + map_offset;
+			chkpt_data->cd_nr_dchunks += count;
 			nr++;
 
 			bmap &= ~mask;
@@ -2060,7 +2063,7 @@ chkpt_insert_sorted(struct umem_store *store, struct umem_checkpoint_data *chkpt
 
 int
 umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
-		      uint64_t *out_id)
+		      uint64_t *out_id, struct umem_cache_chkpt_stats *stats)
 {
 	struct umem_cache           *cache    = store->cache;
 	struct umem_page_info       *pinfo    = NULL;
@@ -2073,6 +2076,9 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	int                          i;
 	int                          rc;
 	int                          inflight = 0;
+	int                          pages_scanned = 0;
+	int                          dchunks_copied = 0;
+	int                          iovs_used = 0;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
@@ -2122,6 +2128,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			chkpt_data->cd_sg_list.sg_nr = chkpt_data->cd_sg_list.sg_nr_out = 0;
 			chkpt_data->cd_store_iod.io_nr                                  = 0;
 			chkpt_data->cd_max_tx                                           = 0;
+			chkpt_data->cd_nr_dchunks                                       = 0;
 
 			while (chkpt_data->cd_nr_pages < MAX_PAGES_PER_SET &&
 			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_PAGE &&
@@ -2192,6 +2199,9 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			pinfo->pi_waiting = 0;
 		}
 		inflight--;
+		pages_scanned  += chkpt_data->cd_nr_pages;
+		dchunks_copied += chkpt_data->cd_nr_dchunks;
+		iovs_used      += chkpt_data->cd_sg_list.sg_nr_out;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
 	} while (inflight != 0 || !d_list_empty(&cache->ca_pgs_copying));
@@ -2199,6 +2209,11 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	D_FREE(chkpt_data_all);
 
 	*out_id = chkpt_id;
+	if (stats) {
+		stats->uccs_nr_pages   = pages_scanned;
+		stats->uccs_nr_dchunks = dchunks_copied;
+		stats->uccs_nr_iovs    = iovs_used;
+	}
 
 	return 0;
 }

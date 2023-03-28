@@ -643,6 +643,9 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* Metrics related to VOS checkpointing */
+	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
+
 	return vp_metrics;
 }
 

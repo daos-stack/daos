@@ -180,9 +180,23 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 };
 
+/*
+ * VOS Pool metrics for checkpoint activity.
+ */
+struct vos_chkpt_metrics {
+	struct d_tm_node_t	*vcm_duration;
+	struct d_tm_node_t	*vcm_dirty_pages;
+	struct d_tm_node_t	*vcm_dirty_chunks;
+	struct d_tm_node_t	*vcm_iovs_copied;
+	struct d_tm_node_t	*vcm_wal_purged;
+};
+
+void vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id);
+
 struct vos_pool_metrics {
-	void			*vp_vea_metrics;
-	struct vos_agg_metrics	 vp_agg_metrics;
+	void                      *vp_vea_metrics;
+	struct vos_agg_metrics	   vp_agg_metrics;
+	struct vos_chkpt_metrics   vp_chkpt_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -1576,5 +1590,4 @@ vos_flush_wal_header(struct vos_pool *vp)
 
 	return 0;
 }
-
 #endif /* __VOS_INTERNAL_H__ */

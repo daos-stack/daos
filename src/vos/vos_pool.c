@@ -362,6 +362,45 @@ struct umem_store_ops vos_store_ops = {
 	.so_wal_id_cmp	= vos_wal_id_cmp,
 };
 
+#define	CHKPT_TELEMETRY_DIR	"checkpoint"
+
+void
+vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id)
+{
+	int rc;
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_duration, D_TM_DURATION,
+			     "Checkpoint duration", NULL, "%s/%s/duration/tgt_%lu", path,
+			     CHKPT_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("failed to create checkpoint_duration metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_pages, D_TM_STATS_GAUGE,
+			     "Number of dirty page blocks checkpointed", "16MiB",
+			     "%s/%s/dirty_pages/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("failed to create checkpoint_dirty_pages metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_chunks, D_TM_STATS_GAUGE,
+			     "Number of umem chunks checkpointed", "4KiB",
+			     "%s/%s/dirty_chunks/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("failed to create checkpoint_dirty_chunks metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_iovs_copied, D_TM_STATS_GAUGE,
+			     "Number of sgl iovs used to copy dirty chunks", NULL,
+			     "%s/%s/iovs_copied/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("failed to create checkpoint_iovs_copied metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_wal_purged, D_TM_STATS_GAUGE,
+			     "Size of WAL purged by the checkpoint", "4KiB",
+			     "%s/%s/wal_purged/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("failed to create checkpoint_wal_purged metric: "DF_RC"\n", DP_RC(rc));
+
+}
+
 void
 vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
 			 vos_chkpt_wait_cb_t wait_cb, void *arg, struct umem_store **storep)
@@ -424,18 +463,26 @@ vos_pool_needs_checkpoint(daos_handle_t poh)
 int
 vos_pool_checkpoint(daos_handle_t poh)
 {
-	struct vos_pool      *pool;
-	uint64_t              tx_id;
-	struct umem_instance *umm;
-	struct umem_store    *store;
-	struct bio_wal_info   wal_info;
-	int                   rc;
+	struct vos_pool               *pool;
+	uint64_t                       tx_id;
+	struct umem_instance          *umm;
+	struct umem_store             *store;
+	struct bio_wal_info            wal_info;
+	int                            rc;
+	uint64_t                       purge_size = 0;
+	struct umem_cache_chkpt_stats  stats;
+	struct vos_chkpt_metrics      *chkpt_metrics;
+
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
+
+	chkpt_metrics = &pool->vp_metrics->vp_chkpt_metrics;
+
+	d_tm_mark_duration_start(chkpt_metrics->vcm_duration, D_TM_CLOCK_REALTIME);
 
 	bio_wal_query(store->stor_priv, &wal_info);
 	tx_id = wal_info.wi_commit_id;
@@ -451,10 +498,10 @@ vos_pool_checkpoint(daos_handle_t poh)
 	if (rc)
 		return rc;
 
-	rc = umem_cache_checkpoint(store, pool->vp_wait_cb, pool->vp_chkpt_arg, &tx_id);
+	rc = umem_cache_checkpoint(store, pool->vp_wait_cb, pool->vp_chkpt_arg, &tx_id, &stats);
 
 	if (rc == 0)
-		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
+		rc = bio_wal_checkpoint(store->stor_priv, tx_id, &purge_size);
 
 	bio_wal_query(store->stor_priv, &wal_info);
 
@@ -465,6 +512,13 @@ vos_pool_checkpoint(daos_handle_t poh)
 	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
 	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
 
+	d_tm_mark_duration_end(chkpt_metrics->vcm_duration);
+	if (!rc) {
+		d_tm_set_gauge(chkpt_metrics->vcm_dirty_pages, stats.uccs_nr_pages);
+		d_tm_set_gauge(chkpt_metrics->vcm_dirty_chunks, stats.uccs_nr_dchunks);
+		d_tm_set_gauge(chkpt_metrics->vcm_iovs_copied, stats.uccs_nr_iovs);
+		d_tm_set_gauge(chkpt_metrics->vcm_wal_purged, purge_size);
+	}
 	return rc;
 }
 

@@ -592,6 +592,7 @@ wal_ut_checkpoint(void **state)
 	struct umem_wal_tx	*tx;
 	struct ut_fake_tx	*fake_tx;
 	int			 i, tx_nr = 20, ckp_idx, rc;
+	uint64_t		 purge_size = 0;
 
 	rc = ut_mc_init(args, meta_sz, meta_sz, meta_sz);
 	assert_rc_equal(rc, 0);
@@ -619,8 +620,9 @@ wal_ut_checkpoint(void **state)
 
 	ckp_idx = tx_nr / 2;
 	tx = txa->ta_tx_ptrs[ckp_idx];
-	rc = bio_wal_checkpoint(args->bua_mc, tx->utx_id);
+	rc = bio_wal_checkpoint(args->bua_mc, tx->utx_id, &purge_size);
 	assert_rc_equal(rc, 0);
+	assert_int_not_equal(purge_size, 0);
 
 	rc = bio_mc_close(args->bua_mc);
 	assert_rc_equal(rc, 0);
@@ -653,6 +655,7 @@ ut_fill_wal(struct bio_ut_args *args, int tx_nr, struct ut_tx_array **txa_ptr)
 	struct umem_wal_tx	*tx;
 	struct ut_fake_tx	*fake_tx;
 	int			 i, rc;
+	uint64_t		 purge_size = 0;
 
 	txa = ut_txa_alloc(tx_nr);
 	assert_non_null(txa);
@@ -684,8 +687,9 @@ ut_fill_wal(struct bio_ut_args *args, int tx_nr, struct ut_tx_array **txa_ptr)
 	}
 
 	if (txa_ptr == NULL) {
-		rc = bio_wal_checkpoint(args->bua_mc, tx->utx_id);
+		rc = bio_wal_checkpoint(args->bua_mc, tx->utx_id, &purge_size);
 		assert_rc_equal(rc, 0);
+		assert_int_not_equal(purge_size, 0);
 
 		ut_txa_free(txa);
 	} else {
