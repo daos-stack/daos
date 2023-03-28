@@ -205,12 +205,14 @@ class ServerFillUp(IorTestBase):
             disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
         self.dmg.hostlist = server
-        self.dmg.storage_set_faulty(disk_id)
-        result = self.dmg.storage_query_device_health(disk_id)
-        # Check if device state changed to EVICTED.
-        if result['response']['host_storage_map']['storage']['smd_info']['devices']['dev_state'] \
-                != 'EVICTED':
-            self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
+        info = get_dmg_smd_info(self, dmg.storage_set_faulty, 'devices', uuid=uuid)
+        for devices in info.values():
+            for device in devices:
+                if device['uuid'] != uuid:
+                    continue
+                if device['dev_state'].lower() != 'evicted':
+                    self.fail(
+                        "device {} State on host {} suppose to be EVICTED".format(disk_id, server))
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
