@@ -11,18 +11,18 @@ This section describes some of the common tasks handled by admins at a high leve
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` and adjust it based on the environment. E.g., `access_points`,
 `bdev_class`.
-6. Check that directory where the log files will be created exists. E.g.,
+6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
 8. Use `dmg config generate` to generate the config file that contains PMEM and
 NVMe.
 9. Define the certificate files in the server config.
 10. Start server with the generated config file.
-11. Check that it's waiting for SCM format. Call dmg storage format.
-12. Create a small pool; ~500MB.
+11. Check that the server is waiting for SCM format. Call `dmg storage format`.
+12. Create a small pool; E.g., ~500MB.
 13. Define the certificate files in the agent config.
 14. Start agent.
-15. Create a POSIX container with daos command.
+15. Create a POSIX container with the `daos` command.
 16. Mount the container with dfuse.
 17. Add a large file that's less than the 500MB pool size into the container.
 18. Call `dmg pool query` and check that the free size has declined.
@@ -33,35 +33,35 @@ NVMe.
 disks, size, address, etc.
 2. Check network configuration. Check that both the server and the client hosts
 can communicate with the network interface.
-3. Install the same version of `daos-server` and `daos-client` RPMs to all the
-hosts.
+3. Install the same version of `daos-server` and `daos-client` RPMs. Install `daos-server`
+to server hosts and `daos-client` to client hosts.
 4. Generate certificate files and distribute them to all the hosts.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` of one of the server hosts and adjust it based on the environment.
 E.g., `access_points`, `bdev_class`.
-6. Check that directory where the log files will be created exists. E.g.,
+6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
-8. Use dmg config generate to generate the config file that contains PMEM and
+8. Use `dmg config generate` to generate the config file that contains PMEM and
 NVMe.
 9. Distribute the config file to `/etc/daos` of all hosts.
 10. Start server on all the hosts.
-11. Check that it's waiting for SCM format. Call `dmg storage format` against all
+11. Check that the server is waiting for SCM format. Call `dmg storage format` against all
 server hosts.
 12. Check that the servers are running on all the hosts with `dmg system query
 --verbose`.
-13. Create a small pool; ~500MB.
+13. Create a small pool; E.g., ~500MB.
 14. Define the certificate files in the agent config in the client host.
 15. Start agent.
-16. Create a POSIX container with daos command.
+16. Create a POSIX container with the `daos` command.
 17. Mount the container with dfuse.
 18. Add a large file that's less than the 500MB pool size into the container.
-19. Call dmg pool query and check that the free size has declined.
+19. Call `dmg pool query` and check that the free size has declined.
 
 ## Pool size management
 
 1. Start DAOS server with PMEM + NVMe and format.
-2. Create a pool with the size percentage. For example,
+2. Create a pool with a size percentage. For example,
 ```
 dmg pool create --size=50%
 ```
@@ -105,6 +105,6 @@ associated Socket ID.
 dash `-`.
 - Each engine must use different `fabric_iface_port`. The port numbers should
 differ by at least 100.
-- Each engine must have different `log_file`.
+- Each engine must have a different `log_file`.
 - Use different `fabric_iface` for the best performance.
 - Each engine must have unique `scm_mount`, `scm_list`, and `bdev_list`.
