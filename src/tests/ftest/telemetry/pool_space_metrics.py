@@ -18,8 +18,6 @@ TIMEOUT_DEADLINE = 15
 
 
 class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-nested-blocks
     """Test telemetry pool space basic metrics.
 
     :avocado: recursive
@@ -83,10 +81,10 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
         """Obtain the specified metrics information.
 
         Args:
-            name (list): List of metric names to query.
+            names (list): List of metric names to query.
 
         Returns:
-            metrics (dict): a dictionary of metric keys linked to their aggregated values.
+            dict: a dictionary of metric keys linked to their aggregated values.
         """
         metrics = {}
         for name in names:
@@ -149,9 +147,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
                     self.log.debug(
                         "Check of the metric %s: got=%d, wait_in=[%d, %d], ok=%r, timeout=%d",
                         name, val, min_val, max_val, is_metric_ok, timeout)
-
-                if is_metric_ok:
-                    test_counter += 1
+                test_counter = (test_counter + 1) if is_metric_ok else 0
 
                 if test_counter >= 2:
                     self.log.info(
