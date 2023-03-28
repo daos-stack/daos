@@ -200,6 +200,13 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	C.free(unsafe.Pointer(ap))
 }
 
+func freeDaosStr(str *C.char) {
+	if str == nil {
+		return
+	}
+	C.free_daos_alloc(unsafe.Pointer(str))
+}
+
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
 	// allocate the struct using C memory to avoid any issues with Go GC
 	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
