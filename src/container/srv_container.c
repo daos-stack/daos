@@ -454,10 +454,9 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 	d_iov_t			value;
 	uint32_t		lookup_val;		/* value from DRAM cache or rdb */
 	struct nhandles_ht_rec *rec = NULL;
-	struct nhandles_ht_rec *rec_inserted = NULL;
 	bool			do_update = true;
 	uint32_t		pool_global_version = cont->c_svc->cs_pool->sp_global_version;
-	int			rc;
+	int			rc = 0;
 
 	/* Test if pool/container has old layout without nhandles */
 	if (pool_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES)
@@ -480,14 +479,14 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		if (rc) {
 			D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-			goto err;
+			goto out;
 		}
 
 		/* ... and cache it, if applicable. */
 		if (nhc) {
 			D_ALLOC_PTR(rec);
 			if (rec == NULL)
-				D_GOTO(err, rc = -DER_NOMEM);
+				D_GOTO(out, rc = -DER_NOMEM);
 			rec->nhr_ref = 1;
 			D_DEBUG(DB_MD, DF_CONT": alloc rec=%p\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rec);
@@ -500,9 +499,8 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 					DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 					DP_RC(rc));
 				D_FREE(rec);
-				goto err;
+				goto out;
 			}
-			rec_inserted = rec;
 		}
 	}
 
@@ -529,23 +527,19 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		if (rc != 0) {
 			D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-			goto err;
+			goto out;
 		}
 
 		if (rec)
 			rec->nhr_nhandles = result;
 	}
 
+out:
 	if (rec)
 		d_hash_rec_decref(nhc, &rec->nhr_hlink);
-
-out:
-	if (nhandles != NULL)
+	/* Note: if rc != 0, and rec was allocated/inserted, it will be freed in HT destroy. */
+	if ((rc == 0) && (nhandles != NULL))
 		*nhandles = result;
-	return 0;
-err:
-	if (rec_inserted)
-		d_hash_rec_delete_at(nhc, &rec_inserted->nhr_hlink);
 	return rc;
 }
 
