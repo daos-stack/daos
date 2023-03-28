@@ -424,6 +424,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
 
     Args:
         test (Test): the test instance
+        dfuse (Dfuse): the dfuse instance to start
         pool (TestPool, optional): pool to mount. Defaults to None
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update
