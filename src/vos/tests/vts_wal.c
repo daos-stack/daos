@@ -36,6 +36,13 @@ static int type_list[] = {
 	DAOS_OT_MULTI_UINT64,
 };
 
+static int
+single_teardown(void **state)
+{
+	sleep(1); /* See DAOS-13040 */
+	return 0;
+}
+
 static int num_keys;
 static enum daos_otype_t otype;
 
@@ -1111,30 +1118,30 @@ wal_io_multiple_objects_ovwr(void **state)
 
 static const struct CMUnitTest wal_tests[] = {
 	{ "WAL01: Basic pool/cont create/destroy test",
-	  wal_tst_01, NULL, NULL },
+	  wal_tst_01, NULL, single_teardown },
 };
 
 static const struct CMUnitTest wal_kv_basic_tests[] = {
 	{ "WAL10: Basic SV/EV small/large update/fetch/verify",
-	  wal_kv_basic, NULL, NULL },
+	  wal_kv_basic, NULL, single_teardown },
 	{ "WAL11: Basic SV/EV large TX update/fetch/verify",
-	  wal_kv_large, NULL, NULL },
+	  wal_kv_large, NULL, single_teardown },
 };
 
 static const struct CMUnitTest wal_io_tests[] = {
 	{ "WAL20: Update/fetch/verify test",
-	  wal_io_multiple_refills, NULL, NULL },
+	  wal_io_multiple_refills, NULL, single_teardown },
 	{ "WAL21: 10K update/fetch/verify test",
-	  wal_io_multiple_updates, NULL, NULL },
+	  wal_io_multiple_updates, NULL, single_teardown },
 	{ "WAL22: Objects Update(overwrite)/fetch test",
-	  wal_io_multiple_objects_ovwr, NULL, NULL },
+	  wal_io_multiple_objects_ovwr, NULL, single_teardown },
 	{ "WAL23: Objects Update/fetch test",
-	  wal_io_multiple_objects, NULL, NULL },
+	  wal_io_multiple_objects, NULL, single_teardown },
 };
 
 static const struct CMUnitTest wal_io_int_tests[] = {
 	{ "WAL24: Key query punch with subsequent update",
-	  wal_io_query_key_punch_update, NULL, NULL },
+	  wal_io_query_key_punch_update, NULL, single_teardown },
 };
 
 int
