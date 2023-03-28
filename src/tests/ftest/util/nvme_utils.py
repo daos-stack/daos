@@ -212,8 +212,8 @@ class ServerFillUp(IorTestBase):
                 if device['uuid'] != disk_id:
                     continue
                 if device['dev_state'].lower() != 'evicted':
-                    self.fail(
-                        "device {} State on host {} suppose to be EVICTED".format(disk_id, server))
+                    self.fail("State of device {} on host {} suppose to be EVICTED".format(
+                        disk_id, server))
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
