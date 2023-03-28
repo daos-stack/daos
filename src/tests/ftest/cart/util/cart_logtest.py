@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -391,7 +391,7 @@ class LogTest():
                             # -DER_NOMEM
                             show = False
                         elif line.get_msg().endswith(': 5 (HG_NO_MEM)'):
-                            # Merury uses hg error numbers, rather
+                            # Mercury uses hg error numbers, rather
                             # than daos, so allow HG_NO_MEM as well as
                             # -DER_NOMEM
                             show = False
