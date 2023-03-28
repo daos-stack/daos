@@ -5,7 +5,7 @@
 """
 
 import os
-import shlib
+import shutil
 from avocado import fail_on
 
 from apricot import TestWithServers
@@ -152,7 +152,8 @@ class DaosCoreBase(TestWithServers):
         cmocka_utils.run_cmocka_test(self, job)
 
         try:
+            tmp_log_path = "/tmp/suite_dmg.log"
             log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
-            shlib.mv("/tmp/suite_dmg.log", log_path)
+            shutil.move(tmp_log_path, log_path)
         except IOError as error:
             print("unable to move dmg log:", error)
