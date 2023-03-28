@@ -3,12 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 
 
 class PunchTest(TestWithServers):
@@ -40,7 +39,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=dkeypunch,test_dkey_punch
+        :avocado: tags=PunchTest,test_dkey_punch
         """
         try:
             # create an object and write some data into it
@@ -71,7 +70,7 @@ class PunchTest(TestWithServers):
             self.fail("Punch should have failed but it didn't.\n")
 
         # expecting an exception so do nothing
-        except DaosApiError as dummy_e:
+        except DaosApiError:
             pass
 
         try:
@@ -82,8 +81,8 @@ class PunchTest(TestWithServers):
             obj.punch_dkeys(0, [dkey])
 
         # this one should work so error if exception occurs
-        except DaosApiError as dummy_e:
-            self.fail("Punch should have worked.\n")
+        except DaosApiError:
+            self.fail("Punch should have worked.")
 
         # there are a bunch of other cases to test here,
         #    --test punching the same updating and punching the same data in
@@ -97,7 +96,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=akeypunch,test_akey_punch
+        :avocado: tags=PunchTest,test_akey_punch
         """
         try:
             # create an object and write some data into it
@@ -153,7 +152,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objpunch,test_obj_punch
+        :avocado: tags=PunchTest,test_obj_punch
         """
         try:
 

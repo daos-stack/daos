@@ -71,7 +71,7 @@ class IorPerRank(IorTestBase):
                 if ((good_node not in self.good_nodes)
                         and (good_node not in self.failed_nodes)):
                     self.good_nodes.append(good_node)
-            except (TestFail, DaosTestError) as _error:
+            except (TestFail, DaosTestError):
                 # collect bad nodes
                 failed_node = self.server_managers[0].get_host(rank)
                 if failed_node not in self.failed_nodes:
@@ -94,16 +94,17 @@ class IorPerRank(IorTestBase):
                               Small transfer size: 256B
                           Compare results and isolate bad nodes.
         :avocado: tags=manual
+        :avocado: tags=hw,medium
         :avocado: tags=ior,deployment
-        :avocado: tags=ior_per_rank,test_ior_per_rank
+        :avocado: tags=IorPerRank,test_ior_per_rank
         """
 
         # test params
         self.failed_nodes = {}
         self.good_nodes = []
         self.transfer_sizes = self.params.get("transfer_sizes", self.ior_cmd.namespace)
-        self.write_flags = self.params.get("write_flags", '/run/ior/*')
-        self.read_flags = self.params.get("read_flags", '/run/ior/*')
+        self.write_flags = self.params.get("write_flags", self.ior_cmd.namespace)
+        self.read_flags = self.params.get("read_flags", self.ior_cmd.namespace)
 
         # Write/Read performance thresholds and expectations
         self.write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
