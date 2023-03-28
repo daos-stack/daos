@@ -12,6 +12,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/dustin/go-humanize"
 )
 
 const recreateRegionsStr = "Remove regions (and any namespaces) by running the reset subcommand, reboot, then run the prepare subcommand again to recreate regions in AppDirect interleaved mode, reboot and then run the prepare subcommand one more time to create the PMem namespaces"
@@ -21,7 +22,8 @@ const recreateRegionsStr = "Remove regions (and any namespaces) by running the r
 func FaultScmNotInterleaved(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
-		fmt.Sprintf("PMem region on socket %d is in non-interleaved mode which is unsupported", sockID),
+		fmt.Sprintf("PMem region on socket %d is in non-interleaved mode which is "+
+			"unsupported", sockID),
 		recreateRegionsStr)
 }
 
@@ -30,7 +32,9 @@ func FaultScmNotHealthy(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d is unhealthy", sockID),
-		fmt.Sprintf("Refer to the ipmctl instructions in the troubleshooting section of the DAOS admin guide to check PMem module health and replace faulty PMem modules. %s", recreateRegionsStr))
+		fmt.Sprintf("Refer to the ipmctl instructions in the troubleshooting section of "+
+			"the DAOS admin guide to check PMem module health and replace faulty PMem "+
+			"modules. %s", recreateRegionsStr))
 }
 
 // FaultScmPartialCapacity creates a fault for the case where the PMem region has only partial
@@ -39,7 +43,9 @@ func FaultScmPartialCapacity(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d only has partial capacity free", sockID),
-		"Creating namespaces on regions with partial free-capacity is unsupported, remove namespaces by running the reset subcommand then run the prepare subcommand to recreate namespaces. No reboot is required between commands.")
+		"Creating namespaces on regions with partial free-capacity is unsupported, remove "+
+			"namespaces by running the command with --reset and then without --reset, no "+
+			"reboot should be required")
 }
 
 // FaultScmUnknownMemoryMode creates a Fault for the case where the PMem region has an unsupported
@@ -47,7 +53,8 @@ func FaultScmPartialCapacity(sockID uint) *fault.Fault {
 func FaultScmUnknownMemoryMode(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
-		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type", sockID),
+		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type",
+			sockID),
 		recreateRegionsStr)
 }
 
@@ -59,16 +66,39 @@ func FaultScmInvalidPMem(msg string) *fault.Fault {
 		recreateRegionsStr)
 }
 
-// FaultScmNoModules represents an error where no PMem modules exist.
-var FaultScmNoModules = storageFault(code.ScmNoModules,
-	"No PMem modules exist on storage server",
-	"Install PMem modules and retry command")
+// FaultScmTmpfsLowMem indicates that total RAM is insufficient to support given configuration.
+func FaultScmTmpfsLowMem(memTmpfsMin, scmSize uint64) *fault.Fault {
+	return storageFault(
+		code.ScmTmpfsLowMem,
+		fmt.Sprintf("Total system memory (RAM) insufficient for tmpfs SCM, want %s have "+
+			"%s (%d bytes)", humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize),
+			scmSize),
+		"Reduce engine targets or the system_ram_reserved values in server config "+
+			"file if increasing the amount of RAM is not possible")
+}
 
-// FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
-// non-emulated NVMe devices are present in the storage config.
-var FaultBdevConfigTypeMismatch = storageFault(code.BdevConfigTypeMismatch,
-	"A mix of emulated and non-emulated NVMe devices are specified in config",
-	"Change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
+var (
+	// FaultScmNoModules represents an error where no PMem modules exist.
+	FaultScmNoModules = storageFault(
+		code.ScmNoModules,
+		"No PMem modules exist on storage server", "Install PMem modules and retry command")
+
+	// FaultBdevConfigMultiTiersWithDCPM creates a Fault when multiple bdev tiers are specified
+	// with DCPM SCM class, which is unsupported.
+	FaultBdevConfigMultiTiersWithDCPM = storageFault(
+		code.BdevConfigMultiTiersWithDCPM,
+		"Multiple bdev tiers in config with scm class set to dcpm",
+		"Only a single bdev tier is supported if scm tier is of class dcpm, reduce the "+
+			"number of bdev tiers in config")
+
+	// FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
+	// non-emulated NVMe devices are present in the storage config.
+	FaultBdevConfigTypeMismatch = storageFault(
+		code.BdevConfigTypeMismatch,
+		"A mix of emulated and non-emulated NVMe devices are specified in config",
+		"Change config tiers to specify either emulated or non-emulated NVMe devices, but "+
+			"not a mix of both")
+)
 
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
@@ -101,13 +131,6 @@ func FaultBdevConfigOptFlagUnknown(input string, options ...string) *fault.Fault
 			options))
 }
 
-// FaultBdevConfigMultiTiersWithDCPM creates a Fault when multiple bdev tiers are specified with DCPM
-// SCM class, which is unsupported.
-var FaultBdevConfigMultiTiersWithDCPM = storageFault(
-	code.BdevConfigMultiTiersWithDCPM,
-	"Multiple bdev tiers in config with scm class set to dcpm",
-	"Only a single bdev tier is supported if scm tier is of class dcpm, reduce the number of bdev tiers in config")
-
 // FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
 // to bdev tiers.
 func FaultBdevConfigBadNrRoles(tierType string, gotNr, wantNr int) *fault.Fault {
@@ -117,21 +140,24 @@ func FaultBdevConfigBadNrRoles(tierType string, gotNr, wantNr int) *fault.Fault 
 		"Adjust the bdev tier role assignments in config to fulfill the requirement")
 }
 
-var FaultBdevNonRootVFIODisable = storageFault(
-	code.BdevNonRootVFIODisable,
-	"VFIO can not be disabled if running as non-root user",
-	"Either run server as root or do not disable VFIO when invoking the command")
+var (
+	// FaultBdevNonRootVFIODisable indicates VFIO has been disabled but user is not privileged.
+	FaultBdevNonRootVFIODisable = storageFault(
+		code.BdevNonRootVFIODisable,
+		"VFIO can not be disabled if running as non-root user",
+		"Either run server as root or do not disable VFIO when invoking the command")
 
-var FaultBdevNoIOMMU = storageFault(
-	code.BdevNoIOMMU,
-	"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
-	"enable IOMMU per the DAOS Admin Guide")
+	// FaultBdevNoIOMMU indicates a missing IOMMU capability.
+	FaultBdevNoIOMMU = storageFault(
+		code.BdevNoIOMMU,
+		"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
+		"enable IOMMU per the DAOS Admin Guide")
 
-// FaultTargetAlreadyMounted represents an error where the target was already mounted.
-var FaultTargetAlreadyMounted = storageFault(
-	code.StorageTargetAlreadyMounted,
-	"request included already-mounted mount target (cannot double-mount)",
-	"unmount the target and retry the operation",
+	// FaultTargetAlreadyMounted represents an error where the target was already mounted.
+	FaultTargetAlreadyMounted = storageFault(
+		code.StorageTargetAlreadyMounted,
+		"request included already-mounted mount target (cannot double-mount)",
+		"unmount the target and retry the operation")
 )
 
 // FaultPathAccessDenied represents an error where a mount point or device path for

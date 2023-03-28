@@ -1242,8 +1242,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(1)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0)),
-				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 1)),
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 1)),
 			},
 		},
 		"dual tmpfs; three ssds per numa": {
@@ -1257,8 +1257,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
-				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
 			},
 		},
 		"dual tmpfs; six ssds per numa": {
@@ -1272,8 +1272,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(6, 7, 8, 9, 10, 11)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0, 1), mockBdevTier(0, 2, 3, 4, 5)),
-				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 6, 7), mockBdevTier(1, 8, 9, 10, 11)),
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0, 1), mockBdevTier(0, 2, 3, 4, 5)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 6, 7), mockBdevTier(1, 8, 9, 10, 11)),
 			},
 		},
 		"vmd enabled; balanced nr ssds": {
@@ -1345,11 +1345,11 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				NumaIfaces: tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				HugepageSize: 2048,                          // in kib
-				MemTotal:     tc.memTotal / humanize.KiByte, // convert to kib
-				NumaSCMs:     tc.numaPMems,
-				NumaSSDs:     tc.numaSSDs,
-				scmCls:       storage.ClassDcpm,
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     tc.memTotal / humanize.KiByte,
+				NumaSCMs:        tc.numaPMems,
+				NumaSSDs:        tc.numaSSDs,
+				scmCls:          storage.ClassDcpm,
 			}
 			if tc.scmCls.String() != "" {
 				sd.scmCls = tc.scmCls
@@ -1460,6 +1460,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 		accessPoints []string // list of access point host/ip addresses
 		ecs          []*engine.Config
 		hpSize       int
+		memTotal     int
 		threadCounts *threadCounts  // numa to cpu mappings
 		expCfg       *config.Server // expected config generated
 		expErr       error
@@ -1470,6 +1471,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 		"no hugepage size": {
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
+			memTotal:     (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 			expErr:       errors.New("invalid system hugepage size"),
 		},
 		"no provider in engine config": {
@@ -1518,6 +1520,57 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			hpSize: defHpSizeKb,
 			expErr: config.FaultConfigBadControlPort,
 		},
+		"dual engine tmpfs; no hugepage size": {
+			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			memTotal: humanize.GiByte,
+			expErr:   errors.New("invalid system hugepage size"),
+		},
+		"dual engine tmpfs; no mem": {
+			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize: defHpSizeKb,
+			expErr: errors.New("requires nonzero total mem"),
+		},
+		"dual engine tmpfs; low mem": {
+			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: humanize.GiByte / humanize.KiByte,
+			expErr:   errors.New("insufficient ram"),
+		},
+		"dual engine tmpfs; high mem": {
+			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: (52 * humanize.GiByte) / humanize.KiByte,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
+				[]*engine.Config{
+					MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
+						mockBdevTier(0, 0).WithBdevDeviceRoles(4),
+						mockBdevTier(0, 1, 2).WithBdevDeviceRoles(3)).
+						WithHelperStreamCount(0),
+					MockEngineCfgTmpfs(1, 5, /* tmpfs size in gib */
+						mockBdevTier(1, 3).WithBdevDeviceRoles(4),
+						mockBdevTier(1, 4, 5).WithBdevDeviceRoles(3)).
+						WithHelperStreamCount(0),
+				}).
+				// 16+1 (MD-on-SSD) targets * 2 engines * 512 pages
+				WithNrHugepages(17 * 2 * 512).
+				WithAccessPoints("hostX:10002"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1530,7 +1583,18 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				tc.threadCounts = &threadCounts{}
 			}
 
-			gotResp, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, tc.hpSize,
+			var sc storage.Class
+			if len(tc.ecs) > 0 {
+				sc = tc.ecs[0].Storage.Tiers.ScmConfigs()[0].Class
+			}
+
+			sd := &storageDetails{
+				HugepageSizeKiB: tc.hpSize,
+				MemTotalKiB:     tc.memTotal,
+				scmCls:          sc,
+			}
+
+			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, sd,
 				tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1548,7 +1612,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
-			if diff := cmp.Diff(tc.expCfg, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expCfg, getCfg, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected engine configs (-want, +got):\n%s\n", diff)
 			}
 		})

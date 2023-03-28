@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -139,6 +140,14 @@ func TestAuto_confGen(t *testing.T) {
 		Addr:    "host1",
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
+	// Total mem to meet requirements 34GiB hugeMem, 1GiB per engine rsvd, 6GiB sys rsvd,
+	// 5GiB per engine for tmpfs.
+	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
+	storRespHighMem.MemInfo.MemTotal = (humanize.GiByte * (34 + 2 + 6 + 10)) / humanize.KiByte
+	storHostRespHighMem := &control.HostResponse{
+		Addr:    "host1",
+		Message: storRespHighMem,
+	}
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
 	e0.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
@@ -239,11 +248,19 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm": {
+		"successful fetch of host storage and fabric; tmpfs scm; low mem": {
 			tmpfsSCM: true,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
+			},
+			expErr: errors.New("insufficient ram"),
+		},
+		"successful fetch of host storage and fabric; tmpfs scm": {
+			tmpfsSCM: true,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostRespHighMem},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages

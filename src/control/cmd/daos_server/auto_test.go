@@ -143,18 +143,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	e1 := control.MockEngineCfg(1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4)
 	e1.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
-	mockMemTotal := humanize.GiByte * 12
-	mockRamdiskSize := 4 // RoundDownGiB(12*0.75/2)
-	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, mockRamdiskSize,
-			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
-			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
-			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, mockRamdiskSize,
-			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
-			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
-			WithTargetCount(18).WithHelperStreamCount(4),
-	}
 
 	for name, tc := range map[string]struct {
 		accessPoints string
@@ -337,6 +325,33 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
+		"tmpfs scm; low mem": {
+			tmpfsSCM: true,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				MemInfo: control.MemInfo{
+					HugepageSizeKb: 2048,
+					MemTotal:       (humanize.GiByte * 12) / humanize.KiByte,
+				},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expErr: errors.New("insufficient ram"),
+		},
 		"tmpfs scm": {
 			tmpfsSCM: true,
 			hf: &control.HostFabric{
@@ -352,8 +367,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(1),
 				},
 				MemInfo: control.MemInfo{
-					HugePageSizeKb: 2048,
-					MemTotal:       int(mockMemTotal / humanize.KiByte),
+					HugepageSizeKb: 2048,
+					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
+					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.
+					MemTotal: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -362,7 +379,21 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2",
+				// SCM tmpfs 5GiB size calculated after subtracting reservations
+				// from MemTotal.
+				[]*engine.Config{
+					control.MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
+						control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
+						control.MockBdevTierWithRole(0,
+							storage.BdevRoleMeta|storage.BdevRoleData, 4)).
+						WithTargetCount(18).WithHelperStreamCount(4),
+					control.MockEngineCfgTmpfs(1, 5, /* tmpfs size in gib */
+						control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
+						control.MockBdevTierWithRole(1,
+							storage.BdevRoleMeta|storage.BdevRoleData, 3)).
+						WithTargetCount(18).WithHelperStreamCount(4),
+				}).
 				// 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512 pages
 				WithNrHugepages(19 * 2 * 512).
 				WithAccessPoints("localhost:10001").

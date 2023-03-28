@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -219,25 +219,6 @@ func TestConfig_ScmValidation(t *testing.T) {
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
 				),
-		},
-		"ramdisk missing scm_size": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("ram").
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
-		},
-		"ramdisk scm_size: 0": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("ram").
-						WithScmRamdiskSize(0).
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
 		},
 		"ramdisk with scm_list": {
 			cfg: baseValidConfig().

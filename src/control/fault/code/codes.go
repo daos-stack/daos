@@ -78,6 +78,7 @@ const (
 	ScmNoModules
 	ScmBadRegion
 	ScmInvalidPMem
+	ScmTmpfsLowMem
 )
 
 // Bdev fault codes

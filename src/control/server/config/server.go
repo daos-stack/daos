@@ -433,6 +433,57 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 	return addr, nil
 }
 
+// Calculate hugepages based on total target count if not using nvme.
+func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSize int, cfg *Server) (int, error) {
+	if cfgTargetCount <= 0 {
+		return 0, nil // no nvme, no hugepages required
+	}
+
+	if cfg.DisableHugepages {
+		return 0, FaultConfigHugepagesDisabled
+	}
+
+	// Calculate minimum number of hugepages for all configured engines.
+	minHugepages, err := common.CalcMinHugepages(hugepageSize, cfgTargetCount+sysXSCount)
+	if err != nil {
+		return 0, err
+	}
+
+	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
+	// that the configured amount is sufficient.
+	if cfg.NrHugepages == 0 {
+		var msgSysXS string
+		if sysXSCount > 0 {
+			msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+		}
+		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
+			cfgTargetCount, msgSysXS)
+		cfg.NrHugepages = minHugepages
+	}
+
+	if cfg.NrHugepages < minHugepages {
+		return 0, FaultConfigInsufficientHugepages(minHugepages, cfg.NrHugepages)
+	}
+
+	return minHugepages, nil
+}
+
+// Calculate recommended scm size if not using pmem.
+func scmSetSize(log logging.Logger, hugepageCount int, cfg *Server) error {
+	if len(cfg.Engines) == 0 {
+		return nil // no engines
+	}
+
+	// Create the same size scm for each engine.
+	scmCfgs := cfg.Engines[0].Storage.Tiers.ScmConfigs()
+
+	if len(scmCfgs) == 0 || scmCfgs[0].Class == storage.ClassDcpm {
+		return nil // no tmpfs to size
+	}
+
+	return nil
+}
+
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
 	msg := "validating config file"
@@ -549,33 +600,13 @@ func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
-	// Calculate hugepages based on total target count if bdevs in config.
-	if cfgTargetCount > 0 {
-		if cfg.DisableHugepages {
-			return FaultConfigHugepagesDisabled
-		}
+	minHugepages, err := hugepageSetCount(log, cfgTargetCount, sysXSCount, hugepageSize, cfg)
+	if err != nil {
+		return err
+	}
 
-		// Calculate minimum number of hugepages for all configured engines.
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount+sysXSCount)
-		if err != nil {
-			return err
-		}
-
-		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
-		// that the configured amount is sufficient.
-		if cfg.NrHugepages == 0 {
-			var msgSysXS string
-			if sysXSCount > 0 {
-				msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
-			}
-			log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugePages,
-				cfgTargetCount, msgSysXS)
-			cfg.NrHugepages = minHugePages
-		}
-
-		if cfg.NrHugepages < minHugePages {
-			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
-		}
+	if err := scmSetSize(log, minHugepages, cfg); err != nil {
+		return err
 	}
 
 	if len(cfg.Engines) > 1 {
