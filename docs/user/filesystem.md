@@ -141,10 +141,10 @@ will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
 number of cores then overcommiting via the `--thread-count` option may be desirable.
 
-DFuse will use two types of threads, fuse threads to accept and process requests
-and event queue threads.  The --thread-count option will dictate the total number of
+DFuse will use two types of threads: fuse threads to accept and process requests
+and event queue threads.  The `--thread-count` option will dictate the total number of
 threads and each eq-thread will reduce this.  Each event queue thread will create a
-daos event queue so consumer additional network resources.  The --eq-count option
+daos event queue so consumes additional network resources.  The `--eq-count` option
 will control the event queues and associated threads.
 
 ### Restrictions
