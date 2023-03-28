@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -314,7 +314,6 @@ main(int argc, char **argv)
 	struct dfuse_pool            *dfp                                    = NULL;
 	struct dfuse_cont            *dfs                                    = NULL;
 	struct duns_attr_t            duns_attr                              = {};
-	uuid_t                        cont_uuid                              = {};
 	char                          pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char                          cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	int                           c;
@@ -576,10 +575,10 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
+	if (cont_name[0])
 		rc = dfuse_cont_open_by_label(fs_handle, dfp, cont_name, &dfs);
 	else
-		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
+		rc = dfuse_cont_open(fs_handle, dfp, cont_name, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));

@@ -12,8 +12,7 @@
 
 /* Lookup a pool */
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name)
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *pool)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
@@ -23,9 +22,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct daos_prop_entry		*prop_entry;
 	daos_pool_info_t		pool_info = {};
 	d_list_t			*rlink;
+	char				cont[DAOS_PROP_LABEL_MAX_LEN + 1] = {0};
 	int				rc;
-	uuid_t				pool;
-	uuid_t				cont = {};
 
 	/*
 	 * This code is only supposed to support one level of directory descent
@@ -34,26 +32,13 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
-	/*
-	 * Dentry names with invalid uuids cannot possibly be added. In this
-	 * case, return the negative dentry with a timeout to prevent future
-	 * lookups.
-	 */
-	if (uuid_parse(name, pool) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
-
-		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-		return;
-	}
-
-	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(pool));
+	DFUSE_TRA_DEBUG(parent, "Lookup of %s", pool);
 
 	rc = dfuse_pool_get_handle(fs_handle, pool, &dfp);
 	if (rc != 0)
 		goto err;
 
-	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
+	rc = dfuse_cont_open(fs_handle, dfp, cont, &dfc);
 	if (rc != 0)
 		goto err;
 
@@ -90,7 +75,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_ie_init(ie);
 
 	ie->ie_parent = parent->ie_stat.st_ino;
-	strncpy(ie->ie_name, name, NAME_MAX);
+	strncpy(ie->ie_name, pool, NAME_MAX);
 
 	ie->ie_dfs = dfc;
 

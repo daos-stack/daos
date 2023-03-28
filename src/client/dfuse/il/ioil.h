@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,17 +15,17 @@
 
 struct ioil_cont {
 	/* Container open handle */
-	daos_handle_t     ioc_coh;
+	daos_handle_t		ioc_coh;
 	/* ioil pool descriptor */
-	struct ioil_pool *ioc_pool;
-	/* uuid of container */
-	uuid_t            ioc_uuid;
+	struct ioil_pool	*ioc_pool;
+	/* uuid/label of container */
+	char			ioc_name[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/* dfs handle */
-	dfs_t            *ioc_dfs;
+	dfs_t			*ioc_dfs;
 	/* List of containers */
-	d_list_t          ioc_containers;
+	d_list_t		ioc_containers;
 	/* Number of files open in container */
-	int               ioc_open_count;
+	int			ioc_open_count;
 };
 
 struct fd_entry {

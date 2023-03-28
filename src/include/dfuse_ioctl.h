@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,11 +34,11 @@
 
 /* Core IOCTL reply */
 struct dfuse_il_reply {
-	int           fir_version;
-	daos_obj_id_t fir_oid;
-	uuid_t        fir_pool;
-	uuid_t        fir_cont;
-	uint64_t      fir_flags;
+	int		fir_version;
+	daos_obj_id_t	fir_oid;
+	char		fir_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		fir_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	uint64_t	fir_flags;
 };
 
 /* Query for global pool/container handle sizes */

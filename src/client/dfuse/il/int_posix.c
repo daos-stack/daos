@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +35,7 @@ FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
 struct ioil_pool {
 	daos_handle_t	iop_poh;
-	uuid_t		iop_uuid;
+	char		iop_name[DAOS_PROP_LABEL_MAX_LEN + 1];
 	d_list_t	iop_container_head;
 	d_list_t	iop_pools;
 };
@@ -649,22 +649,21 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 {
 	int			rc;
 	struct ioil_pool       *pool = cont->ioc_pool;
-	char			uuid_str[37];
 	int			dfs_flags = O_RDWR;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		uuid_unparse(il_reply->fir_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str, NULL, DAOS_PC_RO, &pool->iop_poh, NULL, NULL);
+		rc = daos_pool_connect(il_reply->fir_pool, NULL, DAOS_PC_RO, &pool->iop_poh, NULL,
+				       NULL);
 		if (rc)
 			return false;
 	}
 
-	uuid_unparse(il_reply->fir_cont, uuid_str);
-	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL, NULL);
+	rc = daos_cont_open(pool->iop_poh, il_reply->fir_cont, DAOS_COO_RW, &cont->ioc_coh, NULL,
+			    NULL);
 	if (rc == -DER_NO_PERM) {
 		dfs_flags = O_RDONLY;
-		rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RO, &cont->ioc_coh, NULL,
-				    NULL);
+		rc = daos_cont_open(pool->iop_poh, il_reply->fir_cont, DAOS_COO_RO, &cont->ioc_coh,
+				    NULL, NULL);
 	}
 	if (rc)
 		return false;
@@ -723,11 +722,11 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
-		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
+		if (strcmp(pool->iop_name, il_reply.fir_pool) != 0)
 			continue;
 
 		d_list_for_each_entry(cont, &pool->iop_container_head, ioc_containers) {
-			if (uuid_compare(cont->ioc_uuid, il_reply.fir_cont) != 0)
+			if (strcmp(cont->ioc_name, il_reply.fir_cont) != 0)
 				continue;
 
 			D_GOTO(get_file, rc = 0);
@@ -741,7 +740,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 		D_GOTO(err, rc = ENOMEM);
 
 	pool_alloc = true;
-	uuid_copy(pool->iop_uuid, il_reply.fir_pool);
+	strcpy(pool->iop_name, il_reply.fir_pool);
 	D_INIT_LIST_HEAD(&pool->iop_container_head);
 
 open_cont:
@@ -754,7 +753,7 @@ open_cont:
 	}
 
 	cont->ioc_pool = pool;
-	uuid_copy(cont->ioc_uuid, il_reply.fir_cont);
+	strcpy(cont->ioc_name, il_reply.fir_cont);
 	d_list_add(&cont->ioc_containers, &pool->iop_container_head);
 
 	if (pool_alloc)
