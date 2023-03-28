@@ -1295,13 +1295,16 @@ dss_srv_init(void)
 	xstream_data.xd_ult_signal = false;
 
 	D_ALLOC_ARRAY(xstream_data.xd_xs_ptrs, DSS_XS_NR_TOTAL);
-	if (xstream_data.xd_xs_ptrs == NULL)
+	if (xstream_data.xd_xs_ptrs == NULL) {
+		D_ERROR("Not enough DRAM to allocate XS array.\n");
 		D_GOTO(failed, rc = -DER_NOMEM);
+	}
 	xstream_data.xd_xs_nr = 0;
 
 	rc = ABT_mutex_create(&xstream_data.xd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to create XS mutex: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_MUTEX;
@@ -1309,6 +1312,7 @@ dss_srv_init(void)
 	rc = ABT_cond_create(&xstream_data.xd_ult_init);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to create XS ULT cond(1): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_INIT;
@@ -1316,6 +1320,7 @@ dss_srv_init(void)
 	rc = ABT_cond_create(&xstream_data.xd_ult_barrier);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to create XS ULT cond(2): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
@@ -1324,19 +1329,24 @@ dss_srv_init(void)
 	rc = pthread_key_create(&dss_tls_key, NULL);
 	if (rc) {
 		rc = dss_abterr2der(rc);
+		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
 	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, -1);
-	if (!xstream_data.xd_dtc)
-		D_GOTO(failed, rc);
+	if (!xstream_data.xd_dtc) {
+		D_ERROR("Not enough DRAM to initialize XS local storage.\n");
+		D_GOTO(failed, rc = -DER_NOMEM);
+	}
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
 	rc = dss_sys_db_init();
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to initialize local DB: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
+	}
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
@@ -1346,16 +1356,20 @@ dss_srv_init(void)
 	if (!dss_xstreams_empty()) /* cleanup if we started something */
 		xstream_data.xd_init_step = XD_INIT_XSTREAMS;
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to start XS: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
+	}
 
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
 
 	/* start up drpc listener */
 	rc = drpc_listener_init();
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to start dRPC listener: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
+	}
 	xstream_data.xd_init_step = XD_INIT_DRPC;
 
 	return 0;
