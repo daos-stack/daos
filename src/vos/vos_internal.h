@@ -1420,6 +1420,17 @@ vos_offload_exec(int (*func)(void *), void *arg)
 		return func(arg);
 }
 
+static inline int
+vos_exec(void (*func)(void *), void *arg)
+{
+	if (dss_main_exec != NULL)
+		return dss_main_exec(func, arg);
+
+	func(arg);
+
+	return 0;
+}
+
 static inline bool
 umoff_is_null(umem_off_t umoff)
 {

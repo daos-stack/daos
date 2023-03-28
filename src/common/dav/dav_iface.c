@@ -22,52 +22,6 @@
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
-#define META_READ_BATCH_SIZE (1024 * 1024)
-static inline void
-umemstor_iod_set(struct umem_store_iod *iod, daos_off_t addr, daos_size_t size)
-{
-	iod->io_nr             = 1;
-	iod->io_regions        = &iod->io_region;
-	iod->io_region.sr_addr = addr;
-	iod->io_region.sr_size = size;
-}
-
-static inline void
-umemstor_sgl_set(d_sg_list_t *sgl, d_iov_t *iov, void *buf, daos_size_t size)
-{
-	sgl->sg_iovs   = iov;
-	sgl->sg_nr     = 1;
-	sgl->sg_nr_out = 0;
-	d_iov_set(iov, buf, size);
-}
-
-static int
-umemstor_load_meta(struct umem_store *store, dav_obj_t *hdl)
-{
-	uint64_t              read_size;
-	uint64_t              remain_size = store->stor_size;
-	daos_off_t            off         = 0;
-	char                 *start       = hdl->do_base;
-	int                   rc          = 0;
-	struct umem_store_iod iod;
-	d_sg_list_t           sgl;
-	d_iov_t               iov;
-
-	while (remain_size) {
-		read_size =
-		    (remain_size > META_READ_BATCH_SIZE) ? META_READ_BATCH_SIZE : remain_size;
-		umemstor_iod_set(&iod, off, read_size);
-		umemstor_sgl_set(&sgl, &iov, start, read_size);
-		rc = store->stor_ops->so_read(store, &iod, &sgl);
-		if (rc)
-			break;
-		off += read_size;
-		start += read_size;
-		remain_size -= read_size;
-	}
-	return rc;
-}
-
 /*
  * get_uuid_lo -- (internal) evaluates XOR sum of least significant
  * 8 bytes with most significant 8 bytes.
@@ -180,7 +134,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 		D_ASSERT(store != NULL);
 
-		rc = umemstor_load_meta(store, hdl);
+		rc = store->stor_ops->so_load(store, hdl->do_base);
 		if (rc) {
 			D_ERROR("Failed to read blob to vos file %s, rc = %d\n", path, rc);
 			goto out2;
