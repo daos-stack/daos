@@ -390,6 +390,11 @@ class LogTest():
                             # than daos, so allow ENOMEM as well as
                             # -DER_NOMEM
                             show = False
+                        elif line.get_msg().endswith(': 5 (HG_NO_MEM)'):
+                            # Merury uses hg error numbers, rather
+                            # than daos, so allow HG_NO_MEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
