@@ -166,6 +166,17 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	ds_cont_child_put(cont);
 }
 
+static inline uint64_t
+dtx_sec2age(uint64_t sec)
+{
+	uint64_t	cur = daos_gettime_coarse();
+
+	if (unlikely(cur <= sec))
+		return 0;
+
+	return cur - sec;
+}
+
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
@@ -206,8 +217,7 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
-	    DTX_CLEANUP_THD_AGE_LO)
+	if (dtx_sec2age(ent->ie_dtx_start_time) <= DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
@@ -410,11 +420,10 @@ dtx_aggregate(void *arg)
 		if (stat.dtx_cont_cmt_count == 0 ||
 		    stat.dtx_first_cmt_blob_time_lo == 0 ||
 		    (stat.dtx_cont_cmt_count <= dtx_agg_thd_cnt_lo &&
-		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
-		     dtx_agg_thd_age_lo))
+		     dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= dtx_agg_thd_age_lo))
 			break;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			break;
 	}
 
@@ -472,14 +481,13 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    stat.dtx_first_cmt_blob_time_lo == 0)
 			continue;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			continue;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
-		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
-		      dtx_agg_thd_age_up))) {
+		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
@@ -707,8 +715,7 @@ dtx_batched_commit(void *arg)
 		if (dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
-		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
-		    DTX_CLEANUP_THD_AGE_UP) {
+		    dtx_sec2age(stat.dtx_oldest_active_time) >= DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
 			dtx_get_dbca(dbca);
 
