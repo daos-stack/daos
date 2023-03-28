@@ -319,13 +319,13 @@ type metricsCmd struct {
 type metricsListCmd struct {
 	baseCmd
 	jsonOutputCmd
-	hostListCmd
+	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 }
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.hostlist)
+	host, err := getMetricsHost(cmd.getHostList())
 	if err != nil {
 		return err
 	}
@@ -355,18 +355,14 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 }
 
 func getMetricsHost(hostlist []string) (string, error) {
-	if len(hostlist) == 0 {
-		return "localhost", nil
+	if len(hostlist) != 1 {
+		return "", fmt.Errorf("too many hosts: %v", hostlist)
 	}
 
-	if len(hostlist) == 1 {
-		// discard port if supplied - we use the metrics port
-		parts := strings.Split(hostlist[0], ":")
+	// discard port if supplied - we use the metrics port
+	parts := strings.Split(hostlist[0], ":")
 
-		return parts[0], nil
-	}
-
-	return "", fmt.Errorf("must pass in exactly 1 host (got %d)", len(hostlist))
+	return parts[0], nil
 }
 
 func getConnectingMsg(host string, port uint32) string {
@@ -377,14 +373,14 @@ func getConnectingMsg(host string, port uint32) string {
 type metricsQueryCmd struct {
 	baseCmd
 	jsonOutputCmd
-	hostListCmd
+	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
 }
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.hostlist)
+	host, err := getMetricsHost(cmd.getHostList())
 	if err != nil {
 		return err
 	}

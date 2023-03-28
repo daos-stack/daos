@@ -161,6 +161,12 @@ func TestStorageQueryCommands(t *testing.T) {
 		},
 		{
 			"Set FAULTY device status (with > 1 host)",
+			"storage set nvme-faulty -l host-[1-2] -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"StorageSetFaulty",
+			errors.New("> 1 host"),
+		},
+		{
+			"Set FAULTY device status (with > 1 host) with legacy hostlist",
 			"-l host-[1-2] storage set nvme-faulty -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			"StorageSetFaulty",
 			errors.New("> 1 host"),

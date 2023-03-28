@@ -54,7 +54,7 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareQuery(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -144,7 +144,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareUpdate(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {

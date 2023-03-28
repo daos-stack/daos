@@ -68,7 +68,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	}
 
 	// check cli then config for hostlist, default to localhost
-	hl := cmd.hostlist
+	hl := cmd.getHostList()
 	if len(hl) == 0 && cmd.config != nil {
 		hl = cmd.config.HostList
 	}

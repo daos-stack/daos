@@ -46,10 +46,7 @@ func TestTelemetry_getMetricsHost(t *testing.T) {
 		},
 		"too many hosts": {
 			list:   []string{"one", "two"},
-			expErr: errors.New("exactly 1 host"),
-		},
-		"no hosts": {
-			expResult: "localhost",
+			expErr: errors.New("too many hosts"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
