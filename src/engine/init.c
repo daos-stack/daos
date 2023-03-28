@@ -773,13 +773,8 @@ server_init(int argc, char *argv[])
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();

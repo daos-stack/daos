@@ -776,7 +776,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 						    orw->orw_dkey_hash, iod) ||
 		    is_ec_parity_shard(rw_args->shard_args->auxi.obj_auxi->obj, orw->orw_dkey_hash,
 				       orw->orw_oid.id_shard)) {
-			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
+			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i]) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
 				D_ERROR(DF_UOID" original iod_size "DF_U64", real size "DF_U64
@@ -804,15 +804,19 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				conflict = dc_shard_singv_size_conflict(oca,
 						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 			}
-			rc = fetch_rc;
+			if (rc == 0)
+				rc = fetch_rc;
 			/* one case needs to ignore the DER_REC2BIG failure - long singv
 			 * overwritten by short singv and the short singv only store on one
 			 * data target (and parity targets), other cases should return
 			 * DER_REC2BIG.
 			 */
 			if (rc == 0 && fetch_stat->sfs_rc_other == -DER_REC2BIG &&
-			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca))
+			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
+				D_ERROR("other shard got -DER_REC2BIG, sfs_size "DF_U64
+					" on all shards\n", fetch_stat->sfs_size);
+			}
 		} else if (sizes[i] != 0) {
 			if (iod->iod_size == 0)
 				iod->iod_size = sizes[i];
@@ -830,8 +834,11 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				}
 			}
 			if (fetch_rc == -DER_REC2BIG && fetch_stat->sfs_size != 0 &&
-			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca))
+			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
+				D_ERROR("this non-parity shard got -DER_REC2BIG, sfs_size "DF_U64
+					" on all shards\n", fetch_stat->sfs_size);
+			}
 
 			if (fetch_rc == 0 && fetch_stat->sfs_size != 0)
 				conflict = dc_shard_singv_size_conflict(oca,
