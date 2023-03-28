@@ -12,12 +12,14 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     FormattedParameter, EnvironmentVariables, \
-    CommonConfig
+    CommonConfig, CommandWithParameters
 from exception_utils import CommandFailure
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file, run_pcmd
 from agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
+from run_utils import run_remote
+from general_utils import get_default_config_file
 
 
 def include_local_host(hosts):
@@ -117,6 +119,8 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
+        if self.sub_command.value == "support":
+            self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
 
@@ -129,6 +133,33 @@ class DaosAgentCommand(YamlCommand):
                 "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
 
             self.output = FormattedParameter("--output {}", None)
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_agent support sub command."""
+
+        def __init__(self):
+            """Create a daos_agent support subcommand object."""
+            super().__init__("/run/daos_agent/support/*", "support")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos_agent support sub command object."""
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectlogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectlogSubCommand(CommandWithParameters):
+            """Defines an object for the daos_agent support collect-log command."""
+
+            def __init__(self):
+                """Create a daos_agent support collect-log command object."""
+                super().__init__("/run/daos_agent/support/*", "collect-log")
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}", None)
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}", None)
+                self.target_host = FormattedParameter("--target-host={}", None)
 
     def dump_attachinfo(self, output="uri.txt"):
         """Write CaRT attachinfo file.
@@ -146,6 +177,23 @@ class DaosAgentCommand(YamlCommand):
         """
         self.set_sub_command("dump-attachinfo")
         self.sub_command_class.output.value = output
+        return self._get_result()
+
+    def support_collect_log(self, **kwargs):
+        """Write CaRT attachinfo file.
+
+        Args:
+            output (str): File to which attachinfo dump should be written.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos_agent dump-attachinfo command fails.
+
+        """
+        self.set_command(("support", "collect-log"), **kwargs)
         return self._get_result()
 
     def get_user_file(self):
@@ -236,6 +284,32 @@ class DaosAgentManager(SubprocessManager):
         self.attachinfo = run_pcmd(self.hosts,
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
+
+    def support_collect_log(self, **kwargs):
+        """Collect logs for debug purpose.
+
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
+        Raises:
+            CommandFailure: if the daos_agent command fails.
+
+        Returns:
+            dict: the daos_agent command output converted to a python dictionary
+
+        """
+        cmd = DaosAgentCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.config.value = get_default_config_file("agent")
+        self.log.info("Support collect-log on clients: %s", str(cmd))
+        cmd.set_command(("support", "collect-log"), **kwargs)
+        return run_remote(self.log, self.hosts, cmd.with_exports)
 
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent."""

@@ -164,7 +164,7 @@ type cliOptions struct {
 	Config         configCmd      `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
 	System         SystemCmd      `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
 	Network        NetCmd         `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
-	Support        SupportCmd     `command:"support" alias:"supp" description:"Perform tasks related to debug the system which help support team"`
+	Support        supportCmd     `command:"support" alias:"supp" description:"Perform tasks related to debug the system which help support team"`
 	Pool           PoolCmd        `command:"pool" description:"Perform tasks related to DAOS pools"`
 	Cont           ContCmd        `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd     `command:"version" description:"Print dmg version"`

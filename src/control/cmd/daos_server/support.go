@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-type SupportCmd struct {
+type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from server"`
 }
 

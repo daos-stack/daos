@@ -22,7 +22,7 @@ import (
 )
 
 // NetCmd is the struct representing the top-level network subcommand.
-type SupportCmd struct {
+type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from servers"`
 }
 

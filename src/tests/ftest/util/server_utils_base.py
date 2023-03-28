@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,7 +59,6 @@ class DaosServerCommand(YamlCommand):
         self.debug = FormattedParameter("--debug", True)
         self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
-
         # Additional daos_server command line parameters:
         #     --allow-proxy  Allow proxy configuration via environment
         self.allow_proxy = FormattedParameter("--allow-proxy", False)
@@ -92,6 +91,7 @@ class DaosServerCommand(YamlCommand):
         #   scm            Perform tasks related to locally-attached SCM storage
         #   start          Start daos_server
         #   storage        Perform tasks related to locally-attached storage
+        #   support        Perform tasks related to debug the system to help support team
         #   version        Print daos_server version
         if sub_command == "ms":
             self.sub_command_class = self.MsSubCommand()
@@ -105,6 +105,8 @@ class DaosServerCommand(YamlCommand):
             self.sub_command_class = self.StartSubCommand()
         elif sub_command == "storage":
             self.sub_command_class = self.StorageSubCommand()
+        elif sub_command == "support":
+            self.sub_command_class = self.SupportSubCommand()
         elif sub_command == "version":
             self.sub_command_class = self.VersionSubCommand()
         else:
@@ -525,6 +527,42 @@ class DaosServerCommand(YamlCommand):
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server support sub command."""
+
+        def __init__(self):
+            """Create a support subcommand object."""
+            super().__init__("/run/daos_server/support/*", "support")
+
+        def get_sub_command_class(self):
+            """Get the daos_server support sub command object."""
+            # Available sub-commands:
+            #   collect-log  Collect logs on servers
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectLogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectLogSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server support collect-log command."""
+
+            def __init__(self):
+                """Create a support collect-log subcommand object."""
+                super().__init__(
+                    "/run/daos_server/support/collect-log/*", "collect-log")
+
+                # daos_server support collect-log command options:
+                #   --stop-on-error     Stop the collect-log command on very first error
+                #   --target-folder=    Target Folder location where log will be copied
+                #   --archive=          Archive the log/config files
+                #   --extra-logs-dir=   Collect the Logs from given custom directory
+                #   --target-host=      Rsync the logs to target-host system
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}")
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}")
+                self.target_host = FormattedParameter("--target-host={}")
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server version sub command."""

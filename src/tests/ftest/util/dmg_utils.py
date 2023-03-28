@@ -540,20 +540,20 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("server", "set-logmasks"),
                                      raise_exception=raise_exception, **kwargs)
 
-    def support_collect_log(self, stop=None, target_folder=None, archive=None,
-                            custom_logs=None, target_host=None, raise_exception=None):
+    def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
+                            extra_logs_dir=None, target_host=None, raise_exception=None):
         """Collect logs for debug purpose.
 
         Args:
-            stop (bool, optional): Stop the collect-log command on very first error.
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
             target (str, optional): Target Folder location to copy logs
             archive (bool, optional): Archive the log/config files
-            custom_logs (str, optional): Collect the Logs from given custom directory
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
         Raises:
-            CommandFailure: if the dmg server set logmasks command fails.
+            CommandFailure: if the dmg support collect-log command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -569,10 +569,10 @@ class DmgCommand(DmgCommandBase):
         # }
 
         kwargs = {
-            "stop": stop,
+            "stop_on_error": stop_on_error,
             "target_folder": target_folder,
             "archive": archive,
-            "custom_logs": custom_logs,
+            "extra_logs_dir": extra_logs_dir,
             "target_host": target_host,
         }
 

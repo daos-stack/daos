@@ -14,15 +14,15 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-type SupportCmd struct {
-	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from client"`
+type supportCmd struct {
+	CollectLog      collectLogCmd `command:"collect-log" description:"Collect logs from client"`
+	agentConfigPath string
 }
 
 // collectLogCmd is the struct representing the command to collect the log from client side.
 type collectLogCmd struct {
-	configCmd
+	supportAgentConfigCmd
 	cmdutil.LogCmd
-	ConfigPath string `short:"o" long:"config-path" required:"1" description:"Path to agent configuration file"`
 	support.CollectLogSubCmd
 }
 
@@ -60,7 +60,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params := support.CollectLogsParams{}
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
-	params.Config = cmd.ConfigPath
+	params.Config = cmd.getSupportConf()
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
