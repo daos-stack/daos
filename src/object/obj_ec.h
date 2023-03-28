@@ -223,6 +223,7 @@ struct obj_ec_recov_task {
 	 * degraded fetch, set the iod_size.
 	 */
 	daos_iod_t		*ert_oiod;
+	daos_iod_t		*ert_uiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th;		/* read-only tx handle */

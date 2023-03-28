@@ -2414,6 +2414,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 					    stripe_rec_nr;
 			}
 			rtask->ert_oiod = iod;
+			rtask->ert_uiod = &reasb_req->orr_uiods[i];
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
 			rtask->ert_iod.iod_size = recx_ep == NULL ?
