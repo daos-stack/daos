@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,6 @@ from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive
@@ -118,15 +117,17 @@ class IorTestBase(DfuseTestBase):
             self.update_ior_cmd_with_pool(create_cont)
 
         # start dfuse if api is POSIX or HDF5 with vol connector
-        if self.ior_cmd.api.value == "POSIX" or plugin_path:
-            # add a substring in case of HDF5-VOL
+        if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
+            # Initialize dfuse instance
+            self.load_dfuse(self.hostlist_clients)
+            # Default mount_dir to value in dfuse instance
+            mount_dir = mount_dir or self.dfuse.mount_dir.value
+            # Add a substring in case of HDF5-VOL
             if plugin_path:
                 sub_dir = get_random_string(5)
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
-            if not self.dfuse:
-                params = {'mount_dir': mount_dir} if mount_dir else {}
-                self.start_dfuse(self.hostlist_clients, self.pool, self.container, **params)
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -291,8 +292,7 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
                                   flags, mount_dir):
-        """Run multiple ior commands with various different combination
-           of ior input params.
+        """Run multiple ior commands with various different combination of ior input params.
 
         Args:
             obj_class(list): List of different object classes
@@ -415,11 +415,8 @@ class IorTestBase(DfuseTestBase):
         if hosts is None:
             hosts = self.hostlist_clients
         result = pcmd(hosts, command, verbose=display_output, timeout=300)
-        if 0 not in result and fail_on_err:
-            hosts = [str(
-                nodes) for code, nodes in list(
-                    result.items()) if code != 0]
-            raise CommandFailure(
-                "Error running '{}' on the following hosts: {}".format(
-                    command, NodeSet(",".join(hosts))))
+        if (0 not in result or len(result) > 1) and fail_on_err:
+            hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
+            raise CommandFailure("Error running '{}' on the following hosts: {}".format(
+                command, NodeSet(",".join(hosts))))
         return result

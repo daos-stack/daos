@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,12 +32,13 @@ type configCmd struct {
 type configGenCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-
-	AccessPoints string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
-	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	AccessPoints   string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NrEngines      int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	SCMOnly        bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
+	NetClass       string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
+	NetProvider    string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM    bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	SkipPrep       bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
 type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
@@ -59,14 +60,46 @@ func getLocalFabric(ctx context.Context, log logging.Logger) (*control.HostFabri
 	return hf, nil
 }
 
-type getStorageFn func(context.Context, logging.Logger) (*control.HostStorage, error)
+type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
 
-func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStorage, error) {
-	svc := server.NewStorageControlService(log, config.DefaultServer().Engines)
+func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
+	svc := server.NewStorageControlService(log, config.DefaultServer().Engines).
+		WithVMDEnabled() // use vmd if present
+
+	var nc *nvmeCmd
+	if !skipPrep {
+		nc = &nvmeCmd{}
+		nc.Logger = log
+		nc.IgnoreConfig = true
+		if err := nc.init(); err != nil {
+			return nil, errors.Wrap(err, "could not init nvme cmd")
+		}
+
+		req := storage.BdevPrepareRequest{}
+		if err := prepareNVMe(req, nc, svc.NvmePrepare); err != nil {
+			return nil, errors.Wrap(err, "nvme prep before fetching local storage failed, "+
+				"try cmd again with --skip-prep after performing a manual nvme prepare")
+		}
+	}
 
 	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "nvme scan")
+	}
+
+	if !skipPrep {
+		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
+		//                 controllers (as specified in the server config file) then the
+		//                 backing devices of the unselected VMD controllers will be bound
+		//                 to no driver and therefore inaccessible from both OS and SPDK.
+		//                 Workaround is to run nvme scan --ignore-config to reset driver
+		//                 bindings.
+
+		req := storage.BdevPrepareRequest{Reset_: true}
+		if err := resetNVMe(req, nc, svc.NvmePrepare); err != nil {
+			return nil, errors.Wrap(err, "nvme reset after fetching local storage failed, "+
+				"try cmd again with --skip-prep after performing a manual nvme reset")
+		}
 	}
 
 	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
@@ -74,7 +107,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		return nil, errors.Wrapf(err, "scm scan")
 	}
 
-	hpi, err := common.GetHugePageInfo()
+	hpi, err := common.GetMemInfo()
 	if err != nil {
 		return nil, errors.Wrapf(err, "get hugepage info")
 	}
@@ -83,8 +116,11 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		NvmeDevices:   nvmeResp.Controllers,
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
-		HugePageInfo: control.HugePageInfo{
-			PageSizeKb: hpi.PageSizeKb,
+		MemInfo: control.MemInfo{
+			HugePageSizeKb: hpi.HugePageSizeKb,
+			MemTotal:       hpi.MemTotal,
+			MemFree:        hpi.MemFree,
+			MemAvailable:   hpi.MemAvailable,
 		},
 	}, nil
 }
@@ -110,7 +146,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
-	hs, err := getStorage(ctx, cmd.Logger)
+	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep)
 	if err != nil {
 		return nil, err
 	}
@@ -119,20 +155,20 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	req := control.ConfGenerateReq{
 		Log:          cmd.Logger,
 		NrEngines:    cmd.NrEngines,
-		MinNrSSDs:    cmd.MinNrSSDs,
+		SCMOnly:      cmd.SCMOnly,
 		NetClass:     ndc,
 		NetProvider:  cmd.NetProvider,
 		AccessPoints: accessPoints,
+		UseTmpfsSCM:  cmd.UseTmpfsSCM,
 	}
-
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}
-
 	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
+
 	return &resp.Server, nil
 }
 
@@ -143,7 +179,6 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 // local scan results using the current process.
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
-
 	cfg, err := cmd.confGen(ctx, getLocalFabric, getLocalStorage)
 	if err != nil {
 		return err

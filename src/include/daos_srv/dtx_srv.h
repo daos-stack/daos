@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@ struct dtx_share_peer {
 	daos_unit_oid_t		 dsp_oid;
 	daos_epoch_t		 dsp_epoch;
 	uint64_t		 dsp_dkey_hash;
+	int			 dsp_status;
 	uint32_t		 dsp_inline_mbs:1;
 	struct dtx_memberships	*dsp_mbs;
 };
@@ -84,8 +85,6 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
-					 /* The DTX handle has been verified. */
-					 dth_verified:1,
 					 /* The DTX handle is aborted. */
 					 dth_aborted:1,
 					 /* The modification is done by others. */
@@ -216,6 +215,8 @@ enum dtx_flags {
 	DTX_DROP_CMT		= (1 << 8),
 };
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int

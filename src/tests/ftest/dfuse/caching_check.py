@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,6 @@ from general_utils import percent_change
 
 
 class DfuseCachingCheck(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Check dfuse read performance with and without caching
        on a single server and single client setting with basic parameters.
 

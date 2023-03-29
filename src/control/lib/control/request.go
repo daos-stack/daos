@@ -215,6 +215,11 @@ type retryableRequest struct {
 	retryFn func(context.Context, uint) error
 }
 
+// SetMaxTries sets the maximum number of request attempts.
+func (r *retryableRequest) SetMaxTries(mt uint) {
+	r.retryMaxTries = mt
+}
+
 func (r *retryableRequest) setRetryTimeout(timeout time.Duration) {
 	r.retryTimeout = timeout
 }

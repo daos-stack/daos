@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -481,10 +481,12 @@ ult_execute_cb(void *data)
 	rc = arg->dfa_func(arg->dfa_arg);
 	arg->dfa_status = rc;
 
-	if (!arg->dfa_async)
+	if (!arg->dfa_async) {
 		ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
-	else
+	} else {
 		arg->dfa_comp_cb(arg->dfa_comp_arg);
+		D_FREE(arg);
+	}
 }
 
 /**
@@ -508,41 +510,49 @@ int
 dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		void *cb_args, int xs_type, int tgt_id, size_t stack_size)
 {
-	struct dss_future_arg	future_arg;
+	struct dss_future_arg	*future_arg;
 	ABT_future		future;
 	int			rc;
 
-	memset(&future_arg, 0, sizeof(future_arg));
-	future_arg.dfa_func = func;
-	future_arg.dfa_arg = arg;
-	future_arg.dfa_status = 0;
+	D_ALLOC_PTR(future_arg);
+	if (future_arg == NULL)
+		return -DER_NOMEM;
+
+	future_arg->dfa_func = func;
+	future_arg->dfa_arg = arg;
+	future_arg->dfa_status = 0;
 
 	if (user_cb == NULL) {
 		rc = ABT_future_create(1, NULL, &future);
-		if (rc != ABT_SUCCESS)
-			return dss_abterr2der(rc);
-		future_arg.dfa_future = future;
-		future_arg.dfa_async  = false;
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			D_FREE(future_arg);
+			return rc;
+		}
+		future_arg->dfa_future = future;
+		future_arg->dfa_async  = false;
 	} else {
-		future_arg.dfa_comp_cb	= user_cb;
-		future_arg.dfa_comp_arg = cb_args;
-		future_arg.dfa_async	= true;
+		future_arg->dfa_comp_cb	= user_cb;
+		future_arg->dfa_comp_arg = cb_args;
+		future_arg->dfa_async	= true;
 	}
 
-	rc = dss_ult_create(ult_execute_cb, &future_arg, xs_type, tgt_id,
+	rc = dss_ult_create(ult_execute_cb, future_arg, xs_type, tgt_id,
 			    stack_size, NULL);
 	if (rc)
 		D_GOTO(free, rc);
 
-	if (!future_arg.dfa_async)
+	if (!future_arg->dfa_async) {
 		ABT_future_wait(future);
+		rc = future_arg->dfa_status;
+	}
 free:
-	if (rc == 0)
-		rc = future_arg.dfa_status;
-
-	if (!future_arg.dfa_async)
+	if (!future_arg->dfa_async) {
 		ABT_future_free(&future);
-
+		D_FREE(future_arg);
+	} else if (rc) {
+		D_FREE(future_arg);
+	}
 	return rc;
 }
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -195,7 +195,9 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 	resp := &storage.BdevPrepareResponse{}
 
 	if req.CleanHugePagesOnly {
-		// Remove hugepages created by an inactive SPDK process.
+		// Remove hugepages that were created by a no-longer-active SPDK process. Note that
+		// when running prepare, it's unlikely that any SPDK processes are active as this
+		// is performed prior to starting engines.
 		nrRemoved, err := hpClean(sb.log, hugePageDir)
 		if err != nil {
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
@@ -430,17 +432,7 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 	}
 
 	for _, path := range req.Properties.DeviceList.Devices() {
-		devResp := new(storage.BdevDeviceFormatResponse)
-		resp.DeviceResponses[path] = devResp
-		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
-			devResp.Error = FaultFormatError(path, err)
-			continue
-		}
-		if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
-			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
-				"failed to set ownership of %q to %d.%d", path,
-				req.OwnerUID, req.OwnerGID))
-		}
+		resp.DeviceResponses[path] = createAioFile(sb.log, path, req)
 	}
 
 	return resp, nil

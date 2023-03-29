@@ -45,6 +45,17 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
+		if (fi_out) {
+			struct dfuse_obj_hdl *oh;
+			/* DAOS-12714 If create returns an existing file then oh->doe_ie will point
+			 * to the stale ie in this case.  This can probably only happen when there
+			 * is a race between a create call from one client and rename from a
+			 * different client.
+			 */
+			oh         = (struct dfuse_obj_hdl *)fi_out->fh;
+			oh->doh_ie = inode;
+		}
+
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
 		 * keep a reference on the parent.
@@ -251,7 +262,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	if (attr_len)
+		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 

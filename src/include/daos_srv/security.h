@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,7 @@
 #include <daos_types.h>
 #include <daos_security.h>
 #include <daos_srv/pool.h>
-
-/**
- * Structure representing a resource's ownership by user and group,
- * respectively.
- */
-struct ownership {
-	char *user;	/** name of the user owner */
-	char *group;	/** name of the group owner */
-};
+#include <daos/security.h>
 
 /**
  * Allocate the default ACL for DAOS pools.
@@ -80,7 +72,7 @@ ds_sec_cred_get_origin(d_iov_t *cred, char **machine);
  */
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+			     struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
@@ -102,15 +94,14 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  *		-DER_NOMEM	Out of memory
  */
 int
-ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
  * Determine if the pool connection can be established based on the calculated
  * set of pool capabilities.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Access allowed
@@ -123,7 +114,7 @@ ds_sec_pool_can_connect(uint64_t pool_capas);
  * Determine if a pool handle with given security capabilities can create a
  * container.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Operation allowed
@@ -136,7 +127,7 @@ ds_sec_pool_can_create_cont(uint64_t pool_capas);
  * Determine if a pool handle with given security capabilities can delete a
  * container.
  *
- * \param	pool_capas	Capability bits acquired via
+ * \param[in]	pool_capas	Capability bits acquired via
  *				ds_sec_pool_get_capabilities
  *
  * \return	True		Operation allowed
@@ -149,7 +140,7 @@ ds_sec_pool_can_delete_cont(uint64_t pool_capas);
  * Determine if the container can be opened based on the calculated set of
  * container capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -162,23 +153,23 @@ ds_sec_cont_can_open(uint64_t cont_capas);
  * Determine if the container can be deleted by the user with the given
  * credential, based on the container ACL and ownership information.
  *
- * \param	pool_flags	Parent pool handle flags
- * \param	cred		Pool's security credential
- * \param	ownership	Container ownership information
- * \param	acl		Container ACL
+ * \param[in]	pool_flags	Parent pool handle flags
+ * \param[in]	cred		Pool's security credential
+ * \param[in]	ownership	Container ownership information
+ * \param[in]	acl		Container ACL
  *
  * \return	True		Operation allowed
  *		False		Operation forbidden
  */
 bool
 ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
-		       struct ownership *ownership, struct daos_acl *acl);
+		       struct d_ownership *ownership, struct daos_acl *acl);
 
 /**
  * Determine if the container properties can be viewed based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -191,7 +182,7 @@ ds_sec_cont_can_get_props(uint64_t cont_capas);
  * Determine if the container properties can be modified based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -204,7 +195,7 @@ ds_sec_cont_can_set_props(uint64_t cont_capas);
  * Determine if the container Access Control List can be viewed based on the
  * container security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -217,7 +208,7 @@ ds_sec_cont_can_get_acl(uint64_t cont_capas);
  * Determine if the container Access Control List can be modified based on the
  * container security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -230,7 +221,7 @@ ds_sec_cont_can_set_acl(uint64_t cont_capas);
  * Determine if the container ownership can be modified based on the container
  * security capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -243,7 +234,7 @@ ds_sec_cont_can_set_owner(uint64_t cont_capas);
  * Determine if the container can be written based on the container security
  * capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -255,7 +246,7 @@ ds_sec_cont_can_write_data(uint64_t cont_capas);
 /**
  * Calculate the new capability after enable CONT_CAPA_WRITE_DATA.
  *
- * \param	cont_capas	Input capability.
+ * \param[in]	cont_capas	Input capability.
  *
  * \return	Output capability
  */
@@ -265,7 +256,7 @@ ds_sec_cont_capa_write_data_enable(uint64_t cont_capas);
 /**
  * Calculate the new capability after disable CONT_CAPA_WRITE_DATA.
  *
- * \param	cont_capas	Input capability.
+ * \param[in]	cont_capas	Input capability.
  *
  * \return	Output capability
  */
@@ -276,7 +267,7 @@ ds_sec_cont_capa_write_data_disable(uint64_t cont_capas);
  * Determine if the container can be read based on the container security
  * capabilities.
  *
- * \param	cont_capas	Capability bits acquired via
+ * \param[in]	cont_capas	Capability bits acquired via
  *				ds_sec_cont_get_capabilities
  *
  * \return	True		Access allowed
@@ -284,6 +275,34 @@ ds_sec_cont_capa_write_data_disable(uint64_t cont_capas);
  */
 bool
 ds_sec_cont_can_read_data(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be opened exclusively based on the container
+ * security capabilities. Note that this function does not include the logic of
+ * ds_sec_cont_can_open, that is, even if this function returns true, one
+ * usually still needs to call ds_sec_cont_can_open.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_open_ex(uint64_t cont_capas);
+
+/**
+ * Determine if all container handles, including those from other users, can be
+ * evicted based on the container security capabilities.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_evict_all(uint64_t cont_capas);
 
 /**
  * Get the security capabilities for a rebuild container handle created by the
@@ -302,5 +321,19 @@ ds_sec_get_rebuild_cont_capabilities(void);
  */
 uint64_t
 ds_sec_get_admin_cont_capabilities(void);
+
+/**
+ * Return a positive integer if \a cred_x and \a cred_y are of the same user,
+ * return 0 if they are not, or return an error.
+ *
+ * \param[in]	cred_x	User's security credential
+ * \param[in]	cred_y	User's security credential
+ *
+ * \return	0	Not of the same user
+ *		>0	Of the same user
+ *		<0	Error
+ */
+int
+ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

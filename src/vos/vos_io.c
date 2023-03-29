@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,8 +191,8 @@ vos_dedup_init(struct vos_pool *pool)
 				 &pool->vp_dedup_hash);
 
 	if (rc)
-		D_ERROR(DF_UUID": Init dedup hash failed. "DF_RC".\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		D_ERROR(DF_UUID ": Init dedup hash failed. " DF_RC "\n", DP_UUID(pool->vp_id),
+			DP_RC(rc));
 	return rc;
 }
 
@@ -704,8 +704,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
-		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1)) {
 			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
 				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
@@ -1073,7 +1072,7 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 static int
 key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	       const struct vos_ilog_info *parent, daos_epoch_range_t *epr_out,
-	       struct vos_ilog_info *info)
+	       struct vos_ilog_info *info, bool has_cond)
 {
 	struct umem_instance	*umm;
 	daos_epoch_range_t	 epr = ioc->ic_epr;
@@ -1082,7 +1081,7 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	umm = vos_obj2umm(ioc->ic_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(ioc->ic_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, ioc->ic_bound, 0, parent, info);
+			    epr.epr_hi, ioc->ic_bound, has_cond, NULL, parent, info);
 	if (rc != 0)
 		goto out;
 
@@ -1200,6 +1199,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int			 i, rc;
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	bool			 has_cond = false;
 	struct daos_recx_ep_list *shadow;
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
@@ -1231,8 +1231,18 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		goto out;
 	}
 
+	if (ioc->ic_ts_set != NULL) {
+		if (ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY &&
+		    iod->iod_flags & VOS_OF_COND_AKEY_FETCH) {
+			has_cond = true;
+		} else if (!(ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY) &&
+			   ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH) {
+			has_cond = true;
+		}
+	}
+
 	rc = key_ilog_check(ioc, krec, &ioc->ic_dkey_info, &val_epr,
-			    &ioc->ic_akey_info);
+			    &ioc->ic_akey_info, has_cond);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, false)) {
 		if (rc == 0 && !ioc->ic_read_ts_only) {
@@ -1346,6 +1356,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i, rc;
+	bool			 has_cond;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1368,8 +1379,13 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		goto out;
 	}
 
+	if (ioc->ic_ts_set != NULL && ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH)
+		has_cond = true;
+	else
+		has_cond = false;
+
 	rc = key_ilog_check(ioc, krec, &obj->obj_ilog_info, &ioc->ic_epr,
-			    &ioc->ic_dkey_info);
+			    &ioc->ic_dkey_info, has_cond);
 
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
@@ -1738,7 +1754,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 
 	if (is_array) {
 		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
-			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
 			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
 				DP_KEY(&iod->iod_name));
 			return rc;
@@ -2392,29 +2407,31 @@ abort:
 	if (err == 0)
 		err = vos_ioc_mark_agg(ioc);
 
+	if (err == 0)
+		vos_ts_set_upgrade(ioc->ic_ts_set);
+
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0)
+		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+
+	if (err == 0)
+		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
-	if (err == 0) {
-		vos_ts_set_upgrade(ioc->ic_ts_set);
-		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-					    dth->dth_dti_cos_count,
-					    false, false);
+	if (err == 0)
+		vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries, false);
+
+	if (dtx_is_valid_handle(dth)) {
+		if (err == 0)
 			dth->dth_cos_done = 1;
-		}
-		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
-				  &ioc->ic_dedup_entries, false);
-	} else if (daes != NULL) {
-		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-				    dth->dth_dti_cos_count, false, true);
-		dth->dth_cos_done = 0;
+		else
+			dth->dth_cos_done = 0;
+
+		if (daes != NULL)
+			vos_dtx_post_handle(ioc->ic_cont, daes, dces, dth->dth_dti_cos_count,
+					    false, err != 0);
 	}
 
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-		if (err == 0)
-			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-	}
 
 	if (err != 0)
 		update_cancel(ioc);
@@ -2462,6 +2479,17 @@ vos_check_akeys(int iod_nr, daos_iod_t *iods)
 	return 0;
 }
 
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth)
+{
+	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
+
+	D_ASSERT(dtx_is_valid_handle(dth));
+
+	ioc->ic_epr.epr_hi = dth->dth_epoch;
+	ioc->ic_bound = MAX(dth->dth_epoch_bound, ioc->ic_epr.epr_hi);
+}
+
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -2474,9 +2502,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+	if (dtx_is_valid_handle(dth))
+		epoch = dth->dth_epoch;
+
+	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "
+		DF_X64", flags="DF_X64"\n", DP_UOID(oid), iod_nr, epoch, flags);
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {
@@ -2500,7 +2530,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = dkey_update_begin(ioc);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": dkey update begin failed. %d\n", DP_UOID(oid), rc);
+		D_ERROR(DF_UOID ": dkey update begin failed. " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
 		goto error;
 	}
 	*ioh = vos_ioc2ioh(ioc);

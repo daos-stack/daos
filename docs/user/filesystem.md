@@ -141,6 +141,12 @@ will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
 number of cores then overcommiting via the `--thread-count` option may be desirable.
 
+DFuse will use two types of threads: fuse threads to accept and process requests
+and event queue threads.  The `--thread-count` option will dictate the total number of
+threads and each eq-thread will reduce this.  Each event queue thread will create a
+daos event queue so consumes additional network resources.  The `--eq-count` option
+will control the event queues and associated threads.
+
 ### Restrictions
 
 DFuse by default is limited to a single user. Access to the filesystem from other users,
@@ -272,7 +278,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   samirrav@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off
@@ -331,7 +337,7 @@ Layout Type                             POSIX (1)
 Layout Version                          1
 Max Snapshot                            0
 Owner                                   root@
-Redundancy Factor                       rf0
+Redundancy Factor                       rd_fac0
 Redundancy Level                        node (2)
 Performance domain affinity level of RP 3
 Server Checksumming                     off
@@ -660,7 +666,7 @@ minutes, hours or days.
 
 dfuse-data-cache should be set to "on", "true", "off" or "false" if set, other values will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open
-files will be honoured with this option enabled, files which do not set
+files will be honored with this option enabled, files which do not set
 O\_DIRECT will be cached.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,

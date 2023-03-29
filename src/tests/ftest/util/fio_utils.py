@@ -1,14 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import pcmd
-from command_utils_base import \
-    BasicParameter, FormattedParameter, CommandWithParameters
+from command_utils_base import BasicParameter, FormattedParameter, CommandWithParameters
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 
@@ -26,7 +24,7 @@ class FioCommand(ExecutableCommand):
         """
         super().__init__("/run/fio/*", "fio", path)
 
-        # fio commandline options
+        # fio command-line options
         self.debug = FormattedParameter("--debug={}")
         self.parse_only = FormattedParameter("--parse-only", False)
         self.output = FormattedParameter("--output={}")
@@ -139,14 +137,17 @@ class FioCommand(ExecutableCommand):
         else:
             self.log.error("Invalid job name: %s", job_name)
 
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
+    @property
+    def with_bind(self):
+        """Get the command string with bind_cores.
+
+        Also adds fio job parameters.
 
         Returns:
-            str: the command with all the defined parameters
+            str: the command string with bind_cores and fio job parameters.
 
         """
-        command = [super().__str__()]
+        command = [super().with_bind]
         for name in sorted(self._jobs):
             if name == "global":
                 command.insert(1, str(self._jobs[name]))

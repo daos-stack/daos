@@ -82,7 +82,7 @@ daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
 
-		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
@@ -106,8 +106,8 @@ daos-server RPM.
 
 ## Hardware Provisioning
 
-In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
-SSDs will be prepared and configured to be used by DAOS.
+In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
+used by DAOS and NVME SSDs will be identified.
 
 !!! note
 	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from
@@ -148,12 +148,7 @@ SSDs will be prepared and configured to be used by DAOS.
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-4. Prepare the NVME devices on Server nodes:
-
-		daos_server nvme prepare -u root
-		Preparing locally-attached NVMe storage\...
-
-5. Scan the available storage on the Server nodes:
+4. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
 		Scanning locally-attached storage\...

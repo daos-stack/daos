@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,8 +9,8 @@ import time
 from file_count_test_base import FileCountTestBase
 from data_mover_test_base import DataMoverTestBase
 from general_utils import human_to_bytes
-from pool_test_base import PoolTestBase
 import security_test_base as secTestBase
+from test_utils_pool import check_pool_creation
 
 
 class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
@@ -52,7 +51,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
-            PoolTestBase.check_pool_creation(self, 60)
+            check_pool_creation(self, self.pool, 60)
             self.pool[-1].connect()
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],

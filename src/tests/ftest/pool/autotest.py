@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2023 Intel Corporation.
 
@@ -20,7 +19,7 @@ class PoolAutotestTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=pool
+        :avocado: tags=pool,daos_cmd
         :avocado: tags=autotest,pool_autotest,quick,test_pool_autotest
         """
         self.log.info("Create a pool")

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -428,8 +428,30 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count, rcv_delay,
 		  self_id, to_id, from_id);
 
-	if (self_id == SWIM_ID_INVALID)
-		D_GOTO(out_reply, rc = -DER_UNINIT);
+	if (self_id == SWIM_ID_INVALID) {
+		uint64_t incarnation;
+
+		if (ctx == NULL)
+			D_GOTO(out_reply, rc = -DER_UNINIT);
+
+		crt_swim_csm_lock(csm);
+		incarnation = csm->csm_incarnation;
+		crt_swim_csm_unlock(csm);
+
+		/*
+		 * Infer my rank from rpc->cr_ep.ep_rank, and simulate a reply,
+		 * shorting the local swim state. If there is a suspicion on me
+		 * in rpc_in->upds, this call will clarify it and bump my
+		 * incarnation.
+		 */
+		rc = swim_updates_short(ctx, rpc->cr_ep.ep_rank, incarnation, from_id, to_id,
+					rpc_in->upds.ca_arrays, rpc_in->upds.ca_count,
+					&rpc_out->upds.ca_arrays, &rpc_out->upds.ca_count);
+		if (rc != 0)
+			RPC_ERROR(rpc_priv, "updates short: %lu: %lu <= %lu failed: "DF_RC"\n",
+				  self_id, to_id, from_id, DP_RC(rc));
+		D_GOTO(out_reply, rc);
+	}
 
 	snd_delay = crt_swim_update_delays(csm, hlc, from_id, rcv_delay,
 					   rpc_in->upds.ca_arrays,
@@ -957,11 +979,11 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	swim_id_t		 self_id = swim_self_get(ctx);
 	uint64_t		 incarnation = d_hlc_get();
 
 	D_ASSERT(state != NULL);
-	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
-		  id, swim_self_get(ctx));
+	D_ASSERTF(self_id == SWIM_ID_INVALID || id == self_id, DF_U64" == "DF_U64"\n", id, self_id);
 	crt_swim_csm_lock(csm);
 	csm->csm_incarnation = incarnation;
 	crt_swim_csm_unlock(csm);
@@ -1509,8 +1531,10 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 	crt_swim_csm_unlock(csm);
 
-	if (rc == 0)
+	if (rc == 0) {
 		D_FREE(cst);
+		swim_member_del(csm->csm_ctx, rank);
+	}
 
 	return rc;
 }
@@ -1534,6 +1558,10 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 			SWIM_STATUS_CHARS[cst->cst_state.sms_status],
 			cst->cst_state.sms_incarnation);
 		D_FREE(cst);
+
+		crt_swim_csm_unlock(csm);
+		swim_member_del(csm->csm_ctx, rank);
+		crt_swim_csm_lock(csm);
 	}
 	crt_swim_csm_unlock(csm);
 }

@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,7 +40,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
+        :avocado: tags=security,container_acl,daos_cmd
         :avocado: tags=cont_update_acl_inputs,test_acl_update_invalid_inputs
         """
         # Get lists of invalid
@@ -89,7 +88,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
+        :avocado: tags=security,container_acl,daos_cmd
         :avocado: tags=cont_update_invalid_acl,test_update_invalid_acl
         """
         invalid_file_content = self.params.get(
@@ -128,7 +127,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
+        :avocado: tags=security,container_acl,daos_cmd
         :avocado: tags=cont_update_acl,test_update_acl_file
         """
         path_to_file = os.path.join(self.tmp, self.acl_filename)
@@ -181,7 +180,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
+        :avocado: tags=security,container_acl,daos_cmd
         :avocado: tags=cont_update_acl_noperms,test_no_user_permissions
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")

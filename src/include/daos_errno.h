@@ -285,7 +285,11 @@ extern "C" {
 	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
 	       update again)						\
 	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
-	       NVMe I/O error)
+	       NVMe I/O error)						\
+	ACTION(DER_NO_CERT,		(DER_ERR_DAOS_BASE + 43),	\
+	       Unable to access one or more certificates)		\
+	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
+	       Invalid x509 certificate)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

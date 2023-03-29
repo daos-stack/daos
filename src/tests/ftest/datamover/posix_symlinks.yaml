@@ -16,7 +16,6 @@ server_config:
           scm_size: 4
 pool:
   scm_size: 1G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -28,5 +27,3 @@ dcp:
       dereference: true
     deref_off:
       dereference: false
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"

@@ -2074,6 +2074,7 @@ static int
 pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
 }
 

@@ -13,7 +13,6 @@ server_config:
         - DD_MASK=mgmt,md,dsms,any
         - D_LOG_FLUSH=DEBUG
 pool:
-  control_method: dmg
   scm_size: 5G
   name: daos_server
 container:

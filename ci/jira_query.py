@@ -42,7 +42,6 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 
 def set_output(key, value):
     """Set a key-value pair in GitHub actions metadata"""
-
     env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         clean_value = value.replace('\n', '%0A')
@@ -63,6 +62,7 @@ def valid_comp_from_dir(component):
 
 def fetch_pr_data():
     """Query GibHub API and return PR metadata"""
+    pr_data = None
     if len(sys.argv) == 2:
         try:
             pr_number = int(sys.argv[1])
@@ -79,18 +79,26 @@ def fetch_pr_data():
         print('Pass PR number on command line')
         sys.exit(1)
 
+    assert pr_data is not None
     return pr_data
 
 
 def main():
     """Run the script"""
 
+    # pylint: disable=too-many-branches
     pr_data = fetch_pr_data()
 
     priority = None
     errors = []
-    gh_label = []
+    gh_label = set()
     pr_title = pr_data['title']
+
+    # Revert PRs can be auto-generated, detect and handle this, as well as
+    # marking them a priority.
+    if pr_title.startswith('Revert "'):
+        pr_title = pr_title[8:-1]
+        priority = 2
 
     parts = pr_title.split(' ')
     ticket_number = parts[0]
@@ -130,8 +138,8 @@ def main():
         set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
-    print(ticket.fields.summary)
-    print(ticket.fields.status)
+    print(f'Ticket summary: {ticket.fields.summary}')
+    print(f'Ticket status: {ticket.fields.status}')
 
     # Highest priority, tickets with "Approved to Merge" set.
     if ticket.fields.customfield_10044:
@@ -153,9 +161,9 @@ def main():
                 rv_priority = 3
 
             if str(version) in ('2.2 Community Release'):
-                gh_label.append('release-2.2')
+                gh_label.add('release-2.2')
             if str(version) in ('2.4 Community Release'):
-                gh_label.append('release-2.4')
+                gh_label.add('release-2.4')
 
         # If a PR does not otherwise have priority then use custom values from above.
         if priority is None and not pr_data['base']['ref'].startswith('release'):
@@ -172,7 +180,7 @@ def main():
 
     if priority is not None:
         output.append(f'Job should run at elevated priority ({priority})')
-        gh_label.append('priority')
+        gh_label.add('priority')
 
     if errors:
         output.append(f'Errors are {",".join(errors)}')
@@ -182,7 +190,7 @@ def main():
     set_output('message', '\n'.join(output))
 
     if gh_label:
-        set_output('label', '\n'.join(gh_label))
+        set_output('label', '\n'.join(sorted(gh_label)))
 
     # Remove all managed labels which are not to be set.
     to_remove = []

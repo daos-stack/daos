@@ -113,6 +113,7 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientConnectionTimedOut
 	ClientFormatRunningSystem
 	ClientRpcTimeout
 	ClientConfigVMDImbalance
@@ -188,4 +189,5 @@ const (
 	SecurityUnknown Code = iota + 900
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
+	SecurityInvalidCert
 )
