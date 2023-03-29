@@ -282,7 +282,7 @@ class ServerFillUp(IorTestBase):
         Args:
             rank: Rank number to kill the daos server
         """
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True, copy=True)
 
     def exclude_target_thread(self, rank, target):
         """Target kill thread function.
