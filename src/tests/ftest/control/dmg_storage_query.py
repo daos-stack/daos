@@ -4,6 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import re
+
 import avocado
 
 from control_test_base import ControlTestBase
@@ -26,8 +28,41 @@ class DmgStorageQuery(ControlTestBase):
     def setUp(self):
         """Set up for dmg storage query."""
         super().setUp()
-        self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
-        self.targets = self.server_managers[-1].get_config_value("targets")
+        self.targets = self.server_managers[-1].get_config_value('targets')
+        md_on_ssd = False
+        bdev_tiers = 0
+        self.bdev_list = []
+        for engine in self.server_managers[-1].manager.job.yaml.engine_params:
+            for index, tier in enumerate(engine.storage.storage_tiers):
+                if tier.storage_class.value == 'ram':
+                    md_on_ssd = True
+                elif tier.storage_class.value == 'nvme':
+                    bdev_tiers += 1
+                    for device in tier.bdev_list.value:
+                        self.bdev_list.append(
+                            {'bdev': device, 'roles': tier.roles.value, 'tier': index})
+        if md_on_ssd:
+            for device in self.bdev_list:
+                if device['role']:
+                    continue
+                if bdev_tiers == 1 and device['tier'] == 1:
+                    # First bdev storage tier of 1 tier: all roles
+                    device['role'] = 'wal,data,meta'
+                elif bdev_tiers == 2 and device['tier'] == 1:
+                    # First bdev storage tier of 2 tiers: wal roles
+                    device['role'] = 'wal'
+                elif bdev_tiers == 2 and device['tier'] == 2:
+                    # Second bdev storage tier of 2 tiers: data & meta roles
+                    device['role'] = 'data,meta'
+                elif bdev_tiers > 2 and device['tier'] == 1:
+                    # First bdev storage tier of >2 tiers: wal
+                    device['role'] = 'wal'
+                elif bdev_tiers > 2 and device['tier'] == 2:
+                    # Second bdev storage tier of >2 tiers: meta
+                    device['role'] = 'meta'
+                else:
+                    # Additional bdev storage tier of >2 tiers: data
+                    device['role'] = 'data'
 
     def check_dev_state(self, device_info, state):
         """Check the state of the device.
@@ -48,7 +83,7 @@ class DmgStorageQuery(ControlTestBase):
 
     def test_dmg_storage_query_devices(self):
         """
-        JIRA ID: DAOS-3925
+        JIRA ID: DAOS-3925, DAOS-13011
 
         Test Description: Test 'dmg storage query list-devices' command.
 
@@ -61,15 +96,32 @@ class DmgStorageQuery(ControlTestBase):
         device_info = get_storage_query_device_info(self, self.dmg)
 
         # Check if the number of devices match the config
-        msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(device_info), msg)
+        if len(self.bdev_list) != len(device_info):
+            self.fail(
+                'Number of devices ({}) do not match server config ({})'.format(
+                    len(device_info), len(self.bdev_list)))
 
         # Check that number of targets match the config
+        errors = 0
         targets = 0
         for device in device_info:
+            self.log.info('Verifying device %s', device['tr_addr'])
             targets += len(device['tgt_ids'])
+            self.log.info('  targets: %s', len(device['tgt_ids']))
+            self.log.info('  roles:   %s', device['roles'])
+            for bdev in self.bdev_list:
+                tr_addr = '{:02x}{:02x}{:02x}:'.format(
+                    *list(map(int, re.split(r'[:.]', bdev)[1:], [16] * 3)))
+                if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(tr_addr):
+                    if device['roles'] != bdev['roles']:
+                        self.log.info('    ERROR: expected role: %s', bdev['roles'])
+                        errors += 1
+
         if self.targets != targets:
-            self.fail("Wrong number of targets found: {}".format(targets))
+            self.fail('Wrong number of targets found: {}'.format(targets))
+        if errors:
+            self.fail('Errors detected verifying roles: {}'.format(errors))
+        self.log.info('Test passed')
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):
