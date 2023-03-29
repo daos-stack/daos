@@ -56,7 +56,7 @@ var (
 
 	defMemInfo = &common.MemInfo{
 		HugepageSizeKiB: 2048,
-		MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
+		MemTotalKiB:     (humanize.GiByte * 80) / humanize.KiByte,
 	}
 )
 
@@ -287,8 +287,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/2").
-					WithStorageClass("dcpm").
-					WithScmDeviceList("/dev/pmem1"),
+					WithStorageClass("ram"),
 				storage.NewTierConfig().
 					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
@@ -348,6 +347,7 @@ func TestServerConfig_Validation(t *testing.T) {
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
+		memTotBytes uint64
 		expConfig   *Server
 		expErr      error
 	}{
@@ -528,7 +528,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
@@ -545,7 +544,9 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
+								// 80gib total - (8gib huge + 6gib sys +
+								// 1gib engine)
+								WithScmRamdiskSize(65).
 								WithScmMountPoint("/foo"),
 							storage.NewTierConfig().
 								WithStorageClass("file").
@@ -563,7 +564,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 						),
 					)
@@ -576,7 +576,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
@@ -594,7 +593,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 							storage.NewTierConfig().
 								WithStorageClass("file").
@@ -612,7 +610,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 						),
 					)
@@ -624,7 +621,9 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
+							// 80gib total - (4gib huge + 6gib sys +
+							// 1gib engine)
+							WithScmRamdiskSize(69).
 							WithScmMountPoint("/foo"),
 					),
 				),
@@ -635,7 +634,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
 							WithScmMountPoint("/foo"),
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
@@ -650,7 +648,9 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
+							// 80gib total - (9gib huge + 6gib sys +
+							// 1gib engine)
+							WithScmRamdiskSize(64).
 							WithScmMountPoint("/foo"),
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
@@ -667,7 +667,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
 							WithScmMountPoint("/foo"),
 						storage.NewTierConfig().
 							WithStorageClass("file").
@@ -683,7 +682,9 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
+							// 80gib total - (8gib huge + 6gib sys +
+							// 1gib engine)
+							WithScmRamdiskSize(65).
 							WithScmMountPoint("/foo"),
 						storage.NewTierConfig().
 							WithStorageClass("file").
@@ -700,7 +701,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
 							WithScmMountPoint("/foo"),
 					),
 				)
@@ -711,10 +711,31 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
+							// 80gib total - (0gib huge + 6gib sys +
+							// 1gib engine)
+							WithScmRamdiskSize(73).
 							WithScmMountPoint("/foo"),
 					),
 				),
+		},
+		"out of range scm_size; low": {
+			extraConfig: func(c *Server) *Server {
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
+				return c
+			},
+			expErr: FaultScmTmpfsUnderMinMem(humanize.GiByte*3, 0, common.MemTmpfsMin),
+		},
+		"out of range scm_size; high": {
+			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem
+			// 33 huge mem + 6 sys rsv + 2 engine rsv = 41 gib reserved mem
+			// 60 total - 41 reserved = 19 for tmpfs (9.5 gib per engine)
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				// 9gib is max remainder after reserved, 10gib is too high
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 10
+				return c.WithNrHugepages(16896)
+			},
+			expErr: FaultScmTmpfsOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
 		},
 		"control metadata multi-engine": {
 			extraConfig: func(c *Server) *Server {
@@ -729,8 +750,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages().
-									WithScmRamdiskSize(16),
+									WithScmDisableHugepages(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -742,8 +762,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/2").
 									WithStorageClass("ram").
-									WithScmDisableHugepages().
-									WithScmRamdiskSize(16),
+									WithScmDisableHugepages(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
@@ -766,7 +785,9 @@ func TestServerConfig_Validation(t *testing.T) {
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
 								WithScmDisableHugepages().
-								WithScmRamdiskSize(16),
+								// (80gib total - (18gib huge + 6gib sys +
+								// 2gib engines)) / 2 engines
+								WithScmRamdiskSize(27),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -790,7 +811,9 @@ func TestServerConfig_Validation(t *testing.T) {
 								WithScmMountPoint("/mnt/daos/2").
 								WithStorageClass("ram").
 								WithScmDisableHugepages().
-								WithScmRamdiskSize(16),
+								// (80gib total - (18gib huge + 6gib sys +
+								// 2gib engines)) / 2 engines
+								WithScmRamdiskSize(27),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
@@ -821,8 +844,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages().
-									WithScmRamdiskSize(16),
+									WithScmDisableHugepages(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -845,7 +867,9 @@ func TestServerConfig_Validation(t *testing.T) {
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
 								WithScmDisableHugepages().
-								WithScmRamdiskSize(16),
+								// 80gib total - (8gib huge + 6gib
+								// sys + 1gib engine)
+								WithScmRamdiskSize(65),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -874,8 +898,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages().
-									WithScmRamdiskSize(16),
+									WithScmDisableHugepages(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -895,7 +918,9 @@ func TestServerConfig_Validation(t *testing.T) {
 							WithScmMountPoint("/mnt/daos/1").
 							WithStorageClass("ram").
 							WithScmDisableHugepages().
-							WithScmRamdiskSize(16),
+							// 80gib total - (9gib huge + 6gib sys +
+							// 1gib engine)
+							WithScmRamdiskSize(64),
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
 							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -922,7 +947,6 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/foo"),
 						))
 			},
@@ -940,7 +964,19 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo))
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     (humanize.GiByte * 80) / humanize.KiByte,
+			}
+			if tt.memTotBytes != 0 {
+				val := tt.memTotBytes / humanize.KiByte
+				if val > math.MaxInt {
+					t.Fatal("int overflow")
+				}
+				mi.MemTotalKiB = int(val)
+			}
+
+			CmpErr(t, tt.expErr, dupe.Validate(log, mi))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -1082,15 +1118,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 			outTxt:         "servers:",
 			expValidateErr: errors.New("use \"engines\" instead"),
 		},
-		"specify legacy servers conf directive in addition to engines": {
-			inTxt:  "engines:",
-			outTxt: "servers:",
-			extraConfig: func(c *Server) *Server {
-				var nilEngineConfig *engine.Config
-				return c.WithEngines(nilEngineConfig)
-			},
-			expValidateErr: errors.New("use \"engines\" instead"),
-		},
 		"duplicates in bdev_list from config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
@@ -1100,7 +1127,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
 								WithScmMountPoint("/mnt/daos/2"),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
@@ -1115,6 +1141,27 @@ func TestServerConfig_Parsing(t *testing.T) {
 			inTxt:       "    bdev_busid_range: 0x80-0x8f",
 			outTxt:      "    bdev_busid_range: 0x80-0x8g",
 			expParseErr: errors.New("\"0x8g\": invalid syntax"),
+		},
+		"additional empty storage tier": {
+			// Add empty storage tier to engine-0 and verify it is ignored.
+			inTxt:  "    - wal",
+			outTxt: "    - wal\n  -",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
+				}
+				return nil
+			},
+		},
+		"specify legacy servers conf directive in addition to engines": {
+			inTxt:  "engines:",
+			outTxt: "servers:",
+			extraConfig: func(c *Server) *Server {
+				var nilEngineConfig *engine.Config
+				return c.WithEngines(nilEngineConfig)
+			},
+			expValidateErr: errors.New("use \"engines\" instead"),
 		},
 		"legacy storage; empty bdev_list": {
 			legacyStorage: true,
@@ -1228,18 +1275,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 			inTxt:       "disable_vfio: true",
 			outTxt:      "enable_vmd: true",
 			expParseErr: FaultConfigVMDSettingDuplicate,
-		},
-		"additional empty storage tier": {
-			// Add empty storage tier to engine-0 and verify it is ignored.
-			inTxt:  "    - wal",
-			outTxt: "    - wal\n  -",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 2 {
-					return errors.Errorf("want 2 storage tiers, got %d", nr)
-				}
-				return nil
-			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1360,7 +1395,7 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 	}
 }
 
-func TestServerConfig_DuplicateValues(t *testing.T) {
+func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.MockConfig().
 			WithLogFile("a").
@@ -1369,7 +1404,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			).
 			WithPinnedNumaNode(0).
@@ -1383,7 +1417,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			).
 			WithPinnedNumaNode(0).
@@ -1441,13 +1474,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1)),
 				),
 			configB: configB().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
@@ -1468,6 +1501,17 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
 				),
 			expErr: errors.New("valid PCI addresses"),
+		},
+		"mismatched scm_class": {
+			configA: configA(),
+			configB: configB().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("bb").
+						WithScmDeviceList("a"),
+				),
+			expErr: FaultConfigScmDiffClass(1, 0),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

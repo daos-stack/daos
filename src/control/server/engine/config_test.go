@@ -298,9 +298,18 @@ func TestConfig_BdevValidation(t *testing.T) {
 		expCls          storage.Class
 		expEmptyCfgPath bool
 	}{
-		"unknown class": {
+		"nvme class; no scm": {
 			cfg: baseValidConfig().
 				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				),
+			expErr: errors.New("missing scm storage tier"),
+		},
+		"unknown class": {
+			cfg: baseValidConfig().
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvmed"),
 				),
@@ -308,7 +317,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme"),
 				),
@@ -316,7 +325,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
@@ -324,7 +333,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; duplicate pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
@@ -333,7 +342,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; bad pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
@@ -342,7 +351,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"kdev class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("kdev"),
 				),
@@ -350,7 +359,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"kdev class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("kdev").
 						WithBdevDeviceList("/dev/sda"),
@@ -359,7 +368,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; no size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevDeviceList("bdev1"),
@@ -368,7 +377,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; negative size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevDeviceList("bdev1").
@@ -378,7 +387,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevFileSize(10),
@@ -387,7 +396,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevFileSize(10).
@@ -397,7 +406,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"mix of emulated and non-emulated device classes": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1)),

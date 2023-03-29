@@ -292,7 +292,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
-	c.Storage.Tiers = c.Storage.Tiers[:]
+	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
 	return c
 }

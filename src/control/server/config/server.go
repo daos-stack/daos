@@ -469,8 +469,8 @@ func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSi
 	return nil
 }
 
-// Calculate minimum scm tmpfs size using nr hugepages from config and total memory
-// as reported by /proc/meminfo.
+// Calculate thresholds for scm tmpfs size using nr hugepages from config and total memory
+// as reported by /proc/meminfo. Validate configured values or assign if not already set.
 func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
@@ -479,7 +479,7 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 	// Create the same size scm for each engine.
 	scmCfgs := cfg.Engines[0].Storage.Tiers.ScmConfigs()
 
-	if len(scmCfgs) == 0 || scmCfgs[0].Class == storage.ClassDcpm {
+	if len(scmCfgs) == 0 || scmCfgs[0].Class != storage.ClassRam {
 		return nil // no tmpfs to size
 	}
 
@@ -497,6 +497,7 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 	}
 
 	if scmSize < common.MemTmpfsMin {
+		// Total RAM is insufficient to meet minimum tmpfs size.
 		return storage.FaultScmTmpfsLowMem(common.MemTmpfsMin, scmSize)
 	}
 
@@ -506,17 +507,18 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 			return errors.Errorf("unexpected number of scm configs, want 1 got %d",
 				len(scs))
 		}
+
 		// Validate any configured scm sizes.
 		confSize := uint64(humanize.GiByte * scs[0].Scm.RamdiskSize)
-		if confSize > scmSize {
-			return errors.Errorf("configured scm tmpfs size %s larger than maximum %s",
-				humanize.IBytes(confSize), humanize.IBytes(scmSize))
-		} else if confSize == 0 {
+		if confSize == 0 {
 			// Apply calculated size as not already set.
 			scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
+		} else if confSize > scmSize {
+			// Total RAM is not enough to meet tmpfs size requested in config.
+			return FaultScmTmpfsOverMaxMem(confSize, scmSize, common.MemTmpfsMin)
 		} else if confSize < common.MemTmpfsMin {
-			return errors.Errorf("configured scm tmpfs size %s lower than minimum %s",
-				humanize.IBytes(confSize), humanize.IBytes(common.MemTmpfsMin))
+			// Tmpfs size requested in config is less than minimum allowed.
+			return FaultScmTmpfsUnderMinMem(confSize, scmSize, common.MemTmpfsMin)
 		}
 	}
 
@@ -606,9 +608,7 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-
 		ec.ConvertLegacyStorage(log, idx)
-
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
@@ -634,6 +634,12 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 		log.Debug(msg)
 	}
 
+	if len(cfg.Engines) > 1 {
+		if err := cfg.validateMultiEngineConfig(log); err != nil {
+			return err
+		}
+	}
+
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
@@ -642,24 +648,17 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 		return err
 	}
 
-	// Auto-size tmpfs if SCM is class RAM.
 	if err := scmSetSize(log, mi, cfg); err != nil {
 		return err
-	}
-
-	if len(cfg.Engines) > 1 {
-		if err := cfg.validateMultiServerConfig(log); err != nil {
-			return err
-		}
 	}
 
 	return nil
 }
 
-// validateMultiServerConfig performs an extra level of validation for multi-server configs. The
+// validateMultiEngineConfig performs an extra level of validation for multi-server configs. The
 // goal is to ensure that each instance has unique values for resources which cannot be shared
 // (e.g. log files, fabric configurations, PCI devices, etc.)
-func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
+func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	if len(cfg.Engines) < 2 {
 		return nil
 	}
@@ -671,6 +670,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
+	seenScmCls := storage.ClassNone
+	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -700,9 +701,7 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				return FaultConfigDuplicateScmMount(idx, seenIn)
 			}
 			seenValues[mountConfig] = idx
-		}
 
-		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
 			for _, dev := range scmConf.Scm.DeviceList {
 				if seenIn, exists := seenScmSet[dev]; exists {
 					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
@@ -710,6 +709,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				}
 				seenScmSet[dev] = idx
 			}
+
+			if seenScmClsIdx != -1 && scmConf.Class != seenScmCls {
+				log.Debugf("scm_class entry %s in %d doesn't match %d",
+					scmConf.Class, idx, seenScmClsIdx)
+				return FaultConfigScmDiffClass(idx, seenScmClsIdx)
+			}
+			seenScmCls = scmConf.Class
+			seenScmClsIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()

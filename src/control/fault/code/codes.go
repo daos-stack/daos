@@ -178,6 +178,9 @@ const (
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
+	ServerConfigScmTmpfsUnderMinMem
+	ServerConfigScmTmpfsOverMaxMem
+	ServerConfigScmDiffClass
 )
 
 // SPDK library bindings codes

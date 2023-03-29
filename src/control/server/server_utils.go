@@ -391,9 +391,6 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 	bdevCache := engine.storage.GetBdevCache()
 	newNrBdevs := len(bdevCache.Controllers)
 
-	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",
-		*lastEngineIdx, *lastBdevCount, eIdx, newNrBdevs)
-
 	// Update last recorded counters if this is the first update or if the number of bdevs is
 	// unchanged. If bdev count differs between engines, return fault.
 	switch {

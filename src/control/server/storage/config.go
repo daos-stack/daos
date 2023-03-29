@@ -497,10 +497,10 @@ func (sc *ScmConfig) Validate(class Class) error {
 			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
-		// RAM-disk size auto-sized so allow if zero.
 		if len(sc.DeviceList) > 0 {
 			return errors.New("scm_list may not be set when scm_class is ram")
 		}
+		// Note: RAM-disk size auto-sized so allow if zero.
 	}
 
 	if len(sc.DeviceList) > maxScmDeviceLen {

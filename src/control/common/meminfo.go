@@ -157,8 +157,8 @@ func CalcScmSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, eng
 		memEng = rsvEng
 	}
 
-	msgStats := fmt.Sprintf("mem total: %s, mem hugepage: %s, nr engines: %d, "+
-		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memTot),
+	msgStats := fmt.Sprintf("mem total: %s (%d), mem hugepage: %s, nr engines: %d, "+
+		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memTot), memTot,
 		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
 		humanize.IBytes(memEng))
 
