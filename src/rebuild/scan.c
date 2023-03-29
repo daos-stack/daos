@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,14 +66,14 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	rc = dbtree_iter_delete(ih, NULL);
-	if (rc != 0)
-		return rc;
-
 	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
 		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
 		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
+
+	rc = dbtree_iter_delete(ih, NULL);
+	if (rc != 0)
+		return rc;
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
@@ -114,10 +114,9 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
 					    rpt->rt_coh_uuid, arg->cont_uuid,
 					    arg->tgt_id, rpt->rt_rebuild_ver,
-					    rpt->rt_stable_epoch, arg->oids,
-					    arg->ephs, arg->punched_ephs, arg->shards,
-					    arg->count, rpt->rt_new_layout_ver,
-					    rpt->rt_rebuild_op);
+					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -290,7 +289,12 @@ rebuild_objects_send_ult(void *data)
 	arg.rpt = rpt;
 	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
 		if (rpt->rt_stable_epoch == 0) {
-			ABT_thread_yield();
+			dss_sleep(0);
+			continue;
+		}
+
+		if (dbtree_is_empty(tls->rebuild_tree_hdl)) {
+			dss_sleep(0);
 			continue;
 		}
 
@@ -431,7 +435,7 @@ find_rebuild_shards(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 
 retry:
 	switch (rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 		rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
 					 *tgts, *shards, max_shards_size);
 		break;
@@ -569,9 +573,9 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
 	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_stable_epoch, rpt->rt_rebuild_op,
-			  &arg->oid, &arg->epoch, &arg->punched_epoch, &arg->shard, 1,
-			  arg->tgt_index, rpt->rt_new_layout_ver);
+			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
 	rpt_put(rpt);
 	D_FREE(arg);
 }
@@ -697,11 +701,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 	case RB_OP_DRAIN:
 	case RB_OP_REINT:
 	case RB_OP_EXTEND:
-		rc = find_rebuild_shards(map, arg->co_props.dcp_global_version, &md,
+		rc = find_rebuild_shards(map, arg->co_props.dcp_obj_version, &md,
 					 rpt->rt_tgts_num, rpt->rt_rebuild_op,
 					 rpt->rt_rebuild_ver, myrank,
 					 &tgts, &shards, LOCAL_ARRAY_SIZE);
@@ -782,6 +786,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct ds_cont_child		*cont_child = NULL;
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -818,6 +823,18 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+		if (rc != 0) {
+			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
+			vos_cont_close(coh);
+			return rc;
+		}
+		cont_child->sc_discarding = 1;
+	}
+
 	epoch.oe_value = rpt->rt_stable_epoch;
 	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
@@ -842,6 +859,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 	vos_cont_close(coh);
+
+	if (cont_child != NULL) {
+		cont_child->sc_discarding = 0;
+		ds_cont_child_put(cont_child);
+	}
 
 	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
@@ -877,6 +899,11 @@ rebuild_scanner(void *data)
 	}
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		/* Skip reclaim OP for HANG failure injection */
+		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+		    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
+			break;
+
 		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
 		dss_sleep(2 * 1000);
 	}

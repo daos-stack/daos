@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,8 +54,7 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	status := 0
 	var errStr *string
 	if cmdErr != nil {
-		errStr = new(string)
-		*errStr = cmdErr.Error()
+		errStr = func() *string { str := cmdErr.Error(); return &str }()
 		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
@@ -155,6 +154,9 @@ or query/manage an object inside a container.`
 			if os.Getenv("D_LOG_MASK") == "" {
 				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
 			}
+			if os.Getenv("DD_MASK") == "" {
+				os.Setenv("DD_MASK", "mgmt")
+			}
 			log.Debug("debug output enabled")
 		}
 
@@ -184,11 +186,32 @@ or query/manage an object inside a container.`
 			}
 		}
 
+		// fixup args for commands that can use --path and
+		// positional arguments
+		if contPathCmd, ok := cmd.(interface {
+			parseContPathArgs([]string) ([]string, error)
+		}); ok {
+			var err error
+			args, err = contPathCmd.parseContPathArgs(args)
+			if err != nil {
+				return err
+			}
+		}
+
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}
 
 		return nil
+	}
+
+	// Configure DAOS client logging to stderr if no log file
+	// is specified. This is to avoid polluting the JSON output.
+	if os.Getenv("D_LOG_FILE") == "" {
+		os.Setenv("D_LOG_FILE", "/dev/null")
+		if os.Getenv("DD_STDERR") == "" {
+			os.Setenv("DD_STDERR", "debug")
+		}
 	}
 
 	// Initialize the daos debug system first so that

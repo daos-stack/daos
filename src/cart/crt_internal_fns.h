@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,12 +36,10 @@ bool crt_context_empty(int provider, int locked);
 void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
 crt_context_t crt_context_lookup(int ctx_idx);
 crt_context_t crt_context_lookup_locked(int ctx_idx);
-void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
+void crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
-
-void crt_trigger_hlc_error_cb(void);
 
 /** some simple helper functions */
 
@@ -67,5 +65,12 @@ crt_register_proto_fi(crt_endpoint_t *ep);
 
 int
 crt_register_proto_ctl(crt_endpoint_t *ep);
+
+void
+crt_trigger_hlc_error_cb(void);
+
+void
+crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+		      enum crt_event_type type);
 
 #endif /* __CRT_INTERNAL_FNS_H__ */

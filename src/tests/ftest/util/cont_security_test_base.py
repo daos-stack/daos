@@ -1,17 +1,17 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 import pwd
 import grp
 import re
-from apricot import TestWithServers
+
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 import general_utils
@@ -208,7 +208,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_set_attr(
-            pool_uuid, container_uuid, attr, value)
+            pool_uuid, container_uuid, attrs={attr: value})
         return result
 
     def get_container_attribute(

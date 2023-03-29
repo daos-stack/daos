@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -847,9 +847,16 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
+
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1002,9 +1009,15 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 
 update_iv_cache:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1026,6 +1039,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *value)
 {
 	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*pool_key;
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
@@ -1047,7 +1061,9 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
-	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
+	pool_key = (struct pool_iv_key *)key->key_buf;
+	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank,
+			     pool_key->pik_term);
 
 	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
@@ -1116,7 +1132,7 @@ retry:
 }
 
 static int
-pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
+pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 	       struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
 	       unsigned int sync_mode, bool retry)
@@ -1139,6 +1155,7 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
 	pool_key->pik_eph = d_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);

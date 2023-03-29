@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -404,6 +404,12 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 
+	if (!json_object_object_get_ex(json_pool, "svc_ldr", &tmp)) {
+		D_ERROR("unable to extract pool leader from JSON\n");
+		return -DER_INVAL;
+	}
+	pool_info->mgpi_ldr = json_object_get_int(tmp);
+
 	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
 		return -DER_INVAL;
@@ -634,7 +640,7 @@ dmg_pool_create(const char *dmg_config_file,
 
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
 		if (entry != NULL) {
-			args = cmd_push_arg(args, &argcount, "--label=%s ",
+			args = cmd_push_arg(args, &argcount, "%s ",
 					    entry->dpe_str);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -657,7 +663,7 @@ dmg_pool_create(const char *dmg_config_file,
 		close(tmp_fd);
 		unlink(path);
 
-		args = cmd_push_arg(args, &argcount, "--label=%s ", label);
+		args = cmd_push_arg(args, &argcount, "%s ", label);
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -750,6 +756,124 @@ out:
 	return rc;
 }
 
+static int
+dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
+		const char *grp, d_rank_t rank, int tgt_idx)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (tgt_idx >= 0) {
+		args = cmd_push_arg(args, &argcount, "--target-idx=%d ", tgt_idx);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	args = cmd_push_arg(args, &argcount, "--rank=%d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe(cmd, dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
+		 const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool exclude", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
+		     const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool reintegrate", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
+	       const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool drain", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
+		const char *grp, d_rank_t *ranks, int rank_nr)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	d_rank_list_t		rank_list = { 0 };
+	char			*rank_str = NULL;
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	rank_list.rl_ranks = ranks;
+	rank_list.rl_nr = rank_nr;
+
+	rank_str = d_rank_list_to_str(&rank_list);
+	if (rank_str == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out_rankstr, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out_rankstr, rc = -DER_NOMEM);
+	}
+
+	args = cmd_push_arg(args, &argcount, "--ranks=%s ", rank_str);
+	if (args == NULL)
+		D_GOTO(out_rankstr, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool extend", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out_rankstr:
+	D_FREE(rank_str);
+out:
+	return rc;
+}
+
 int
 dmg_pool_list(const char *dmg_config_file, const char *group,
 	      daos_size_t *npools, daos_mgmt_pool_info_t *pools)
@@ -812,11 +936,12 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	int			i, j;
 	int			rc;
 	char			*tmp_var;
+	char			*saved_ptr;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
 
-		tmp_var =  strtok(host, ":");
+		tmp_var =  strtok_r(host, ":", &saved_ptr);
 		if (tmp_var == NULL) {
 			D_ERROR("Hostname is empty\n");
 			return -DER_INVAL;
@@ -1103,6 +1228,59 @@ int verify_blobstore_state(int state, const char *state_str)
 	return 1;
 }
 
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (force != 0) {
+		args = cmd_push_arg(args, &argcount, " --force ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system start", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
 const char *
 daos_target_state_enum_to_str(int state)
 {

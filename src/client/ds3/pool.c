@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,8 +83,8 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
-	int    rc;
-	ds3_t *ds3_tmp;
+	int	rc, rc2;
+	ds3_t	*ds3_tmp;
 
 	if (ds3 == NULL || pool == NULL)
 		return -EINVAL;
@@ -94,7 +94,8 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		return -ENOMEM;
 
 	/** Copy pool name */
-	strcpy(ds3_tmp->pool, pool);
+	strncpy(ds3_tmp->pool, pool, DAOS_PROP_LABEL_MAX_LEN);
+	ds3_tmp->pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	/** Connect to the pool first */
 	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
@@ -146,9 +147,13 @@ err:
 
 #undef X
 
-	dfs_disconnect(ds3_tmp->meta_dfs);
+	rc2 = dfs_disconnect(ds3_tmp->meta_dfs);
+	if (rc2)
+		D_ERROR("dfs_disconnect() Failed %d (%s)\n", rc2, strerror(rc2));
 err_poh:
-	daos_pool_disconnect(ds3_tmp->poh, NULL);
+	rc2 = daos_pool_disconnect(ds3_tmp->poh, NULL);
+	if (rc2)
+		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
 err_ds3:
 	D_FREE(ds3_tmp);
 	return -rc;
@@ -169,7 +174,13 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 #undef X
 
 	rc = dfs_disconnect(ds3->meta_dfs);
-	daos_pool_disconnect(ds3->poh, ev);
+	if (rc)
+		D_ERROR("dfs_disconnect() Failed %d (%s)\n", rc, strerror(rc));
+	rc = daos_pool_disconnect(ds3->poh, ev);
+	if (rc) {
+		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
+		rc = daos_der2errno(rc);
+	}
 	D_FREE(ds3);
 	return -rc;
 }

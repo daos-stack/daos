@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -332,10 +332,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	/* Dynamic root could have smaller size */
-	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_KEY_NODE))
-		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_KEY_NODE);
-	return umem_zalloc(&tins->ti_umm, size);
+	return vos_slab_alloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -443,7 +440,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
-	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
+	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx, vos_hdl2cont(tins->ti_coh), *epc);
 	rbund->rb_off = rec->rec_off;
 	return 0;
 }
@@ -692,10 +689,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	/* Dynamic root could have smaller size */
-	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_SV_NODE))
-		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_SV_NODE);
-	return umem_zalloc(&tins->ti_umm, size);
+	return vos_slab_alloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -805,6 +799,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
 	struct evt_desc_cbs	 cbs;
 	int			 expected_flag;
+	uint64_t                 feats = vos_evt_feats;
 	int			 unexpected_flag;
 	int			 rc = 0;
 
@@ -860,8 +855,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	}
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
-				uma, &cbs, sub_toh);
+		if (pool->vp_feats & VOS_POOL_FEAT_DYN_ROOT)
+			feats |= EVT_FEAT_DYNAMIC_ROOT;
+		rc = evt_create(&krec->kr_evt, feats, VOS_EVT_ORDER, uma, &cbs, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: "DF_RC"\n",
 				DP_RC(rc));

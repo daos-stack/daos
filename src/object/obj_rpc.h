@@ -371,7 +371,8 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_punched_ephs)	CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
 	((uint32_t)		(om_new_layout_ver)	CRT_VAR)	\
-	((uint32_t)		(om_opc)		CRT_VAR)
+	((uint32_t)		(om_opc)		CRT_VAR)	\
+	((uint32_t)		(om_generation)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
 	((int32_t)		(om_status)		CRT_VAR)
@@ -679,6 +680,9 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 }
+
+#define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
+					 DAOS_OO_IO_RAND | DAOS_OO_IO_SEQ)
 
 static inline bool
 obj_is_fetch_opc(uint32_t opc)

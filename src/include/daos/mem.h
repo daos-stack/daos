@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -282,8 +282,7 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-
-#define UMM_SLABS_CNT	7
+#define UMM_SLABS_CNT 16
 
 /** attributes to initialize an unified memory class */
 struct umem_attr {

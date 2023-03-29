@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -322,7 +322,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	daos_size_t len;
 
 	if (p_buf_len != NULL)
-	*p_buf_len = 0;
+		*p_buf_len = 0;
 
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
@@ -653,15 +653,18 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 {
 	crt_phy_addr_t	addr_env;
 	bool		sep = false;
+	uint32_t	limit = 0;
 
 	/** enable statistics on the server side */
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
+	d_getenv_int("DAOS_RPC_SIZE_LIMIT", &limit);
+
 	daos_crt_init_opt.cio_use_expected_size = 1;
-	daos_crt_init_opt.cio_max_expected_size = DAOS_RPC_SIZE;
+	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
 	daos_crt_init_opt.cio_use_unexpected_size = 1;
-	daos_crt_init_opt.cio_max_unexpected_size = DAOS_RPC_SIZE;
+	daos_crt_init_opt.cio_max_unexpected_size = limit ? limit : DAOS_RPC_SIZE;
 
 	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);

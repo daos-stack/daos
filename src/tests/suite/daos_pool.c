@@ -199,11 +199,11 @@ pool_exclude(void **state)
 	}
 	rank = info.pi_nnodes - 1;
 	print_message("rank 0 excluding rank %u... ", rank);
-	/* TODO: remove the loop, call daos_exclude_target passing in the rank just calculated? */
+	/* TODO: remove the loop, call dmg_pool_exclude passing in the rank just calculated? */
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
-		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config,
-				    arg->pool.svc->rl_ranks[idx], tgt);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      arg->pool.svc->rl_ranks[idx], tgt);
+		assert_success(rc);
 	}
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
@@ -2074,6 +2074,7 @@ static int
 pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
 }
 

@@ -20,14 +20,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,14 +30,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 12000000000
   nvme_size: 108000000000
@@ -99,7 +85,6 @@ test_obj_class:
   oclass:
     - RP_3G6
     - RP_4G1
-    - S1
 loop_test:
   iterations: 3
 aggregation:

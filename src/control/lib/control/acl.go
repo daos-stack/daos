@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package control
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -19,13 +18,9 @@ import (
 
 // AccessControlList is a structure for the access control list.
 type AccessControlList struct {
-	Entries    []string `json:"ACL"`       // Access Control Entries in short string format
-	Owner      string   `json:"OwnerUser"` // User that owns the resource
-	OwnerGroup string   // Group that owns the resource
-}
-
-func (acl *AccessControlList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(acl.Entries)
+	Entries    []string `json:"entries"`     // Access Control Entries in short string format
+	Owner      string   `json:"owner_user"`  // User that owns the resource
+	OwnerGroup string   `json:"owner_group"` // Group that owns the resource
 }
 
 // Empty checks whether there are any entries in the AccessControlList

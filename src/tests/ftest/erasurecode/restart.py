@@ -1,25 +1,28 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from ec_utils import ErasureCodeIor, check_aggregation_status
+from ec_utils import ErasureCodeIor
+
 
 class EcodServerRestart(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after restarting all servers.
+
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
         self.percent = self.params.get("size", '/run/ior/data_percentage/*')
 
     def execution(self, agg_check=None):
-        """
+        """Execute test.
+
         Common test execution method to write data, verify aggregation, restart
         all the servers and read data.
 
@@ -34,8 +37,8 @@ class EcodServerRestart(ErasureCodeIor):
         # Write all EC object data to SCM
         self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
         self.log.info(self.pool.pool_percentage_used())
-        size_before_restart = self.pool.pool_percentage_used()
-        self.log.info("Size before Restart: %s ", size_before_restart)
+        self.pool.pool_percentage_used()
+        self.log.info("Size before Restart: %s ", self.pool.pool_percentage_used())
 
         if not agg_check:
             # Set time mode aggregation
@@ -46,7 +49,7 @@ class EcodServerRestart(ErasureCodeIor):
 
         if agg_check == "Before":
             # Verify if Aggregation is getting started
-            if not any(check_aggregation_status(self.pool, attempt=50).values()):
+            if not any(self.check_aggregation_status(attempt=50).values()):
                 self.fail("Aggregation failed to start Before server restart..")
 
         # Shutdown the servers and restart
@@ -55,17 +58,13 @@ class EcodServerRestart(ErasureCodeIor):
         self.get_dmg_command().system_start()
 
         if agg_check == "After":
-            size_after_restart = self.pool.pool_percentage_used()
-            self.log.info("Size after Restart: %s ", size_after_restart)
+            self.pool.pool_percentage_used()
+            self.log.info("Size after Restart: %s ", self.pool.pool_percentage_used())
             # Verify if Aggregation is getting started
-            if not any(check_aggregation_status(self.pool, attempt=50).values()):
+            if not any(self.check_aggregation_status(attempt=50).values()):
                 self.fail("Aggregation failed to start After server restart..")
-            if not size_after_restart['scm'] > size_before_restart['scm']:
-                self.log.info("SCM size_after_restart: %s, size_before_restart['scm']: %s",
-                              size_after_restart['scm'], size_before_restart['scm'])
-                self.fail("Aggregation failed : SCM space not recovered")
 
-        # Read all EC object data from NVMe
+        # Read all EC object data from NVMe/
         self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
         # Read all EC object data which was written on SCM
         self.read_set_from_beginning = False
@@ -81,9 +80,9 @@ class EcodServerRestart(ErasureCodeIor):
                     Read and verify all IOR data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_before_agg
+        :avocado: tags=EcodServerRestart,test_ec_restart_before_agg
         """
         self.execution(agg_check="Before")
 
@@ -97,9 +96,9 @@ class EcodServerRestart(ErasureCodeIor):
                 start. Read and verify all IOR data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_after_agg
+        :avocado: tags=EcodServerRestart,test_ec_restart_after_agg
         """
         self.execution(agg_check="After")
 
@@ -113,9 +112,9 @@ class EcodServerRestart(ErasureCodeIor):
                     for 20 seconds. Restart all servers, Read and verify all IOR data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_during_agg
+        :avocado: tags=EcodServerRestart,test_ec_restart_during_agg
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")

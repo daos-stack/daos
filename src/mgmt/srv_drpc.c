@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -393,6 +393,8 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 
+	resp->leader = pool_info.pi_leader;
+
 	rc = rank_list_to_uint32_array(enabled_ranks, &resp->tgt_ranks, &resp->n_tgt_ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
@@ -683,9 +685,9 @@ out:
 }
 
 static int
-pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
-			 size_t n_targetidx, uint32_t *targetidx,
-			 uint32_t rank, pool_comp_state_t state)
+pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
+			 uint32_t *targetidx, uint32_t rank, pool_comp_state_t state,
+			 size_t scm_size, size_t nvme_size)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -714,7 +716,8 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
 		target_addr_list.pta_addrs[0].pta_rank = rank;
 	}
 
-	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
+					      nvme_size);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -752,9 +755,9 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks,
-				      req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_DOWN);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
+				      0 /* nvme_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -802,8 +805,9 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx,
-			req->targetidx, req->rank, PO_COMP_ST_DRAIN);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
+				      0 /* nvme_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -918,6 +922,8 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
+	uint64_t			scm_bytes;
+	uint64_t			nvme_bytes = 0;
 	int				rc;
 
 	mgmt__pool_reintegrate_resp__init(&resp);
@@ -933,13 +939,23 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
+	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
+	}
+
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks,
-				      req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_UP);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
 
 	d_rank_list_free(svc_ranks);
 
@@ -1265,11 +1281,14 @@ free_ace_list(char **list, size_t len)
 static void
 free_resp_acl(Mgmt__ACLResp *resp)
 {
-	if (resp->owneruser && resp->owneruser[0] != '\0')
-		D_FREE(resp->owneruser);
-	if (resp->ownergroup && resp->ownergroup[0] != '\0')
-		D_FREE(resp->ownergroup);
-	free_ace_list(resp->acl, resp->n_acl);
+	if (resp->acl != NULL) {
+		if (resp->acl->owner_user && resp->acl->owner_user[0] != '\0')
+			D_FREE(resp->acl->owner_user);
+		if (resp->acl->owner_group && resp->acl->owner_group[0] != '\0')
+			D_FREE(resp->acl->owner_group);
+		free_ace_list(resp->acl->entries, resp->acl->n_entries);
+		D_FREE(resp->acl);
+	}
 }
 
 static int
@@ -1289,8 +1308,8 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 		return rc;
 	}
 
-	resp->n_acl = ace_nr;
-	resp->acl = ace_list;
+	resp->acl->n_entries = ace_nr;
+	resp->acl->entries = ace_list;
 
 	return 0;
 }
@@ -1300,6 +1319,11 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 {
 	struct daos_prop_entry	*entry;
 	int			rc = 0;
+
+	D_ALLOC_PTR(resp->acl);
+	if (resp->acl == NULL)
+		return -DER_NOMEM;
+	mgmt__access_control_list__init(resp->acl);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
@@ -1312,13 +1336,13 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->owneruser, entry->dpe_str,
+		D_STRNDUP(resp->acl->owner_user, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry != NULL && entry->dpe_str != NULL &&
 	    entry->dpe_str[0] != '\0')
-		D_STRNDUP(resp->ownergroup, entry->dpe_str,
+		D_STRNDUP(resp->acl->owner_group, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	return 0;
@@ -1420,7 +1444,7 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, acl_out);
+	rc = daos_acl_from_strs((const char **)req->entries, req->n_entries, acl_out);
 	if (rc != 0) {
 		D_ERROR("Couldn't parse requested ACL strings to DAOS ACL, "
 			"rc="DF_RC"\n", DP_RC(rc));
