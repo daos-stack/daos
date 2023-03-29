@@ -144,20 +144,17 @@ class DmgPoolQueryRanks(ControlTestBase):
         for rank in all_ranks:
             self.log.debug("Reintegrating rank %d", rank)
 
-            counter = 0
             cmd_succeed = False
-            while counter < 3:
+            for _ in range(3):
                 try:
                     result = self.pool.reintegrate(rank)
-                except CommandFailure:
-                    self.log.debug("dmg command failed retry")
-                else:
                     cmd_succeed = True
                     break
-                counter += 1
+                except CommandFailure:
+                    self.log.debug("dmg command failed retry")
                 time.sleep(3)
 
-            self.assertTrue(cmd_succeed, result)
+            self.assertTrue(cmd_succeed, "pool reintegrate failed: {}".format(result))
             enabled_ranks = sorted(enabled_ranks + [rank])
             disabled_ranks.remove(rank)
 
