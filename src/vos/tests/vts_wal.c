@@ -1162,7 +1162,7 @@ run_wal_tests(const char *cfg)
 	rc = cmocka_run_group_tests_name(test_name, wal_tests, setup_wal_test,
 					   teardown_wal_test);
 
-	dts_create_config(test_name, "WAL Basic SV/EV update/fetch/verify tests %s", cfg);
+	dts_create_config(test_name, "WAL Basic SV and EV IO tests %s", cfg);
 	D_PRINT("Running %s\n", test_name);
 	otype = 0;
 	rc += cmocka_run_group_tests_name(test_name, wal_kv_basic_tests,
@@ -1178,9 +1178,8 @@ run_wal_tests(const char *cfg)
 			akey = "uint";
 		if (is_daos_obj_type_set(otype, DAOS_OT_AKEY_LEXICAL))
 			akey = "lex";
-		dts_create_config(test_name,
-				  "WAL# Basic I/O tests dkey=%-6s akey=%s %s",
-				  dkey, akey, cfg);
+		dts_create_config(test_name, "WAL Basic IO tests dkey=%-6s akey=%s %s", dkey, akey,
+				  cfg);
 		test_name[3] = '1';
 		D_PRINT("Running %s\n", test_name);
 		rc += cmocka_run_group_tests_name(test_name, wal_io_tests,
