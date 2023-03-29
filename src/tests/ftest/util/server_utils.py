@@ -776,10 +776,7 @@ class DaosServerManager(SubprocessManager):
             valid_states.extend(extra_states)
         self.log.info("Stopping DAOS I/O Engines")
         self.check_system_state(valid_states)
-        if copy:
-            self.dmg.copy().system_stop(force=True)
-        else:
-            self.dmg.system_stop(force=True)
+        self.dmg.system_stop(force=True)
         if self.dmg.result.exit_status != 0:
             raise ServerFailed("Error stopping DAOS:\n{}".format(self.dmg.result))
 
