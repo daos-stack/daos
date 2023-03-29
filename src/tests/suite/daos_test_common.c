@@ -1022,6 +1022,21 @@ get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 }
 
 daos_prop_t *
+get_daos_prop_with_acl(struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	return prop;
+}
+
+daos_prop_t *
 get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 {
 	daos_prop_t	*prop;
@@ -1039,12 +1054,11 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	return prop;
 }
 
-daos_prop_t *
-get_daos_prop_with_user_acl_perms(uint64_t perms)
+struct daos_acl *
+get_daos_acl_with_user_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
-	struct daos_ace	*ace;
+	struct daos_ace	*ace = NULL;
 	char		*user = NULL;
 
 	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
@@ -1059,9 +1073,23 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 
 	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
-	/* Set effective user up as non-owner */
-	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
-						acl, DAOS_PROP_CO_ACL);
+	daos_ace_free(ace);
+	D_FREE(user);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace = NULL;
+	char		*user = NULL;
+
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_user_perms(perms);
+	prop = get_daos_prop_with_acl(acl, DAOS_PROP_CO_ACL);
 
 	daos_ace_free(ace);
 	daos_acl_free(acl);
