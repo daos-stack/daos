@@ -1368,7 +1368,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    sync ? CRT_IV_SYNC_EAGER : CRT_IV_SYNC_LAZY,
-			    !sync/* retry */);
+			    true/* retry */);
 	D_FREE(iv_entry);
 	return rc;
 }
