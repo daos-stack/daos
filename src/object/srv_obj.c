@@ -1463,6 +1463,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (parity_list != NULL) {
 				daos_recx_ep_list_set(parity_list, iods_nr,
 						      ioc->ioc_coc->sc_ec_agg_eph_boundary, 0);
+				D_ERROR("set parity_list, sc_ec_agg_eph_boundary "DF_X64"\n",
+					ioc->ioc_coc->sc_ec_agg_eph_boundary);
 				daos_recx_ep_list_merge(parity_list, iods_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = iods_nr;

@@ -526,8 +526,12 @@ cont_iv_ent_agg_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	if (rank != entry->ns->iv_master_rank)
+	if (rank != entry->ns->iv_master_rank) {
+		D_ERROR(DF_CONT" rank %d, entry->ns->iv_master_rank %d, eph "DF_X64", forward\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+			rank, entry->ns->iv_master_rank, civ_ent->iv_agg_eph.eph);
 		return -DER_IVCB_FORWARD;
+	}
 
 	rc = ds_cont_leader_update_agg_eph(entry->ns->iv_pool_uuid,
 					   civ_key->cont_uuid,
@@ -1035,7 +1039,9 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 		return rc;
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, false /* retry */);
+			    shortcut, sync_mode, true /* retry */);
+	if (rc)
+		D_ERROR("op %d, cont_iv_update failed, "DF_RC"\n", op, DP_RC(rc));
 	return rc;
 }
 
