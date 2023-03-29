@@ -64,7 +64,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	if err := cfg.Validate(log, mi.HugepageSizeKb); err != nil {
+	if err := cfg.Validate(log, mi); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 

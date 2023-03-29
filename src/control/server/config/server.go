@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
@@ -434,19 +435,19 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Calculate hugepages based on total target count if not using nvme.
-func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSize int, cfg *Server) (int, error) {
+func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSize int, cfg *Server) error {
 	if cfgTargetCount <= 0 {
-		return 0, nil // no nvme, no hugepages required
+		return nil // no nvme, no hugepages required
 	}
 
 	if cfg.DisableHugepages {
-		return 0, FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabled
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
 	minHugepages, err := common.CalcMinHugepages(hugepageSize, cfgTargetCount+sysXSCount)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
@@ -462,14 +463,15 @@ func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSi
 	}
 
 	if cfg.NrHugepages < minHugepages {
-		return 0, FaultConfigInsufficientHugepages(minHugepages, cfg.NrHugepages)
+		return FaultConfigInsufficientHugepages(minHugepages, cfg.NrHugepages)
 	}
 
-	return minHugepages, nil
+	return nil
 }
 
-// Calculate recommended scm size if not using pmem.
-func scmSetSize(log logging.Logger, hugepageCount int, cfg *Server) error {
+// Calculate minimum scm tmpfs size using nr hugepages from config and total memory
+// as reported by /proc/meminfo.
+func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
 	}
@@ -481,11 +483,48 @@ func scmSetSize(log logging.Logger, hugepageCount int, cfg *Server) error {
 		return nil // no tmpfs to size
 	}
 
+	// Convert available memory from kib to bytes.
+	memTotal := uint64(mi.MemTotalKiB * humanize.KiByte)
+
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * mi.HugepageSizeKiB * humanize.KiByte)
+
+	// Pass 0 for sys and engine reservations to use default values.
+	// TODO: pass system reservation parameter from config
+	scmSize, err := common.CalcScmSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
+	if err != nil {
+		return errors.Wrapf(err, "calculate scm ramdisk size")
+	}
+
+	if scmSize < common.MemTmpfsMin {
+		return storage.FaultScmTmpfsLowMem(common.MemTmpfsMin, scmSize)
+	}
+
+	for _, ec := range cfg.Engines {
+		scs := ec.Storage.Tiers.ScmConfigs()
+		if len(scs) != 1 {
+			return errors.Errorf("unexpected number of scm configs, want 1 got %d",
+				len(scs))
+		}
+		// Validate any configured scm sizes.
+		confSize := uint64(humanize.GiByte * scs[0].Scm.RamdiskSize)
+		if confSize > scmSize {
+			return errors.Errorf("configured scm tmpfs size %s larger than maximum %s",
+				humanize.IBytes(confSize), humanize.IBytes(scmSize))
+		} else if confSize == 0 {
+			// Apply calculated size as not already set.
+			scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
+		} else if confSize < common.MemTmpfsMin {
+			return errors.Errorf("configured scm tmpfs size %s lower than minimum %s",
+				humanize.IBytes(confSize), humanize.IBytes(common.MemTmpfsMin))
+		}
+	}
+
 	return nil
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
+func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -592,7 +631,6 @@ func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
 				sysXSCount++
 			}
 		}
-
 		log.Debug(msg)
 	}
 
@@ -600,12 +638,12 @@ func (cfg *Server) Validate(log logging.Logger, hugepageSize int) (err error) {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
-	minHugepages, err := hugepageSetCount(log, cfgTargetCount, sysXSCount, hugepageSize, cfg)
-	if err != nil {
+	if err := hugepageSetCount(log, cfgTargetCount, sysXSCount, mi.HugepageSizeKiB, cfg); err != nil {
 		return err
 	}
 
-	if err := scmSetSize(log, minHugepages, cfg); err != nil {
+	// Auto-size tmpfs if SCM is class RAM.
+	if err := scmSetSize(log, mi, cfg); err != nil {
 		return err
 	}
 

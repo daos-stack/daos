@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -626,13 +627,18 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
 			}
 
-			// ensure that the engine affinities are set.
+			// ensure that the engine affinities are set
 			if err := cfg.SetEngineAffinities(log, mockAffSrc); err != nil {
 				t.Fatal(err)
 			}
 
-			// test only with 2M hugepage size
-			if err := cfg.Validate(log, 2048); err != nil {
+			// test with typical meminfo values
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
+			}
+
+			if err := cfg.Validate(log, mi); err != nil {
 				t.Fatal(err)
 			}
 
@@ -683,8 +689,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			mockGetMemInfo := func() (*common.MemInfo, error) {
 				t.Logf("returning %d free hugepages from mock", tc.hugepagesFree)
 				return &common.MemInfo{
-					HugepageSizeKb: 2048,
-					HugepagesFree:  tc.hugepagesFree,
+					HugepageSizeKiB: 2048,
+					HugepagesFree:   tc.hugepagesFree,
 				}, tc.getHpiErr
 			}
 
@@ -746,8 +752,13 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
 				WithDisableHugepages(tc.disableHugepages)
 
-			// test only with 2M hugepage size
-			if err := cfg.Validate(log, 2048); err != nil {
+			// test with typical meminfo values
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
+			}
+
+			if err := cfg.Validate(log, mi); err != nil {
 				t.Fatal(err)
 			}
 

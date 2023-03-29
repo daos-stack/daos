@@ -34,7 +34,7 @@ type dbCfgCmd struct {
 }
 
 func (cmd *dbCfgCmd) getDatabaseConfig() (*sdb.DatabaseConfig, error) {
-	if err := cmd.config.Validate(cmd.Logger, 0); err != nil {
+	if err := cmd.config.Validate(cmd.Logger, &common.MemInfo{}); err != nil {
 		return nil, err
 	}
 

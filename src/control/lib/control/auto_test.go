@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -510,8 +511,8 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					MemInfo: MemInfo{
-						HugepageSizeKb: humanize.KiByte * 2,
-						MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
+						HugepageSizeKiB: humanize.KiByte * 2,
+						MemTotalKiB:     (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 					},
 				},
 			},
@@ -1345,11 +1346,13 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				NumaIfaces: tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				HugepageSizeKiB: 2048,
-				MemTotalKiB:     tc.memTotal / humanize.KiByte,
-				NumaSCMs:        tc.numaPMems,
-				NumaSSDs:        tc.numaSSDs,
-				scmCls:          storage.ClassDcpm,
+				MemInfo: &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     tc.memTotal / humanize.KiByte,
+				},
+				NumaSCMs: tc.numaPMems,
+				NumaSSDs: tc.numaSSDs,
+				scmCls:   storage.ClassDcpm,
 			}
 			if tc.scmCls.String() != "" {
 				sd.scmCls = tc.scmCls
@@ -1357,8 +1360,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				sd.scmCls = storage.ClassDcpm
 			}
 
-			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet,
-				nd, sd)
+			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet, nd, sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1583,19 +1585,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				tc.threadCounts = &threadCounts{}
 			}
 
-			var sc storage.Class
-			if len(tc.ecs) > 0 {
-				sc = tc.ecs[0].Storage.Tiers.ScmConfigs()[0].Class
-			}
-
-			sd := &storageDetails{
+			mi := &common.MemInfo{
 				HugepageSizeKiB: tc.hpSize,
 				MemTotalKiB:     tc.memTotal,
-				scmCls:          sc,
 			}
 
-			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, sd,
-				tc.threadCounts)
+			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

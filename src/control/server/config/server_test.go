@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -54,7 +55,8 @@ var (
 	}
 
 	defMemInfo = &common.MemInfo{
-		HugepageSizeKb: 2048,
+		HugepageSizeKiB: 2048,
+		MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
 	}
 )
 
@@ -148,7 +150,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defMemInfo.HugepageSizeKb)
+				err = configA.Validate(log, defMemInfo)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -179,7 +181,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defMemInfo.HugepageSizeKb)
+				err = configB.Validate(log, defMemInfo)
 			}
 
 			if err != nil {
@@ -938,7 +940,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo.HugepageSizeKb))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -1273,7 +1275,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo.HugepageSizeKb))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1476,7 +1478,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defMemInfo.HugepageSizeKb)
+			gotErr := conf.Validate(log, defMemInfo)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

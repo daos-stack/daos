@@ -13,7 +13,6 @@ import (
 	"math/bits"
 	"sort"
 
-	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -142,7 +141,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req.Log, req.AccessPoints, ecs, sd, tc)
+	sc, err := genServerConfig(req.Log, req.AccessPoints, ecs, sd.MemInfo, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -448,11 +447,10 @@ func (nsm numaSSDsMap) fromNVMe(ssds storage.NvmeControllers) error {
 }
 
 type storageDetails struct {
-	HugepageSizeKiB int
-	MemTotalKiB     int
-	NumaSCMs        numaSCMsMap
-	NumaSSDs        numaSSDsMap
-	scmCls          storage.Class
+	NumaSCMs numaSCMsMap
+	NumaSSDs numaSSDsMap
+	MemInfo  *common.MemInfo
+	scmCls   storage.Class
 }
 
 // getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.  Returns storage
@@ -463,13 +461,15 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 	}
 
 	sd := storageDetails{
-		NumaSCMs:        make(numaSCMsMap),
-		NumaSSDs:        make(numaSSDsMap),
-		HugepageSizeKiB: hs.MemInfo.HugepageSizeKb,
-		MemTotalKiB:     hs.MemInfo.MemTotal,
-		scmCls:          storage.ClassDcpm,
+		NumaSCMs: make(numaSCMsMap),
+		NumaSSDs: make(numaSSDsMap),
+		MemInfo: &common.MemInfo{
+			HugepageSizeKiB: hs.MemInfo.HugepageSizeKiB,
+			MemTotalKiB:     hs.MemInfo.MemTotalKiB,
+		},
+		scmCls: storage.ClassDcpm,
 	}
-	if sd.HugepageSizeKiB == 0 {
+	if sd.MemInfo.HugepageSizeKiB == 0 {
 		return nil, errors.New("getStorageDetails() requires nonzero HugepageSizeKiB")
 	}
 
@@ -482,7 +482,7 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 		if numaCount <= 0 {
 			return nil, errors.New("getStorageDetails() requires nonzero numaCount")
 		}
-		if sd.MemTotalKiB == 0 {
+		if sd.MemInfo.MemTotalKiB == 0 {
 			return nil, errors.New("getStorageDetails() requires nonzero MemTotalKiB")
 		}
 
@@ -1102,50 +1102,10 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 	return &tc, nil
 }
 
-// Using nr hugepages from config, calculate RAM-disk size (in bytes) based on total memory
-// as reported by /proc/meminfo.
-func setScmSize(log logging.Logger, cfg *config.Server, sd *storageDetails) error {
-	switch sd.scmCls {
-	case storage.ClassRam:
-	case storage.ClassDcpm:
-		log.Debugf("skipping scm tmpfs sizing for class %s", sd.scmCls)
-		return nil
-	default:
-		return errors.Errorf("unsupported scm class %s", sd.scmCls)
-	}
-
-	// Convert available memory from kib to bytes.
-	memTotal := uint64(sd.MemTotalKiB * humanize.KiByte)
-
-	// Calculate assigned hugepage memory in bytes.
-	memHuge := uint64(cfg.NrHugepages * sd.HugepageSizeKiB * humanize.KiByte)
-
-	// Pass 0 for sys and engine reservations to use default values.
-	scmSize, err := common.CalcScmSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
-	if err != nil {
-		return errors.Wrapf(err, "calculate scm ramdisk size")
-	}
-
-	if scmSize < common.MemTmpfsMin {
-		return storage.FaultScmTmpfsLowMem(common.MemTmpfsMin, scmSize)
-	}
-
-	for _, ec := range cfg.Engines {
-		scs := ec.Storage.Tiers.ScmConfigs()
-		if len(scs) != 1 {
-			return errors.Errorf("unexpected number of scm configs, want 1 got %d",
-				len(scs))
-		}
-		scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
-	}
-
-	return nil
-}
-
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Config, sd *storageDetails, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
@@ -1161,12 +1121,8 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
 
-	if err := cfg.Validate(log, sd.HugepageSizeKiB); err != nil {
+	if err := cfg.Validate(log, mi); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
-	}
-
-	if err := setScmSize(log, cfg, sd); err != nil {
-		return nil, errors.Wrap(err, "set scm size")
 	}
 
 	return cfg, nil
