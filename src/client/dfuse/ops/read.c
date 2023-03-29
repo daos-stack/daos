@@ -66,7 +66,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
-		DFUSE_TRA_INFO(oh, "Returning EOF early without round trip %#zx", position);
+		oh->doh_linear_read_eof = false;
+		oh->doh_linear_read     = false;
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
 	}
