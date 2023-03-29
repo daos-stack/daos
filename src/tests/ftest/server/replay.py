@@ -109,7 +109,7 @@ class ReplayTests(TestWithServers):
         container = self.get_container(pool)
 
         self.log_step('Start dfuse')
-        dfuse = get_dfuse(self.hostlist_clients)
+        dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step('Write and then read data to the dfuse mount point')
