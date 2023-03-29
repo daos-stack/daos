@@ -7,6 +7,10 @@ import time
 
 from ior_test_base import IorTestBase
 
+# Pretty print constant
+RESULT_OK = "[\033[32m OK\033[0m]"
+RESULT_NOK = "[\033[31mNOK\033[0m]"
+
 TIMEOUT_DEADLINE = 60
 
 
@@ -70,6 +74,7 @@ class PoolTargetQueryScmTest(IorTestBase):
         :avocado: tags=pool
         :avocado: tags=PoolTargetQueryScmTest,test_pool_target_query_scm
         """
+        test_failed_nb = 0
 
         # create pool and container
         self.add_pool(connect=False)
@@ -86,15 +91,12 @@ class PoolTargetQueryScmTest(IorTestBase):
                     "Successfully check the SCM used: got=%d, wait_in=[%d, %d], timeout=%d",
                     scm_used, min_val, max_val, timeout)
                 break
+            test_failed_nb += 1
             self.log.error(
                 "Aggregated value of the SCM used is invalid: got=%d, wait_in=[%d, %d], timeout=%d",
                 scm_used, min_val, max_val, timeout)
             time.sleep(1)
             timeout -= 1
-        self.assertTrue(
-            timeout == TIMEOUT_DEADLINE,
-            "For {} seconds the SCM space used was inconsistent"
-            .format(TIMEOUT_DEADLINE - timeout))
 
         # Run ior command.
         self.update_ior_cmd_with_pool(False)
@@ -105,19 +107,35 @@ class PoolTargetQueryScmTest(IorTestBase):
         old_val = scm_used
         scm_used = self.get_scm_used()
         min_val, max_val = self.scm_metadata_interval[1]
-        self.assertTrue(
-            min_val <= scm_used <= max_val,
-            "Aggregated value of the SCM used is invalid: got={}, wait_in=[{}, {}]"
-            .format(scm_used, min_val, max_val))
-        self.log.info(
-            "Successfully check the SCM used: got=%d, wait_in=[%d, %d]",
-            scm_used, min_val, max_val)
-        self.assertTrue(
-            old_val < scm_used,
-            "Aggregated value of the SCM used is invalid: got={}, wait>{}"
-            .format(scm_used, old_val))
-        self.log.info(
-            "Successfully check the SCM used: got=%d, wait>%d",
-            scm_used, old_val)
+        if min_val <= scm_used <= max_val:
+            self.log.info(
+                "Successfully check the SCM used: got=%d, wait_in=[%d, %d]",
+                scm_used, min_val, max_val)
+        else:
+            test_failed_nb += 1
+            self.log.error(
+                "Aggregated value of the SCM used is invalid: got=%d, wait_in=[%d, %d]",
+                scm_used, min_val, max_val)
 
-        self.log.info("------Test passed------")
+        if old_val < scm_used:
+            self.log.info(
+                "Successfully check the SCM used: got=%d, wait>%d",
+                scm_used, old_val)
+        else:
+            test_failed_nb += 1
+            self.log.error(
+                "Aggregated value of the SCM used is invalid: got=%d, wait>%d",
+                scm_used, old_val)
+
+        self.log.info("\n")
+        self.log.info("############ Test Results ############")
+        self.log.info(
+            "# Initial value of SCM usage:\t%s",
+            RESULT_OK if timeout == TIMEOUT_DEADLINE else RESULT_NOK)
+        self.log.info(
+            "# Final value of the SCM usage:\t%s",
+            RESULT_OK if min_val <= scm_used <= max_val and old_val < scm_used else RESULT_NOK)
+        self.log.info("######################################")
+        self.assertTrue(
+            test_failed_nb == 0,
+            "{} SCM target query tests have failed".format(test_failed_nb))
