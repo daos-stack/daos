@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,10 +36,10 @@ var storageHashOpts = hashstructure.HashOptions{
 // For the purposes of the storage scan, we only care about the system hugepage size and memory
 // available.
 type MemInfo struct {
-	HugepageSizeKb int `json:"hugepage_size_kb"`
-	MemTotal       int `json:"mem_total" hash:"ignore"`
-	MemFree        int `json:"mem_free" hash:"ignore"`
-	MemAvailable   int `json:"mem_available" hash:"ignore"`
+	HugepageSizeKiB int `json:"hugepage_size_kb"`
+	MemTotalKiB     int `json:"mem_total" hash:"ignore"`
+	MemFreeKiB      int `json:"mem_free" hash:"ignore"`
+	MemAvailableKiB int `json:"mem_available" hash:"ignore"`
 }
 
 func (mi *MemInfo) Summary() string {
@@ -47,10 +47,10 @@ func (mi *MemInfo) Summary() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
-		humanize.IBytes(uint64(mi.HugepageSizeKb*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemTotal*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemFree*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemAvailable*humanize.KiByte)))
+		humanize.IBytes(uint64(mi.HugepageSizeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemTotalKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemFreeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)))
 }
 
 // HostStorage describes a host storage configuration which

@@ -34,22 +34,22 @@ type GetMemInfoFn func() (*MemInfo, error)
 
 // MemInfo contains information about system hugepages.
 type MemInfo struct {
-	HugepagesTotal int `json:"hugepages_total"`
-	HugepagesFree  int `json:"hugepages_free"`
-	HugepagesRsvd  int `json:"hugepages_rsvd"`
-	HugepagesSurp  int `json:"hugepages_surp"`
-	HugepageSizeKb int `json:"hugepage_size_kb"`
-	MemTotal       int `json:"mem_total"`
-	MemFree        int `json:"mem_free"`
-	MemAvailable   int `json:"mem_available"`
+	HugepagesTotal  int `json:"hugepages_total"`
+	HugepagesFree   int `json:"hugepages_free"`
+	HugepagesRsvd   int `json:"hugepages_rsvd"`
+	HugepagesSurp   int `json:"hugepages_surp"`
+	HugepageSizeKiB int `json:"hugepage_size_kb"`
+	MemTotalKiB     int `json:"mem_total"`
+	MemFreeKiB      int `json:"mem_free"`
+	MemAvailableKiB int `json:"mem_available"`
 }
 
 func (mi *MemInfo) HugepagesTotalMB() int {
-	return (mi.HugepagesTotal * mi.HugepageSizeKb) / 1024
+	return (mi.HugepagesTotal * mi.HugepageSizeKiB) / 1024
 }
 
 func (mi *MemInfo) HugepagesFreeMB() int {
-	return (mi.HugepagesFree * mi.HugepageSizeKb) / 1024
+	return (mi.HugepagesFree * mi.HugepageSizeKiB) / 1024
 }
 
 func parseInt(a string, i *int) {
@@ -93,13 +93,13 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 
 			switch keyVal[0] {
 			case "Hugepagesize":
-				parseInt(sf[0], &mi.HugepageSizeKb)
+				parseInt(sf[0], &mi.HugepageSizeKiB)
 			case "MemTotal":
-				parseInt(sf[0], &mi.MemTotal)
+				parseInt(sf[0], &mi.MemTotalKiB)
 			case "MemFree":
-				parseInt(sf[0], &mi.MemFree)
+				parseInt(sf[0], &mi.MemFreeKiB)
 			case "MemAvailable":
-				parseInt(sf[0], &mi.MemAvailable)
+				parseInt(sf[0], &mi.MemAvailableKiB)
 			}
 		default:
 			continue

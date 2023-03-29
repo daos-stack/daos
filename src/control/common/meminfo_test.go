@@ -50,12 +50,12 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &MemInfo{
-				HugepagesTotal: 1024,
-				HugepagesFree:  1023,
-				HugepageSizeKb: 2048,
-				MemTotal:       1024,
-				MemFree:        1024,
-				MemAvailable:   1024,
+				HugepagesTotal:  1024,
+				HugepagesFree:   1023,
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     1024,
+				MemFreeKiB:      1024,
+				MemAvailableKiB: 1024,
 			},
 			expFreeMB: 2046,
 		},
@@ -68,9 +68,9 @@ HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
 			expOut: &MemInfo{
-				HugepagesTotal: 16,
-				HugepagesFree:  16,
-				HugepageSizeKb: 1048576,
+				HugepagesTotal:  16,
+				HugepagesFree:   16,
+				HugepageSizeKiB: 1048576,
 			},
 			expFreeMB: 16384,
 		},
@@ -122,34 +122,34 @@ func TestCommon_CalcMinHugepages(t *testing.T) {
 		},
 		"no targets": {
 			input: &MemInfo{
-				HugepageSizeKb: 2048,
+				HugepageSizeKiB: 2048,
 			},
 			expErr: errors.New("numTargets"),
 		},
 		"2KB pagesize; 16 targets": {
 			input: &MemInfo{
-				HugepageSizeKb: 2048,
+				HugepageSizeKiB: 2048,
 			},
 			numTargets: 16,
 			expPages:   8192,
 		},
 		"2KB pagesize; 31 targets": {
 			input: &MemInfo{
-				HugepageSizeKb: 2048,
+				HugepageSizeKiB: 2048,
 			},
 			numTargets: 31,
 			expPages:   15872,
 		},
 		"1GB pagesize; 16 targets": {
 			input: &MemInfo{
-				HugepageSizeKb: 1048576,
+				HugepageSizeKiB: 1048576,
 			},
 			numTargets: 16,
 			expPages:   16,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotPages, gotErr := CalcMinHugepages(tc.input.HugepageSizeKb, tc.numTargets)
+			gotPages, gotErr := CalcMinHugepages(tc.input.HugepageSizeKiB, tc.numTargets)
 			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

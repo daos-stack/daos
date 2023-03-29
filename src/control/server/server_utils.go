@@ -453,7 +453,7 @@ func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetM
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMiB := mi.HugepageSizeKb / humanize.KiByte // kib to mib
+	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
 

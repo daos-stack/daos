@@ -216,7 +216,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -244,7 +244,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -272,7 +272,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo:     control.MemInfo{HugepageSizeKb: 2048},
+				MemInfo:     control.MemInfo{HugepageSizeKiB: 2048},
 				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
@@ -291,7 +291,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -315,7 +315,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -340,8 +340,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(1),
 				},
 				MemInfo: control.MemInfo{
-					HugepageSizeKb: 2048,
-					MemTotal:       (humanize.GiByte * 12) / humanize.KiByte,
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     (humanize.GiByte * 12) / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -367,10 +367,10 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(1),
 				},
 				MemInfo: control.MemInfo{
-					HugepageSizeKb: 2048,
+					HugepageSizeKiB: 2048,
 					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
 					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.
-					MemTotal: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
+					MemTotalKiB: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -381,7 +381,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2",
 				// SCM tmpfs 5GiB size calculated after subtracting reservations
-				// from MemTotal.
+				// from MemTotalKiB.
 				[]*engine.Config{
 					control.MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
 						control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),

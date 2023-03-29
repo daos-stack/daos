@@ -117,10 +117,10 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
 		MemInfo: control.MemInfo{
-			HugepageSizeKb: hpi.HugepageSizeKb,
-			MemTotal:       hpi.MemTotal,
-			MemFree:        hpi.MemFree,
-			MemAvailable:   hpi.MemAvailable,
+			HugepageSizeKiB: hpi.HugepageSizeKiB,
+			MemTotalKiB:     hpi.MemTotalKiB,
+			MemFreeKiB:      hpi.MemFreeKiB,
+			MemAvailableKiB: hpi.MemAvailableKiB,
 		},
 	}, nil
 }
