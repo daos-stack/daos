@@ -952,7 +952,11 @@ cont_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static void
 cont_hdl_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
+	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
+
 	cont_hdl_obj(rlink)->sch_ref++;
+	D_INFO("hdl="DF_UUID" after addref, sch_ref=%d\n",
+	       DP_UUID(hdl->sch_uuid), hdl->sch_ref);
 }
 
 static bool
@@ -961,6 +965,8 @@ cont_hdl_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
 
 	hdl->sch_ref--;
+	D_INFO("hdl="DF_UUID" after decref, sch_ref=%d\n",
+	       DP_UUID(hdl->sch_uuid), hdl->sch_ref);
 	return hdl->sch_ref == 0;
 }
 
@@ -1683,18 +1689,18 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
-		D_DEBUG(DB_MD, DF_CONT": closing (%d): hdl="DF_UUID"\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
-			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
+		D_INFO(DF_CONT": closing (%d): hdl="DF_UUID"\n",
+		       DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+		       cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
 			dtx_cont_close(cont_child);
 
-		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
-			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
+		D_INFO(DF_CONT": closed (%d): hdl="DF_UUID"\n",
+		       DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+		       cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
