@@ -22,7 +22,14 @@ server_configurations: !mux
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_engine_0.log
-          storage: auto
+          storage:
+            0:
+              class: dcpm
+              scm_list: ["/dev/pmem0"]
+              scm_mount: /mnt/daos0
+            1:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a"]
         1:
           targets: 4
           pinned_numa_node: 1
@@ -30,7 +37,14 @@ server_configurations: !mux
           fabric_iface: ib1
           fabric_iface_port: 32317
           log_file: daos_engine_1.log
-          storage: auto
+          storage:
+            0:
+              class: dcpm
+              scm_list: ["/dev/pmem1"]
+              scm_mount: /mnt/daos1
+            1:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b"]
   server_config_scm_ram:
     server_config:
       name: daos_server
