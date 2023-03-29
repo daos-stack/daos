@@ -44,7 +44,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Args:
             action (str): dmg subcommand string such as drain, exclude, extend.
-            results (queue): dmg command output queue.
+            results (queue): dmg command output queue to store results.
             kwargs (dict): Parameters for the dmg command methods in dmg_utils.py, plus
                 'action' and 'results' params above.
         """
