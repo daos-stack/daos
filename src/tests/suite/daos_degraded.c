@@ -250,8 +250,20 @@ static const struct CMUnitTest degraded_tests[] = {
 static int
 degraded_setup(void **state)
 {
-	return rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
-					DAOS_PROP_CO_REDUN_RF3);
+	test_arg_t *arg;
+	int rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+				      DAOS_PROP_CO_REDUN_RF3);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
+	return rc;
+
 }
 
 static int
