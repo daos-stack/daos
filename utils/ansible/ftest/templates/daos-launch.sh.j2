@@ -170,8 +170,8 @@ function cleanup
 			mountpoint="/mnt/daos$index"
 			if ssh root@$host mountpoint -q "$mountpoint" ; then
 				info "Cleaning mount points $mountpoint of host $host"
-				ssh root@$host rm -fr /mnt/daos0/*
-				ssh root@$host umount /mnt/daos0
+				ssh root@$host rm -fr $mountpoint/*
+				ssh root@$host umount $mountpoint
 			fi
 		done
 

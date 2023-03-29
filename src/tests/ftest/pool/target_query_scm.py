@@ -3,12 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from ior_test_base import IorTestBase
+
+TIMEOUT_DEADLINE = 60
 
 
 class PoolTargetQueryScmTest(IorTestBase):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-nested-blocks
     """Test SCM target pool query
 
     :avocado: recursive
@@ -37,7 +39,7 @@ class PoolTargetQueryScmTest(IorTestBase):
         """Get the SCM space used from all targets.
 
         return:
-            scm_used (int): scm space used from all targets.
+            int: scm space used from all targets.
         """
         self.pool.connect()
 
@@ -52,29 +54,16 @@ class PoolTargetQueryScmTest(IorTestBase):
 
         return scm_used
 
-    def check_scm_used(self, scm_used, wait_range):
-        """Check if a SCM usage value is in an expected range.
-
-        Args:
-            scm_used (int): The value to check.
-            wait_range (list): Min and max expected values.
-        """
-        min_val, max_val = wait_range
-        self.assertTrue(
-            min_val <= scm_used <= max_val,
-            "Aggregated value of the SCM used is invalid: got={}, wait_in=[{}, {}]"
-            .format(scm_used, min_val, max_val))
-        self.log.info(
-            "Successfully check the SCM used: got=%d, wait_in=[%d, %d]",
-            scm_used, min_val, max_val)
-
     def test_pool_target_query_scm(self):
-        """JIRA ID: DAOS-XXXXX
+        """JIRA ID: DAOS-12968
 
-        TODO
+        Check if the SCM space used return by the target_query() function is consistent.
 
         Steps:
-            TODO
+            Create a pool and a container
+            Check the SCM space used
+            Generate deterministic workload.  Using ior to write 128MiB of data.
+            Check the SCM space used
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
@@ -88,9 +77,24 @@ class PoolTargetQueryScmTest(IorTestBase):
         self.add_container(pool=self.pool)
 
         # perform SCM usage verification check
-        got_value = self.get_scm_used()
-        wait_range = self.scm_metadata_interval[0]
-        self.check_scm_used(got_value, wait_range)
+        timeout = TIMEOUT_DEADLINE
+        while timeout > 0:
+            scm_used = self.get_scm_used()
+            min_val, max_val = self.scm_metadata_interval[0]
+            if min_val <= scm_used <= max_val:
+                self.log.info(
+                    "Successfully check the SCM used: got=%d, wait_in=[%d, %d], timeout=%d",
+                    scm_used, min_val, max_val, timeout)
+                break
+            self.log.error(
+                "Aggregated value of the SCM used is invalid: got=%d, wait_in=[%d, %d], timeout=%d",
+                scm_used, min_val, max_val, timeout)
+            time.sleep(1)
+            timeout -= 1
+        self.assertTrue(
+            timeout == TIMEOUT_DEADLINE,
+            "For {} seconds the SCM space used was inconsistent"
+            .format(TIMEOUT_DEADLINE - timeout))
 
         # Run ior command.
         self.update_ior_cmd_with_pool(False)
@@ -98,16 +102,22 @@ class PoolTargetQueryScmTest(IorTestBase):
             timeout=200, create_pool=False, create_cont=False)
 
         # perform SCM usage verification check
-        old_value = got_value
-        got_value = self.get_scm_used()
-        wait_range = self.scm_metadata_interval[1]
-        self.check_scm_used(got_value, wait_range)
+        old_val = scm_used
+        scm_used = self.get_scm_used()
+        min_val, max_val = self.scm_metadata_interval[1]
         self.assertTrue(
-            old_value < got_value,
+            min_val <= scm_used <= max_val,
+            "Aggregated value of the SCM used is invalid: got={}, wait_in=[{}, {}]"
+            .format(scm_used, min_val, max_val))
+        self.log.info(
+            "Successfully check the SCM used: got=%d, wait_in=[%d, %d]",
+            scm_used, min_val, max_val)
+        self.assertTrue(
+            old_val < scm_used,
             "Aggregated value of the SCM used is invalid: got={}, wait>{}"
-            .format(got_value, old_value))
+            .format(scm_used, old_val))
         self.log.info(
             "Successfully check the SCM used: got=%d, wait>%d",
-            got_value, old_value)
+            scm_used, old_val)
 
         self.log.info("------Test passed------")
