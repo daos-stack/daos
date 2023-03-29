@@ -90,9 +90,10 @@ struct dfuse_obj_hdl {
 	/* Next offset we expect from readdir */
 	off_t                     doh_rd_offset;
 
+	/* Pointer to the last returned drc entry */
 	struct dfuse_readdir_c   *doh_rd_nextc;
 
-	/** True if caching is enabled for this file. */
+	/** True if caching is enabled for this file */
 	bool                      doh_caching;
 
 	/* True if the file handle is writeable - used for cache invalidation */

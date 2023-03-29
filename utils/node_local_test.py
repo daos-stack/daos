@@ -3710,7 +3710,11 @@ def run_in_fg(server, conf, args):
     try:
         if args.launch_cmd:
             start = time.time()
-            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
+            # Set the PATH and agent dir.
+            agent_env = os.environ.copy()
+            agent_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+            agent_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{agent_env["PATH"]}'
+            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir, env=agent_env)
             elapsed = time.time() - start
             dfuse.stop()
             (minutes, seconds) = divmod(elapsed, 60)

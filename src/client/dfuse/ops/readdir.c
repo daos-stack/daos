@@ -389,8 +389,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			       (drc->drc_offset != offset)) {
 				D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
-				DFUSE_TRA_DEBUG(oh, "Moving along list %#lx %#lx", drc->drc_offset,
-						offset);
+				DFUSE_TRA_DEBUG(oh, "Moving along list looking for %#lx at %#lx",
+						offset, drc->drc_offset);
 
 				drc = (struct dfuse_readdir_c *)drc->drc_list.next;
 			}
@@ -496,7 +496,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries, added %d", added);
 
 		if (added) {
-			oh->doh_rd_nextc = drc;
+			/* This reader has got to the end of the cache list so update nextc
+			 * with the last replied entry, that is the current tail of the list.
+			 */
+			oh->doh_rd_nextc = (struct dfuse_readdir_c *)hdl->drh_cache_list.prev;
 			D_GOTO(reply, oh->doh_rd_offset = next_offset);
 		}
 	}
@@ -525,6 +528,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 		/* Drop if shared */
 		if (oh->doh_rd->dre_caching) {
+			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL)
@@ -704,6 +708,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			if (drc) {
 				oh->doh_rd_nextc = drc;
+				DFUSE_TRA_DEBUG(hdl, "Appending offset %#lx to list, next %#lx",
+						drc->drc_offset, drc->drc_next_offset);
 				d_list_add_tail(&drc->drc_list, &hdl->drh_cache_list);
 			}
 
