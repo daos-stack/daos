@@ -35,8 +35,8 @@ class PoolCreateTests(TestWithServers):
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests within 2 minutes.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """
