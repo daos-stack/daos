@@ -9,7 +9,7 @@ from ior_test_base import IorTestBase
 # pylint: disable=too-many-ancestors
 class IoConsistency(IorTestBase):
     """Test class Description: Verify data consistency using different
-                               middlewares. In this case, using DFS and POSIX.
+                               middleware. In this case, using DFS and POSIX.
 
     :avocado: recursive
     """

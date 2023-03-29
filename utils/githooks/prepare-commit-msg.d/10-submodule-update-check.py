@@ -21,16 +21,16 @@ def submodule_check(modname, msg_file):
     """Determines if a sub-module has been updated"""
     modified = False
 
-    with subprocess.Popen(['git', 'status', '--porcelain'], stdout=subprocess.PIPE) as p:
-        out, _ = p.communicate()
+    with subprocess.Popen(['git', 'status', '--porcelain'], stdout=subprocess.PIPE) as proc:
+        out, _ = proc.communicate()
         for line in out.decode().splitlines():
             match = modified_re.match(line)
             if match:
                 modified = modified | (match.group('name') == modname)
 
         if not rebasing() and modified:
-            with open(msg_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            with open(msg_file, 'r', encoding='utf-8') as file:
+                lines = file.readlines()
 
             message = f'# WARNING *** This patch modifies the {modname} reference.  ' \
                       'Are you sure this is intended? *** WARNING'
@@ -38,8 +38,8 @@ def submodule_check(modname, msg_file):
             if lines[0] != message:
                 lines = [message, "\n", "\n"] + lines
 
-            with open(msg_file, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            with open(msg_file, 'w', encoding='utf-8') as file:
+                file.writelines(lines)
 
 
 def main(msg_file):

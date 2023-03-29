@@ -53,7 +53,7 @@ class TestWithScrubberBasic(TestWithScrubber):
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=test_scrubber_disabled_during_pool_creation
 
@@ -70,7 +70,7 @@ class TestWithScrubberBasic(TestWithScrubber):
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=test_scrubber_enabled_during_pool_creation
 

@@ -26,15 +26,15 @@ class DaosServerDumpTest(TestWithServers):
         self.start_servers_once = False
         self.setup_start_agents = False
 
-    def tearDown(self):
-        """Tear down after each test case."""
-        super().tearDown()
-
         # force test status !!
         # use mangling trick described at
         # https://stackoverflow.com/questions/3385317/private-variables-and-methods-in-python
-        # to do so
-        self._Test__status = 'PASS'
+        # conditionally set to FAIL in tearDown
+        self._Test__status = 'PASS'  # pylint:disable=invalid-name
+
+    def tearDown(self):
+        """Tear down after each test case."""
+        super().tearDown()
 
         # DAOS-1452 may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
@@ -54,7 +54,8 @@ class DaosServerDumpTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=daos_server_dump_tests,test_daos_server_dump_basic
+        :avocado: tags=server
+        :avocado: tags=DaosServerDumpTest,test_daos_server_dump_basic
         """
 
         ret_codes = dump_engines_stacks(self.hostlist_servers,
@@ -78,7 +79,9 @@ class DaosServerDumpTest(TestWithServers):
         Test Description: Test engine ULT stacks dump (error case).
 
         :avocado: tags=manual
-        :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_error
+        :avocado: tags=vm
+        :avocado: tags=server
+        :avocado: tags=DaosServerDumpTest,test_daos_server_dump_on_error
         """
 
         self.log.info("Forcing test error!")
@@ -90,7 +93,9 @@ class DaosServerDumpTest(TestWithServers):
         Test Description: Test engine ULT stacks dump (failure case).
 
         :avocado: tags=manual
-        :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_fail
+        :avocado: tags=vm
+        :avocado: tags=server
+        :avocado: tags=DaosServerDumpTest,test_daos_server_dump_on_fail
         """
 
         self.log.info("Forcing test failure!")
@@ -102,7 +107,9 @@ class DaosServerDumpTest(TestWithServers):
         Test Description: Test engine ULT stacks dump (timeout case).
 
         :avocado: tags=manual
-        :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_timeout
+        :avocado: tags=vm
+        :avocado: tags=server
+        :avocado: tags=DaosServerDumpTest,test_daos_server_dump_on_timeout
         """
 
         self.log.info("Sleeping to trigger test timeout!")
@@ -114,7 +121,9 @@ class DaosServerDumpTest(TestWithServers):
         Test Description: Test engine ULT stacks dump (unexpected engine status case).
 
         :avocado: tags=manual
-        :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_unexpected_engine_status
+        :avocado: tags=vm
+        :avocado: tags=server
+        :avocado: tags=DaosServerDumpTest,test_daos_server_dump_on_unexpected_engine_status
         """
 
         self.log.info("Forcing servers expected state to make teardown unhappy!")

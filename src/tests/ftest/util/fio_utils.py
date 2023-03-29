@@ -214,7 +214,7 @@ class FioCommand(ExecutableCommand):
             self.filename_format = FormattedParameter("--filename_format={}")
             self.unique_filename = FormattedParameter("--unique_filename={}")
             self.opendir = FormattedParameter("--opendir={}")
-            self.rw = FormattedParameter("--rw={}")
+            self.rw = FormattedParameter("--rw={}")  # pylint: disable=invalid-name
             self.blocksize = FormattedParameter("--bs={}")
             self.blockalign = FormattedParameter("--ba={}")
             self.bsrange = FormattedParameter("--bsrange={}")

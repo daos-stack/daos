@@ -818,8 +818,8 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.m.value = message
-            cart_ctl.n.value = None
+            cart_ctl.log_message.value = message
+            cart_ctl.no_sync.value = None
             cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
@@ -1323,15 +1323,16 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, msg=None):
+    def fail(self, message=None):
         """Dump engines ULT stacks upon test failure."""
         self.dump_engines_stacks("Test has failed")
-        super().fail(msg)
+        super().fail(message)
 
-    def error(self, msg=None):
+    def error(self, message=None):
+        # pylint: disable=arguments-renamed
         """Dump engines ULT stacks upon test error."""
         self.dump_engines_stacks("Test has errored")
-        super().error(msg)
+        super().error(message)
 
     def tearDown(self):
         """Tear down after each test case."""
