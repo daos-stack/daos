@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,8 +41,8 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 		 * send to the server although in some cases it might end up being a noop
 		 */
 		DFUSE_TRA_DEBUG(ie, "uid flags %#x uid %d gid %d",
-				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)),
-				attr->st_uid, attr->st_gid);
+				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)), attr->st_uid,
+				attr->st_gid);
 
 		if (to_set & FUSE_SET_ATTR_UID)
 			dfs_flags |= DFS_SET_ATTR_UID;
@@ -85,16 +85,15 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	}
 
 	if (to_set & FUSE_SET_ATTR_SIZE) {
-		DFUSE_TRA_DEBUG(ie, "size %#lx",
-				attr->st_size);
+		DFUSE_TRA_DEBUG(ie, "size %#lx", attr->st_size);
 		to_set &= ~FUSE_SET_ATTR_SIZE;
 		dfs_flags |= DFS_SET_ATTR_SIZE;
-		if (ie->ie_dfs->dfc_data_caching &&
-		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
+		if (ie->ie_dfs->dfc_data_timeout != 0 && ie->ie_stat.st_size == 0 &&
+		    attr->st_size > 0) {
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
-			ie->ie_truncated = true;
-			ie->ie_start_off = 0;
-			ie->ie_end_off = 0;
+			ie->ie_truncated    = true;
+			ie->ie_start_off    = 0;
+			ie->ie_end_off      = 0;
 			ie->ie_stat.st_size = attr->st_size;
 		} else {
 			ie->ie_truncated = false;
