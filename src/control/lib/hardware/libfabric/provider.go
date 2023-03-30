@@ -120,12 +120,10 @@ func (p *Provider) infoToFabricInterface(fi info, priority int) (*hardware.Fabri
 
 // libFabricProviderToExt converts a single libfabric provider string into a DAOS provider string
 func libFabricProviderToExt(provider string) string {
-	switch provider {
-	case "sockets", "tcp", "verbs", "psm2", "gni", "cxi":
-		return "ofi+" + provider
-	default:
+	if provider == "ofi_rxm" {
 		return provider
 	}
+	return "ofi+" + provider
 }
 
 // libFabricProviderListToExt converts a libfabric provider string containing one or more providers
