@@ -605,6 +605,64 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_get_acl(pool=self.identifier)
 
     @fail_on(CommandFailure)
+    def set_prop(self, *args, **kwargs):
+        """Get pool properties by calling dmg pool set-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_set_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_set_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool set-prop
+
+        Returns:
+            dict: json output of dmg pool set-prop command
+
+        """
+        return self.dmg.pool_set_prop(pool=self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def get_prop(self, *args, **kwargs):
+        """Get pool properties by calling dmg pool get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool get-prop
+
+        Returns:
+            dict: json output of dmg pool get-prop command
+
+        """
+        return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
+
+    def get_prop_values(self, *args, **kwargs):
+        """Get pool property values from the dmg pool get-prop json output.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool get-prop
+
+        Returns:
+            list: a list of values matching the or specified property names.
+
+        """
+        values = []
+        self.log.info("Getting property values for %s", self)
+        data = self.get_prop(*args, **kwargs)
+        if data['status'] != 0:
+            return values
+        for entry in data['response']:
+            values.append(entry['value'])
+        return values
+
+    @DeprecationWarning('Use get_prop() or get_prop_values() instead')
+    @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
 

@@ -415,7 +415,8 @@ class Test(avocadoTest):
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
         self.log.debug(
-            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
+            "Register: Adding calling %s(%s) during tearDown()",
+            method.__name__, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
