@@ -386,7 +386,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
 	if (grp_root == CRT_NO_RANK) {
-		D_DEBUG(DB_NET, "%s: self rank not known yet\n",
+		D_ERROR("%s: self rank not known yet\n",
 			grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, rc = -DER_GRPVER);
 	}
@@ -521,7 +521,7 @@ crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 		RPC_ERROR(parent_rpc_priv,
 			  "CORPC failed: "DF_RC"\n", DP_RC(failed_rc));
 	else
-		RPC_TRACE(DB_NET, parent_rpc_priv,
+		RPC_ERROR(parent_rpc_priv,
 			  "CORPC failed: "DF_RC"\n", DP_RC(failed_rc));
 }
 
@@ -802,7 +802,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	 * might have changed the self rank from CRT_NO_RANK to a valid value.
 	 */
 	if (co_info->co_grp_priv->gp_self == CRT_NO_RANK) {
-		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet\n",
+		RPC_ERROR(rpc_priv, "%s: self rank not known yet\n",
 			  co_info->co_grp_priv->gp_pub.cg_grpid);
 		rc = -DER_GRPVER;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
@@ -834,7 +834,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		co_info->co_grp_priv->gp_self, co_info->co_child_num);
 
 	if (!ver_match) {
-		D_INFO("parent version and local version mismatch.\n");
+		D_ERROR("parent version and local version mismatch.\n");
 		rc = -DER_GRPVER;
 		co_info->co_child_num = 0;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
