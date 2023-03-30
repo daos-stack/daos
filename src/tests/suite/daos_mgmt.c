@@ -17,6 +17,7 @@
 
 #include <daos_mgmt.h>
 #include <daos_event.h>
+#include <daos/agent.h>
 
 /** create/destroy pool on all tgts */
 static void
@@ -396,6 +397,49 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success\n");
 }
 
+static void
+get_sys_info_test(void **state)
+{
+	struct daos_sys_info	*info = NULL;
+	char			*old_agent_path;
+	uint32_t		i;
+	int			rc;
+
+	print_message("SUBTEST: alloc with NULL input\n");
+	rc = daos_mgmt_sys_info_alloc(NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: free with NULL input\n");
+	daos_mgmt_sys_info_free(NULL); /* ensure it doesn't crash */
+
+	print_message("SUBTEST: bad agent socket\n");
+	old_agent_path = dc_agent_sockpath;
+	dc_agent_sockpath = "/fake/path/not/real";
+	rc = daos_mgmt_sys_info_alloc(&info);
+
+	/* restore the global variable before checking rc */
+	dc_agent_sockpath = old_agent_path;
+	assert_rc_equal(rc, -DER_AGENT_COMM);
+	assert_null(info);
+
+	print_message("SUBTEST: success\n");
+	rc = daos_mgmt_sys_info_alloc(&info);
+	assert_rc_equal(rc, 0);
+	assert_non_null(info);
+
+	assert_int_not_equal(strnlen(info->dsi_system_name, DAOS_SYS_INFO_STRING_MAX), 0);
+	print_message("system name: %s\n", info->dsi_system_name);
+	assert_int_not_equal(strnlen(info->dsi_provider, DAOS_SYS_INFO_STRING_MAX), 0);
+	print_message("provider: %s\n", info->dsi_provider);
+	assert_non_null(info->dsi_ms_ranks);
+	print_message("number of ranks: %d\n", info->dsi_nr_ms_ranks);
+	for (i = 0; i < info->dsi_nr_ms_ranks; i++)
+		print_message("rank %u, uri: %s\n", info->dsi_ms_ranks[i].dru_rank,
+			      info->dsi_ms_ranks[i].dru_uri);
+
+	daos_mgmt_sys_info_free(info);
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -406,7 +450,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT4: list-pools with multiple pools in sys",
 	  list_pools_test, setup_manypools, teardown_pools},
 	{ "MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors",
-	  pool_create_and_destroy_retry, async_disable, test_case_teardown}
+	  pool_create_and_destroy_retry, async_disable, test_case_teardown},
+	{ "MGMT6: daos_mgmt_get_sys_info",
+	  get_sys_info_test, async_disable, test_case_teardown},
 };
 
 static int

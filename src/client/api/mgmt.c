@@ -67,3 +67,15 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_mgmt_sys_info_alloc(struct daos_sys_info **info)
+{
+	return dc_mgmt_sys_info_alloc(info);
+}
+
+void
+daos_mgmt_sys_info_free(struct daos_sys_info *info)
+{
+	dc_mgmt_sys_info_free(info);
+}

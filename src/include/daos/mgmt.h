@@ -39,6 +39,7 @@ struct dc_mgmt_sys_info {
 	uint32_t	crt_timeout;
 	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
+	char		system_name[DAOS_SYS_INFO_STRING_MAX + 1];
 };
 
 /** Client system handle */
@@ -66,6 +67,9 @@ int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
 int dc_mgmt_net_get_num_srv_ranks(void);
+
+int dc_mgmt_sys_info_alloc(struct daos_sys_info **info);
+void dc_mgmt_sys_info_free(struct daos_sys_info *info);
 
 int dc_get_attach_info(const char *name, bool all_ranks,
 		       struct dc_mgmt_sys_info *info,

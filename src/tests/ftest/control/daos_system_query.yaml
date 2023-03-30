@@ -1,0 +1,27 @@
+hosts:
+  test_servers: 1
+timeout: 80
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 8
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt
+      storage: auto
+    1:
+      targets: 8
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt
+      storage: auto

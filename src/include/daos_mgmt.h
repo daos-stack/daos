@@ -20,6 +20,29 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_pool.h>
 
+/**
+ * Get the DAOS system information in a newly allocated structure.
+ *
+ * \param[out]	info	Newly allocated system information
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Out of memory
+ *		-DER_AGENT_COMM	Unable to communicate with DAOS agent
+ *		-DER_NO_PERM	No access to agent communications socket
+ *		-DER_MISC	Unexpected error
+ */
+int
+daos_mgmt_sys_info_alloc(struct daos_sys_info **info);
+
+/**
+ * Free the system info structure.
+ * 
+ * \param[in]	info	Structure to be freed
+ */
+void
+daos_mgmt_sys_info_free(struct daos_sys_info *info);
+
 /*
  * DAOS management pool information
  */

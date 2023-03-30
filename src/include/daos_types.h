@@ -226,6 +226,24 @@ typedef struct {
 	uint64_t	hi;
 } daos_obj_id_t;
 
+/**
+ * Corresponding rank and URI for a DAOS engine
+ */
+struct daos_rank_uri {
+	uint32_t	 dru_rank;
+	char		*dru_uri;
+};
+
+/**
+ * DAOS general system information
+ */
+struct daos_sys_info {
+	char			dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
+	char			dsi_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	uint32_t		dsi_nr_ms_ranks;
+	struct daos_rank_uri	*dsi_ms_ranks;
+};
+
 /** max pool/cont attr size */
 #define DAOS_ATTR_NAME_MAX 511
 
