@@ -17,7 +17,6 @@ from exception_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
 import security_test_base as secTestBase
-from test_utils_container import TestContainer
 
 
 class ContSecurityTestBase(TestWithServers):
@@ -97,9 +96,7 @@ class ContSecurityTestBase(TestWithServers):
             file_name = acl_file
 
         try:
-            self.container = TestContainer(pool=pool,
-                                           daos_command=self.daos_tool)
-            self.container.get_params(self)
+            self.container = self.get_container(pool, create=False, daos_command=self.daos_tool)
             self.container.create(acl_file=file_name)
             container_uuid = self.container.uuid
         except TestFail as error:
@@ -178,20 +175,18 @@ class ContSecurityTestBase(TestWithServers):
             self.pool.uuid, self.container_uuid, entry=entry)
         return result
 
-    def destroy_test_container(self, pool_uuid, container_uuid):
+    def destroy_test_container(self, pool, container):
         """Test container destroy/delete.
 
         Args:
-            pool_uuid (str): pool uuid.
-            container_uuid (str): container uuid.
+            pool (str): pool label or UUID.
+            container (str): container label or UUID.
 
         Return:
             result (str): daos_tool.container_destroy result.
         """
         self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_destroy(
-            pool_uuid, container_uuid, True)
-        return result
+        return self.daos_tool.container_destroy(pool, container, True)
 
     def set_container_attribute(
             self, pool_uuid, container_uuid, attr, value):

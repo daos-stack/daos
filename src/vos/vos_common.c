@@ -585,6 +585,7 @@ vos_metrics_free(void *data)
 }
 
 #define VOS_AGG_DIR	"vos_aggregation"
+#define VOS_SPACE_DIR	"vos_space"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -604,10 +605,11 @@ agg_op2str(unsigned int agg_op)
 static void *
 vos_metrics_alloc(const char *path, int tgt_id)
 {
-	struct vos_pool_metrics	*vp_metrics;
-	struct vos_agg_metrics	*vam;
-	char			 desc[40];
-	int			 i, rc;
+	struct vos_pool_metrics		*vp_metrics;
+	struct vos_agg_metrics		*vam;
+	struct vos_space_metrics	*vsm;
+	char				desc[40];
+	int				i, rc;
 
 	D_ASSERT(tgt_id >= 0);
 
@@ -622,6 +624,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	}
 
 	vam = &vp_metrics->vp_agg_metrics;
+	vsm = &vp_metrics->vp_space_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -695,6 +698,21 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
+
+	/* VOS space SCM used metric */
+	rc = d_tm_add_metric(&vsm->vsm_scm_used, D_TM_GAUGE, "SCM space used", "bytes",
+			     "%s/%s/scm_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'scm_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS space NVME used metric */
+	rc = d_tm_add_metric(&vsm->vsm_nvme_used, D_TM_GAUGE, "NVME space used", "bytes",
+			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* Initialize the vos_space_metrics timeout counter */
+	vsm->vsm_last_update_ts = 0;
 
 	return vp_metrics;
 }

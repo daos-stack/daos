@@ -869,7 +869,7 @@ dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
 dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
-	     tse_task_t *task);
+	     tse_task_t *task, bool comp);
 
 int
 dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
