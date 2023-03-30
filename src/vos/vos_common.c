@@ -259,9 +259,11 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   bool started, struct bio_desc *biod, int err)
 {
 	struct dtx_handle	*dth = dth_in;
+	struct vos_dtx_act_ent	*dae;
 	struct dtx_rsrvd_uint	*dru;
 	struct vos_dtx_cmt_ent	*dce = NULL;
 	struct dtx_handle	 tmp = {0};
+	int			 rc;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -308,19 +310,67 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
+	if (dtx_is_valid_handle(dth_in)) {
+		dae = dth->dth_ent;
+		if (dae != NULL)
+			dae->dae_preparing = 0;
+
+		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+			/* Aborted by race during the yield for local TX commit. */
+			rc = vos_dtx_validation(dth);
+			switch (rc) {
+			case DTX_ST_INITED:
+			case DTX_ST_PREPARED:
+			case DTX_ST_PREPARING:
+				/* The DTX has been ever aborted and related resent RPC
+				 * is in processing. Return -DER_AGAIN to make this ULT
+				 * to retry sometime later without dtx_abort().
+				 */
+				err = -DER_AGAIN;
+				break;
+			case DTX_ST_ABORTED:
+				D_ASSERT(dae == NULL);
+				/* Aborted, return -DER_INPROGRESS for client retry.
+				 *
+				 * Fall through.
+				 */
+			case DTX_ST_ABORTING:
+				err = -DER_INPROGRESS;
+				break;
+			case DTX_ST_COMMITTED:
+			case DTX_ST_COMMITTING:
+			case DTX_ST_COMMITTABLE:
+				/* Aborted then prepared/committed by race.
+				 * Return -DER_ALREADY to avoid repeated modification.
+				 */
+				dth->dth_already = 1;
+				err = -DER_ALREADY;
+				break;
+			default:
+				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
+					  DP_DTI(&dth->dth_xid), rc);
+			}
+		} else if (dae != NULL) {
+			if (dth->dth_solo) {
+				if (err == 0 && cont->vc_solo_dtx_epoch < dth->dth_epoch)
+					cont->vc_solo_dtx_epoch = dth->dth_epoch;
+
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
+			} else {
+				D_ASSERT(dce == NULL);
+				if (err == 0)
+					dae->dae_prepared = 1;
+			}
+		}
+	}
+
 	if (err != 0) {
-		/* The transaction aborted or failed to commit. */
+		/* Do not set dth->dth_pinned. Upper layer caller can do that via
+		 * vos_dtx_cleanup() when necessary.
+		 */
 		vos_tx_publish(dth, false);
 		if (dtx_is_valid_handle(dth_in))
 			vos_dtx_cleanup_internal(dth);
-	}
-
-	if (dce != NULL) {
-		struct vos_dtx_act_ent	*dae = dth_in->dth_ent;
-
-		vos_dtx_post_handle(cont, &dae, &dce, 1, false,
-				    err != 0 ? true : false);
-		dth_in->dth_ent = NULL;
 	}
 
 	return err;
