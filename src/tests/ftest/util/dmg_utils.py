@@ -1341,6 +1341,35 @@ def check_system_query_status(data):
     return not bool(failed_rank_list)
 
 
+def get_json_response(test, data, key, description):
+    """Get the response for the dmg command's json output.
+
+    Also checks for errors in the dmg command's json output.
+
+    Args:
+         test (Test): avocado test class
+         data (dict): json result from the dmg command
+         key (str, optional): dmg command json response key to return. Defaults to None.
+         description (str): the dmg command/method description
+
+    Raises:
+         TestFail: if there are errors detected in the dmg command's json output
+
+    Returns:
+         dict: the 'response' or 'response.key' from the command json data
+    """
+    response = {}
+    try:
+        if data['error']:
+            test.fail("{} failed: {}".format(description, data['error']))
+        if len(data['response']['host_errors']) > 0:
+            test.fail("{} failed: {}".format(description, data['response']['host_errors']))
+        response = data['response'][key] if key else data['response']
+    except KeyError as error:
+        test.fail("Error parsing {} json output: {}".format(description, error))
+    return response
+
+
 def get_dmg_response(test, dmg_method, key=None, **kwargs):
     """Get the data from the dmg command's json response key.
 
@@ -1362,23 +1391,8 @@ def get_dmg_response(test, dmg_method, key=None, **kwargs):
         data = dmg_method(**kwargs)
     except CommandFailure as error:
         test.fail("dmg.{}({}) failed: {}".format(dmg_method.__name__, dict_to_str(kwargs), error))
-
-    response = {}
-    try:
-        if data['error']:
-            test.fail(
-                "dmg.{}({}) failed: {}".format(
-                    dmg_method.__name__, dict_to_str(kwargs), data['error']))
-        if len(data['response']['host_errors']) > 0:
-            test.fail(
-                "dmg.{}({}) failed: {}".format(
-                    dmg_method.__name__, dict_to_str(kwargs), data['response']['host_errors']))
-        response = data['response'][key] if key else data['response']
-    except KeyError as error:
-        test.fail(
-            "Error parsing dmg.{}({}) json output: {}".format(
-                dmg_method.__name__, dict_to_str(kwargs), error))
-    return response
+    return get_json_response(
+        test, data, key, "dmg.{})({})".format(dmg_method.__name__, dict_to_str(kwargs)))
 
 
 def get_dmg_smd_info(test, dmg_method, smd_info_key=None, **kwargs):
