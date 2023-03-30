@@ -51,4 +51,5 @@ else
 fi
 
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$SL_SRC_DIR" utils/run_test.sh
+USE_DEV=/dev/vdb IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$SL_SRC_DIR" \
+    utils/run_test.sh

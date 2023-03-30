@@ -1889,6 +1889,25 @@ meta_open(struct bio_meta_context *mc)
 	return rc;
 }
 
+/*
+ * Try to generate an unique generation for WAL blob, the generation will be used
+ * to distinguish the stale TX blocks from destroyed pools.
+ *
+ * Note: It's only useful for AIO device which doesn't support unmap, if the blob
+ * is on NVMe SSD, the old data will be cleared by unmap on pool destroy.
+ */
+static inline uint32_t
+get_wal_gen(uuid_t pool_id, uint32_t tgt_id)
+{
+	uint64_t	pool = d_hash_murmur64(pool_id, sizeof(uuid_t), 5371);
+	uint32_t	ts = (uint32_t)daos_wallclock_secs();
+
+	if (tgt_id != BIO_STANDALONE_TGT_ID)
+		return (pool >> 32) ^ (pool & UINT32_MAX) ^ ts ^ tgt_id;
+
+	return (pool >> 32) ^ (pool & UINT32_MAX) ^ ts;
+}
+
 int
 meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 {
@@ -1947,7 +1966,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	memset(wal_hdr, 0, sizeof(*wal_hdr));
 	wal_hdr->wh_magic = BIO_WAL_MAGIC;
 	wal_hdr->wh_version = BIO_WAL_VERSION;
-	wal_hdr->wh_gen = (uint32_t)daos_wallclock_secs();
+	wal_hdr->wh_gen = get_wal_gen(fi->fi_pool_id, fi->fi_vos_id);
 	wal_hdr->wh_blk_bytes = WAL_BLK_SZ;
 	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;
