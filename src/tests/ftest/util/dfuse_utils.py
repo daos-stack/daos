@@ -253,6 +253,8 @@ class Dfuse(DfuseCommand):
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
 
+        self.env['MALLOC_CHECK_'] = '3'
+
         # Determine which fusermount command to use before mounting
         if not self._fusermount_cmd:
             self.log.info('Check which fusermount command to use')

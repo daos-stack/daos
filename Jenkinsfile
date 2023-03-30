@@ -1091,6 +1091,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                 test_function: 'runTestFunctionalV2'))
+                        timeout(time: 6, unit: 'HOURS')
                     }
                     post {
                         always {
