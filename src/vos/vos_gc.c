@@ -1141,6 +1141,8 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 	D_ASSERT(daos_handle_is_valid(poh));
 
+	vos_space_update_metrics(pool);
+
 	param.vgc_yield_func	= yield_func;
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;
