@@ -179,6 +179,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	if (handle) {
 		inode = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {

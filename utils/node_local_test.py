@@ -1825,13 +1825,17 @@ class PosixTests():
 
     @needs_dfuse
     def test_read(self):
-        """Test a basic read into cache"""
+        """Test a basic read.
+
+        Write to a file, then read from it.  With caching on dfuse won't see the read, with caching
+        off dfuse will see one truncated read, then another at EOF which will return zero bytes.
+        """
         file_name = join(self.dfuse.dir, 'file')
         with open(file_name, 'w') as fd:
             fd.write('test')
 
         with open(file_name, 'r') as fd:
-            data = fd.read(16)
+            data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
         print(data)
         assert data == 'test'
 
