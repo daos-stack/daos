@@ -34,8 +34,6 @@ ut_mc_init(struct bio_ut_args *args, uint64_t meta_sz, uint64_t wal_sz, uint64_t
 		D_ERROR("UT MC create failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-	/* Sleep 1 second to ensure each test uses unique WAL re-format timestamps */
-	sleep(1);
 
 	rc = bio_mc_open(args->bua_xs_ctxt, args->bua_pool_id, 0, &args->bua_mc);
 	if (rc) {
