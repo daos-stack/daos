@@ -327,7 +327,8 @@ struct bio_bdev {
 	 * marked as faulty (at least before next server restart).
 	 */
 				bb_faulty:1,
-				bb_tgt_cnt_init:1;
+				bb_tgt_cnt_init:1,
+				bb_unmap_supported:1;
 	/* bdev roles data/meta/wal */
 	unsigned int		bb_roles;
 };
@@ -607,6 +608,15 @@ dma_biov2pg(struct bio_iov *biov, uint64_t *off, uint64_t *end,
 		*pg_off = *off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 	}
 	D_ASSERT(*pg_cnt > 0);
+}
+
+static inline struct bio_bdev *
+ioc2d_bdev(struct bio_io_context *ioc)
+{
+	struct bio_bdev	*d_bdev = ioc->bic_xs_blobstore->bxb_blobstore->bb_dev;
+
+	D_ASSERT(d_bdev != NULL);
+	return d_bdev;
 }
 
 /* bio_bulk.c */

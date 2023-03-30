@@ -18,6 +18,16 @@
 #include <daos/sys_db.h>
 #include <daos_srv/bio.h>
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 struct bio_ut_args {
 	struct bio_xs_context	*bua_xs_ctxt;
 	struct bio_meta_context	*bua_mc;
