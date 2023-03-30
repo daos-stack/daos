@@ -625,7 +625,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self._call_method(self.container.query, {"coh": coh})
             self.info = self.container.info
 
-    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None):
+    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None, ci_nhandles=None):
         # pylint: disable=unused-argument
         """Check the container info attributes.
 

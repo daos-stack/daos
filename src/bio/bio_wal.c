@@ -548,6 +548,12 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	unsigned int		 left, entry_sz = sizeof(struct wal_trans_entry), dc_idx = 0;
 	uint64_t		 src_addr;
 
+	/* Simulate a server crash before the inflight WAL tx committed */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
+		D_ERROR("Injected WAL tx lost for ID:"DF_U64".\n", tx->utx_id);
+		return;
+	}
+
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
 	blk_hdr.th_id = tx->utx_id;
@@ -1171,13 +1177,23 @@ load_wal(struct bio_meta_context *mc, char *buf, unsigned int max_blks, uint64_t
 	return rc;
 }
 
+/* Check if a tx_id is known to be committed */
+static bool
+tx_known_committed(struct wal_super_info *si, uint64_t tx_id)
+{
+	/* Newly created WAL blob without any committed transactions */
+	if (si->si_commit_blks == 0) {
+		D_ASSERT(si->si_commit_id == 0);
+		return false;
+	}
+
+	return (wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
+}
+
 static int
 verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx_id)
 {
-	bool	committed = false;
-
-	if (wal_id_cmp(si, tx_id, si->si_commit_id) <= 0)
-		committed = true;
+	bool	committed = tx_known_committed(si, tx_id);
 
 	if (hdr->th_magic != WAL_HDR_MAGIC) {
 		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL head magic, %x != %x\n",
@@ -1406,11 +1422,8 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
 	uint32_t		 csum, expected_csum;
 	unsigned int		 csum_len, buf_len;
-	bool			 committed = false;
+	bool			 committed = tx_known_committed(si, hdr->th_id);
 	int			 rc;
-
-	if (wal_id_cmp(si, hdr->th_id, si->si_commit_id) <= 0)
-		committed = true;
 
 	if (skip_wal_tx_tail(&mc->mc_wal_info)) {
 		rc = verify_tx_blks(si, buf, blk_desc);
@@ -1556,6 +1569,69 @@ replay_tx(struct wal_super_info *si, char *buf,
 	return rc;
 }
 
+static inline uint64_t
+off2lba_blk(uint64_t off)
+{
+	return off + WAL_HDR_BLKS;
+}
+
+static int
+unmap_wal(struct bio_meta_context *mc, uint64_t unmap_start, uint64_t unmap_end,
+	  uint64_t *purged_blks)
+{
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	unsigned int		 blk_sz = si->si_header.wh_blk_bytes;
+	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
+	uint32_t		 tot_purged;
+	d_sg_list_t		 unmap_sgl;
+	d_iov_t			*unmap_iov;
+	int			 rc;
+
+	rc = d_sgl_init(&unmap_sgl, 2);
+	if (rc) {
+		D_ERROR("Failed to init unmap SGL. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	unmap_sgl.sg_nr_out = 1;
+	unmap_iov = &unmap_sgl.sg_iovs[0];
+
+	if (unmap_end == unmap_start) {
+		unmap_iov->iov_buf = (void *)off2lba_blk(0);
+		unmap_iov->iov_len = tot_blks;
+		tot_purged = unmap_iov->iov_len;
+	} else if (unmap_end > unmap_start) {
+		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
+		unmap_iov->iov_len = unmap_end - unmap_start;
+		tot_purged = unmap_iov->iov_len;
+	} else {
+		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
+		unmap_iov->iov_len = tot_blks - unmap_start;
+		tot_purged = unmap_iov->iov_len;
+
+		if (unmap_end > 0) {
+			unmap_sgl.sg_nr_out = 2;
+			unmap_iov = &unmap_sgl.sg_iovs[1];
+
+			unmap_iov->iov_buf = (void *)off2lba_blk(0);
+			unmap_iov->iov_len = unmap_end;
+			tot_purged += unmap_iov->iov_len;
+		}
+	}
+
+	rc = bio_blob_unmap_sgl(mc->mc_wal, &unmap_sgl, blk_sz);
+	d_sgl_fini(&unmap_sgl, false);
+	if (rc) {
+		D_ERROR("Unmap WAL failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (purged_blks)
+		*purged_blks = tot_purged;
+
+	return 0;
+}
+
 int
 bio_wal_replay(struct bio_meta_context *mc,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
@@ -1569,7 +1645,7 @@ bio_wal_replay(struct bio_meta_context *mc,
 	struct umem_action	*act;
 	unsigned int		 max_blks = WAL_MAX_TRANS_BLKS, blk_off;
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
-	uint64_t		 tx_id;
+	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
@@ -1583,6 +1659,7 @@ bio_wal_replay(struct bio_meta_context *mc,
 	}
 
 	tx_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
+	start_id = tx_id;
 
 load_wal:
 	tight_loop = 0;
@@ -1594,6 +1671,13 @@ load_wal:
 	}
 
 	while (1) {
+		/* Something went wrong, it's impossible to replay the whole WAL */
+		if (id2seq(tx_id) != id2seq(start_id) && id2off(tx_id) >= id2off(start_id)) {
+			D_ERROR("Whole WAL replayed. "DF_U64"/"DF_U64"\n", start_id, tx_id);
+			rc = -DER_INVAL;
+			break;
+		}
+
 		hdr = (struct wal_trans_head *)(buf + blk_off * blk_bytes);
 		rc = verify_tx_hdr(si, hdr, tx_id);
 		if (rc)
@@ -1643,9 +1727,34 @@ load_wal:
 out:
 	if (rc >= 0) {
 		D_DEBUG(DB_IO, "Replayed %u WAL transactions\n", nr_replayed);
-		D_ASSERT(wal_id_cmp(si, tx_id, si->si_commit_id) > 0);
+		D_ASSERT(si->si_commit_blks == 0 || wal_id_cmp(si, tx_id, si->si_commit_id) > 0);
 		si->si_unused_id = wal_next_id(si, si->si_commit_id, si->si_commit_blks);
-		rc = 0;
+
+		unmap_start = id2off(si->si_unused_id);
+		unmap_end = id2off(start_id);
+		/*
+		 * Unmap the unused region to erase stale tx entries, otherwise, stale tx could
+		 * be mistakenly replayed on next restart in following scenario:
+		 *
+		 * 1. Imagine two inflight transactions T1 and T2, T1 is submitted before T2;
+		 * 2. Before T1 is written to WAL, T2 is written successfully, both transactions
+		 *    are still regarded as incompleted since the preceding T1 is not persistent;
+		 * 3. Sever restart;
+		 * 4. WAL replay hit the hole generated by unfinished T1 and stop relaying as
+		 *    expected, both T1 & T2 are not replayed;
+		 * 5. A new transaction T3 committed, T3 happen to has same WAL size as T1, so it
+		 *    filled the hole perfectly;
+		 * 6. Server restart again;
+		 * 7. Both T3 & T2 are replayed since there is no way to tell that T2 is stale;
+		 *
+		 * This unmap solves the issue for any device with unmap properly implemented,
+		 * but it won't be helpful for AIO device which doesn't support unmap. Given that
+		 * AIO device is only used for unit testing, and zeroing the unused region would
+		 * be too heavy, we choose to leave this risk for AIO device.
+		 */
+		rc = unmap_wal(mc, unmap_start, unmap_end, NULL);
+		if (rc)
+			D_ERROR("Unmap after replay failed. "DF_RC"\n", DP_RC(rc));
 	} else {
 		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
 	}
@@ -1656,26 +1765,16 @@ out:
 	return rc;
 }
 
-static inline uint64_t
-off2lba_blk(uint64_t off)
-{
-	return off + WAL_HDR_BLKS;
-}
-
 int
-bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_size)
+bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged_blks)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_trans_head	*hdr;
 	struct wal_blks_desc	 blk_desc = { 0 };
 	char			*buf;
 	unsigned int		 blk_sz = si->si_header.wh_blk_bytes;
-	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	uint64_t		 unmap_start, unmap_end;
-	d_sg_list_t		 unmap_sgl;
-	d_iov_t			*unmap_iov;
 	int			 rc;
-	uint64_t		 unmap_size = 0;
 
 	D_ASSERT(wal_id_cmp(si, si->si_ckp_id, tx_id) < 0);
 	D_ASSERT(wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
@@ -1704,38 +1803,7 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_
 	unmap_end = id2off(wal_next_id(si, tx_id, blk_desc.bd_blks));
 
 	/* Unmap the checkpointed regions */
-	rc = d_sgl_init(&unmap_sgl, 2);
-	if (rc)
-		goto out;
-
-	unmap_sgl.sg_nr_out = 1;
-	unmap_iov = &unmap_sgl.sg_iovs[0];
-
-	if (unmap_end == unmap_start) {
-		unmap_iov->iov_buf = (void *)off2lba_blk(0);
-		unmap_iov->iov_len = tot_blks;
-		unmap_size = tot_blks;
-	} else if (unmap_end > unmap_start) {
-		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
-		unmap_iov->iov_len = unmap_end - unmap_start;
-		unmap_size = unmap_iov->iov_len;
-	} else {
-		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
-		unmap_iov->iov_len = tot_blks - unmap_start;
-		unmap_size = unmap_iov->iov_len;
-
-		if (unmap_end > 0) {
-			unmap_sgl.sg_nr_out = 2;
-			unmap_iov = &unmap_sgl.sg_iovs[1];
-
-			unmap_iov->iov_buf = (void *)off2lba_blk(0);
-			unmap_iov->iov_len = unmap_end;
-			unmap_size += unmap_iov->iov_len;
-		}
-	}
-
-	rc = bio_blob_unmap_sgl(mc->mc_wal, &unmap_sgl, blk_sz);
-	d_sgl_fini(&unmap_sgl, false);
+	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
 	if (rc)	/* Flush the WAL header anyway */
 		D_ERROR("Unmap checkpointed region failed. "DF_RC"\n", DP_RC(rc));
 
@@ -1749,8 +1817,6 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_
 		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
 out:
 	D_FREE(buf);
-	if (!rc)
-		*purge_size = unmap_size;
 	return rc;
 }
 
@@ -1776,6 +1842,13 @@ wal_close(struct bio_meta_context *mc)
 	D_ASSERT(si->si_tx_failed == 0);
 	if (si->si_rsrv_waiters > 0)
 		wakeup_reserve_waiters(si, true);
+
+	/* Simulate a server crash before inflight WAL commit completed */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
+		D_ERROR("Injected WAL tx lost, reset committed ID to zero.\n");
+		si->si_commit_id = 0;
+		si->si_commit_blks = 0;
+	}
 
 	rc = bio_wal_flush_header(mc);
 	if (rc)
@@ -1889,6 +1962,25 @@ meta_open(struct bio_meta_context *mc)
 	return rc;
 }
 
+/*
+ * Try to generate an unique generation for WAL blob, the generation will be used
+ * to distinguish the stale TX blocks from destroyed pools.
+ *
+ * Note: It's only useful for AIO device which doesn't support unmap, if the blob
+ * is on NVMe SSD, the old data will be cleared by unmap on pool destroy.
+ */
+static inline uint32_t
+get_wal_gen(uuid_t pool_id, uint32_t tgt_id)
+{
+	uint64_t	pool = d_hash_murmur64(pool_id, sizeof(uuid_t), 5371);
+	uint32_t	ts = (uint32_t)daos_wallclock_secs();
+
+	if (tgt_id != BIO_STANDALONE_TGT_ID)
+		return (pool >> 32) ^ (pool & UINT32_MAX) ^ ts ^ tgt_id;
+
+	return (pool >> 32) ^ (pool & UINT32_MAX) ^ ts;
+}
+
 int
 meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 {
@@ -1947,7 +2039,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	memset(wal_hdr, 0, sizeof(*wal_hdr));
 	wal_hdr->wh_magic = BIO_WAL_MAGIC;
 	wal_hdr->wh_version = BIO_WAL_VERSION;
-	wal_hdr->wh_gen = (uint32_t)daos_wallclock_secs();
+	wal_hdr->wh_gen = get_wal_gen(fi->fi_pool_id, fi->fi_vos_id);
 	wal_hdr->wh_blk_bytes = WAL_BLK_SZ;
 	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;

@@ -11,11 +11,11 @@ static void
 dfuse_cb_write_complete(struct dfuse_event *ev)
 {
 	if (ev->de_ev.ev_error == 0)
-		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
+		DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
 	else
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
 	daos_event_fini(&ev->de_ev);
-	d_slab_release(ev->de_handle->dpi_write_slab, ev);
+	d_slab_release(ev->de_eqt->de_write_slab, ev);
 }
 
 void
@@ -25,10 +25,16 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
+	size_t                        len       = fuse_buf_size(bufv);
+	struct fuse_bufvec            ibuf      = FUSE_BUFVEC_INIT(len);
+	struct dfuse_eq              *eqt;
 	int                           rc;
 	struct dfuse_event           *ev;
-	size_t                        len  = fuse_buf_size(bufv);
-	struct fuse_bufvec            ibuf = FUSE_BUFVEC_INIT(len);
+	uint64_t                      eqt_idx;
+
+	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
+
+	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
 
 	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
@@ -39,11 +45,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 		}
 	}
 
-	ev = d_slab_acquire(fs_handle->dpi_write_slab);
+	ev = d_slab_acquire(eqt->de_write_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
-
-	DFUSE_TRA_UP(ev, oh, "write");
 
 	/* Declare a bufvec on the stack and have fuse copy into it.
 	 * For page size and above this will read directly into the
@@ -55,6 +59,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
+	ev->de_oh          = oh;
 	ev->de_iov.iov_len = len;
 	ev->de_req         = req;
 	ev->de_len         = len;
@@ -83,12 +88,11 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	/* Send a message to the async thread to wake it up and poll for events
-	 */
-	sem_post(&fs_handle->dpi_sem);
+	/* Send a message to the async thread to wake it up and poll for events */
+	sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
-	d_slab_restock(fs_handle->dpi_write_slab);
+	d_slab_restock(eqt->de_write_slab);
 
 	return;
 
@@ -96,6 +100,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(fs_handle->dpi_write_slab, ev);
+		d_slab_release(eqt->de_write_slab, ev);
 	}
 }
