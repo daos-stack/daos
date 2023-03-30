@@ -276,16 +276,16 @@ class ReplayTests(TestWithServers):
         for container in containers:
             for index, item in enumerate((container.pool, container)):
                 # Modify a random pool/container property value
-                property = random.choice(expected[item.identifier])  # nosec
-                self.log.info('Modifying %s property: %s', item.identifier, property)
-                if isinstance((int, float), property['value']):
-                    property['value'] *= 2
+                modify = random.choice(expected[item.identifier])  # nosec
+                self.log.info('Modifying %s property: %s', item.identifier, modify)
+                if isinstance((int, float), modify['value']):
+                    modify['value'] *= 2
                 else:
-                    property['value'] = 'foo'
+                    modify['value'] = 'foo'
                 if index == 0:
-                    kwargs = {'properties': join(':', property['name'], property['value'])}
+                    kwargs = {'properties': join(':', modify['name'], modify['value'])}
                 else:
-                    kwargs = {'prop': property['name'], 'value': property['value']}
+                    kwargs = {'prop': modify['name'], 'value': modify['value']}
                 item.set_prop(**kwargs)
 
         self.stop_engines()
