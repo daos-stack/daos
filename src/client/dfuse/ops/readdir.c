@@ -127,6 +127,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
 	uint32_t                  oldref;
+	off_t                     expected_offset = 2;
 
 	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
@@ -155,7 +156,11 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_ASSERT(drc->drc_magic == DRC_MAGIC);
+		D_ASSERT(drc->drc_offset == expected_offset);
+		D_ASSERT(drc->drc_next_offset == expected_offset + 1 ||
+			 drc->drc_next_offset == READDIR_EOD);
 		drc->drc_magic = DRC_MAGIC - 1;
+		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
 			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
