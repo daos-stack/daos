@@ -66,7 +66,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     finally:
         dmg.json.value = dmg_json
     response = get_json_response(test, json.loads(res.stdout_text), None,
-        'dmg.storage_set_faulty({})'.format(dict_to_str(kwargs)))
+                                 'dmg.storage_set_faulty({})'.format(dict_to_str(kwargs)))
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, test=test, dmg=dmg, server=server, uuid=uuid)
