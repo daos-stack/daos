@@ -90,7 +90,7 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 				OSName: "fi0_domain",
 				Providers: hardware.NewFabricProviderSet(
 					&hardware.FabricProvider{
-						Name:     "provider_x",
+						Name:     "ofi+provider_x",
 						Priority: testPriority,
 					},
 				),
@@ -160,7 +160,7 @@ func TestLibfabric_libFabricProviderListToExt(t *testing.T) {
 		},
 		"unknown": {
 			in:     "provider_x",
-			expOut: "provider_x",
+			expOut: "ofi+provider_x",
 		},
 		"badly formed": {
 			in:     " ;ofi_rxm",
