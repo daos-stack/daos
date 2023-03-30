@@ -201,9 +201,16 @@ struct vos_chkpt_metrics {
 
 void vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id);
 
+struct vos_space_metrics {
+	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
+	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
+};
+
 struct vos_pool_metrics {
-	void                      *vp_vea_metrics;
-	struct vos_agg_metrics	   vp_agg_metrics;
+	void			*vp_vea_metrics;
+	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics   vp_chkpt_metrics;
 	/* TODO: add more metrics for VOS */
 };
@@ -1394,6 +1401,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+void
+vos_space_update_metrics(struct vos_pool *pool);
 
 static inline bool
 vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,

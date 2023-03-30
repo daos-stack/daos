@@ -4726,8 +4726,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				  task->dt_result == -DER_NONEXIST)) {
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj,
-					     DAOS_OBJ_RPC_FETCH, task);
+				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, false);
 			}
 			break;
 		}
@@ -4747,8 +4746,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				D_ASSERT(obj != NULL);
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj,
-					     obj_auxi->opc, task);
+				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, false);
 			}
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
@@ -5761,18 +5759,16 @@ dc_obj_update_task(tse_task_t *task)
 	if (rc != 0)
 		goto comp;
 
-	if (daos_handle_is_valid(args->th)) {
+	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task);
-		goto comp;
-	}
+		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, true);
 
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
+
 comp:
-	if (rc <= 0)
-		obj_task_complete(task, rc);
-	return rc > 0 ? 0 : rc;
+	obj_task_complete(task, rc);
+	return rc;
 }
 
 static int
@@ -6643,17 +6639,16 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
-	if (daos_handle_is_valid(args->th)) {
+	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, obj, opc, task);
-		goto comp;
-	}
+		return dc_tx_attach(args->th, obj, opc, task, true);
+
 	/* submit the punch */
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
+
 comp:
-	if (rc <= 0)
-		obj_task_complete(task, rc);
-	return rc > 0 ? 0 : rc;
+	obj_task_complete(task, rc);
+	return rc;
 }
 
 int

@@ -31,8 +31,8 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_create_acl,test_container_basics
+        :avocado: tags=security,container,container_acl
+        :avocado: tags=CreateContainterACLTest,test_container_basics
         """
         acl_args = {"tmp_dir": self.tmp,
                     "user": self.current_user,
@@ -44,7 +44,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 1. Create a pool and obtain its UUID
         self.log.info("===> Creating a pool with no ACL file passed")
-        self.pool_uuid = self.create_pool_with_dmg()
+        pool_uuid = self.create_pool_with_dmg()
 
         # 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")
@@ -53,8 +53,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         if not self.container_uuid:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.container_uuid)
+        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL: {}".format(cont_acl, expected_acl))
@@ -82,9 +81,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         if not self.container_uuid:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.container_uuid,
-                                               True)
+        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid, True)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL:  {}".format(cont_acl, expected_acl))
