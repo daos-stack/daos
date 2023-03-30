@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -304,7 +304,7 @@ lmm_db_upsert(struct sys_db *db, char *table, d_iov_t *key, d_iov_t *val)
 out:
 	rc = mdb_error2daos_error(rc);
 	if (end_tx)
-		lmm_db_tx_end(db, rc);
+		rc = lmm_db_tx_end(db, rc);
 	return rc;
 }
 
@@ -333,7 +333,7 @@ lmm_db_delete(struct sys_db *db, char *table, d_iov_t *key)
 out:
 	rc = mdb_error2daos_error(rc);
 	if (end_tx)
-		lmm_db_tx_end(db, rc);
+		rc = lmm_db_tx_end(db, rc);
 	return rc;
 }
 
