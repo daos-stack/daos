@@ -168,7 +168,10 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	/* Set max number of contexts. Defaults to the number of cores */
 	ctx_num = 0;
 	d_getenv_int("CRT_CTX_NUM", &ctx_num);
-	max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	if (opt)
+		max_num_ctx = ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
+	else
+		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;

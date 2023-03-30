@@ -589,16 +589,20 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 
 		if (i == ATTR_DATA_CACHE_INDEX) {
 			if (dfuse_char_enabled(buff_addrs[i], sizes[i])) {
-				dfc->dfc_data_caching = true;
+				dfc->dfc_data_timeout = -1;
 				DFUSE_TRA_INFO(dfc, "setting '%s' is enabled", cont_attr_names[i]);
 			} else if (dfuse_char_disabled(buff_addrs[i], sizes[i])) {
 				have_cache_off        = true;
-				dfc->dfc_data_caching = false;
+				dfc->dfc_data_timeout = 0;
 				DFUSE_TRA_INFO(dfc, "setting '%s' is disabled", cont_attr_names[i]);
+			} else if (dfuse_parse_time(buff_addrs[i], sizes[i], &value) == 0) {
+				DFUSE_TRA_INFO(dfc, "setting '%s' is %u seconds",
+					       cont_attr_names[i], value);
+				dfc->dfc_data_timeout = value;
 			} else {
 				DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
 						  buff_addrs[i], cont_attr_names[i]);
-				dfc->dfc_data_caching = false;
+				dfc->dfc_data_timeout = 0;
 			}
 			continue;
 		}
@@ -638,16 +642,14 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 	}
 
-	/* Check if dfuse-direct-io-disable is set to on but
-	 * dfuse-data-cache is set to off.  This combination
-	 * does not make sense, so warn in this case and set
-	 * caching to on.
+	/* Check if dfuse-direct-io-disable is set to on but dfuse-data-cache is set to off.
+	 * This combination does not make sense, so warn in this case and set caching to on.
 	 */
 	if (have_dio) {
 		if (have_cache_off)
 			DFUSE_TRA_WARNING(dfc, "Caching enabled because of %s",
 					  cont_attr_names[ATTR_DIRECT_IO_DISABLE_INDEX]);
-		dfc->dfc_data_caching = true;
+		dfc->dfc_data_timeout = -1;
 	}
 
 	if (have_dentry && !have_dentry_dir)
@@ -678,7 +680,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_dentry_timeout     = 1;
 	dfc->dfc_dentry_dir_timeout = 5;
 	dfc->dfc_ndentry_timeout    = 1;
-	dfc->dfc_data_caching       = true;
+	dfc->dfc_data_timeout       = 60 * 10;
 	dfc->dfc_direct_io_disable  = false;
 }
 
@@ -821,9 +823,9 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
 		 */
-		dfc->dfc_attr_timeout = 5;
-		dfc->dfc_dentry_dir_timeout = 5;
-		dfc->dfc_ndentry_timeout = 5;
+		dfc->dfc_attr_timeout       = 60;
+		dfc->dfc_dentry_dir_timeout = 60;
+		dfc->dfc_ndentry_timeout    = 60;
 
 	} else if (*_dfc == NULL) {
 		char str[37];
@@ -935,6 +937,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	struct timespec left;
 	double          time_left;
 
+	if (max_age == -1)
+		return true;
+
 	if (ie->ie_cache_last_update.tv_sec == 0)
 		return false;
 
@@ -948,12 +953,13 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	}
 	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
 	if (time_left > 0) {
-		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
 		use = true;
-	}
 
-	if (use && timeout)
-		*timeout = time_left;
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
+
+		if (timeout)
+			*timeout = time_left;
+	}
 
 	return use;
 }
