@@ -13,7 +13,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	struct dfuse_obj_hdl *oh = ev->de_oh;
 
 	if (ev->de_ev.ev_error != 0) {
-		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(oh, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(release, 0);
 	}
 
@@ -29,23 +29,23 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	}
 
 	if (ev->de_len == 0) {
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
 				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
 
-		DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+		DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 		D_GOTO(release, 0);
 	}
 
 	if (ev->de_len == ev->de_req_len)
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read", ev->de_req_position,
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", ev->de_req_position,
 				ev->de_req_position + ev->de_req_len - 1);
 	else
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
 				ev->de_req_position, ev->de_req_position + ev->de_len - 1,
 				ev->de_req_position + ev->de_len,
 				ev->de_req_position + ev->de_req_len - 1);
 
-	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
