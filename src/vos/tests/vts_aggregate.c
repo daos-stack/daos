@@ -2992,7 +2992,7 @@ run_aggregate_tests(bool slow, const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "Aggregate Tests %s", cfg);
+	dts_create_config(test_name, "Aggregate Tests (%s) %s", cfg, slow ? "slow" : "fast");
 
 	slow_test = slow;
 	return cmocka_run_group_tests_name(test_name,
