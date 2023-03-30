@@ -657,7 +657,7 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8') + '"' +
+                                                quickBuildDeps('el8', true) + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
