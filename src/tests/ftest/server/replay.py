@@ -6,7 +6,7 @@
 
 from apricot import TestWithServers
 
-from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
+from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse, restart_dfuse
 from ior_utils import get_ior
 from job_manager_utils import get_job_manager
 from test_utils_pool import add_pool
@@ -122,7 +122,7 @@ class ReplayTests(TestWithServers):
         ior.run(self.server_group, container.pool, container, None, ppn, dfuse=dfuse)
 
         self.log_step('After the read has completed, unmount dfuse')
-        stop_dfuse(self, dfuse)
+        stop_dfuse(self, dfuse, False)
 
         self.log_step('Shutdown every engine cleanly (dmg system stop)')
         self.get_dmg_command().system_stop(True)
@@ -139,7 +139,7 @@ class ReplayTests(TestWithServers):
             self.fail('Failed to start ranks cleanly')
 
         self.log_step('Remount dfuse')
-        start_dfuse(self, dfuse, pool, container)
+        restart_dfuse(self, dfuse)
 
         self.log_step('Verify the previously written data exists')
         ior_log = '_'.join(

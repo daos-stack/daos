@@ -345,7 +345,7 @@ class Dfuse(DfuseCommand):
 
             self._update_mount_state()
 
-    def stop(self):
+    def stop(self, remove_mount=True):
         """Stop dfuse.
 
         Try to stop dfuse.  Try once nicely by using fusermount, then if that
@@ -354,6 +354,10 @@ class Dfuse(DfuseCommand):
         not worked correctly.
 
         Finally, try and remove the mount point, and that itself should work.
+
+        Args:
+            remove_mount (bool, optional): whether or not to remove the dfuse mount point. Defaults
+                to True.
 
         Raises:
             CommandFailure: In case dfuse stop fails
@@ -379,17 +383,19 @@ class Dfuse(DfuseCommand):
             error_list.append(f"Error stopping dfuse on {self._running_hosts}")
 
         # Remove mount points
-        try:
-            self._remove_mount_point()
-        except CommandFailure as error:
-            error_list.append(str(error))
+        if remove_mount:
+            try:
+                self._remove_mount_point()
+            except CommandFailure as error:
+                error_list.append(str(error))
 
         # Report any errors
         if error_list:
             raise CommandFailure("\n".join(error_list))
 
         # Only assume clean if nothing above failed
-        self.__need_cleanup = False
+        if remove_mount:
+            self.__need_cleanup = False
 
 
 def get_dfuse(test, hosts, namespace=None):
@@ -430,7 +436,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         params (Object, optional): Dfuse command arguments to update
 
     Raises:
-        CommandFailure: on failure to start dfuse
+        TestFail: on failure to start dfuse
 
     """
     if pool:
@@ -450,12 +456,33 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         test.fail("Failed to start dfuse")
 
 
-def stop_dfuse(test, dfuse):
+def restart_dfuse(test, dfuse):
+    """Restart a Dfuse instance.
+
+    Args:
+        test (Test): the test instance
+        dfuse (Dfuse): the dfuse instance to start
+
+    Raises:
+        TestFail: on failure to restart dfuse
+
+    """
+    try:
+        dfuse.bind_cores = test.params.get('cores', dfuse.namespace, None)
+        dfuse.run()
+    except CommandFailure as error:
+        test.log.error("Failed to restart dfuse on hosts %s", dfuse.hosts, exc_info=error)
+        test.fail("Failed to restart dfuse")
+
+
+def stop_dfuse(test, dfuse, remove_mount=True):
     """Stop a dfuse instance.
 
     Args:
         test (Test): the test from which to stop dfuse
         dfuse (Dfuse): the dfuse instance to stop
+        remove_mount (bool, optional): whether or not to remove the dfuse mount point. Defaults to
+                True.
 
     Returns:
         list: a list of any errors detected when stopping dfuse
@@ -463,7 +490,7 @@ def stop_dfuse(test, dfuse):
     """
     error_list = []
     try:
-        dfuse.stop()
+        dfuse.stop(remove_mount)
     except (CommandFailure) as error:
         test.test_log.info("  {}".format(error))
         error_list.append("Error stopping dfuse: {}".format(error))
