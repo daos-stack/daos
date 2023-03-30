@@ -3023,7 +3023,7 @@ static const struct CMUnitTest int_tests[] = {
 };
 
 static int
-run_oclass_tests(enum daos_otype_t type, const char *cfg)
+run_oclass_tests(const char *cfg)
 {
 	char        test_name[DTS_CFG_MAX];
 	const char *akey = "hashed";
@@ -3032,13 +3032,13 @@ run_oclass_tests(enum daos_otype_t type, const char *cfg)
 
 	vts_nest_iterators = false;
 
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_UINT64))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_UINT64))
 		dkey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_LEXICAL))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_LEXICAL))
 		dkey = "lex";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_UINT64))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_UINT64))
 		akey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_LEXICAL))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_LEXICAL))
 		akey = "lex";
 
 	dts_create_config(test_name, "IO_oclass tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
@@ -3088,7 +3088,7 @@ run_io_test(int *types, int num_types, int keys, const char *cfg)
 
 	for (int i = 0; i < num_types; i++) {
 		init_type = types[i];
-		rc += run_oclass_tests(type, cfg);
+		rc += run_oclass_tests(cfg);
 	}
 
 	return rc;

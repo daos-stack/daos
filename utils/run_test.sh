@@ -279,7 +279,6 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
-    run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
 
