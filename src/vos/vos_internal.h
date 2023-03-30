@@ -95,6 +95,14 @@ enum {
 	DTX_LID_RESERVED,
 };
 
+/**
+ * If the highest bit (31th) of the DTX entry offset is set, then it is for
+ * solo (single modification against single replicated object) transaction.
+ */
+#define DTX_LID_SOLO_BITS	31
+#define DTX_LID_SOLO_FLAG	(1UL << DTX_LID_SOLO_BITS)
+#define DTX_LID_SOLO_MASK	(DTX_LID_SOLO_FLAG - 1)
+
 /*
  * When aggregate merge window reaches this size threshold, it will stop
  * growing and trigger window flush immediately.
@@ -179,9 +187,16 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 };
 
+struct vos_space_metrics {
+	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
+	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
+};
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_space_metrics vp_space_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -284,6 +299,10 @@ struct vos_container {
 	uint64_t		vc_io_nospc_ts;
 	/* The (next) position for committed DTX entries reindex. */
 	umem_off_t		vc_cmt_dtx_reindex_pos;
+	/* The epoch for the latest committed solo DTX. Any solo
+	 * * transaction with older epoch must have been committed.
+	 */
+	daos_epoch_t		vc_solo_dtx_epoch;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -328,11 +347,14 @@ struct vos_dtx_act_ent {
 	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
+					 dae_committing:1,
 					 dae_committed:1,
+					 dae_aborting:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
 					 /* Need validation on leader before commit/committable. */
 					 dae_need_validation:1,
+					 dae_preparing:1,
 					 dae_prepared:1;
 };
 
@@ -405,6 +427,62 @@ D_CASSERT((VOS_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT - VOS_AGG_NR_BITS))) == 
 CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
 CHECK_VOS_TREE_FLAG(VOS_TF_AGG_OPT);
 CHECK_VOS_TREE_FLAG(VOS_AGG_TIME_MASK);
+
+/* For solo transaction (single modification against single replicated object),
+ * consider efficiency, we do not generate persistent DTX entry. Then we need
+ * some special mechanism to maintain the semantics: any readable data must be
+ * persistently visible unless it is over-written by newer modification. That
+ * is the same behavior as non-solo cases. So if the local backend TX for the
+ * solo transaction is in committing, then related modification is invisible
+ * until related local backend TX has been successfully committed. (NOTE: in
+ * committing modification maybe lost if engine crashed before commit done.)
+ *
+ * For this purpose, we will reuse the DTX entry index (uint32_t) in the data
+ * record (ilog/svt/evt). Originally, such 32-bits integer is used as the DTX
+ * entry offset in the DTX LRU array. Up to now, we only use the lower 20 bits
+ * (DTX_ARRAY_LEN). Now, the highest (31th) bit will be used as a solo flag to
+ * indicate a solo DTX. On the other hand, we will trace the epoch against the
+ * container for the latest committed solo DTX. Anytime, for a given solo DTX,
+ * if its epoch is newer than the one for the container known latest committed
+ * solo DTX, then it is in committing status; otherwise, it has been committed.
+ */
+static inline bool
+dtx_is_committed(uint32_t tx_lid, struct vos_container *cont, daos_epoch_t epoch)
+{
+	if (tx_lid == DTX_LID_COMMITTED)
+		return true;
+
+	D_ASSERT(cont != NULL);
+
+	if (tx_lid & DTX_LID_SOLO_FLAG && cont->vc_solo_dtx_epoch >= epoch)
+		return true;
+
+	return false;
+}
+
+static inline bool
+dtx_is_aborted(uint32_t tx_lid)
+{
+	return tx_lid == DTX_LID_ABORTED;
+}
+
+static inline bool
+vos_dtx_is_normal_entry(uint32_t tx_lid)
+{
+	return tx_lid >= DTX_LID_RESERVED && !(tx_lid & DTX_LID_SOLO_FLAG);
+}
+
+static inline void
+dtx_set_committed(uint32_t *tx_lid)
+{
+	*tx_lid = DTX_LID_COMMITTED;
+}
+
+static inline void
+dtx_set_aborted(uint32_t *tx_lid)
+{
+	*tx_lid = DTX_LID_ABORTED;
+}
 
 /** Get the aggregatable write timestamp within 1/4 ms granularity */
 static inline bool
@@ -557,21 +635,22 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
  * Get local entry DTX state. Only used by VOS aggregation.
  *
  * \param entry		[IN]	DTX local id
+ * \param cont		[IN]	Pointer to the vos container.
+ * \param epoch		[IN]	Epoch for the entry.
  *
  * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
  *			DTX_ST_ABORTED.
  */
 static inline unsigned int
-vos_dtx_ent_state(uint32_t entry)
+vos_dtx_ent_state(uint32_t entry, struct vos_container *cont, daos_epoch_t epoch)
 {
-	switch (entry) {
-	case DTX_LID_COMMITTED:
+	if (dtx_is_committed(entry, cont, epoch))
 		return DTX_ST_COMMITTED;
-	case DTX_LID_ABORTED:
+
+	if (dtx_is_aborted(entry))
 		return DTX_ST_ABORTED;
-	default:
-		return DTX_ST_PREPARED;
-	}
+
+	return DTX_ST_PREPARED;
 }
 
 /**
@@ -1358,6 +1437,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+void
+vos_space_update_metrics(struct vos_pool *pool);
 
 static inline bool
 vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
@@ -1488,6 +1569,30 @@ struct csum_recalc_args {
 };
 
 int vos_csum_recalc_fn(void *recalc_args);
+
+static inline bool
+vos_dae_is_commit(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_committable || dae->dae_committing || dae->dae_committed;
+}
+
+static inline bool
+vos_dae_is_abort(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_aborting || dae->dae_aborted;
+}
+
+static inline bool
+vos_dae_is_prepare(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_preparing || dae->dae_prepared;
+}
+
+static inline bool
+vos_dae_in_process(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_committing || dae->dae_aborting || dae->dae_preparing;
+}
 
 static inline struct dcs_csum_info *
 vos_csum_at(struct dcs_iod_csums *iod_csums, unsigned int idx)
