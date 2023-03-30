@@ -682,7 +682,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct ds_pool_clue		*clue;
+	struct ds_pool_clue		*clue = cpr->cpr_clue;
 	char				*strs[3];
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
@@ -729,7 +729,6 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -817,7 +816,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_pool_label = cpr->cpr_label;
+	cru.cru_pool_label = clue->pc_label;
 	cru.cru_msg = "Check leader detects orphan pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -889,7 +888,6 @@ ignore:
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -1046,7 +1044,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				goto report;
 
 			clue = cpr->cpr_clue;
-			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, cpr->cpr_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
@@ -1216,7 +1214,7 @@ ignore:
 			break;
 
 		clue = cpr->cpr_clue;
-		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, cpr->cpr_label,
 					       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 		if (result != 0) {
 			cbk->cb_statistics.cs_failed++;
@@ -1629,6 +1627,14 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			cpr = (struct chk_pool_rec *)riov.iov_buf;
 			cpr->cpr_exist_on_ms = 1;
 
+			rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
+					    clp[i].clp_label != NULL ?
+					    strlen(clp[i].clp_label) : 0);
+			if (rc != 0) {
+				cpr->cpr_skip = 1;
+				goto out;
+			}
+
 			/* No engine report shard for the pool, it is dangling pool. */
 			if (d_list_empty(&cpr->cpr_shard_list)) {
 				chk_pool_get(cpr);
@@ -1655,14 +1661,6 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			if (cpr->cpr_for_orphan) {
 				chk_pool_remove_nowait(cpr);
 				continue;
-			}
-
-			rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
-					    clp[i].clp_label != NULL ?
-					    strlen(clp[i].clp_label) : 0);
-			if (rc != 0) {
-				cpr->cpr_skip = 1;
-				goto out;
 			}
 
 			chk_pool_get(cpr);
