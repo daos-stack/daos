@@ -135,10 +135,22 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	if (fi_out)
+	ie->ie_stat = entry.attr;
+
+	if (fi_out) {
+		/* Now set the value of keep_cache, this is for creat where we need to do the hash
+		 * table lookup before setting this value.
+		 */
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
+			fi_out->keep_cache = 1;
+		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+			fi_out->keep_cache = 1;
+		}
+
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
-	else
+	} else {
 		DFUSE_REPLY_ENTRY(ie, req, entry);
+	}
 
 	if (wipe_parent == 0)
 		return;
@@ -262,7 +274,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	if (attr_len)
+		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 

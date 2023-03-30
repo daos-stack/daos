@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,7 +132,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /
 		dae = rec_iov.iov_buf;
 	}
 
-	while (dae->dae_committable || dae->dae_committed || dae->dae_aborted ||
+	while (vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_preparing ||
 	       dae->dae_dth != NULL) {
 		if (oiter->oit_linear) {
 			if (dae->dae_link.next ==
@@ -204,7 +204,7 @@ dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 				 sizeof(struct vos_dtx_act_ent));
 			dae = rec_iov.iov_buf;
 		}
-	} while (dae->dae_committable || dae->dae_committed || dae->dae_aborted ||
+	} while (vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_preparing ||
 		 dae->dae_dth != NULL);
 
 out:
@@ -241,9 +241,9 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	/* Only return prepared ones. */
-	D_ASSERT(!dae->dae_committable);
-	D_ASSERT(!dae->dae_committed);
-	D_ASSERT(!dae->dae_aborted);
+	D_ASSERT(!vos_dae_is_commit(dae));
+	D_ASSERT(!vos_dae_is_abort(dae));
+	D_ASSERT(!dae->dae_preparing);
 	D_ASSERT(dae->dae_dth == NULL);
 
 	/*

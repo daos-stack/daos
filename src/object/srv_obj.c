@@ -1255,6 +1255,16 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
 	return false;
 }
 
+static inline uint64_t
+orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
+{
+	uint64_t flags = 0;
+
+	if (orf_flags & ORF_EPOCH_UNCERTAIN)
+		flags |= DTX_EPOCH_UNCERTAIN;
+	return flags;
+}
+
 static int
 obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		      daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
@@ -1539,8 +1549,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
 			rc = csum_add2iods(ioh,
 					   orw->orw_iod_array.oia_iods,
-					   orw->orw_iod_array.oia_iod_nr,
-					   ioc->ioc_coc->sc_csummer,
+					   iods_nr, ioc->ioc_coc->sc_csummer,
 					   orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
 			if (rc) {
@@ -1591,8 +1600,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto post;
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
-					 biod, ioc->ioc_coc->sc_csummer,
-					 orw->orw_iod_array.oia_iod_nr);
+					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
 		if (rc != 0)
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
 				DF_RC"\n",
@@ -1632,25 +1640,48 @@ out:
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && obj_rpc_is_update(rpc) && dth->dth_need_validation &&
-	    sched_cur_seq() != sched_seq) {
-		daos_epoch_t	epoch = 0;
-		int		rc1;
+	if (rc == 0 && obj_rpc_is_update(rpc) && sched_cur_seq() != sched_seq) {
+		if (dth->dth_need_validation) {
+			daos_epoch_t	epoch = 0;
+			int		rc1;
 
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
-		switch (rc1) {
-		case 0:
-			orw->orw_epoch = epoch;
-			/* Fall through */
-		case -DER_ALREADY:
-			rc = -DER_ALREADY;
-			break;
-		case -DER_NONEXIST:
-		case -DER_EP_OLD:
-			break;
-		default:
-			rc = rc1;
-			break;
+			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
+			switch (rc1) {
+			case 0:
+				orw->orw_epoch = epoch;
+				/* Fall through */
+			case -DER_ALREADY:
+				rc = -DER_ALREADY;
+				break;
+			case -DER_NONEXIST:
+			case -DER_EP_OLD:
+				break;
+			default:
+				rc = rc1;
+				break;
+			}
+		}
+
+		/* For solo update, it will be handled via one-phase transaction.
+		 * If there is CPU yield after its epoch generated, we will renew
+		 * the epoch, then we can use the epoch to sort related solo DTXs
+		 * based on their epochs.
+		 */
+		if (rc == 0 && dth->dth_solo) {
+			struct dtx_epoch	epoch;
+
+			epoch.oe_value = d_hlc_get();
+			epoch.oe_first = orw->orw_epoch_first;
+			epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
+
+			dtx_renew_epoch(&epoch, dth);
+			vos_update_renew_epoch(ioh, dth);
+
+			D_DEBUG(DB_IO,
+				"update rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				rpc, orw->orw_epoch, dth->dth_epoch, DP_DTI(&orw->orw_dti));
+
+			orw->orw_epoch = dth->dth_epoch;
 		}
 	}
 
@@ -1698,12 +1729,6 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			D_ALLOC_ARRAY(*csums, oiod_nr);
 			if (*csums == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			for (i = 0; i < oiod_nr &&
-			     iod_array->oia_iods[i].iod_type == DAOS_IOD_SINGLE; i++) {
-				D_ALLOC_PTR((*csums)[i].ic_data);
-				if ((*csums)[i].ic_data == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
-			}
 		}
 	}
 
@@ -1736,8 +1761,8 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			(*iods)[idx].iod_recxs = &iod_parent->iod_recxs[siod->siod_idx];
 			(*iods)[idx].iod_nr = siod->siod_nr;
 			if (csums != NULL) {
-				(*csums)[i].ic_data = &iod_pcsum->ic_data[siod->siod_idx];
-				(*csums)[i].ic_nr = siod->siod_nr;
+				(*csums)[idx].ic_data = &iod_pcsum->ic_data[siod->siod_idx];
+				(*csums)[idx].ic_nr = siod->siod_nr;
 			}
 		} else {
 			if (iod_parent->iod_recxs != NULL)
@@ -1745,11 +1770,15 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			else
 				(*iods)[idx].iod_recxs = NULL;
 			(*iods)[idx].iod_nr = 1;
-			if (csums != NULL) {
+			if (csums != NULL && iod_pcsum->ic_nr > 0) {
 				struct dcs_csum_info	*ci, *split_ci;
 
 				D_ASSERT(iod_pcsum->ic_nr == 1);
 				ci = &iod_pcsum->ic_data[0];
+				D_ALLOC_PTR((*csums)[idx].ic_data);
+				if ((*csums)[idx].ic_data == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+
 				split_ci = (*csums)[idx].ic_data;
 				*split_ci = *ci;
 				if (ci->cs_nr > 1) {
@@ -1838,20 +1867,19 @@ again:
 	}
 
 out:
-	if (iods != NULL && iods != &iod && iods != orw->orw_iod_array.oia_iods)
-		D_FREE(iods);
-	if (offs != NULL && offs != &off && offs != orw->orw_iod_array.oia_offs)
-		D_FREE(offs);
 	if (csums != NULL && csums != &csum && csums != orw->orw_iod_array.oia_iod_csums) {
 		int i;
 
-		for (i = 0; i < orw->orw_iod_array.oia_oiod_nr &&
-		     orw->orw_iod_array.oia_iods[i].iod_type == DAOS_IOD_SINGLE; i++) {
-			if (csums[i].ic_data != NULL)
+		for (i = 0; i < nr; i++) {
+			if (iods[i].iod_type == DAOS_IOD_SINGLE && csums[i].ic_data != NULL)
 				D_FREE(csums[i].ic_data);
 		}
 		D_FREE(csums);
 	}
+	if (iods != NULL && iods != &iod && iods != orw->orw_iod_array.oia_iods)
+		D_FREE(iods);
+	if (offs != NULL && offs != &off && offs != orw->orw_iod_array.oia_offs)
+		D_FREE(offs);
 
 	return rc;
 }
@@ -2198,16 +2226,6 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 failed:
 	obj_ioc_end(ioc, rc);
 	return rc;
-}
-
-static uint64_t
-orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
-{
-	uint64_t flags = 0;
-
-	if (orf_flags & ORF_EPOCH_UNCERTAIN)
-		flags |= DTX_EPOCH_UNCERTAIN;
-	return flags;
 }
 
 void
@@ -2827,6 +2845,7 @@ again2:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
 		d_tm_inc_counter(opm->opm_update_retry, 1);
+		ABT_thread_yield();
 		goto again1;
 	default:
 		break;
@@ -3669,6 +3688,7 @@ again2:
 	case -DER_AGAIN:
 		opi->opi_flags |= ORF_RESEND;
 		need_abort = true;
+		ABT_thread_yield();
 		goto again1;
 	default:
 		break;
@@ -4226,21 +4246,38 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && dth->dth_modification_cnt > 0 && dth->dth_need_validation &&
-	    sched_cur_seq() != sched_seq) {
-		daos_epoch_t	epoch = 0;
-		int		rc1;
+	if (rc == 0 && dth->dth_modification_cnt > 0 && sched_cur_seq() != sched_seq) {
+		if (dth->dth_need_validation) {
+			daos_epoch_t	epoch = 0;
+			int		rc1;
 
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
-		switch (rc1) {
-		case 0:
-		case -DER_ALREADY:
-			D_GOTO(out, rc = -DER_ALREADY);
-		case -DER_NONEXIST:
-		case -DER_EP_OLD:
-			break;
-		default:
-			D_GOTO(out, rc = rc1);
+			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
+			switch (rc1) {
+			case 0:
+			case -DER_ALREADY:
+				D_GOTO(out, rc = -DER_ALREADY);
+			case -DER_NONEXIST:
+			case -DER_EP_OLD:
+				break;
+			default:
+				D_GOTO(out, rc = rc1);
+			}
+		}
+
+		if (rc == 0 && dth->dth_solo) {
+			daos_epoch_t	epoch = dcsh->dcsh_epoch.oe_value;
+
+			D_ASSERT(dcde->dcde_read_cnt == 0);
+			D_ASSERT(dcde->dcde_write_cnt == 1);
+
+			dcsh->dcsh_epoch.oe_value = d_hlc_get();
+
+			dtx_renew_epoch(&dcsh->dcsh_epoch, dth);
+			vos_update_renew_epoch(iohs[0], dth);
+
+			D_DEBUG(DB_IO,
+				"CPD rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				rpc, epoch, dcsh->dcsh_epoch.oe_value, DP_DTI(&dcsh->dcsh_xid));
 		}
 	}
 
@@ -4348,9 +4385,9 @@ out:
 			struct dcs_iod_csums	*csum = pcsums[i];
 			int j;
 
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr &&
-			     dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE; i++) {
-				if (csum[j].ic_data != NULL)
+			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
+				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL)
 					D_FREE(csum[j].ic_data);
 			}
 
@@ -4659,7 +4696,7 @@ again:
 	else
 		tgts++;
 
-	if (tgt_cnt <= 1 && dcde->dcde_write_cnt <= 1)
+	if (tgt_cnt <= 1 && dcde->dcde_write_cnt == 1 && dcde->dcde_read_cnt == 0)
 		dtx_flags |= DTX_SOLO;
 	if (flags & ORF_RESEND)
 		dtx_flags |= DTX_PREPARED;
@@ -4694,6 +4731,7 @@ out:
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;
 		need_abort = true;
+		ABT_thread_yield();
 		goto again;
 	}
 
