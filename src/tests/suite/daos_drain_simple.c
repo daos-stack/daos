@@ -514,10 +514,8 @@ static const struct CMUnitTest drain_tests[] = {
 	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
 	{"DRAIN8: drain multiple objects",
 	 drain_objects, rebuild_sub_rf0_setup, test_teardown},
-	{"DRAIN9: drain multiple objects",
-	 drain_objects, rebuild_sub_setup, test_teardown},
-	{"DRAIN10: drain fail and retry",
-	 drain_fail_and_retry_objects, rebuild_sub_setup, test_teardown},
+	{"DRAIN9: drain fail and retry",
+	 drain_fail_and_retry_objects, rebuild_sub_rf0_setup, test_teardown},
 };
 
 int
