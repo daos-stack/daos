@@ -155,5 +155,8 @@ class DaosCoreBase(TestWithServers):
             tmp_log_path = "/tmp/suite_dmg.log"
             log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
             shutil.move(tmp_log_path, log_path)
+        except FileNotFoundError:
+            # if dmg wasn't called, there will not be a dmg log file
+            self.log.info("dmg log file not found")
         except IOError as error:
-            print("unable to move dmg log:", error)
+            self.log.error("unable to move dmg log: %s", error)
