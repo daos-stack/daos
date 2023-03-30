@@ -4,7 +4,9 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.2.0-6%{?dist}
-%global libfabric_version 1.16.0-1
+
+# 1.18 introduces new TCP provider
+%global libfabric_version 1.18.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -564,8 +566,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Mar 27 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.2.0-12
-- Pin libfabric to 1.15.1 version
+* Wed Mar 29 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.2.0-12
+- Pin libfabric to be below 1.18 version. 1.18 introduces new TCP provider and
+  requires additional mercury update.
 
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.2.0-11
 - Add numactl requires for server package
