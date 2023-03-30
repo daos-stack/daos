@@ -526,7 +526,6 @@ wal_kv_large(void **state)
 static void
 wal_args_reset(struct io_test_args *args)
 {
-	sleep(1); /** See DAOS-13040 */
 	args->oid = gen_oid(otype);
 	args->otype = otype;
 	if (is_daos_obj_type_set(otype, DAOS_OT_AKEY_UINT64)) {
