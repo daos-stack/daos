@@ -26,7 +26,7 @@ mdr_stop_pool_svc(void **argv)
 		print_message("creating pool\n");
 		rc = dmg_pool_create(dmg_config_file,
 				     geteuid(), getegid(), arg->group,
-				     NULL, 128 * 1024 * 1024, 0,
+				     NULL, 256 * 1024 * 1024, 0,
 				     NULL, arg->pool.svc, uuid);
 	}
 	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
@@ -123,7 +123,7 @@ mdr_stop_cont_svc(void **argv)
 	print_message("creating pool\n");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(), arg->group,
-			     NULL, 128 * 1024 * 1024, 0,
+			     NULL, 256 * 1024 * 1024, 0,
 			     NULL, arg->pool.svc, pool_uuid);
 	assert_rc_equal(rc, 0);
 
