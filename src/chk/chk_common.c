@@ -73,6 +73,7 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
+	D_INIT_LIST_HEAD(&cpr->cpr_pending_list);
 	cpr->cpr_refs = 1;
 	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
 	cpr->cpr_thread = ABT_THREAD_NULL;
@@ -179,7 +180,7 @@ btr_ops_t chk_pool_ops = {
 };
 
 struct chk_pending_bundle {
-	d_list_t		*cpb_ins_head;
+	d_list_t		*cpb_pool_head;
 	d_list_t		*cpb_rank_head;
 	d_rank_t		 cpb_rank;
 	uuid_t			 cpb_uuid;
@@ -236,7 +237,7 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 		D_INIT_LIST_HEAD(&cpr->cpr_rank_link);
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, cpr);
-	d_list_add_tail(&cpr->cpr_ins_link, cpb->cpb_ins_head);
+	d_list_add_tail(&cpr->cpr_pool_link, cpb->cpb_pool_head);
 
 	d_iov_set(val_out, cpr, sizeof(*cpr));
 
@@ -261,7 +262,7 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	d_iov_t			*val_iov = args;
 
 	rec->rec_off = UMOFF_NULL;
-	d_list_del_init(&cpr->cpr_ins_link);
+	d_list_del_init(&cpr->cpr_pool_link);
 	d_list_del_init(&cpr->cpr_rank_link);
 
 	if (val_iov != NULL) {
@@ -419,6 +420,33 @@ chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret)
 
 	if (ret != NULL)
 		*ret = rc;
+}
+
+static void
+chk_pool_wait(struct chk_pool_rec *cpr)
+{
+	struct chk_instance	*ins = cpr->cpr_ins;
+	struct chk_pending_rec	*pending;
+	struct chk_pending_rec	*tmp;
+
+	D_ASSERT(cpr->cpr_refs > 0);
+
+	ABT_mutex_lock(cpr->cpr_mutex);
+	if (cpr->cpr_thread != ABT_THREAD_NULL && !cpr->cpr_stop) {
+		cpr->cpr_stop = 1;
+		ABT_cond_broadcast(cpr->cpr_cond);
+		ABT_mutex_unlock(cpr->cpr_mutex);
+
+		/* Cleanup all pending records belong to this pool. */
+		ABT_rwlock_wrlock(ins->ci_abt_lock);
+		d_list_for_each_entry_safe(pending, tmp, &cpr->cpr_pending_list, cpr_pool_link)
+			chk_pending_wakeup(ins, pending);
+		ABT_rwlock_unlock(ins->ci_abt_lock);
+
+		ABT_thread_free(&cpr->cpr_thread);
+	} else {
+		ABT_mutex_unlock(cpr->cpr_mutex);
+	}
 }
 
 void
@@ -747,8 +775,8 @@ chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank
 }
 
 int
-chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uuid_t uuid, uint64_t seq,
-		uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
+chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
+		uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
 {
 	struct chk_pending_bundle	rbund;
 	d_iov_t				kiov;
@@ -758,8 +786,8 @@ chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uuid_t uuid, uint
 
 	D_ASSERT(cpr != NULL);
 
-	rbund.cpb_ins_head = &ins->ci_pending_list;
 	uuid_copy(rbund.cpb_uuid, uuid);
+	rbund.cpb_pool_head = pool_head;
 	rbund.cpb_rank_head = rank_head;
 	rbund.cpb_seq = seq;
 	rbund.cpb_rank = rank;
@@ -812,10 +840,46 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec *
 	return rc;
 }
 
+int
+chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr)
+{
+	d_iov_t		kiov;
+	d_iov_t		riov;
+	int		rc = 0;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, &cpr->cpr_seq, sizeof(cpr->cpr_seq));
+	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	if (rc != 0) {
+		D_ASSERT(rc != -DER_NONEXIST);
+
+		D_ERROR("Failed to remove pending rec for seq "DF_X64": "DF_RC"\n",
+			cpr->cpr_seq, DP_RC(rc));
+	} else {
+		D_ASSERT(cpr == riov.iov_buf);
+
+		ABT_mutex_lock(cpr->cpr_mutex);
+		if (cpr->cpr_busy) {
+			/*
+			 * Notify the owner who is blocked on the pending record
+			 * and will release the pending record after using it.
+			 */
+			cpr->cpr_exiting = 1;
+			ABT_cond_broadcast(cpr->cpr_cond);
+			ABT_mutex_unlock(cpr->cpr_mutex);
+		} else {
+			ABT_mutex_unlock(cpr->cpr_mutex);
+			chk_pending_destroy(cpr);
+		}
+	}
+
+	return rc;
+}
+
 void
 chk_pending_destroy(struct chk_pending_rec *cpr)
 {
-	D_ASSERT(d_list_empty(&cpr->cpr_ins_link));
+	D_ASSERT(d_list_empty(&cpr->cpr_pool_link));
 	D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
 
 	if (cpr->cpr_cond != ABT_COND_NULL)
@@ -890,7 +954,6 @@ chk_ins_init(struct chk_instance **p_ins)
 	D_INIT_LIST_HEAD(&ins->ci_pool_list);
 
 	ins->ci_pending_hdl = DAOS_HDL_INVAL;
-	D_INIT_LIST_HEAD(&ins->ci_pending_list);
 
 	rc = ABT_rwlock_create(&ins->ci_abt_lock);
 	if (rc != ABT_SUCCESS)
@@ -942,7 +1005,6 @@ chk_ins_fini(struct chk_instance **p_ins)
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
