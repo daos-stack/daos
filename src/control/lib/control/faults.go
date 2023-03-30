@@ -56,6 +56,7 @@ func IsRetryableConnErr(err error) bool {
 	}
 
 	return f.Code == code.ClientConnectionRefused ||
+		f.Code == code.ClientConnectionTimedOut ||
 		f.Code == code.ClientConnectionClosed
 }
 
@@ -69,6 +70,7 @@ func IsConnErr(err error) bool {
 	for _, connCode := range []code.Code{
 		code.ClientConnectionBadHost, code.ClientConnectionClosed,
 		code.ClientConnectionNoRoute, code.ClientConnectionRefused,
+		code.ClientConnectionTimedOut,
 	} {
 		if f.Code == connCode {
 			return true
@@ -107,6 +109,14 @@ func FaultConnectionClosed(srvAddr string) *fault.Fault {
 		code.ClientConnectionClosed,
 		fmt.Sprintf("the server at %s closed the connection without accepting a request", srvAddr),
 		"verify that the configured address and your TLS configuration are correct (or disable transport security)",
+	)
+}
+
+func FaultConnectionTimedOut(srvAddr string) *fault.Fault {
+	return clientFault(
+		code.ClientConnectionTimedOut,
+		fmt.Sprintf("the connection to the server at %s timed out", srvAddr),
+		"verify that the configured address is correct and that the server is running",
 	)
 }
 

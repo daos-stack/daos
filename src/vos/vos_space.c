@@ -14,6 +14,9 @@
 #define POOL_SCM_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_SCM])
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
+/* Minimal seconds interval for updating VOS space metrics */
+#define VOS_SPACE_METRICS_INTV	1
+
 /* Extra space being reserved to deal with fragmentation issues */
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
@@ -371,4 +374,51 @@ vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld)
 
 	POOL_SCM_HELD(pool)	-= space_hld[DAOS_MEDIA_SCM];
 	POOL_NVME_HELD(pool)	-= space_hld[DAOS_MEDIA_NVME];
+}
+
+void
+vos_space_update_metrics(struct vos_pool *pool)
+{
+	struct vos_pool_metrics	*vpm;
+	uint64_t		 now;
+
+	vpm = pool->vp_metrics;
+	if (!vpm)
+		return;
+
+	now = daos_gettime_coarse();
+	if (now < vpm->vp_space_metrics.vsm_last_update_ts + VOS_SPACE_METRICS_INTV) {
+		return;
+	}
+	vpm->vp_space_metrics.vsm_last_update_ts = now;
+
+	if (vpm->vp_space_metrics.vsm_scm_used) {
+		daos_size_t	scm_used;
+		int		rc;
+
+		rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
+				     "stats.heap.curr_allocated", &scm_used);
+		if (rc) {
+			rc = umem_tx_errno(rc);
+			D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
+				DP_UUID(pool->vp_id), DP_RC(rc));
+		} else {
+			d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_used, scm_used);
+		}
+	}
+
+	if (vpm->vp_space_metrics.vsm_nvme_used && pool->vp_vea_info) {
+		struct vea_attr	va = { 0 };
+		daos_size_t	nvme_used;
+		int		rc;
+
+		rc = vea_query(pool->vp_vea_info, &va, NULL);
+		if (rc) {
+			D_ERROR("Query Pool:"DF_UUID" NVMe space failed. "DF_RC"\n",
+				DP_UUID(pool->vp_id), DP_RC(rc));
+		}
+
+		nvme_used = (va.va_tot_blks - va.va_free_blks) * va.va_blk_sz;
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_nvme_used, nvme_used);
+	}
 }
