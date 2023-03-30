@@ -177,7 +177,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
         check = self.check_result(
-            set_device_faulty(self, self.dmg, self.hostlist_servers, test_dev, self.pool),
+            set_device_faulty(self, self.dmg, self.hostlist_servers[0], test_dev, self.pool),
             "EVICTED", "ON")
 
         if not check:
