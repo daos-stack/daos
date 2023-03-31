@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,7 +178,8 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
@@ -227,7 +228,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
