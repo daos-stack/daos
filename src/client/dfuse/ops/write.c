@@ -32,6 +32,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_event           *ev;
 	uint64_t                      eqt_idx;
 
+	oh->doh_linear_read = false;
+
 	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
 
 	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
