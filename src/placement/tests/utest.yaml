@@ -1,0 +1,4 @@
+- name: placement
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/jump_pl_map"]

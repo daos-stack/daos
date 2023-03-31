@@ -1,0 +1,6 @@
+- name: cart
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/tests/ftest/cart/utest/test_linkage"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_hlc"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_swim"]

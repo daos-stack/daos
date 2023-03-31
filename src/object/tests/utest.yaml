@@ -1,0 +1,4 @@
+- name: csum_server
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/srv_checksum_tests"]

@@ -1,0 +1,4 @@
+- name: mgmt
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/mgmt/tests/srv_drpc_tests"]

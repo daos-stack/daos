@@ -1,0 +1,4 @@
+- name: rdb
+  memcheck: False
+  tests:
+    - cmd: ["src/rdb/raft_tests/raft_tests.py"]

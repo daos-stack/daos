@@ -1,0 +1,28 @@
+- name: common
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/umem_test"]
+    - cmd: ["src/common/tests/sched"]
+    - cmd: ["src/common/tests/drpc_tests"]
+    - cmd: ["src/common/tests/acl_api_tests"]
+    - cmd: ["src/common/tests/acl_valid_tests"]
+    - cmd: ["src/common/tests/acl_util_tests"]
+    - cmd: ["src/common/tests/acl_principal_tests"]
+    - cmd: ["src/common/tests/acl_real_tests"]
+    - cmd: ["src/common/tests/prop_tests"]
+    - cmd: ["src/common/tests/fault_domain_tests"]
+- name: btree_stress
+  memcheck: False
+  tests:
+    - cmd: ["src/common/tests/btree.sh", "perf"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "ukey"]
+- name: btree
+  tests:
+    - cmd: ["src/common/tests/btree.sh"]
+    - cmd: ["src/common/tests/btree.sh", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn"]

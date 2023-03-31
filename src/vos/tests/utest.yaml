@@ -1,0 +1,33 @@
+- name: VOS
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vos_tests", "-A", "500"]
+    - cmd: ["bin/vos_tests", "-r",
+            "-c pool -w key@0-4 -w key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-r",
+            "-c pool -w key@0-3 -w key@3-4 -w key@5-1 -w key@5-4 -R key@5-3 -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-r", "-c pool -x key@10-400 -i -d -o pool -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-C"]
+      env_vars:
+        DAOS_DKEY_PUNCH_PROPAGATE: "1"
+- name: VOS_evtree
+  tests:
+    - cmd: ["src/vos/tests/evt_ctl.sh"]
+- name: VOS_evtree_stress
+  memcheck: False
+  tests:
+    - cmd: ["src/vos/tests/evt_stress.py"]
+    - cmd: ["src/vos/tests/evt_stress.py", "--algo", "soff"]
+    - cmd: ["src/vos/tests/evt_stress.py", "--algo", "dist_even"]
+- name: VOS_NVMe
+  base: "PREFIX"
+  sudo: True
+  memcheck: False
+  tests:
+    - cmd: ["bin/vos_tests", "-a"]
+      aio: "AIO_1"
+      size: 4
+- name: csum_scrubber
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/pool_scrubbing_tests"]

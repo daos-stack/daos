@@ -1,0 +1,5 @@
+- name: storage_estimator
+  base: "DAOS_BASE"
+  memcheck: False
+  tests:
+    - cmd: ["src/vos/storage_estimator/common/tests/storage_estimator.sh"]

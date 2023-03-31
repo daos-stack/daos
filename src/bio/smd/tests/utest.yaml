@@ -1,0 +1,4 @@
+- name: bio
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/bio/smd/tests/smd_ut"]

@@ -1,0 +1,4 @@
+- name: rpc
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/rpc_tests"]

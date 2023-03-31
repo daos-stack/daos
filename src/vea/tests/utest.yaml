@@ -1,0 +1,13 @@
+- name: vea
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vea_ut"]
+    - cmd: ["bin/vea_stress", "-d", "60"]
+- name: vea_debug
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vea_ut"]
+      env_vars:
+        D_LOG_MASK: "debug"
+        DD_SUBSYS: "all"
+        DD_MASK: "all"

@@ -1,0 +1,7 @@
+- name: security
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/client/api/bin/drpc_client_tests"]
+    - cmd: ["src/client/api/bin/drpc_progress_tests"]
+    - cmd: ["src/client/api/bin/drpc_handler_tests"]
+    - cmd: ["src/client/api/bin/drpc_listener_tests"]

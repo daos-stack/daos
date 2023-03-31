@@ -1,0 +1,6 @@
+- name: client
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/eq_tests"]
+    - cmd: ["bin/agent_tests"]
+    - cmd: ["bin/job_tests"]

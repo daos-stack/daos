@@ -1,0 +1,10 @@
+- name: control
+  memcheck: False
+  tests:
+    - cmd: ["src/control/run_go_tests.sh"]
+- name: spdk
+  base: "PREFIX"
+  memcheck: False
+  tests:
+    - cmd: ["bin/nvme_control_ctests"]
+      warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
