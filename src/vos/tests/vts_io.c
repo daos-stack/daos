@@ -1851,8 +1851,6 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	sleep(1); /* See DAOS-13044 */
-
 	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_256M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 

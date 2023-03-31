@@ -526,7 +526,6 @@ wal_kv_large(void **state)
 static void
 wal_args_reset(struct io_test_args *args)
 {
-	sleep(1); /** See DAOS-13040 */
 	args->oid = gen_oid(otype);
 	args->otype = otype;
 	if (is_daos_obj_type_set(otype, DAOS_OT_AKEY_UINT64)) {
@@ -537,8 +536,6 @@ wal_args_reset(struct io_test_args *args)
 		args->dkey = NULL;
 		args->dkey_size = sizeof(uint64_t);
 	}
-	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
-		 vos_path, otype);
 }
 
 static int
@@ -1164,7 +1161,7 @@ run_wal_tests(const char *cfg)
 			akey = "uint";
 		if (is_daos_obj_type_set(otype, DAOS_OT_AKEY_LEXICAL))
 			akey = "lex";
-		dts_create_config(test_name, "WAL Basic IO tests dkey=%-6s akey=%s %s", dkey, akey,
+		dts_create_config(test_name, "WAL0 Basic IO tests dkey=%-6s akey=%s %s", dkey, akey,
 				  cfg);
 		test_name[3] = '1';
 		D_PRINT("Running %s\n", test_name);
