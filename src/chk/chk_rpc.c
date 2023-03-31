@@ -47,20 +47,134 @@ chk_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct chk_start_out	*out_source = crt_reply_get(source);
 	struct chk_start_out	*out_result = crt_reply_get(result);
 	struct chk_co_rpc_priv	*ccrp = priv;
+	struct ds_pool_clue	*clues;
+	d_rank_t		*ranks;
+	uint32_t		 cap;
+	uint32_t		 nr;
 	int			 rc;
+	int			 i;
 
-	if (out_source->cso_status < 0) {
-		D_ERROR("Failed to check start with gen "DF_X64": "DF_RC"\n",
-			in_source->csi_gen, DP_RC(out_source->cso_status));
+	if (out_source->cso_status < 0 || out_source->cso_child_status < 0) {
+		D_ERROR("Failed to check start with gen "DF_X64": %d/%d\n", in_source->csi_gen,
+			out_source->cso_status, out_source->cso_child_status);
 
 		if (out_result->cso_child_status == 0)
-			out_result->cso_child_status = out_source->cso_status;
-	} else {
-		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_status,
+			out_result->cso_child_status = out_source->cso_status < 0 ?
+				out_source->cso_status : out_source->cso_child_status;
+
+		return 0;
+	}
+
+	/* Root node. */
+	if (ccrp != NULL) {
+		rc = ccrp->cb(ccrp->args, 0 /* unused rank */, 0 /* unused result */,
 			      out_source->cso_clues.ca_arrays, out_source->cso_clues.ca_count);
 		if (rc != 0 && out_result->cso_child_status == 0)
 			out_result->cso_child_status = rc;
+
+		ranks = out_source->cso_cmp_ranks.ca_arrays;
+		if (ranks == NULL)
+			return 0;
+
+		for (i = 0; i < out_source->cso_cmp_ranks.ca_count; i++, ranks++) {
+			rc = ccrp->cb(ccrp->args, *ranks, 1,
+				      NULL /* unused data */, 0 /* unused nr */);
+			if (rc != 0 && out_result->cso_child_status == 0)
+				out_result->cso_child_status = rc;
+		}
+
+		return 0;
 	}
+
+	/* Middle node aggregation. */
+
+	if (out_source->cso_clues.ca_count == 0)
+		goto cmp_ranks;
+
+	nr = out_source->cso_clues.ca_count + out_result->cso_clues.ca_count;
+	if (nr > out_result->cso_clue_cap) {
+		cap = out_result->cso_clue_cap > 0 ? out_result->cso_clue_cap : 1;
+		while (cap < nr)
+			cap <<= 1;
+
+clue_again:
+		D_REALLOC_ARRAY(clues, out_result->cso_clues.ca_arrays,
+				out_result->cso_clue_cap, cap);
+		if (clues == NULL) {
+			if (cap > nr) {
+				cap = nr;
+				goto clue_again;
+			}
+
+			return -DER_NOMEM;
+		}
+
+		out_result->cso_clues.ca_arrays = clues;
+		out_result->cso_clue_cap = cap;
+	}
+
+	memcpy((struct ds_pool_clue *)out_result->cso_clues.ca_arrays +
+	       out_result->cso_clues.ca_count, out_source->cso_clues.ca_arrays,
+	       sizeof(*clues) * out_source->cso_clues.ca_count);
+	out_result->cso_clues.ca_count = nr;
+
+	/*
+	 * pc_svc_clue/pc_label/pc_tgt_status are shared between out_source to out_result.
+	 * Let's reset them in out_source to avoid being released when cleanup out_source.
+	 */
+	for (i = 0, clues = out_source->cso_clues.ca_arrays;
+	     i < out_source->cso_clues.ca_count; i++, clues++) {
+		clues->pc_label_len = 0;
+		clues->pc_tgt_nr = 0;
+		clues->pc_svc_clue = NULL;
+		clues->pc_label = NULL;
+		clues->pc_tgt_status = NULL;
+	}
+
+cmp_ranks:
+	if (out_source->cso_cmp_ranks.ca_count == 0)
+		return 0;
+
+	nr = out_source->cso_cmp_ranks.ca_count + out_result->cso_cmp_ranks.ca_count;
+	if (nr > out_result->cso_rank_cap) {
+		cap = out_result->cso_rank_cap > 0 ? out_result->cso_rank_cap : 1;
+		while (cap < nr)
+			cap <<= 1;
+
+rank_again:
+		D_REALLOC_ARRAY(ranks, out_result->cso_cmp_ranks.ca_arrays,
+				out_result->cso_rank_cap, cap);
+		if (ranks == NULL) {
+			if (cap > nr) {
+				cap = nr;
+				goto rank_again;
+			}
+
+			return -DER_NOMEM;
+		}
+
+		out_result->cso_cmp_ranks.ca_arrays = ranks;
+		out_result->cso_rank_cap = cap;
+	}
+
+	memcpy((d_rank_t *)out_result->cso_cmp_ranks.ca_arrays + out_result->cso_cmp_ranks.ca_count,
+	       out_source->cso_cmp_ranks.ca_arrays,
+	       sizeof(*ranks) * out_source->cso_cmp_ranks.ca_count);
+	out_result->cso_cmp_ranks.ca_count = nr;
+
+	return 0;
+}
+
+static int
+chk_start_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct chk_start_out	*cso = crt_reply_get(rpc);
+	struct ds_pool_clues	 clues = { 0 };
+
+	D_FREE(cso->cso_cmp_ranks.ca_arrays);
+	clues.pcs_len = cso->cso_clues.ca_count;
+	clues.pcs_array = cso->cso_clues.ca_arrays;
+	ds_pool_clues_fini(&clues);
 
 	return 0;
 }
@@ -72,19 +186,81 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct chk_stop_out	*out_source = crt_reply_get(source);
 	struct chk_stop_out	*out_result = crt_reply_get(result);
 	struct chk_co_rpc_priv	*ccrp = priv;
+	d_rank_t		*ranks;
+	uint32_t		 cap;
+	uint32_t		 nr;
 	int			 rc;
+	int			 i;
 
-	if (out_source->cso_status < 0) {
-		D_ERROR("Failed to check stop with gen "DF_X64": "DF_RC"\n",
-			in_source->csi_gen, DP_RC(out_source->cso_status));
+	if (out_source->cso_status < 0 || out_source->cso_child_status < 0) {
+		D_ERROR("Failed to check stop with gen "DF_X64": %d/%d\n", in_source->csi_gen,
+			out_source->cso_status, out_source->cso_child_status);
 
 		if (out_result->cso_child_status == 0)
-			out_result->cso_child_status = out_source->cso_status;
-	} else if (out_source->cso_status > 0 && ccrp->cb != NULL) {
-		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_status, NULL, 0);
-		if (rc != 0 && out_result->cso_child_status == 0)
-			out_result->cso_child_status = rc;
+			out_result->cso_child_status = out_source->cso_status < 0 ?
+				out_source->cso_status : out_source->cso_child_status;
+
+		return 0;
 	}
+
+	/* Root node. */
+	if (ccrp != NULL) {
+		if (ccrp->cb == NULL)
+			return 0;
+
+		ranks = out_source->cso_ranks.ca_arrays;
+		if (ranks == NULL)
+			return 0;
+
+		for (i = 0; i < out_source->cso_ranks.ca_count; i++, ranks++) {
+			rc = ccrp->cb(ccrp->args, *ranks, 1,
+				      NULL /* unused data */, 0 /* unused nr */);
+			if (rc != 0 && out_result->cso_child_status == 0)
+				out_result->cso_child_status = rc;
+		}
+
+		return 0;
+	}
+
+	/* Middle node aggregation. */
+
+	if (out_source->cso_ranks.ca_count == 0)
+		return 0;
+
+	nr = out_source->cso_ranks.ca_count + out_result->cso_ranks.ca_count;
+	if (nr > out_result->cso_cap) {
+		cap = out_result->cso_cap > 0 ? out_result->cso_cap : 1;
+		while (cap < nr)
+			cap <<= 1;
+
+again:
+		D_REALLOC_ARRAY(ranks, out_result->cso_ranks.ca_arrays, out_result->cso_cap, cap);
+		if (ranks == NULL) {
+			if (cap > nr) {
+				cap = nr;
+				goto again;
+			}
+
+			return -DER_NOMEM;
+		}
+
+		out_result->cso_ranks.ca_arrays = ranks;
+		out_result->cso_cap = cap;
+	}
+
+	memcpy((d_rank_t *)out_result->cso_ranks.ca_arrays + out_result->cso_ranks.ca_count,
+	       out_source->cso_ranks.ca_arrays, sizeof(*ranks) * out_source->cso_ranks.ca_count);
+	out_result->cso_ranks.ca_count = nr;
+
+	return 0;
+}
+
+static int
+chk_stop_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct chk_stop_out	*cso = crt_reply_get(rpc);
+
+	D_FREE(cso->cso_ranks.ca_arrays);
 
 	return 0;
 }
@@ -92,24 +268,87 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 static int
 chk_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct chk_query_in	*in_source = crt_req_get(source);
-	struct chk_query_out	*out_source = crt_reply_get(source);
-	struct chk_query_out	*out_result = crt_reply_get(result);
-	struct chk_co_rpc_priv	*ccrp = priv;
-	int			 rc;
+	struct chk_query_in		*in_source = crt_req_get(source);
+	struct chk_query_out		*out_source = crt_reply_get(source);
+	struct chk_query_out		*out_result = crt_reply_get(result);
+	struct chk_co_rpc_priv		*ccrp = priv;
+	struct chk_query_pool_shard	*shards;
+	uint32_t			 cap;
+	uint32_t			 nr;
+	int				 rc;
+	int				 i;
 
-	if (out_source->cqo_status != 0) {
-		D_ERROR("Failed to check query with gen "DF_X64": "DF_RC"\n",
-			in_source->cqi_gen, DP_RC(out_source->cqo_status));
+	if (out_source->cqo_status != 0 || out_source->cqo_child_status != 0) {
+		D_ERROR("Failed to check query with gen "DF_X64": %d/%d\n", in_source->cqi_gen,
+			out_source->cqo_status, out_source->cqo_child_status);
 
 		if (out_result->cqo_child_status == 0)
-			out_result->cqo_child_status = out_source->cqo_status;
-	} else {
-		rc = ccrp->cb(ccrp->args, 0, out_source->cqo_status,
+			out_result->cqo_child_status = out_source->cqo_status != 0 ?
+				out_source->cqo_status : out_source->cqo_child_status;
+
+		return 0;
+	}
+
+	/* Root node. */
+	if (ccrp != NULL) {
+		rc = ccrp->cb(ccrp->args, 0 /* unused rank */, out_source->cqo_status,
 			      out_source->cqo_shards.ca_arrays, out_source->cqo_shards.ca_count);
 		if (rc != 0 && out_result->cqo_child_status == 0)
 			out_result->cqo_child_status = rc;
+
+		return 0;
 	}
+
+	/* Middle node aggregation. */
+
+	if (out_source->cqo_shards.ca_count == 0)
+		return 0;
+
+	nr = out_source->cqo_shards.ca_count + out_result->cqo_shards.ca_count;
+	if (nr >out_result->cqo_cap) {
+		cap = out_result->cqo_cap > 0 ? out_result->cqo_cap : 1;
+		while (cap < nr)
+			cap <<= 1;
+
+again:
+		D_REALLOC_ARRAY(shards, out_result->cqo_shards.ca_arrays, out_result->cqo_cap, cap);
+		if (shards == NULL) {
+			if (cap > nr) {
+				cap = nr;
+				goto again;
+			}
+
+			return -DER_NOMEM;
+		}
+
+		out_result->cqo_shards.ca_arrays = shards;
+		out_result->cqo_cap = cap;
+	}
+
+	memcpy((struct chk_query_pool_shard *)out_result->cqo_shards.ca_arrays +
+	       out_result->cqo_shards.ca_count, out_source->cqo_shards.ca_arrays,
+	       sizeof(*shards) * out_source->cqo_shards.ca_count);
+	out_result->cqo_shards.ca_count = nr;
+
+	/*
+	 * cqps_target_nr and cqps_targets are shared between out_source to out_result.
+	 * Let's reset them in out_source to avoid being released when cleanup out_source.
+	 */
+	for (i = 0, shards = out_source->cqo_shards.ca_arrays;
+	     i < out_source->cqo_shards.ca_count; i++, shards++) {
+		shards->cqps_target_nr = 0;
+		shards->cqps_targets = NULL;
+	}
+
+	return 0;
+}
+
+static int
+chk_query_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct chk_query_out	*cqo = crt_reply_get(rpc);
+
+	chk_query_free(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
 
 	return 0;
 }
@@ -157,20 +396,71 @@ chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct chk_cont_list_out	*out_source = crt_reply_get(source);
 	struct chk_cont_list_out	*out_result = crt_reply_get(result);
 	struct chk_co_rpc_priv		*ccrp = priv;
+	uuid_t				*uuids;
+	uint32_t			 cap;
+	uint32_t			 nr;
 	int				 rc;
 
-	if (out_source->cclo_status < 0) {
-		D_ERROR("Failed to check cont list with gen "DF_X64": "DF_RC"\n",
-			in_source->ccli_gen, DP_RC(out_source->cclo_status));
+	if (out_source->cclo_status < 0 || out_source->cclo_child_status < 0) {
+		D_ERROR("Failed to check cont list with gen "DF_X64": %d/%d\n", in_source->ccli_gen,
+			out_source->cclo_status, out_source->cclo_child_status);
 
 		if (out_result->cclo_child_status == 0)
-			out_result->cclo_child_status = out_source->cclo_status;
-	} else {
-		rc = ccrp->cb(ccrp->args, out_source->cclo_rank, 0,
+			out_result->cclo_child_status = out_source->cclo_status < 0 ?
+				out_source->cclo_status : out_source->cclo_child_status;
+
+		return 0;
+	}
+
+	/* Root node */
+	if (ccrp != NULL) {
+		rc = ccrp->cb(ccrp->args, 0 /* unused rank */, out_source->cclo_status,
 			      out_source->cclo_conts.ca_arrays, out_source->cclo_conts.ca_count);
 		if (rc != 0 && out_result->cclo_child_status == 0)
 			out_result->cclo_child_status = rc;
+
+		return 0;
 	}
+
+	/* Middle node aggregation. */
+
+	if (out_source->cclo_conts.ca_count == 0)
+		return 0;
+
+	nr = out_source->cclo_conts.ca_count + out_result->cclo_conts.ca_count;
+	if (nr > out_result->cclo_cap) {
+		cap = out_result->cclo_cap > 0 ? out_result->cclo_cap : 1;
+		while (cap < nr)
+			cap <<= 1;
+
+again:
+		D_REALLOC_ARRAY(uuids, out_result->cclo_conts.ca_arrays, out_result->cclo_cap, cap);
+		if (uuids == NULL) {
+			if (cap > nr) {
+				cap = nr;
+				goto again;
+			}
+
+			return -DER_NOMEM;
+		}
+
+		out_result->cclo_conts.ca_arrays = uuids;
+		out_result->cclo_cap = cap;
+	}
+
+	memcpy((uuid_t *)out_result->cclo_conts.ca_arrays + out_result->cclo_conts.ca_count,
+	       out_source->cclo_conts.ca_arrays, sizeof(uuid_t) * out_source->cclo_conts.ca_count);
+	out_result->cclo_conts.ca_count = nr;
+
+	return 0;
+}
+
+static int
+chk_cont_list_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
+
+	D_FREE(cclo->cclo_conts.ca_arrays);
 
 	return 0;
 }
@@ -196,16 +486,19 @@ chk_pool_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 struct crt_corpc_ops chk_start_co_ops = {
 	.co_aggregate	= chk_start_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = chk_start_post_reply,
 };
 
 struct crt_corpc_ops chk_stop_co_ops = {
 	.co_aggregate	= chk_stop_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = chk_stop_post_reply,
 };
 
 struct crt_corpc_ops chk_query_co_ops = {
 	.co_aggregate	= chk_query_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = chk_query_post_reply,
 };
 
 struct crt_corpc_ops chk_mark_co_ops = {
@@ -221,6 +514,7 @@ struct crt_corpc_ops chk_act_co_ops = {
 struct crt_corpc_ops chk_cont_list_co_ops = {
 	.co_aggregate	= chk_cont_list_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = chk_cont_list_post_reply,
 };
 
 struct crt_corpc_ops chk_pool_start_co_ops = {
@@ -259,8 +553,8 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 {
 	struct chk_co_rpc_priv	 ccrp;
 	crt_rpc_t		*req = NULL;
-	struct chk_start_in	*csi;
-	struct chk_start_out	*cso;
+	struct chk_start_in	*csi = NULL;
+	struct chk_start_out	*cso = NULL;
 	int			 rc;
 	int			 rc1;
 
@@ -290,15 +584,6 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	cso = crt_reply_get(req);
 	if (cso->cso_child_status != 0) {
 		rc = cso->cso_child_status;
-
-		/*
-		 * Some failure happened on remote check engine or during aggregation.
-		 * Then release the clues' buffer for the case of the check engine and
-		 * the check leader are on the same rank. See ds_chk_start_hdlr for detail.
-		 */
-		if (cso->cso_status >= 0)
-			chk_fini_clues(cso->cso_clues.ca_arrays, cso->cso_clues.ca_count,
-				       cso->cso_rank);
 	} else {
 		rc = cso->cso_status;
 
@@ -308,12 +593,22 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
-			rc = start_cb(args, cso->cso_rank, cso->cso_status,
+			rc = start_cb(args, leader, cso->cso_status,
 				      cso->cso_clues.ca_arrays, cso->cso_clues.ca_count);
 	}
 
 out:
 	if (req != NULL) {
+		/*
+		 * If the check engine and the leader are on the same rank, we will not go through
+		 * CaRT proc function that will copy the clues into related RPC reply buffer. Then
+		 * we have to keep related buffer that is allocated inside ds_chk_start_hdlr() for
+		 * a while until the check leader completed aggregating. And then the check leader
+		 * needs to release it explicitly.
+		 */
+		if (cso != NULL && cso->cso_status >= 0)
+			chk_start_post_reply(req, NULL);
+
 		if (rc < 0 && rc != -DER_ALREADY) {
 			rc1 = chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
 			if (rc1 < 0)
@@ -336,9 +631,9 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		chk_co_rpc_cb_t stop_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
-	crt_rpc_t		*req;
-	struct chk_stop_in	*csi;
-	struct chk_stop_out	*cso;
+	crt_rpc_t		*req = NULL;
+	struct chk_stop_in	*csi = NULL;
+	struct chk_stop_out	*cso = NULL;
 	int			 rc;
 
 	ccrp.cb = stop_cb;
@@ -368,12 +663,23 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc > 0 && stop_cb != NULL)
-			rc = stop_cb(args, cso->cso_rank, cso->cso_status, NULL, 0);
+			rc = stop_cb(args, dss_self_rank(), cso->cso_status, NULL, 0);
 	}
 
 out:
-	if (req != NULL)
+	if (req != NULL) {
+		/*
+		 * If the check engine and the leader are on the same rank, we will not go through
+		 * CaRT proc function that will copy the ranks into related RPC reply buffer. Then
+		 * we have to keep related buffer that is allocated inside ds_chk_stop_hdlr() for
+		 * a while until the check leader completed aggregating. And then the check leader
+		 * needs to release it explicitly.
+		 */
+		if (cso != NULL)
+			D_FREE(cso->cso_ranks.ca_arrays);
+
 		crt_req_decref(req);
+	}
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u stop DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
@@ -387,9 +693,9 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		 chk_co_rpc_cb_t query_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
-	crt_rpc_t		*req;
-	struct chk_query_in	*cqi;
-	struct chk_query_out	*cqo;
+	crt_rpc_t		*req = NULL;
+	struct chk_query_in	*cqi = NULL;
+	struct chk_query_out	*cqo = NULL;
 	int			 rc;
 
 	ccrp.cb = query_cb;
@@ -410,14 +716,6 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 	cqo = crt_reply_get(req);
 	if (cqo->cqo_child_status != 0) {
 		rc = cqo->cqo_child_status;
-
-		/*
-		 * Some failure happened on remote check engine or during aggregation.
-		 * Then release the shards' buffer for the case of the check engine and
-		 * the check leader are on the same rank. See ds_chk_query_hdlr for detail.
-		 */
-		if (cqo->cqo_status == 0)
-			chk_fini_shards(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
 	} else {
 		rc = cqo->cqo_status;
 
@@ -427,13 +725,24 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc == 0)
-			rc = query_cb(args, 0, cqo->cqo_status, cqo->cqo_shards.ca_arrays,
-				      cqo->cqo_shards.ca_count);
+			rc = query_cb(args, 0 /* unused rank */, cqo->cqo_status,
+				      cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
 	}
 
 out:
-	if (req != NULL)
+	if (req != NULL) {
+		/*
+		 * If the check engine and the PS leader are on the same rank, we will not go
+		 * through CaRT proc function that will copy shards into the RPC reply buffer.
+		 * So we have to keep related buffer that is allocated in ds_chk_query_hdlr()
+		 * for a while until the PS leader completed aggregating of the results. And
+		 * then the PS leader needs to release the buffer explicitly.
+		 */
+		if (cqo != NULL && cqo->cqo_status >= 0)
+			chk_query_free(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
+
 		crt_req_decref(req);
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u query DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
@@ -523,9 +832,9 @@ int
 chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args)
 {
 	struct chk_co_rpc_priv		 ccrp;
-	crt_rpc_t			*req;
-	struct chk_cont_list_in		*ccli;
-	struct chk_cont_list_out	*cclo;
+	crt_rpc_t			*req = NULL;
+	struct chk_cont_list_in		*ccli = NULL;
+	struct chk_cont_list_out	*cclo = NULL;
 	int				 rc;
 
 	ccrp.cb = list_cb;
@@ -550,14 +859,6 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 	cclo = crt_reply_get(req);
 	if (cclo->cclo_child_status != 0) {
 		rc = cclo->cclo_child_status;
-
-		/*
-		 * Some failure happened on remote check engine or during aggregation.
-		 * Then release the conts' buffer for the case of the check engine and
-		 * PS leader are on the same rank. See ds_chk_cont_list_hdlr for detail.
-		 */
-		if (cclo->cclo_status >= 0)
-			chk_fini_conts(cclo->cclo_conts.ca_arrays, cclo->cclo_rank);
 	} else {
 		rc = cclo->cclo_status;
 
@@ -567,13 +868,24 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		 * resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
-			rc = list_cb(args, cclo->cclo_rank, 0,
+			rc = list_cb(args, 0 /* unused rank */, cclo->cclo_status,
 				     cclo->cclo_conts.ca_arrays, cclo->cclo_conts.ca_count);
 	}
 
 out:
-	if (req != NULL)
+	if (req != NULL) {
+		/*
+		 * If the check engine and the PS leader are on the same rank, we will not go
+		 * through CaRT proc function that will copy the containers' uuids into the RPC
+		 * reply buffer. So we have to keep related buffer that is allocated in the
+		 * ds_chk_cont_list_hdlr() for a while until the PS leader completed aggregating
+		 * of the results. And then the PS leader needs to release the buffer explicitly.
+		 */
+		if (cclo != NULL && cclo->cclo_status >= 0)
+			D_FREE(cclo->cclo_conts.ca_arrays);
+
 		crt_req_decref(req);
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u DAOS check cont list for "DF_UUIDF" with gen "DF_X64": "DF_RC"\n",

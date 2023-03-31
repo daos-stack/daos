@@ -2642,12 +2642,6 @@ chk_leader_start_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	}
 
 out:
-	/*
-	 * The check engine and the check leader are on the same rank,
-	 * release the buffer for clues. See ds_chk_start_hdlr for detail.
-	 */
-	chk_fini_clues(clues, nr, rank);
-
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle start CB with rank %u, result %d: "
 			DF_RC"\n", DP_LEADER(ins), rank, result, DP_RC(rc));
@@ -2986,8 +2980,6 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	int				 rc = 0;
 	int				 i;
 
-	D_ASSERTF(result == 0, "Unexpected result for query CB %d\n", result);
-
 	for (i = 0; i < nr; i++) {
 		/*
 		 * @shards is from chk_query_remote RPC reply, the buffer will be released after
@@ -3007,15 +2999,9 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	}
 
 out:
-	/*
-	 * The check engine and the check leader are on the same rank,
-	 * release the buffer for shards. See ds_chk_query_hdlr for detail.
-	 */
-	chk_fini_shards(shards, nr);
-
 	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to handle query CB with rank %u, result %d: "
-			DF_RC"\n", DP_LEADER(cqa->cqa_ins), rank, result, DP_RC(rc));
+		D_ERROR(DF_LEADER" failed to handle query CB with result %d: "
+			DF_RC"\n", DP_LEADER(cqa->cqa_ins), result, DP_RC(rc));
 
 	return rc;
 }
