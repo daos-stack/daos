@@ -16,7 +16,7 @@ pool:
   debug: True
   control_method: dmg
   pool_query_timeout: 30
-  properties: rd_fac:2
+  properties: rf:2
 container:
   akey_size: 5
   dkey_size: 5
