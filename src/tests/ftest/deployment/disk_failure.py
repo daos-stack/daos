@@ -146,20 +146,17 @@ class DiskFailureTest(OSAUtils):
                 # Set the device as faulty
                 get_dmg_response(
                     self, self.dmg_command.storage_set_faulty, uuid=device["uuid"])
-                # Check for host errors before replacing the device.
+                # Replace the device with same uuid.
                 error_count = 0
                 for _ in range(10):
-                    data = self.dmg_command.storage_query_device_health(uuid=device["uuid"])
+                    data = self.dmg_command.storage_replace_nvme(old_uuid=device["uuid"],
+                                                                 new_uuid=device["uuid"])
                     if data['error'] or len(data['response']['host_errors']) > 0:
                         error_count = error_count + 1
                     else:
                         error_count = 0
                 if error_count > 0:
-                    self.fail("storage_query_device_health failed: {}".
-                              format(result['response']['host_errors']))
-                # Replace the device with same uuid.
-                get_dmg_response(
-                    self, self.dmg_command.storage_replace_nvme,
-                    old_uuid=device["uuid"], new_uuid=device["uuid"])
+                    self.fail("replace_nvme command failed: {}".
+                              format(data['response']['host_errors']))
             finally:
                 self.dmg_command.hostlist = self.server_managers[0].hosts
