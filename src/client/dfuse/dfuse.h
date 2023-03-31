@@ -106,7 +106,18 @@ struct dfuse_obj_hdl {
 	/* Pointer to the last returned drc entry */
 	struct dfuse_readdir_c   *doh_rd_nextc;
 
-	/** True if caching is enabled for this file */
+	/* Linear read function, if a file is read from start to end then this normally requires
+	 * a final read request at the end of the file that returns zero bytes.  Detect this case
+	 * and when the final read is detected then just return without a round trip.
+	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
+	 * to false), the expected position of the next read and a boonean for if EOF has been
+	 * detected.
+	 */
+	off_t                     doh_linear_read_pos;
+	bool                      doh_linear_read;
+	bool                      doh_linear_read_eof;
+
+	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
 	/* True if the kernel may have been told to keep the cache for this open.  This is used
@@ -246,6 +257,7 @@ struct dfuse_event {
 	struct dfuse_eq              *de_eqt;
 	struct dfuse_obj_hdl         *de_oh;
 	off_t                         de_req_position; /**< The file position requested by fuse */
+	size_t                        de_req_len;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
