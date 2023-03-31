@@ -16,7 +16,6 @@ from nvme_utils import set_device_faulty
 
 
 class NvmeFaultReintegrate(VmdLedStatus):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     NVME fault and reintegration test cases.
