@@ -235,7 +235,7 @@ chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, struct chk_co_rpc
 	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list,
 				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION),
 				    NULL, priv, CRT_RPC_FLAG_FILTER_INVERT,
-				    crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
+				    crt_tree_topo(CRT_TREE_FLAT, 0), req);
 }
 
 static inline int
