@@ -22,7 +22,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
 
     :avocado: recursive
     """
-
+    # pylint: disable=too-many-ancestors
     def setUp(self):
         """Set up for test case."""
         super().setUp()
