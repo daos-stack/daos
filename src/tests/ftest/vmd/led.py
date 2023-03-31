@@ -24,7 +24,7 @@ class VmdLedStatus(OSAUtils):
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
-    def run_vmd_led_identify(self, device_id=None, reset=False):
+    def run_vmd_led_identify(self, device_id=None):
         """Run the VMD LED identify command.
 
         Args:
@@ -36,7 +36,7 @@ class VmdLedStatus(OSAUtils):
             self.fail("No device id provided")
 
         try:
-            result = self.dmg.storage_led_identify(ids=device_id, reset=reset)
+            result = self.dmg.storage_led_identify(ids=device_id)
         except CommandFailure as details:
             self.fail("dmg command failed: {}".format(details))
 

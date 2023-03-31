@@ -68,7 +68,9 @@ class NvmeFaultReintegrate(VmdLedStatus):
                         if device['dev_state'] == dev_state and device['led_state'] == led_state:
                             return True
         else:
-            self.log.info("##Unsupported result dictionary %s", result)
+            self.log.debug(
+                "Neither 'response' nor 'host_storage_map' found in dmg command json output:")
+            self.log.debug('  %s', result)
         return False
 
     def reset_fault_device(self, device):
@@ -119,8 +121,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
                 self.log.info("  %s: %s", key, entry[key])
         test_dev = devices[0]
         for device in devices:
-            self.run_vmd_led_identify(device, reset=True)
-
+            get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
         # 2.
         self.log_step("Verify that each device is in a 'NORMAL' state and its LED is 'OFF'")
         err_dev = []

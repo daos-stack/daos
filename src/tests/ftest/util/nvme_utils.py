@@ -50,17 +50,22 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
         uuid (str): the device UUID
         pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
             Defaults to None.
+        kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
 
     Returns:
-        CmdResult: _description_
+        dict: the json response from the dmg storage set-faulty command.
 
     """
     dmg.hostlist = server
     kwargs['uuid'] = uuid
+    # Use this when DmgCommand.storage_set_faulty returns json output natively
+    # response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+
+    # Remove this when DmgCommand.storage_set_faulty returns json output natively
     dmg_json = dmg.json.value
     dmg.json.value = True
     try:
-        res = dmg.storage_set_faulty(uuid=uuid)
+        res = dmg.storage_set_faulty(**kwargs)
     except CommandFailure as error:
         test.fail('dmg.storage_set_faulty({}) failed: {}'.format(dict_to_str(kwargs), error))
     finally:
