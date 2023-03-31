@@ -19,7 +19,7 @@ pool:
   svcn: 2
   control_method: dmg
   pool_query_timeout: 30
-  properties: rd_fac:2
+  properties: rf:2
 container:
   object_qty: 10
   record_qty: 10
