@@ -205,8 +205,9 @@ class ServerFillUp(IorTestBase):
             disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
         self.dmg.hostlist = server
+        self.dmg.storage_set_faulty(disk_id)
         info = get_dmg_smd_info(
-            self, self.dmg.storage_set_faulty, 'devices', uuid=disk_id)
+            self, self.dmg.storage_query_device_health, 'devices', uuid=disk_id)
         for devices in info.values():
             for device in devices:
                 if device['uuid'] != disk_id:
