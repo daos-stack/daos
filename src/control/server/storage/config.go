@@ -762,7 +762,7 @@ func (obs OptionBits) toString(optStr2Flag optFlagMap) string {
 // fromStrings generates bitset referenced by the function receiver from the option names provided.
 func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error {
 	if obs == nil {
-		return errors.New("fromStrings() called on nil OptionBits")
+		return errors.New("called on nil OptionBits")
 	}
 
 	*obs = 0

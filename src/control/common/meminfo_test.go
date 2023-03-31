@@ -10,12 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCommon_getMemInfo(t *testing.T) {
@@ -103,121 +101,6 @@ Hugepagesize:       1 GB
 			if gotOut.HugepagesFreeMB() != tc.expFreeMB {
 				t.Fatalf("expected FreeMB() to be %d, got %d",
 					tc.expFreeMB, gotOut.HugepagesFreeMB())
-			}
-		})
-	}
-}
-
-func TestCommon_CalcMinHugepages(t *testing.T) {
-	for name, tc := range map[string]struct {
-		input      *MemInfo
-		numTargets int
-		expPages   int
-		expErr     error
-	}{
-		"no pages": {
-			input:      &MemInfo{},
-			numTargets: 1,
-			expErr:     errors.New("invalid system hugepage size"),
-		},
-		"no targets": {
-			input: &MemInfo{
-				HugepageSizeKiB: 2048,
-			},
-			expErr: errors.New("numTargets"),
-		},
-		"2KB pagesize; 16 targets": {
-			input: &MemInfo{
-				HugepageSizeKiB: 2048,
-			},
-			numTargets: 16,
-			expPages:   8192,
-		},
-		"2KB pagesize; 31 targets": {
-			input: &MemInfo{
-				HugepageSizeKiB: 2048,
-			},
-			numTargets: 31,
-			expPages:   15872,
-		},
-		"1GB pagesize; 16 targets": {
-			input: &MemInfo{
-				HugepageSizeKiB: 1048576,
-			},
-			numTargets: 16,
-			expPages:   16,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotPages, gotErr := CalcMinHugepages(tc.input.HugepageSizeKiB, tc.numTargets)
-			CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if gotPages != tc.expPages {
-				t.Fatalf("expected %d, got %d", tc.expPages, gotPages)
-			}
-		})
-	}
-}
-
-func TestCommon_CalcScmSize(t *testing.T) {
-	for name, tc := range map[string]struct {
-		memTotal uint64
-		memHuge  uint64
-		rsvSys   uint64
-		rsvEng   uint64
-		engCount int
-		expSize  uint64
-		expErr   error
-	}{
-		"no mem": {
-			expErr: errors.New("requires nonzero total mem"),
-		},
-		"no engines": {
-			memTotal: humanize.GiByte,
-			expErr:   errors.New("requires nonzero nr engines"),
-		},
-		"default values; low mem": {
-			memTotal: humanize.GiByte * 18,
-			memHuge:  humanize.GiByte * 12,
-			engCount: 1,
-			expErr:   errors.New("insufficient ram"),
-		},
-		"default values; high mem": {
-			memTotal: humanize.GiByte * 23,
-			memHuge:  humanize.GiByte * 12,
-			engCount: 1,
-			expSize:  humanize.GiByte * 4,
-		},
-		"custom values; low sys reservation": {
-			rsvSys:   humanize.GiByte * 4,
-			memTotal: humanize.GiByte * 18,
-			memHuge:  humanize.GiByte * 12,
-			engCount: 2,
-		},
-		"custom values; high eng reservation": {
-			rsvEng:   humanize.GiByte * 3,
-			memTotal: humanize.GiByte * 23,
-			memHuge:  humanize.GiByte * 12,
-			engCount: 2,
-			expErr:   errors.New("insufficient ram"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer ShowBufferOnFailure(t, buf)
-
-			gotSize, gotErr := CalcScmSize(log, tc.memTotal, tc.memHuge, tc.rsvSys,
-				tc.rsvEng, tc.engCount)
-			CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if gotSize != tc.expSize {
-				t.Fatalf("expected %d, got %d", tc.expSize, gotSize)
 			}
 		})
 	}

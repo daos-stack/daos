@@ -723,7 +723,7 @@ func TestServerConfig_Validation(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
 				return c
 			},
-			expErr: FaultScmTmpfsUnderMinMem(humanize.GiByte*3, 0, common.MemTmpfsMin),
+			expErr: FaultScmTmpfsUnderMinMem(humanize.GiByte*3, 0, memTmpfsMin),
 		},
 		"out of range scm_size; high": {
 			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem

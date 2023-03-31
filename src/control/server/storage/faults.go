@@ -9,10 +9,11 @@ package storage
 import (
 	"fmt"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/dustin/go-humanize"
 )
 
 const recreateRegionsStr = "Remove regions (and any namespaces) by running the reset subcommand, reboot, then run the prepare subcommand again to recreate regions in AppDirect interleaved mode, reboot and then run the prepare subcommand one more time to create the PMem namespaces"
@@ -71,8 +72,7 @@ func FaultScmTmpfsLowMem(memTmpfsMin, scmSize uint64) *fault.Fault {
 	return storageFault(
 		code.ScmTmpfsLowMem,
 		fmt.Sprintf("Total system memory (RAM) insufficient for tmpfs SCM, want %s have "+
-			"%s (%d bytes)", humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize),
-			scmSize),
+			"%s", humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize)),
 		"Reduce engine targets or the system_ram_reserved values in server config "+
 			"file if increasing the amount of RAM is not possible")
 }

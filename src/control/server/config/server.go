@@ -33,6 +33,8 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
+	// memTmpfsMin is the minimum amount of memory needed for each engine's tmpfs SCM.
+	memTmpfsMin = 4 << 30 // 4GiB
 )
 
 // Server describes configuration options for DAOS control plane.
@@ -445,7 +447,7 @@ func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSi
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
-	minHugepages, err := common.CalcMinHugepages(hugepageSize, cfgTargetCount+sysXSCount)
+	minHugepages, err := storage.CalcMinHugepages(hugepageSize, cfgTargetCount+sysXSCount)
 	if err != nil {
 		return err
 	}
@@ -491,14 +493,14 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 
 	// Pass 0 for sys and engine reservations to use default values.
 	// TODO: pass system reservation parameter from config
-	scmSize, err := common.CalcScmSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
+	scmSize, err := storage.CalcScmSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
 	if err != nil {
 		return errors.Wrapf(err, "calculate scm ramdisk size")
 	}
 
-	if scmSize < common.MemTmpfsMin {
+	if scmSize < memTmpfsMin {
 		// Total RAM is insufficient to meet minimum tmpfs size.
-		return storage.FaultScmTmpfsLowMem(common.MemTmpfsMin, scmSize)
+		return storage.FaultScmTmpfsLowMem(memTmpfsMin, scmSize)
 	}
 
 	for _, ec := range cfg.Engines {
@@ -515,10 +517,10 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 			scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
 		} else if confSize > scmSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			return FaultScmTmpfsOverMaxMem(confSize, scmSize, common.MemTmpfsMin)
-		} else if confSize < common.MemTmpfsMin {
+			return FaultScmTmpfsOverMaxMem(confSize, scmSize, memTmpfsMin)
+		} else if confSize < memTmpfsMin {
 			// Tmpfs size requested in config is less than minimum allowed.
-			return FaultScmTmpfsUnderMinMem(confSize, scmSize, common.MemTmpfsMin)
+			return FaultScmTmpfsUnderMinMem(confSize, scmSize, memTmpfsMin)
 		}
 	}
 
@@ -782,7 +784,7 @@ func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSourc
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
 	if len(affSources) == 0 {
-		return errors.New("SetEngineAffinities() requires at least one affinity source")
+		return errors.New("requires at least one affinity source")
 	}
 	defaultAffinity := uint(0)
 

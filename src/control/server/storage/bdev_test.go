@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -249,6 +250,60 @@ func Test_filterBdevScanResponse(t *testing.T) {
 			expAddrStr := strings.Join(tc.expAddrs, ", ")
 			if diff := cmp.Diff(expAddrStr, tc.scanResp.Controllers.String()); diff != "" {
 				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func Test_CalcMinHugepages(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input      *common.MemInfo
+		numTargets int
+		expPages   int
+		expErr     error
+	}{
+		"no pages": {
+			input:      &common.MemInfo{},
+			numTargets: 1,
+			expErr:     errors.New("invalid system hugepage size"),
+		},
+		"no targets": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			},
+			expErr: errors.New("numTargets"),
+		},
+		"2KB pagesize; 16 targets": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			},
+			numTargets: 16,
+			expPages:   8192,
+		},
+		"2KB pagesize; 31 targets": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			},
+			numTargets: 31,
+			expPages:   15872,
+		},
+		"1GB pagesize; 16 targets": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 1048576,
+			},
+			numTargets: 16,
+			expPages:   16,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotPages, gotErr := CalcMinHugepages(tc.input.HugepageSizeKiB, tc.numTargets)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if gotPages != tc.expPages {
+				t.Fatalf("expected %d, got %d", tc.expPages, gotPages)
 			}
 		})
 	}

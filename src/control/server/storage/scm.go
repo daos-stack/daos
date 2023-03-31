@@ -44,6 +44,11 @@ const (
 	ScmPartFreeCap
 	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
 	ScmUnknownMode
+
+	// Default amount of memory reserved for system when calculating tmpfs capacity for SCM.
+	memSysDefRsvd = 6 << 30 // 6GiB
+	// Default amount of memory reserved per-engine when calculating tmpfs capacity for SCM.
+	memEngineDefRsvd = 1 << 30 // 1GiB
 )
 
 func (ss ScmState) String() string {
@@ -532,4 +537,42 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 	}
 
 	return res, nil
+}
+
+// CalcScmSi2e returns recommended SCM RAM-disk size calculated as
+// (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
+// All values in units of bytes and return value is for a single RAM-disk/engine.
+func CalcScmSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, engCount int) (uint64, error) {
+	if memTot == 0 {
+		return 0, errors.New("requires nonzero total mem")
+	}
+	if engCount == 0 {
+		return 0, errors.New("requires nonzero nr engines")
+	}
+
+	var memSys uint64 = memSysDefRsvd
+	if rsvSys > 0 {
+		memSys = rsvSys
+	}
+	var memEng uint64 = memEngineDefRsvd
+	if rsvEng > 0 {
+		memEng = rsvEng
+	}
+
+	msgStats := fmt.Sprintf("mem total: %s (%d), mem hugepage: %s, nr engines: %d, "+
+		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memTot), memTot,
+		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
+		humanize.IBytes(memEng))
+
+	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
+	if memTot < memRsvd {
+		return 0, errors.Errorf("insufficient ram to meet minimum requirements (%s)",
+			msgStats)
+	}
+
+	scmSize := (memTot - memRsvd) / uint64(engCount)
+
+	log.Debugf("tmpfs scm size %s calculated using %s", humanize.IBytes(scmSize), msgStats)
+
+	return scmSize, nil
 }

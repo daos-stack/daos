@@ -470,7 +470,7 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 		scmCls: storage.ClassDcpm,
 	}
 	if sd.MemInfo.HugepageSizeKiB == 0 {
-		return nil, errors.New("getStorageDetails() requires nonzero HugepageSizeKiB")
+		return nil, errors.New("requires nonzero HugepageSizeKiB")
 	}
 
 	if err := sd.NumaSSDs.fromNVMe(hs.NvmeDevices); err != nil {
@@ -480,10 +480,10 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 	// if tmpfs scm mode is requested, init scm map to init entry for each numa node
 	if useTmpfs {
 		if numaCount <= 0 {
-			return nil, errors.New("getStorageDetails() requires nonzero numaCount")
+			return nil, errors.New("requires nonzero numaCount")
 		}
 		if sd.MemInfo.MemTotalKiB == 0 {
-			return nil, errors.New("getStorageDetails() requires nonzero MemTotalKiB")
+			return nil, errors.New("requires nonzero MemTotalKiB")
 		}
 
 		log.Debugf("using tmpfs for scm, one for each numa node [0-%d]", numaCount-1)
