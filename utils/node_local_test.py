@@ -3104,8 +3104,8 @@ class PosixTests():
 
         side_dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
-        dfuse.start()
-        side_dfuse.start(v_hint='side')
+        dfuse.start(v_hint='dfuse_perms')
+        side_dfuse.start(v_hint='dfuse_perms_side')
 
         test_file = join(dfuse.dir, 'test-file')
         side_test_file = join(side_dfuse.dir, 'test-file')

@@ -1559,13 +1559,12 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret = HG_Bulk_create(hg_ctx->chc_bulkcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags,
-				&hg_bulk_hdl);
+	hg_ret = HG_Bulk_create(hg_ctx->chc_bulkcla, sgl->sg_nr, buf_ptrs,
+				buf_sizes, flags, &hg_bulk_hdl);
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
 	} else {
-		D_ERROR("HG_Bulk_create failed, hg_ret: %d %s.\n", hg_ret,
-			HG_Error_to_string(hg_ret));
+		D_ERROR("HG_Bulk_create failed, hg_ret: %d.\n", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
