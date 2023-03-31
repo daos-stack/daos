@@ -91,7 +91,7 @@ def reset_fault_device(test, dmg, server, uuid):
     Args:
         test (Test): avocado test class
         dmg (DmgCommand): a DmgCommand class instance
-        server (NodeSet): host on which to issue the dmg storage set nvme-faulty
+        server (NodeSet): host on which to issue the dmg storage led identify
         uuid (str): device to reset
 
     Returns:
