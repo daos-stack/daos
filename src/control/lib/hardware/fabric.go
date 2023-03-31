@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -921,6 +921,7 @@ func (s *FabricScanner) init(ctx context.Context, provider string) error {
 		}
 	}
 
+	s.provider = provider
 	s.builders = defaultFabricInterfaceSetBuilders(s.log,
 		&FabricInterfaceSetBuilderConfig{
 			Topology:                 topo,
