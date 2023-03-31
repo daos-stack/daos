@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,13 +19,13 @@ func TestTelemetryCommands(t *testing.T) {
 			"list with too many hosts",
 			"telemetry metrics list -l host1,host2",
 			"",
-			errors.New("exactly 1 host"),
+			errors.New("single host"),
 		},
 		{
 			"query with too many hosts",
 			"telemetry metrics query -l host1,host2",
 			"",
-			errors.New("exactly 1 host"),
+			errors.New("single host"),
 		},
 	})
 }

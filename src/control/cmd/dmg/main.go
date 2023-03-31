@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,7 +31,6 @@ import (
 type (
 	hostListGetter interface {
 		getHostList() []string
-		validateHostList() error
 	}
 
 	hostListSetter interface {
@@ -44,7 +43,7 @@ type (
 	}
 
 	singleHostCmd struct {
-		HostList ui.HostSetFlag `short:"l" long:"host-list" default:"localhost" description:"Single host address <ipv4addr/hostname> to connect to"`
+		HostList singleHostFlag `short:"l" long:"host-list" default:"localhost" description:"Single host address <ipv4addr/hostname> to connect to"`
 		host     string
 	}
 
@@ -81,31 +80,19 @@ func (cmd *hostListCmd) getHostList() []string {
 	return cmd.hostlist
 }
 
-func (cmd *hostListCmd) validateHostList() error {
-	return nil
-}
-
 func (cmd *hostListCmd) setHostList(newList *hostlist.HostSet) {
 	cmd.HostList.Replace(newList)
 }
 
 func (cmd *singleHostCmd) getHostList() []string {
 	if cmd.host == "" {
-		if cmd.HostList.Empty() {
+		if cmd.HostList.Count() == 0 {
 			cmd.host = "localhost"
 		} else {
 			cmd.host = cmd.HostList.Slice()[0]
 		}
 	}
 	return []string{cmd.host}
-}
-
-func (cmd *singleHostCmd) validateHostList() error {
-	numHosts := cmd.HostList.Count()
-	if numHosts > 1 {
-		return fmt.Errorf("must pass in exactly 1 host (got %d)", numHosts)
-	}
-	return nil
 }
 
 func (cmd *singleHostCmd) setHostList(newList *hostlist.HostSet) {
@@ -337,9 +324,6 @@ and access control settings, along with system wide operations.`
 		}
 
 		if hlCmd, ok := cmd.(hostListGetter); ok {
-			if err := hlCmd.validateHostList(); err != nil {
-				return err
-			}
 			hl := hlCmd.getHostList()
 			if len(hl) > 0 {
 				ctlCfg.HostList = hl
