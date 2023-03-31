@@ -8,6 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
 
 
+# pylint: disable=too-many-ancestors
 class DmvrLargeDir(DataMoverTestBase):
     """Test class Description: Add datamover test to copy a large directory
                                amongst DAOS containers and external file system.

@@ -9,6 +9,7 @@ from exception_utils import CommandFailure
 
 
 class DmvrPosixMetaEntry(DataMoverTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover entry metadata validation.
 
     Test Class Description:

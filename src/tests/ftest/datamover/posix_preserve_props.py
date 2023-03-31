@@ -13,6 +13,7 @@ from duns_utils import format_path
 
 
 class DmvrPreserveProps(DataMoverTestBase):
+    # pylint: disable=too-many-ancestors
     """Data Mover validation for --preserve-props option only for DFS copies.
     Test Class Description:
         Tests the following cases:
