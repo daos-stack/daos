@@ -157,7 +157,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 		D_ASSERT(drc->drc_offset == expected_offset);
 		D_ASSERT(drc->drc_next_offset == expected_offset + 1 ||
 			 drc->drc_next_offset == READDIR_EOD);
-		drc->drc_magic = DRC_MAGIC - 1;
+		drc->drc_magic  = DRC_MAGIC - 1;
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
 			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
@@ -360,6 +360,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		struct dfuse_readdir_c *drc;
 		size_t                  written     = 0;
 		off_t                   next_offset = 0;
+		void                   *nextp;
 
 		DFUSE_TRA_DEBUG(oh, "hdl_next %p list start %p list end %p list addr %p",
 				oh->doh_rd_nextc, hdl->drh_cache_list.next,
@@ -378,7 +379,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 						drc->drc_offset, offset);
 			}
 		} else {
-			drc = (struct dfuse_readdir_c *)hdl->drh_cache_list.next;
+			drc = container_of(hdl->drh_cache_list.next, struct dfuse_readdir_c,
+					   drc_list);
 
 			D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
@@ -389,18 +391,26 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			 * offsets match.
 			 */
 
-			while ((drc != (void *)&hdl->drh_cache_list) &&
+			nextp = &drc->drc_list.next;
+
+			while ((nextp != (void *)&hdl->drh_cache_list) &&
 			       (drc->drc_offset != offset)) {
 				D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
 				DFUSE_TRA_DEBUG(oh, "Moving along list looking for %#lx at %#lx",
 						offset, drc->drc_offset);
 
-				drc = (struct dfuse_readdir_c *)drc->drc_list.next;
+				nextp = drc->drc_list.next;
+				drc   = container_of(nextp, struct dfuse_readdir_c, drc_list);
+				D_ASSERT((nextp == (void *)&hdl->drh_cache_list) ||
+					 (drc->drc_magic == DRC_MAGIC));
 			}
 		}
 
-		while (drc != (void *)&hdl->drh_cache_list) {
+		nextp = &drc->drc_list.next;
+		while (nextp != (void *)&hdl->drh_cache_list) {
+			drc = container_of(nextp, struct dfuse_readdir_c, drc_list);
+
 			D_ASSERT(drc->drc_magic == DRC_MAGIC);
 
 			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
@@ -494,7 +504,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			added += 1;
 			buff_offset += written;
 
-			drc = (struct dfuse_readdir_c *)drc->drc_list.next;
+			nextp = drc->drc_list.next;
 		}
 
 		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries, added %d", added);
@@ -503,7 +513,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			/* This reader has got to the end of the cache list so update nextc
 			 * with the last replied entry, that is the current tail of the list.
 			 */
-			oh->doh_rd_nextc = (struct dfuse_readdir_c *)hdl->drh_cache_list.prev;
+			oh->doh_rd_nextc = container_of(hdl->drh_cache_list.prev,
+							struct dfuse_readdir_c, drc_list);
+			D_ASSERT(oh->doh_rd_nextc->drc_magic == DRC_MAGIC);
 			D_GOTO(reply, oh->doh_rd_offset = next_offset);
 		}
 	}
@@ -656,9 +668,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
 
 			if (plus) {
-				struct fuse_entry_param entry = {0};
+				struct fuse_entry_param   entry = {0};
 				struct dfuse_inode_entry *ie;
-				d_list_t               *rlink;
+				d_list_t                 *rlink;
 
 				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
 						  out, attr_len, &rlink);

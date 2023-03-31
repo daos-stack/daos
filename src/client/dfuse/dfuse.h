@@ -110,7 +110,7 @@ struct dfuse_obj_hdl {
 	 * a final read request at the end of the file that returns zero bytes.  Detect this case
 	 * and when the final read is detected then just return without a round trip.
 	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
-	 * to false), the expected position of the next read and a boonean for if EOF has been
+	 * to false), the expected position of the next read and a boolean for if EOF has been
 	 * detected.
 	 */
 	off_t                     doh_linear_read_pos;
@@ -156,19 +156,17 @@ struct dfuse_readdir_entry {
 };
 
 /* Readdir entry as saved by the cache.  These are backwards looking from the current position
- * and will be used by other open handles on the same directory doing subsequent readdir calls
+ * and will be used by other open handles on the same inode doing subsequent readdir calls
  */
 struct dfuse_readdir_c {
-	/* List of entries: For now has to be at start due to list handling */
-	d_list_t    drc_list;
-
 	uint64_t    drc_magic;
+
+	d_list_t    drc_list;
 
 	struct stat drc_stbuf;
 	d_list_t   *drc_rlink;
 	off_t       drc_offset;
 	off_t       drc_next_offset;
-	/* Name of this entry */
 	char        drc_name[NAME_MAX + 1];
 };
 
