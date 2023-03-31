@@ -115,8 +115,6 @@ _handle_init(struct dfuse_cont *dfc)
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
-	if (dfc->dfc_dentry_timeout > 0)
-		hdl->dre_caching = true;
 	return hdl;
 }
 
@@ -319,7 +317,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
-			if (oh->doh_rd->dre_caching) {
+			if (oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
+				oh->doh_rd->dre_caching = true;
 				dfuse_cache_set_time(oh->doh_ie);
 				oh->doh_ie->ie_rd_hdl = oh->doh_rd;
 			}
