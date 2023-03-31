@@ -34,11 +34,11 @@
 	ACTION(DAOS_OT_AKEY_LEXICAL)                                                               \
 	ACTION(DAOS_OT_MULTI_LEXICAL)
 
-#define OT_ENUM_VALUE(ot) ot,
+#define OT_ENUM_VALUE(otype) otype,
 
 static int type_list[] = {FOREACH_OTYPE(OT_ENUM_VALUE)};
 
-#define OT_HELP_MESSAGE(ot) print_message("        %d: " #ot "\n", (ot));
+#define OT_HELP_MESSAGE(otype) print_message("        %d: " #otype "\n", (otype));
 
 static void
 print_usage()
