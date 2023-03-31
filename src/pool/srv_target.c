@@ -81,6 +81,8 @@ ds_pool_child_lookup(const uuid_t uuid)
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		if (uuid_compare(uuid, child->spc_uuid) == 0) {
 			child->spc_ref++;
+			D_INFO(DF_UUID": spc_ref=%d after increment/lookup\n",
+			       DP_UUID(uuid), child->spc_ref);
 			return child;
 		}
 	}
@@ -91,6 +93,8 @@ struct ds_pool_child *
 ds_pool_child_get(struct ds_pool_child *child)
 {
 	child->spc_ref++;
+	D_INFO(DF_UUID": spc_ref=%d after increment/get\n", DP_UUID(child->spc_uuid),
+	       child->spc_ref);
 	return child;
 }
 
@@ -99,6 +103,8 @@ ds_pool_child_put(struct ds_pool_child *child)
 {
 	D_ASSERTF(child->spc_ref > 0, "%d\n", child->spc_ref);
 	child->spc_ref--;
+	D_INFO(DF_UUID": spc_ref=%d after decrement/put\n", DP_UUID(child->spc_uuid),
+	       child->spc_ref);
 	if (child->spc_ref == 0) {
 		D_DEBUG(DB_MGMT, DF_UUID": destroying\n",
 			DP_UUID(child->spc_uuid));
