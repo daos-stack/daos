@@ -661,7 +661,6 @@ class TestPool(TestDaosApiBase):
             values.append(entry['value'])
         return values
 
-    @DeprecationWarning('Use get_prop() or get_prop_values() instead')
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
