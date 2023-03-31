@@ -206,7 +206,7 @@ class ServerFillUp(IorTestBase):
         """
         self.dmg.hostlist = server
         info = get_dmg_smd_info(
-            self, self.dmg.storage_set_faulty(disk_id), 'devices', uuid=disk_id)
+            self, self.dmg.storage_set_faulty, 'devices', uuid=disk_id)
         for devices in info.values():
             for device in devices:
                 if device['uuid'] != disk_id:
