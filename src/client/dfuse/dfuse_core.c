@@ -1055,10 +1055,12 @@ err:
 void
 dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 {
-	oh->doh_dfs = ie->ie_dfs->dfs_ns;
-	oh->doh_ie  = ie;
-	atomic_store_relaxed(&oh->doh_il_calls, 0);
-	atomic_store_relaxed(&oh->doh_write_count, 0);
+	oh->doh_dfs             = ie->ie_dfs->dfs_ns;
+	oh->doh_ie              = ie;
+	oh->doh_linear_read     = true;
+	oh->doh_linear_read_pos = 0;
+	atomic_init(&oh->doh_il_calls, 0);
+	atomic_init(&oh->doh_write_count, 0);
 }
 
 void
