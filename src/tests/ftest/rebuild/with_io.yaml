@@ -5,12 +5,15 @@ hosts:
 timeout: 5000
 server_config:
   name: daos_server
+  control_log_mask: DEBUG
   engines_per_host: 1
   engines:
     0:
       targets: 2
       nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
       env_vars:
+        - DD_MASK=group_metadata_only
         - FI_LOG_LEVEL=warning
         - HG_LOG_LEVEL=warning
         - HG_LOG_SUBSYS=hg,na

@@ -1512,6 +1512,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
 		hdl->sch_cont->sc_open++;
+		D_INFO(DF_CONT": hdl="DF_UUID", for dtx, get ref sch_cont, sc_open=%u\n",
+		       DP_CONT(pool_uuid, cont_uuid), DP_UUID(cont_hdl_uuid),
+		       hdl->sch_cont->sc_open);
 
 		if (hdl->sch_cont->sc_open > 1)
 			goto opened;
@@ -1522,6 +1525,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
 			hdl->sch_cont->sc_open--;
+			D_INFO(DF_CONT": hdl="DF_UUID", for dtx (open failed), put ref "
+			       "sch_cont, sc_open=%u\n", DP_CONT(pool_uuid, cont_uuid),
+			       DP_UUID(cont_hdl_uuid), hdl->sch_cont->sc_open);
 			D_GOTO(err_cont, rc);
 		}
 
@@ -1529,11 +1535,16 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
+		D_INFO(DF_CONT": hdl="DF_UUID", for dtx_resync, get ref sch_cont/sc_pool\n",
+		       DP_CONT(pool_uuid, cont_uuid), DP_UUID(cont_hdl_uuid));
 		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
 		if (rc != 0) {
+			D_INFO(DF_CONT": hdl="DF_UUID", for dtx_resync (create failed), "
+			       "put ref sch_cont/sc_pool\n",
+			       DP_CONT(pool_uuid, cont_uuid), DP_UUID(cont_hdl_uuid));
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
 			D_GOTO(err_dtx, rc);
@@ -1559,6 +1570,10 @@ err_dtx:
 		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
 	hdl->sch_cont->sc_open--;
+	D_INFO(DF_CONT": hdl="DF_UUID", for dtx (after successful open), put ref "
+	       "sch_cont, sc_open=%u\n", DP_CONT(pool_uuid, cont_uuid),
+	       DP_UUID(cont_hdl_uuid), hdl->sch_cont->sc_open);
+
 	dtx_cont_close(hdl->sch_cont);
 
 err_cont:
@@ -1633,7 +1648,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	arg.sec_capas = sec_capas;
 	arg.status_pm_ver = status_pm_ver;
 
-	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
+	D_INFO("open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
 	/* collective operations */
