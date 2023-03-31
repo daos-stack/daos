@@ -51,5 +51,12 @@ else
 fi
 
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-USE_DEV=/dev/vdb IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$SL_SRC_DIR" \
-    utils/run_test.sh
+# Save the old command line to avoid merge conflicts when merging to other branches
+# that may have added more testing
+# USE_DEV=/dev/vdb IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$SL_SRC_DIR" \
+#     utils/run_test.sh
+RUN_TEST_VALGRIND=""
+if [ "$WITH_VALGRIND" = "memcheck" ]; then
+    RUN_TEST_VALGRIND="--memcheck"
+fi
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error
