@@ -299,6 +299,8 @@ lmm_db_upsert(struct sys_db *db, char *table, d_iov_t *key, d_iov_t *val)
 	db_data.mv_data = val->iov_buf;
 
 	rc = mdb_put(ldb->db_txn, ldb->db_dbi, &db_key, &db_data, 0);
+	if (rc)
+		D_ERROR("Failed to put in mdb: %d\n", rc);
 	D_FREE(db_key.mv_data);
 
 out:
@@ -328,6 +330,8 @@ lmm_db_delete(struct sys_db *db, char *table, d_iov_t *key)
 		goto out;
 
 	rc = mdb_del(ldb->db_txn, ldb->db_dbi, &db_key, NULL);
+	if (rc)
+		D_ERROR("Failed to delete in mdb: %d\n", rc);
 	D_FREE(db_key.mv_data);
 
 out:
@@ -407,6 +411,8 @@ lmm_db_tx_end(struct sys_db *db, int rc)
 	}
 
 	rc = mdb_txn_commit(txn);
+	if (rc)
+		D_ERROR("Failed to commit txn in mdb: %d\n", rc);
 
 	return mdb_error2daos_error(rc);
 }
