@@ -3104,8 +3104,8 @@ class PosixTests():
 
         side_dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
-        dfuse.start(v_hint='dfuse_perms')
-        side_dfuse.start(v_hint='dfuse_perms_side')
+        dfuse.start(v_hint='perms')
+        side_dfuse.start(v_hint='perms_side')
 
         test_file = join(dfuse.dir, 'test-file')
         side_test_file = join(side_dfuse.dir, 'test-file')
@@ -3120,6 +3120,7 @@ class PosixTests():
             assert data == 'data'
         with open(side_test_file, 'r') as fd:
             data = fd.read()
+            print(data)
             assert data == 'data'
 
         # Remove all permissions on the file.
