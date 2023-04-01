@@ -31,7 +31,7 @@ class Pass1Test(TestWithServers):
         7. Verify that the dangling pool was removed. Call dmg pool list and it should
         return an empty list.
 
-        Jira ID: DAOS-11711
+        Jira ID: DAOS-11711. For test.
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
