@@ -7,6 +7,7 @@ from ec_utils import ErasureCodeIor
 
 
 class EcodIorHardRebuild(ErasureCodeIor):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate IOR Hard with EC object class for rebuild scenarios
 

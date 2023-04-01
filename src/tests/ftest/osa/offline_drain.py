@@ -12,6 +12,7 @@ from write_host_file import write_host_file
 
 
 class OSAOfflineDrain(OSAUtils, ServerFillUp):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     daos_server offline drain test cases.

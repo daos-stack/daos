@@ -8,6 +8,7 @@ from ec_utils import ErasureCodeIor
 
 
 class EcodServerRestart(ErasureCodeIor):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after restarting all servers.
 

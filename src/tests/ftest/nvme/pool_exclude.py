@@ -18,6 +18,7 @@ from write_host_file import write_host_file
 
 
 class NvmePoolExclude(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     NVME Pool Exclude test cases.
