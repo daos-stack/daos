@@ -195,7 +195,7 @@ class ConfigGenerateOutput(TestWithServers):
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
         # Get necessary storage and network info.
-        self.prepare_expected_data2()
+        self.prepare_expected_data()
 
         # 1. Call dmg config generate.
         result = self.get_dmg_command().config_generate(
