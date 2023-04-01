@@ -611,7 +611,7 @@ class PreReqComponent():
         if compiler == 'icc':
             compiler_map['icc'] = self._setup_intelc()
 
-        if self.__env.get('WARNING_LEVEL') == 'error':
+        if compiler !=  'covc' and self.__env.get('WARNING_LEVEL') == 'error':
             if compiler == 'icc' and not self._has_icx:
                 warning_flag = '-Werror-all'
             else:
