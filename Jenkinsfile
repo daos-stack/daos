@@ -668,7 +668,7 @@ pipeline {
                                        build_deps: 'yes',
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release WARNING_LEVEL=warn'))
                     }
                     post {
                         unsuccessful {
