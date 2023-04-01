@@ -7,6 +7,7 @@ from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
 
 
+# pylint: disable=too-many-ancestors
 class DmvrSerialLargePosix(DataMoverTestBase):
     """Object Data Mover validation for serializing/deserializing
        POSIX containers at the object level.

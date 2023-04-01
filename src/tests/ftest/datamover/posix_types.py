@@ -10,6 +10,7 @@ from duns_utils import format_path, parse_path
 
 
 class DmvrPosixTypesTest(DataMoverTestBase):
+    # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for varying source and destination types
        using "dcp", "dsync, and "daos filesystem copy" with POSIX containers.
 

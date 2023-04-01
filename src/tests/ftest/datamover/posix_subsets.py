@@ -9,6 +9,7 @@ from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrPosixSubsets(DataMoverTestBase):
+    # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for container subsets using
        "dcp" and "daos filesystem copy" with POSIX containers.
 

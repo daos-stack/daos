@@ -10,6 +10,7 @@ from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrSerialSmall(DataMoverTestBase):
+    # pylint: disable=too-many-ancestors
     """Object Data Mover validation for serializing/deserializing
        generic containers at the object level.
 

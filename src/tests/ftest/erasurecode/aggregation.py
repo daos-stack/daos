@@ -7,6 +7,7 @@ from ec_utils import ErasureCodeIor
 
 
 class EcodAggregationOff(ErasureCodeIor):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object with different
                             Aggregation mode.

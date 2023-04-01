@@ -8,6 +8,7 @@ from ec_utils import ErasureCodeIor
 
 
 class EcodAggregationOffRebuild(ErasureCodeIor):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object for offline rebuild
                         with different Aggregation mode for Partial strip data.
