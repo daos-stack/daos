@@ -18,6 +18,7 @@ from apricot import skipForTicket
 
 
 class OSAOnlineParallelTest(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     daos_server online drain,reintegration,

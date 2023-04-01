@@ -16,6 +16,7 @@ from daos_utils import DaosCommand
 
 
 class OSAOnlineReintegration(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """Online Server Addition online re-integration test class.
 
     Test Class Description:

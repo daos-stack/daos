@@ -10,6 +10,7 @@ from dmg_utils import check_system_query_status
 
 
 class OSAOfflineExtend(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     daos_server offline extend test cases.

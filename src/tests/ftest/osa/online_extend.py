@@ -15,6 +15,7 @@ from daos_utils import DaosCommand
 
 
 class OSAOnlineExtend(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     daos_server Online Extend test cases.
