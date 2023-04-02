@@ -35,12 +35,8 @@ class ConfigGenerateOutput(TestWithServers):
     def prepare_expected_data(self):
         """Prepare expected values.
 
-        Use the dmg storage scan output from server manager and call dmg network scan to
-        collect expected values for NVMe, PMEM, and networking. (We can't use the dmg
-        network scan output from server manager because we need to pass in --provider=all,
-        but the one in server manager doesn't do so.)
-
-        Create the following 4 dictionaries and 1 set.
+        Call dmg storage scan and network scan to collect expected values for NVMe, PMEM,
+        and networking and create the following 4 dictionaries and 1 set.
 
         1. Create numa_node_to_pci_addrs. Key is socket_id from the output and value is a
         set of pci_addr(s) from the output.
@@ -57,8 +53,8 @@ class ConfigGenerateOutput(TestWithServers):
         """
         dmg = self.get_dmg_command()
 
-        # Obtain dmg storage scan output.
-        storage_out = self.server_managers[0].information.storage
+        # Call dmg storage scan.
+        storage_out = dmg.storage_scan()
 
         # Get nvme_devices and scm_namespaces list that are buried. There's a uint64 hash
         # of the struct under HostStorage.
