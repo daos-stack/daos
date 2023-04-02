@@ -151,7 +151,7 @@ class DiskFailureTest(OSAUtils):
                 for _ in range(10):
                     data = self.dmg_command.storage_replace_nvme(old_uuid=device["uuid"],
                                                                  new_uuid=device["uuid"])
-                    time.sleep(10)
+                    time.sleep(5)
                     if data['error'] or len(data['response']['host_errors']) > 0:
                         error_count = error_count + 1
                     else:
