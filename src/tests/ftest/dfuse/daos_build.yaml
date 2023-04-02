@@ -24,9 +24,8 @@ container:
   type: POSIX
   control_method: daos
 dfuse:
-  cores: '0-4'
-  thread_count: 36
-  eq_count: 2
+  cores: '0-17'
+  thread_count: 18
 dfuse_vm:
   cores: '0-3'
   eq_count: 2
