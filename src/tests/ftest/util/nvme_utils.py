@@ -9,7 +9,7 @@ import time
 
 from avocado.core.exceptions import TestFail
 
-from dmg_utils import get_storage_query_device_uuids
+from dmg_utils import get_storage_query_device_uuids, get_dmg_smd_info
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -206,10 +206,15 @@ class ServerFillUp(IorTestBase):
         """
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
-        result = self.dmg.storage_query_device_health(disk_id)
-        # Check if device state changed to EVICTED.
-        if 'State:EVICTED' not in result.stdout_text:
-            self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
+        info = get_dmg_smd_info(
+            self, self.dmg.storage_query_device_health, 'devices', uuid=disk_id)
+        for devices in info.values():
+            for device in devices:
+                if device['uuid'] != disk_id:
+                    continue
+                if device['dev_state'].lower() != 'evicted':
+                    self.fail("State of device {} on host {} suppose to be EVICTED".format(
+                        disk_id, server))
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
