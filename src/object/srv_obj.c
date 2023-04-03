@@ -4430,9 +4430,9 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 {
 	struct dtx_handle		*dth = NULL;
 	struct obj_cpd_in		*oci = crt_req_get(rpc);
-	struct daos_cpd_sub_head	*dcsh = ds_obj_cpd_get_dcsh(rpc, 0);
-	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
-	struct daos_cpd_sub_req		*dcsr = ds_obj_cpd_get_dcsr(rpc, 0);
+	struct daos_cpd_sub_head	*dcsh = ds_obj_cpd_get_head(rpc, 0);
+	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_ents(rpc, 0, -1);
+	struct daos_cpd_sub_req		*dcsr = ds_obj_cpd_get_reqs(rpc, 0);
 	daos_epoch_t			 e = dcsh->dcsh_epoch.oe_value;
 	uint32_t			 dtx_flags = DTX_DIST;
 	int				 rc = 0;
@@ -4529,8 +4529,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			struct daos_cpd_sub_head	*dcsh;
 			struct daos_cpd_sub_req		*dcsrs;
 
-			dcde = ds_obj_cpd_get_dcde(dca->dca_rpc,
-						   dca->dca_idx, 0);
+			dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
 			/* The check for read capa has been done before handling
 			 * the CPD RPC. Here, only need to check the write capa.
 			 */
@@ -4540,8 +4539,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 					goto comp;
 			}
 
-			dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-			dcsrs = ds_obj_cpd_get_dcsr(dca->dca_rpc, dca->dca_idx);
+			dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);
+			dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 			rc = ds_cpd_handle_one_wrap(dca->dca_rpc, dcsh, dcde,
 						    dcsrs, ioc, &dlh->dlh_handle);
 		}
@@ -4600,7 +4599,7 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 	int				 rc = 0;
 	bool				 need_abort = false;
 
-	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
+	dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);
 
 	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on leader, idx %u\n",
 		DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
@@ -4670,11 +4669,11 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
-	dcde = ds_obj_cpd_get_dcde(dca->dca_rpc, dca->dca_idx, 0);
-	dcsrs = ds_obj_cpd_get_dcsr(dca->dca_rpc, dca->dca_idx);
+	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
+	dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
-	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
-	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
+	req_cnt = ds_obj_cpd_get_reqs_cnt(dca->dca_rpc, dca->dca_idx);
+	tgt_cnt = ds_obj_cpd_get_tgts_cnt(dca->dca_rpc, dca->dca_idx);
 
 	if (dcde == NULL || dcsrs == NULL || tgts == NULL ||
 	    req_cnt < 0 || tgt_cnt < 0)
@@ -4814,6 +4813,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	int				  j;
 
 	total += oci->oci_sub_heads.ca_count;
+	total += oci->oci_sub_reqs.ca_count;
 	total += oci->oci_disp_ents.ca_count;
 	if (leader)
 		total += oci->oci_disp_tgts.ca_count;
@@ -4825,11 +4825,23 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	*p_dcbs = dcbs;
 	*dcb_nr = total;
 
+	for (i = 0; i < oci->oci_sub_reqs.ca_count; i++) {
+		dcb = ds_obj_cpd_get_reqs_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_REQ,
+						  ds_obj_cpd_get_reqs_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
+		}
+	}
+
 	for (i = 0; i < oci->oci_sub_heads.ca_count; i++) {
 		dcb = ds_obj_cpd_get_head_bulk(rpc, i);
 		if (dcb != NULL) {
 			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_HEAD,
-						  ds_obj_cpd_get_dcsh_cnt(rpc, i));
+						  ds_obj_cpd_get_head_cnt(rpc, i));
 			if (rc != 0)
 				goto out;
 
@@ -4838,10 +4850,10 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	}
 
 	for (i = 0; i < oci->oci_disp_ents.ca_count; i++) {
-		dcb = ds_obj_cpd_get_disp_bulk(rpc, i);
+		dcb = ds_obj_cpd_get_ents_bulk(rpc, i);
 		if (dcb != NULL) {
-			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_DISP,
-						  ds_obj_cpd_get_dcde_cnt(rpc, i));
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_ENT,
+						  ds_obj_cpd_get_ents_cnt(rpc, i));
 			if (rc != 0)
 				goto out;
 
@@ -4854,7 +4866,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 			dcb = ds_obj_cpd_get_tgts_bulk(rpc, i);
 			if (dcb != NULL) {
 				rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_TGT,
-							  ds_obj_cpd_get_tgt_cnt(rpc, i));
+							  ds_obj_cpd_get_tgts_cnt(rpc, i));
 				if (rc != 0)
 					goto out;
 
@@ -4891,7 +4903,26 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 			dcsh = &dcbs[i]->dcb_head;
 			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
 			break;
-		case DCST_BULK_DISP:
+		case DCST_BULK_REQ:
+			rc = crt_proc_create(dss_get_module_info()->dmi_ctx,
+					     dcbs[i]->dcb_iov.iov_buf, dcbs[i]->dcb_iov.iov_len,
+					     CRT_PROC_DECODE, &dcbs[i]->dcb_proc);
+			if (rc != 0)
+				goto out;
+
+			D_ALLOC_ARRAY(dcbs[i]->dcb_reqs, dcbs[i]->dcb_item_nr);
+			if (dcbs[i]->dcb_reqs == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
+				rc = crt_proc_struct_daos_cpd_sub_req(dcbs[i]->dcb_proc,
+								      CRT_PROC_DECODE,
+								      &dcbs[i]->dcb_reqs[j], true);
+				if (rc != 0)
+					goto out;
+			}
+			break;
+		case DCST_BULK_ENT:
 			dcde = dcbs[i]->dcb_iov.iov_buf;
 			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
 			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
@@ -4930,6 +4961,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	int			 tx_count = oci->oci_sub_heads.ca_count;
 	int			 rc = 0;
 	int			 i;
+	int			 j;
 	bool			 leader;
 
 	D_ASSERT(oci != NULL);
@@ -5034,7 +5066,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 			struct daos_cpd_sub_head	*dcsh;
 
 			ABT_future_set(future, NULL);
-			dcsh = ds_obj_cpd_get_dcsh(rpc, i);
+			dcsh = ds_obj_cpd_get_head(rpc, i);
 			ds_obj_cpd_set_sub_result(oco, i, rc,
 						  dcsh->dcsh_epoch.oe_value);
 			/* Continue to handle other independent DTXs. */
@@ -5051,8 +5083,27 @@ reply:
 	D_FREE(dcas);
 	if (dcbs != NULL) {
 		for (i = 0; i < dcb_nr; i++) {
-			if (dcbs[i] != NULL)
-				D_FREE(dcbs[i]->dcb_iov.iov_buf);
+			if (dcbs[i] == NULL)
+				continue;
+
+			if (dcbs[i]->dcb_reqs != NULL) {
+				D_ASSERT(dcbs[i]->dcb_proc != NULL);
+
+				crt_proc_reset(dcbs[i]->dcb_proc, dcbs[i]->dcb_iov.iov_buf,
+					       dcbs[i]->dcb_iov.iov_len, CRT_PROC_FREE);
+				for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
+					crt_proc_struct_daos_cpd_sub_req(dcbs[i]->dcb_proc,
+									 CRT_PROC_FREE,
+									 &dcbs[i]->dcb_reqs[j],
+									 true);
+				}
+				D_FREE(dcbs[i]->dcb_reqs);
+			}
+
+			if (dcbs[i]->dcb_proc != NULL)
+				crt_proc_destroy(dcbs[i]->dcb_proc);
+
+			D_FREE(dcbs[i]->dcb_iov.iov_buf);
 		}
 		D_FREE(dcbs);
 	}
