@@ -28,4 +28,5 @@ dfuse:
   thread_count: 36
 dfuse_vm:
   cores: '0-3'
+  eq_count: 2
   thread_count: 8
