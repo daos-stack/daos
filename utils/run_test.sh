@@ -277,7 +277,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/object/tests/cli_checksum_tests"
     run_test "${SL_BUILD_DIR}/src/object/tests/srv_checksum_tests"
     run_test "${SL_BUILD_DIR}/src/vos/tests/pool_scrubbing_tests"
-    run_test "${SL_BUILD_DIR}/src/tests/rpc_tests"
+    run_test "${SL_BUILD_DIR}/src/tests/rpc/rpc_tests"
 
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
