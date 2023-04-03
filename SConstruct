@@ -383,8 +383,7 @@ def scons():
     opts = parse_and_save_conf(deps_env, opts_file)
 
     if deps_env.get('SCONS_ENV') == 'full':
-        for key, value in os.environ.items():
-            deps_env["ENV"][key] = value
+        deps_env["ENV"] = os.environ.copy()
     else:
 
         def _copy_env(var_list):
