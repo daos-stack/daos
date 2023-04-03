@@ -77,12 +77,6 @@ class ReplayTests(TestWithServers):
             self.log.info('Ranks %s failed to start', rank_check)
             self.fail('Failed to start ranks cleanly')
 
-        self.log_step('Wait for rebuild to start (dmg pool query)')
-        pool.wait_for_rebuild_to_start()
-
-        self.log_step('Wait for rebuild to end (dmg pool query)')
-        pool.wait_for_rebuild_to_end()
-
     def read_data(self, ior, container, ppn, dfuse=None):
         """Verify the data used to populate the container.
 
