@@ -582,20 +582,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		goto out;
 
 	cso = crt_reply_get(req);
-	if (cso->cso_child_status != 0) {
-		rc = cso->cso_child_status;
-	} else {
-		rc = cso->cso_status;
-
-		/*
-		 * The aggregator only aggregates the results from other check
-		 * engines, does not include the check engine on the same rank
-		 * as the check leader resides. Let's aggregate it here.
-		 */
-		if (rc >= 0)
-			rc = start_cb(args, leader, cso->cso_status,
-				      cso->cso_clues.ca_arrays, cso->cso_clues.ca_count);
-	}
+	rc = cso->cso_child_status != 0 ? cso->cso_child_status : cso->cso_status;
 
 out:
 	if (req != NULL) {
@@ -652,19 +639,7 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		goto out;
 
 	cso = crt_reply_get(req);
-	if (cso->cso_child_status != 0) {
-		rc = cso->cso_child_status;
-	} else {
-		rc = cso->cso_status;
-
-		/*
-		 * The aggregator only aggregates the results from other check
-		 * engines, does not include the check engine on the same rank
-		 * as the check leader resides. Let's aggregate it here.
-		 */
-		if (rc > 0 && stop_cb != NULL)
-			rc = stop_cb(args, dss_self_rank(), cso->cso_status, NULL, 0);
-	}
+	rc = cso->cso_child_status != 0 ? cso->cso_child_status : cso->cso_status;
 
 out:
 	if (req != NULL) {
@@ -714,20 +689,7 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		goto out;
 
 	cqo = crt_reply_get(req);
-	if (cqo->cqo_child_status != 0) {
-		rc = cqo->cqo_child_status;
-	} else {
-		rc = cqo->cqo_status;
-
-		/*
-		 * The aggregator only aggregates the results from other check
-		 * engines, does not include the check engine on the same rank
-		 * as the check leader resides. Let's aggregate it here.
-		 */
-		if (rc == 0)
-			rc = query_cb(args, 0 /* unused rank */, cqo->cqo_status,
-				      cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
-	}
+	rc = cqo->cqo_child_status != 0 ? cqo->cqo_child_status : cqo->cqo_status;
 
 out:
 	if (req != NULL) {
@@ -857,20 +819,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		goto out;
 
 	cclo = crt_reply_get(req);
-	if (cclo->cclo_child_status != 0) {
-		rc = cclo->cclo_child_status;
-	} else {
-		rc = cclo->cclo_status;
-
-		/*
-		 * The aggregator only aggregates the results from the pool shards,
-		 * does not include the pool shard on the same rank as the PS leader
-		 * resides. Let's aggregate it here.
-		 */
-		if (rc >= 0)
-			rc = list_cb(args, 0 /* unused rank */, cclo->cclo_status,
-				     cclo->cclo_conts.ca_arrays, cclo->cclo_conts.ca_count);
-	}
+	rc = cclo->cclo_child_status != 0 ? cclo->cclo_child_status : cclo->cclo_status;
 
 out:
 	if (req != NULL) {
