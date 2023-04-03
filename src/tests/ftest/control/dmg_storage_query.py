@@ -115,15 +115,21 @@ class DmgStorageQuery(ControlTestBase):
         for device in device_info:
             self.log.info('Verifying device %s', device['tr_addr'])
             targets += len(device['tgt_ids'])
-            self.log.info('  targets: %s', len(device['tgt_ids']))
-            self.log.info('  roles:   %s', device['roles'])
+            self.log.info('  targets: detected=%s', len(device['tgt_ids']))
+            message = ''
             for bdev in self.bdev_list:
-                tr_addr = '{:02x}{:02x}{:02x}:'.format(
-                    *list(map(int, re.split(r'[:.]', bdev)[1:], [16] * 3)))
-                if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(tr_addr):
+                bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
+                    *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
+                if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
+                    message = 'detected={}, expected={}'.format(device['roles'], bdev['roles'])
                     if device['roles'] != bdev['roles']:
-                        self.log.info('    ERROR: expected roles: %s', bdev['roles'])
+                        message += ' <= ERROR unexpected role'
                         errors += 1
+            if not message:
+                message = 'detected={}, expected=*NO MATCH* <= ERROR unexpected role'.format(
+                    device['roles'])
+                errors += 1
+            self.log.info('  roles:   %s', message)
 
         if self.targets != targets:
             self.fail('Wrong number of targets found: {}'.format(targets))
