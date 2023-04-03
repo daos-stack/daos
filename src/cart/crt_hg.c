@@ -612,6 +612,8 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 		}
 	}
 
+	D_ERROR("ctx_num %d, will exceed CRT_SRV_CONTEXT_NUM (%d) if create more context.\n",
+		prov_data->cpg_ctx_num, CRT_SRV_CONTEXT_NUM);
 	return -1;
 }
 
@@ -919,10 +921,9 @@ out:
 int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0;
+	hg_return_t hg_ret;
+	int         rc = -DER_SUCCESS;
 
-	D_ASSERT(hg_ctx != NULL);
 	crt_hg_pool_fini(hg_ctx);
 
 	if (hg_ctx->chc_hgctx) {
