@@ -47,7 +47,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			legacyCmd: &legacyPrepCmd{Force: true},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
@@ -83,7 +83,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
@@ -111,7 +111,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},

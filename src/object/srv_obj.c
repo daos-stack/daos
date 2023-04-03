@@ -1356,6 +1356,16 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
 	return false;
 }
 
+static inline uint64_t
+orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
+{
+	uint64_t flags = 0;
+
+	if (orf_flags & ORF_EPOCH_UNCERTAIN)
+		flags |= DTX_EPOCH_UNCERTAIN;
+	return flags;
+}
+
 static int
 obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		      daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
@@ -1732,25 +1742,48 @@ out:
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && obj_rpc_is_update(rpc) && dth->dth_need_validation &&
-	    sched_cur_seq() != sched_seq) {
-		daos_epoch_t	epoch = 0;
-		int		rc1;
+	if (rc == 0 && obj_rpc_is_update(rpc) && sched_cur_seq() != sched_seq) {
+		if (dth->dth_need_validation) {
+			daos_epoch_t	epoch = 0;
+			int		rc1;
 
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
-		switch (rc1) {
-		case 0:
-			orw->orw_epoch = epoch;
-			/* Fall through */
-		case -DER_ALREADY:
-			rc = -DER_ALREADY;
-			break;
-		case -DER_NONEXIST:
-		case -DER_EP_OLD:
-			break;
-		default:
-			rc = rc1;
-			break;
+			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
+			switch (rc1) {
+			case 0:
+				orw->orw_epoch = epoch;
+				/* Fall through */
+			case -DER_ALREADY:
+				rc = -DER_ALREADY;
+				break;
+			case -DER_NONEXIST:
+			case -DER_EP_OLD:
+				break;
+			default:
+				rc = rc1;
+				break;
+			}
+		}
+
+		/* For solo update, it will be handled via one-phase transaction.
+		 * If there is CPU yield after its epoch generated, we will renew
+		 * the epoch, then we can use the epoch to sort related solo DTXs
+		 * based on their epochs.
+		 */
+		if (rc == 0 && dth->dth_solo) {
+			struct dtx_epoch	epoch;
+
+			epoch.oe_value = d_hlc_get();
+			epoch.oe_first = orw->orw_epoch_first;
+			epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
+
+			dtx_renew_epoch(&epoch, dth);
+			vos_update_renew_epoch(ioh, dth);
+
+			D_DEBUG(DB_IO,
+				"update rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				rpc, orw->orw_epoch, dth->dth_epoch, DP_DTI(&orw->orw_dti));
+
+			orw->orw_epoch = dth->dth_epoch;
 		}
 	}
 
@@ -2295,16 +2328,6 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 failed:
 	obj_ioc_end(ioc, rc);
 	return rc;
-}
-
-static uint64_t
-orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
-{
-	uint64_t flags = 0;
-
-	if (orf_flags & ORF_EPOCH_UNCERTAIN)
-		flags |= DTX_EPOCH_UNCERTAIN;
-	return flags;
 }
 
 void
@@ -2923,6 +2946,7 @@ again2:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
 		d_tm_inc_counter(opm->opm_update_retry, 1);
+		ABT_thread_yield();
 		goto again1;
 	default:
 		break;
@@ -3765,6 +3789,7 @@ again2:
 	case -DER_AGAIN:
 		opi->opi_flags |= ORF_RESEND;
 		need_abort = true;
+		ABT_thread_yield();
 		goto again1;
 	default:
 		break;
@@ -4314,21 +4339,38 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && dth->dth_modification_cnt > 0 && dth->dth_need_validation &&
-	    sched_cur_seq() != sched_seq) {
-		daos_epoch_t	epoch = 0;
-		int		rc1;
+	if (rc == 0 && dth->dth_modification_cnt > 0 && sched_cur_seq() != sched_seq) {
+		if (dth->dth_need_validation) {
+			daos_epoch_t	epoch = 0;
+			int		rc1;
 
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
-		switch (rc1) {
-		case 0:
-		case -DER_ALREADY:
-			D_GOTO(out, rc = -DER_ALREADY);
-		case -DER_NONEXIST:
-		case -DER_EP_OLD:
-			break;
-		default:
-			D_GOTO(out, rc = rc1);
+			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
+			switch (rc1) {
+			case 0:
+			case -DER_ALREADY:
+				D_GOTO(out, rc = -DER_ALREADY);
+			case -DER_NONEXIST:
+			case -DER_EP_OLD:
+				break;
+			default:
+				D_GOTO(out, rc = rc1);
+			}
+		}
+
+		if (rc == 0 && dth->dth_solo) {
+			daos_epoch_t	epoch = dcsh->dcsh_epoch.oe_value;
+
+			D_ASSERT(dcde->dcde_read_cnt == 0);
+			D_ASSERT(dcde->dcde_write_cnt == 1);
+
+			dcsh->dcsh_epoch.oe_value = d_hlc_get();
+
+			dtx_renew_epoch(&dcsh->dcsh_epoch, dth);
+			vos_update_renew_epoch(iohs[0], dth);
+
+			D_DEBUG(DB_IO,
+				"CPD rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				rpc, epoch, dcsh->dcsh_epoch.oe_value, DP_DTI(&dcsh->dcsh_xid));
 		}
 	}
 
@@ -4745,7 +4787,7 @@ again:
 	else
 		tgts++;
 
-	if (tgt_cnt <= 1 && dcde->dcde_write_cnt <= 1)
+	if (tgt_cnt <= 1 && dcde->dcde_write_cnt == 1 && dcde->dcde_read_cnt == 0)
 		dtx_flags |= DTX_SOLO;
 	if (flags & ORF_RESEND)
 		dtx_flags |= DTX_PREPARED;
@@ -4780,6 +4822,7 @@ out:
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;
 		need_abort = true;
+		ABT_thread_yield();
 		goto again;
 	}
 
