@@ -202,6 +202,9 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
+## Optional parameter that should only be set if overriding the automatically
+## calculated value is necessary.
+#
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. Note that each target requires 1 GiB of hugepage space.
 ## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
@@ -362,18 +365,19 @@
 #    scm_mount: /mnt/daos/1
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
 #    class: ram
 #
-#    # When class is set to ram, tmpfs will be used to emulate SCM.
-#    # The size of ram is specified by scm_size in GB units.
-#    scm_size: 16
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to ram, tmpfs will be mounted with hugepage
 #    # support, if the kernel supports it. If this is not desirable,
@@ -535,14 +539,19 @@
 #    scm_mount: /mnt/daos/2
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
 #    class: ram
+#
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to dcpm, scm_list is the list of device paths for
 #    # PMem namespaces (currently only one per engine supported).

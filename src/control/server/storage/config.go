@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
@@ -500,7 +501,14 @@ func (sc *ScmConfig) Validate(class Class) error {
 		if len(sc.DeviceList) > 0 {
 			return errors.New("scm_list may not be set when scm_class is ram")
 		}
-		// Note: RAM-disk size auto-sized so allow if zero.
+		// Note: RAM-disk size can be auto-sized so allow if zero.
+		if sc.RamdiskSize != 0 {
+			confScmSize := uint64(humanize.GiByte * sc.RamdiskSize)
+			if confScmSize < MemTmpfsMin {
+				// Tmpfs size requested in config is less than minimum allowed.
+				return FaultScmConfigTmpfsUnderMinMem(confScmSize, MemTmpfsMin)
+			}
+		}
 	}
 
 	if len(sc.DeviceList) > maxScmDeviceLen {

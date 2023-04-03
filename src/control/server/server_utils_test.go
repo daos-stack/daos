@@ -9,6 +9,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"os"
 	"os/user"
 	"strings"
 	"testing"
@@ -28,6 +29,35 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+var mockFabIfSet = hardware.NewFabricInterfaceSet(
+	&hardware.FabricInterface{
+		Name:          "eth0",
+		NetInterfaces: common.NewStringSet("eth0"),
+		DeviceClass:   hardware.Ether,
+		Providers:     testFabricProviderSet("test", "ofi+tcp"),
+	},
+	&hardware.FabricInterface{
+		Name:          "eth1",
+		NetInterfaces: common.NewStringSet("eth1"),
+		DeviceClass:   hardware.Ether,
+		NUMANode:      1,
+		Providers:     testFabricProviderSet("test", "ofi+tcp"),
+	},
+	&hardware.FabricInterface{
+		Name:          "ib0",
+		NetInterfaces: common.NewStringSet("ib0"),
+		DeviceClass:   hardware.Infiniband,
+		Providers:     testFabricProviderSet("test", "ofi+tcp", "ofi+verbs;ofi_rxm"),
+	},
+	&hardware.FabricInterface{
+		Name:          "ib1",
+		NetInterfaces: common.NewStringSet("ib1"),
+		DeviceClass:   hardware.Infiniband,
+		NUMANode:      1,
+		Providers:     testFabricProviderSet("test", "ofi+tcp", "ofi+verbs;ofi_rxm"),
+	},
 )
 
 type mockInterface struct {
@@ -627,18 +657,30 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
 			}
 
-			// ensure that the engine affinities are set
-			if err := cfg.SetEngineAffinities(log, mockAffSrc); err != nil {
-				t.Fatal(err)
-			}
-
 			// test with typical meminfo values
 			mi := &common.MemInfo{
 				HugepageSizeKiB: 2048,
 				MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
 			}
 
-			if err := cfg.Validate(log, mi); err != nil {
+			osSetenv = func(string, string) error {
+				return nil
+			}
+			// return function variable to default after test
+			defer func() {
+				osSetenv = os.Setenv
+			}()
+
+			mockIfLookup := func(string) (netInterface, error) {
+				return &mockInterface{
+					addrs: []net.Addr{
+						&mockAddr{},
+					},
+				}, nil
+			}
+
+			if err = processConfig(log, cfg, mockFabIfSet, mi, mockIfLookup,
+				mockAffSrc); err != nil {
 				t.Fatal(err)
 			}
 
@@ -752,13 +794,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
 				WithDisableHugepages(tc.disableHugepages)
 
-			// test with typical meminfo values
-			mi := &common.MemInfo{
-				HugepageSizeKiB: 2048,
-				MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
-			}
-
-			if err := cfg.Validate(log, mi); err != nil {
+			if err := cfg.Validate(log); err != nil {
 				t.Fatal(err)
 			}
 
@@ -964,40 +1000,11 @@ func TestServer_getNetDevClass(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fis := hardware.NewFabricInterfaceSet(
-				&hardware.FabricInterface{
-					Name:          "eth0",
-					NetInterfaces: common.NewStringSet("eth0"),
-					DeviceClass:   hardware.Ether,
-					Providers:     testFabricProviderSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:          "eth1",
-					NetInterfaces: common.NewStringSet("eth1"),
-					DeviceClass:   hardware.Ether,
-					NUMANode:      1,
-					Providers:     testFabricProviderSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:          "ib0",
-					NetInterfaces: common.NewStringSet("ib0"),
-					DeviceClass:   hardware.Infiniband,
-					Providers:     testFabricProviderSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:          "ib1",
-					NetInterfaces: common.NewStringSet("ib1"),
-					DeviceClass:   hardware.Infiniband,
-					NUMANode:      1,
-					Providers:     testFabricProviderSet("test"),
-				},
-			)
-
 			cfg := config.DefaultServer().
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotNetDevCls, gotErr := getFabricNetDevClass(cfg, fis)
+			gotNetDevCls, gotErr := getFabricNetDevClass(cfg, mockFabIfSet)
 
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {

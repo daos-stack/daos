@@ -188,6 +188,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -216,7 +217,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("ram").
-						WithScmRamdiskSize(1).
+						WithScmRamdiskSize(storage.MemTmpfsMin).
 						WithScmMountPoint("test"),
 				),
 		},
@@ -289,6 +290,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
 			).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -450,9 +452,10 @@ func TestConfig_Validation(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
+					WithScmRamdiskSize(storage.MemTmpfsMin).
 					WithScmMountPoint("/foo/bar"),
 			).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -462,11 +465,15 @@ func TestConfig_Validation(t *testing.T) {
 	}{
 		"empty config should fail": {
 			cfg:    MockConfig(),
-			expErr: errors.New("provider not set"),
+			expErr: errors.New("target count must be nonzero"),
 		},
 		"config with pinned_numa_node and nonzero first_core should fail": {
 			cfg:    validConfig().WithPinnedNumaNode(1).WithServiceThreadCore(1),
 			expErr: errors.New("cannot specify both"),
+		},
+		"config with zero target count should fail": {
+			cfg:    validConfig().WithTargetCount(0),
+			expErr: errors.New("target count must be nonzero"),
 		},
 		"minimally-valid config should pass": {
 			cfg: validConfig(),

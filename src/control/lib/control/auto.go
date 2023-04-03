@@ -1121,8 +1121,16 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
 
-	if err := cfg.Validate(log, mi); err != nil {
+	if err := cfg.Validate(log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
+	}
+
+	if err := cfg.SetNrHugepages(log, mi); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil

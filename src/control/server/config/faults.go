@@ -238,22 +238,9 @@ func FaultConfigInsufficientHugepages(min, req int) *fault.Fault {
 	)
 }
 
-// FaultConfigScmTmpfsUnderMinMem indicates that the tmpfs size requested in config is less than
-// minimum allowed.
-func FaultScmTmpfsUnderMinMem(confSize, scmSize, memTmpfsMin uint64) *fault.Fault {
-	return serverConfigFault(
-		code.ServerConfigScmTmpfsUnderMinMem,
-		fmt.Sprintf("configured scm tmpfs size %s is lower than the minimum (%s) required "+
-			"for SCM", humanize.IBytes(confSize), humanize.IBytes(memTmpfsMin)),
-		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
-			"or manually set to a value between %s and %s in the config file",
-			humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize)),
-	)
-}
-
 // FaultConfigScmTmpfsOverMaxMem indicates that the tmpfs size requested in config is larger than
 // maximum allowed.
-func FaultScmTmpfsOverMaxMem(confSize, scmSize, memTmpfsMin uint64) *fault.Fault {
+func FaultConfigScmTmpfsOverMaxMem(confSize, scmSize, memTmpfsMin uint64) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigScmTmpfsOverMaxMem,
 		fmt.Sprintf("configured scm tmpfs size %s is larger than the maximum (%s) that "+

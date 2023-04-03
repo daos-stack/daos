@@ -48,6 +48,10 @@ type netListenFn func(string, string) (net.Listener, error)
 // be used to resolve a host address to a list of IP addresses.
 type ipLookupFn func(string) ([]net.IP, error)
 
+// ifLookupFn defines the function signature for a helper that can be used to resolve a fabric
+// interface name to an object of a type that implements the netInterface interface.
+type ifLookupFn func(string) (netInterface, error)
+
 // resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
 // If the hostname resolves to multiple addresses, the first one is returned.
 func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
@@ -724,7 +728,7 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 	return cliSrx, nil
 }
 
-func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+func checkFabricInterface(name string, lookup ifLookupFn) error {
 	if name == "" {
 		return errors.New("no name provided")
 	}

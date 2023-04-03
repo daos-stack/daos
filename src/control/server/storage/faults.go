@@ -77,6 +77,19 @@ func FaultScmTmpfsLowMem(memTmpfsMin, scmSize uint64) *fault.Fault {
 			"file if increasing the amount of RAM is not possible")
 }
 
+// FaultScmConfigTmpfsUnderMinMem indicates that the tmpfs size requested in config is less than
+// minimum allowed.
+func FaultScmConfigTmpfsUnderMinMem(confSize, memTmpfsMin uint64) *fault.Fault {
+	return storageFault(
+		code.ServerConfigScmTmpfsUnderMinMem,
+		fmt.Sprintf("configured scm tmpfs size %s is lower than the minimum (%s) required "+
+			"for SCM", humanize.IBytes(confSize), humanize.IBytes(memTmpfsMin)),
+		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
+			"or manually set to a value above %s in the config file",
+			humanize.IBytes(memTmpfsMin)),
+	)
+}
+
 var (
 	// FaultScmNoModules represents an error where no PMem modules exist.
 	FaultScmNoModules = storageFault(

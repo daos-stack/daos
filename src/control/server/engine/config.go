@@ -139,6 +139,10 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
+	if c.TargetCount == 0 {
+		return errors.New("target count must be nonzero")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}

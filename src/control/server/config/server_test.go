@@ -53,12 +53,26 @@ var (
 			return x.Equals(y)
 		}),
 	}
-
-	defMemInfo = &common.MemInfo{
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     (humanize.GiByte * 80) / humanize.KiByte,
-	}
 )
+
+func baseCfg(t *testing.T, testFile string) *Server {
+	t.Helper()
+
+	config, err := mockConfigFromFile(t, testFile)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", testFile, err)
+	}
+	// Clear the control metadata by default. We'll add it manually in tests that use it.
+	return config.WithControlMetadata(storage.ControlMetadata{})
+}
+
+func defaultEngineCfg() *engine.Config {
+	return engine.NewConfig().
+		WithFabricInterfacePort(1234).
+		WithFabricInterface("eth0").
+		WithTargetCount(8).
+		WithPinnedNumaNode(0)
+}
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
@@ -150,7 +164,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defMemInfo)
+				err = configA.Validate(log)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -181,7 +195,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defMemInfo)
+				err = configB.Validate(log)
 			}
 
 			if err != nil {
@@ -256,8 +270,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
 					WithStorageClass("ram").
-					WithScmDisableHugepages().
-					WithScmRamdiskSize(16),
+					WithScmDisableHugepages(),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -328,26 +341,10 @@ func TestServerConfig_Validation(t *testing.T) {
 
 	testMetadataDir := filepath.Join(testDir, "control_md")
 
-	baseCfg := func() *Server {
-		config, err := mockConfigFromFile(t, testFile)
-		if err != nil {
-			t.Fatalf("failed to load %s: %s", testFile, err)
-		}
-		// Clear the control metadata by default. We'll add it manually in tests that use it.
-		return config.WithControlMetadata(storage.ControlMetadata{})
-	}
-	defaultEngineCfg := func() *engine.Config {
-		return engine.NewConfig().
-			WithFabricInterfacePort(1234).
-			WithFabricInterface("eth0").
-			WithTargetCount(8).
-			WithPinnedNumaNode(0)
-	}
 	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
-		memTotBytes uint64
 		expConfig   *Server
 		expErr      error
 	}{
@@ -521,6 +518,252 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigNrHugepagesOutOfRange(math.MaxInt32+1, math.MaxInt32),
 		},
+		"out of range scm_size; low": {
+			extraConfig: func(c *Server) *Server {
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
+				return c
+			},
+			expErr: storage.FaultScmConfigTmpfsUnderMinMem(humanize.GiByte*3,
+				storage.MemTmpfsMin),
+		},
+		"control metadata multi-engine": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f"),
+							),
+						defaultEngineCfg().
+							WithFabricInterfacePort(5678).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/2").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+									WithBdevBusidRange("0x90-0x9f"),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevBusidRange("0x80-0x8f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+					defaultEngineCfg().
+						WithStorageIndex(1).
+						WithFabricInterfacePort(5678).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/2").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+								WithBdevBusidRange("0x90-0x9f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine1",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"md-on-ssd disabled with explicit role assignment": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleData),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleData),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"control metadata has path only": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f"),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path: testMetadataDir,
+				}).
+				WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmMountPoint("/mnt/daos/1").
+							WithStorageClass("ram").
+							WithScmDisableHugepages(),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+							WithBdevBusidRange("0x80-0x8f").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
+					).
+					WithStorageVosEnv("NVME").
+					WithStorageControlMetadataPath(testMetadataDir).
+					WithStorageControlMetadataDevice("").
+					WithStorageConfigOutputPath(filepath.Join(
+						testMetadataDir,
+						storage.ControlMetadataSubdir,
+						"engine0",
+						"daos_nvme.conf",
+					)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"control metadata has device only": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					DevicePath: "/dev/sdb0",
+				}).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+						))
+			},
+			expErr: FaultConfigControlMetadataNoPath,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			if tt.extraConfig == nil {
+				tt.extraConfig = noopExtra
+			}
+
+			// Apply test case changes to basic config
+			cfg := tt.extraConfig(baseCfg(t, testFile))
+
+			CmpErr(t, tt.expErr, cfg.Validate(log))
+			if tt.expErr != nil || tt.expConfig == nil {
+				return
+			}
+
+			if diff := cmp.Diff(tt.expConfig, cfg, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("unexpected config after validation (-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestServerConfig_SetNrHugepages(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		extraConfig    func(c *Server) *Server
+		memTotBytes    uint64
+		expNrHugepages int
+		expErr         error
+	}{
 		"disabled hugepages; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithDisableHugepages(true).
@@ -614,19 +857,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						),
 					)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugepages(2048).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							// 80gib total - (4gib huge + 6gib sys +
-							// 1gib engine)
-							WithScmRamdiskSize(69).
-							WithScmMountPoint("/foo"),
-					),
-				),
+			expNrHugepages: 2048,
 		},
 		"zero hugepages set in config; bdevs configured; implicit role assignment": {
 			extraConfig: func(c *Server) *Server {
@@ -641,25 +872,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					),
 				)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugepages(4608).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							// 80gib total - (9gib huge + 6gib sys +
-							// 1gib engine)
-							WithScmRamdiskSize(64).
-							WithScmMountPoint("/foo"),
-						storage.NewTierConfig().
-							WithStorageClass("nvme").
-							WithBdevDeviceList("0000:81:00.0").
-							WithBdevDeviceRoles(storage.BdevRoleAll),
-					).
-					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
-					WithStorageVosEnv("NVME"),
-				),
+			expNrHugepages: 4608,
 		},
 		"zero hugepages set in config; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -675,25 +888,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					),
 				)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugepages(4096).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							// 80gib total - (8gib huge + 6gib sys +
-							// 1gib engine)
-							WithScmRamdiskSize(65).
-							WithScmMountPoint("/foo"),
-						storage.NewTierConfig().
-							WithStorageClass("file").
-							WithBdevDeviceList("/tmp/daos-bdev").
-							WithBdevFileSize(16),
-					).
-					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
-					WithStorageVosEnv("AIO"),
-				),
+			expNrHugepages: 4096,
 		},
 		"zero hugepages set in config; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -705,26 +900,70 @@ func TestServerConfig_Validation(t *testing.T) {
 					),
 				)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							// 80gib total - (0gib huge + 6gib sys +
-							// 1gib engine)
-							WithScmRamdiskSize(73).
-							WithScmMountPoint("/foo"),
-					),
-				),
 		},
-		"out of range scm_size; low": {
+		"md-on-ssd enabled with explicit role assignment": {
 			extraConfig: func(c *Server) *Server {
-				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
-				return c
+				return c.WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+				)
 			},
-			expErr: FaultScmTmpfsUnderMinMem(humanize.GiByte*3, 0, memTmpfsMin),
+			// 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD)
+			expNrHugepages: 4608,
 		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			// Apply test case changes to basic config
+			cfg := tc.extraConfig(baseCfg(t, testFile))
+
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			}
+
+			// TODO: Remove validate once bdev role assignment side effect has been
+			//       removed.
+			if err := cfg.Validate(log); err != nil {
+				t.Fatal(err)
+			}
+
+			CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expNrHugepages, cfg.NrHugepages,
+				"unexpected number of hugepages set in config")
+		})
+	}
+}
+
+func TestServerConfig_SetRamdiskSize(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		extraConfig    func(c *Server) *Server
+		memTotBytes    uint64
+		expRamdiskSize int
+		expErr         error
+	}{
 		"out of range scm_size; high": {
 			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem
 			// 33 huge mem + 6 sys rsv + 2 engine rsv = 41 gib reserved mem
@@ -735,254 +974,165 @@ func TestServerConfig_Validation(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 10
 				return c.WithNrHugepages(16896)
 			},
-			expErr: FaultScmTmpfsOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
+			expErr: FaultConfigScmTmpfsOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
 		},
-		"control metadata multi-engine": {
+		"low mem": {
+			// 47 total - 41 reserved = 6 for tmpfs (3 gib per engine - too low)
+			memTotBytes: humanize.GiByte * 47,
 			extraConfig: func(c *Server) *Server {
-				return c.WithControlMetadata(storage.ControlMetadata{
-					Path:       testMetadataDir,
-					DevicePath: "/dev/something",
-				}).
-					WithEngines(
-						defaultEngineCfg().
-							WithFabricInterfacePort(1234).
-							WithStorage(
-								storage.NewTierConfig().
-									WithScmMountPoint("/mnt/daos/1").
-									WithStorageClass("ram").
-									WithScmDisableHugepages(),
-								storage.NewTierConfig().
-									WithStorageClass("nvme").
-									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
-							),
-						defaultEngineCfg().
-							WithFabricInterfacePort(5678).
-							WithStorage(
-								storage.NewTierConfig().
-									WithScmMountPoint("/mnt/daos/2").
-									WithStorageClass("ram").
-									WithScmDisableHugepages(),
-								storage.NewTierConfig().
-									WithStorageClass("nvme").
-									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
-									WithBdevBusidRange("0x90-0x9f"),
-							),
-					)
+				return c.WithNrHugepages(16896)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithControlMetadata(storage.ControlMetadata{
-					Path:       testMetadataDir,
-					DevicePath: "/dev/something",
-				}).
-				WithNrHugepages(9216).
-				WithEngines(
-					defaultEngineCfg().
-						WithFabricInterfacePort(1234).
-						WithStorage(
-							storage.NewTierConfig().
-								WithScmMountPoint("/mnt/daos/1").
-								WithStorageClass("ram").
-								WithScmDisableHugepages().
-								// (80gib total - (18gib huge + 6gib sys +
-								// 2gib engines)) / 2 engines
-								WithScmRamdiskSize(27),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-								WithBdevBusidRange("0x80-0x8f").
-								WithBdevDeviceRoles(storage.BdevRoleAll),
-						).
-						WithStorageVosEnv("NVME").
-						WithStorageControlMetadataPath(testMetadataDir).
-						WithStorageControlMetadataDevice("/dev/something").
-						WithStorageConfigOutputPath(filepath.Join(
-							testMetadataDir,
-							storage.ControlMetadataSubdir,
-							"engine0",
-							"daos_nvme.conf",
-						)), // NVMe conf should end up in metadata dir
-					defaultEngineCfg().
-						WithStorageIndex(1).
-						WithFabricInterfacePort(5678).
-						WithStorage(
-							storage.NewTierConfig().
-								WithScmMountPoint("/mnt/daos/2").
-								WithStorageClass("ram").
-								WithScmDisableHugepages().
-								// (80gib total - (18gib huge + 6gib sys +
-								// 2gib engines)) / 2 engines
-								WithScmRamdiskSize(27),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
-								WithBdevBusidRange("0x90-0x9f").
-								WithBdevDeviceRoles(storage.BdevRoleAll),
-						).
-						WithStorageVosEnv("NVME").
-						WithStorageControlMetadataPath(testMetadataDir).
-						WithStorageControlMetadataDevice("/dev/something").
-						WithStorageConfigOutputPath(filepath.Join(
-							testMetadataDir,
-							storage.ControlMetadataSubdir,
-							"engine1",
-							"daos_nvme.conf",
-						)), // NVMe conf should end up in metadata dir
-				),
+			expErr: storage.FaultScmTmpfsLowMem(storage.MemTmpfsMin, humanize.GiByte*3),
 		},
-		"md-on-ssd disabled with explicit role assignment": {
+		"custom value set": {
+			memTotBytes: humanize.GiByte * 60,
 			extraConfig: func(c *Server) *Server {
-				return c.WithControlMetadata(storage.ControlMetadata{
-					Path:       testMetadataDir,
-					DevicePath: "/dev/something",
-				}).
-					WithEngines(
-						defaultEngineCfg().
-							WithFabricInterfacePort(1234).
-							WithStorage(
-								storage.NewTierConfig().
-									WithScmMountPoint("/mnt/daos/1").
-									WithStorageClass("ram").
-									WithScmDisableHugepages(),
-								storage.NewTierConfig().
-									WithStorageClass("nvme").
-									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevDeviceRoles(storage.BdevRoleData),
-							),
-					)
+				// set custom value between min and max
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 6
+				c.Engines[1].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 6
+				return c.WithNrHugepages(16896)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithControlMetadata(storage.ControlMetadata{
-					Path:       testMetadataDir,
-					DevicePath: "/dev/something",
-				}).
-				WithNrHugepages(4096).
-				WithEngines(
-					defaultEngineCfg().
-						WithFabricInterfacePort(1234).
-						WithStorage(
-							storage.NewTierConfig().
-								WithScmMountPoint("/mnt/daos/1").
-								WithStorageClass("ram").
-								WithScmDisableHugepages().
-								// 80gib total - (8gib huge + 6gib
-								// sys + 1gib engine)
-								WithScmRamdiskSize(65),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-								WithBdevDeviceRoles(storage.BdevRoleData),
-						).
-						WithStorageVosEnv("NVME").
-						WithStorageControlMetadataPath(testMetadataDir).
-						WithStorageControlMetadataDevice("/dev/something").
-						WithStorageConfigOutputPath(filepath.Join(
-							testMetadataDir,
-							storage.ControlMetadataSubdir,
-							"engine0",
-							"daos_nvme.conf",
-						)), // NVMe conf should end up in metadata dir
-				),
+			expRamdiskSize: 6,
 		},
-		"control metadata has path only": {
+		"auto-calculated value set": {
+			memTotBytes: humanize.GiByte * 60,
 			extraConfig: func(c *Server) *Server {
-				return c.
-					WithControlMetadata(storage.ControlMetadata{
-						Path: testMetadataDir,
-					}).
+				return c.WithNrHugepages(16896)
+			},
+			expRamdiskSize: 9,
+		},
+		"no scm configured on second engine": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4096).
 					WithEngines(
 						defaultEngineCfg().
 							WithStorage(
 								storage.NewTierConfig().
-									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmMountPoint("/foo"),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
-									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
 							),
 					)
 			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithControlMetadata(storage.ControlMetadata{
-					Path: testMetadataDir,
-				}).
-				WithNrHugepages(4608).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithScmMountPoint("/mnt/daos/1").
-							WithStorageClass("ram").
-							WithScmDisableHugepages().
-							// 80gib total - (9gib huge + 6gib sys +
-							// 1gib engine)
-							WithScmRamdiskSize(64),
-						storage.NewTierConfig().
-							WithStorageClass("nvme").
-							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-							WithBdevBusidRange("0x80-0x8f").
-							WithBdevDeviceRoles(storage.BdevRoleAll),
-					).
-					WithStorageVosEnv("NVME").
-					WithStorageControlMetadataPath(testMetadataDir).
-					WithStorageControlMetadataDevice("").
-					WithStorageConfigOutputPath(filepath.Join(
-						testMetadataDir,
-						storage.ControlMetadataSubdir,
-						"engine0",
-						"daos_nvme.conf",
-					)), // NVMe conf should end up in metadata dir
-				),
+			expErr: errors.New("unexpected number of scm tiers"),
 		},
-		"control metadata has device only": {
+		"bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
 			extraConfig: func(c *Server) *Server {
-				return c.WithControlMetadata(storage.ControlMetadata{
-					DevicePath: "/dev/sdb0",
-				}).
+				return c.WithNrHugepages(4096).
 					WithEngines(defaultEngineCfg().
 						WithStorage(
 							storage.NewTierConfig().
 								WithStorageClass("ram").
 								WithScmMountPoint("/foo"),
-						))
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						),
+					)
 			},
-			expErr: FaultConfigControlMetadataNoPath,
+			// 80gib total - (8gib huge + 6gib sys + 1gib engine)
+			expRamdiskSize: 65,
+		},
+		"emulated bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4096).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						),
+					)
+			},
+			// 80gib total - (8gib huge + 6gib sys + 1gib engine)
+			expRamdiskSize: 65,
+		},
+		"no bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+			// 80gib total - (0gib huge + 6gib sys + 1gib engine)
+			expRamdiskSize: 73,
+		},
+		"md-on-ssd enabled with explicit role assignment": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4608).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			// 80gib total - (9gib huge + 6gib sys + 1gib engine)
+			expRamdiskSize: 64,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			if tt.extraConfig == nil {
-				tt.extraConfig = noopExtra
+			// Apply test case changes to basic config
+			cfg := tc.extraConfig(baseCfg(t, testFile))
+
+			val := tc.memTotBytes / humanize.KiByte
+			if val > math.MaxInt {
+				t.Fatal("int overflow")
 			}
-
-			// Apply extra config test case
-			dupe := tt.extraConfig(baseCfg())
-
 			mi := &common.MemInfo{
 				HugepageSizeKiB: 2048,
-				MemTotalKiB:     (humanize.GiByte * 80) / humanize.KiByte,
-			}
-			if tt.memTotBytes != 0 {
-				val := tt.memTotBytes / humanize.KiByte
-				if val > math.MaxInt {
-					t.Fatal("int overflow")
-				}
-				mi.MemTotalKiB = int(val)
+				MemTotalKiB:     int(val),
 			}
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, mi))
-			if tt.expErr != nil || tt.expConfig == nil {
+			CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
+			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tt.expConfig, dupe, defConfigCmpOpts...); diff != "" {
-				t.Fatalf("unexpected config after validation (-want, +got): %s", diff)
+			if len(cfg.Engines) == 0 {
+				t.Fatal("no engines in config")
+			}
+			for _, ec := range cfg.Engines {
+				scmTiers := ec.Storage.Tiers.ScmConfigs()
+				if len(scmTiers) != 1 {
+					t.Fatal("unexpected number of scm tiers")
+				}
+				if scmTiers[0].Class != storage.ClassRam {
+					t.Fatal("expected scm tier to have class RAM")
+				}
+				AssertEqual(t, tc.expRamdiskSize, int(scmTiers[0].Scm.RamdiskSize),
+					"unexpected ramdisk size set in config")
 			}
 		})
 	}
@@ -1241,16 +1391,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
-		"legacy storage; non-empty bdev_list; hugepages disabled": {
-			legacyStorage: true,
-			inTxtList: []string{
-				"    bdev_list: []", "telemetry_port: 9191",
-			},
-			outTxtList: []string{
-				"    bdev_list: [0000:80:00.0]", "disable_hugepages: true",
-			},
-			expValidateErr: FaultConfigHugepagesDisabled,
-		},
 		"legacy vmd enable": {
 			inTxt:  "disable_vmd: true",
 			outTxt: "enable_vmd: true",
@@ -1310,7 +1450,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo))
+			CmpErr(t, tt.expValidateErr, config.Validate(log))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1522,7 +1662,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defMemInfo)
+			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

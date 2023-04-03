@@ -33,8 +33,6 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
-	// memTmpfsMin is the minimum amount of memory needed for each engine's tmpfs SCM.
-	memTmpfsMin = 4 << 30 // 4GiB
 )
 
 // Server describes configuration options for DAOS control plane.
@@ -436,8 +434,26 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 	return addr, nil
 }
 
-// Calculate hugepages based on total target count if not using nvme.
-func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSize int, cfg *Server) error {
+// SetNrHugepages calculates minimum based on total target count if using nvme.
+func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) (err error) {
+	var cfgTargetCount int
+	var sysXSCount int
+	for idx, ec := range cfg.Engines {
+		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
+			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+
+		// Calculate overall target count if NVMe is enabled.
+		if ec.Storage.Tiers.HaveBdevs() {
+			cfgTargetCount += ec.TargetCount
+			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
+				// MD-on-SSD has extra sys-xstream for rdb.
+				sysXSCount++
+			}
+		}
+		log.Debug(msg)
+	}
+
 	if cfgTargetCount <= 0 {
 		return nil // no nvme, no hugepages required
 	}
@@ -447,7 +463,7 @@ func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSi
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
-	minHugepages, err := storage.CalcMinHugepages(hugepageSize, cfgTargetCount+sysXSCount)
+	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
 	if err != nil {
 		return err
 	}
@@ -471,9 +487,10 @@ func hugepageSetCount(log logging.Logger, cfgTargetCount, sysXSCount, hugepageSi
 	return nil
 }
 
-// Calculate thresholds for scm tmpfs size using nr hugepages from config and total memory
-// as reported by /proc/meminfo. Validate configured values or assign if not already set.
-func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
+// SetRamdiskSize calculates thresholds for scm tmpfs size using nr hugepages from config and
+// total memory as reported by /proc/meminfo. Validate configured values or assign if not already
+// set.
+func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err error) {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
 	}
@@ -498,29 +515,26 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 		return errors.Wrapf(err, "calculate scm ramdisk size")
 	}
 
-	if scmSize < memTmpfsMin {
+	if scmSize < storage.MemTmpfsMin {
 		// Total RAM is insufficient to meet minimum tmpfs size.
-		return storage.FaultScmTmpfsLowMem(memTmpfsMin, scmSize)
+		return storage.FaultScmTmpfsLowMem(storage.MemTmpfsMin, scmSize)
 	}
 
 	for _, ec := range cfg.Engines {
 		scs := ec.Storage.Tiers.ScmConfigs()
 		if len(scs) != 1 {
-			return errors.Errorf("unexpected number of scm configs, want 1 got %d",
+			return errors.Errorf("unexpected number of scm tiers, want 1 got %d",
 				len(scs))
 		}
 
-		// Validate any configured scm sizes.
+		// Validate or set configured scm sizes based on calculated value.
 		confSize := uint64(humanize.GiByte * scs[0].Scm.RamdiskSize)
 		if confSize == 0 {
 			// Apply calculated size as not already set.
 			scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
 		} else if confSize > scmSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			return FaultScmTmpfsOverMaxMem(confSize, scmSize, memTmpfsMin)
-		} else if confSize < memTmpfsMin {
-			// Tmpfs size requested in config is less than minimum allowed.
-			return FaultScmTmpfsUnderMinMem(confSize, scmSize, memTmpfsMin)
+			return FaultConfigScmTmpfsOverMaxMem(confSize, scmSize, storage.MemTmpfsMin)
 		}
 	}
 
@@ -528,7 +542,7 @@ func scmSetSize(log logging.Logger, mi *common.MemInfo, cfg *Server) error {
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) {
+func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -605,8 +619,6 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 		return FaultConfigBadTelemetryPort
 	}
 
-	var cfgTargetCount int
-	var sysXSCount int
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
@@ -616,24 +628,6 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 		if err := ec.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
-
-		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
-			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
-
-		// Calculate overall target count if NVMe is enabled.
-		if ec.Storage.Tiers.HaveBdevs() {
-			cfgTargetCount += ec.TargetCount
-			if ec.TargetCount == 0 {
-				return errors.Errorf("engine %d: Target count cannot be zero if "+
-					"bdevs have been assigned in config", idx)
-			}
-			if ec.Storage.Tiers.HaveBdevRoleMeta() {
-				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
-				// MD-on-SSD has extra sys-xstream for rdb.
-				sysXSCount++
-			}
-		}
-		log.Debug(msg)
 	}
 
 	if len(cfg.Engines) > 1 {
@@ -644,14 +638,6 @@ func (cfg *Server) Validate(log logging.Logger, mi *common.MemInfo) (err error) 
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
-	}
-
-	if err := hugepageSetCount(log, cfgTargetCount, sysXSCount, mi.HugepageSizeKiB, cfg); err != nil {
-		return err
-	}
-
-	if err := scmSetSize(log, mi, cfg); err != nil {
-		return err
 	}
 
 	return nil

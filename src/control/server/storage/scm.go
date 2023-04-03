@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,6 +49,8 @@ const (
 	memSysDefRsvd = 6 << 30 // 6GiB
 	// Default amount of memory reserved per-engine when calculating tmpfs capacity for SCM.
 	memEngineDefRsvd = 1 << 30 // 1GiB
+	// MemTmpfsMin is the minimum amount of memory needed for each engine's tmpfs SCM.
+	MemTmpfsMin = 4 << 30 // 4GiB
 )
 
 func (ss ScmState) String() string {
@@ -539,7 +541,7 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 	return res, nil
 }
 
-// CalcScmSi2e returns recommended SCM RAM-disk size calculated as
+// CalcScmSize returns recommended SCM RAM-disk size calculated as
 // (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
 func CalcScmSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, engCount int) (uint64, error) {
