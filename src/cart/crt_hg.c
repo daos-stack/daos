@@ -922,7 +922,7 @@ int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
 	hg_return_t hg_ret;
-	int         rc = -DER_SUCCESS;
+	int         rc = DER_SUCCESS;
 
 	crt_hg_pool_fini(hg_ctx);
 
@@ -947,11 +947,12 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		goto out;
 
 	if (hg_ctx->chc_hgcla) {
-		/* ignore below error with warn msg */
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
-		if (hg_ret != HG_SUCCESS)
+		if (hg_ret != HG_SUCCESS) {
 			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
 			       DP_HG_RC(hg_ret));
+			rc = crt_hgret_2_der(hg_ret);
+		}
 	}
 out:
 	return rc;
