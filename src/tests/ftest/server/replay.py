@@ -65,7 +65,7 @@ class ReplayTests(TestWithServers):
             self.log.info('Ranks %s failed to stop', rank_check)
             self.fail('Failed to stop ranks cleanly')
 
-    def restart_engines(self):
+    def restart_engines(self, pool):
         """Restart each server engine and verify they are running."""
         self.log_step('Restarting the engines (dmg system start)')
         self.get_dmg_command().system_start()
@@ -76,6 +76,12 @@ class ReplayTests(TestWithServers):
         if rank_check:
             self.log.info('Ranks %s failed to start', rank_check)
             self.fail('Failed to start ranks cleanly')
+
+        self.log_step('Wait for rebuild to start (dmg pool query)')
+        pool.wait_for_rebuild_to_start()
+
+        self.log_step('Wait for rebuild to end (dmg pool query)')
+        pool.wait_for_rebuild_to_end()
 
     def read_data(self, ior, container, ppn, dfuse=None):
         """Verify the data used to populate the container.
@@ -130,7 +136,7 @@ class ReplayTests(TestWithServers):
         ior = self.write_data(container, ppn)
 
         self.stop_engines()
-        self.restart_engines()
+        self.restart_engines(container.pool)
 
         self.log_step('Verifying data previously written to the container (ior)')
         self.read_data(ior, container, ppn)
@@ -170,7 +176,7 @@ class ReplayTests(TestWithServers):
         stop_dfuse(self, dfuse)
 
         self.stop_engines()
-        self.restart_engines()
+        self.restart_engines(container.pool)
 
         self.log_step('Remount dfuse')
         start_dfuse(self, dfuse)
@@ -230,7 +236,7 @@ class ReplayTests(TestWithServers):
         self.verify_snapshots(container, snapshots)
 
         self.stop_engines()
-        self.restart_engines()
+        self.restart_engines(container.pool)
 
         self.log_step('Verifying two snapshots exist after restart (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)
@@ -273,23 +279,41 @@ class ReplayTests(TestWithServers):
                 expected[item.identifier] = item.get_prop()['response']
 
         self.log_step('Modify at least one different attribute on each pool and container')
+        modify_attributes = [
+            # Pool attributes
+            {'checkpoint_freq': list(range(1, 10)),
+             'checkpoint_thresh': list(range(25, 75)),
+             'scrub-freq': list(range(604200, 605200))},
+            # Container attributes
+            {'cksum_size': list(range(16384, 32768, 1024)),
+             'dedup_threshold': list(range(3072, 5120, 64)),
+             'max_snapshot': list(range(10))},
+        ]
         for container in containers:
             for index, item in enumerate((container.pool, container)):
                 # Modify a random pool/container property value
-                modify = random.choice(expected[item.identifier])  # nosec
-                self.log.info('Modifying %s property: %s', item.identifier, modify)
-                if isinstance((int, float), modify['value']):
-                    modify['value'] *= 2
-                else:
-                    modify['value'] = 'foo'
-                if index == 0:
-                    kwargs = {'properties': join(':', modify['name'], modify['value'])}
-                else:
-                    kwargs = {'prop': modify['name'], 'value': modify['value']}
-                item.set_prop(**kwargs)
+                name = random.choice(modify_attributes[index])  # nosec
+                modified = False
+                for entry in expected:
+                    if entry['name'] == name:
+                        original = entry['value']
+                        while entry['value'] == original:
+                            entry['value'] = random.choice(modify_attributes[index][name])  # nosec
+                        self.log.info(
+                            'Modifying %s property: %s -> %s',
+                            item.identifier, entry['name'], entry['value'])
+                        if index == 0:
+                            kwargs = {'properties': join(':', entry['name'], entry['value'])}
+                        else:
+                            kwargs = {'prop': entry['name'], 'value': entry['value']}
+                        item.set_prop(**kwargs)
+                        modified = True
+                        break
+                if not modified:
+                    self.fail('Missing {} {} attribute to modify'.format(item.identifier, name))
 
         self.stop_engines()
-        self.restart_engines()
+        self.restart_engines(container.pool)
 
         self.log_step('Verify each modified pool and container attribute is still set')
         errors = []

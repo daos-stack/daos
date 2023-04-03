@@ -509,7 +509,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         }
         self._log_method("daos.container_list_snaps", kwargs)
         data = self.daos.container_list_snaps(**kwargs)
-        return data["epoch"] if "epoch" in data else []
+        return data["epochs"] if "epochs" in data else []
 
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
