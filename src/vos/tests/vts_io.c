@@ -3076,6 +3076,7 @@ int
 run_io_test(int *types, int num_types, int keys, const char *cfg)
 {
 	int rc = 0;
+	int i;
 
 	init_num_keys = VTS_IO_KEYS;
 	if (keys)
@@ -3086,7 +3087,7 @@ run_io_test(int *types, int num_types, int keys, const char *cfg)
 
 	rc = run_single_class_tests(cfg);
 
-	for (int i = 0; i < num_types; i++) {
+	for (i = 0; i < num_types; i++) {
 		init_type = types[i];
 		rc += run_oclass_tests(cfg);
 	}

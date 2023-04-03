@@ -425,6 +425,7 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
+	vos_dtx_attach(dth, false, false);
 
 	*dthp = dth;
 }
