@@ -85,7 +85,7 @@ func processFabricProvider(cfg *config.Server) {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
+	for _, rxmProv := range []string{"ofi+verbs"} {
 		if rxmProv == provider {
 			return true
 		}
