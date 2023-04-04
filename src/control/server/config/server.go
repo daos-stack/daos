@@ -46,7 +46,8 @@ type Server struct {
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
 	DisableVMD          *bool                     `yaml:"disable_vmd"`
 	EnableHotplug       bool                      `yaml:"enable_hotplug"`
-	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
+	NrHugepages         int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved   int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages    bool                      `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
@@ -274,6 +275,13 @@ func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	return cfg
 }
 
+// WithSystemRamReserved sets the amount of system memory to reserve for system (non-DAOS)
+// use. In units of GiB.
+func (cfg *Server) WithSystemRamReserved(nr int) *Server {
+	cfg.SystemRamReserved = nr
+	return cfg
+}
+
 // WithControlLogMask sets the daos_server log level.
 func (cfg *Server) WithControlLogMask(lvl common.ControlLogLevel) *Server {
 	cfg.ControlLogMask = lvl
@@ -314,15 +322,16 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // populated with defaults.
 func DefaultServer() *Server {
 	return &Server{
-		SystemName:      build.DefaultSystemName,
-		SocketDir:       defaultRuntimeDir,
-		AccessPoints:    []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
-		ControlPort:     build.DefaultControlPort,
-		TransportConfig: security.DefaultServerTransportConfig(),
-		Hyperthreads:    false,
-		Path:            defaultConfigPath,
-		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableHotplug:   false, // disabled by default
+		SystemName:        build.DefaultSystemName,
+		SocketDir:         defaultRuntimeDir,
+		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:       build.DefaultControlPort,
+		TransportConfig:   security.DefaultServerTransportConfig(),
+		Hyperthreads:      false,
+		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
+		Path:              defaultConfigPath,
+		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
+		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
@@ -435,7 +444,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // SetNrHugepages calculates minimum based on total target count if using nvme.
-func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) (err error) {
+func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
 	var cfgTargetCount int
 	var sysXSCount int
 	for idx, ec := range cfg.Engines {
@@ -490,7 +499,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) (err e
 // SetRamdiskSize calculates thresholds for scm tmpfs size using nr hugepages from config and
 // total memory as reported by /proc/meminfo. Validate configured values or assign if not already
 // set.
-func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err error) {
+func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
 	}
@@ -508,16 +517,18 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err e
 	// Calculate assigned hugepage memory in bytes.
 	memHuge := uint64(cfg.NrHugepages * mi.HugepageSizeKiB * humanize.KiByte)
 
-	// Pass 0 for sys and engine reservations to use default values.
-	// TODO: pass system reservation parameter from config
-	ramdiskSize, err := storage.CalcRamdiskSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(humanize.GiByte * cfg.SystemRamReserved)
+
+	ramdiskSize, err := storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
+		storage.DefaultEngineMemRsvd, len(cfg.Engines))
 	if err != nil {
-		return errors.Wrapf(err, "calculate scm ramdisk size")
+		return errors.Wrapf(err, "calculate ramdisk size")
 	}
 
-	if ramdiskSize < storage.MemRamdiskMin {
-		// Total RAM is insufficient to meet minimum tmpfs size.
-		return storage.FaultRamdiskLowMem(storage.MemRamdiskMin, ramdiskSize)
+	if ramdiskSize < storage.MinRamdiskMem {
+		// Total RAM is insufficient to meet minimum size.
+		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, ramdiskSize)
 	}
 
 	for _, ec := range cfg.Engines {
@@ -534,7 +545,8 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err e
 			scs[0].WithScmRamdiskSize(uint(ramdiskSize / humanize.GiByte))
 		} else if confSize > ramdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			return FaultConfigRamdiskOverMaxMem(confSize, ramdiskSize, storage.MemRamdiskMin)
+			return FaultConfigRamdiskOverMaxMem(confSize, ramdiskSize,
+				storage.MinRamdiskMem)
 		}
 	}
 

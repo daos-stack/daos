@@ -217,7 +217,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("ram").
-						WithScmRamdiskSize(storage.MemRamdiskMin).
+						WithScmRamdiskSize(storage.MinRamdiskMem).
 						WithScmMountPoint("test"),
 				),
 		},
@@ -452,7 +452,7 @@ func TestConfig_Validation(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
-					WithScmRamdiskSize(storage.MemRamdiskMin).
+					WithScmRamdiskSize(storage.MinRamdiskMem).
 					WithScmMountPoint("/foo/bar"),
 			).
 			WithTargetCount(8).

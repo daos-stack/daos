@@ -256,7 +256,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithClientEnvVars([]string{"foo=bar"}).
 		WithFabricAuthKey("foo:bar").
-		WithHyperthreads(true) // hyper-threads disabled by default
+		WithHyperthreads(true). // hyper-threads disabled by default
+		WithSystemRamReserved(5)
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -524,7 +525,7 @@ func TestServerConfig_Validation(t *testing.T) {
 				return c
 			},
 			expErr: storage.FaultConfigRamdiskUnderMinMem(humanize.GiByte*3,
-				storage.MemRamdiskMin),
+				storage.MinRamdiskMem),
 		},
 		"control metadata multi-engine": {
 			extraConfig: func(c *Server) *Server {
@@ -966,23 +967,23 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 	}{
 		"out of range scm_size; high": {
 			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem
-			// 33 huge mem + 6 sys rsv + 2 engine rsv = 41 gib reserved mem
-			// 60 total - 41 reserved = 19 for tmpfs (9.5 gib per engine)
+			// 33 huge mem + 5 sys rsv + 2 engine rsv = 40 gib reserved mem
+			// 60 total - 40 reserved = 20 for tmpfs (10 gib per engine)
 			memTotBytes: humanize.GiByte * 60,
 			extraConfig: func(c *Server) *Server {
-				// 9gib is max remainder after reserved, 10gib is too high
-				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 10
+				// 10gib is max remainder after reserved, 11gib is too high
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 11
 				return c.WithNrHugepages(16896)
 			},
-			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
+			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*10, 0),
 		},
 		"low mem": {
-			// 47 total - 41 reserved = 6 for tmpfs (3 gib per engine - too low)
-			memTotBytes: humanize.GiByte * 47,
+			// 46 total - 40 reserved = 6 for tmpfs (3 gib per engine - too low)
+			memTotBytes: humanize.GiByte * 46,
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expErr: storage.FaultRamdiskLowMem(storage.MemRamdiskMin, humanize.GiByte*3),
+			expErr: storage.FaultRamdiskLowMem(storage.MinRamdiskMem, humanize.GiByte*3),
 		},
 		"custom value set": {
 			memTotBytes: humanize.GiByte * 60,
@@ -999,7 +1000,17 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expRamdiskSize: 9,
+			expRamdiskSize: 10,
+		},
+		"custom system_ram_reserved value set": {
+			// 33 huge mem + 2 sys rsv + 2 engine rsv = 37 gib reserved mem
+			// 60 total - 37 reserved = 23 for tmpfs (11 gib per engine after rounding)
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				c.SystemRamReserved = 2
+				return c.WithNrHugepages(16896)
+			},
+			expRamdiskSize: 11,
 		},
 		"no scm configured on second engine": {
 			memTotBytes: humanize.GiByte * 80,
@@ -1040,8 +1051,8 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 						),
 					)
 			},
-			// 80gib total - (8gib huge + 6gib sys + 1gib engine)
-			expRamdiskSize: 65,
+			// 80gib total - (8gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 66,
 		},
 		"emulated bdevs configured": {
 			memTotBytes: humanize.GiByte * 80,
@@ -1059,8 +1070,8 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 						),
 					)
 			},
-			// 80gib total - (8gib huge + 6gib sys + 1gib engine)
-			expRamdiskSize: 65,
+			// 80gib total - (8gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 66,
 		},
 		"no bdevs configured": {
 			memTotBytes: humanize.GiByte * 80,
@@ -1073,8 +1084,8 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 					),
 				)
 			},
-			// 80gib total - (0gib huge + 6gib sys + 1gib engine)
-			expRamdiskSize: 73,
+			// 80gib total - (0gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 74,
 		},
 		"md-on-ssd enabled with explicit role assignment": {
 			memTotBytes: humanize.GiByte * 80,
@@ -1095,8 +1106,8 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 							),
 					)
 			},
-			// 80gib total - (9gib huge + 6gib sys + 1gib engine)
-			expRamdiskSize: 64,
+			// 80gib total - (9gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 65,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1415,6 +1426,17 @@ func TestServerConfig_Parsing(t *testing.T) {
 			inTxt:       "disable_vfio: true",
 			outTxt:      "enable_vmd: true",
 			expParseErr: FaultConfigVMDSettingDuplicate,
+		},
+		"check default system_ram_reserved": {
+			inTxt:  "system_ram_reserved: 5",
+			outTxt: "",
+			expCheck: func(c *Server) error {
+				if c.SystemRamReserved != storage.DefaultSysMemRsvd/humanize.GiByte {
+					return errors.Errorf("unexpected system_ram_reserved, want %d got %d",
+						storage.DefaultSysMemRsvd/humanize.GiByte, c.SystemRamReserved)
+				}
+				return nil
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

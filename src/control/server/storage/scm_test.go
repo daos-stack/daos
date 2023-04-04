@@ -20,8 +20,8 @@ func Test_CalcRamdiskSize(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memTotal uint64
 		memHuge  uint64
-		rsvSys   uint64
-		rsvEng   uint64
+		memSys   uint64
+		memEng   uint64
 		engCount int
 		expSize  uint64
 		expErr   error
@@ -36,23 +36,29 @@ func Test_CalcRamdiskSize(t *testing.T) {
 		"default values; low mem": {
 			memTotal: humanize.GiByte * 18,
 			memHuge:  humanize.GiByte * 12,
+			memSys:   DefaultSysMemRsvd,
+			memEng:   DefaultEngineMemRsvd,
 			engCount: 1,
 			expErr:   errors.New("insufficient ram"),
 		},
 		"default values; high mem": {
 			memTotal: humanize.GiByte * 23,
 			memHuge:  humanize.GiByte * 12,
+			memSys:   DefaultSysMemRsvd,
+			memEng:   DefaultEngineMemRsvd,
 			engCount: 1,
 			expSize:  humanize.GiByte * 4,
 		},
 		"custom values; low sys reservation": {
-			rsvSys:   humanize.GiByte * 4,
+			memSys:   humanize.GiByte * 4,
+			memEng:   DefaultEngineMemRsvd,
 			memTotal: humanize.GiByte * 18,
 			memHuge:  humanize.GiByte * 12,
 			engCount: 2,
 		},
 		"custom values; high eng reservation": {
-			rsvEng:   humanize.GiByte * 3,
+			memSys:   DefaultSysMemRsvd,
+			memEng:   humanize.GiByte * 3,
 			memTotal: humanize.GiByte * 23,
 			memHuge:  humanize.GiByte * 12,
 			engCount: 2,
@@ -63,8 +69,8 @@ func Test_CalcRamdiskSize(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotSize, gotErr := CalcRamdiskSize(log, tc.memTotal, tc.memHuge, tc.rsvSys,
-				tc.rsvEng, tc.engCount)
+			gotSize, gotErr := CalcRamdiskSize(log, tc.memTotal, tc.memHuge, tc.memSys,
+				tc.memEng, tc.engCount)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

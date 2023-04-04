@@ -202,8 +202,8 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
-## Optional parameter that should only be set if overriding the automatically
-## calculated value is necessary.
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary.
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. Note that each target requires 1 GiB of hugepage space.
@@ -224,6 +224,17 @@
 #
 ## default: false
 #disable_hugepages: false
+#
+#
+## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
+## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
+## reserved when calculating RAM-disk sizes for all engines.
+#
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary.
+#
+## default: 6
+#system_ram_reserved: 5
 #
 #
 ## Set specific debug mask for daos_server (control plane).

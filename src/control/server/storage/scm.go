@@ -45,12 +45,14 @@ const (
 	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
 	ScmUnknownMode
 
-	// Default amount of memory reserved for system when calculating tmpfs capacity for SCM.
-	memSysDefRsvd = 6 << 30 // 6GiB
-	// Default amount of memory reserved per-engine when calculating tmpfs capacity for SCM.
-	memEngineDefRsvd = 1 << 30 // 1GiB
-	// MemRamdiskMin is the minimum amount of memory needed for each engine's tmpfs RAMp-disk.
-	MemRamdiskMin = 4 << 30 // 4GiB
+	// DefaultSysMemRsvd is the default amount of memory reserved for system when calculating
+	// RAM-disk size for DAOS I/O engine.
+	DefaultSysMemRsvd = humanize.GiByte * 6
+	// DefaultEngineMemRsvd is the default amount of memory reserved per-engine when
+	// calculating RAM-disk size for DAOS I/O engine.
+	DefaultEngineMemRsvd = humanize.GiByte * 1
+	// MinRamdiskMem is the minimum amount of memory needed for each engine's tmpfs RAM-disk.
+	MinRamdiskMem = humanize.GiByte * 4
 )
 
 func (ss ScmState) String() string {
@@ -544,21 +546,12 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 // CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
 // (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
-func CalcRamdiskSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, engCount int) (uint64, error) {
+func CalcRamdiskSize(log logging.Logger, memTot, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
 	if memTot == 0 {
 		return 0, errors.New("requires nonzero total mem")
 	}
 	if engCount == 0 {
 		return 0, errors.New("requires nonzero nr engines")
-	}
-
-	var memSys uint64 = memSysDefRsvd
-	if rsvSys > 0 {
-		memSys = rsvSys
-	}
-	var memEng uint64 = memEngineDefRsvd
-	if rsvEng > 0 {
-		memEng = rsvEng
 	}
 
 	msgStats := fmt.Sprintf("mem total: %s (%d), mem hugepage: %s, nr engines: %d, "+
