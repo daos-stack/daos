@@ -304,7 +304,7 @@ class DaosAgentManager(SubprocessManager):
 
         """
         cmd = DaosAgentCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.sudo = True
         cmd.debug.value = False
         cmd.config.value = get_default_config_file("agent")
         self.log.info("Support collect-log on clients: %s", str(cmd))
