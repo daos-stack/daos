@@ -948,11 +948,9 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 
 	if (hg_ctx->chc_hgcla) {
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
-		if (hg_ret != HG_SUCCESS) {
+		if (hg_ret != HG_SUCCESS)
 			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
 			       DP_HG_RC(hg_ret));
-			rc = crt_hgret_2_der(hg_ret);
-		}
 	}
 out:
 	return rc;
