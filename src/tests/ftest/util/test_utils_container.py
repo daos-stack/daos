@@ -498,17 +498,10 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         Returns:
             list: a list of snapshot epochs defined for this container
         """
-        self.log.info("Listing snapshots for container: %s", str(self))
         if not self.daos:
-            raise DaosTestError("Undefined daos command")
-
-        # destroy snapshot using daos utility
-        kwargs = {
-            "pool": self.pool.identifier,
-            "cont": self.identifier,
-        }
-        self._log_method("daos.container_list_snaps", kwargs)
-        data = self.daos.container_list_snaps(**kwargs)
+            raise DaosTestError(
+                "Undefined daos command for listing snapshots for container {}".format(self))
+        data = self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
         return data["epochs"] if "epochs" in data else []
 
     @fail_on(DaosApiError)

@@ -29,11 +29,10 @@ class ReplayTests(TestWithServers):
         Returns:
             TestContainer: the created container with a reference to the created pool
         """
-        self.log_step(join(' - ', 'Creating a pool (dmg pool create)', details))
+        self.log_step(join(' ', 'Creating a pool (dmg pool create)', '-', details))
         pool = add_pool(self)
-        self.log_step(join(' - ', 'Creating a container (daos container create)', details))
-        container = self.get_container(pool)
-        return container
+        self.log_step(join(' ', 'Creating a container (daos container create)', '-', details))
+        return self.get_container(pool)
 
     def write_data(self, container, ppn, dfuse=None):
         """Write data to the container/dfuse using ior.
@@ -65,7 +64,7 @@ class ReplayTests(TestWithServers):
             self.log.info('Ranks %s failed to stop', rank_check)
             self.fail('Failed to stop ranks cleanly')
 
-    def restart_engines(self, pool):
+    def restart_engines(self):
         """Restart each server engine and verify they are running."""
         self.log_step('Restarting the engines (dmg system start)')
         self.get_dmg_command().system_start()
@@ -212,19 +211,18 @@ class ReplayTests(TestWithServers):
 
         snapshots = []
         for index in range(1, 4):
-            step = join(' of ', index, 3)
-            self.log_step(join(' - ', 'Write data to the container (ior)', step))
+            step = join(' ', index, 'of', 3)
+            self.log_step(join(' ', 'Write data to the container (ior)', '-', step))
             self.write_data(container, ppn)
 
-            self.log_step(join(' - ', 'Creating a snapshot (daos container create-snap)', step))
+            self.log_step(join(' ', 'Creating a snapshot (daos container create-snap)', '-', step))
             snapshots.append(container.create_snap()["epoch"])
 
         self.log_step('Verifying all three snapshots exist (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)
 
         self.log_step('Removing the second snapshot (daos container destroy-snap)')
-        container.destroy_snap(epc=snapshots[1])
-        snapshots.pop(1)
+        container.destroy_snap(epc=snapshots.pop(1))
 
         self.log_step('Verifying two snapshots exist (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)
@@ -236,9 +234,8 @@ class ReplayTests(TestWithServers):
         self.verify_snapshots(container, snapshots)
 
         self.log_step('Remove the remaining snapshots (daos container destroy-snap)')
-        for snapshot in snapshots:
-            container.destroy_snap(epc=snapshot)
-        snapshots.clear()
+        while snapshots:
+            container.destroy_snap(epc=snapshots.pop(0))
 
         self.log_step('Verifying no snapshots exist (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)
@@ -264,7 +261,7 @@ class ReplayTests(TestWithServers):
         """
         containers = []
         for index in range(1, 4):
-            containers.append(self.create_container(join(' of ', index, 3)))
+            containers.append(self.create_container(join(' ', index, 'of', 3)))
 
         self.log_step('List the current pool and container attributes')
         expected = {}
