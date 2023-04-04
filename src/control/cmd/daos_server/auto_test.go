@@ -10,6 +10,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dustin/go-humanize"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -17,11 +23,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/dustin/go-humanize"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 )
+
+var defMemInfo = common.MemInfo{HugepageSizeKiB: 2048}
 
 func TestDaosServer_Auto_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
@@ -168,8 +172,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf: &control.HostFabric{},
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+				MemInfo:       &defMemInfo,
 			},
-			expErr: errors.New("requires nonzero"),
+			expErr: errors.New("zero numa nodes reported"),
 		},
 		"fetching host storage fails": {
 			hf: &control.HostFabric{
@@ -201,7 +206,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("requires nonzero"),
+			expErr: errors.New("nil HostStorage.MemInfo"),
 		},
 		"single engine; dcpm on numa 1": {
 			hf: &control.HostFabric{
@@ -216,7 +221,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -244,7 +249,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -272,7 +277,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo:     control.MemInfo{HugepageSizeKiB: 2048},
+				MemInfo:     &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
@@ -291,7 +296,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -315,7 +320,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugepageSizeKiB: 2048},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -339,7 +344,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{
+				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
 					MemTotalKiB:     (humanize.GiByte * 12) / humanize.KiByte,
 				},
@@ -366,7 +371,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{
+				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
 					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
 					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.

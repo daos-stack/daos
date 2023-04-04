@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,45 +54,67 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, miFn common.GetMemInfoFn) *StorageControlService {
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, ecs []*engine.Config) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(ecs) > 0 {
+		topCfg.ControlMetadata = ecs[0].Storage.ControlMetadata
+	}
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
 	}
 
 	return &StorageControlService{
-		log:             l,
-		storage:         sp,
+		log:             log,
 		instanceStorage: instanceStorage,
-		getMemInfo:      miFn,
+		storage:         storage.DefaultProvider(log, 0, topCfg),
+		getMemInfo:      common.GetMemInfo,
 	}
 }
 
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	topCfg := &storage.Config{
-		Tiers: nil,
+// MockMemInfo returns a mock MemInfo result.
+func MockMemInfo() *common.MemInfo {
+	return &common.MemInfo{
+		HugepagesTotal:  1024,
+		HugepagesFree:   512,
+		HugepagesRsvd:   64,
+		HugepagesSurp:   32,
+		HugepageSizeKiB: 2048,
+		MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
+		MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
+		MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
 	}
-	if len(engineCfgs) > 0 {
-		topCfg.ControlMetadata = engineCfgs[0].Storage.ControlMetadata
-	}
-	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, topCfg),
-		common.GetMemInfo,
-	)
 }
 
 // NewMockStorageControlService returns a StorageControlService with a mocked
 // storage provider consisting of the given sys, scm and bdev providers.
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.MockProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}, sys, scm, bdev, nil),
-		func() (*common.MemInfo, error) {
-			return nil, nil
-		},
-	)
+func NewMockStorageControlService(log logging.Logger, ecs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider, getMemInfo common.GetMemInfoFn) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(ecs) > 0 {
+		topCfg.ControlMetadata = ecs[0].Storage.ControlMetadata
+	}
+	instanceStorage := make(map[uint32]*storage.Config)
+	for i, c := range ecs {
+		instanceStorage[uint32(i)] = &c.Storage
+	}
+
+	if getMemInfo == nil {
+		getMemInfo = func() (*common.MemInfo, error) {
+			return MockMemInfo(), nil
+		}
+	}
+
+	return &StorageControlService{
+		log:             log,
+		instanceStorage: instanceStorage,
+		storage:         storage.MockProvider(log, 0, topCfg, sys, scm, bdev, nil),
+		getMemInfo:      getMemInfo,
+	}
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {

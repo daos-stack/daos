@@ -143,7 +143,7 @@ func TestAuto_confGen(t *testing.T) {
 	// Total mem to meet requirements 34GiB hugeMem, 1GiB per engine rsvd, 6GiB sys rsvd,
 	// 5GiB per engine for tmpfs.
 	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
-	storRespHighMem.MemInfo.MemTotal = (humanize.GiByte * (34 + 2 + 6 + 10)) / humanize.KiByte
+	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 2 + 6 + 10)) / humanize.KiByte
 	storHostRespHighMem := &control.HostResponse{
 		Addr:    "host1",
 		Message: storRespHighMem,

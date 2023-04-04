@@ -222,7 +222,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.prepCmd == nil {
 				tc.prepCmd = &prepareNVMeCmd{}
@@ -448,7 +448,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.resetCmd == nil {
 				tc.resetCmd = &resetNVMeCmd{}
@@ -696,7 +696,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.scanCmd == nil {
 				tc.scanCmd = &scanNVMeCmd{}

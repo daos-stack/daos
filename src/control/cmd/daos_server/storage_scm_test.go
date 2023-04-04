@@ -237,7 +237,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			}
 			msb := scm.NewMockBackend(smbc)
 			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			cmd := prepareSCMCmd{
 				Force: !tc.noForce,
@@ -438,7 +438,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			}
 			msb := scm.NewMockBackend(smbc)
 			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			cmd := resetSCMCmd{
 				Force: !tc.noForce,
@@ -538,7 +538,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			mbp := bdev.NewProvider(log, nil)
 			msb := scm.NewMockBackend(tc.smbc)
 			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			cmd := scanSCMCmd{}
 			cmd.LogCmd = cmdutil.LogCmd{

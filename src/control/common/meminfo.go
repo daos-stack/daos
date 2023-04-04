@@ -8,11 +8,13 @@ package common
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
 
@@ -20,14 +22,25 @@ type GetMemInfoFn func() (*MemInfo, error)
 
 // MemInfo contains information about system hugepages.
 type MemInfo struct {
-	HugepagesTotal  int `json:"hugepages_total"`
-	HugepagesFree   int `json:"hugepages_free"`
-	HugepagesRsvd   int `json:"hugepages_rsvd"`
-	HugepagesSurp   int `json:"hugepages_surp"`
+	HugepagesTotal  int `json:"hugepages_total" hash:"ignore"`
+	HugepagesFree   int `json:"hugepages_free" hash:"ignore"`
+	HugepagesRsvd   int `json:"hugepages_reserved" hash:"ignore"`
+	HugepagesSurp   int `json:"hugepages_surplus" hash:"ignore"`
 	HugepageSizeKiB int `json:"hugepage_size_kb"`
-	MemTotalKiB     int `json:"mem_total"`
-	MemFreeKiB      int `json:"mem_free"`
-	MemAvailableKiB int `json:"mem_available"`
+	MemTotalKiB     int `json:"mem_total_kb"`
+	MemFreeKiB      int `json:"mem_free_kb" hash:"ignore"`
+	MemAvailableKiB int `json:"mem_available_kb" hash:"ignore"`
+}
+
+func (mi *MemInfo) Summary() string {
+	if mi == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
+		humanize.IBytes(uint64(mi.HugepageSizeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemTotalKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemFreeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)))
 }
 
 func (mi *MemInfo) HugepagesTotalMB() int {

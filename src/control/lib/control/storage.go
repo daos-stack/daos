@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dustin/go-humanize"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -30,27 +29,6 @@ import (
 
 var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
-}
-
-// MemInfo is a cut-down version of the memory information retrieved from the storage scan.
-// For the purposes of the storage scan, we only care about the system hugepage size and memory
-// available.
-type MemInfo struct {
-	HugepageSizeKiB int `json:"hugepage_size_kb"`
-	MemTotalKiB     int `json:"mem_total" hash:"ignore"`
-	MemFreeKiB      int `json:"mem_free" hash:"ignore"`
-	MemAvailableKiB int `json:"mem_available" hash:"ignore"`
-}
-
-func (mi *MemInfo) Summary() string {
-	if mi == nil {
-		return "<nil>"
-	}
-	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
-		humanize.IBytes(uint64(mi.HugepageSizeKiB*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemTotalKiB*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemFreeKiB*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)))
 }
 
 // HostStorage describes a host storage configuration which
@@ -81,7 +59,7 @@ type HostStorage struct {
 	RebootRequired bool `json:"reboot_required"`
 
 	// MemInfo contains information about the host's hugepages.
-	MemInfo MemInfo `json:"mem_info"`
+	MemInfo *common.MemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into

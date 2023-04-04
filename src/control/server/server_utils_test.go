@@ -696,7 +696,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
-					mbp),
+					mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -811,7 +811,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp,
 					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
-					mbp),
+					mbp, nil),
 				srvCfg: cfg,
 			}
 

@@ -459,6 +459,9 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 	if hs == nil {
 		return nil, errors.New("nil HostStorage")
 	}
+	if hs.MemInfo == nil {
+		return nil, errors.New("nil HostStorage.MemInfo")
+	}
 
 	sd := storageDetails{
 		NumaSCMs: make(numaSCMsMap),
