@@ -58,20 +58,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     """
     dmg.hostlist = server
     kwargs['uuid'] = uuid
-    # Use this when DmgCommand.storage_set_faulty returns json output natively
-    # response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
-
-    # Remove this when DmgCommand.storage_set_faulty returns json output natively
-    dmg_json = dmg.json.value
-    dmg.json.value = True
-    try:
-        res = dmg.storage_set_faulty(**kwargs)
-    except CommandFailure as error:
-        test.fail('dmg.storage_set_faulty({}) failed: {}'.format(dict_to_str(kwargs), error))
-    finally:
-        dmg.json.value = dmg_json
-    response = get_json_response(test, json.loads(res.stdout_text), None,
-                                 'dmg.storage_set_faulty({})'.format(dict_to_str(kwargs)))
+    response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, test=test, dmg=dmg, server=server, uuid=uuid)

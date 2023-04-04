@@ -5,7 +5,7 @@
 """
 import time
 
-from dmg_utils import get_storage_query_device_uuids
+from dmg_utils import get_storage_query_device_uuids, get_dmg_response
 from exception_utils import CommandFailure
 from nvme_utils import set_device_faulty
 from osa_utils import OSAUtils
