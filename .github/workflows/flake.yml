@@ -28,7 +28,7 @@ jobs:
         with:
           # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
           # should be using it now.
-          ignore: 'F841,W503,E402,F841'
+          ignore: 'W503'
           exclude: 'src/control/vendor,src/client/pydaos/raw,src/vos/storage_estimator'
           max-line-length: '100'
       - name: flake8 Lint
@@ -36,7 +36,7 @@ jobs:
         with:
           # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
           # should be using it now.
-          ignore: 'F841,W503,E402,F841,E261'
+          ignore: 'F841,W503,E261'
           exclude: 'src/control/vendor,src/client/pydaos/raw'
           # Max line length is 100, and pylint will warn about lines longer than this, but some
           # existing lines are longer so allow them here.

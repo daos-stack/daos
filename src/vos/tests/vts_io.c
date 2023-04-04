@@ -1851,8 +1851,6 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	sleep(1); /* See DAOS-13044 */
-
 	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_256M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 
@@ -2978,17 +2976,8 @@ io_allocbuf_failure(void **state)
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
-static const struct CMUnitTest io_tests[] = {
-    {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
-    {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
-    {"VOS203: Simple update/fetch/verify test", io_simple_one_key, NULL, NULL},
-    {"VOS204: Simple Punch test", io_simple_punch, NULL, NULL},
-    {"VOS205: Simple near-epoch retrieval test", io_simple_near_epoch, NULL, NULL},
-    {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
-    {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
-    {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
-    {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
     {"VOS240.1: KV Iter tests with anchor (for dkey)", io_iter_test_with_anchor, NULL, NULL},
     {"VOS240.7: key2anchor iterator test", io_iter_test_key2anchor, NULL, NULL},
@@ -2997,6 +2986,17 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS240.5 KV range iteration tests (for recx)", io_obj_forward_recx_iter_test, NULL, NULL},
     {"VOS240.6 KV reverse range iteration tests (for recx)", io_obj_reverse_recx_iter_test, NULL,
      NULL},
+};
+
+static const struct CMUnitTest io_tests[] = {
+    {"VOS203: Simple update/fetch/verify test", io_simple_one_key, NULL, NULL},
+    {"VOS204: Simple Punch test", io_simple_punch, NULL, NULL},
+    {"VOS205: Simple near-epoch retrieval test", io_simple_near_epoch, NULL, NULL},
+    {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
+    {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
+    {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+    {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
+    {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
     {"VOS245.0: Object iter test (for oid)", oid_iter_test, oid_iter_test_setup, NULL},
     {"VOS245.1: Object iter test with anchor (for oid)", oid_iter_test_with_anchor,
      oid_iter_test_setup, NULL},
@@ -3015,47 +3015,83 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 static const struct CMUnitTest int_tests[] = {
-	{ "VOS300.1: Test key query punch with subsequent update",
-		io_query_key_punch_update, NULL, NULL},
-	{ "VOS300.2: Key query test", io_query_key, NULL, NULL},
-	{ "VOS300.3: Key query negative test",
-		io_query_key_negative, NULL, NULL},
-	{ "VOS300.4: Return error on DMA buffer allocation failure",
-		io_allocbuf_failure, NULL, NULL},
+    {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
+    {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
+    {"VOS300.1: Test key query punch with subsequent update", io_query_key_punch_update, NULL,
+     NULL},
+    {"VOS300.2: Key query test", io_query_key, NULL, NULL},
+    {"VOS300.3: Key query negative test", io_query_key_negative, NULL, NULL},
+    {"VOS300.4: Return error on DMA buffer allocation failure", io_allocbuf_failure, NULL, NULL},
 };
 
-int
-run_io_test(enum daos_otype_t type, int keys, bool nest_iterators, const char *cfg)
+static int
+run_oclass_tests(const char *cfg)
 {
-	char buf[VTS_BUF_SIZE];
+	char        test_name[DTS_CFG_MAX];
 	const char *akey = "hashed";
 	const char *dkey = "hashed";
-	vts_nest_iterators = nest_iterators;
+	int         rc;
+
+	vts_nest_iterators = false;
+
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_UINT64))
+		dkey = "uint";
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_LEXICAL))
+		dkey = "lex";
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_UINT64))
+		akey = "uint";
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_LEXICAL))
+		akey = "lex";
+
+	dts_create_config(test_name, "IO_oclass tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
+	D_PRINT("Running %s\n", test_name);
+
+	rc = cmocka_run_group_tests_name(test_name, io_tests, setup_io, teardown_io);
+
+	dts_create_config(test_name, "IO_iterator tests (nested=false dkey=%-6s akey=%s) %s", dkey,
+			  akey, cfg);
+
+	rc += cmocka_run_group_tests_name(test_name, iterator_tests, setup_io, teardown_io);
+
+	dts_create_config(test_name, "IO_iterator tests (nested=true dkey=%-6s akey=%s) %s", dkey,
+			  akey, cfg);
+
+	vts_nest_iterators = true;
+
+	rc += cmocka_run_group_tests_name(test_name, iterator_tests, setup_io, teardown_io);
+
+	return rc;
+}
+
+static int
+run_single_class_tests(const char *cfg)
+{
+	char test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "IO single oclass tests %s", cfg);
+	D_PRINT("Running %s\n", test_name);
+
+	return cmocka_run_group_tests_name(test_name, int_tests, setup_io, teardown_io);
+}
+
+int
+run_io_test(int *types, int num_types, int keys, const char *cfg)
+{
 	int rc = 0;
 
 	init_num_keys = VTS_IO_KEYS;
-
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_UINT64))
-		dkey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_LEXICAL))
-		dkey = "lex";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_UINT64))
-		akey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_LEXICAL))
-		akey = "lex";
-
-	snprintf(buf, VTS_BUF_SIZE, "IO# tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
-	init_type = type;
 	if (keys)
 		init_num_keys = keys;
-	D_PRINT("Running %s\n", buf);
-	if (type == DAOS_OT_MULTI_UINT64) {
-		buf[2] = '2';
-		rc = cmocka_run_group_tests_name(buf, int_tests, setup_io,
-						 teardown_io);
-	}
-	buf[2] = '1';
 
-	return rc + cmocka_run_group_tests_name(buf, io_tests,
-						setup_io, teardown_io);
+	/** key query tests require integer classes, other general tests don't care */
+	init_type = DAOS_OT_MULTI_UINT64;
+
+	rc = run_single_class_tests(cfg);
+
+	for (int i = 0; i < num_types; i++) {
+		init_type = types[i];
+		rc += run_oclass_tests(cfg);
+	}
+
+	return rc;
 }

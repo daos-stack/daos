@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,8 +130,8 @@ int run_aggregate_tests(bool slow, const char *cfg);
 int run_dtx_tests(const char *cfg);
 int run_gc_tests(const char *cfg);
 int run_pm_tests(const char *cfg);
-int run_io_test(enum daos_otype_t type, int keys, bool nest_iterators,
-		const char *cfg);
+int
+    run_io_test(int *types, int num_types, int keys, const char *cfg);
 int run_ts_tests(const char *cfg);
 
 int run_ilog_tests(const char *cfg);
