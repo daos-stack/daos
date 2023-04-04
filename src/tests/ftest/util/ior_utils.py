@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,6 +13,30 @@ from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
 from general_utils import get_log_file
+
+
+def get_ior(test, manager, log, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
+    """Get a Ior object.
+
+    Args:
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        log (str): log file.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Returns:
+        Ior: the Ior object requested
+    """
+    ior = Ior(test, manager, log, hosts, path, slots, namespace)
+    if ior_params:
+        for name, value in ior_params.items():
+            ior.update(name, value)
+    return ior
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
@@ -53,13 +77,7 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         CmdResult: result of the ior command
 
     """
-    ior = Ior(test, manager, log, hosts, path, slots, namespace)
-    if ior_params:
-        for name, value in ior_params.items():
-            ior_attr = getattr(ior.command, name, None)
-            if ior_attr:
-                if isinstance(ior_attr, BasicParameter):
-                    ior_attr.update(value, ".".join(["ior", name]))
+    ior = get_ior(test, manager, log, hosts, path, slots, namespace, ior_params)
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning)
@@ -453,8 +471,9 @@ class Ior:
         self.manager.assign_hosts(hosts, path, slots)
         self.manager.job = IorCommand(namespace)
         self.manager.job.get_params(test)
-        self.manager.output_check = "combined"
+        self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
+        self.label_generator = test.label_generator
         self.env = self.command.get_default_env(str(self.manager), log)
 
     @property
@@ -466,6 +485,18 @@ class Ior:
 
         """
         return self.manager.job
+
+    def update(self, name, value):
+        """Update a IorCommand BasicParameter with a new value.
+
+        Args:
+            name (str): name of the IorCommand BasicParameter to update
+            value (str): value to assign to the IorCommand BasicParameter
+        """
+        param = getattr(self.command, name, None)
+        if param:
+            if isinstance(param, BasicParameter):
+                param.update(value, ".".join([self.command.command, name]))
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False):
@@ -498,7 +529,7 @@ class Ior:
         result = None
         error_message = None
 
-        self.command.set_daos_params(group, pool, container.uuid)
+        self.command.set_daos_params(group, pool, container.identifier)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
@@ -515,11 +546,20 @@ class Ior:
             else:
                 raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
 
+        if not self.manager.job.test_file.value:
+            # Provide a default test_file if not specified
+            if dfuse and (self.manager.job.api.value == "POSIX" or plugin_path):
+                test_file = self.manager.job.test_file.value or 'testfile'
+                self.manager.job.test_file.update(os.path.join(dfuse.mount_dir.value, test_file))
+            elif self.manager.job.api.value == "DFS":
+                self.manager.job.test_file.update(
+                    os.path.join(os.sep, self.label_generator.get_label("testfile")))
+
         if ppn is None:
             self.manager.assign_processes(processes)
         else:
-            self.manager.ppn.update(ppn, "{}.ppn".format(self.manager.command))
-            self.manager.processes.update(None, "{}.np".format(self.manager.command))
+            self.manager.ppn.update(ppn, ".".join([self.manager.command, "ppn"]))
+            self.manager.processes.update(None, ".".join([self.manager.command, "np"]))
 
         self.manager.assign_environment(self.env)
 

@@ -112,6 +112,7 @@ struct bio_meta_context {
 };
 
 struct meta_fmt_info {
+	uuid_t		fi_pool_id;		/* Pool UUID */
 	uuid_t		fi_meta_devid;		/* Meta SSD device ID */
 	uuid_t		fi_wal_devid;		/* WAL SSD device ID */
 	uuid_t		fi_data_devid;		/* Data SSD device ID */

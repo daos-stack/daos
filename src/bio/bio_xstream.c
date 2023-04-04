@@ -810,6 +810,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	struct bio_bdev			*d_bdev, *old_dev;
 	struct spdk_blob_store		*bs = NULL;
 	struct spdk_bs_type		 bstype;
+	struct spdk_bdev		*bdev;
 	uuid_t				 bs_uuid;
 	int				 rc;
 	bool				 new_bs = false;
@@ -842,6 +843,10 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	if (d_bdev->bb_name == NULL) {
 		D_GOTO(error, rc = -DER_NOMEM);
 	}
+
+	bdev = spdk_bdev_get_by_name(d_bdev->bb_name);
+	D_ASSERT(bdev != NULL);
+	d_bdev->bb_unmap_supported = spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_UNMAP);
 
 	/*
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
