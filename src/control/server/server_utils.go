@@ -216,7 +216,7 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 		}
 
 		for i, cfgIface := range cfgIfaces {
-			fi, err := fis.GetInterface(cfgIface)
+			fi, err := fis.GetInterfaceOnNetDevice(cfgIface, engine.Fabric.Provider)
 			if err != nil {
 				return nil, err
 			}

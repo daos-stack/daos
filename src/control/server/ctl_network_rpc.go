@@ -39,7 +39,7 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		return nil, err
 	}
 
-	result, err := c.fabric.Scan(ctx)
+	result, err := c.fabric.Scan(ctx, provider)
 	if err != nil {
 		return nil, err
 	}
