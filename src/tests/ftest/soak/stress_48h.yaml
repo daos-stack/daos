@@ -72,7 +72,10 @@ container_reserved:
 soak_stress:
   name: soak_stress
   # stress test timeout in hours
-  test_timeout: 48
+  test_timeout:
+    test_soak_stress_48h: 48
+    test_soak_stress_24h: 24
+    test_soak_stress_12h: 12
   joblist:
     - fio_stress
     #- daos_racer

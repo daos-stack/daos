@@ -414,7 +414,7 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
-                            self.fail("Error canceling Job {}".format(job))
+                            self.fail("Error cancelling Job {}".format(job))
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
@@ -542,10 +542,9 @@ class SoakTestBase(TestWithServers):
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
-        test_to = self.params.get("test_timeout", test_param + "*")
+        test_to = self.params.get("test_timeout", os.path.join(test_param, self.test_id, "*"))
         self.test_name = self.params.get("name", test_param + "*")
-        single_test_pool = self.params.get(
-            "single_test_pool", test_param + "*", True)
+        single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
