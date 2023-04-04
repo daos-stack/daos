@@ -15,11 +15,10 @@ from command_utils_base import \
     CommonConfig, CommandWithParameters
 from exception_utils import CommandFailure
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file, run_pcmd
+from general_utils import get_log_file, run_pcmd, get_default_config_file
 from agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
 from run_utils import run_remote
-from general_utils import get_default_config_file
 
 
 def include_local_host(hosts):
@@ -180,17 +179,17 @@ class DaosAgentCommand(YamlCommand):
         return self._get_result()
 
     def support_collect_log(self, **kwargs):
-        """Write CaRT attachinfo file.
+        """support collect-log command run.
 
         Args:
-            output (str): File to which attachinfo dump should be written.
+            kwargs (dic): option to pass to support collect-log command
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
 
         Raises:
-            CommandFailure: if the daos_agent dump-attachinfo command fails.
+            CommandFailure: if the daos_agent support collect-log command fails.
 
         """
         self.set_command(("support", "collect-log"), **kwargs)
@@ -293,9 +292,7 @@ class DaosAgentManager(SubprocessManager):
             target (str, optional): Target Folder location to copy logs
             archive (bool, optional): Archive the log/config files
             extra_logs_dir (str, optional): Collect the Logs from given custom directory
-            raise_exception (bool, optional): whether or not to raise an exception if the command
-                fails. This overrides the self.exit_status_exception
-                setting if defined. Defaults to None.
+            target-host (str, optional): R sync all the logs to target system
         Raises:
             CommandFailure: if the daos_agent command fails.
 

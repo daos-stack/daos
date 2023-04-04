@@ -14,6 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
+// supportCmd is the struct representing the top-level support subcommand.
 type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from server"`
 }
@@ -43,7 +44,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		progress.Total++
 	}
 
-	// Copy the custom log location
+	// Copy custom log folder
 	if cmd.ExtraLogsDir != "" {
 		LogCollection[support.CollectExtraLogsDirEnum] = []string{""}
 		progress.Total++

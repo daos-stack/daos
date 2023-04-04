@@ -513,7 +513,7 @@ class DmgCommand(DmgCommandBase):
                                      raise_exception=raise_exception, **kwargs)
 
     def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
-                            extra_logs_dir=None, target_host=None, raise_exception=None):
+                            extra_logs_dir=None, target_host=None):
         """Collect logs for debug purpose.
 
         Args:
@@ -521,9 +521,7 @@ class DmgCommand(DmgCommandBase):
             target (str, optional): Target Folder location to copy logs
             archive (bool, optional): Archive the log/config files
             extra_logs_dir (str, optional): Collect the Logs from given custom directory
-            raise_exception (bool, optional): whether or not to raise an exception if the command
-                fails. This overrides the self.exit_status_exception
-                setting if defined. Defaults to None.
+            target-host (str, optional): R sync all the logs to target system
         Raises:
             CommandFailure: if the dmg support collect-log command fails.
 
@@ -548,8 +546,7 @@ class DmgCommand(DmgCommandBase):
             "target_host": target_host,
         }
 
-        return self._get_json_result(("support", "collect-log"),
-                                     raise_exception=raise_exception, **kwargs)
+        return self._get_json_result(("support", "collect-log"), **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,

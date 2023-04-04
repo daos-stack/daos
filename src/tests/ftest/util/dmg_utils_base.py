@@ -517,7 +517,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg support subcommand object."""
-            super().__init__("/run/dmg/server/*", "support")
+            super().__init__("/run/dmg/support/*", "support")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -532,7 +532,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg support collect-log command object."""
-                super().__init__("/run/dmg/server/support/*", "collect-log")
+                super().__init__("/run/dmg/support/collect-log/*", "collect-log")
                 self.stop_on_error = FormattedParameter("--stop-on-error", False)
                 self.target_folder = FormattedParameter("--target-folder={}", None)
                 self.archive = FormattedParameter("--archive", False)

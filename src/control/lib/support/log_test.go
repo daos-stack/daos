@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,7 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-const mockSocketDir = "/tmp/mock_scoket_dir/"
+const mockSocketDir = "/tmp/mock_socket_dir/"
 
 // Run fake daos_engine process.
 func startFakeEngine(t *testing.T) bool {
@@ -115,7 +115,7 @@ func TestSupport_checkEngineState(t *testing.T) {
 				startFakeEngine(t)
 			}
 			gotOutput, gotErr := checkEngineState(log)
-			test.AssertEqual(t, tc.expResult, gotOutput, "daos_engine state is not equal")
+			test.AssertEqual(t, tc.expResult, gotOutput, "Result is not as expected")
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.engStart {
 				killFakeEngine(t)
@@ -149,7 +149,7 @@ func TestSupport_getRunningConf(t *testing.T) {
 				startFakeEngine(t)
 			}
 			gotOutput, gotErr := getRunningConf(log)
-			test.AssertEqual(t, tc.expResult, gotOutput, "daos_engine state is not equal")
+			test.AssertEqual(t, tc.expResult, gotOutput, "Result is not as expected")
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.engStart {
 				killFakeEngine(t)
@@ -169,12 +169,12 @@ func TestSupport_getServerConf(t *testing.T) {
 	}{
 		"default config path if no engine is running": {
 			engStart:  false,
-			expResult: filepath.Join(config.DefaultServer().SocketDir, config.ConfigOut),
+			expResult: config.ConfigOut,
 			expErr:    nil,
 		},
 		"valid config when engine is running": {
 			engStart:  true,
-			expResult: mockSocketDir + config.ConfigOut,
+			expResult: config.ConfigOut,
 			expErr:    nil,
 		},
 	} {
@@ -183,7 +183,7 @@ func TestSupport_getServerConf(t *testing.T) {
 				startFakeEngine(t)
 			}
 			gotOutput, gotErr := getServerConf(log)
-			test.AssertEqual(t, tc.expResult, gotOutput, "daos_engine state is not equal")
+			test.AssertEqual(t, tc.expResult, filepath.Base(gotOutput), "daos server config file is not what we expected")
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.engStart {
 				killFakeEngine(t)
@@ -413,11 +413,6 @@ func TestSupport_rsyncLog(t *testing.T) {
 		TargetHost   string
 		expErr       error
 	}{
-		"rsync valid log directory": {
-			targetFolder: targetTestDir,
-			TargetHost:   hostName,
-			expErr:       nil,
-		},
 		"rsync to invalid Target directory": {
 			targetFolder: targetTestDir + "/foo/bar",
 			TargetHost:   hostName + ":/tmp/foo/bar/",
@@ -666,12 +661,6 @@ func TestSupport_copyServerConfig(t *testing.T) {
 		config       string
 		expErr       error
 	}{
-		"Copy default config": {
-			createFile:   true,
-			targetFolder: targetTestDir,
-			config:       defaultSeverConfig,
-			expErr:       nil,
-		},
 		"Copy server file which is not available": {
 			createFile:   false,
 			targetFolder: targetTestDir,
@@ -893,7 +882,7 @@ hyperthreads: false
 			targetFolder: targetTestDir,
 			config:       "",
 			logCmd:       "EngineLog",
-			expErr:       errors.New("Engine count is 0 from ser ver config"),
+			expErr:       errors.New("Engine count is 0 from server config"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

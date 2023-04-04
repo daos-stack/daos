@@ -3,8 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from support_test_base import SupportTestBase
 
 
@@ -19,7 +17,7 @@ class DmgSupportCollectLogTest(SupportTestBase):
         """JIRA ID: DAOS-10625
 
         Test Description:
-            Test that support collect-log command completes successfully.
+            Test that dmg support collect-log command completes successfully.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
@@ -31,9 +29,9 @@ class DmgSupportCollectLogTest(SupportTestBase):
         # Later verify the dame data file is archived as part of collection.
         self.create_custom_log("Support_Custom_Dir")
 
-        # Run dmg support collect-log with --extra-logs-dir
-        # Copy the log to non default folder with command option --target-folder
-        # Enable archive mode to collect the logs
+        # Run dmg support collect-log with --extra-logs-dir,
+        # copy logs to folder with command option --target-folder
+        # Enable archive mode.
         result = self.dmg.support_collect_log(extra_logs_dir=self.custom_log_dir,
                                               target_folder=self.target_folder,
                                               archive=True)
@@ -45,12 +43,12 @@ class DmgSupportCollectLogTest(SupportTestBase):
         if result is not None:
             self.fail(result)
 
-        # Verify server logs file in extracted dir
+        # Verify server logs file collected.
         result = self.validate_server_log_files()
         if result is not None:
             self.fail(result)
 
-        # Verify the custom log file collected on each servers.
+        # Verify the custom log file collected.
         self.verify_custom_log_data()
 
         # Clean up the log file created during test execution

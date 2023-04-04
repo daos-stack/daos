@@ -3,8 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from support_test_base import SupportTestBase
 
 
@@ -15,7 +13,7 @@ class DaosSupportCollectLogTest(SupportTestBase):
     :avocado: recursive
     """
 
-    def test_daos_support_collect_log_with_archive(self):
+    def test_daos_support_collect_log(self):
         """JIRA ID: DAOS-10625
 
         Test Description:
@@ -28,12 +26,12 @@ class DaosSupportCollectLogTest(SupportTestBase):
         """
         self.log_hosts = self.hostlist_servers
         # Create the custom log data which will be collected via support collect-log,
-        # Later verify the dame data file is archived as part of collection.
+        # Later verify the data file is archived as part of collection.
         self.create_custom_log("Server_Support_Logs")
 
-        # Run daos_server support collect-log with --extra-logs-dir
-        # Copy the log to non default folder with command option --target-folder
-        # Enable archive mode to collect the logs
+        # Run daos_server support collect-log with --extra-logs-dir,
+        # copy log to folder with command option --target-folder
+        # Enable archive mode.
         result = self.server_managers[0].support_collect_log(
             extra_logs_dir=self.custom_log_dir,
             target_folder=self.target_folder,
@@ -47,12 +45,12 @@ class DaosSupportCollectLogTest(SupportTestBase):
         if result is not None:
             self.fail(result)
 
-        # Verify server logs file in extracted dir
+        # Verify server logs files collected for each servers.
         result = self.validate_server_log_files()
         if result is not None:
             self.fail(result)
 
-        # Verify the custom log file collected on each servers.
+        # Verify the custom log file collected for each servers.
         self.verify_custom_log_data()
 
         # Clean up the log file created during test execution

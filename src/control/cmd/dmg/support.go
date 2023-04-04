@@ -21,12 +21,12 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-// NetCmd is the struct representing the top-level network subcommand.
+// supportCmd is the struct representing the top-level support subcommand.
 type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from servers"`
 }
 
-// collectLogCmd is the struct representing the command to collect the logs from the servers for support purpose
+// collectLogCmd is the struct representing the command to collect the Logs/config for support purpose
 type collectLogCmd struct {
 	baseCmd
 	cfgCmd
@@ -46,7 +46,7 @@ func (cmd *collectLogCmd) rsyncAdminLog() error {
 		cmd.TargetFolder + "/",
 		cmd.TargetHost + ":" + cmd.TargetFolder}, " ")
 
-	cmd.Debugf("Rsync Admin Log to TargetHost = %s", runcmd)
+	cmd.Debugf("Rsync Admin Log command = %s", runcmd)
 	rsyncCmd := exec.Command("sh", "-c", runcmd)
 	var stdout, stderr bytes.Buffer
 	rsyncCmd.Stdout = &stdout
@@ -68,8 +68,8 @@ func (cmd *collectLogCmd) rsyncLog() error {
 		return err
 	}
 
-	// Admin host will be the central host to collect all the logs if TargetHost option not provided.
-	// In that case only server logs will be rsync to Admin host.
+	// Admin host will be the central host to collect all the logs from servers.
+	// Logs will be rsync to TargetHost is provided.
 	if cmd.TargetHost == "" {
 		cmd.TargetHost = hostName
 	} else {
@@ -126,6 +126,7 @@ func (cmd *collectLogCmd) archLogsOnServer() error {
 	return nil
 }
 
+// Execute is run when supportCmd activates.
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Default log collection set
 	var LogCollection = map[int32][]string{
@@ -171,6 +172,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "DAOS Management Service is down")
 	}
 
+	// Default TargetFolder location where logs will be copied.
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
@@ -233,7 +235,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(progress.Display())
 	}
 
-	// Rsync the logs from servers
+	// R sync the logs from servers
 	rsyncerr := cmd.rsyncLog()
 	fmt.Printf(progress.Display())
 	if rsyncerr != nil && cmd.Stop {

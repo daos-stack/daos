@@ -557,7 +557,7 @@ class DaosServerCommand(YamlCommand):
                 #   --target-folder=    Target Folder location where log will be copied
                 #   --archive=          Archive the log/config files
                 #   --extra-logs-dir=   Collect the Logs from given custom directory
-                #   --target-host=      Rsync the logs to target-host system
+                #   --target-host=      R sync the logs to target-host system
                 self.stop_on_error = FormattedParameter("--stop-on-error", False)
                 self.target_folder = FormattedParameter("--target-folder={}")
                 self.archive = FormattedParameter("--archive", False)

@@ -38,7 +38,7 @@ type cliOptions struct {
 	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
 	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
-	Support    supportCmd             `command:"support" description:"Perform tasks related to debug the system to help support team"`
+	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -194,7 +194,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
 			}
 			log.Debugf("agent config loaded from %s", cfgPath)
-
 		}
 
 		if suppCmd, ok := cmd.(supportAgentConfig); ok {

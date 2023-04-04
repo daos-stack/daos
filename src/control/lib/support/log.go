@@ -54,11 +54,11 @@ type CollectLogSubCmd struct {
 // Folder names to copy logs and configs
 const (
 	dmgSystemLogs    = "DmgSystemLogs"    // Copy the dmg command output for DAOS system
-	dmgNodeLogs      = "DmgNodeLogs"      // Copy the dmg command output specific to the storage.
+	dmgNodeLogs      = "DmgNodeLogs"      // Copy the dmg command output specific to the server.
 	daosAgentCmdInfo = "DaosAgentCmdInfo" // Copy the daos_agent command output specific to the node.
 	genSystemInfo    = "GenSystemInfo"    // Copy the system related information
 	serverLogs       = "ServerLogs"       // Copy the server/control and helper logs
-	clientLogs       = "ClientLogs"       // Copy the server/control and helper logs
+	clientLogs       = "ClientLogs"       // Copy the DAOS client logs
 	DaosServerConfig = "DaosServerConfig" // Copy the server config
 	agentConfig      = "AgentConfig"      // Copy the Agent config
 	agentLogs        = "AgentLogs"        // Copy the Agent log
@@ -112,7 +112,7 @@ var DaosServerCmd = []string{
 type ProgressBar struct {
 	Start     int  // start int number
 	Total     int  // end int number
-	Steps     int  // Int number be increased per steps
+	Steps     int  // number to be increased per step
 	NoDisplay bool // Option to skip progress bar if Json output is enabled
 }
 
@@ -132,7 +132,7 @@ type logCopy struct {
 	option string
 }
 
-// Print the progress while log collect command in progress
+// Print the progress while collect-log command is in progress
 func (p *ProgressBar) Display() string {
 	if !(p.NoDisplay) {
 		// Return the progress End string.
@@ -149,7 +149,7 @@ func (p *ProgressBar) Display() string {
 	return ""
 }
 
-// Check if daos_engine process is running and return the bool value accordingly.
+// Check if daos_engine process is running on server and return the bool value accordingly.
 func checkEngineState(log logging.Logger) (bool, error) {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
 	if err != nil {
@@ -159,7 +159,7 @@ func checkEngineState(log logging.Logger) (bool, error) {
 	return true, nil
 }
 
-// Get the server config from the running daos engine
+// Get the server config from the running daos engine process
 func getRunningConf(log logging.Logger) (string, error) {
 	running_config := ""
 	runState, err := checkEngineState(log)
@@ -208,30 +208,6 @@ func cpLogFile(src, dst string, log logging.Logger) error {
 	return nil
 }
 
-// Create the local folder on each servers
-func createFolder(target string, log logging.Logger) error {
-	if _, err := os.Stat(target); err != nil {
-		log.Debugf("Log folder is not Exists, so creating %s", target)
-
-		if err := os.MkdirAll(target, 0777); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Get the system hostname
-func GetHostName() (string, error) {
-	hn, err := exec.Command("hostname", "-s").Output()
-	if err != nil {
-		return "", errors.Wrapf(err, "Error running hostname -s command %s", hn)
-	}
-	out := strings.Split(string(hn), "\n")
-
-	return out[0], nil
-}
-
 // Copy Command output to the file
 func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, error) {
 	// Run command and copy output to the file
@@ -253,7 +229,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 	return string(out), nil
 }
 
-// Create the Archive of logs.
+// Create the Archive of log folder.
 func ArchiveLogs(log logging.Logger, opts ...CollectLogsParams) error {
 	var buf bytes.Buffer
 	err := common.FolderCompress(opts[0].TargetFolder, &buf)
@@ -278,6 +254,30 @@ func ArchiveLogs(log logging.Logger, opts ...CollectLogsParams) error {
 	return nil
 }
 
+// Get the system hostname
+func GetHostName() (string, error) {
+	hn, err := exec.Command("hostname", "-s").Output()
+	if err != nil {
+		return "", errors.Wrapf(err, "Error running hostname -s command %s", hn)
+	}
+	out := strings.Split(string(hn), "\n")
+
+	return out[0], nil
+}
+
+// Create the local folder on each servers
+func createFolder(target string, log logging.Logger) error {
+	if _, err := os.Stat(target); err != nil {
+		log.Debugf("Log folder is not Exists, so creating %s", target)
+
+		if err := os.MkdirAll(target, 0777); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Create the individual folder on each server based on hostname
 func createHostFolder(dst string, log logging.Logger) (string, error) {
 	hn, err := GetHostName()
@@ -294,7 +294,7 @@ func createHostFolder(dst string, log logging.Logger) (string, error) {
 	return targetLocation, nil
 }
 
-// Create the individual log folder on each server
+// Create the TargetFolder on each server
 func createHostLogFolder(dst string, log logging.Logger, opts ...CollectLogsParams) (string, error) {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -341,7 +341,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
-// Rsync the logs from individual servers to Admin/TargetHost node
+// R sync logs from individual servers to Admin/TargetHost node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -597,7 +597,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	switch opts[0].LogCmd {
 	case "EngineLog":
 		if len(serverConfig.Engines) == 0 {
-			return errors.New("Engine count is 0 from ser ver config")
+			return errors.New("Engine count is 0 from server config")
 		}
 
 		for i := range serverConfig.Engines {
@@ -624,7 +624,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	return nil
 }
 
-// Collect daos metrics.
+// Collect daos server metrics.
 func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...CollectLogsParams) error {
 	engineRunState, err := checkEngineState(log)
 	if err != nil {
@@ -659,7 +659,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Col
 	return nil
 }
 
-// Collect output of system side option of daos_server command.
+// Collect system side info of daos_server command.
 func collectDaosServerCmd(log logging.Logger, opts ...CollectLogsParams) error {
 	daosNodeLocation, err := createHostLogFolder(dmgNodeLogs, log, opts...)
 	if err != nil {

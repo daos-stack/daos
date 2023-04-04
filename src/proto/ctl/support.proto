@@ -9,6 +9,8 @@ package ctl;
 
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
+// Management Service Protobuf Definitions related to collect-log for support purpose.
+
 message CollectLogReq {
   string TargetFolder = 1;
   string ExtraLogsDir = 2;
