@@ -15,18 +15,14 @@ class FioCommand(ExecutableCommand):
     # pylint: disable=too-many-instance-attributes
     """Defines a object representing a fio command."""
 
-    def __init__(self, path="", il_lib_path=None):
+    def __init__(self, path=""):
         """Create a FioCommand object.
 
         Args:
             path (str, optional): path to location of command binary file.
                 Defaults to "".
         """
-        if il_lib_path is None:
-            super().__init__("/run/fio/*", "fio", path)
-        else:
-            print(f"DBG> Using LD_PRELOAD={il_lib_path}")
-            super().__init__("/run/fio/*", f"LD_PRELOAD={il_lib_path} fio", path)
+        super().__init__("/run/fio/*", "fio", path)
 
         # fio command-line options
         self.debug = FormattedParameter("--debug={}")

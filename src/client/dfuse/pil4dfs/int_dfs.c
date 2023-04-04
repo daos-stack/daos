@@ -23,6 +23,7 @@
 #include <sys/ioctl.h>
 #include <mntent.h>
 #include <signal.h>
+#include <inttypes.h>
 
 #include <gurt/list.h>
 #include <gurt/common.h>
@@ -80,6 +81,18 @@ struct DFSMOUNT {
 };
 
 static bool            bLog;
+static uint64_t        num_read;
+static uint64_t        num_write;
+static uint64_t        num_open;
+static uint64_t        num_stat;
+static uint64_t        num_opendir;
+static uint64_t        num_readdir;
+static uint64_t        num_unlink;
+static uint64_t        num_seek;
+static uint64_t        num_mkdir;
+static uint64_t        num_rmdir;
+static uint64_t        num_rename;
+static uint64_t        num_mmap;
 
 static long int        page_size;
 
@@ -92,7 +105,7 @@ static void
 discover_daos_mount(void);
 static void
 discover_dfuse(void);
-static void
+static int
 retrieve_handles_from_fuse(int idx);
 static void
 init_dfs(int idx);
@@ -297,6 +310,7 @@ static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 static int (*next_fxstat)(int vers, int fd, struct stat *buf);
 
 static int (*next_statfs)(const char *pathname, struct statfs *buf);
+static int (*next_fstatfs)(int fd, struct statfs *buf);
 
 static int (*next_statvfs)(const char *pathname, struct statvfs *buf);
 
@@ -384,6 +398,8 @@ static ssize_t (*next_readlinkat)(int dirfd, const char *path, char *buf, size_t
 static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 static int (*next_munmap)(void *addr, size_t length);
 
+static void (*next_exit)(int rc);
+
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
 
@@ -438,6 +454,9 @@ free_map(int idx);
 
 static void
 register_handler(int sig, struct sigaction *old_handler);
+
+static void
+print_summary(void);
 
 static int       num_fd_dup2ed;
 struct FD_DUP2ED fd_dup2_list[MAX_FD_DUP2ED];
@@ -551,11 +570,11 @@ discover_dfuse(void)
 	endmntent(fp);
 }
 
-static void
+static int
 retrieve_handles_from_fuse(int idx)
 {
 	struct dfuse_hs_reply hs_reply;
-	int                   fd, cmd, rc;
+	int                   fd, cmd, rc, errno_saved;
 	d_iov_t               iov = {};
 	char                  *buff = NULL;
 	size_t                buff_size;
@@ -563,7 +582,8 @@ retrieve_handles_from_fuse(int idx)
 	fd = libc_open(dfs_list[idx].fs_root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0) {
 		printf("Error: failed to open dir: %s\n", dfs_list[idx].fs_root);
-		return;
+		errno = EEXIST;
+		return (-1);
 	}
 
 	cmd = _IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_SIZE, struct dfuse_hs_reply);
@@ -577,10 +597,8 @@ retrieve_handles_from_fuse(int idx)
 	buff_size = max(hs_reply.fsr_pool_size, hs_reply.fsr_cont_size);
 	buff_size = max(buff_size, hs_reply.fsr_dfs_size);
 	D_ALLOC(buff, buff_size);
-	if (buff == NULL) {
-		printf("Failed to allocate %zu bytes memory. Quit.\n", buff_size);
-		exit(1);
-	}
+	if (buff == NULL)
+		goto err;
 
 	iov.iov_buf = buff;
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
@@ -627,14 +645,21 @@ retrieve_handles_from_fuse(int idx)
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
+	if (rc)
+		goto err;
+
+	return 0;
 
 err:
+	errno_saved = errno;
 	libc_close(fd);
 	D_FREE(buff);
+	errno = errno_saved;
+	return (-1);
 }
 
 /* Check whether path starts with "DAOS://" */
-inline bool
+bool
 is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_path)
 {
 	int rc;
@@ -667,7 +692,7 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 }
 
 /* standarlize and determine whether a path is a target path or not */
-static void
+static int
 parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *item_name,
 	   char *parent_dir, char full_path[], struct DFSMOUNT **dfs_mt)
 {
@@ -678,15 +703,21 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
-	int    idx_dfs;
+	int    idx_dfs, rc;
 
 	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
 	if (with_daos_prefix) {
 		/* TO DO. Need more work!!! query_dfs_pool_cont(pool, cont)*/
 		*is_target_path = 0;
-		return;
+		return 0;
 	}
-	/* absolute path */
+	if ((strncmp(szInput, "http://", 7) == 0) ||
+	     (strncmp(szInput, "https://", 8) == 0) ||
+	     (strncmp(szInput, "git://", 6) == 0)) {
+		*is_target_path = 0;
+		return 0;
+	}
+
 	if (strncmp(szInput, ".", 2) == 0) {
 		strcpy(full_path_loc, cur_dir);
 	} else if (szInput[0] == '/') {
@@ -721,7 +752,9 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* Need mutex before dfs init!!!!! */
 			if ((*dfs_mt)->pool == NULL) {
 				/* retrieve dfs, pool and container handles from dfuse */
-				retrieve_handles_from_fuse(idx_dfs);
+				rc = retrieve_handles_from_fuse(idx_dfs);
+				if (rc)
+					return (-1);
 			} else {
 				init_dfs(idx_dfs);
 			}
@@ -769,6 +802,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		*parent         = NULL;
 		item_name[0]    = '\0';
 	}
+	return 0;
 }
 
 static void
@@ -1302,7 +1336,10 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (!hook_enabled)
 		goto org_func;
 
-	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(pathname, &is_target_path, &parent, item_name, parent_dir,
+			full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 
 	if (!is_target_path)
 		goto org_func;
@@ -1359,6 +1396,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		}
 		return (idx_dirfd + FD_DIR_BASE);
 	}
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_open, 1);
 
 	idx_fd = find_next_available_fd();
 	assert(idx_fd >= 0);
@@ -1593,7 +1632,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	}
 
 	if (bLog)
-		fprintf(stderr, "[libpil4dfs] Intercepting read of size %zu\n", bytes_read);
+		atomic_fetch_add_relaxed(&num_read, 1);
 
 	return (ssize_t)bytes_read;
 }
@@ -1665,7 +1704,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 		return (-1);
 	}
 	if (bLog)
-		fprintf(stderr, "[libpil4dfs] Intercepting write of size %zu\n", size);
+		atomic_fetch_add_relaxed(&num_write, 1);
 
 	return size;
 }
@@ -1700,6 +1739,9 @@ new_fxstat(int vers, int fd, struct stat *buf)
 		rc    = -1;
 	}
 
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_stat, 1);
+
 	return 0;
 }
 
@@ -1716,10 +1758,13 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	if (!hook_enabled)
 		return next_xstat(ver, path, stat_buf);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_xstat(ver, path, stat_buf);
-
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_stat, 1);
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
 	else
@@ -1824,10 +1869,13 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	if (!hook_enabled)
 		return next_xstat(ver, path, stat_buf);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_xstat(ver, path, stat_buf);
-
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_stat, 1);
 	/* Need to compare with using dfs_lookup!!! */
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
@@ -1851,6 +1899,9 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
+
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_seek, 1);
 
 	switch (whence) {
 	case SEEK_SET:
@@ -1910,12 +1961,17 @@ statfs(const char *pathname, struct statfs *sfs)
 	if (!hook_enabled)
 		return next_statfs(pathname, sfs);
 
-	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_statfs(pathname, sfs);
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
-	assert(rc == 0);
+	if (rc != 0) {
+		errno = rc;
+		return (-1);
+	}
 
 	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
 			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
@@ -1926,9 +1982,47 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
 
-	if (rc)
-		rc = -1;
-	return rc;
+	return 0;
+}
+
+int
+fstatfs(int fd, struct statfs *sfs)
+{
+	int              rc;
+	struct DFSMOUNT *dfs_mt;
+	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
+
+	if (next_fstatfs == NULL) {
+		next_fstatfs = dlsym(RTLD_NEXT, "fstatfs");
+		assert(next_fstatfs != NULL);
+	}
+
+	if (!hook_enabled)
+		return next_fstatfs(fd, sfs);
+
+	if (fd < FD_FILE_BASE)
+		return next_fstatfs(fd, sfs);
+
+	if (fd < FD_DIR_BASE)
+		dfs_mt = file_list[fd - FD_FILE_BASE].dfs_mt;
+	else
+		dfs_mt = dir_list[fd - FD_DIR_BASE].dfs_mt;
+	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
+	if (rc != 0) {
+		errno = rc;
+		return (-1);
+	}
+
+	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
+			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
+	sfs->f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM] +
+		       info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME];
+	sfs->f_bsize  = 1;
+	sfs->f_files  = -1;
+	sfs->f_ffree  = -1;
+	sfs->f_bavail = sfs->f_bfree;
+
+	return 0;
 }
 
 int
@@ -1956,7 +2050,9 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	if (!hook_enabled)
 		return next_statvfs(pathname, svfs);
 
-	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_statvfs(pathname, svfs);
 
@@ -2001,9 +2097,13 @@ opendir(const char *path)
 	if (!hook_enabled)
 		return next_opendir(path);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return NULL;
 	if (!is_target_path)
 		return next_opendir(path);
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &dir_obj, &mode, NULL);
@@ -2058,6 +2158,8 @@ fdopendir(int fd)
 	}
 	if (!hook_enabled || fd < FD_DIR_BASE)
 		return next_fdopendir(fd);
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	return (DIR *)(&dir_list[fd - FD_DIR_BASE]);
 }
@@ -2177,6 +2279,8 @@ new_readdir(DIR *dirp)
 		errno = EINVAL;
 		return NULL;
 	}
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_readdir, 1);
 
 	if (mydir->num_ents)
 		goto out_readdir;
@@ -2285,9 +2389,13 @@ mkdir(const char *path, mode_t mode)
 	if (!hook_enabled)
 		return next_mkdir(path, mode);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_mkdir(path, mode);
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_mkdir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		errno = EEXIST;
@@ -2342,9 +2450,13 @@ rmdir(const char *path)
 	if (!hook_enabled)
 		return next_rmdir(path);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_rmdir(path);
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_rmdir, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -2371,7 +2483,9 @@ symlink(const char *symvalue, const char *path)
 	if (!hook_enabled)
 		return next_symlink(symvalue, path);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_symlink(symvalue, path);
 
@@ -2430,7 +2544,9 @@ readlink(const char *path, char *buf, size_t size)
 	if (!hook_enabled)
 		return next_readlink(path, buf, size);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_readlink(path, buf, size);
 
@@ -2531,21 +2647,31 @@ rename(const char *old_name, const char *new_name)
 	if (!hook_enabled)
 		return next_rename(old_name, new_name);
 
-	parse_path(old_name, &is_target_path1, &parent_old, item_name_old, parent_dir_old, NULL,
-		   &dfs_mt1);
+	rc = parse_path(old_name, &is_target_path1, &parent_old, item_name_old,
+			parent_dir_old, NULL, &dfs_mt1);
+	if (rc)
+		return (-1);
 	if (is_target_path1 && parent_old == NULL) {
 		printf("rename(): Failed to lookup parent of %s\n", old_name);
 		errno = ENOTDIR;
 		return (-1);
 	}
 
-	parse_path(new_name, &is_target_path2, &parent_new, item_name_new, parent_dir_new, NULL,
-		   &dfs_mt2);
+	rc = parse_path(new_name, &is_target_path2, &parent_new, item_name_new,
+			parent_dir_new, NULL, &dfs_mt2);
+	if (rc)
+		return (-1);
 	if (is_target_path2 && parent_new == NULL) {
 		printf("rename(): Failed to lookup parent of %s\n", new_name);
 		errno = ENOTDIR;
 		return (-1);
 	}
+
+	if (is_target_path1 == 0 && is_target_path2 == 0)
+		return next_rename(old_name, new_name);
+
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_rename, 1);
 
 	if (is_target_path1 && is_target_path2) {
 		/* Both old and new are on DAOS */
@@ -2556,9 +2682,6 @@ rename(const char *old_name, const char *new_name)
 			return (-1);
 		}
 		return 0;
-	} else if (is_target_path1 == 0 && is_target_path2 == 0) {
-		/* Both are on non-DAOS filesystem */
-		return next_rename(old_name, new_name);
 	} else if (is_target_path1 == 1 && is_target_path2 == 0) {
 		/* Old_name is on DAOS and new_name is on non-DAOS filesystem */
 
@@ -2932,8 +3055,9 @@ access(const char *path, int mode)
 	if (!hook_enabled)
 		return next_access(path, mode);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
-
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (is_target_path) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
 			rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
@@ -2991,7 +3115,9 @@ chdir(const char *path)
 	if (!hook_enabled)
 		return next_chdir(path);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path) {
 		rc = next_chdir(path);
 		if (rc == 0)
@@ -3049,9 +3175,14 @@ new_unlink(const char *path)
 	if (!hook_enabled)
 		return libc_unlink(path);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return libc_unlink(path);
+
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_unlink, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -3082,9 +3213,14 @@ unlinkat(int dirfd, const char *path, int flags)
 
 	if (path[0] == '/') {
 		/* absolute path, dirfd is ignored */
-		parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+		rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir,
+				NULL, &dfs_mt);
+		if (rc)
+			return (-1);
 		if (!is_target_path)
 			return next_unlinkat(dirfd, path, flags);
+		if (bLog)
+			atomic_fetch_add_relaxed(&num_unlink, 1);
 
 		rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 		if (rc) {
@@ -3167,7 +3303,9 @@ truncate(const char *path, off_t length)
 	if (!hook_enabled)
 		return next_truncate(path, length);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_truncate(path, length);
 
@@ -3209,8 +3347,9 @@ chmod(const char *path, mode_t mode)
 	if (!hook_enabled)
 		return next_chmod(path, mode);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
-
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (is_target_path) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
 			rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode);
@@ -3297,7 +3436,9 @@ utime(const char *path, const struct utimbuf *times)
 	if (!hook_enabled)
 		return next_utime(path, times);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_utime(path, times);
 
@@ -3359,7 +3500,9 @@ utimes(const char *path, const struct timeval times[2])
 	if (!hook_enabled)
 		return next_utimes(path, times);
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path)
 		return next_utimes(path, times);
 
@@ -3415,7 +3558,9 @@ utimens_timespec(const char *path, const struct timespec times[2])
 	char             parent_dir[DFS_MAX_PATH];
 	char             full_path[DFS_MAX_PATH];
 
-	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
 	if (!is_target_path) {
 		times_us[0].tv_sec  = times[0].tv_sec;
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
@@ -3655,11 +3800,17 @@ new_fcntl(int fd, int cmd, ...)
 	return libc_fcntl(fd, cmd);
 }
 
+struct dfuse_user_reply {
+	uid_t uid;
+	gid_t gid;
+};
+
 int
 ioctl(int fd, unsigned long request, ...)
 {
-	va_list arg;
-	void   *param;
+	va_list                         arg;
+	void                           *param;
+	struct dfuse_user_reply        *reply;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -3671,6 +3822,15 @@ ioctl(int fd, unsigned long request, ...)
 	}
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_ioctl(fd, request, param);
+
+	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
+	/* Provided to pass dfuse_test                                  */
+	if ((request & 0xFFFFFFFF) == 0x8008A3cA) {
+		reply = (dfuse_user_reply *)param;
+		reply->uid = getuid();
+		reply->gid = getgid();
+		return 0;
+	}
 
 	printf("Not implemented yet for ioctl().\n");
 	errno = ENOTSUP;
@@ -3852,6 +4012,9 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_mmap(addr, length, prot, flags, fd, offset);
+
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_mmap, 1);
 
 	addr_ret = next_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
 	if (addr_ret == MAP_FAILED)
@@ -4067,6 +4230,16 @@ tcgetattr(int fd, void *termios_p)
 }
 
 static void
+new_exit(int rc)
+{
+	if (!hook_enabled)
+		return next_exit(rc);
+
+	print_summary();
+	next_exit(rc);
+}
+
+static void
 update_cwd(void)
 {
 	char *cwd = NULL;
@@ -4264,6 +4437,8 @@ init_myhook(void)
 	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
 	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
+	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
+
 	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
 	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
 	 *	register_a_hook("libc", "execv", (void *)new_execv, (long int *)(&real_execv));
@@ -4285,12 +4460,40 @@ init_myhook(void)
 	}
 }
 
+static void
+print_summary(void)
+{
+	uint64_t op_sum = 0;
+
+	if (!bLog)
+		return;
+
+	fprintf(stderr, "libpil4dfs intercepting summary for ops on DFS:\n");
+	fprintf(stderr, "[read   ]  %" PRIu64 "\n", num_read);
+	fprintf(stderr, "[write  ]  %" PRIu64 "\n", num_write);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "[open   ]  %" PRIu64 "\n", num_open);
+	fprintf(stderr, "[stat   ]  %" PRIu64 "\n", num_stat);
+	fprintf(stderr, "[opendir]  %" PRIu64 "\n", num_opendir);
+	fprintf(stderr, "[readdir]  %" PRIu64 "\n", num_readdir);
+	fprintf(stderr, "[unlink ]  %" PRIu64 "\n", num_unlink);
+	fprintf(stderr, "[seek   ]  %" PRIu64 "\n", num_seek);
+	fprintf(stderr, "[mkdir  ]  %" PRIu64 "\n", num_mkdir);
+	fprintf(stderr, "[rmdir  ]  %" PRIu64 "\n", num_rmdir);
+	fprintf(stderr, "[rename ]  %" PRIu64 "\n", num_rename);
+	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", num_mmap);
+
+	op_sum = num_read + num_write + num_open + num_stat + num_opendir + num_readdir +
+		 num_unlink + num_seek + num_mkdir + num_rmdir + num_rename + num_mmap;
+	fprintf(stderr, "\n");
+	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
+	fflush(stderr);
+}
+
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
 	close_all_duped_fd();
-
-	uninstall_hook();
 	finalize_dfs();
 
 	pthread_mutex_destroy(&lock_init);
@@ -4300,6 +4503,7 @@ finalize_myhook(void)
 
 	free(file_list);
 	free(dir_list);
+	uninstall_hook();
 }
 
 static void

@@ -471,6 +471,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         params = {}
         if self.mdtest_cmd.dfs_oclass.value:
             params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         if self.mdtest_cmd.dfs_chunk.value:
             params['chunk_size'] = self.mdtest_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)

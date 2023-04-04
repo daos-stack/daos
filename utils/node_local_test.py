@@ -33,6 +33,7 @@ import xattr
 import junit_xml
 import tabulate
 import yaml
+import re
 
 
 class NLTestFail(Exception):
@@ -1018,12 +1019,22 @@ def pil4dfs_cmd(dfuse, cmd):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
-    my_env['D_LOG_MASK'] = 'FATAL'
+    my_env['D_LOG_MASK'] = 'INFO'
+    my_env['IL_LOG'] = 'true'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
-    ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         env=my_env, check=False)
+    ret = subprocess.run(cmd, stderr=subprocess.PIPE, env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
+    search = re.findall(r'\[op_sum\ ]  \d+', ret.stderr.decode('utf-8'))
+    if len(search) == 0:
+        print("ERROR: [op_sum ]  is NOT found in stderr.")
+        ret.returncode = 1
+    else:
+        num_op = int(search[0][9:])
+        print(f"DBG> num_op = {num_op}")
+        if num_op == 0:
+            print("ERROR: num_op is zero. This is unexpected.")
+            ret.returncode = 1
     return ret
 
 

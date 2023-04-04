@@ -33,7 +33,6 @@ class IorInterceptMessagesPil4dfs(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
-        :avocado: tags=IorInterceptMessages,test_ior_intercept_messages
         :avocado: tags=IorInterceptMessages,test_ior_intercept_messages_pil4dfs
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
@@ -43,7 +42,7 @@ class IorInterceptMessagesPil4dfs(IorTestBase):
         stderr = out.stderr.decode("utf-8")
 
         # Verify expected number of interception messages
-        num_intercept = len(re.findall(r"\[libpil4dfs\] Intercepting write*", stderr))
-        expected = self.processes * 100
+        num_intercept = len(re.findall(r"\[write  \]  100", stderr))
+        expected = self.processes * 1
         if num_intercept != expected:
             self.fail('Expected {} intercept messages but got {}'.format(expected, num_intercept))

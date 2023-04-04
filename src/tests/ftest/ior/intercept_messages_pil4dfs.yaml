@@ -23,8 +23,7 @@ ior:
     - DD_SUBSYS=all
   api: POSIX
   client_processes:
-    np_16:
-      np: 16
+    np: 16
   test_file: testFile
   repetitions: 1
   iorflags:
@@ -34,7 +33,6 @@ ior:
   write_x: 2
   read_x: 1
   objectclass:
-    oclass_SX:
-      dfs_oclass: "SX"
+    dfs_oclass: "SX"
 dfuse:
   disable_caching: true

@@ -524,6 +524,10 @@ class CommandWithParameters(ObjectWithParameters):
         """
         return CommandWithParameters(self.namespace, self._command, self._path)
 
+    def command_prepend_il(self, libpath):
+        """Add LD_PRELOAD=libpath into command to enable interception library"""
+        self._command = f'LD_PRELOAD={libpath} {self._command}'
+
 
 class YamlParameters(ObjectWithParameters):
     """A class of parameters used to create a yaml file."""
