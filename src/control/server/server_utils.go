@@ -215,8 +215,27 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 			return nil, err
 		}
 
+		provs, err := engine.Fabric.GetProviders()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(provs) == 1 {
+			for i := range cfgIfaces {
+				if i == 0 {
+					continue
+				}
+				provs = append(provs, provs[0])
+			}
+		}
+
+		if len(cfgIfaces) != len(provs) {
+			return nil, fmt.Errorf("number of ifaces (%d) and providers (%d) not equal",
+				len(cfgIfaces), len(provs))
+		}
+
 		for i, cfgIface := range cfgIfaces {
-			fi, err := fis.GetInterfaceOnNetDevice(cfgIface, engine.Fabric.Provider)
+			fi, err := fis.GetInterfaceOnNetDevice(cfgIface, provs[i])
 			if err != nil {
 				return nil, err
 			}
