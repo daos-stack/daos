@@ -284,8 +284,7 @@ daos_event_register_comp_cb(struct daos_event *ev,
 	ecl->op_comp_arg = arg;
 	ecl->op_comp_cb = cb;
 
-	d_list_add_tail(&evx->evx_callback.evx_comp_list,
-			&ecl->op_comp_list);
+	d_list_add_tail(&ecl->op_comp_list, &evx->evx_callback.evx_comp_list);
 
 	return 0;
 }

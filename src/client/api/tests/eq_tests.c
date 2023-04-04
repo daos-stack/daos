@@ -1169,6 +1169,75 @@ out:
 }
 
 static int
+mul_cb(void *udata, daos_event_t *ev, int ret)
+{
+	int *num = (int *)udata;
+
+	D_ASSERT(ret == 0);
+	*num = (*num) * 2;
+
+	return 0;
+}
+
+static void
+eq_test_10(void **state)
+{
+	struct daos_event *ep;
+	struct daos_event  ev;
+	int	       *udata = NULL;
+	int                rc    = 0;
+
+	DAOS_TEST_ENTRY("10", "Multiple Event Completion Callback");
+
+	rc = daos_event_init(&ev, my_eqh, NULL);
+	if (rc) {
+		print_error("daos_event_init() failed (%d)\n", rc);
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(udata, 1);
+	D_ASSERT(udata != NULL);
+	*udata = 0;
+
+	rc = daos_event_register_comp_cb(&ev, inc_cb, udata);
+	if (rc) {
+		print_error("daos_event_register_comp_cb() failed (%d)\n", rc);
+		goto out;
+	}
+
+	rc = daos_event_register_comp_cb(&ev, mul_cb, udata);
+	if (rc) {
+		print_error("daos_event_register_comp_cb() failed (%d)\n", rc);
+		goto out;
+	}
+
+	rc = daos_event_launch(&ev);
+	if (rc) {
+		print_error("daos_event_launch() failed (%d)\n", rc);
+		goto out;
+	}
+
+	daos_event_complete(&ev, 0);
+	if (*udata != 1998) {
+		print_error("invalid udata value (%d)\n", *udata);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = daos_eq_poll(my_eqh, 0, 0, 1, &ep);
+	if (rc != 1) {
+		print_error("Failed to drain EQ: %d\n", rc);
+		goto out;
+	}
+	rc = 0;
+
+	daos_event_fini(&ev);
+out:
+	D_FREE(udata);
+	DAOS_TEST_EXIT(rc);
+}
+
+static int
 eq_ut_setup(void **state)
 {
 	int rc;
@@ -1221,7 +1290,8 @@ static const struct CMUnitTest eq_uts[] = {
 	{ "EQ_Test_6", eq_test_6, NULL, NULL},
 	{ "EQ_Test_7", eq_test_7, NULL, NULL},
 	{ "EQ_Test_8", eq_test_8, NULL, NULL},
-	{ "EQ_Test_9", eq_test_9, NULL, NULL}
+	{ "EQ_Test_9", eq_test_9, NULL, NULL},
+	{ "EQ_Test_10", eq_test_10, NULL, NULL}
 };
 
 int main(int argc, char **argv)
