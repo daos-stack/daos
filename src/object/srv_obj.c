@@ -1413,7 +1413,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
 				if (shadows == NULL) {
-					rc = -DER_IO;
+					rc = -DER_DATA_LOSS;
 					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
 						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
 						DP_RC(rc));

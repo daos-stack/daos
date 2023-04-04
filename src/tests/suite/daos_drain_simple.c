@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -469,21 +469,21 @@ drain_objects(void **state)
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
 	{"DRAIN1: drain small rec multiple dkeys",
-	 drain_dkeys, rebuild_small_sub_setup, test_teardown},
+	 drain_dkeys, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN2: drain small rec multiple akeys",
-	 drain_akeys, rebuild_small_sub_setup, test_teardown},
+	 drain_akeys, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN3: drain small rec multiple indexes",
-	 drain_indexes, rebuild_small_sub_setup, test_teardown},
+	 drain_indexes, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN4: drain small rec multiple keys/indexes",
-	 drain_multiple, rebuild_small_sub_setup, test_teardown},
+	 drain_multiple, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN5: drain large rec single index",
-	 drain_large_rec, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN7: drain keys with multiple snapshots",
-	 drain_snap_update_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN8: drain keys/punch with multiple snapshots",
+	 drain_large_rec, rebuild_small_sub_rf0_setup, test_teardown},
+	{"DRAIN6: drain keys with multiple snapshots",
+	 drain_snap_update_keys, rebuild_small_sub_rf0_setup, test_teardown},
+	{"DRAIN7: drain keys/punch with multiple snapshots",
 	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN9: drain multiple objects",
-	 drain_objects, rebuild_sub_setup, test_teardown},
+	{"DRAIN8: drain multiple objects",
+	 drain_objects, rebuild_sub_rf0_setup, test_teardown},
 };
 
 int

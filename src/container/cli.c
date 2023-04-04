@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1430,18 +1430,6 @@ dc_cont_set_prop(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
-	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
-	if (entry != NULL) {
-		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
-		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
-			rc = -DER_INVAL;
-			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
-				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
-				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
-			goto err;
-		}
-	}
-
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
@@ -1452,6 +1440,20 @@ dc_cont_set_prop(tse_task_t *task)
 	D_DEBUG(DB_MD, DF_CONT": setting props: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+			goto err_cont;
+		}
+		co_stat.dcs_pm_ver = dc_pool_get_version(pool);
+		entry->dpe_val = daos_prop_co_status_2_val(&co_stat);
+	}
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,

@@ -61,6 +61,75 @@ struct pool_svc_events {
 	bool			pse_stop;
 };
 
+/* Pool service schedule state */
+struct pool_svc_sched {
+	int		psc_svc_rf;
+	bool		psc_force_notify;	/* for pool_svc_step_up_cb */
+	ABT_mutex	psc_mutex;		/* only for psc_cv */
+	ABT_cond	psc_cv;
+	bool		psc_in_progress;
+	bool		psc_canceled;
+};
+
+static int
+sched_init(struct pool_svc_sched *sched)
+{
+	int rc;
+
+	rc = ABT_mutex_create(&sched->psc_mutex);
+	if (rc != ABT_SUCCESS) {
+		return dss_abterr2der(rc);
+	}
+
+	rc = ABT_cond_create(&sched->psc_cv);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&sched->psc_mutex);
+		return dss_abterr2der(rc);
+	}
+
+	sched->psc_svc_rf = -1;
+	sched->psc_force_notify = false;
+	sched->psc_in_progress = false;
+	sched->psc_canceled = false;
+	return 0;
+}
+
+static void
+sched_fini(struct pool_svc_sched *sched)
+{
+	ABT_cond_free(&sched->psc_cv);
+	ABT_mutex_free(&sched->psc_mutex);
+}
+
+static void
+sched_begin(struct pool_svc_sched *sched)
+{
+	sched->psc_in_progress = true;
+	sched->psc_canceled = false;
+}
+
+static void
+sched_end(struct pool_svc_sched *sched)
+{
+	sched->psc_in_progress = false;
+	sched->psc_canceled = false;
+}
+
+static void
+sched_cancel_and_wait(struct pool_svc_sched *sched)
+{
+	/*
+	 * The CV requires a mutex. We don't otherwise need it for ULTs within
+	 * the same xstream.
+	 */
+	ABT_mutex_lock(sched->psc_mutex);
+	if (sched->psc_in_progress)
+		sched->psc_canceled = true;
+	while (sched->psc_in_progress)
+		ABT_cond_wait(sched->psc_cv, sched->psc_mutex);
+	ABT_mutex_unlock(sched->psc_mutex);
+}
+
 /* Pool service */
 struct pool_svc {
 	struct ds_rsvc		ps_rsvc;
@@ -73,6 +142,10 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
+
+	/* Check all containers RF for the pool */
+	struct pool_svc_sched	ps_rfcheck_sched;
+
 	/* The global pool map version on all pool targets */
 	uint32_t		ps_global_map_version;
 };
@@ -868,14 +941,19 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 		goto err_events_mutex;
 	}
 
-	rc = ds_cont_svc_init(&svc->ps_cont_svc, svc->ps_uuid, 0 /* id */,
-			      &svc->ps_rsvc);
+	rc = sched_init(&svc->ps_rfcheck_sched);
 	if (rc != 0)
 		goto err_events_cv;
 
+	rc = ds_cont_svc_init(&svc->ps_cont_svc, svc->ps_uuid, 0 /* id */,
+			      &svc->ps_rsvc);
+	if (rc != 0)
+		goto err_cont_rf_sched;
+
 	*rsvc = &svc->ps_rsvc;
 	return 0;
-
+err_cont_rf_sched:
+	sched_fini(&svc->ps_rfcheck_sched);
 err_events_cv:
 	ABT_cond_free(&svc->ps_events.pse_cv);
 err_events_mutex:
@@ -1134,6 +1212,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	struct pool_svc *svc = pool_svc_obj(rsvc);
 
 	ds_cont_svc_fini(&svc->ps_cont_svc);
+	sched_fini(&svc->ps_rfcheck_sched);
 	ABT_cond_free(&svc->ps_events.pse_cv);
 	ABT_mutex_free(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_user);
@@ -1343,7 +1422,19 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	return rc;
 }
 
-/* up */
+/*
+ * Log a NOTE of as well as print a message. Arguments may be evaluated more
+ * than once.
+ */
+#define DS_POOL_NOTE_PRINT(fmt, ...) do {							\
+	D_NOTE(fmt, ## __VA_ARGS__);								\
+	D_PRINT(fmt, ## __VA_ARGS__);								\
+} while (0)
+
+static void pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+			      void (*func)(void *));
+static void pool_svc_rfcheck_ult(void *arg);
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -1356,6 +1447,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
 	d_rank_t		rank;
+	bool			svc_scheduled = false;
 	int			rc;
 
 	/*
@@ -1396,6 +1488,9 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	events_initialized = true;
+
+	pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
+	svc_scheduled = true;
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
@@ -1439,6 +1534,9 @@ out:
 	if (rc != 0) {
 		if (events_initialized)
 			fini_events(svc);
+		if (svc_scheduled)
+			sched_cancel_and_wait(&svc->ps_rfcheck_sched);
+
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1465,6 +1563,7 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 
 	fini_events(svc);
+	sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
 
@@ -4838,10 +4937,93 @@ out:
 	return rc;
 }
 
+static void
+pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+		  void (*func)(void *))
+{
+	enum ds_rsvc_state	state;
+	int			rc;
+
+	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
+
+	/*
+	 * Avoid scheduling when the PS is stepping down
+	 * and has already called sched_cancel_and_wait.
+	 */
+	state = ds_rsvc_get_state(&svc->ps_rsvc);
+	if (state == DS_RSVC_DRAINING) {
+		D_DEBUG(DB_MD, DF_UUID": end: service %s\n", DP_UUID(svc->ps_uuid),
+			ds_rsvc_state_str(state));
+		return;
+	}
+
+	D_ASSERT(&svc->ps_rfcheck_sched == sched);
+	sched_cancel_and_wait(sched);
+
+	sched_begin(sched);
+
+	/*
+	 * An extra svc leader reference is not required, because
+	 * pool_svc_step_down_cb waits for this ULT to terminate.
+	 *
+	 * ULT tracking is achieved through sched, not a ULT handle.
+	 */
+	rc = dss_ult_create(func, svc, DSS_XS_SELF, 0, 0, NULL /* ult */);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create ULT: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		sched_end(sched);
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+}
+
 static int pool_find_all_targets_by_addr(struct pool_map *map,
 					 struct pool_target_addr_list *list,
 					 struct pool_target_id_list *tgt_list,
 					 struct pool_target_addr_list *inval);
+
+static int
+cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg)
+{
+	struct pool_svc_sched *sched = arg;
+	int rc;
+
+	/* If anything happened during rf check, let's continue to check the next container
+	 * for the moment.
+	 */
+	rc = ds_cont_rf_check(pool_uuid, cont_uuid, tx);
+	if (rc)
+		D_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, DF_CONT" check_rf: "DF_RC"\n",
+			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+
+	if (sched->psc_canceled) {
+		D_DEBUG(DB_MD, DF_CONT" is canceled.\n", DP_CONT(pool_uuid, cont_uuid));
+		return 1;
+	}
+
+	return 0;
+}
+
+static void
+pool_svc_rfcheck_ult(void *arg)
+{
+	struct pool_svc	*svc = arg;
+	int rc;
+
+	do {
+		/* retry until some one stop the pool svc(rc == 1) or succeed */
+		rc = ds_cont_rdb_iterate(svc->ps_uuid, cont_rf_check_cb,
+					 &svc->ps_rfcheck_sched);
+		if (rc >= 0)
+			break;
+		D_ERROR(DF_UUID" check rf with %d and retry\n", DP_UUID(svc->ps_uuid), rc);
+		dss_sleep(0);
+	} while (1);
+
+	sched_end(&svc->ps_rfcheck_sched);
+	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
+}
 
 /*
  * Perform an update to the pool map of \a svc.
@@ -4971,6 +5153,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 	replace_failed_replicas(svc, map);
+	if (opc == POOL_EXCLUDE)
+		pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
 
 out_map_buf:
 	pool_buf_free(map_buf);

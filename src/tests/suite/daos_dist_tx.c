@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2887,7 +2887,9 @@ dtx_38(void **state)
 
 	rebuild_single_pool_rank(arg, kill_ranks[0], false);
 
+	daos_cont_status_clear(arg->coh, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (arg->myrank == 0) {
 		print_message("Verifying data after rebuild...\n");
 
@@ -3053,8 +3055,38 @@ dtx_sub_setup(void **state)
 
 	saved_dtx_arg = *state;
 	*state = NULL;
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
-			0, NULL);
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF2);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf0_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF0);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf1_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF1);
+
 	return rc;
 }
 
@@ -3152,9 +3184,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX37: resync - leader failed during prepare",
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
-	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
 	{"DTX39: not restart the transaction with fixed epoch",
-	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_39, dtx_sub_rf1_setup, dtx_sub_teardown},
 
 	{"DTX40: uncertain check - miss commit with delay",
 	 dtx_40, NULL, test_case_teardown},
