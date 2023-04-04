@@ -1560,7 +1560,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	d_rank_t		rank;
 	int			rc;
 
-	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
+	if (svc->ps_pool->sp_iv_ns->iv_master_term <= rsvc->s_term)
+		ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 
 	fini_events(svc);
 	sched_cancel_and_wait(&svc->ps_rfcheck_sched);

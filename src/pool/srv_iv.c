@@ -868,6 +868,8 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		return 0;
 
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
+		struct pool_iv_key *pool_key = key2priv(key);
+
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
 			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
 			if (rc) {
@@ -875,9 +877,21 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 					rc = 0;
 				return rc;
 			}
-			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
-			uuid_clear(pool->sp_srv_cont_hdl);
-			uuid_clear(pool->sp_srv_pool_hdl);
+			if (pool->sp_iv_ns->iv_master_term <= pool_key->pik_term ||
+			    pool_key->pik_term == 0) {
+				D_INFO("Invalid pool/cont hdl "DF_UUID"/"DF_UUID"\n",
+				       DP_UUID(pool->sp_srv_pool_hdl),
+				       DP_UUID(pool->sp_srv_cont_hdl));
+				ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
+				uuid_clear(pool->sp_srv_cont_hdl);
+				uuid_clear(pool->sp_srv_pool_hdl);
+			} else {
+				D_INFO("Ignore close pool/cont hdl "DF_UUID"/"DF_UUID
+				       "pik term "DF_U64" < current term "DF_U64"\n",
+				       DP_UUID(pool->sp_srv_pool_hdl),
+				       DP_UUID(pool->sp_srv_cont_hdl),
+				       pool_key->pik_term, pool->sp_iv_ns->iv_master_term);
+			}
 			ds_pool_put(pool);
 			return 0;
 		}
@@ -1352,9 +1366,17 @@ int
 ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool)
 {
 	struct ds_iv_key	key = { 0 };
+	struct pool_iv_key	*pool_key;
 	int			rc;
 
 	key.class_id = IV_POOL_HDL;
+
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
+	pool_key->pik_eph = crt_hlc_get();
+	pool_key->pik_term = pool->sp_iv_ns->iv_master_term;
+	uuid_copy(pool_key->pik_uuid, pool->sp_srv_pool_hdl);
+
 	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
 			      CRT_IV_SYNC_NONE, 0, false /* retry */);
 	if (rc)
