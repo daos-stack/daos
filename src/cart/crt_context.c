@@ -1725,12 +1725,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	struct crt_context	*ctx;
 	int			 rc = 0;
 
-	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
-		return -DER_INVAL;
-	}
-
+	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL);
 	ctx = crt_ctx;
 
 	/**
@@ -1748,7 +1743,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	crt_context_timeout_check(ctx);
 	timeout = crt_exec_progress_cb(ctx, timeout);
 
-	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
+	if (unlikely(rc == -DER_TIMEDOUT && timeout != 0)) {
 		/** call progress once again with the real timeout */
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
 		if (unlikely(rc && rc != -DER_TIMEDOUT))

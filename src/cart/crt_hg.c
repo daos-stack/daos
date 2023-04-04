@@ -1459,9 +1459,9 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
-	hg_context_t		*hg_context;
-	unsigned int		hg_timeout;
-	unsigned int		total = 256;
+	hg_context_t	*hg_context;
+	unsigned int	hg_timeout;
+	unsigned int	total = 256;
 
 	hg_context = hg_ctx->chc_hgctx;
 
@@ -1474,15 +1474,15 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		hg_timeout = timeout / 1000;
 
 	do {
-		hg_return_t     hg_ret = HG_SUCCESS;
-		int             rc = 0;
-		unsigned int count = 0;
+		hg_return_t	hg_ret;
+		int		rc = 0;
+		unsigned int	count = 0;
 
 		/** progress RPC execution */
 		hg_ret = HG_Progress(hg_context, hg_timeout);
 		if (hg_ret == HG_TIMEOUT) {
 			rc = -DER_TIMEDOUT;
-		} else if (hg_ret != HG_SUCCESS) {
+		} else if (unlikely(hg_ret != HG_SUCCESS)) {
 			D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
 			return crt_hgret_2_der(hg_ret);
 		}
@@ -1492,12 +1492,12 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		if (hg_ret == HG_TIMEOUT) {
 			/** nothing to trigger */
 			return rc;
-		} else if (hg_ret != HG_SUCCESS) {
+		} else if (unlikely(hg_ret != HG_SUCCESS)) {
 			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 			return crt_hgret_2_der(hg_ret);
 		}
 
-		if (count == 0 || rc)
+		if (rc || count == 0)
 			/** nothing to trigger */
 			return rc;
 
