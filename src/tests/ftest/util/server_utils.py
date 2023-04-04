@@ -831,7 +831,7 @@ class DaosServerManager(SubprocessManager):
         return data
 
     @fail_on(CommandFailure)
-    def stop_ranks(self, ranks, daos_log, force=False):
+    def stop_ranks(self, ranks, daos_log, force=False, copy=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
@@ -839,6 +839,7 @@ class DaosServerManager(SubprocessManager):
             daos_log (DaosLog): object for logging messages
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
+            copy (bool, optional): Copy dmg command. Defaults to False.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
@@ -850,7 +851,10 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(ranks=list_to_str(value=ranks), force=force)
+        if copy:
+            self.dmg.copy().system_stop(ranks=list_to_str(value=ranks), force=force)
+        else:
+            self.dmg.system_stop(ranks=list_to_str(value=ranks), force=force)
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])

@@ -1663,6 +1663,8 @@ int
 dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 		  int *dfs_entry_key_size, int *dfs_entry_size)
 {
+	struct dfs_entry entry;
+
 	if (dkey == NULL || akey_count == NULL)
 		return EINVAL;
 
@@ -1672,7 +1674,14 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 
 	*akey_count = SB_AKEYS;
 	*dfs_entry_key_size = sizeof(INODE_AKEY_NAME) - 1;
-	*dfs_entry_size = sizeof(struct dfs_entry);
+	/** Can't just use sizeof(struct dfs_entry because it's not accurate */
+	*dfs_entry_size =
+	    D_ALIGNUP(sizeof(entry.mode) + sizeof(entry.oid) + sizeof(entry.mtime) +
+			  sizeof(entry.ctime) + sizeof(entry.chunk_size) + sizeof(entry.oclass) +
+			  sizeof(entry.mtime_nano) + sizeof(entry.ctime_nano) + sizeof(entry.uid) +
+			  sizeof(entry.gid) + sizeof(entry.value_len) + sizeof(entry.obj_hlc),
+		      32);
+
 	set_sb_params(true, *iods, dkey);
 
 	return 0;
@@ -4536,7 +4545,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

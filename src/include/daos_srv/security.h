@@ -88,7 +88,6 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  * \param[in]	ownership	Container ownership information
  * \param[in]	acl		Container ACL
  * \param[out]	capas		Capability bits for this user
- * \param[out]	is_owner	If this user is the owner
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -96,7 +95,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  */
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas, bool *is_owner);
+			     struct daos_acl *acl, uint64_t *capas);
 
 /**
  * Determine if the pool connection can be established based on the calculated
@@ -276,6 +275,34 @@ ds_sec_cont_capa_write_data_disable(uint64_t cont_capas);
  */
 bool
 ds_sec_cont_can_read_data(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be opened exclusively based on the container
+ * security capabilities. Note that this function does not include the logic of
+ * ds_sec_cont_can_open, that is, even if this function returns true, one
+ * usually still needs to call ds_sec_cont_can_open.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_open_ex(uint64_t cont_capas);
+
+/**
+ * Determine if all container handles, including those from other users, can be
+ * evicted based on the container security capabilities.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_evict_all(uint64_t cont_capas);
 
 /**
  * Get the security capabilities for a rebuild container handle created by the

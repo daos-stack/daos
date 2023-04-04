@@ -61,7 +61,7 @@ class DmgCommandBase(YamlCommand):
         """Set the hostlist to be used for dmg invocation.
 
         Args:
-            hostlist (string list): list of host addresses
+            hostlist (NodeSet): list of host addresses
         """
         if self.hostlist_suffix:
             hostlist = nodeset_append_suffix(hostlist, self.hostlist_suffix)
@@ -69,7 +69,7 @@ class DmgCommandBase(YamlCommand):
         if self.yaml:
             if isinstance(hostlist, NodeSet):
                 hostlist = list(hostlist)
-            elif not isinstance(hostlist, list):
+            elif isinstance(hostlist, str):
                 hostlist = hostlist.split(",")
             self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:

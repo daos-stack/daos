@@ -226,7 +226,6 @@ type containerCreateCmd struct {
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User            ui.ACLPrincipalFlag  `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
@@ -283,10 +282,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 	ap.c_op = C.CONT_CREATE
 
-	if cmd.User != "" {
-		ap.user = C.CString(cmd.User.String())
-		defer freeString(ap.user)
-	}
 	if cmd.Group != "" {
 		ap.group = C.CString(cmd.Group.String())
 		defer freeString(ap.group)

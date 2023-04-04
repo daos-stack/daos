@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       6%{?relval}%{?dist}
+Version:       2.3.106
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -147,6 +147,7 @@ Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
+Requires: numactl
 %{?systemd_requires}
 
 %description server
@@ -552,6 +553,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
+- Add numactl requires for server package
+
+* Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
+- Bump version to be higher than TB5
+
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556
 

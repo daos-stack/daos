@@ -23,17 +23,28 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
+	hostListGetter interface {
+		getHostList() []string
+	}
+
 	hostListSetter interface {
-		setHostList([]string)
+		setHostList(*hostlist.HostSet)
 	}
 
 	hostListCmd struct {
+		HostList ui.HostSetFlag `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 		hostlist []string
+	}
+
+	singleHostCmd struct {
+		HostList singleHostFlag `short:"l" long:"host-list" default:"localhost" description:"Single host address <ipv4addr/hostname> to connect to"`
+		host     string
 	}
 
 	ctlInvoker interface {
@@ -62,8 +73,30 @@ func (cmd *ctlInvokerCmd) setInvoker(c control.Invoker) {
 	cmd.ctlInvoker = c
 }
 
-func (cmd *hostListCmd) setHostList(hl []string) {
-	cmd.hostlist = hl
+func (cmd *hostListCmd) getHostList() []string {
+	if cmd.hostlist == nil && !cmd.HostList.Empty() {
+		cmd.hostlist = cmd.HostList.Slice()
+	}
+	return cmd.hostlist
+}
+
+func (cmd *hostListCmd) setHostList(newList *hostlist.HostSet) {
+	cmd.HostList.Replace(newList)
+}
+
+func (cmd *singleHostCmd) getHostList() []string {
+	if cmd.host == "" {
+		if cmd.HostList.Count() == 0 {
+			cmd.host = "localhost"
+		} else {
+			cmd.host = cmd.HostList.Slice()[0]
+		}
+	}
+	return []string{cmd.host}
+}
+
+func (cmd *singleHostCmd) setHostList(newList *hostlist.HostSet) {
+	cmd.HostList.Replace(newList)
 }
 
 func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer, wj *atm.Bool) {
@@ -152,7 +185,7 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool           `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       ui.HostSetFlag `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	HostList       ui.HostSetFlag `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
 	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
 	LogFile        string         `long:"log-file" description:"Log command output to the specified file"`
@@ -279,14 +312,22 @@ and access control settings, along with system wide operations.`
 			ctlCmd.setInvoker(invoker)
 		}
 
+		// Handle the deprecated global hostlist flag
 		if !opts.HostList.Empty() {
 			if hlCmd, ok := cmd.(hostListSetter); ok {
-				hl := opts.HostList.Slice()
-				hlCmd.setHostList(hl)
-				ctlCfg.HostList = hl
+				hlCmd.setHostList(&opts.HostList.HostSet)
 			} else {
-				return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
-					control.UserConfigPath(), control.SystemConfigPath())
+				return &flags.Error{
+					Type:    flags.ErrUnknownFlag,
+					Message: "unknown flag `l'/`host-list'",
+				}
+			}
+		}
+
+		if hlCmd, ok := cmd.(hostListGetter); ok {
+			hl := hlCmd.getHostList()
+			if len(hl) > 0 {
+				ctlCfg.HostList = hl
 			}
 		}
 

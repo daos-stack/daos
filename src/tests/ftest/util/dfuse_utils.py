@@ -28,6 +28,7 @@ class DfuseCommand(ExecutableCommand):
         self.cont = BasicParameter(None, position=2)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
+        self.eq_count = FormattedParameter("--eq-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
@@ -507,8 +508,12 @@ class VerifyPermsCommand(ExecutableCommand):
         Raises:
             CommandFailure: If the command fails
 
+        Returns:
+            RemoteCommandResult: result from run_remote
+
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result
