@@ -2552,8 +2552,7 @@ main(int argc, char **argv)
 	int		rc;
 	int		j;
 	int		start_idx;
-	char		*test_name;
-	bool		create_pmem;
+	char           *test_name;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2566,33 +2565,19 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	/* Capture test_name and pmem args if any */
+	/* Capture test_name args if any */
 	start_idx = 0;
 	test_name = "evtree default test suite name";
-	create_pmem = false;
 	if (argc > 1) {
 		/* Get test suite variables */
 		if (strcmp(argv[1], "--start-test") == 0) {
 			start_idx = 2;
 			test_name = argv[start_idx];
 		}
-
-		/* Capture pmem parameter */
-		if (argc > start_idx+1) {
-			if (strcmp(argv[start_idx+1], "pmem") == 0) {
-				create_pmem = true;
-				start_idx++;
-			}
-		}
 	}
 	optind = start_idx;
-	/* Create pool - pmem or vmem */
-	if (create_pmem) {
-		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
-				       &ts_utx);
-	} else {
-		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
-	}
+	/* Create pmem pool */
+	rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root), &ts_utx);
 	if (rc != 0) {
 		perror("Evtree test couldn't create pool");
 		return rc;
