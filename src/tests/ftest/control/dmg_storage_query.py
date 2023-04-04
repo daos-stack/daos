@@ -118,6 +118,9 @@ class DmgStorageQuery(ControlTestBase):
             self.log.info('  targets: detected=%s', len(device['tgt_ids']))
             message = ''
             for bdev in self.bdev_list:
+                # Convert the bdev address (e.g., '0000:85:05.5') to a VMD-style tr_addr (e.g.,
+                # '850505:') by splitting the bdev address on either ':' or '.' and joining the
+                # last three elements as double digit hex characters.
                 bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
                     *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
                 if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
