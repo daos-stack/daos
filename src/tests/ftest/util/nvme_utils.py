@@ -10,7 +10,7 @@ import json
 
 from avocado.core.exceptions import TestFail
 
-from dmg_utils import get_storage_query_device_uuids, get_dmg_response, get_json_response
+from dmg_utils import get_storage_query_device_uuids, get_dmg_response
 from exception_utils import CommandFailure
 from general_utils import dict_to_str
 from ior_test_base import IorTestBase
@@ -58,7 +58,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     """
     dmg.hostlist = server
     kwargs['uuid'] = uuid
-    response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+    response = get_dmg_response(test, dmg.storage_set_faulty, **kwargs)
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, test=test, dmg=dmg, server=server, uuid=uuid)
