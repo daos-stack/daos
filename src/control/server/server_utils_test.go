@@ -291,7 +291,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		iommuDisabled   bool
 		srvCfgExtra     func(*config.Server) *config.Server
-		getHpiErr       error
 		hugepagesFree   int
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
@@ -508,29 +507,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
-		"0 engines; nr_hugepages unset; hpi fetch fails": {
-			getHpiErr: errors.New("could not find hugepage info"),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 128,
-				TargetUser:    username,
-				EnableVMD:     true,
-			},
-		},
-		"1 engine; nr_hugepages unset; hpi fetch fails": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugepages(8192).
-					WithEngines(nvmeEngine(0))
-			},
-			getHpiErr: errors.New("could not find hugepage info"),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
-				HugeNodes:     "0",
-				TargetUser:    username,
-				PCIAllowList:  test.MockPCIAddr(0),
-				EnableVMD:     true,
-			},
-			expMemChkErr: errors.New("could not find hugepage info"),
-		},
 		// prepare will continue even if reset fails
 		"reset fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -728,18 +704,12 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return
 			}
 
-			mockGetMemInfo := func() (*common.MemInfo, error) {
-				t.Logf("returning %d free hugepages from mock", tc.hugepagesFree)
-				return &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					HugepagesFree:   tc.hugepagesFree,
-				}, tc.getHpiErr
-			}
-
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
 
-			gotMemChkErr := updateMemValues(srv, ei, mockGetMemInfo)
+			mi.HugepagesFree = tc.hugepagesFree
+
+			gotMemChkErr := updateHugeMemValues(srv, ei, mi)
 			test.CmpErr(t, tc.expMemChkErr, gotMemChkErr)
 			if tc.expMemChkErr != nil {
 				return

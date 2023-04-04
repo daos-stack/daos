@@ -434,23 +434,17 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetMemInfoFn) error {
-	engine.RLock()
-	ec := engine.runner.GetConfig()
-	ei := ec.Index
+func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+	ei.RLock()
+	ec := ei.runner.GetConfig()
+	eIdx := ec.Index
 
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
-		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
-		engine.RUnlock()
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
+		ei.RUnlock()
 		return nil
 	}
-	engine.RUnlock()
-
-	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	mi, err := getMemInfo()
-	if err != nil {
-		return err
-	}
+	ei.RUnlock()
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
@@ -462,13 +456,13 @@ func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetM
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
 		pageSizeMiB, *mi)
 	if memSizeFreeMiB < memSizeReqMiB {
-		return FaultInsufficientFreeHugepageMem(int(ei), memSizeReqMiB, memSizeFreeMiB,
+		return FaultInsufficientFreeHugepageMem(int(eIdx), memSizeReqMiB, memSizeFreeMiB,
 			nrPagesRequired, mi.HugepagesFree)
 	}
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	engine.setMemSize(memSizeReqMiB)
-	engine.setHugepageSz(pageSizeMiB)
+	ei.setMemSize(memSizeReqMiB)
+	ei.setHugepageSz(pageSizeMiB)
 
 	return nil
 }
@@ -486,6 +480,35 @@ func cleanEngineHugepages(srv *server) error {
 	}
 
 	srv.log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+
+	return nil
+}
+
+func checkAvailMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+	sc, err := ei.storage.GetScmConfig()
+	if err != nil {
+		return err
+	}
+
+	if sc.Class != storage.ClassRam {
+		return nil // no ramdisk to size
+	}
+
+	ramdiskSize, err := srv.cfg.CalcRamdiskSize(srv.log, mi.HugepageSizeKiB, mi.MemAvailableKiB)
+	if err != nil {
+		return errors.Wrapf(err, "calculate ramdisk size")
+	}
+
+	// Fail if size calculated using available memory is less than 90% of what has been set in
+	// the configuration.
+	minSize := uint64(((sc.Scm.RamdiskSize * humanize.GiByte) / 100) * 90)
+	if ramdiskSize < minSize {
+		srv.log.Errorf("available memory reported (%s) is too low to support configured"+
+			"ramdisk size (%s)",
+			humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)),
+			humanize.IBytes(uint64(sc.Scm.RamdiskSize)))
+		return storage.FaultRamdiskLowMem(minSize, ramdiskSize)
+	}
 
 	return nil
 }
@@ -516,9 +539,23 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 			srv.log.Errorf(err.Error())
 		}
 
+		// Retrieve up-to-date meminfo to check resource availability.
+		mi, err := common.GetMemInfo()
+		if err != nil {
+			return err
+		}
+
 		// Update engine memory related config parameters before starting.
-		return errors.Wrap(updateMemValues(srv, engine, common.GetMemInfo),
-			"updating engine memory parameters")
+		if err := updateHugeMemValues(srv, engine, mi); err != nil {
+			return errors.Wrap(err, "updating engine memory parameters")
+		}
+
+		// Check available RAM is sufficient before starting engines.
+		if err := checkAvailMem(srv, engine, mi); err != nil {
+			return errors.Wrap(err, "check available memory resources")
+		}
+
+		return nil
 	})
 }
 

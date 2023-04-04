@@ -496,9 +496,24 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	return nil
 }
 
-// SetRamdiskSize calculates thresholds for scm tmpfs size using nr hugepages from config and
-// total memory as reported by /proc/meminfo. Validate configured values or assign if not already
-// set.
+// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and an
+// input amount of memory.
+func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
+	// Convert available memory from kib to bytes.
+	memAvail := uint64(memKiB * humanize.KiByte)
+
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	return storage.CalcRamdiskSize(log, memAvail, memHuge, memSys,
+		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+}
+
+// SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
+// Then either validate configured engine storage values or assign if not already set.
 func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
@@ -508,20 +523,10 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 	scmCfgs := cfg.Engines[0].Storage.Tiers.ScmConfigs()
 
 	if len(scmCfgs) == 0 || scmCfgs[0].Class != storage.ClassRam {
-		return nil // no tmpfs to size
+		return nil // no ramdisk to size
 	}
 
-	// Convert available memory from kib to bytes.
-	memTotal := uint64(mi.MemTotalKiB * humanize.KiByte)
-
-	// Calculate assigned hugepage memory in bytes.
-	memHuge := uint64(cfg.NrHugepages * mi.HugepageSizeKiB * humanize.KiByte)
-
-	// Calculate reserved system memory in bytes.
-	memSys := uint64(humanize.GiByte * cfg.SystemRamReserved)
-
-	ramdiskSize, err := storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+	ramdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
 	if err != nil {
 		return errors.Wrapf(err, "calculate ramdisk size")
 	}
