@@ -1987,8 +1987,9 @@ vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 	vsi = vos_cont2pool(cont)->vp_vea_info;
 	D_ASSERT(vsi);
 
-	hint_ctxt = cont->vc_hint_ctxt[ios];
-	D_ASSERT(hint_ctxt);
+	D_ASSERT(cont->vc_hint_ctxt[ios]);
+	/* To minimize fragmentations, don't use hint allocation for tiny extents */
+	hint_ctxt = (size >= (1UL << 20)) ? cont->vc_hint_ctxt[ios] : NULL;
 
 	blk_cnt = vos_byte2blkcnt(size);
 

@@ -147,6 +147,8 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	return rc;
 }
 
+#define	TINY_ALLOC_THRESH	(1UL << 20)	/* 1MB */
+
 int
 reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 	       struct vea_resrvd_ext *resrvd)
@@ -194,6 +196,13 @@ reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 	} else {
 		uint32_t half_blks, tot_blks;
 		uint64_t blk_off;
+
+		/* Try small allocation first to reduce fragmentations */
+		if (blk_cnt < (TINY_ALLOC_THRESH / vsi->vsi_md->vsd_blk_sz)) {
+			rc = reserve_small(vsi, blk_cnt, resrvd);
+			if (rc != 0 || resrvd->vre_blk_cnt != 0)
+				return rc;
+		}
 
 		blk_off = entry->ve_ext.vfe_blk_off;
 		tot_blks = entry->ve_ext.vfe_blk_cnt;
