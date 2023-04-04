@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,15 +39,14 @@ class OSAOfflineParallelTest(OSAUtils):
         self.dmg_command.exit_status_exception = True
         self.server_boot = None
 
-    def dmg_thread(self, action, action_args, results):
+    def dmg_thread(self, action, results, **kwargs):
         """Generate different dmg command related to OSA.
 
         Args:
-            action_args(dict) : {action: {"puuid": pool[val].uuid,
-                                          "rank": rank,
-                                          "target": t_string,
-                                          "action": action,}
-            results (queue) : dmg command output queue.
+            action (str): dmg subcommand string such as drain, exclude, extend.
+            results (queue): dmg command output queue to store results.
+            kwargs (dict): Parameters for the dmg command methods in dmg_utils.py, plus
+                'action' and 'results' params above.
         """
         dmg = copy.copy(self.dmg_command)
         try:
@@ -56,20 +55,17 @@ class OSAOfflineParallelTest(OSAUtils):
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
             if action == "exclude" and self.server_boot is True:
-                ranks = action_args[action][1]
+                ranks = str(kwargs["rank"])
                 dmg.system_stop(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
                 dmg.system_start(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Starting rank {}".format(ranks))
             else:
-                # For each action, read the values from the
-                # dictionary.
-                # example {"exclude" : {"puuid": self.pool, "rank": rank
-                #                       "target": t_string, "action": exclude}}
-                # getattr is used to obtain the method in dmg object.
+                # For each action, pass in necessary parameters to the dmg method with
+                # kwargs. getattr is used to obtain the method in dmg object.
                 # eg: dmg -> pool_exclude method, then pass arguments like
                 # puuid, rank, target to the pool_exclude method.
-                getattr(dmg, "pool_{}".format(action))(**action_args[action])
+                getattr(dmg, "pool_{}".format(action))(**kwargs)
         except Exception as error:      # pylint: disable=broad-except
             results.put("pool {} failed: {}".format(action, str(error)))
 
@@ -142,18 +138,18 @@ class OSAOfflineParallelTest(OSAUtils):
             # Create the threads here
             threads = []
             # Action dictionary with OSA dmg command parameters
-            action_args = {
+            action_kwargs = {
                 "drain": {"pool": self.pool.uuid, "rank": rank, "tgt_idx": None},
                 "exclude": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
                 "extend": {"pool": self.pool.uuid, "ranks": (rank + 2)}
             }
-            for action in sorted(action_args):
+            for action in sorted(action_kwargs):
                 # Add a dmg thread
-                process = threading.Thread(target=self.dmg_thread,
-                                           kwargs={"action": action,
-                                                   "action_args": action_args,
-                                                   "results": self.out_queue})
+                kwargs = action_kwargs[action].copy()
+                kwargs['action'] = action
+                kwargs['results'] = self.out_queue
+                process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
                 self.log.info("Starting pool %s in a thread", action)
                 process.start()
                 threads.append(process)

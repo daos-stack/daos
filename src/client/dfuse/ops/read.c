@@ -10,29 +10,42 @@
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
+	struct dfuse_obj_hdl *oh = ev->de_oh;
+
 	if (ev->de_ev.ev_error != 0) {
-		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(oh, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(release, 0);
+	}
+
+	if (oh->doh_linear_read) {
+		if (oh->doh_linear_read_pos != ev->de_req_position) {
+			oh->doh_linear_read = false;
+		} else {
+			oh->doh_linear_read_pos = ev->de_req_position + ev->de_len;
+			if (ev->de_len < ev->de_req_len) {
+				oh->doh_linear_read_eof = true;
+			}
+		}
 	}
 
 	if (ev->de_len == 0) {
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
 				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
 
-		DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+		DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 		D_GOTO(release, 0);
 	}
 
-	if (ev->de_len == ev->de_iov.iov_buf_len)
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read", ev->de_req_position,
-				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
+	if (ev->de_len == ev->de_req_len)
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", ev->de_req_position,
+				ev->de_req_position + ev->de_req_len - 1);
 	else
-		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
 				ev->de_req_position, ev->de_req_position + ev->de_len - 1,
 				ev->de_req_position + ev->de_len,
-				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
+				ev->de_req_position + ev->de_req_len - 1);
 
-	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
@@ -50,6 +63,14 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	uint64_t                      eqt_idx;
 
 	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
+
+	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
+		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
+		oh->doh_linear_read_eof = false;
+		oh->doh_linear_read     = false;
+		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
+		return;
+	}
 
 	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
 
@@ -79,6 +100,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_req          = req;
 	ev->de_sgl.sg_nr    = 1;
 	ev->de_oh           = oh;
+	ev->de_req_len      = len;
 	ev->de_req_position = position;
 
 	if (mock_read) {
