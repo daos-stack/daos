@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func Test_CalcScmSize(t *testing.T) {
+func Test_CalcRamdiskSize(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memTotal uint64
 		memHuge  uint64
@@ -63,7 +63,7 @@ func Test_CalcScmSize(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotSize, gotErr := CalcScmSize(log, tc.memTotal, tc.memHuge, tc.rsvSys,
+			gotSize, gotErr := CalcRamdiskSize(log, tc.memTotal, tc.memHuge, tc.rsvSys,
 				tc.rsvEng, tc.engCount)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

@@ -523,8 +523,8 @@ func TestServerConfig_Validation(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
 				return c
 			},
-			expErr: storage.FaultScmConfigTmpfsUnderMinMem(humanize.GiByte*3,
-				storage.MemTmpfsMin),
+			expErr: storage.FaultConfigRamdiskUnderMinMem(humanize.GiByte*3,
+				storage.MemRamdiskMin),
 		},
 		"control metadata multi-engine": {
 			extraConfig: func(c *Server) *Server {
@@ -974,7 +974,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 10
 				return c.WithNrHugepages(16896)
 			},
-			expErr: FaultConfigScmTmpfsOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
+			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*10, humanize.GiByte*9.5, 0),
 		},
 		"low mem": {
 			// 47 total - 41 reserved = 6 for tmpfs (3 gib per engine - too low)
@@ -982,7 +982,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expErr: storage.FaultScmTmpfsLowMem(storage.MemTmpfsMin, humanize.GiByte*3),
+			expErr: storage.FaultRamdiskLowMem(storage.MemRamdiskMin, humanize.GiByte*3),
 		},
 		"custom value set": {
 			memTotBytes: humanize.GiByte * 60,

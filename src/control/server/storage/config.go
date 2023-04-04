@@ -504,9 +504,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		// Note: RAM-disk size can be auto-sized so allow if zero.
 		if sc.RamdiskSize != 0 {
 			confScmSize := uint64(humanize.GiByte * sc.RamdiskSize)
-			if confScmSize < MemTmpfsMin {
-				// Tmpfs size requested in config is less than minimum allowed.
-				return FaultScmConfigTmpfsUnderMinMem(confScmSize, MemTmpfsMin)
+			if confScmSize < MemRamdiskMin {
+				// Ramdisk size requested in config is less than minimum allowed.
+				return FaultConfigRamdiskUnderMinMem(confScmSize, MemRamdiskMin)
 			}
 		}
 	}

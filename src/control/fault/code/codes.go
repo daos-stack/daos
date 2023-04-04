@@ -78,7 +78,7 @@ const (
 	ScmNoModules
 	ScmBadRegion
 	ScmInvalidPMem
-	ScmTmpfsLowMem
+	RamdiskLowMem
 )
 
 // Bdev fault codes
@@ -178,8 +178,8 @@ const (
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
-	ServerConfigScmTmpfsUnderMinMem
-	ServerConfigScmTmpfsOverMaxMem
+	ServerConfigRamdiskUnderMinMem
+	ServerConfigRamdiskOverMaxMem
 	ServerConfigScmDiffClass
 )
 

@@ -238,17 +238,17 @@ func FaultConfigInsufficientHugepages(min, req int) *fault.Fault {
 	)
 }
 
-// FaultConfigScmTmpfsOverMaxMem indicates that the tmpfs size requested in config is larger than
+// FaultConfigRamdiskOverMaxMem indicates that the tmpfs size requested in config is larger than
 // maximum allowed.
-func FaultConfigScmTmpfsOverMaxMem(confSize, scmSize, memTmpfsMin uint64) *fault.Fault {
+func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *fault.Fault {
 	return serverConfigFault(
-		code.ServerConfigScmTmpfsOverMaxMem,
+		code.ServerConfigRamdiskOverMaxMem,
 		fmt.Sprintf("configured scm tmpfs size %s is larger than the maximum (%s) that "+
 			"total system memory (RAM) will allow", humanize.IBytes(confSize),
-			humanize.IBytes(scmSize)),
+			humanize.IBytes(ramSize)),
 		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
 			"or manually set to a value between %s and %s in the config file",
-			humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize)),
+			humanize.IBytes(memRamdiskMin), humanize.IBytes(ramSize)),
 	)
 }
 

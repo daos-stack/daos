@@ -510,14 +510,14 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err e
 
 	// Pass 0 for sys and engine reservations to use default values.
 	// TODO: pass system reservation parameter from config
-	scmSize, err := storage.CalcScmSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
+	ramdiskSize, err := storage.CalcRamdiskSize(log, memTotal, memHuge, 0, 0, len(cfg.Engines))
 	if err != nil {
 		return errors.Wrapf(err, "calculate scm ramdisk size")
 	}
 
-	if scmSize < storage.MemTmpfsMin {
+	if ramdiskSize < storage.MemRamdiskMin {
 		// Total RAM is insufficient to meet minimum tmpfs size.
-		return storage.FaultScmTmpfsLowMem(storage.MemTmpfsMin, scmSize)
+		return storage.FaultRamdiskLowMem(storage.MemRamdiskMin, ramdiskSize)
 	}
 
 	for _, ec := range cfg.Engines {
@@ -531,10 +531,10 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) (err e
 		confSize := uint64(humanize.GiByte * scs[0].Scm.RamdiskSize)
 		if confSize == 0 {
 			// Apply calculated size as not already set.
-			scs[0].WithScmRamdiskSize(uint(scmSize / humanize.GiByte))
-		} else if confSize > scmSize {
+			scs[0].WithScmRamdiskSize(uint(ramdiskSize / humanize.GiByte))
+		} else if confSize > ramdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			return FaultConfigScmTmpfsOverMaxMem(confSize, scmSize, storage.MemTmpfsMin)
+			return FaultConfigRamdiskOverMaxMem(confSize, ramdiskSize, storage.MemRamdiskMin)
 		}
 	}
 

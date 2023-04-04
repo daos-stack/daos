@@ -67,26 +67,26 @@ func FaultScmInvalidPMem(msg string) *fault.Fault {
 		recreateRegionsStr)
 }
 
-// FaultScmTmpfsLowMem indicates that total RAM is insufficient to support given configuration.
-func FaultScmTmpfsLowMem(memTmpfsMin, scmSize uint64) *fault.Fault {
+// FaultRamdiskLowMem indicates that total RAM is insufficient to support given configuration.
+func FaultRamdiskLowMem(memRamdiskMin, ramdiskSize uint64) *fault.Fault {
 	return storageFault(
-		code.ScmTmpfsLowMem,
+		code.RamdiskLowMem,
 		fmt.Sprintf("Total system memory (RAM) insufficient for tmpfs SCM, want %s have "+
-			"%s", humanize.IBytes(memTmpfsMin), humanize.IBytes(scmSize)),
+			"%s", humanize.IBytes(memRamdiskMin), humanize.IBytes(ramdiskSize)),
 		"Reduce engine targets or the system_ram_reserved values in server config "+
 			"file if increasing the amount of RAM is not possible")
 }
 
-// FaultScmConfigTmpfsUnderMinMem indicates that the tmpfs size requested in config is less than
+// FaultConfigRamdiskUnderMinMem indicates that the tmpfs size requested in config is less than
 // minimum allowed.
-func FaultScmConfigTmpfsUnderMinMem(confSize, memTmpfsMin uint64) *fault.Fault {
+func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault {
 	return storageFault(
-		code.ServerConfigScmTmpfsUnderMinMem,
+		code.ServerConfigRamdiskUnderMinMem,
 		fmt.Sprintf("configured scm tmpfs size %s is lower than the minimum (%s) required "+
-			"for SCM", humanize.IBytes(confSize), humanize.IBytes(memTmpfsMin)),
+			"for SCM", humanize.IBytes(confSize), humanize.IBytes(memRamdiskMin)),
 		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
 			"or manually set to a value above %s in the config file",
-			humanize.IBytes(memTmpfsMin)),
+			humanize.IBytes(memRamdiskMin)),
 	)
 }
 

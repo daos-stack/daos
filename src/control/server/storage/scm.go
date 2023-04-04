@@ -49,8 +49,8 @@ const (
 	memSysDefRsvd = 6 << 30 // 6GiB
 	// Default amount of memory reserved per-engine when calculating tmpfs capacity for SCM.
 	memEngineDefRsvd = 1 << 30 // 1GiB
-	// MemTmpfsMin is the minimum amount of memory needed for each engine's tmpfs SCM.
-	MemTmpfsMin = 4 << 30 // 4GiB
+	// MemRamdiskMin is the minimum amount of memory needed for each engine's tmpfs RAMp-disk.
+	MemRamdiskMin = 4 << 30 // 4GiB
 )
 
 func (ss ScmState) String() string {
@@ -541,10 +541,10 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 	return res, nil
 }
 
-// CalcScmSize returns recommended SCM RAM-disk size calculated as
+// CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
 // (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
-func CalcScmSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, engCount int) (uint64, error) {
+func CalcRamdiskSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, engCount int) (uint64, error) {
 	if memTot == 0 {
 		return 0, errors.New("requires nonzero total mem")
 	}
@@ -572,9 +572,9 @@ func CalcScmSize(log logging.Logger, memTot, memHuge, rsvSys, rsvEng uint64, eng
 			msgStats)
 	}
 
-	scmSize := (memTot - memRsvd) / uint64(engCount)
+	ramdiskSize := (memTot - memRsvd) / uint64(engCount)
 
-	log.Debugf("tmpfs scm size %s calculated using %s", humanize.IBytes(scmSize), msgStats)
+	log.Debugf("tmpfs scm size %s calculated using %s", humanize.IBytes(ramdiskSize), msgStats)
 
-	return scmSize, nil
+	return ramdiskSize, nil
 }
