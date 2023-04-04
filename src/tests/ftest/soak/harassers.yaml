@@ -81,6 +81,8 @@ soak_harassers:
     # - snapshot
     # - exclude_reintegrate
     - exclude_reintegrate-offline
+    # - exclude_extend
+    # - exclude_extend-offline
     # - server-stop_server-start
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate

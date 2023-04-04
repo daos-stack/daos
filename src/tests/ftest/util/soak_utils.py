@@ -516,7 +516,7 @@ def launch_vmd_identify_check(self, name, results, args):
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_exclude_reintegrate(self, pool, name, results, args):
+def launch_exclude_reintegrate_extend(self, pool, name, results, args):
     """Launch the dmg cmd to exclude a rank in a pool.
 
     Args:
@@ -558,19 +558,27 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
-    elif name == "REINTEGRATE":
+    elif name in ["REINTEGRATE", "EXTEND"]:
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
             tgt_idx = self.harasser_args["EXCLUDE"]["tgt_idx"]
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
-            try:
-                pool.reintegrate(rank, tgt_idx=tgt_idx)
-                status = True
-            except TestFail as error:
-                self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
-                status = False
-            if status:
+            if name == "REINTEGRATE":
+                try:
+                    pool.reintegrate(rank, tgt_idx=tgt_idx)
+                    status = True
+                except TestFail as error:
+                    self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
+                    status = False
+            else:
+                try:
+                    pool.extend(rank)
+                    status = True
+                except TestFail as error:
+                    self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
+                    status = False
+            if status and name == "REINTEGRATE":
                 status = wait_for_pool_rebuild(self, pool, name)
         else:
             self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",
@@ -630,7 +638,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     status = False
                 drain_status &= status
                 if drain_status:
-                    drain_status &= wait_for_pool_rebuild(self, pool, name)
+                    drain_status &= wait_for_pool_rebuild(self, pool, "DRAIN")
                     status = drain_status
                 else:
                     status = False

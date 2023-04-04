@@ -23,7 +23,7 @@ from host_utils import get_local_host
 import slurm_utils
 from run_utils import run_remote
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
-    launch_snapshot, launch_exclude_reintegrate, \
+    launch_snapshot, launch_exclude_reintegrate_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
@@ -218,13 +218,18 @@ class SoakTestBase(TestWithServers):
             params = (self, self.pool[0], name)
             job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "exclude":
-            method = launch_exclude_reintegrate
+            method = launch_exclude_reintegrate_extend
             name = "EXCLUDE"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "reintegrate":
-            method = launch_exclude_reintegrate
+            method = launch_exclude_reintegrate_extend
             name = "REINTEGRATE"
+            params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "extend":
+            method = launch_exclude_reintegrate_extend
+            name = "EXTEND"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-stop":
@@ -248,9 +253,7 @@ class SoakTestBase(TestWithServers):
             params = (self, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         else:
-            raise SoakTestError(
-                "<<FAILED: Harasser {} is not supported. ".format(
-                    harasser))
+            raise SoakTestError(f"<<FAILED: Harasser {harasser} is not supported. ")
 
         # start harasser
         job.start()
@@ -258,8 +261,7 @@ class SoakTestBase(TestWithServers):
         # Wait for harasser job to join
         job.join(timeout)
         if job.is_alive():
-            self.log.error(
-                "<< ERROR: harasser %s is alive, failed to join>>", job.name)
+            self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
             if name not in ["REBUILD", "SNAPSHOT"]:
                 job.terminate()
                 status_msg = "<<FAILED: {} has been terminated.".format(name)
