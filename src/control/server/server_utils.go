@@ -203,7 +203,7 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
 	var netDevClass hardware.NetDevClass
 	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		fi, err := fis.GetInterfaceOnNetDevice(engine.Fabric.Interface, engine.Fabric.Provider)
 		if err != nil {
 			return 0, err
 		}

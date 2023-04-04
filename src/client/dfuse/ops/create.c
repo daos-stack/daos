@@ -159,6 +159,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_ie_init(ie);
 	dfuse_open_handle_init(oh, ie);
 
+	oh->doh_linear_read = false;
+
 	if (!fs_handle->dpi_info->di_multi_user) {
 		rc = _dfuse_mode_update(req, parent, &mode);
 		if (rc != 0)
