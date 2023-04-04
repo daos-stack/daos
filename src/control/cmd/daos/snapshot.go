@@ -7,7 +7,11 @@
 package main
 
 import (
+	"unsafe"
+
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
@@ -129,11 +133,71 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	rc := C.cont_list_snaps_hdlr(ap)
+	var anchor C.daos_anchor_t
+	var snapCount C.int
+
+	rc := C.daos_cont_list_snap(ap.cont, &snapCount, nil, nil, &anchor, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to list snapshots for container %s",
-			cmd.contUUID)
+		return errors.Wrapf(err, "failed to count snapshots for container %s", cmd.ContainerID())
+	}
+
+	if !C.daos_anchor_is_eof(&anchor) {
+		return errors.New("too many snapshots returned")
+	}
+
+	epochs := make([]C.daos_epoch_t, snapCount)
+	names := make([]*C.char, snapCount)
+	defer func() {
+		for _, name := range names {
+			freeDaosStr(name)
+		}
+	}()
+	expectedSnaps := snapCount
+	C.memset(unsafe.Pointer(&anchor), 0, C.sizeof_daos_anchor_t)
+	if snapCount > 0 {
+		rc = C.daos_cont_list_snap(ap.cont, &snapCount, &epochs[0], &names[0], &anchor, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to list snapshots for container %s", cmd.ContainerID())
+		}
+	}
+
+	if expectedSnaps < snapCount {
+		return errors.New("snapshot list has been truncated (size changed)")
+	}
+	actualSnaps := func() int {
+		if snapCount < expectedSnaps {
+			return int(snapCount)
+		} else {
+			return int(expectedSnaps)
+		}
+	}()
+
+	if cmd.jsonOutputEnabled() {
+		type snapshot struct {
+			Epoch     uint64 `json:"epoch"`
+			Timestamp string `json:"timestamp"`
+			Name      string `json:"name,omitempty"`
+		}
+
+		snaps := make([]*snapshot, actualSnaps)
+		for i := 0; i < actualSnaps; i++ {
+			snaps[i] = &snapshot{
+				Epoch:     uint64(epochs[i]),
+				Timestamp: daos.HLC(epochs[i]).String(),
+				Name:      C.GoString(names[i]),
+			}
+		}
+
+		return cmd.outputJSON(snaps, nil)
+	}
+
+	cmd.Info("Container's snapshots :")
+	if snapCount == 0 {
+		cmd.Info("no snapshots")
+		return nil
+	}
+	for i := 0; i < actualSnaps; i++ {
+		cmd.Infof("0x%x %s", epochs[i], C.GoString(names[i]))
 	}
 
 	return nil
