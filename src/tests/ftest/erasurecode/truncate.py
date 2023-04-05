@@ -33,9 +33,9 @@ class Ecodtruncate(FioBase):
             Verify the data content and file size
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_fio,ec_posix
-        :avocado: tags=ec_truncate,test_ec_truncate
+        :avocado: tags=hw,large
+        :avocado: tags=ec,ec_fio,ec_posix,fio
+        :avocado: tags=Ecodtruncate,test_ec_truncate
         """
         truncate_size = int(self.params.get("truncate_size", '/run/fio/*'))
         fname = self.params.get("names", '/run/fio/*')

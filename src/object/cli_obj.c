@@ -70,6 +70,7 @@ open_retry:
 		oid.id_shard  = obj_shard->do_shard;
 		oid.id_pub    = obj->cob_md.omd_id;
 		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
@@ -902,12 +903,13 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
-	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
+	if (obj_auxi->req_reasbed) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n", DP_OID(oid));
 		D_ASSERTF(reasb_req->orr_iod_nr == args->nr, "%d != %d.\n",
 			  reasb_req->orr_iod_nr, args->nr);
 		memset(reasb_req->orr_fetch_stat, 0, args->nr * sizeof(*reasb_req->orr_fetch_stat));
-		return 0;
+		if (!reasb_req->orr_size_fetched)
+			return 0;
 	}
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
@@ -1404,6 +1406,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
+	D_ASSERT(obj->cob_co->dc_props.dcp_obj_version < MAX_OBJ_LAYOUT_VERSION);
 	obj->cob_layout_version = obj->cob_co->dc_props.dcp_obj_version;
 	rc = obj_init_oca(obj);
 	if (rc != 0)
@@ -2073,7 +2076,7 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 static int
 obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		  d_sg_list_t *sgls, bool update, bool size_fetch,
-		  bool spec_shard)
+		  bool spec_shard, bool check_exist)
 {
 	int i, j;
 	int rc;
@@ -2122,9 +2125,10 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		case DAOS_IOD_ARRAY:
 			if (sgls == NULL) {
 				/* size query or punch */
-				if (!update || iods[i].iod_size == DAOS_REC_ANY)
+				if ((iods[i].iod_size == DAOS_REC_ANY) ||
+				    (!update && check_exist))
 					continue;
-				D_ERROR("invalid update req with NULL sgl\n");
+				D_ERROR("invalid req with NULL sgl\n");
 				return -DER_INVAL;
 			}
 			if (!size_fetch &&
@@ -2355,8 +2359,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, f_args->nr,
-					       f_args->iods, f_args->sgls,
-					       false, size_fetch, spec_shard);
+					       f_args->iods, f_args->sgls, false,
+					       size_fetch, spec_shard, check_exist);
 			if (rc)
 				goto out;
 		}
@@ -2396,7 +2400,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, u_args->nr,
 					       u_args->iods, u_args->sgls, true,
-					       false, false);
+					       false, false, false);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -3652,7 +3656,8 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 			   !obj_is_modification_opc(obj_auxi->opc) &&
 			   !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
 			   !obj_auxi->spec_group && !obj_auxi->to_leader &&
-			   ret != -DER_TX_RESTART && !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
+			   ret != -DER_TX_RESTART && ret != -DER_RF &&
+			   !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to
@@ -4569,16 +4574,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (task->dt_result == -DER_CSUM || task->dt_result == -DER_TX_UNCERTAIN ||
 		    task->dt_result == -DER_NVME_IO) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
-			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				if (task->dt_result == -DER_CSUM)
-					obj_auxi->csum_retry = 1;
-				else if (task->dt_result == -DER_TX_UNCERTAIN)
-					obj_auxi->tx_uncertain = 1;
-				else
-					obj_auxi->nvme_io_err = 1;
+			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov) {
+				/* Retry fetch on alternative shard */
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+					if (task->dt_result == -DER_CSUM)
+						obj_auxi->csum_retry = 1;
+					else if (task->dt_result == -DER_TX_UNCERTAIN)
+						obj_auxi->tx_uncertain = 1;
+					else
+						obj_auxi->nvme_io_err = 1;
+				} else if (task->dt_result != -DER_NVME_IO) {
+					/* Don't retry update for CSUM & UNCERTAIN errors */
+					obj_auxi->io_retry = 0;
+				}
 			} else {
-				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
 			}
 		}
@@ -4722,8 +4731,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				  task->dt_result == -DER_NONEXIST)) {
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj,
-					     DAOS_OBJ_RPC_FETCH, task);
+				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, false);
 			}
 			break;
 		}
@@ -4743,8 +4751,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				D_ASSERT(obj != NULL);
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj,
-					     obj_auxi->opc, task);
+				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, false);
 			}
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
@@ -5757,18 +5764,16 @@ dc_obj_update_task(tse_task_t *task)
 	if (rc != 0)
 		goto comp;
 
-	if (daos_handle_is_valid(args->th)) {
+	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task);
-		goto comp;
-	}
+		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, true);
 
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
+
 comp:
-	if (rc <= 0)
-		obj_task_complete(task, rc);
-	return rc > 0 ? 0 : rc;
+	obj_task_complete(task, rc);
+	return rc;
 }
 
 static int
@@ -6639,17 +6644,16 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
-	if (daos_handle_is_valid(args->th)) {
+	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, obj, opc, task);
-		goto comp;
-	}
+		return dc_tx_attach(args->th, obj, opc, task, true);
+
 	/* submit the punch */
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
+
 comp:
-	if (rc <= 0)
-		obj_task_complete(task, rc);
-	return rc > 0 ? 0 : rc;
+	obj_task_complete(task, rc);
+	return rc;
 }
 
 int
@@ -7133,6 +7137,7 @@ daos_dc_obj2id(void *ptr, daos_unit_oid_t *id)
 
 	id->id_pub = obj->cob_md.omd_id;
 	id->id_layout_ver = obj->cob_layout_version;
+	id->id_padding = 0;
 }
 
 /**

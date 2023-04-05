@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,7 +29,6 @@
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
-#define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
@@ -186,9 +185,13 @@ struct bio_faulty_criteria	glb_criteria;
 static inline void
 set_faulty_criteria(void)
 {
-	glb_criteria.fc_enabled = false;
-	glb_criteria.fc_max_io_errs = 5;
-	glb_criteria.fc_max_csum_errs = 5;
+	glb_criteria.fc_enabled = true;
+	glb_criteria.fc_max_io_errs = 10;
+	/*
+	 * FIXME: Don't enable csum error criterion for now, otherwise, targets
+	 *	  be unexpectedly down in CSUM tests.
+	 */
+	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
 	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
 	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
@@ -294,7 +297,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
-	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	env = getenv("VOS_BDEV_CLASS");

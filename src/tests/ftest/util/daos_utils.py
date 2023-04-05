@@ -584,36 +584,12 @@ class DaosCommand(DaosCommandBase):
             ("container", "set-owner"),
             pool=pool, cont=cont, user=user, group=group)
 
-    def container_set_attr(
-            self, pool, cont, attr, val, sys_name=None):
-        """Call daos container set-attr for a single attribute.
+    def container_set_attr(self, pool, cont, attrs, sys_name=None):
+        """Call daos container set-attr.
 
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            attr (str): attribute name
-            val (str): attribute value
-            sys_name (str, optional): DAOS system name context for servers.
-                Defaults to None.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the daos container set-attr command fails.
-
-        """
-        return self._get_result(
-            ("container", "set-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=list_to_str([attr, val], ":"))
-
-    def container_set_attrs(self, pool, cont, attrs, sys_name=None):
-        """Set multiple container attributes.
-
-        Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
             attrs (dict): Attribute key/val pairs.
             sys_name (str): DAOS system name. Defaults to None.
 

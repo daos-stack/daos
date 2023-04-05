@@ -8,6 +8,6 @@ ninja
 pyelftools
 pyxattr
 pyyaml
-scons<4.5        # 4.5 has some serious issues
+scons        # Works around a bug in scons on EL 8.
 tabulate
 wheel

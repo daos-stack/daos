@@ -234,8 +234,16 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 			din->di_flags.ca_arrays = NULL;
 		}
 
-		if (dra->dra_opc == DTX_REFRESH && DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY)) {
-			rc = crt_req_set_timeout(req, 3);
+		if (dra->dra_opc == DTX_REFRESH) {
+			if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+				rc = crt_req_set_timeout(req, 3);
+			else
+				/*
+				 * If related DTX is committable, then it will be committed
+				 * within DTX_COMMIT_THRESHOLD_AGE time. So if need to wait
+				 * for longer, then just let related client to retry.
+				 */
+				rc = crt_req_set_timeout(req, DTX_COMMIT_THRESHOLD_AGE);
 			D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
 		}
 
@@ -1067,8 +1075,13 @@ next:
 				rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid,
 						    NULL, NULL, NULL, NULL, false);
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
-				    rc1 != -DER_NONEXIST && rc == 0)
-					rc = -DER_INPROGRESS;
+				    rc1 != -DER_NONEXIST) {
+					if (!failout)
+						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
+						       DP_DTI(&dsp->dsp_xid), rc1);
+					else if (rc == 0)
+						rc = -DER_INPROGRESS;
+				}
 
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
@@ -1184,13 +1197,50 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
-		if (dth->dth_aborted) {
-			rc = -DER_CANCELED;
+		if (dth->dth_need_validation) {
+			rc = vos_dtx_validation(dth);
+			switch (rc) {
+			case DTX_ST_INITED:
+				if (!dth->dth_aborted)
+					break;
+				/* Fall through */
+			case DTX_ST_PREPARED:
+			case DTX_ST_PREPARING:
+				/* The DTX has been ever aborted and related resent RPC
+				 * is in processing. Return -DER_AGAIN to make this ULT
+				 * to retry sometime later without dtx_abort().
+				 */
+				rc = -DER_AGAIN;
+				break;
+			case DTX_ST_ABORTED:
+				D_ASSERT(dth->dth_ent == NULL);
+				/* Aborted, return -DER_INPROGRESS for client retry.
+				 *
+				 * Fall through.
+				 */
+			case DTX_ST_ABORTING:
+				rc = -DER_INPROGRESS;
+				break;
+			case DTX_ST_COMMITTED:
+			case DTX_ST_COMMITTING:
+			case DTX_ST_COMMITTABLE:
+				/* Aborted then prepared/committed by race.
+				 * Return -DER_ALREADY to avoid repeated modification.
+				 */
+				dth->dth_already = 1;
+				rc = -DER_ALREADY;
+				break;
+			default:
+				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
+					  DP_DTI(&dth->dth_xid), rc);
+			}
 		} else {
 			vos_dtx_cleanup(dth, false);
 			dtx_handle_reinit(dth);
 			rc = -DER_AGAIN;
 		}
+	} else if (rc == -DER_TIMEDOUT) {
+		rc = -DER_INPROGRESS;
 	}
 
 	return rc;

@@ -22,7 +22,7 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
     Args:
@@ -31,14 +31,17 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
             POOL_NAMESPACE.
         create (bool, optional): should the pool be created. Defaults to True.
         connect (bool, optional): should the pool be connected. Defaults to True.
-        index (int, optional): Server index for dmg command. Defaults to 0.
+        dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+            calls test.get_dmg_command().
 
     Returns:
         TestPool: the new pool object
 
     """
+    if not dmg:
+        dmg = test.get_dmg_command()
     pool = TestPool(
-        namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
+        namespace=namespace, context=test.context, dmg_command=dmg,
         label_generator=test.label_generator)
     pool.get_params(test)
     if params:
@@ -201,7 +204,7 @@ class TestPool(TestDaosApiBase):
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.acl_file = BasicParameter(None)
-        self.label = BasicParameter(None, "TestLabel")
+        self.label = BasicParameter(None, "TestPool")
         self.label_generator = label_generator
 
         # Optional TestPool parameters used to autosize the dmg pool create
@@ -389,13 +392,13 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        if self.set_logmasks is True:
+        if self.set_logmasks.value is True:
             self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            if self.set_logmasks is True:
+            if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
@@ -494,7 +497,7 @@ class TestPool(TestDaosApiBase):
 
                 # Destroy the pool with the dmg command.
                 # Elevate log_mask to DEBUG, then restore after pool destroy
-                if self.set_logmasks is True:
+                if self.set_logmasks.value is True:
                     self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                     self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
                     self.dmg.server_set_logmasks(raise_exception=False)
@@ -670,6 +673,20 @@ class TestPool(TestDaosApiBase):
                         "response. This timeout can be adjusted via the 'pool/pool_query_timeout' "
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
+
+    @fail_on(CommandFailure)
+    def query_targets(self, *args, **kwargs):
+        """Call dmg pool query-targets.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_query_targets
+            kwargs (dict, optional): named arguments to DmgCommand.pool_query_targets
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def reintegrate(self, rank, tgt_idx=None):
@@ -980,6 +997,31 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_space_per_target(self, ranks, target_idx):
+        """Get space usage per rank, per target using dmg pool query-targets.
+
+        Args:
+            ranks (list): List of ranks to be queried
+            target_idx (str): Comma-separated list of target idx(s) to be queried
+
+        Returns:
+            dict: space per rank, per target
+                E.g. {<rank>: {<target>: {scm: {total: X, free: Y, used: Z}, nvme: {...}}}}
+
+        """
+        rank_target_tier_space = {}
+        for rank in ranks:
+            rank_target_tier_space[rank] = {}
+            rank_result = self.query_targets(rank=rank, target_idx=target_idx)
+            for target, target_info in enumerate(rank_result['response']['Infos']):
+                rank_target_tier_space[rank][target] = {}
+                for tier in target_info['Space']:
+                    rank_target_tier_space[rank][target][tier['media_type']] = {
+                        'total': tier['total'],
+                        'free': tier['free'],
+                        'used': tier['total'] - tier['free']}
+        return rank_target_tier_space
 
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.

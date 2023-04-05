@@ -1286,6 +1286,7 @@ credits_available(struct crt_ep_inflight *epi)
 	return crt_gdata.cg_credit_ep_ctx - inflight;
 }
 
+/* Not to be called on URI_LOOKUP RPCs. */
 static void
 crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 {
@@ -1294,10 +1295,6 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(crt_ctx != NULL);
 	D_ASSERT(epi != NULL);
-
-	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP)
-		return;
-
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED ||
 		 rpc_priv->crp_state == RPC_STATE_QUEUED ||
 		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
@@ -1305,8 +1302,6 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 		 rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_CANCELED ||
 		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH);
-	epi = rpc_priv->crp_epi;
-	D_ASSERT(epi != NULL);
 
 	D_MUTEX_LOCK(&epi->epi_mutex);
 
@@ -1349,18 +1344,20 @@ void
 crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	struct crt_ep_inflight	*epi = rpc_priv->crp_epi;
+	struct crt_ep_inflight	*epi;
 	d_list_t		 submit_list;
 	struct crt_rpc_priv	*tmp_rpc;
 	int			 rc;
 
 	D_ASSERT(crt_ctx != NULL);
-	D_ASSERT(epi != NULL);
 
 	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
 		RPC_TRACE(DB_NET, rpc_priv, "bypass untracking for URI_LOOKUP.\n");
 		return;
 	}
+
+	epi = rpc_priv->crp_epi;
+	D_ASSERT(epi != NULL);
 
 	crt_context_req_untrack_internal(rpc_priv);
 

@@ -276,7 +276,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
-        self.label = BasicParameter(None)
+        self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
 
         self.container = None
@@ -359,6 +359,10 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.container = DaosContainer(self.pool.context)
 
         if self.control_method.value == self.USE_API:
+            # pydaos.raw doesn't support create with a label
+            self.log.info("Ignoring label for container created with API")
+            self.label.update(None)
+
             # Create a container with the API method
             kwargs = {"poh": self.pool.pool.handle}
             if uuid is not None:
@@ -598,7 +602,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self._call_method(self.container.query, {"coh": coh})
             self.info = self.container.info
 
-    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None):
+    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None, ci_nhandles=None):
         # pylint: disable=unused-argument
         """Check the container info attributes.
 
@@ -1012,3 +1016,17 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             raise DaosTestError("Undefined daos command")
         return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, entry=entry, acl_file=acl_file)
+
+    def set_attr(self, *args, **kwargs):
+        """Call daos container set-attr.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_attr
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_attr
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.daos.container_set_attr(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

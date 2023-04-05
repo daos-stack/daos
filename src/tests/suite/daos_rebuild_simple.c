@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -777,7 +777,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	test_rebuild_wait(&arg, 1);
 
 	print_message("lookup 100 dkeys\n");
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 100 && oclass != OC_SX; i++) {
 		char buffer[32];
 
 		memset(buffer, 0, 32);
@@ -787,8 +787,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 		 * data anyway, so it may lose data here, so do not need verify data
 		 * for SX object. Incremental reintegration might fix this.
 		 */
-		if (oclass != OC_SX)
-			assert_string_equal(buffer, rec);
+		assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
 }
@@ -848,6 +847,34 @@ rebuild_large_object(void **state)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+}
+
+int
+rebuild_small_pool_n4_rf1_setup(void **state)
+{
+	test_arg_t	*arg;
+	int rc;
+
+	save_group_state(state);
+	rc = rebuild_sub_setup_common(state, REBUILD_SMALL_POOL_SIZE, 4, DAOS_PROP_CO_REDUN_RF1);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, 4, NULL);
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
@@ -1188,6 +1215,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
 	reintegrate_single_pool_rank(arg, rank, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);
@@ -1201,7 +1229,6 @@ rebuild_with_dfs_open_create_punch(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	daos_cont_status_clear(co_hdl, NULL);
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -1278,6 +1305,139 @@ rebuild_many_objects_with_failure(void **state)
 	D_FREE(oids);
 }
 
+#define KB 1024
+#define MB (KB * 1024)
+#define GB (MB * 1024)
+
+static void
+inject_corruption(const int my_rank, const int injection_rank, const char *injection_group,
+		  const int injection_count)
+{
+	int	fault_injection = DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_SOME;
+
+	if (my_rank == 0) {
+		daos_debug_set_params(injection_group, injection_rank, DMG_KEY_FAIL_NUM,
+				      injection_count, 0, NULL);
+		daos_debug_set_params(injection_group, injection_rank, DMG_KEY_FAIL_LOC,
+				      fault_injection, 0, NULL);
+	}
+}
+
+/*
+ * This test was introduced to troubleshoot hitting an assert in rpc_csum.c "csum->cs_csum != NULL".
+ * It tests that nothing breaks while the checksum scrubber detects data corruption and
+ * initiates a drain on multiple targets due to the corruption threshold being hit.
+ */
+static void
+rebuild_object_with_csum_error(void **state)
+{
+	test_arg_t	*arg = *state;
+	d_sg_list_t	 sgl = {0};
+	int		 rc = 0;
+	int		 i, j;
+	daos_handle_t	 poh = arg->pool.poh;
+	int		 ranks = 3; /* will inject corruption to ranks 0-2 */
+	daos_key_t	 dkey, akey;
+	uint64_t	 dkey_val;
+	char		*akey_val = "0";
+	daos_prop_t	*cont_props;
+	uuid_t		 cont_uuid;
+	char		 uuid_cont_str[DAOS_UUID_STR_SIZE];
+	daos_handle_t	 coh;
+	daos_handle_t	 oh;
+	daos_obj_id_t	 oid;
+	daos_recx_t	 recx;
+	daos_iod_t	 iod;
+	uint8_t		*pool_uuid = arg->pool.pool_uuid;
+
+	/* test params */
+	daos_size_t	transfer_size = 1 * MB;
+	daos_size_t	block_size = 2L * GB;
+	daos_size_t	io_count = block_size / transfer_size;
+	uint32_t	iterations = 2;
+
+	if (!test_runable(arg, 3)) {
+		skip();
+		return;
+	}
+
+	/* setup pool to have scrubbing turned on */
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "timed", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub-freq", "1", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub-thresh", "2", pool_uuid));
+
+	/* setup container */
+	cont_props = daos_prop_alloc(3);
+	assert_non_null(cont_props);
+	cont_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	cont_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	cont_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	cont_props->dpp_entries[1].dpe_val = 1;
+	cont_props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM;
+	cont_props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_CRC16;
+
+	if (arg->myrank == 0) {
+		/* make sure corruption is disabled while creating cont ... */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+
+	assert_success(daos_cont_create(poh, &cont_uuid, cont_props, NULL));
+	uuid_unparse(cont_uuid, uuid_cont_str);
+	assert_success(daos_cont_open(poh, uuid_cont_str, DAOS_COO_RW, &coh, NULL, NULL));
+
+	/* setup object */
+	oid = daos_test_oid_gen(coh, OC_RP_2GX, 0, 0, 0);
+	assert_success(daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL));
+
+	/* setup keys */
+	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
+	d_iov_set(&akey, akey_val, strlen(akey_val));
+
+	/* setup IOD and SGL */
+	recx.rx_idx = 0;
+	recx.rx_nr = transfer_size;
+
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &recx;
+
+	assert_success(d_sgl_init(&sgl, 1));
+	assert_success(daos_iov_alloc(&sgl.sg_iovs[0], transfer_size, true));
+	memset(sgl.sg_iovs[0].iov_buf, 0xa, transfer_size);
+
+	for (j = 0; j < iterations && rc == 0; j++) {
+		print_message("iteration: %d\n", j);
+		for (i = 0; i < io_count && rc == 0; i++) {
+			if (i % 100 == 0)
+				inject_corruption(arg->myrank, (i / 100) % ranks, arg->group, 2);
+			dkey_val = i;
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+			if (rc != 0)
+				print_message("Error updating object: "DF_RC"\n", DP_RC(rc));
+		}
+		for (i = 0; i < io_count && rc == 0; i++) {
+			dkey_val = i;
+			rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+			if (rc != 0)
+				print_message("Error fetching object: "DF_RC"\n", DP_RC(rc));
+		}
+	}
+
+	if (arg->myrank == 0) {
+		/* reset fault injection */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+
+	/* clean up */
+	assert_success(daos_cont_close(coh, NULL));
+	assert_success(daos_cont_destroy(poh, uuid_cont_str, false, NULL));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "off", arg->pool.pool_uuid));
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1303,27 +1463,29 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
-	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	 rebuild_sx_object, rebuild_small_sub_rf0_setup, test_teardown},
 	{"REBUILD13: rebuild xsf object",
 	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD14: rebuild large stripe object",
-	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_large_object, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD16: rebuild with full stripe",
-	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_full_shards, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD17: rebuild with punch recxs",
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD18: rebuild with multiple group",
-	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	 rebuild_multiple_group, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD19: rebuild with large offset",
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD20: rebuild with large key",
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
-	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD22: rebuild lot of objects with failure",
 	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
+	{"REBUILD23: object corrupt rebuild",
+	 rebuild_object_with_csum_error, rebuild_small_sub_rf1_setup, test_teardown},
 };
 
 int

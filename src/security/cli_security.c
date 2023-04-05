@@ -234,6 +234,7 @@ get_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t gr
 {
 	struct daos_acl		*acl = NULL;
 	struct d_ownership	ownership = {0};
+	bool			is_owner;
 	int			rc;
 
 	/* These ACL and ownership variables point to the data in-place in the prop, and thus don't
@@ -255,7 +256,7 @@ get_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t gr
 		return -DER_INVAL;
 	}
 
-	return get_acl_permissions(acl, &ownership, user_info, min_owner_perms, perms);
+	return get_acl_permissions(acl, &ownership, user_info, min_owner_perms, perms, &is_owner);
 }
 
 static void

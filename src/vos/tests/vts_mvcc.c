@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -169,6 +169,7 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	daos_obj_set_oid(&oid->id_pub, DAOS_OT_MULTI_UINT64, OR_RP_1, 1, 0);
 	oid->id_shard = 0;
 	oid->id_layout_ver = 0;
+	oid->id_padding = 0;
 }
 
 static void
@@ -243,6 +244,8 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 
 	if (txh->th_nr_ops == txh->th_op_seq) {
 		xid = dth->dth_xid;
+		if (txh->th_nr_mods != 0 && !success)
+			vos_dtx_cleanup(dth, true);
 		vts_dtx_end(dth);
 		if (txh->th_nr_mods != 0) {
 			if (success && !txh->th_skip_commit) {
@@ -251,7 +254,8 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 			} else {
 				if (!success)
 					txh->th_skip_commit = false;
-				daos_dti_copy(&txh->th_saved_xid, &xid);
+				else
+					daos_dti_copy(&txh->th_saved_xid, &xid);
 			}
 		}
 	}
@@ -1294,7 +1298,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		if (txh1.th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &txh1.th_saved_xid, 1, NULL);
-			assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
 		}
 		if (expect_inprogress) {
 			print_message("  %s(%s, "DF_X64") (expect %s): ",
@@ -1557,21 +1561,19 @@ out:
 				      bound, mvcc_arg->i));
 
 	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
-		if (wtx->th_skip_commit)
+		if (wtx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &wtx->th_saved_xid, 1, NULL);
-		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &wtx->th_saved_xid, DAOS_EPOCH_MAX);
-		assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
+		}
 	}
 
 	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
-		if (atx->th_skip_commit)
+		if (atx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &atx->th_saved_xid, 1, NULL);
-		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &atx->th_saved_xid, DAOS_EPOCH_MAX);
-		assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
+		}
 	}
 
 #undef DP_CASE

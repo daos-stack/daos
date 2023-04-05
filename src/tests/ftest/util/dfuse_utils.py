@@ -28,6 +28,7 @@ class DfuseCommand(ExecutableCommand):
         self.cont = BasicParameter(None, position=2)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
+        self.eq_count = FormattedParameter("--eq-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
@@ -73,6 +74,9 @@ class Dfuse(DfuseCommand):
 
         # which fusermount command to use for unmount
         self._fusermount_cmd = ""
+
+        # used by stop() to know cleanup is needed
+        self.__need_cleanup = False
 
     def __del__(self):
         """Destruct the object."""
@@ -259,6 +263,9 @@ class Dfuse(DfuseCommand):
             if not self._fusermount_cmd:
                 raise CommandFailure(f'Failed to get fusermount command on: {self.hosts}')
 
+        # mark the instance as needing cleanup before starting setup
+        self.__need_cleanup = True
+
         # setup the mount point
         self._setup_mount_point()
 
@@ -276,7 +283,7 @@ class Dfuse(DfuseCommand):
             # it immediately after the command returns.
             num_retries = 3
             for retry in range(1, num_retries + 1):
-                if not self.check_running(fail_on_error=(retry == num_retries)):
+                if not self.check_running(fail_on_error=retry == num_retries):
                     self.log.info('Waiting two seconds for dfuse to start')
                     time.sleep(2)
 
@@ -334,7 +341,7 @@ class Dfuse(DfuseCommand):
 
             # Try to unmount dfuse on each host, ignoring errors for now
             _ = self._run_as_owner(
-                self._running_hosts, self._get_umount_command(force=(current_try > 0)))
+                self._running_hosts, self._get_umount_command(force=current_try > 0))
             time.sleep(2)
 
             self._update_mount_state()
@@ -353,6 +360,9 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse stop fails
 
         """
+        if not self.__need_cleanup:
+            return
+
         self.log.info("Stopping dfuse at %s on %s", self.mount_dir.value, self.hosts)
 
         if self.mount_dir.value is None:
@@ -378,6 +388,9 @@ class Dfuse(DfuseCommand):
         # Report any errors
         if error_list:
             raise CommandFailure("\n".join(error_list))
+
+        # Only assume clean if nothing above failed
+        self.__need_cleanup = False
 
 
 def get_dfuse(test, hosts, namespace=None):
@@ -431,9 +444,30 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     try:
         dfuse.bind_cores = test.params.get('cores', dfuse.namespace, None)
         dfuse.run()
+        test.register_cleanup(stop_dfuse, test=test, dfuse=dfuse)
     except CommandFailure as error:
         test.log.error("Failed to start dfuse on hosts %s", dfuse.hosts, exc_info=error)
         test.fail("Failed to start dfuse")
+
+
+def stop_dfuse(test, dfuse):
+    """Stop a dfuse instance.
+
+    Args:
+        test (Test): the test from which to stop dfuse
+        dfuse (Dfuse): the dfuse instance to stop
+
+    Returns:
+        list: a list of any errors detected when stopping dfuse
+
+    """
+    error_list = []
+    try:
+        dfuse.stop()
+    except (CommandFailure) as error:
+        test.test_log.info("  {}".format(error))
+        error_list.append("Error stopping dfuse: {}".format(error))
+    return error_list
 
 
 class VerifyPermsCommand(ExecutableCommand):
@@ -458,6 +492,7 @@ class VerifyPermsCommand(ExecutableCommand):
         self.other_user = FormattedParameter("--other-user {}")
         self.verify_mode = FormattedParameter("--verify-mode {}")
         self.create_type = FormattedParameter("--create-type {}")
+        self.no_chmod = FormattedParameter("--no-chmod", False)
 
         # run options
         self.hosts = hosts.copy()
@@ -473,8 +508,12 @@ class VerifyPermsCommand(ExecutableCommand):
         Raises:
             CommandFailure: If the command fails
 
+        Returns:
+            RemoteCommandResult: result from run_remote
+
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result
