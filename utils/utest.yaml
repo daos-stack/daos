@@ -20,7 +20,7 @@
   required_src: ["src/common/tests/ad_mem_tests.c"]
   tests:
     - cmd: ["src/common/tests/ad_mem_tests"]
-    - cmd: ["src/common/tests/umem_tests_bmem"]
+    - cmd: ["src/common/tests/umem_test_bmem"]
 - name: btree_stress
   memcheck: False
   tests:
@@ -52,10 +52,6 @@
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/mgmt/tests/srv_drpc_tests"]
-- name: csum_server
-  base: "PREFIX"
-  tests:
-    - cmd: ["bin/srv_checksum_tests"]
 - name: placement
   base: "PREFIX"
   tests:
@@ -69,10 +65,6 @@
   tests:
     - cmd: ["src/security/tests/cli_security_tests"]
     - cmd: ["src/security/tests/srv_acl_tests"]
-- name: rpc
-  base: "PREFIX"
-  tests:
-    - cmd: ["bin/rpc_tests"]
 - name: vea
   base: "PREFIX"
   tests:
@@ -134,10 +126,12 @@
     - cmd: ["bin/bio_ut"]
       aio: "AIO_7"
       size: 4
-- name: csum_scrubber
+- name: csum
   base: "PREFIX"
   tests:
+    - cmd: ["bin/rpc_tests"]
     - cmd: ["bin/pool_scrubbing_tests"]
+    - cmd: ["bin/srv_checksum_tests"]
 - name: bio
   base: "BUILD_DIR"
   tests:
