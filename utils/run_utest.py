@@ -278,7 +278,7 @@ class AIO():
         if self.device is None:
             run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=1G", f"count={min_size}"])
         else:
-            run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1"])
+            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1"])
         self.create_config(name)
 
     def finalize_test(self):
