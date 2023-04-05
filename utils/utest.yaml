@@ -13,10 +13,6 @@
     - cmd: ["src/common/tests/acl_real_tests"]
     - cmd: ["src/common/tests/prop_tests"]
     - cmd: ["src/common/tests/fault_domain_tests"]
-    - cmd: ["src/common/tests/ad_mem_tests"]
-      warn_if_missing: "ad_mem_tests is missing, are you on feature/vos_on_blob branch?"
-    - cmd: ["src/common/tests/umem_tests_bmem"]
-      warn_if_missing: "umem_tests_bmem is missing, are you on feature/vos_on_blob branch?"
 - name: common_md_on_ssd
   base: "BUILD_DIR"
   required_src: ["src/common/tests/ad_mem_tests.c"]
