@@ -129,7 +129,7 @@ class ReplayTests(TestWithServers):
         ior = self.write_data(container, ppn)
 
         self.stop_engines()
-        self.restart_engines(container.pool)
+        self.restart_engines()
 
         self.log_step('Verifying data previously written to the container (ior)')
         self.read_data(ior, container, ppn)
@@ -169,7 +169,7 @@ class ReplayTests(TestWithServers):
         stop_dfuse(self, dfuse)
 
         self.stop_engines()
-        self.restart_engines(container.pool)
+        self.restart_engines()
 
         self.log_step('Remount dfuse')
         start_dfuse(self, dfuse)
@@ -228,7 +228,7 @@ class ReplayTests(TestWithServers):
         self.verify_snapshots(container, snapshots)
 
         self.stop_engines()
-        self.restart_engines(container.pool)
+        self.restart_engines()
 
         self.log_step('Verifying two snapshots exist after restart (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)
@@ -304,7 +304,7 @@ class ReplayTests(TestWithServers):
                     self.fail('Missing {} {} attribute to modify'.format(item.identifier, name))
 
         self.stop_engines()
-        self.restart_engines(container.pool)
+        self.restart_engines()
 
         self.log_step('Verify each modified pool and container attribute is still set')
         errors = []
