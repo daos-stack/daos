@@ -706,7 +706,8 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	}
 
 	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
-		D_ERROR("Found unexpected non-VMD device type (%s)\n", pci_dev_type);
+		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s), can't manage LEDs\n",
+			pci_dev_type);
 		opts->status = -DER_NOSYS;
 		return;
 	}
@@ -715,7 +716,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
 		opts->finished = true;
-		return;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
@@ -913,8 +913,9 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		D_ERROR("LED %s failed (targeted state: %s): %s\n", LED_ACTION_NAME(action),
-			LED_STATE_NAME(*state), spdk_strerror(opts.status));
+		if (opts.status != -DER_NOSYS)
+			D_ERROR("LED %s failed (target state: %s): %s\n", LED_ACTION_NAME(action),
+				LED_STATE_NAME(*state), spdk_strerror(opts.status));
 		return opts.status;
 	}
 	if (!opts.all_devices && !opts.finished) {

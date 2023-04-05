@@ -2,7 +2,7 @@
 
 set -eux
 
-dir="$1/"
+dir="$1/$STAGE_NAME/"
 mkdir -p "$dir"
 
 notify=false

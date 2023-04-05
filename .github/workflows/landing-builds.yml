@@ -63,7 +63,7 @@ jobs:
         run: ./ci/gha_helper.py --single
         id: commit-hash
       - name: Setup docker cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         with:
           key: ${{ steps.commit-hash.outputs.key }}
           restore-keys: ${{ steps.commit-hash.outputs.restore }}
@@ -106,7 +106,7 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -174,7 +174,7 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}

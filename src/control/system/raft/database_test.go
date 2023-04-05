@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -996,6 +997,10 @@ func Test_Database_ResignLeadership(t *testing.T) {
 		},
 		"cause: raft.ErrLeadershipTransferInProgress": {
 			cause:     raft.ErrLeadershipTransferInProgress,
+			expLeader: true,
+		},
+		"cause: system.ErrNotLeader": {
+			cause:     &system.ErrNotLeader{},
 			expLeader: true,
 		},
 		// Also check to see what happens if we get a raft error during

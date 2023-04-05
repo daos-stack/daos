@@ -1,11 +1,9 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from scrubber_test_base import TestWithScrubber
-from apricot import skipForTicket
 
 
 class TestWithScrubberBasic(TestWithScrubber):
@@ -44,7 +42,6 @@ class TestWithScrubberBasic(TestWithScrubber):
             self.fail("------Test Failed-----")
         self.log.info("------Test passed------")
 
-    @skipForTicket("DAOS-8906")
     def test_scrubber_disabled_during_pool_creation(self):
         """JIRA ID: DAOS-7371
 

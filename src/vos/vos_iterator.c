@@ -13,7 +13,7 @@
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
 #include <daos_api.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 /** Dictionary for all known vos iterators */
 struct vos_iter_dict {
@@ -619,6 +619,11 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 	if (acts & VOS_ITER_CB_EXIT)
 		D_GOTO(out, rc = ITER_EXIT);
 
+	if (anchors->ia_probe_level != 0) {
+		anchors->ia_probe_level = 0;
+		acts |= VOS_ITER_CB_YIELD;
+	}
+
 	set_reprobe(type, acts, anchors, param->ip_flags);
 	if (acts & VOS_ITER_CB_ABORT)
 		D_GOTO(out, rc = ITER_ABORT);
@@ -648,17 +653,33 @@ out:
 	return rc;
 }
 
+static inline void
+vos_iter_sched_sync(struct vos_iterator *iter)
+{
+	iter->it_seq = vos_sched_seq();
+}
+
+static inline bool
+vos_iter_sched_check(struct vos_iterator *iter)
+{
+	uint64_t seq = vos_sched_seq();
+	bool     ret = iter->it_seq != seq;
+
+	iter->it_seq = seq;
+	return ret;
+}
 
 static inline int
 vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
 {
-	uint64_t	start_seq = vos_sched_seq();
+	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		rc;
 
+	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
-	if (start_seq != vos_sched_seq())
+	if (vos_iter_sched_check(iter))
 		*acts |= VOS_ITER_CB_YIELD;
 
 	return rc;
@@ -732,6 +753,8 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 
 	iter = vos_hdl2iter(ih);
+	/** Save pointer to anchors for vos_iter_validate */
+	iter->it_anchors          = anchors;
 	iter->it_show_uncommitted = 0;
 	if (show_uncommitted) {
 		iter->it_show_uncommitted = 1;
@@ -773,9 +796,13 @@ probe:
 
 		if (pre_cb && stage == VOS_ITER_STAGE_PRE) {
 			acts = 0;
+			anchors->ia_probe_level = 0;
 			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
+			if (anchors->ia_probe_level != 0 &&
+			    anchors->ia_probe_level != iter->it_type)
+				goto finish;
 
 			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_RECURSE, &probe_flags);
@@ -818,6 +845,10 @@ probe:
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
 
+			if (anchors->ia_probe_level != 0 &&
+			    anchors->ia_probe_level != iter->it_type)
+				goto finish;
+
 			rc = advance_stage(type, 0, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
@@ -830,9 +861,14 @@ probe:
 
 		if (post_cb) {
 			acts = 0;
+			anchors->ia_probe_level = 0;
 			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
+
+			if (anchors->ia_probe_level != 0 &&
+			    anchors->ia_probe_level != iter->it_type)
+				goto finish;
 
 			/** Make sure we advance to next entry on re-probe */
 			if ((acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) == 0)
@@ -867,6 +903,7 @@ out:
 	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
 			DP_RC(rc));
 
+finish:
 	vos_iter_finish(ih);
 
 	return rc;
@@ -925,4 +962,63 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	return vos_iterate_internal(param, type, recursive, false, anchors,
 				    pre_cb, post_cb, arg, dth);
+}
+
+static int
+vos_iter_validate_internal(struct vos_iterator *iter)
+{
+	daos_anchor_t     *anchor;
+	int                rc;
+	struct dtx_handle *old;
+
+	D_ASSERT(iter->it_anchors != NULL);
+
+	if (!vos_iter_sched_check(iter))
+		return 0; /* No interleaving operations so no need to revalidate */
+
+	if (iter->it_parent) {
+		rc = vos_iter_validate_internal(iter->it_parent);
+		if (rc != 0)
+			return rc;
+	} else {
+		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	}
+
+	switch (iter->it_type) {
+	case VOS_ITER_OBJ:
+		anchor = &iter->it_anchors->ia_obj;
+		break;
+	case VOS_ITER_DKEY:
+		anchor = &iter->it_anchors->ia_dkey;
+		break;
+	case VOS_ITER_AKEY:
+		anchor = &iter->it_anchors->ia_akey;
+		break;
+	case VOS_ITER_SINGLE:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	case VOS_ITER_RECX:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	default:
+		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
+	}
+
+	old = vos_dth_get();
+	vos_dth_set(iter->it_dth);
+	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	vos_dth_set(old);
+
+	if (rc == 0)
+		return 0;
+
+	iter->it_anchors->ia_probe_level = iter->it_type;
+
+	return iter->it_type;
+}
+
+int
+vos_iter_validate(daos_handle_t ih)
+{
+	return vos_iter_validate_internal(vos_hdl2iter(ih));
 }

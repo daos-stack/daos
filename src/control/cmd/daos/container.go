@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	Link        containerLinkCmd        `command:"link" description:"create a UNS link to an existing container"`
 	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
@@ -219,14 +220,13 @@ type containerCreateCmd struct {
 	Path            string               `long:"path" short:"p" description:"container namespace path"`
 	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
-	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
-	CHints          string               `long:"hints" short:"h" description:"container hints"`
+	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
+	CHints          string               `long:"hints" short:"H" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User            string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group           string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
@@ -282,12 +282,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 	ap.c_op = C.CONT_CREATE
 
-	if cmd.User != "" {
-		ap.user = C.CString(cmd.User)
-		defer freeString(ap.user)
-	}
 	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group)
+		ap.group = C.CString(cmd.Group.String())
 		defer freeString(ap.group)
 	}
 	if cmd.ACLFile != "" {
@@ -385,54 +381,104 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Path string `long:"path" short:"d" description:"unified namespace path"`
+	Path string `long:"path" short:"p" description:"unified namespace path"`
 	Args struct {
 		Container ContainerID `positional-arg-name:"container name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
-func (cmd *existingContainerCmd) ContainerID() ContainerID {
-	return cmd.Args.Container
+func (cmd *existingContainerCmd) ContainerID() ui.LabelOrUUIDFlag {
+	return cmd.Args.Container.LabelOrUUIDFlag
+}
+
+// parseContPathArgs is a gross hack to support the --path flag with positional
+// arguments. It's necessary because the positional arguments are parsed at the
+// same time as the flags, so we can't tell if the user is trying to use a path
+// with positional arguments (e.g. --path=/tmp/dfuse set-attr foo:bar) until after
+// the flags have been parsed. If --path was used, any consumed positional arguments
+// are appended in reverse order to the end of the args slice so that the command
+// handler (which must be aware of this convention) may parse them again. Otherwise,
+// the positional arguments are parsed as normal pool/container IDs.
+func (cmd *existingContainerCmd) parseContPathArgs(args []string) ([]string, error) {
+	if contArg := cmd.Args.Container.String(); contArg != "" {
+		if cmd.Path != "" {
+			args = append(args, contArg)
+			cmd.Args.Container.Clear()
+		} else {
+			if err := cmd.Args.Container.LabelOrUUIDFlag.UnmarshalFlag(contArg); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if poolArg := cmd.poolBaseCmd.Args.Pool.String(); poolArg != "" {
+		if cmd.Path != "" {
+			args = append(args, poolArg)
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		} else {
+			if err := cmd.poolBaseCmd.Args.Pool.LabelOrUUIDFlag.UnmarshalFlag(poolArg); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return args, nil
+}
+
+func (cmd *existingContainerCmd) resolveContainerPath(ap *C.struct_cmd_args_s) (err error) {
+	if cmd.Path == "" {
+		return errors.New("path cannot be empty")
+	}
+	if ap == nil {
+		return errors.New("ap cannot be nil")
+	}
+
+	if err := resolveDunsPath(cmd.Path, ap); err != nil {
+		return err
+	}
+
+	cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
+	if err != nil {
+		return
+	}
+	cmd.poolBaseCmd.poolUUID = cmd.poolBaseCmd.Args.Pool.UUID
+	cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
+
+	cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
+	if err != nil {
+		return
+	}
+	cmd.contUUID = cmd.Args.Container.UUID
+	cmd.Args.Container.Label = C.GoString(&ap.cont_str[0])
+	if cmd.Args.Container.Label != "" {
+		cmd.contLabel = cmd.Args.Container.Label
+	}
+	cmd.Debugf("resolved %s into pool %s and container %s", cmd.Path, cmd.poolBaseCmd.Args.Pool, cmd.Args.Container)
+
+	return
 }
 
 func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err error) {
-	switch {
-	case cmd.Path != "" && !(cmd.PoolID().Empty() && cmd.ContainerID().Empty()):
-		return errors.New("can't specify --path with pool ID or container ID")
-	case cmd.Path == "" && (cmd.PoolID().Empty() || cmd.ContainerID().Empty()):
-		return errors.New("pool and container ID must be specified if --path not used")
+	if cmd.Path != "" {
+		return cmd.resolveContainerPath(ap)
 	}
 
-	if cmd.Path != "" {
-		if ap == nil {
-			return errors.New("ap cannot be nil with --path")
+	switch {
+	case cmd.ContainerID().HasLabel():
+		cmd.contLabel = cmd.ContainerID().Label
+		if ap != nil {
+			cLabel := C.CString(cmd.ContainerID().Label)
+			defer freeString(cLabel)
+			C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
 		}
-		if err = resolveDunsPath(cmd.Path, ap); err != nil {
-			return
+	case cmd.ContainerID().HasUUID():
+		cmd.contUUID = cmd.ContainerID().UUID
+		if ap != nil {
+			cUUIDstr := C.CString(cmd.contUUID.String())
+			defer freeString(cUUIDstr)
+			C.strncpy(&ap.cont_str[0], cUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
 		}
-
-		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
-		cmd.contLabel = C.GoString(&ap.cont_str[0])
-		cmd.contUUID = cmd.Args.Container.UUID
-	} else {
-		switch {
-		case cmd.ContainerID().HasLabel():
-			cmd.contLabel = cmd.ContainerID().Label
-			if ap != nil {
-				cLabel := C.CString(cmd.ContainerID().Label)
-				defer freeString(cLabel)
-				C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
-			}
-		case cmd.ContainerID().HasUUID():
-			cmd.contUUID = cmd.ContainerID().UUID
-			if ap != nil {
-				cUUIDstr := C.CString(cmd.contUUID.String())
-				defer freeString(cUUIDstr)
-				C.strncpy(&ap.cont_str[0], cUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
-			}
-		default:
-			return errors.New("no container label or UUID supplied")
-		}
+	default:
+		return errors.New("no container label or UUID supplied")
 	}
 
 	cmd.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
@@ -736,7 +782,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
-	if ci.ContainerLabel != "" && ci.ContainerLabel != labelNotSetStr {
+	if ci.ContainerLabel != "" {
 		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
 	}
 	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
@@ -883,10 +929,26 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 	rc := C.cont_clone_hdlr(ap)
 
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to clone container %s",
-			cmd.Source)
+		return errors.Wrapf(err, "failed to clone container %s", cmd.Source)
 	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(struct {
+			SourcePool string `json:"src_pool"`
+			SourceCont string `json:"src_cont"`
+			DestPool   string `json:"dst_pool"`
+			DestCont   string `json:"dst_cont"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+		}, nil)
+	}
+
+	// Compat with old-style output
+	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.Infof("Successfully copied to destination container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 
 	return nil
 }
@@ -1007,18 +1069,22 @@ func (cmd *containerDelAttrCmd) Execute(args []string) error {
 type containerGetAttrCmd struct {
 	existingContainerCmd
 
-	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	FlagAttr string `long:"attr" short:"a" description:"single attribute name (deprecated; use positional argument)"`
 	Args     struct {
-		Attr string `positional-arg-name:"<attribute name>"`
+		Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *containerGetAttrCmd) Execute(args []string) error {
 	if cmd.FlagAttr != "" {
-		cmd.Args.Attr = cmd.FlagAttr
-	}
-	if cmd.Args.Attr == "" {
-		return errors.New("attribute name is required")
+		if len(cmd.Args.Attrs.ParsedProps) > 0 {
+			return errors.New("cannot specify both --attr and positional arguments")
+		}
+		cmd.Args.Attrs.ParsedProps.Add(cmd.FlagAttr)
+	} else if len(args) > 0 {
+		if err := cmd.Args.Attrs.UnmarshalFlag(args[len(args)-1]); err != nil {
+			return err
+		}
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
@@ -1033,20 +1099,28 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	attr, err := cmd.getAttr(cmd.Args.Attr)
+	var attrs attrList
+	if len(cmd.Args.Attrs.ParsedProps) == 0 {
+		attrs, err = listDaosAttributes(cmd.cContHandle, contAttr, true)
+	} else {
+		cmd.Debugf("getting attributes: %s", cmd.Args.Attrs.ParsedProps)
+		attrs, err = getDaosAttributes(cmd.cContHandle, contAttr, cmd.Args.Attrs.ParsedProps.ToSlice())
+	}
 	if err != nil {
-		return errors.Wrapf(err,
-			"failed to get attribute %q from container %s",
-			cmd.Args.Attr, cmd.ContainerID())
+		return errors.Wrapf(err, "failed to get attributes from container %s", cmd.ContainerID())
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attr, nil)
+		// Maintain compatibility with older behavior.
+		if len(cmd.Args.Attrs.ParsedProps) == 1 && len(attrs) == 1 {
+			return cmd.outputJSON(attrs[0], nil)
+		}
+		return cmd.outputJSON(attrs, nil)
 	}
 
 	var bld strings.Builder
 	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
-	printAttributes(&bld, title, attr)
+	printAttributes(&bld, title, attrs...)
 
 	cmd.Info(bld.String())
 
@@ -1059,24 +1133,28 @@ type containerSetAttrCmd struct {
 	FlagAttr  string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
 	FlagValue string `long:"value" short:"v" description:"attribute value (deprecated; use positional argument)"`
 	Args      struct {
-		Attr  string `positional-arg-name:"<attribute name>"`
-		Value string `positional-arg-name:"<attribute value>"`
+		Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *containerSetAttrCmd) Execute(args []string) error {
-	if cmd.FlagAttr != "" {
-		cmd.Args.Attr = cmd.FlagAttr
-	}
-	if cmd.FlagValue != "" {
-		cmd.Args.Value = cmd.FlagValue
+	if cmd.FlagAttr != "" || cmd.FlagValue != "" {
+		if cmd.FlagAttr == "" || cmd.FlagValue == "" {
+			return errors.New("both --attr and --value are required if either are used")
+		}
+		if len(cmd.Args.Attrs.ParsedProps) > 0 {
+			return errors.New("cannot specify both --attr and positional arguments")
+		}
+		cmd.Args.Attrs.ParsedProps = make(map[string]string)
+		cmd.Args.Attrs.ParsedProps[cmd.FlagAttr] = cmd.FlagValue
+	} else if len(args) > 0 {
+		if err := cmd.Args.Attrs.UnmarshalFlag(args[len(args)-1]); err != nil {
+			return err
+		}
 	}
 
-	if cmd.Args.Attr == "" {
-		return errors.New("attribute name is required")
-	}
-	if cmd.Args.Value == "" {
-		return errors.New("attribute value is required")
+	if len(cmd.Args.Attrs.ParsedProps) == 0 {
+		return errors.New("attribute name and value are required")
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
@@ -1091,13 +1169,16 @@ func (cmd *containerSetAttrCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	if err := setDaosAttribute(cmd.cContHandle, contAttr, &attribute{
-		Name:  cmd.Args.Attr,
-		Value: []byte(cmd.Args.Value),
-	}); err != nil {
-		return errors.Wrapf(err,
-			"failed to set attribute %q on container %s",
-			cmd.Args.Attr, cmd.ContainerID())
+	attrs := make(attrList, 0, len(cmd.Args.Attrs.ParsedProps))
+	for key, val := range cmd.Args.Attrs.ParsedProps {
+		attrs = append(attrs, &attribute{
+			Name:  key,
+			Value: []byte(val),
+		})
+	}
+
+	if err := setDaosAttributes(cmd.cContHandle, contAttr, attrs); err != nil {
+		return errors.Wrapf(err, "failed to set attributes on container %s", cmd.ContainerID())
 	}
 
 	return nil
@@ -1106,10 +1187,31 @@ func (cmd *containerSetAttrCmd) Execute(args []string) error {
 type containerGetPropCmd struct {
 	existingContainerCmd
 
-	Properties GetPropertiesFlag `long:"properties" description:"container properties to get" default:"all"`
+	PropsFlag GetPropertiesFlag `long:"properties" description:"container properties to get (deprecated: use positional argument)"`
+	Args      struct {
+		Props GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerGetPropCmd) Execute(args []string) error {
+	if len(args) > 0 {
+		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
+			return err
+		}
+	}
+	if len(cmd.PropsFlag.names) > 0 {
+		if len(cmd.Args.Props.names) > 0 {
+			return errors.New("cannot specify both --properties and positional arguments")
+		}
+		cmd.Args.Props = cmd.PropsFlag
+	}
+	if len(cmd.Args.Props.names) == 0 {
+		// Ensure that things are set up correctly for the default case.
+		if err := cmd.Args.Props.UnmarshalFlag(""); err != nil {
+			return err
+		}
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -1122,7 +1224,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Properties.names...)
+	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Args.Props.names...)
 	defer freeProps()
 	if err != nil {
 		return errors.Wrapf(err,
@@ -1130,7 +1232,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	if len(cmd.Properties.names) == len(propHdlrs) {
+	if len(cmd.Args.Props.names) == len(propHdlrs) {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
 		if err != nil && err != daos.NoPermission {
 			return errors.Wrapf(err,
@@ -1164,17 +1266,35 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 type containerSetPropCmd struct {
 	existingContainerCmd
 
-	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties to set"`
+	PropsFlag SetPropertiesFlag `long:"properties" description:"container properties to set (deprecated: use positional argument)"`
+	Args      struct {
+		Props SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerSetPropCmd) Execute(args []string) error {
+	if len(args) > 0 {
+		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
+			return err
+		}
+	}
+	if len(cmd.PropsFlag.ParsedProps) > 0 {
+		if len(cmd.Args.Props.ParsedProps) > 0 {
+			return errors.New("cannot specify both --properties and positional arguments")
+		}
+		cmd.Args.Props = cmd.PropsFlag
+	}
+	if len(cmd.Args.Props.ParsedProps) == 0 {
+		return errors.New("property name and value are required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	ap.props = cmd.Properties.props
+	ap.props = cmd.Args.Props.props
 
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
@@ -1227,7 +1347,7 @@ func parsePoolFlag() *poolFlagCmd {
 }
 
 type ContainerID struct {
-	ui.LabelOrUUIDFlag
+	argOrID
 }
 
 // Implement the completion handler to provide a list of container IDs
@@ -1262,4 +1382,60 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 
 	return
+}
+
+type containerLinkCmd struct {
+	containerBaseCmd
+
+	Path string `long:"path" short:"p" description:"container namespace path to create"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"Container to link in the namespace"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *containerLinkCmd) ContainerID() ui.LabelOrUUIDFlag {
+	return cmd.Args.Container.LabelOrUUIDFlag
+}
+
+func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	var cleanup func()
+	cleanup, err = cmd.connectPool(C.DAOS_COO_RO, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	cmd.Debugf("Creating a namespace link %s for container %s", cmd.Path, cmd.ContainerID())
+
+	cPath := C.CString(cmd.Path)
+	defer freeString(cPath)
+
+	var rc C.int
+	switch {
+	case cmd.ContainerID().HasUUID():
+		cmd.contUUID = cmd.ContainerID().UUID
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cUUIDstr, cPath)
+	case cmd.ContainerID().Label != "":
+		cLabel := C.CString(cmd.ContainerID().Label)
+		defer freeString(cLabel)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cLabel, cPath)
+	default:
+		return errors.New("no UUID or label for container")
+	}
+
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to link container %s in the namespace",
+			cmd.ContainerID())
+	}
+
+	return nil
 }

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-(C) Copyright 2022 Intel Corporation.
+(C) Copyright 2022-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,8 +30,8 @@ class PoolCreateAllTestBase(TestWithServers):
         """Set up each test case."""
         super().setUp()
 
-        self.ranks_size = len(self.hostlist_servers)
-        self.delta_bytes = self.ranks_size * self.epsilon_bytes
+        self.ranks_count = len(self.hostlist_servers)
+        self.delta_bytes = self.ranks_count * self.epsilon_bytes
 
     def create_pool(self, index):
         """Create a pool and return the time to do it"""

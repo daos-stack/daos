@@ -4,14 +4,14 @@
 # 'recipe' for building a RHEL variant docker image of a DAOS administrator node
 #
 # - DAOS_BASE_IMAGE      Base docker image to use (default "daos-base")
-# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.4")
+# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.6")
 # - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_ADMIN_USER      Name or uid of the daos administrattor user (default "root")
 # - DAOS_ADMIN_GROUP     Name or gid of the daos administrattor group (default "root")
 
 # Pull base image
 ARG	DAOS_BASE_IMAGE=daos-base
-ARG	DAOS_BASE_VERSION=rocky8.4
+ARG	DAOS_BASE_VERSION=rocky8.6
 FROM	$DAOS_BASE_IMAGE:$DAOS_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 

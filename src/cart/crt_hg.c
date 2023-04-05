@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -586,19 +586,35 @@ crt_provider_get_na_config(bool primary, int provider)
 }
 
 void
-crt_provider_inc_cur_ctx_num(bool primary, int provider)
+crt_provider_put_ctx_idx(bool primary, int provider, int idx)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	prov_data->cpg_ctx_num++;
+	if (prov_data->cpg_used_idx[idx] == false) {
+		D_WARN("Put context on free idx=%d:%d\n", provider, idx);
+	} else {
+		prov_data->cpg_used_idx[idx] = false;
+		prov_data->cpg_ctx_num--;
+	}
 }
 
-void
-crt_provider_dec_cur_ctx_num(bool primary, int provider)
+int
+crt_provider_get_ctx_idx(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
+	int			i;
 
-	prov_data->cpg_ctx_num--;
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (prov_data->cpg_used_idx[i] == false) {
+			prov_data->cpg_used_idx[i] = true;
+			prov_data->cpg_ctx_num++;
+			return i;
+		}
+	}
+
+	D_ERROR("ctx_num %d, will exceed CRT_SRV_CONTEXT_NUM (%d) if create more context.\n",
+		prov_data->cpg_ctx_num, CRT_SRV_CONTEXT_NUM);
+	return -1;
 }
 
 d_list_t
@@ -607,6 +623,15 @@ d_list_t
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
 	return &prov_data->cpg_ctx_list;
+}
+
+void
+crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+
+	*list = &prov_data->cpg_ctx_list;
+	*num = prov_data->cpg_ctx_num;
 }
 
 static int
@@ -629,21 +654,37 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s:%d",
-				   provider_str, domain_str,
-				   start_port + ctx_idx);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str,
-				   start_port + ctx_idx);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, domain_str, start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://:%d",
+					   provider_str, start_port + ctx_idx);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s:%d",
+					   provider_str, domain_str, ip_str,
+					   start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, ip_str,
+					   start_port + ctx_idx);
+		}
 	} else {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s",
-				   provider_str, domain_str);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s",
-				   provider_str, domain_str, ip_str);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s",
+					   provider_str, domain_str);
+			else
+				D_ASPRINTF(*string, "%s://", provider_str);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s",
+					   provider_str, domain_str, ip_str);
+			else
+				D_ASPRINTF(*string, "%s://%s", provider_str, ip_str);
+		}
 	}
 
 out:
@@ -745,6 +786,8 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	rc = crt_get_info_string(primary, provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
 	if (crt_provider_is_block_mode(provider))
 		init_info.na_init_info.progress_mode = 0;
@@ -878,10 +921,9 @@ out:
 int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0;
+	hg_return_t hg_ret;
+	int         rc = -DER_SUCCESS;
 
-	D_ASSERT(hg_ctx != NULL);
 	crt_hg_pool_fini(hg_ctx);
 
 	if (hg_ctx->chc_hgctx) {
@@ -907,9 +949,11 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_hgcla) {
 		/* ignore below error with warn msg */
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
-		if (hg_ret != HG_SUCCESS)
-			D_WARN("Could not finalize HG class, hg_ret: %d.\n",
-			       hg_ret);
+		if (hg_ret != HG_SUCCESS) {
+			D_WARN("Could not finalize HG class, hg_ret: %d %s.\n", hg_ret,
+			       HG_Error_to_string(hg_ret));
+			rc = crt_hgret_2_der(hg_ret);
+		}
 	}
 out:
 	return rc;
@@ -968,39 +1012,38 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	 */
 	rpc_tmp.crp_pub.cr_opc = opc;
 
-	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (unlikely(opc_info == NULL)) {
-		D_ERROR("opc: %#x, lookup failed.\n", opc);
-		/*
-		 * The RPC is not registered on the server, we don't know how to
-		 * process the RPC request, so we send a CART
-		 * level error message to the client.
-		 */
-		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
+	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
+	if (unlikely(rc != 0)) {
+		if (rc == -DER_UNREG) {
+			D_ERROR("opc: %#x, lookup failed.\n", opc);
+			/*
+			 * The RPC is not registered on the server, we don't know how to
+			 * process the RPC request, so we send a CART
+			 * level error message to the client.
+			 */
+			crt_hg_reply_error_send(&rpc_tmp, rc);
+			crt_hg_unpack_cleanup(proc);
+			HG_Destroy(rpc_tmp.crp_hg_hdl);
+			D_GOTO(out, hg_ret = HG_SUCCESS);
+		} else if (rc == -DER_NOMEM) {
+			crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
+			crt_hg_unpack_cleanup(proc);
+			HG_Destroy(rpc_tmp.crp_hg_hdl);
+			D_GOTO(out, hg_ret = HG_SUCCESS);
+		}
 	}
-	D_ASSERT(opc_info->coi_opc == opc);
 
-	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
-	if (unlikely(rpc_priv == NULL)) {
-		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
-	}
-	crt_hg_header_copy(&rpc_tmp, rpc_priv);
+	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
+
+	crt_hg_header_copy(&rpc_tmp, rpc_priv);
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
 		rpc_priv->crp_input_got = 1;
 	}
 
-	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
-	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
@@ -1009,15 +1052,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	if (unlikely(rc != 0)) {
-		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
-		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_FREE(rpc_priv);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	if (rpc_pub->cr_input_size > 0) {
@@ -1185,18 +1220,19 @@ mem_free:
 static hg_return_t
 crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
-	struct crt_cb_info	crt_cbinfo;
 	crt_rpc_t		*rpc_pub;
 	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
 	hg_return_t		hg_ret = HG_SUCCESS;
-	crt_rpc_state_t		state;
 	int			rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
+	crt_rpc_lock(rpc_priv);
+
 	rpc_pub = &rpc_priv->crp_pub;
 	if (crt_rpc_completed(rpc_priv)) {
+		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return rc;
 	}
@@ -1204,7 +1240,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n", hg_cbinfo->ret);
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
-		state = RPC_STATE_COMPLETED;
+		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
 		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp, rpc_pub->cr_ep.ep_rank)) {
@@ -1217,25 +1253,21 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			RPC_TRACE(DB_NET, rpc_priv, "request canceled\n");
 			rc = -DER_CANCELED;
 		}
-		state = RPC_STATE_CANCELED;
-		rpc_priv->crp_state = state;
+		rpc_priv->crp_state = RPC_STATE_CANCELED;
 		hg_ret = hg_cbinfo->ret;
 		break;
 	default:
-		state  = RPC_STATE_COMPLETED;
-		rc     = crt_hgret_2_der(hg_cbinfo->ret);
+		rpc_priv->crp_state = RPC_STATE_COMPLETED;
+		rc = crt_hgret_2_der(hg_cbinfo->ret);
 		hg_ret = hg_cbinfo->ret;
 		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 		break;
 	}
 
-	if (rpc_priv->crp_complete_cb == NULL) {
-		rpc_priv->crp_state = state;
+	if (rpc_priv->crp_complete_cb == NULL)
 		D_GOTO(out, hg_ret);
-	}
 
 	if (rc == 0) {
-		rpc_priv->crp_state = RPC_STATE_REPLY_RECVED;
 		if (rpc_priv->crp_opc_info->coi_no_reply == 0) {
 			/* HG_Free_output in crt_hg_req_destroy */
 			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle, &rpc_pub->cr_output);
@@ -1254,26 +1286,31 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			rc = -DER_HLC_SYNC;
 	}
 
-	crt_cbinfo.cci_rpc = rpc_pub;
-	crt_cbinfo.cci_arg = rpc_priv->crp_arg;
-	crt_cbinfo.cci_rc = rc;
-
-	if (crt_cbinfo.cci_rc != 0)
-		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
-			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
-
-	RPC_TRACE(DB_TRACE, rpc_priv,
-		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
-		  rpc_priv->crp_pub.cr_ep.ep_rank,
-		  rpc_priv->crp_pub.cr_ep.ep_tag,
-		  DP_RC(crt_cbinfo.cci_rc));
-
-	rpc_priv->crp_complete_cb(&crt_cbinfo);
-
-	rpc_priv->crp_state = state;
-
 out:
 	crt_context_req_untrack(rpc_priv);
+
+	crt_rpc_unlock(rpc_priv);
+
+	/* Invoke the completion callback after releasing crp_mutex. */
+	if (rpc_priv->crp_complete_cb != NULL) {
+		struct crt_cb_info crt_cbinfo;
+
+		crt_cbinfo.cci_rpc = rpc_pub;
+		crt_cbinfo.cci_arg = rpc_priv->crp_arg;
+		crt_cbinfo.cci_rc = rc;
+
+		if (crt_cbinfo.cci_rc != 0)
+			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+				   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
+
+		RPC_TRACE(DB_TRACE, rpc_priv,
+			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag,
+			  DP_RC(crt_cbinfo.cci_rc));
+
+		rpc_priv->crp_complete_cb(&crt_cbinfo);
+	}
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	RPC_DECREF(rpc_priv);
@@ -1318,7 +1355,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else {
-		rpc_priv->crp_on_wire = 1;
+		rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	}
 
 	RPC_DECREF(rpc_priv);

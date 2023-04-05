@@ -64,10 +64,10 @@ class RbldWithIOR(IorTestBase):
         self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
 
         # wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
         # wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # verify the pool information after rebuild
         self.log.info("Verifying pool info after rebuild")

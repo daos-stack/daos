@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,7 +61,7 @@ class DmgCommandBase(YamlCommand):
         """Set the hostlist to be used for dmg invocation.
 
         Args:
-            hostlist (string list): list of host addresses
+            hostlist (NodeSet): list of host addresses
         """
         if self.hostlist_suffix:
             hostlist = nodeset_append_suffix(hostlist, self.hostlist_suffix)
@@ -69,7 +69,7 @@ class DmgCommandBase(YamlCommand):
         if self.yaml:
             if isinstance(hostlist, NodeSet):
                 hostlist = list(hostlist)
-            elif not isinstance(hostlist, list):
+            elif isinstance(hostlist, str):
                 hostlist = hostlist.split(",")
             self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:
@@ -222,9 +222,10 @@ class DmgCommandBase(YamlCommand):
                 self.access_points = FormattedParameter(
                     "--access-points={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
-                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
                 self.net_provider = FormattedParameter("--net-provider={}", None)
+                self.use_tmpfs_scm = FormattedParameter("--use-tmpfs-scm", False)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
@@ -301,12 +302,16 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "get-acl":
                 self.sub_command_class = self.GetAclSubCommand()
+            elif self.sub_command.value == "get-prop":
+                self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "list":
                 self.sub_command_class = self.ListSubCommand()
             elif self.sub_command.value == "overwrite-acl":
                 self.sub_command_class = self.OverwriteAclSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
+            elif self.sub_command.value == "query-targets":
+                self.sub_command_class = self.QueryTargetsSubCommand()
             elif self.sub_command.value == "set-prop":
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
@@ -322,6 +327,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool create command object."""
                 super().__init__("/run/dmg/pool/create/*", "create")
+                self.label = BasicParameter(None, position=1)
                 self.group = FormattedParameter("--group={}", None)
                 self.user = FormattedParameter("--user={}", None)
                 self.acl_file = FormattedParameter("--acl-file={}", None)
@@ -333,7 +339,6 @@ class DmgCommandBase(YamlCommand):
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
-                self.label = FormattedParameter("--label={}", None)
                 self.nranks = FormattedParameter("--nranks={}", None)
 
         class DeleteAclSubCommand(CommandWithParameters):
@@ -403,6 +408,15 @@ class DmgCommandBase(YamlCommand):
                 self.force = FormattedParameter("--force", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
+        class GetPropSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool get-prop command."""
+
+            def __init__(self):
+                """Create a dmg pool get-prop command object."""
+                super().__init__("/run/dmg/pool/get-prop/*", "get-prop")
+                self.pool = BasicParameter(None, position=1)
+                self.name = BasicParameter(None, position=2)
+
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool list command."""
 
@@ -431,6 +445,16 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
                 self.show_disabled = FormattedParameter("--show-disabled", False)
+
+        class QueryTargetsSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool query-targets command."""
+
+            def __init__(self):
+                """Create a dmg pool query-targets command object."""
+                super().__init__("/run/dmg/pool/query-targets/*", "query-targets")
+                self.pool = BasicParameter(None, position=1)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.target_idx = FormattedParameter("--target-idx={}", None)
 
         class ReintegrateSubCommand(CommandWithParameters):
             """Defines an object for dmg pool reintegrate command."""
@@ -496,9 +520,9 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg storage sub command object."""
-            if self.sub_command.value == "identify":
-                self.sub_command_class = self.IdentifySubCommand()
-            if self.sub_command.value == "replace":
+            if self.sub_command.value == "led":
+                self.sub_command_class = self.LedSubCommand()
+            elif self.sub_command.value == "replace":
                 self.sub_command_class = self.ReplaceSubCommand()
             elif self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
@@ -513,6 +537,7 @@ class DmgCommandBase(YamlCommand):
 
         class ReplaceSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage replace sub command"""
+
             def __init__(self):
                 """Create a dmg storage replace sub command object."""
                 super().__init__("/run/dmg/storage/replace/*", "replace")
@@ -527,6 +552,7 @@ class DmgCommandBase(YamlCommand):
 
             class NVMESubCommand(CommandWithParameters):
                 """Get dmg storage replace sub command object"""
+
                 def __init__(self):
                     """Create a dmg storage replace sub command object."""
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
@@ -534,27 +560,40 @@ class DmgCommandBase(YamlCommand):
                     self.new_uuid = FormattedParameter("--new-uuid {}", None)
                     self.no_reint = FormattedParameter("--no-reint", False)
 
-        class IdentifySubCommand(CommandWithSubCommand):
-            """Defines an object for the dmg storage identify command"""
+        class LedSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage LED command"""
+
             def __init__(self):
-                """Create a dmg storage identify sub command object."""
-                super().__init__("/run/dmg/storage/identify/*", "identify")
+                """Create a dmg storage led sub command object."""
+                super().__init__("/run/dmg/storage/led/*", "led")
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
-                """Get the dmg storage identify sub command object."""
-                if self.sub_command.value == "vmd":
-                    self.sub_command_class = self.VmdSubCommand()
+                """Get the dmg storage led sub command object."""
+                if self.sub_command.value == "identify":
+                    self.sub_command_class = self.IdentifySubCommand()
+                elif self.sub_command.value == "check":
+                    self.sub_command_class = self.CheckSubCommand()
                 else:
                     self.sub_command_class = None
 
-            class VmdSubCommand(CommandWithParameters):
-                """Get dmg storage identify vmd sub command object"""
+            class IdentifySubCommand(CommandWithParameters):
+                """Get dmg storage led identify sub command object"""
+
                 def __init__(self):
-                    """Create a dmg storage identify vmd command object."""
-                    super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
-                    self.verbose = FormattedParameter("--verbose", False)
-                    self.uuid = FormattedParameter("--uuid {}", None)
+                    """Create a dmg storage led identify command object."""
+                    super().__init__("/run/dmg/storage/led/identify/*", "identify")
+                    self.timeout = FormattedParameter("--timeout {}", None)
+                    self.reset = FormattedParameter("--reset", False)
+                    self.ids = BasicParameter(None)
+
+            class CheckSubCommand(CommandWithParameters):
+                """Get dmg storage led check sub command object"""
+
+                def __init__(self):
+                    """Create a dmg storage led check command object."""
+                    super().__init__("/run/dmg/storage/led/check/*", "check")
+                    self.ids = BasicParameter(None)
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""
@@ -583,6 +622,8 @@ class DmgCommandBase(YamlCommand):
                     self.sub_command_class = self.ListPoolsSubCommand()
                 elif self.sub_command.value == "target-health":
                     self.sub_command_class = self.TargetHealthSubCommand()
+                elif self.sub_command.value == "usage":
+                    self.sub_command_class = self.UsageSubCommand()
                 else:
                     self.sub_command_class = None
 
@@ -622,6 +663,13 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/query/target-health/*", "target-health")
                     self.rank = FormattedParameter("-r {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
+
+            class UsageSubCommand(CommandWithParameters):
+                """Defines a dmg storage query usage object."""
+
+                def __init__(self):
+                    """Create a dmg storage query usage object."""
+                    super().__init__("/run/dmg/storage/query/usage/*", "usage")
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""
@@ -802,3 +850,11 @@ class DmgCommandBase(YamlCommand):
             """Create a dmg version subcommand object."""
             super(DmgCommandBase.VersionSubCommand, self).__init__(
                 "/run/dmg/version/*", "version")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgCommandBase: a new DmgCommandBase object
+        """
+        return DmgCommandBase(self._path, self.yaml, self.hostlist_suffix)

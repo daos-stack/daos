@@ -761,50 +761,6 @@ daos_acl_validate(struct daos_acl *acl)
 }
 
 static bool
-perms_valid_for_ace(struct daos_ace *ace, uint64_t valid_perms)
-{
-	if ((ace->dae_allow_perms & ~valid_perms) ||
-	    (ace->dae_audit_perms & ~valid_perms) ||
-	    (ace->dae_alarm_perms & ~valid_perms))
-		return false;
-
-	return true;
-}
-
-static int
-validate_acl_with_special_perms(struct daos_acl *acl, uint64_t valid_perms)
-{
-	int		rc;
-	struct daos_ace	*ace;
-
-	rc = daos_acl_validate(acl);
-	if (rc != 0)
-		return rc;
-
-	ace = daos_acl_get_next_ace(acl, NULL);
-	while (ace != NULL) {
-		if (!perms_valid_for_ace(ace, valid_perms))
-			return -DER_INVAL;
-
-		ace = daos_acl_get_next_ace(acl, ace);
-	}
-
-	return 0;
-}
-
-int
-daos_acl_pool_validate(struct daos_acl *acl)
-{
-	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_POOL_ALL);
-}
-
-int
-daos_acl_cont_validate(struct daos_acl *acl)
-{
-	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_CONT_ALL);
-}
-
-static bool
 type_is_group(enum daos_acl_principal_type type)
 {
 	if (type == DAOS_ACL_GROUP || type == DAOS_ACL_OWNER_GROUP) {
@@ -1180,8 +1136,6 @@ bool
 daos_ace_is_valid(struct daos_ace *ace)
 {
 	uint8_t		valid_types = DAOS_ACL_ACCESS_ALL;
-	uint16_t	valid_flags = DAOS_ACL_FLAG_ALL;
-	uint64_t	valid_perms = DAOS_ACL_PERM_ALL;
 	bool		name_exists;
 	bool		flag_exists;
 
@@ -1194,12 +1148,6 @@ daos_ace_is_valid(struct daos_ace *ace)
 
 	/* No access type defined */
 	if (ace->dae_access_types == 0)
-		return false;
-
-	if (ace->dae_access_flags & ~valid_flags)
-		return false;
-
-	if (!perms_valid_for_ace(ace, valid_perms))
 		return false;
 
 	/* Name should only exist for types that require it */

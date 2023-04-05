@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2019-2023 Intel Corporation.
 
@@ -25,9 +24,9 @@ class MdtestSmall(MdtestBase):
             Run MDTest with various APIs and configurations.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=mdtest,checksum,dfs,dfuse
-        :avocado: tags=mdtest_small,test_mdtest_small
+        :avocado: tags=MdtestSmall,test_mdtest_small
         """
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)

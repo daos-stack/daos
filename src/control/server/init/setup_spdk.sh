@@ -91,19 +91,10 @@ else
 	${scriptpath}
 	set +x
 
-	# build arglist manually to filter missing directories/files
-	# so we don't error on non-existent entities
-	for glob in '/dev/hugepages' '/dev/uio*'		\
-		'/sys/class/uio/uio*/device/config'	\
-		'/sys/class/uio/uio*/device/resource*'; do
-
-		# shellcheck disable=SC2086
-		if list=$(ls -d $glob); then
-			echo -n "RUN: ls -d $glob | xargs -r chown -R "
-			echo "$_TARGET_USER"
-			echo "$list" | xargs -r chown -R "$_TARGET_USER"
-		fi
-	done
+	if [ -d "/dev/hugepages/" ]; then
+		echo "RUN: chown -R ${_TARGET_USER} /dev/hugepages"
+		chown -R "${_TARGET_USER}" "/dev/hugepages"
+	fi
 
 	echo "Setting VFIO file permissions for unprivileged access"
 	set_vfio_permissions

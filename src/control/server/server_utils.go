@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -188,7 +189,7 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
 	var netDevClass hardware.NetDevClass
 	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		fi, err := fis.GetInterfaceOnNetDevice(engine.Fabric.Interface, engine.Fabric.Provider)
 		if err != nil {
 			return 0, err
 		}
@@ -422,7 +423,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetMemInfoFn) error {
 	engine.RLock()
 	ec := engine.runner.GetConfig()
 	ei := ec.Index
@@ -435,28 +436,28 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	engine.RUnlock()
 
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	hpi, err := getHugePageInfo()
+	mi, err := getMemInfo()
 	if err != nil {
 		return err
 	}
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMb := hpi.PageSizeKb >> 10
-	memSizeReqMb := nrPagesRequired * pageSizeMb
-	memSizeFreeMb := hpi.Free * pageSizeMb
+	pageSizeMiB := mi.HugePageSizeKb / humanize.KiByte // kib to mib
+	memSizeReqMiB := nrPagesRequired * pageSizeMiB
+	memSizeFreeMiB := mi.HugePagesFree * pageSizeMiB
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
-		pageSizeMb, *hpi)
-	if memSizeFreeMb < memSizeReqMb {
-		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
-			nrPagesRequired, hpi.Free)
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
+		pageSizeMiB, *mi)
+	if memSizeFreeMiB < memSizeReqMiB {
+		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMiB, memSizeFreeMiB,
+			nrPagesRequired, mi.HugePagesFree)
 	}
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	engine.setMemSize(memSizeReqMb)
-	engine.setHugePageSz(pageSizeMb)
+	engine.setMemSize(memSizeReqMiB)
+	engine.setHugePageSz(pageSizeMiB)
 
 	return nil
 }
@@ -505,7 +506,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
+		return errors.Wrap(updateMemValues(srv, engine, common.GetMemInfo),
 			"updating engine memory parameters")
 	})
 }

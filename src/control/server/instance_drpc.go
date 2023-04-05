@@ -123,13 +123,12 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 
 	localState := ei.LocalState()
 	if localState != system.MemberStateReady {
-		// member not ready for dRPC comms, annotate result with last
-		// error as Msg field if found to be stopped
-		result := &system.MemberResult{Rank: rank, State: localState}
+		// member not ready for dRPC comms, annotate result with last error if stopped
+		var err error
 		if localState == system.MemberStateStopped && ei._lastErr != nil {
-			result.Msg = ei._lastErr.Error()
+			err = ei._lastErr
 		}
-		return result
+		return system.NewMemberResult(rank, err, localState)
 	}
 
 	// system member state that should be set on dRPC success
@@ -154,10 +153,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return &system.MemberResult{
-				Rank: rank, Msg: ctx.Err().Error(),
-				State: system.MemberStateUnresponsive,
-			}
+			return system.NewMemberResult(rank, ctx.Err(), system.MemberStateUnresponsive)
 		}
 		return nil // shutdown
 	case result := <-resChan:
@@ -218,33 +214,28 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevic
 	return smdDev, nil
 }
 
-func updateCtrlrHealth(pbStats *ctlpb.BioHealthResp, ctrlr *storage.NvmeController) error {
-	ctrlr.HealthStats = new(storage.NvmeHealth)
-	if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
-		return errors.Wrap(err, "convert health stats")
-	}
-
-	return nil
-}
-
 // updateInUseBdevs updates-in-place the input list of controllers with new NVMe health stats and
 // SMD metadata info.
 //
 // Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
 // data in ctrlrMap using PCI address key.
-func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) (err error) {
-	defer func() {
-		err = errors.Wrapf(err, "instance %d", ei.Index())
-	}()
+func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController) ([]storage.NvmeController, error) {
+	ctrlrMap := make(map[string]*storage.NvmeController)
+	for idx, ctrlr := range ctrlrs {
+		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
+			return nil, errors.Errorf("duplicate entries for controller %s",
+				ctrlr.PciAddr)
+		}
 
-	// Clear SMD info for controllers in ctrlrMap, populate smd info from scratch.
-	for _, ctrlr := range ctrlrMap {
-		ctrlr.SmdDevices = []*storage.SmdDevice{}
+		// Clear SMD info for controllers to remove stale stats.
+		ctrlrs[idx].SmdDevices = []*storage.SmdDevice{}
+		// Update controllers in input slice through map by reference.
+		ctrlrMap[ctrlr.PciAddr] = &ctrlrs[idx]
 	}
 
 	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
-		return errors.Wrapf(err, "list smd devices")
+		return nil, errors.Wrapf(err, "list smd devices")
 	}
 	ei.log.Debugf("engine %d: smdDevs %+v", ei.Index(), smdDevs)
 
@@ -261,7 +252,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 		smdDev, err := ei.getSmdDetails(smd)
 		if err != nil {
-			return errors.Wrapf(err, "%s: collect smd info", msg)
+			return nil, errors.Wrapf(err, "%s: collect smd info", msg)
 		}
 
 		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
@@ -293,15 +284,14 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		if hasUpdatedHealth[ctrlr.PciAddr] {
 			continue
 		}
-
-		if err := updateCtrlrHealth(pbStats, ctrlr); err != nil {
-			ei.log.Errorf("%s: update ctrlr health: %s", err.Error())
+		ctrlr.HealthStats = new(storage.NvmeHealth)
+		if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
+			ei.log.Errorf("%s: update ctrlr health: %s", msg, err.Error())
 			continue
 		}
-		hasUpdatedHealth[ctrlr.PciAddr] = true
-
 		ei.log.Debugf("%s: ctrlr health updated", msg)
+		hasUpdatedHealth[ctrlr.PciAddr] = true
 	}
 
-	return nil
+	return ctrlrs, nil
 }

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2023 Intel Corporation.
 
@@ -9,12 +8,12 @@ import threading
 import subprocess  # nosec
 import time
 from getpass import getuser
-import general_utils
 
-from ClusterShell.NodeSet import NodeSet
+
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 # pylint: disable=too-many-ancestors
@@ -124,9 +123,9 @@ class ParallelIo(FioBase, IorTestBase):
             This should fail.
             Check dfuse again.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio,test_parallelio
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,tx,dfuse,fio
+        :avocado: tags=ParallelIo,test_parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -146,16 +145,10 @@ class ParallelIo(FioBase, IorTestBase):
             cmd = "ls -a {}".format(dfuse_cont_dir)
             try:
                 # execute bash cmds
-                ret_code = general_utils.pcmd(
-                    self.hostlist_clients, cmd, timeout=30)
-                if 0 not in ret_code:
-                    error_hosts = NodeSet(
-                        ",".join(
-                            [str(node_set) for code, node_set in
-                             list(ret_code.items()) if code != 0]))
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
+                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=30)
+                if result.failed_hosts:
+                    raise CommandFailure("Error running '{}' on the following hosts: {}".format(
+                        cmd, result.failed_hosts))
             # report error if any command fails
             except CommandFailure as error:
                 self.log.error("ParallelIo Test Failed: %s",
@@ -215,9 +208,9 @@ class ParallelIo(FioBase, IorTestBase):
             fail the test.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
-        :avocado: tags=multipoolparallelio,test_multipool_parallelio
+        :avocado: tags=ParallelIo,test_multipool_parallelio
         """
         # test params
         threads = []
@@ -244,9 +237,9 @@ class ParallelIo(FioBase, IorTestBase):
             self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
-        # be parallelised as different container create could complete at
+        # be parallelized as different container create could complete at
         # different times and get appended in the self.container variable in
-        # unorderly manner, causing problems during the write process.
+        # unordered manner, causing problems during the write process.
         for _, pool in enumerate(self.pool):
             self.add_container_qty(self.cont_count, pool)
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,10 +129,11 @@ char *crt_provider_name_get(int provider);
 bool crt_provider_is_sep(bool primary, int provider);
 void crt_provider_set_sep(bool primary, int provider, bool enable);
 int crt_provider_get_cur_ctx_num(bool primary, int provider);
-void crt_provider_inc_cur_ctx_num(bool primary, int provider);
-void crt_provider_dec_cur_ctx_num(bool primary, int provider);
+int crt_provider_get_ctx_idx(bool primary, int provider);
+void crt_provider_put_ctx_idx(bool primary, int provider, int idx);
 int crt_provider_get_max_ctx_num(bool primary, int provider);
 d_list_t *crt_provider_get_ctx_list(bool primary, int provider);
+void crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, int provider);
 
@@ -144,6 +145,7 @@ crt_hgret_2_der(int hg_ret)
 		return 0;
 	case HG_TIMEOUT:
 		return -DER_TIMEDOUT;
+	case HG_FAULT:
 	case HG_INVALID_ARG:
 		return -DER_INVAL;
 	case HG_MSGSIZE:

@@ -3,7 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
+# pylint: disable=too-many-lines
 import os
 from os.path import join
 import re
@@ -19,12 +19,12 @@ from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path
-from general_utils import create_string_buffer
-from command_utils_base import BasicParameter
+from general_utils import create_string_buffer, get_log_file
+from command_utils_base import BasicParameter, EnvironmentVariables
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
     """Base DataMover test class.
 
     Optional yaml config values:
@@ -368,10 +368,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
         cont_uuid = query_response['container_uuid']
 
-        # Convert default label to None
-        cont_label = query_response['container_label']
-        if cont_label == 'container_label_not_set':
-            cont_label = None
+        cont_label = query_response.get('container_label')
 
         # Create a TestContainer and DaosContainer instance
         container = TestContainer(pool, daos_command=self.daos_cmd)
@@ -379,7 +376,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         container.container.uuid = str_to_c_uuid(cont_uuid)
         container.container.poh = pool.pool.handle
         container.uuid = container.container.get_uuid_str()
-        container.label.value = cont_label
+        container.update_params(label=cont_label, type=query_response['container_type'])
+        container.control_method.update(
+            self.params.get('control_method', container.namespace, container.control_method.value))
 
         return container
 
@@ -587,6 +586,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                              src_type=None, src_path=None, src_pool=None, src_cont=None,
                              dst_type=None, dst_path=None, dst_pool=None, dst_cont=None):
         """Set the params for self.tool.
+
         Called by run_datamover if params are passed.
 
         DEPRECATED. Use set_dm_params() instead.
@@ -901,6 +901,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                       expected_rc=0, expected_output=None, expected_err=None,
                       processes=None):
         """Run the corresponding command specified by self.tool.
+
         Calls set_datamover_params if and only if any are passed in.
 
         Args:
@@ -949,22 +950,28 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if test_desc is not None:
             self.log.info("Running %s: %s", self.tool, test_desc)
 
+        env = EnvironmentVariables.from_list(
+            self.params.get("env_vars", "/run/{}/*".format(self.tool.lower()), []))
+        if "D_LOG_FILE" not in env:
+            env["D_LOG_FILE"] = get_log_file("{}.log".format(self.tool.lower()))
+
         ppn = None
+        result = None
         try:
             if self.tool == "DCP":
                 if not processes:
                     processes = self.dcp_np
                     ppn = self.dcp_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dcp_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dcp_cmd.run(processes, self.job_manager, ppn)
+                self.dcp_cmd.exit_status_exception = expected_rc == 0
+                result = self.dcp_cmd.run(processes, self.job_manager, ppn, env)
             elif self.tool == "DSYNC":
                 if not processes:
                     processes = self.dsync_np
                     ppn = self.dsync_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dsync_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dsync_cmd.run(processes, self.job_manager, ppn)
+                self.dsync_cmd.exit_status_exception = expected_rc == 0
+                result = self.dsync_cmd.run(processes, self.job_manager, ppn, env)
             elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
@@ -974,8 +981,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     ppn1 = self.dserialize_ppn
                     processes2 = self.ddeserialize_np
                     ppn2 = self.ddeserialize_ppn
-                result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1)
-                result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2)
+                result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1, env)
+                result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2, env)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
@@ -988,6 +995,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 test_desc))
 
         # Check the return code
+        assert result is not None
         actual_rc = result.exit_status
         if actual_rc != expected_rc:
             self.fail("Expected (rc={}) but got (rc={}): {}\n".format(
@@ -1004,8 +1012,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return result
 
     def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
-        """Generic method to perform various datamover activities
-           using ior
+        """Generic method to perform various datamover activities using ior
+
         Args:
             tool (str): specify the tool name to be used
             pool (TestPool): source pool object
@@ -1017,7 +1025,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_tool(tool)
 
         if create_dataset:
-            # create initial datasets with ior
+            # create initial data-sets with ior
             self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
 
         # create cont2

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -81,7 +81,7 @@ func Debug(msg proto.Message) string {
 			}
 		}
 	case *mgmtpb.PoolCreateResp:
-		fmt.Fprintf(&bld, "%T ", m)
+		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.Leader)
 		ranks := &ranklist.RankSet{}
 		for _, r := range m.SvcReps {
 			ranks.Add(ranklist.Rank(r))

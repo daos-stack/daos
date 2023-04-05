@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +11,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from results_utils import TestName, TestResult, Results, Job, create_xml
-from run_utils import get_clush_command_list, run_local, run_remote
+from run_utils import get_clush_command, run_local, run_remote
 
 
 class CmockaUtils():
@@ -139,14 +139,14 @@ class CmockaUtils():
         run_remote(test.log, self.hosts, " ".join(ls_command))
 
         # Copy any remote cmocka files back to this host
-        command = get_clush_command_list(self.hosts)
-        command.extend(["--rcopy", self.cmocka_dir, "--dest", self.cmocka_dir])
+        command = get_clush_command(
+            self.hosts, args=" ".join(["--rcopy", self.cmocka_dir, "--dest", self.cmocka_dir]))
         try:
             run_local(test.log, command)
 
         finally:
             test.log.debug("Local %s directory after clush:", self.cmocka_dir)
-            run_local(test.log, ls_command)
+            run_local(test.log, " ".join(ls_command))
             # Move local files to the avocado test variant data directory
             for cmocka_node_dir in os.listdir(self.cmocka_dir):
                 cmocka_node_path = os.path.join(self.cmocka_dir, cmocka_node_dir)
@@ -155,7 +155,7 @@ class CmockaUtils():
                         if "_cmocka_results." in cmocka_file:
                             cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
                             command = ["mv", cmocka_file_path, self.outputdir]
-                            run_local(test.log, command)
+                            run_local(test.log, " ".join(command))
 
     def _check_cmocka_files(self):
         """Determine if cmocka files exist in the expected location.

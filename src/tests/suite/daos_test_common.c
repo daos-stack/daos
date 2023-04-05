@@ -29,7 +29,8 @@ bool		dt_csum_server_verify;
 /** container cell size */
 unsigned int	dt_cell_size;
 int		dt_obj_class;
-
+int		dt_redun_lvl;
+int		dt_redun_fac;
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -344,7 +345,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 dpp_entry[4] = {0};
+	struct daos_prop_entry	 dpp_entry[6] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -425,6 +426,20 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
+	if (dt_redun_lvl) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		entry->dpe_val = dt_redun_lvl;
+		co_props.dpp_nr++;
+	}
+
+	if (dt_redun_fac) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+		entry->dpe_val = dt_redun_fac;
 		co_props.dpp_nr++;
 	}
 
@@ -618,6 +633,8 @@ test_teardown(void **state)
 	}
 
 free:
+	dt_redun_lvl = 0;
+	dt_redun_fac = 0;
 	if (arg->pool.svc)
 		d_rank_list_free(arg->pool.svc);
 	if (arg->pool.alive_svc)
@@ -746,7 +763,7 @@ rebuild_pool_wait(test_arg_t *arg)
 	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
 	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
-	     rst->rs_version != arg->rebuild_pre_pool_ver) {
+	    rst->rs_version > arg->rebuild_pre_pool_ver) {
 		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
@@ -918,8 +935,6 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 	rc = dmg_system_start_rank(dmg_config_file, rank);
 	print_message(" dmg start: %d, rc %#x\n", rank, rc);
 	assert_rc_equal(rc, 0);
-
-	daos_cont_status_clear(arg->coh, NULL);
 }
 
 void
@@ -965,8 +980,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	print_message(" dmg stop, rc %#x\n", rc);
 
 	assert_rc_equal(rc, 0);
-
-	daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *
@@ -1009,6 +1022,21 @@ get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 }
 
 daos_prop_t *
+get_daos_prop_with_acl(struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	return prop;
+}
+
+daos_prop_t *
 get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 {
 	daos_prop_t	*prop;
@@ -1026,12 +1054,11 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	return prop;
 }
 
-daos_prop_t *
-get_daos_prop_with_user_acl_perms(uint64_t perms)
+struct daos_acl *
+get_daos_acl_with_user_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
-	struct daos_ace	*ace;
+	struct daos_ace	*ace = NULL;
 	char		*user = NULL;
 
 	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
@@ -1046,9 +1073,23 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 
 	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
-	/* Set effective user up as non-owner */
-	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
-						acl, DAOS_PROP_CO_ACL);
+	daos_ace_free(ace);
+	D_FREE(user);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace = NULL;
+	char		*user = NULL;
+
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_user_perms(perms);
+	prop = get_daos_prop_with_acl(acl, DAOS_PROP_CO_ACL);
 
 	daos_ace_free(ace);
 	daos_acl_free(acl);

@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,11 +12,6 @@ class RbldContRfTest(ContRedundancyFactor):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a Rebuild Container RF with ObjClass Write object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
 
     def test_rebuild_with_container_rf(self):
         """Jira ID:
@@ -43,8 +37,8 @@ class RbldContRfTest(ContRedundancyFactor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container,rebuild
-        :avocado: tags=container_rf,rebuild_container_rf,test_rebuild_with_container_rf
+        :avocado: tags=container,rebuild,container_rf
+        :avocado: tags=RbldContRfTest,test_rebuild_with_container_rf
         """
         self.mode = "cont_rf_with_rebuild"
         self.execute_cont_rf_test()

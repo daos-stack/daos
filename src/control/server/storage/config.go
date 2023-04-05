@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -145,7 +145,7 @@ func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	return tc
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	tc.Scm.RamdiskSize = size
@@ -285,12 +285,17 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	tid := 0
+	tmp2 := make([]*TierConfig, 0, len(tmp))
 	for i := range tmp {
-		if tmp[i].Tier == 0 {
-			tmp[i].Tier = i
+		if tmp[i] == nil {
+			continue
 		}
+		tmp[i].Tier = tid
+		tmp2 = append(tmp2, tmp[i])
+		tid++
 	}
-	*tcs = tmp
+	*tcs = tmp2
 
 	return nil
 }

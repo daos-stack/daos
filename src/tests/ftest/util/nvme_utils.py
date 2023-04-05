@@ -1,25 +1,28 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
 import re
 import time
-from exception_utils import CommandFailure
+
 from avocado.core.exceptions import TestFail
+
+from dmg_utils import get_storage_query_device_uuids, get_dmg_smd_info
+from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
+from server_utils import ServerFailed
 
 
-def get_device_ids(dmg, servers):
+def get_device_ids(test, dmg, servers):
     """Get the NVMe Device ID from servers.
 
     Args:
-        dmg: DmgCommand class instance.
+        test (Test): avocado test class
+        dmg (DmgCommand): a DmgCommand class instance.
         servers (list): list of server hosts.
 
     Returns:
@@ -27,25 +30,15 @@ def get_device_ids(dmg, servers):
 
     """
     devices = {}
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("query")
-    dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
     for host in servers:
         dmg.hostlist = host
-        try:
-            result = dmg.run()
-        except CommandFailure as _error:
-            raise CommandFailure("dmg list-devices failed with error {}".format(_error)) from _error
-        drive_list = []
-        for line in result.stdout_text.split('\n'):
-            if 'UUID' in line:
-                drive_list.append(line.split('UUID:')[1].split(' ')[0])
-        devices[host] = drive_list
+        devices[host] = []
+        for uuid_list in get_storage_query_device_uuids(test, dmg).values():
+            devices[host].extend(uuid_list)
     return devices
 
 
 class ServerFillUp(IorTestBase):
-    # pylint: disable=too-many-ancestors,too-many-instance-attributes
     """Class to fill up the servers based on pool percentage given.
 
     It will get the drives listed in yaml file and find the maximum capacity of
@@ -94,7 +87,7 @@ class ServerFillUp(IorTestBase):
         self.dmg_command = self.get_dmg_command()
 
     def create_container(self):
-        """Create the container """
+        """Create the container."""
         self.nvme_local_cont = self.get_container(self.pool, create=False)
 
         # update container oclass
@@ -213,20 +206,25 @@ class ServerFillUp(IorTestBase):
         """
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
-        result = self.dmg.storage_query_device_health(disk_id)
-        # Check if device state changed to EVICTED.
-        if 'State:EVICTED' not in result.stdout_text:
-            self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
+        info = get_dmg_smd_info(
+            self, self.dmg.storage_query_device_health, 'devices', uuid=disk_id)
+        for devices in info.values():
+            for device in devices:
+                if device['uuid'] != disk_id:
+                    continue
+                if device['dev_state'].lower() != 'evicted':
+                    self.fail("State of device {} on host {} suppose to be EVICTED".format(
+                        disk_id, server))
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""
         # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(self.dmg, self.hostlist_servers)
+        device_ids = get_device_ids(self, self.dmg, self.hostlist_servers)
 
         # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
         # single drive from single server
@@ -235,8 +233,11 @@ class ServerFillUp(IorTestBase):
             for disk_id in range(0, self.no_of_drives):
                 self.set_device_faulty(server, device_ids[server][disk_id])
 
-    def get_max_storage_sizes(self):
+    def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.
+
+        Args:
+            percentage (int): percentage of the maximum storage space to use
 
         Returns:
             list: a list of the maximum SCM and NVMe size
@@ -244,22 +245,21 @@ class ServerFillUp(IorTestBase):
         """
         try:
             sizes_dict = self.server_managers[0].get_available_storage()
-            sizes = [sizes_dict["scm"], sizes_dict["nvme"]]
-        except (ServerFailed, KeyError) as error:
+            # Return a percentage of the storage space as it won't be used 100% for pool creation.
+            percentage /= 100
+            sizes = [int(sizes_dict["scm"] * percentage), int(sizes_dict["nvme"] * percentage)]
+        except (ServerFailed, KeyError, ValueError) as error:
             self.fail(error)
-
-        # Return the 96% of storage space as it won't be used 100% for pool creation.
-        for index, _size in enumerate(sizes):
-            sizes[index] = int(sizes[index] * 0.96)
 
         return sizes
 
-    def create_pool_max_size(self, scm=False, nvme=False):
+    def create_pool_max_size(self, scm=False, nvme=False, percentage=96):
         """Create a single pool with Maximum NVMe/SCM size available.
 
         Args:
             scm (bool): To create the pool with max SCM size or not.
             nvme (bool): To create the pool with max NVMe size or not.
+            percentage (int): percentage of the maximum storage space to use
 
         Note: Method to Fill up the server. It will get the maximum Storage space and create the
               pool. Replace with dmg options in future when it's available.
@@ -268,40 +268,37 @@ class ServerFillUp(IorTestBase):
         self.add_pool(create=False)
 
         if nvme or scm:
-            sizes = self.get_max_storage_sizes()
+            sizes = self.get_max_storage_sizes(percentage)
 
         # If NVMe is True get the max NVMe size from servers
         if nvme:
-            self.pool.nvme_size.update('{}'.format(sizes[1]))
+            self.pool.nvme_size.update(str(sizes[1]))
 
         # If SCM is True get the max SCM size from servers
         if scm:
-            self.pool.scm_size.update('{}'.format(sizes[0]))
+            self.pool.scm_size.update(str(sizes[0]))
 
         # Create the Pool
         self.pool.create()
 
     def kill_rank_thread(self, rank):
-        """
-        Server rank kill thread function
+        """Server rank kill thread function.
 
         Args:
             rank: Rank number to kill the daos server
         """
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True, copy=True)
 
     def exclude_target_thread(self, rank, target):
-        """
-        Target kill thread function
+        """Target kill thread function.
 
         Args:
             rank(int): Rank number to kill the target from
             target(str): target number or range of targets to kill
         """
-        self.dmg_command.pool_exclude(self.pool.uuid, rank, str(target))
+        self.pool.exclude(rank, str(target))
 
-    def start_ior_load(self, storage='NVMe', operation="WriteRead",
-                       percent=1, create_cont=True):
+    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -344,8 +341,7 @@ class ServerFillUp(IorTestBase):
             # Kill the target from rank in BG thread
             for _id, (key, value) in enumerate(self.pool_exclude.items()):
                 kill_target_job.append(threading.Thread(target=self.exclude_target_thread,
-                                                        kwargs={"rank": key,
-                                                                "target": value}))
+                                                        kwargs={"rank": key, "target": value}))
                 kill_target_job[_id].start()
 
             # Wait for server kill thread to finish

@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     common = denv.SharedObject(['rpc.c'])
 

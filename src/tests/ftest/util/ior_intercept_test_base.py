@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,8 +11,6 @@ from general_utils import percent_change
 
 
 class IorInterceptTestBase(IorTestBase):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-few-public-methods
     """Base IOR interception test class.
 
     :avocado: recursive

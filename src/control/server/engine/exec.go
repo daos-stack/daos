@@ -134,7 +134,7 @@ func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	if err != nil {
 		return nil, err
 	}
-	env = mergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
+	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
 	exitCh := make(RunnerExitChan)
 	return exitCh, r.run(ctx, args, env, exitCh)

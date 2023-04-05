@@ -6,6 +6,7 @@ port: 10001
 
 runtime_dir: /var/run/daos_agent
 log_file: /tmp/daos_agent.log
+control_log_mask: info
 
 transport_config:
 @DAOS_NOAUTH_SECTION_BEGIN@
@@ -18,4 +19,10 @@ transport_config:
   key: /etc/daos/certs/agent.key
 @DAOS_AUTH_SECTION_END@
 
-exclude_fabric_ifaces: ["docker0", "lo"]
+@DAOS_IFACE_SECTION_BEGIN@
+fabric_ifaces:
+- numa_node: @DAOS_IFACE_NUMA_NODE@
+  devices:
+    - iface: @DAOS_IFACE_NAME@
+      domain: @DAOS_IFACE_DOMAIN_NAME@
+@DAOS_IFACE_SECTION_END@

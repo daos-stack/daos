@@ -680,18 +680,18 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return
 			}
 
-			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+			mockGetMemInfo := func() (*common.MemInfo, error) {
 				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
-				return &common.HugePageInfo{
-					PageSizeKb: 2048,
-					Free:       tc.hugePagesFree,
+				return &common.MemInfo{
+					HugePageSizeKb: 2048,
+					HugePagesFree:  tc.hugePagesFree,
 				}, tc.getHpiErr
 			}
 
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
 
-			gotMemChkErr := updateMemValues(srv, ei, mockGetHugePageInfo)
+			gotMemChkErr := updateMemValues(srv, ei, mockGetMemInfo)
 			test.CmpErr(t, tc.expMemChkErr, gotMemChkErr)
 			if tc.expMemChkErr != nil {
 				return
@@ -831,7 +831,7 @@ func TestServer_setEngineBdevs(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList("0000:80:00.0"),
+						WithBdevDeviceList("0000:00:00.0"),
 				),
 			engineIdx:        1,
 			scanResp:         &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},

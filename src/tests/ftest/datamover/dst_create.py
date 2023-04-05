@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -301,7 +301,7 @@ class DmvrDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfs,ior
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior,daos_cmd
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         :avocado: tags=test_dm_dst_create_fs_copy_posix_dfs
         """

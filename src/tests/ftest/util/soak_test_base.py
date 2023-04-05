@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,13 +15,13 @@ from getpass import getuser
 import socket
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
 from general_utils import run_command, DaosTestError
 from host_utils import get_local_host
 import slurm_utils
+from run_utils import run_remote
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
@@ -29,7 +29,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline
+    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
 
 
 class SoakTestBase(TestWithServers):
@@ -242,6 +242,11 @@ class SoakTestBase(TestWithServers):
             name = "SVR_REINTEGRATE"
             params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "vmd-identify-check":
+            method = launch_vmd_identify_check
+            name = "VMD_LED_CHECK"
+            params = (self, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(
                 "<<FAILED: Harasser {} is not supported. ".format(
@@ -319,8 +324,7 @@ class SoakTestBase(TestWithServers):
                     elif "fio" in job:
                         commands = create_fio_cmdline(self, job, pool)
                     elif "mdtest" in job:
-                        commands = create_mdtest_cmdline(
-                            self, job, pool, ppn, npj)
+                        commands = create_mdtest_cmdline(self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
                     elif "vpic" in job:
@@ -329,6 +333,8 @@ class SoakTestBase(TestWithServers):
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
+                    elif "datamover" in job:
+                        commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))
@@ -356,7 +362,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(self.log, self.control, str(script))
+                job_id = slurm_utils.run_slurm_script(self.log, str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
@@ -481,9 +487,8 @@ class SoakTestBase(TestWithServers):
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
-            "mkdir -p {}".format(self.soaktest_dir), self.srun_params)
+        result = run_remote(
+            self.log, self.hostlist_clients, "mkdir -p {}".format(self.soaktest_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: logfile directory not created on clients>>: {}".format(
@@ -573,9 +578,7 @@ class SoakTestBase(TestWithServers):
                 " ".join([pool.uuid for pool in self.pool]))
 
         # cleanup soak log directories before test on all nodes
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
-            "rm -rf {}".format(self.soak_dir), self.srun_params)
+        result = run_remote(self.log, self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed from clients>>: {}".format(

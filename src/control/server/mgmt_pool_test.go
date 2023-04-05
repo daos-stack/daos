@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -102,8 +102,11 @@ func testPoolLabelProp() []*mgmtpb.PoolProperty {
 
 func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state   system.PoolServiceState
-		expResp *mgmtpb.PoolCreateResp
+		state     system.PoolServiceState
+		queryResp *mgmtpb.PoolQueryResp
+		queryErr  error
+		expResp   *mgmtpb.PoolCreateResp
+		expErr    error
 	}{
 		"creating": {
 			state: system.PoolServiceStateCreating,
@@ -113,9 +116,20 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		},
 		"ready": {
 			state: system.PoolServiceStateReady,
-			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(daos.Already),
+			queryResp: &mgmtpb.PoolQueryResp{
+				Leader: 1,
 			},
+			expResp: &mgmtpb.PoolCreateResp{
+				Leader:    1,
+				SvcReps:   []uint32{1},
+				TgtRanks:  []uint32{1},
+				TierBytes: []uint64{1, 2},
+			},
+		},
+		"ready (query error)": {
+			state:    system.PoolServiceStateReady,
+			queryErr: errors.New("query error"),
+			expErr:   errors.New("query error"),
 		},
 		"destroying": {
 			state: system.PoolServiceStateDestroying,
@@ -129,6 +143,10 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
+			setupMockDrpcClient(svc, tc.queryResp, tc.queryErr)
+			if _, err := svc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
+				t.Fatal(err)
+			}
 			poolUUID := test.MockPoolUUID(1)
 			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
 			defer lock.Release()
@@ -136,7 +154,11 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			if err := svc.sysdb.AddPoolService(ctx, &system.PoolService{
 				PoolUUID: poolUUID,
 				State:    tc.state,
-				Storage:  &system.PoolServiceStorage{},
+				Storage: &system.PoolServiceStorage{
+					CreationRankStr:    "1",
+					PerRankTierStorage: []uint64{1, 2},
+				},
+				Replicas: []ranklist.Rank{1},
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -148,9 +170,10 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 				Properties: testPoolLabelProp(),
 			}
 
-			gotResp, err := svc.PoolCreate(ctx, req)
-			if err != nil {
-				t.Fatal(err)
+			gotResp, gotErr := svc.PoolCreate(ctx, req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
@@ -506,7 +529,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			pcCtx, pcCancel := context.WithTimeout(context.Background(), defaultRetryAfter+10*time.Millisecond)
+			pcCtx, pcCancel := context.WithTimeout(context.Background(), 260*time.Millisecond)
 			defer pcCancel()
 			gotResp, gotErr := tc.mgmtSvc.PoolCreate(pcCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -589,12 +612,32 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	// We should only be trying to create on the Joined ranks.
 	wantReq.Ranks = []uint32{0, 2, 3}
 
+	// These properties are automatically added by PoolCreate
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubMode,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubThresh,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+
 	gotReq := new(mgmtpb.PoolCreateReq)
 	if err := proto.Unmarshal(dc.calls[0].Body, gotReq); err != nil {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(wantReq, gotReq, test.DefaultCmpOpts()...); diff != "" {
+	cmpOpts := append(test.DefaultCmpOpts(),
+		// Ensure stable ordering of properties to avoid intermittent failures.
+		protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
+			return a.Number < b.Number
+		}),
+	)
+	if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
 	}
 }
@@ -1386,7 +1429,9 @@ func TestPoolGetACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1444,7 +1489,7 @@ func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
 	return &mgmtpb.ModifyACLReq{
 		Sys: build.DefaultSystemName,
 		Id:  mockUUID,
-		ACL: []string{
+		Entries: []string{
 			"A::OWNER@:rw",
 		},
 	}
@@ -1512,7 +1557,9 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1590,7 +1637,9 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1676,7 +1725,9 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:G:readers@:r"},
+		Acl: &mgmtpb.AccessControlList{
+			Entries: []string{"A::OWNER@:rw", "A:G:readers@:r"},
+		},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 

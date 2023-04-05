@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1346,6 +1346,98 @@ rebuild_pool_destroy_during_rebuild_failure(void **state)
 						    DAOS_FAIL_ALWAYS);
 }
 
+static int
+reintegrate_failure_cb(void *arg)
+{
+	test_arg_t	*test_arg = arg;
+
+	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	return 0;
+}
+
+static void
+reintegrate_failure_and_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[20];
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < 20; i++)
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0,
+					    0, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
+
+	arg->rebuild_cb = reintegrate_failure_cb;
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+
+	arg->rebuild_cb = NULL;
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static void
+rebuild_kill_more_RF_ranks(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	struct ioreq	req;
+	d_rank_t	ranks[4] = {7, 6, 5, 4};
+	int		i;
+
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
+		print_message("need at least 5 svcs, -s5\n");
+		return;
+	}
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		insert_single("dkey", "akey", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+	}
+	rebuild_pools_ranks(&arg, 1, ranks, 4, true);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+	reintegrate_single_pool_rank(arg, 6, true);
+	reintegrate_single_pool_rank(arg, 4, true);
+	reintegrate_single_pool_rank(arg, 7, true);
+
+	print_message("lookup and expect -DER_RF\n");
+	for (i = 0; i < OBJ_NR; i++) {
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		arg->expect_result = -DER_RF;
+		D_DEBUG(DB_TRACE, "lookup single %d\n", i);
+		lookup_single("dkey", "akey", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+	}
+
+	D_DEBUG(DB_TRACE, "cont status clear\n");
+	/* clear health status */
+	daos_cont_status_clear(arg->coh, NULL);
+
+	print_message("clear health status then retry.\n");
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		lookup_single("dkey", "akey", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+	}
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1412,7 +1504,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD25: rebuild with two failures",
 	 rebuild_multiple_failures, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD26: rebuild fail all replicas before rebuild",
-	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_setup,
+	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_rf1_setup,
 	 rebuild_sub_teardown},
 	{"REBUILD27: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
@@ -1424,6 +1516,12 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sub_teardown},
 	{"REBUILD30: destroy pool during rebuild failure and retry",
 	  rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD31: reintegrate failure and retry",
+	  reintegrate_failure_and_retry, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD32: kill more ranks than RF, then reintegrate",
+	  rebuild_kill_more_RF_ranks, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

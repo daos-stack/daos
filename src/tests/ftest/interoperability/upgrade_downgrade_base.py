@@ -15,6 +15,7 @@ from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 
+
 class UpgradeDowngradeBase(IorTestBase):
     # pylint: disable=global-variable-not-assigned,global-statement
     # pylint: disable=too-many-ancestors
@@ -442,13 +443,13 @@ class UpgradeDowngradeBase(IorTestBase):
         # (9)Pool and containers create on 2.2 agent and server
         self.log.info("==(9)Create new pools and containers on 2.2 agent to 2.2 server")
         agent_server_ver = "2.2 agent to 2.2 server"
-        cmd = "dmg pool create  --size 5G --label New_pool1"
+        cmd = "dmg pool create --size 5G New_pool1"
         self.verify_daos_libdaos("9.1", hosts_client, cmd, positive_test, agent_server_ver)
         cmd = "dmg pool list"
         self.verify_daos_libdaos("9.2", hosts_client, cmd, positive_test, agent_server_ver)
-        cmd = "daos cont create New_pool1 --label C21 --type POSIX --properties 'rf:2'"
+        cmd = "daos cont create New_pool1 C21 --type POSIX --properties 'rf:2'"
         self.verify_daos_libdaos("9.3", hosts_client, cmd, positive_test, agent_server_ver)
-        cmd = "daos cont create New_pool1 --label C22 --type POSIX --properties 'rf:2'"
+        cmd = "daos cont create New_pool1 C22 --type POSIX --properties 'rf:2'"
         self.verify_daos_libdaos("9.4", hosts_client, cmd, positive_test, agent_server_ver)
         cmd = "daos container list New_pool1"
         self.verify_daos_libdaos("9.5", hosts_client, cmd, positive_test, agent_server_ver)
@@ -480,10 +481,10 @@ class UpgradeDowngradeBase(IorTestBase):
             "11.2", hosts_client, cmd, negative_test, agent_server_ver, exp_err)
         cmd = "sudo daos_agent dump-attachinfo"
         self.verify_daos_libdaos("11.3", hosts_client, cmd, positive_test, agent_server_ver)
-        cmd = "daos cont create {0} --label 'C_oldP' --type POSIX --properties 'rf:2'".format(
+        cmd = "daos cont create {0} 'C_oldP' --type POSIX --properties 'rf:2'".format(
             pool_id)
         self.verify_daos_libdaos("11.4", hosts_client, cmd, positive_test, agent_server_ver)
-        cmd = "daos cont create New_pool1 --label 'C_newP' --type POSIX --properties 'rf:2'"
+        cmd = "daos cont create New_pool1 'C_newP' --type POSIX --properties 'rf:2'"
         exp_err = "DER_NO_SERVICE(-2039)"
         self.verify_daos_libdaos(
             "11.5", hosts_client, cmd, negative_test, agent_server_ver, exp_err)

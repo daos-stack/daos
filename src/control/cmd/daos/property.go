@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,7 +116,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return labelNotSetStr
+				return ""
 			}
 			return strValStringer(e, name)
 		},
@@ -635,9 +635,8 @@ var contDeprProps = map[string]string{
 // below.
 
 const (
-	maxNameLen     = 20 // arbitrary; came from C code
-	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
+	maxNameLen  = 20 // arbitrary; came from C code
+	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
@@ -751,7 +750,7 @@ func propInvalidValue(e *C.struct_daos_prop_entry, name string) string {
 
 func propError(fs string, args ...interface{}) *flags.Error {
 	return &flags.Error{
-		Message: fmt.Sprintf("--properties: "+fs, args...),
+		Message: fmt.Sprintf("properties: "+fs, args...),
 	}
 }
 
@@ -1029,7 +1028,7 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	// Accept a list of property names to fetch, if specified,
 	// otherwise just fetch all known properties.
 	f.names = strings.Split(fv, ",")
-	if len(f.names) == 0 || f.names[0] == "all" {
+	if fv == "" || len(f.names) == 0 || f.names[0] == "all" {
 		f.names = propHdlrs.keys()
 	}
 
@@ -1039,8 +1038,8 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 			return propError("name must not be empty")
 		}
 		if len(key) > maxNameLen {
-			return propError("name too long (%d > %d)",
-				len(name), maxNameLen)
+			return propError("%q: name too long (%d > %d)",
+				key, len(key), maxNameLen)
 		}
 		if newKey, found := contDeprProps[key]; found {
 			key = newKey
@@ -1141,7 +1140,7 @@ func printProperties(out io.Writer, header string, props ...*property) {
 	table := []txtfmt.TableRow{}
 	for _, prop := range props {
 		row := txtfmt.TableRow{}
-		row[nameTitle] = prop.Description
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Name)
 		if prop.String() != "" {
 			row[valueTitle] = prop.String()
 			if len(titles) == 1 {

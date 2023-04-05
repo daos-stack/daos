@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,8 +24,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// TestBackend_createEmptyFile verifies empty files are created as expected.
-func TestBackend_createEmptyFile(t *testing.T) {
+// TestBackend_createAioFile verifies AIO files are created (or not) as expected.
+func TestBackend_createAioFile(t *testing.T) {
 	tests := map[string]struct {
 		path          string
 		pathImmutable bool // avoid adjusting path in test if set
@@ -64,10 +64,28 @@ func TestBackend_createEmptyFile(t *testing.T) {
 				tc.path = filepath.Join(testDir, tc.path)
 			}
 
-			gotErr := createEmptyFile(log, tc.path, tc.size)
-			test.CmpErr(t, tc.expErr, gotErr)
+			req := &storage.BdevFormatRequest{
+				OwnerUID: os.Getuid(),
+				OwnerGID: os.Getgid(),
+				Properties: storage.BdevTierProperties{
+					DeviceFileSize: tc.size,
+				},
+			}
+
+			gotResp := createAioFile(log, tc.path, req)
 			if tc.expErr != nil {
+				if gotResp.Error == nil {
+					t.Fatal("expected non-nil error in response")
+				}
+				test.CmpErr(t, tc.expErr, gotResp.Error)
+				if _, err := os.Stat(tc.path); err == nil {
+					t.Fatalf("%s file was not removed on error", tc.path)
+				}
+
 				return
+			}
+			if gotResp.Error != nil {
+				t.Fatal("expected nil error in response")
 			}
 
 			expSize := (tc.size / aioBlockSize) * aioBlockSize

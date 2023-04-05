@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,8 @@ typedef struct {
 	uuid_t				 mgpi_uuid;
 	/** List of current pool service replica ranks */
 	d_rank_list_t			*mgpi_svc;
+	/** Current pool service leader */
+	d_rank_t			 mgpi_ldr;
 } daos_mgmt_pool_info_t;
 
 /**

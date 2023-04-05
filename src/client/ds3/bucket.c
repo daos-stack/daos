@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,17 +10,18 @@ int
 ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, bool *is_truncated,
 		ds3_t *ds3, daos_event_t *ev)
 {
-	int                         rc = 0;
-	struct daos_pool_cont_info *conts;
-	daos_size_t                 ncont = *nbuck;
-	daos_size_t                 bi    = 0;
-	daos_size_t                 i     = 0;
-	ds3_bucket_t               *ds3b  = NULL;
-	char		       *name;
+	int				rc = 0;
+	struct daos_pool_cont_info	*conts;
+	daos_size_t			ncont;
+	daos_size_t			bi = 0;
+	daos_size_t			i = 0;
+	ds3_bucket_t			*ds3b  = NULL;
+	char				*name;
 
 	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
 		return -EINVAL;
 
+	ncont = *nbuck;
 	D_ALLOC_ARRAY(conts, ncont);
 	if (conts == NULL)
 		return -ENOMEM;
@@ -239,11 +240,9 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 int
 ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
-	void *const values[]       = {info->encoded};
-	size_t            sizes[]  = {info->encoded_length};
 	daos_handle_t     coh;
+	int               rc, rc2;
 
 	if (ds3b == NULL || info == NULL)
 		return -EINVAL;
@@ -252,9 +251,16 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	if (rc != 0)
 		return -rc;
 
-	rc = daos_cont_get_attr(coh, 1, names, values, sizes, ev);
-	rc = daos_der2errno(rc);
-	dfs_cont_put(ds3b->dfs, coh);
+	rc = daos_cont_get_attr(coh, 1, names, &info->encoded, &info->encoded_length, ev);
+	if (rc) {
+		rc = daos_der2errno(rc);
+		goto out_put;
+	}
+
+out_put:
+	rc2 = dfs_cont_put(ds3b->dfs, coh);
+	if (rc == 0)
+		rc = -rc2;
 	return -rc;
 }
 
@@ -286,10 +292,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b)
 {
 	int            rc = 0;
-	char          *file_start;
-	const char    *path        = "";
+	char          *file_start = NULL;
+	const char    *path = "";
 	char          *prefix_copy = NULL;
-	const char    *prefix_rest;
+	const char    *prefix_rest = NULL;
 	dfs_obj_t     *dir_obj;
 	char          *lookup_path;
 	struct dirent *dirents;
@@ -319,14 +325,13 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		D_STRNDUP(prefix_copy, prefix, DS3_MAX_KEY_BUFF - 1);
 		if (prefix_copy == NULL)
 			return -ENOMEM;
-	}
-
-	file_start  = strrchr(prefix_copy, delim[0]);
-	prefix_rest = prefix_copy;
-	if (file_start != NULL) {
-		*file_start = '\0';
-		path        = prefix_copy;
-		prefix_rest = file_start + 1;
+		file_start  = strrchr(prefix_copy, delim[0]);
+		prefix_rest = prefix_copy;
+		if (file_start != NULL) {
+			*file_start = '\0';
+			path        = prefix_copy;
+			prefix_rest = file_start + 1;
+		}
 	}
 
 	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY_BUFF);
@@ -374,8 +379,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		 * Skip entries that do not start with prefix_rest
 		 * TODO handle how this affects max
 		 */
-		if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0)
-			continue;
+		if (prefix_rest) {
+			if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0)
+				continue;
+		}
 
 		/* Open the file and check mode */
 		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
@@ -442,7 +449,6 @@ err_dir_obj:
 err_path:
 	D_FREE(lookup_path);
 err_prefix:
-	if (prefix_copy != NULL)
-		D_FREE(prefix_copy);
+	D_FREE(prefix_copy);
 	return -rc;
 }

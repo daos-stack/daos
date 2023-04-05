@@ -6,13 +6,14 @@ def scons():
     Import('denv', 'dc_security_tgts', 'acl_tgts')
 
     mocks = denv.Object('drpc_mocks.c')
+    util = denv.Object('sec_test_util.c')
     # Isolated unit tests
     denv.d_test_program('cli_security_tests',
-                        source=['cli_security_tests.c', dc_security_tgts, mocks],
+                        source=['cli_security_tests.c', util, dc_security_tgts, mocks],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
     denv.d_test_program('srv_acl_tests',
-                        source=['srv_acl_tests.c', acl_tgts, mocks],
+                        source=['srv_acl_tests.c', util, acl_tgts, mocks],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
 

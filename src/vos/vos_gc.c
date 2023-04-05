@@ -103,7 +103,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain %s btree: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain %s btree: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -139,7 +139,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain evtree %s: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain evtree %s: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -646,8 +646,8 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 		 * immediately.
 		 */
 		if (rc != -DER_NOSPACE) {
-			D_CRIT("Failed to add item, pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
+			D_CRIT("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
+			       DP_UUID(pool->vp_id), DP_RC(rc));
 			return rc;
 		}
 
@@ -660,13 +660,13 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 
 		rc = gc_reclaim_pool(pool, &creds, &empty);
 		if (rc) {
-			D_CRIT("Cannot run RC for pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
+			D_CRIT("Cannot run RC for pool=" DF_UUID ", rc=" DF_RC "\n",
+			       DP_UUID(pool->vp_id), DP_RC(rc));
 			return rc;
 		}
 
 		if (creds == GC_CREDS_TIGHT) { /* recliamed nothing? */
-			D_CRIT("Failed to recliam space for pool="DF_UUID"\n",
+			D_CRIT("Failed to recliam space for pool=" DF_UUID "\n",
 			       DP_UUID(pool->vp_id));
 			return -DER_NOSPACE;
 		}
@@ -712,8 +712,8 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
-		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
-			DP_UUID(pool->vp_id), d_errstr(rc));
+		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
 		if (cont != NULL)
 			vos_cont_decref(cont);
 		return rc;
@@ -758,7 +758,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
 		if (rc < 0) {
-			D_ERROR("GC=%s error=%s\n", gc->gc_name, d_errstr(rc));
+			D_ERROR("GC=%s error: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 			break;
 		}
 
@@ -1078,7 +1078,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	total = *credits;
 	rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
-		D_CRIT("GC failed %s\n", d_errstr(rc));
+		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
 		return 0; /* caller can't do anything for it */
 	}
 	total -= *credits; /* subtract the remained credits */
@@ -1141,6 +1141,8 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 	D_ASSERT(daos_handle_is_valid(poh));
 
+	vos_space_update_metrics(pool);
+
 	param.vgc_yield_func	= yield_func;
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;
@@ -1163,7 +1165,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		total += creds;
 		rc = vos_gc_pool_tight(poh, &creds);
 		if (rc) {
-			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
+			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */

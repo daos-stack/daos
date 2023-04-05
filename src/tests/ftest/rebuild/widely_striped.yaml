@@ -13,14 +13,7 @@ server_config:
         - SWIM_PROTOCOL_PERIOD_LEN=2000
         - SWIM_SUSPECT_TIMEOUT=19000
         - SWIM_PING_TIMEOUT=1900
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 testparams:
   ranks_to_kill:
     - [6]

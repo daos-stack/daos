@@ -1,5 +1,5 @@
 """Fake scons environment shutting up pylint on SCons files"""
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -32,14 +32,14 @@ class SConscript():
     """Fake SConscript"""
 
     def __init__(self, *_args, **_kw):
-        """init function"""
+        """Init function"""
 
 
 class DefaultEnvironment():
     """Default environment"""
 
     def __init__(self, *_args, **_kwargs):
-        """constructor"""
+        """Constructor"""
 
     def RunTests(self, *_args, **_kw):
         """Fake tests builder (defined by prereq_tools)"""
@@ -84,6 +84,10 @@ class DefaultEnvironment():
     def Zip(self, *_args, **_kw):
         """Fake Zip"""
         return []
+
+    def Tool(self, name, **_kw):
+        """Fake Tool"""
+        return
 
     def CXXFile(self, *_args, **_kw):
         """Fake CXXFile"""
@@ -212,6 +216,7 @@ class DefaultEnvironment():
         return
 
     def __index__(self):
+        """Allow indexing"""
         return 0
 
     def Install(self, *_args, **_kw):
@@ -230,7 +235,7 @@ class DefaultEnvironment():
         return []
 
     def SConscript(self, s_dir):
-        "Fake SConscript"
+        """Fake SConscript"""
         return
 
     def Replace(self, *_args, **_kw):
@@ -277,6 +282,10 @@ class DefaultEnvironment():
         """Fake PrependENVPath"""
         return
 
+    def Configure(self):
+        """Fake Configure"""
+        return Configure()
+
     def d_add_build_rpath(self, pathin='.'):
         """Fake d_add_build_rpath"""
         return
@@ -299,12 +308,10 @@ class DefaultEnvironment():
 
     def d_program(self, *_args, **_kw):
         """Fake d_program"""
-
         return self.Program(*_args, **_kw)
 
     def d_test_program(self, *_args, **_kw):
         """Fake d_test_program"""
-
         return self.d_program(*_args, **_kw)
 
     def d_static_library(self, *_args, **_kw):
@@ -315,6 +322,10 @@ class DefaultEnvironment():
         """Fake d_library"""
         return self.Library(*_args, **_kw)
 
+    def analyze_setup(self, prefix, args):
+        """Fake analyze_setup"""
+        return
+
     def compiler_setup(self):
         """Fake compiler_setup"""
         return
@@ -323,12 +334,16 @@ class DefaultEnvironment():
         """Fake Preprocess"""
         return
 
+    def require(self, env, *kw, headers_only=False):
+        """Fake require"""
+        return
+
 
 class Variables():
     """Fake variables"""
 
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
     def Add(self, *_args, **_kw):
         """Fake Add function"""
@@ -348,9 +363,10 @@ class Variables():
 
 class Configure():
     """Fake Configure"""
+
     def __init__(self, *_args, **_kw):
         self.env = DefaultEnvironment()
-        """constructor"""
+        """Constructor"""
 
     def CheckHeader(self, *_args, **_kw):
         """Fake CheckHeader"""
@@ -400,11 +416,12 @@ class Literal():
     """Fake Literal"""
 
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
 
 class Dir():
     """Fake Dir"""
+
     def __init__(self, *_args, **_kw):
         self.abspath = os.getcwd()
         self.path = os.getcwd()
@@ -443,8 +460,9 @@ def SetOption(*_args, **_kw):
 
 class Help():
     """Fake Help"""
+
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
 
 def Glob(*_args):

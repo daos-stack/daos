@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,12 +7,10 @@ from telemetry_utils import TelemetryUtils
 
 
 class ScrubberUtils(TelemetryUtils):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Class for Scrubber Utils."""
 
     def is_scrubber_started(self):
-        """This method is used to check whether scrubber is
-          started.
+        """This method is used to check whether scrubber is started.
 
         Returns:
             info (dict): Scrubber started output.
@@ -33,8 +30,7 @@ class ScrubberUtils(TelemetryUtils):
         return info
 
     def get_csum_total_metrics(self):
-        """This method is used to get scrubber csum total
-        metrics.
+        """This method is used to get scrubber csum total metrics.
 
         Returns:
             info (dict): scrubber csum total metrics.

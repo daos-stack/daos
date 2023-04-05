@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -610,21 +610,8 @@ int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static int
 set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	char	uuid_str[37] = {0};
-	char	dmg_cmd[DTS_CFG_MAX];
-	int	rc;
-
-	/* build and invoke dmg cmd to set DAOS_PROP_PO_RECLAIM property */
-	uuid_unparse(arg->pool.pool_uuid, uuid_str);
-	dts_create_config(dmg_cmd, "dmg pool set-prop %s --name=reclaim --value=%s",
-			  uuid_str, (char *)strategy);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
-
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
-
-	return rc;
+	return dmg_pool_set_prop(arg->dmg_config, "reclaim",
+				 strategy, arg->pool.pool_uuid);
 }
 
 /**
@@ -3289,6 +3276,7 @@ fetch_replica_unavail(void **state)
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
+		daos_cont_status_clear(arg->coh, NULL);
 	}
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);
@@ -3471,12 +3459,24 @@ io_obj_key_query(void **state)
 	rc = daos_tx_open(arg->coh, &th, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
 	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
+	flags = DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
 
@@ -3774,7 +3774,7 @@ split_sgl_internal(void **state, int size)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
 
-	/** Let's use differet iod_size to see if fetch
+	/** Let's use different iod_size to see if fetch
 	 *  can reset the correct iod_size
 	 */
 	iod.iod_size = size/2;
@@ -5119,6 +5119,7 @@ obj_setup_internal(void **state)
 	else if (arg->obj_class != OC_UNKNOWN)
 		dts_obj_class = arg->obj_class;
 
+	dt_redun_lvl = DAOS_PROP_CO_REDUN_RANK;
 	return 0;
 }
 

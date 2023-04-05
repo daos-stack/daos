@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -78,7 +77,8 @@ class TelemetryUtils():
         'engine_pool_scrubber_scrubber_started',
         'engine_pool_scrubber_ult_start',
         'engine_pool_scrubber_wait_gauge',
-    ]
+        'engine_pool_vos_space_scm_used',
+        'engine_pool_vos_space_nvme_used']
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -143,6 +143,12 @@ class TelemetryUtils():
         "engine_io_latency_vos_fetch_mean",
         "engine_io_latency_vos_fetch_min",
         "engine_io_latency_vos_fetch_stddev"]
+    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = [
+        "engine_io_latency_bio_fetch",
+        "engine_io_latency_bio_fetch_max",
+        "engine_io_latency_bio_fetch_mean",
+        "engine_io_latency_bio_fetch_min",
+        "engine_io_latency_bio_fetch_stddev"]
     ENGINE_IO_LATENCY_UPDATE_METRICS = [
         "engine_io_latency_update",
         "engine_io_latency_update_max",
@@ -167,6 +173,12 @@ class TelemetryUtils():
         "engine_io_latency_vos_update_mean",
         "engine_io_latency_vos_update_min",
         "engine_io_latency_vos_update_stddev"]
+    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = [
+        "engine_io_latency_bio_update",
+        "engine_io_latency_bio_update_max",
+        "engine_io_latency_bio_update_mean",
+        "engine_io_latency_bio_update_min",
+        "engine_io_latency_bio_update_stddev"]
     ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
         "engine_io_ops_akey_enum_active",
         "engine_io_ops_akey_enum_active_max",
@@ -394,10 +406,12 @@ class TelemetryUtils():
         ENGINE_IO_LATENCY_FETCH_METRICS +\
         ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
         ENGINE_IO_LATENCY_VOS_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_BIO_FETCH_METRICS +\
         ENGINE_IO_LATENCY_UPDATE_METRICS +\
         ENGINE_IO_LATENCY_TGT_UPDATE_METRICS +\
         ENGINE_IO_LATENCY_BULK_UPDATE_METRICS +\
         ENGINE_IO_LATENCY_VOS_UPDATE_METRICS +\
+        ENGINE_IO_LATENCY_BIO_UPDATE_METRICS +\
         ENGINE_IO_OPS_AKEY_ENUM_METRICS +\
         ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS +\

@@ -54,6 +54,7 @@ struct ds_pool {
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
 	uint32_t		sp_global_version;
+	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
@@ -327,5 +328,9 @@ ds_pool_get_version(struct ds_pool *pool)
 
 	return ver;
 }
+
+struct rdb_tx;
+int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+			    d_iov_t *cred);
 
 #endif /* __DAOS_SRV_POOL_H__ */

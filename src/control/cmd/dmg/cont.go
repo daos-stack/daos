@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 // ContCmd is the struct representing the top-level container subcommand.
@@ -25,10 +26,10 @@ type ContSetOwnerCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	GroupName string `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
-	UserName  string `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
-	ContUUID  string `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
-	PoolUUID  string `short:"p" long:"pool" required:"1" description:"UUID of the DAOS pool for the container"`
+	GroupName ui.ACLPrincipalFlag `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
+	UserName  ui.ACLPrincipalFlag `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
+	ContUUID  string              `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
+	PoolUUID  string              `short:"p" long:"pool" required:"1" description:"UUID of the DAOS pool for the container"`
 }
 
 // Execute runs the container set-owner command
@@ -43,8 +44,8 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 	req := &control.ContSetOwnerReq{
 		ContUUID: c.ContUUID,
 		PoolUUID: c.PoolUUID,
-		User:     c.UserName,
-		Group:    c.GroupName,
+		User:     c.UserName.String(),
+		Group:    c.GroupName.String(),
 	}
 
 	ctx := context.Background()

@@ -1,6 +1,6 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
@@ -9,9 +9,7 @@ from avocado.core.exceptions import TestFail
 from oclass_utils import extract_redundancy_factor
 
 
-# pylint: disable=attribute-defined-outside-init
 class FileCountTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create specified number of files.
 
     :avocado: recursive

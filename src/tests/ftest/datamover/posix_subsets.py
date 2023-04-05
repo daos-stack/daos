@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -177,7 +176,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
             DAOS-6752: daos fs copy improvements
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior,daos_cmd
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         :avocado: tags=test_dm_posix_subsets_fs_copy
         """

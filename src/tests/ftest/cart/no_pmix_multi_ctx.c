@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,7 @@
 
 #define NUM_CTX 8
 #define NUM_RANKS 99
+#define NUM_CREATE_DESTROY 10
 
 static pthread_barrier_t	barrier1;
 static pthread_barrier_t	barrier2;
@@ -38,6 +39,16 @@ my_crtu_progress_fn(void *data)
 	crt_context_t	*p_ctx = (crt_context_t *)data;
 	void		*ret;
 	int		rc;
+	int		i;
+
+	/* Create and destroy context multiple times to test DAOS-12012 */
+	for (i = 0; i < NUM_CREATE_DESTROY; i++) {
+		rc = crt_context_create(p_ctx);
+		D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
+
+		rc = crt_context_destroy(*p_ctx, false);
+		D_ASSERTF(rc == 0, "crt_context_destroy() failed; rc=%d\n", rc);
+	}
 
 	rc = crt_context_create(p_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
@@ -48,7 +59,6 @@ my_crtu_progress_fn(void *data)
 	/* Only the first thread will do the sanity check */
 	if (p_ctx == &crt_ctx[0]) {
 		bool		ctx_id_present[NUM_CTX];
-		int		i;
 		int		idx;
 		char		*my_uri;
 		crt_group_t	*grp;

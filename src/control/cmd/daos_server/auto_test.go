@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -18,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -30,7 +30,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "localhost",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
@@ -40,39 +39,38 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --min-ssds 0",
+			"config generate -a foo --scm-only",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
+				SCMOnly:      true,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2 --min-ssds 4",
+			"config generate -a foo --num-engines 2",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
 				NrEngines:    2,
-				MinNrSSDs:    4,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s 4",
+			"config generate -a foo -e 2 -s",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
 				NrEngines:    2,
-				MinNrSSDs:    4,
 				NetClass:     "infiniband",
+				SCMOnly:      true,
 			}),
 			nil,
 		},
@@ -81,7 +79,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --net-class ethernet",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "ethernet",
 			}),
 			nil,
@@ -91,7 +88,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --net-class infiniband",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
@@ -107,6 +103,16 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --net-class loopback",
 			"",
 			errors.New("Invalid value"),
+		},
+		{
+			"Generate with tmpfs scm",
+			"config generate -a foo --use-tmpfs-scm",
+			printCommand(t, &configGenCmd{
+				AccessPoints: "foo",
+				NetClass:     "infiniband",
+				UseTmpfsSCM:  true,
+			}),
+			nil,
 		},
 		{
 			"Nonexistent subcommand",
@@ -132,68 +138,25 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	ib1 := &control.HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
-	exmplEngineCfg := control.DefaultEngineCfg(0).
-		WithPinnedNumaNode(0).
-		WithFabricInterface("ib0").
-		WithFabricInterfacePort(31416).
-		WithFabricProvider("ofi+psm2").
-		WithStorage(
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmDeviceList("/dev/pmem0").
-				WithScmMountPoint("/mnt/daos0"),
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(
-					storage.MockNvmeController(2).PciAddr,
-					storage.MockNvmeController(4).PciAddr),
-		).
-		WithTargetCount(18).
-		WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{
-		exmplEngineCfg,
-		control.DefaultEngineCfg(1).
-			WithPinnedNumaNode(1).
-			WithFabricInterface("ib1").
-			WithFabricInterfacePort(32416).
-			WithFabricProvider("ofi+psm2").
-			WithFabricNumaNodeIndex(1).
-			WithStorage(
-				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
-					WithStorageClass(storage.ClassDcpm.String()).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1"),
-				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
-					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(
-						storage.MockNvmeController(1).PciAddr,
-						storage.MockNvmeController(3).PciAddr),
-			).
-			WithStorageNumaNodeIndex(1).
-			WithTargetCount(18).
-			WithHelperStreamCount(4),
+		control.MockEngineCfg(t, 0, 2, 4).WithTargetCount(18).WithHelperStreamCount(4),
+		control.MockEngineCfg(t, 1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4),
 	}
-	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
-		for idx, ec := range ecs {
-			ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
-				WithStorageVosEnv("NVME")
-		}
-		return config.DefaultServer().
-			WithControlLogFile("").
-			WithFabricProvider(prov).
-			WithDisableVMD(false).
-			WithEngines(ecs...)
+	mockMemTotal := humanize.GiByte * 12
+	mockRamdiskSize := 4 // RoundDownGiB(12*0.75/2)
+	tmpfsEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(t, 0, mockRamdiskSize, 2, 4).
+			WithTargetCount(18).WithHelperStreamCount(4),
+		control.MockEngineCfgTmpfs(t, 1, mockRamdiskSize, 1, 3).
+			WithTargetCount(18).WithHelperStreamCount(4),
 	}
 
 	for name, tc := range map[string]struct {
 		accessPoints string
 		nrEngines    int
-		minNrSSDs    int
+		scmOnly      bool
 		netClass     string
+		tmpfsSCM     bool
 		hf           *control.HostFabric
 		hfErr        error
 		hs           *control.HostStorage
@@ -213,7 +176,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expErr: errors.New("zero numa nodes"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"fetching host storage fails": {
 			hf: &control.HostFabric{
@@ -245,7 +208,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("insufficient number of pmem"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"single engine; dcpm on numa 1": {
 			hf: &control.HostFabric{
@@ -260,7 +223,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -268,7 +231,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
@@ -287,7 +250,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -295,14 +258,13 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"unmet min nr ssds": {
-			minNrSSDs: 8,
 			hf: &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					eth0, eth1, ib0, ib1,
@@ -315,13 +277,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
+				MemInfo:     control.MemInfo{HugePageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
@@ -339,7 +296,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -363,7 +320,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -373,15 +330,42 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
+		"tmpfs scm": {
+			tmpfsSCM: true,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				MemInfo: control.MemInfo{
+					HugePageSizeKb: 2048,
+					MemTotal:       int(mockMemTotal / humanize.KiByte),
+				},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expCfg: control.MockServerCfg(t, "ofi+psm2", tmpfsEngineCfgs).
+				WithNrHugePages(18432).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Mimic go-flags default values.
-			if tc.minNrSSDs == 0 {
-				tc.minNrSSDs = 1
-			}
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
@@ -392,8 +376,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			cmd := &configGenCmd{
 				AccessPoints: tc.accessPoints,
 				NrEngines:    tc.nrEngines,
-				MinNrSSDs:    tc.minNrSSDs,
+				SCMOnly:      tc.scmOnly,
 				NetClass:     tc.netClass,
+				UseTmpfsSCM:  tc.tmpfsSCM,
 			}
 			cmd.Logger = log
 
@@ -401,7 +386,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				return tc.hf, tc.hfErr
 			}
 
-			gs := func(_ context.Context, _ logging.Logger) (*control.HostStorage, error) {
+			gs := func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
 				return tc.hs, tc.hsErr
 			}
 

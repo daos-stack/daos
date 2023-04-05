@@ -197,7 +197,7 @@ if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 fi
 
 cd "$DAOS_SOURCE_DIR"
-SCONS_OPTS="-j $JOBS_NB"
+SCONS_OPTS="-j $JOBS_NB --implicit-deps-changed"
 case $CMD in
 	install) SCONS_OPTS="$SCONS_OPTS --build-deps=yes --config=force" ;;
 	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
@@ -208,6 +208,9 @@ info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE=debug PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi
+
+info "Finalizing install of ftest setup scripts"
+run ln -vfs "$DAOS_SOURCE_DIR/.build_vars.sh" "$DAOS_SOURCE_DIR/utils/sl/.build_vars-Linux.sh"
 
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)

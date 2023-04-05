@@ -203,6 +203,25 @@ class BasicParameter():
         """
         self._default = value
 
+    def copy(self):
+        """Get a copy of this object.
+
+        Returns:
+            BasicParameter: a copy of this BasicParameter
+        """
+        new = self._get_new()
+        new.updated = self.updated
+        return new
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            FormattedParameter: a new FormattedParameter object
+        """
+        return BasicParameter(
+            self._value, self._default, self._yaml_key, self._position, self._mapped_values)
+
 
 class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
@@ -252,6 +271,14 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            FormattedParameter: a new FormattedParameter object
+        """
+        return FormattedParameter(self._str_format, self._value, self._yaml_key)
 
 
 class LogParameter(FormattedParameter):
@@ -313,6 +340,14 @@ class LogParameter(FormattedParameter):
         super().update(value, name, append)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            LogParameter: a new LogParameter object
+        """
+        return LogParameter(self._directory, self._str_format, self._value)
 
 
 class ObjectWithParameters():
@@ -387,6 +422,43 @@ class ObjectWithParameters():
             except AttributeError as error:
                 raise CommandFailure("Unknown parameter: {}".format(name)) from error
 
+    def copy(self):
+        """Get a copy of this object.
+
+        Returns:
+            ObjectWithParameters: a copy of this ObjectWithParameters object
+        """
+        new = self._get_new()
+        self._copy_params(new)
+        return new
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            ObjectWithParameters: a new ObjectWithParameters object
+        """
+        return ObjectWithParameters(self.namespace)
+
+    def _copy_params(self, other):
+        """Copy the parameter values from this ObjectWithParameters to another ObjectWithParameters.
+
+        Args:
+            other (ObjectWithParameters): the object whose parameters will be updated to match this
+                ObjectWithParameters parameter values
+        """
+        for name in self.get_attribute_names():
+            attr = getattr(self, name)
+            if isinstance(attr, list):
+                list_copy = []
+                for item in attr:
+                    list_copy.append(item.copy() if hasattr(item, "copy") else item)
+                setattr(other, name, list_copy)
+            elif hasattr(attr, "copy"):
+                setattr(other, name, attr.copy())
+            else:
+                setattr(other, name, attr)
+
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with parameters."""
@@ -443,6 +515,14 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         return self.get_param_names()
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommandWithParameters: a new CommandWithParameters object
+        """
+        return CommandWithParameters(self.namespace, self._command, self._path)
 
 
 class YamlParameters(ObjectWithParameters):
@@ -601,6 +681,14 @@ class YamlParameters(ObjectWithParameters):
             value = None
         return value
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            YamlParameters: a new YamlParameters object
+        """
+        return YamlParameters(self.namespace, self.filename, self.title, None)
+
 
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
@@ -612,11 +700,13 @@ class TransportCredentials(YamlParameters):
             namespace (str): yaml namespace (path to parameters)
             title (str, optional): namespace under which to place the
                 parameters when creating the yaml file. Defaults to None.
+            log_dir (str): location of the certificate files
         """
         super().__init__(namespace, None, title)
+        self._log_dir = log_dir
         default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
         default_insecure = default_insecure.lower() == "true"
-        self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
+        self.ca_cert = LogParameter(self._log_dir, None, "daosCA.crt")
         self.allow_insecure = BasicParameter(None, default_insecure)
 
     def get_yaml_data(self):
@@ -659,6 +749,14 @@ class TransportCredentials(YamlParameters):
                         data[dir_name].append(file_name)
         return data
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            TransportCredentials: a new TransportCredentials object
+        """
+        return TransportCredentials(self.namespace, self.title, self._log_dir)
+
 
 class CommonConfig(YamlParameters):
     """Defines common daos_agent and daos_server configuration file parameters.
@@ -677,8 +775,7 @@ class CommonConfig(YamlParameters):
             name (str): default value for the name configuration parameter
             transport (TransportCredentials): transport credentials
         """
-        super().__init__(
-            "/run/common_config/*", None, None, transport)
+        super().__init__("/run/common_config/*", None, None, transport)
 
         # Common configuration parameters
         #   - name: <str>, e.g. "daos_server"
@@ -697,6 +794,14 @@ class CommonConfig(YamlParameters):
         self.name = BasicParameter(None, name)
         self.access_points = BasicParameter(None, ["localhost"])
         self.port = BasicParameter(None, 10001)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommonConfig: a new CommonConfig object
+        """
+        return CommonConfig(self.name.value, None)
 
 
 class EnvironmentVariables(dict):
@@ -736,7 +841,7 @@ class EnvironmentVariables(dict):
             kv_list (list):  list of environment variable assignment (key=value) strings
         """
         for kv in kv_list:
-            key, *value = kv.split('=')
+            key, *value = kv.split('=', maxsplit=1)
             self[key] = value[0] if value else None
 
     def to_export_str(self, separator=";"):

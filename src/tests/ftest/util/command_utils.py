@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -95,10 +95,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        command = super().__str__()
-        if self.bind_cores:
-            command = ' '.join(['taskset', '-c', self.bind_cores, command])
-        return command_as_user(command, self.run_user)
+        return self.with_sudo
 
     @property
     def sudo(self):
@@ -138,14 +135,37 @@ class ExecutableCommand(CommandWithParameters):
         return "'({})'".format("|".join(self._exe_names))
 
     @property
-    def with_exports(self):
-        """Get the command string with any environment variable exports.
+    def with_bind(self):
+        """Get the command string with bind_cores.
 
         Returns:
-            str: the command string with any environment variable exports
+            str: the command string with bind_cores
 
         """
-        return " ".join([self.env.to_export_str(), str(self)]).strip()
+        command = super().__str__()
+        if self.bind_cores:
+            command = ' '.join(['taskset', '-c', self.bind_cores, command])
+        return command
+
+    @property
+    def with_sudo(self):
+        """Get the command string with bind_cores and sudo, but not env exports.
+
+        Returns:
+            str: the command string with bind_cores and sudo
+
+        """
+        return command_as_user(self.with_bind, self.run_user)
+
+    @property
+    def with_exports(self):
+        """Get the command string with bind_cores, sudo, and env exports.
+
+        Returns:
+            str: the command string with bind_cores, sudo, and env exports
+
+        """
+        return command_as_user(self.with_bind, self.run_user, self.env)
 
     def run(self, raise_exception=None):
         """Run the command.
@@ -434,6 +454,16 @@ class ExecutableCommand(CommandWithParameters):
             if namespace is not None:
                 self.env.update_from_list(test.params.get("env_vars", namespace, []))
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            ExecutableCommand: a new ExecutableCommand object
+        """
+        return ExecutableCommand(
+            self.namespace, self._command, self._path, self.run_as_subprocess,
+            self.check_results_list)
+
 
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
@@ -570,6 +600,28 @@ class CommandWithSubCommand(ExecutableCommand):
                 "<{}> command failed: {}".format(self.command, error)) from error
         return self.result
 
+    def set_command(self, sub_command_list=None, **kwargs):
+        """Set the command and its arguments.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if an unknown parameter is provided for the full command
+
+        """
+        # Set up the full command by setting each specified sub-command
+        full_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                full_command.set_sub_command(sub_command)
+                full_command = full_command.sub_command_class
+
+        # Update any argument values for the full command
+        full_command.update_params(**kwargs)
+
     def _get_result(self, sub_command_list=None, raise_exception=None, **kwargs):
         """Get the result from running the command with the defined arguments.
 
@@ -598,16 +650,8 @@ class CommandWithSubCommand(ExecutableCommand):
                 execution.
 
         """
-        # Set the subcommands
-        this_command = self
-        if sub_command_list is not None:
-            for sub_command in sub_command_list:
-                this_command.set_sub_command(sub_command)
-                this_command = this_command.sub_command_class
-
-        # Set the sub-command arguments
-        for name, value in list(kwargs.items()):
-            getattr(this_command, name).value = value
+        # Setup the command and its arguments
+        self.set_command(sub_command_list, **kwargs)
 
         # Issue the command and store the command result
         return self.run(raise_exception)
@@ -625,7 +669,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 setting if defined. Defaults to None.
             kwargs (dict): Parameters for the command.
         """
-
         if self.json is None:
             raise CommandFailure(
                 f"The {self.command} command doesn't have json option defined!")
@@ -645,6 +688,14 @@ class CommandWithSubCommand(ExecutableCommand):
             if json_err:
                 self.exit_status_exception = prev_exit_exception
         return json.loads(self.result.stdout)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommandWithSubCommand: a new CommandWithSubCommand object
+        """
+        return CommandWithSubCommand(self.namespace, self._command, self._path)
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -767,6 +818,15 @@ class SubProcessCommand(CommandWithSubCommand):
         else:
             # Report the successful start
             self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            SubProcessCommand: a new SubProcessCommand object
+        """
+        return SubProcessCommand(
+            self.namespace, self._command, self._path, self.pattern_timeout.value)
 
 
 class YamlCommand(SubProcessCommand):
@@ -1008,6 +1068,15 @@ class YamlCommand(SubProcessCommand):
 
         """
         return self.get_config_value("socket_dir")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            YamlCommand: a new YamlCommand object
+        """
+        return YamlCommand(
+            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value)
 
 
 class SubprocessManager(ObjectWithParameters):

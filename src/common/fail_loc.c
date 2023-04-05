@@ -137,7 +137,7 @@ daos_shard_in_fail_value(uint16_t shard)
 
 	D_ASSERT(shard != 0xffff);
 	for (i = 0; i < 4; i++) {
-		if ((shard + 1) == (fail_val & (mask << (i * 16))))
+		if ((shard + 1) == ((fail_val & (mask << (i * 16))) >> (i * 16)))
 			return true;
 	}
 	return false;

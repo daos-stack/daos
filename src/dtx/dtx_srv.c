@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -388,16 +388,6 @@ dtx_init(void)
 
 	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 19 / 20;
 	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
-
-	dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
-	d_getenv_int("DAOS_DTX_RPC_HELPER_THD", &dtx_rpc_helper_thd);
-	if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
-		D_WARN("Invalid DTX RPC helper threshold %u, the valid range is [%u, unlimited), "
-		       "use the default value %u\n",
-		       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
-		dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
-	}
-	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
 
 	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
 	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);

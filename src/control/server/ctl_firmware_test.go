@@ -300,7 +300,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 		"NVMe - specific devices": {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
-				DeviceIDs: []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "0000:02:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: testNVMeDevs},
@@ -460,7 +460,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
 				QueryScm:  true,
-				DeviceIDs: []string{"0000:80:00.1", "Device0", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "Device0", "0000:02:00.0"},
 			},
 			smbc: &scm.MockBackendConfig{
 				GetModulesRes:        mockSCM,
@@ -780,7 +780,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_NVMe,
 				FirmwarePath: "/some/path",
-				DeviceIDs:    []string{"0000:80:00.0", "0000:80:00.1"},
+				DeviceIDs:    []string{"0000:00:00.0", "0000:01:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: mockNVMe},

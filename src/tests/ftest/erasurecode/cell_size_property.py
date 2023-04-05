@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2023 Intel Corporation.
 
@@ -51,7 +50,7 @@ class EcodCellSizeProperty(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_ior
+        :avocado: tags=ec,ec_ior,daos_cmd
         :avocado: tags=ec_cell_property,test_ec_pool_property
         """
         ior_transfer_size = self.params.get("ior_transfer_size",

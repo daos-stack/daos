@@ -22,8 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <vos_obj.h>
-#include <vos_internal.h>
+#include "vos_obj.h"
+#include "vos_internal.h"
 #include <daos_errno.h>
 
 /**
@@ -415,7 +415,8 @@ check_object:
 	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    bound, NULL, NULL, &obj->obj_ilog_info);
+				    bound, false, /* has_cond: no object level condition. */
+				    NULL, NULL, &obj->obj_ilog_info);
 		if (rc != 0) {
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))

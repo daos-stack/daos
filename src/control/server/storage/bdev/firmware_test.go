@@ -59,7 +59,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request device subset": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.2"},
+				DeviceAddrs: []string{"0000:00:00.0", "0000:02:00.0"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -77,7 +77,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request nonexistent device - ignored": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "fake"},
+				DeviceAddrs: []string{"0000:00:00.0", "fake"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -92,7 +92,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request duplicates": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.0"},
+				DeviceAddrs: []string{"0000:01:00.0", "0000:01:00.0"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -171,7 +171,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"nothing in device list matches filters": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceAddrs: []string{"0000:01:00.0", "0000:02:00.0"},
 				ModelID:     "model-0",
 				FirmwareRev: "fwRev-0",
 			},
@@ -268,7 +268,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		},
 		"request device subset": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.2"},
+				DeviceAddrs:  []string{"0000:00:00.0", "0000:02:00.0"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
@@ -287,7 +287,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		},
 		"request nonexistent device": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "fake"},
+				DeviceAddrs:  []string{"0000:00:00.0", "fake"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
@@ -297,7 +297,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		},
 		"request duplicates": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.0"},
+				DeviceAddrs:  []string{"0000:00:00.0", "0000:00:00.0"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
@@ -379,7 +379,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		"nothing in device list matches filters": {
 			input: storage.NVMeFirmwareUpdateRequest{
 				FirmwarePath: testPath,
-				DeviceAddrs:  []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceAddrs:  []string{"0000:01:00.0", "0000:02:00.0"},
 				ModelID:      "model-0",
 				FirmwareRev:  "fwRev-0",
 			},

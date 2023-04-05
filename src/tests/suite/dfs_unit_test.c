@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1423,6 +1423,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	struct stat		stbuf;
 	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
+	dfs_obj_t		*tmp_obj;
 	int			rc;
 
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
@@ -1498,6 +1499,15 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookupx(dfs_mt, NULL, name, O_RDWR, &tmp_obj, NULL, &stbuf, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -2291,6 +2301,93 @@ dfs_test_multiple_pools(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+dfs_test_xattrs(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*dir = "xdir";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	int			create_flags = O_RDWR | O_CREAT;
+	const char		*xname1 = "user.empty";
+	const char		*xname2 = "user.with_value";
+	const char		*xval2  = "some value";
+	daos_size_t		size;
+	char			buf[32];
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, dir, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = 0;
+	rc = dfs_setxattr(dfs_mt, obj, xname1, NULL, size, 0);
+	assert_int_equal(rc, 0);
+
+	size = sizeof(buf);
+	rc = dfs_getxattr(dfs_mt, obj, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = strlen(xval2) + 1;
+	rc = dfs_setxattr(dfs_mt, obj, xname2, xval2, size, 0);
+	assert_int_equal(rc, 0);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, obj, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xval2) + 1);
+	assert_string_equal(xval2, buf);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname1) + 1 + strlen(xname2) + 1);
+	assert_string_equal(buf, xname1);
+	assert_string_equal(buf + strlen(xname1) + 1, xname2);
+
+	rc = dfs_removexattr(dfs_mt, obj, xname1);
+	assert_int_equal(rc, 0);
+
+	size = 0;
+	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname2) + 1);
+	assert_string_equal(buf, xname2);
+
+	rc = dfs_removexattr(dfs_mt, obj, xname2);
+	assert_int_equal(rc, 0);
+
+	size = 0;
+	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
+	assert_int_equal(rc, ENODATA);
+
+	size = sizeof(buf);
+	rc = dfs_listxattr(dfs_mt, obj, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -2334,6 +2431,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST21: dfs multiple pools",
 	  dfs_test_multiple_pools, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST22: dfs extended attributes",
+	  dfs_test_xattrs, test_case_teardown},
 };
 
 static int

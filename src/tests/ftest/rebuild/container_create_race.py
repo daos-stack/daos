@@ -24,8 +24,7 @@ class RbldContainerCreate(IorTestBase):
 
         Args:
             qty (int, optional): the number of containers to create
-            index (int, optional): the container index to perform write
-                during rebuild
+            index (int, optional): the container index to perform write during rebuild
         """
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         object_qty = self.params.get("object_qty", "/run/io/*")
@@ -37,14 +36,14 @@ class RbldContainerCreate(IorTestBase):
         count = 0
         self.container = []
         rebuild_done = False
-        self.log.info("..Create %s containers and write data during rebuild.", qty)
+        self.log.info("=> Create %s containers and write data during rebuild.", qty)
         while not rebuild_done and count < qty:
             count += 1
             self.log.info(
-                "..Creating container %s/%s in pool %s during rebuild", count, qty, self.pool.uuid)
+                "=> Creating container %s/%s in %s during rebuild", count, qty, str(self.pool))
             self.container.append(self.get_container(self.pool))
-            rebuild_done = self.pool.rebuild_complete()
-            self.log.info("..Rebuild status, rebuild_done= %s", rebuild_done)
+            rebuild_done = self.pool.has_rebuild_completed()
+            self.log.info("=> Rebuild status, rebuild_done= %s", rebuild_done)
 
         self.container[index].object_qty.value = object_qty
         self.container[index].record_qty.value = record_qty
@@ -66,12 +65,12 @@ class RbldContainerCreate(IorTestBase):
         """
         status = True
         container = self.container[index]
-        self.log.info("..Verifying the container %s created during rebuild", container)
+        self.log.info("=> Verifying the container %s created during rebuild", container)
         try:
             container.read_objects()
             container.close()
         except TestFail as error:
-            self.log.error("##Container %s read failed:", container, exc_info=error)
+            self.log.error("=> Container %s read failed:", container, exc_info=error)
             status = False
         return status
 
@@ -129,34 +128,30 @@ class RbldContainerCreate(IorTestBase):
         self.pool.display_pool_daos_space("after creation")
 
         # perform ior before rebuild
-        self.log.info("..(1)Start IOR before rebuild")
+        self.log.info("=> (1) Start IOR before rebuild")
         for ind in range(ior_loop):
             self.log.info("..Starting ior run number %s", ind)
             self.run_ior_with_pool()
 
         # Kill the server and trigger rebuild
-        self.log.info("..(2)Starting rebuild by killing rank %s", rank)
+        self.log.info("=> (2) Starting rebuild by killing rank %s", rank)
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.
-        self.log.info("..(3)Wait for rebuild to start for race condition")
-        self.pool.wait_for_rebuild(True, interval=1)
+        self.log.info("=> (3) Wait for rebuild to start for race condition")
+        self.pool.wait_for_rebuild_to_start(interval=1)
 
         # Race condition, create containers write and read during rebuild.
-        self.log.info("..(4)Create containers, write/read during rebuild")
+        self.log.info("=> (4) Create containers, write/read during rebuild")
         self.add_containers_during_rebuild(qty=cont_qty)
         self.access_container()
 
         # Wait for rebuild to complete.
-        self.log.info("..(5)Wait for rebuild to finish")
-        self.pool.wait_for_rebuild(False, interval=1)
-
-        self.pool.set_query_data()
-        rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
-        self.log.info("Pool %s rebuild status:%s", self.pool.uuid, rebuild_status)
+        self.log.info("=> (5) Wait for rebuild to finish")
+        self.pool.wait_for_rebuild_to_end(interval=1)
 
         # Check for pool and rebuild info after rebuild
-        self.log.info("..(6)Check for pool and rebuild info after rebuild")
+        self.log.info("=> (6) Check for pool and rebuild info after rebuild")
         info_checks["pi_ndisabled"] += targets
         rebuild_checks["rs_obj_nr"] = ">0"
         rebuild_checks["rs_rec_nr"] = ">0"
@@ -167,3 +162,4 @@ class RbldContainerCreate(IorTestBase):
         self.assertTrue(
             self.pool.check_rebuild_status(**rebuild_checks),
             "Invalid pool rebuild info detected after rebuild")
+        self.log.info("Test passed")

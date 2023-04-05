@@ -1,6 +1,8 @@
 """Common DAOS library for setting up the compiler"""
 
 from SCons.Script import GetOption, Exit
+from SCons.Script import Configure
+
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -85,9 +87,85 @@ def _base_setup(env):
     env['BSETUP'] = compiler
 
 
+def _check_flag_helper(context, compiler, ext, flag):
+    """Helper function to allow checking for compiler flags"""
+    if compiler in ["icc", "icpc"]:
+        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
+        # bug in older scons, need CFLAGS to exist, -O2 is default.
+        context.env.Replace(CFLAGS=['-O2'])
+    elif compiler in ["gcc", "g++"]:
+        # pylint: disable=wrong-spelling-in-comment
+        # remove -no- for test
+        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
+        # options to the compiler even if it doesn't understand them but.  This would be tricky
+        # to fix gcc only complains about unknown -Wno- warning options if the compile Fails
+        # for other reasons anyway.
+        test_flag = flag.replace("-Wno-", "-W")
+        flags = ["-Werror", test_flag]
+    else:
+        flags = ["-Werror", flag]
+    context.Message(f'Checking {compiler} {flag} ')
+    context.env.Replace(CCFLAGS=flags)
+    ret = context.TryCompile("""
+int main() {
+    return 0;
+}
+""", ext)
+    context.Result(ret)
+    return ret
+
+
+def _check_flag(context, flag):
+    """Check C specific compiler flags"""
+    return _check_flag_helper(context, context.env.get("CC"), ".c", flag)
+
+
+def _check_flag_cc(context, flag):
+    """Check C++ specific compiler flags"""
+    return _check_flag_helper(context, context.env.get("CXX"), ".cpp", flag)
+
+
+def _check_flags(env, config, key, value):
+    """Check and append all supported flags"""
+    if GetOption('help') or GetOption('clean'):
+        return
+    checked = []
+    cxx = env.get('CXX')
+    for flag in value:
+        if flag in checked:
+            continue
+        insert = False
+        if key == "CCFLAGS":
+            if config.CheckFlag(flag) and (cxx is None or config.CheckFlagCC(flag)):
+                insert = True
+        elif key == "CFLAGS":
+            if config.CheckFlag(flag):
+                insert = True
+        elif cxx is not None and config.CheckFlagCC(flag):
+            insert = True
+        if insert:
+            env.AppendUnique(**{key: [flag]})
+        checked.append(flag)
+
+
+def _append_if_supported(env, **kwargs):
+    """Check and append flags for construction variables"""
+    cenv = env.Clone()
+    config = Configure(cenv, custom_tests={'CheckFlag': _check_flag,
+                                           'CheckFlagCC': _check_flag_cc})
+    for key, value in kwargs.items():
+        if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
+            env.AppendUnique(**{key: value})
+            continue
+        _check_flags(env, config, key, value)
+
+    config.Finish()
+
+
 def generate(env):
     """Add daos specific method to environment"""
     env.AddMethod(_base_setup, 'compiler_setup')
+    env.AddMethod(_append_if_supported, "AppendIfSupported")
 
 
 def exists(_env):

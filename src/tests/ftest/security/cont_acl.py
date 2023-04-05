@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -55,8 +54,8 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl,cont_user_sec,cont_group_sec,cont_sec
-        :avocado: tags=test_container_user_acl
+        :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
+        :avocado: tags=DaosContainterSecurityTest,test_container_user_acl
         """
 
         # (1)Setup
@@ -121,15 +120,14 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             test_user_type, test_user, permission_type, cont_permission)
         self.setup_container_acl_and_permission(
             test_user_type, test_user, permission_type, cont_permission)
-        self.log.info(
-            "(4.2)Verify container_attribute: read, expect: %s", expect_read)
+        self.log.info("(4.2)Verify container_attribute: read, expect: %s", expect_read)
         self.verify_cont_rw_property("read", expect_read)
-        self.log.info(
-            "(4.3)Verify container_attribute: write, expect: %s", expect_write)
-        self.verify_cont_rw_property(
-            "write", expect_write, property_name, property_value)
-        self.log.info(
-            "(4.4)Verify container_attribute: read, expect: %s", expect_read)
+        self.log.info("(4.3)Verify container_attribute: write, expect: %s", expect_write)
+        self.verify_cont_rw_property("write", expect_write, property_name, property_value)
+        # Update container label so it is in-sync
+        if expect_write == "pass" and property_name.lower() == "label":
+            self.container.label.update(property_value)
+        self.log.info("(4.4)Verify container_attribute: read, expect: %s", expect_read)
         self.verify_cont_rw_property("read", expect_read)
 
         # (5)Verify container permissions aA, rw-acl

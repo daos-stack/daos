@@ -1,30 +1,27 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
 from getpass import getuser
-import math
 import os
 import time
 import random
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, stop_processes, get_display_size, run_pcmd
+from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
 from host_utils import get_local_host
-from server_utils_base import \
-    ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
+from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
+from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -306,48 +303,86 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage
 
         """
-        cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
-        cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.target_user.value = user
-        cmd.sub_command_class.sub_command_class.force.value = True
-
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
         if using_nvme is None:
             using_nvme = self.manager.job.using_nvme
 
-        if using_dcpm and not using_nvme:
-            cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif not using_dcpm and using_nvme:
-            cmd.sub_command_class.sub_command_class.nvme_only.value = True
+        if using_dcpm:
+            # Prepare SCM storage
+            if not self.scm_prepare(target_user=user, ignore_config=True).passed:
+                raise ServerFailed("Error preparing dcpm storage")
 
+        if using_nvme:
+            # Prepare NVMe storage
+            if not self.nvme_prepare(target_user=user, ignore_config=True).passed:
+                raise ServerFailed("Error preparing nvme storage")
+
+    def scm_prepare(self, **kwargs):
+        """Run daos_server scm prepare on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.ScmSubCommand.PrepareSubCommand object
+
+        Raises:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.set_command(("scm", "prepare"), **kwargs)
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(
-            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        result = run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        if not result.passed:
+            # Add some debug due to the failure
+            run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
+            run_remote(self.log, self._hosts, "ndctl list")
+        return result
 
-        # gratuitously lifted from pcmd() and get_current_state()
-        result = {}
-        stdouts = ""
-        for res in results:
-            stdouts += '\n'.join(res["stdout"] + [''])
-            if res["exit_status"] not in result:
-                result[res["exit_status"]] = NodeSet()
-            result[res["exit_status"]].add(res["hosts"])
+    def scm_reset(self, **kwargs):
+        """Run daos_server scm reset on the server hosts.
 
-        if len(result) > 1 or 0 not in result or \
-           (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
-            dev_type = "nvme"
-            if using_dcpm and using_nvme:
-                dev_type = "dcpm & nvme"
-            elif using_dcpm:
-                dev_type = "dcpm"
-            pcmd(self._hosts, "sudo -n ipmctl show -v -dimm")
-            pcmd(self._hosts, "ndctl list ")
-            raise ServerFailed("Error preparing {} storage".format(dev_type))
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.ScmSubCommand.ResetSubCommand object
+
+        Raises:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.set_command(("scm", "reset"), **kwargs)
+        self.log.info("Resetting DAOS server storage: %s", str(cmd))
+        return run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+
+    def nvme_prepare(self, **kwargs):
+        """Run daos_server nvme prepare on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        self.log.info("Preparing DAOS server storage: %s", str(cmd))
+        cmd.set_command(("nvme", "prepare"), **kwargs)
+        return run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -465,15 +500,13 @@ class DaosServerManager(SubprocessManager):
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.nvme_only.value = True
-        cmd.sub_command_class.sub_command_class.reset.value = True
-        cmd.sub_command_class.sub_command_class.force.value = True
+        cmd.set_sub_command("nvme")
+        cmd.sub_command_class.set_sub_command("reset")
+        cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
-        if len(result) > 1 or 0 not in result:
+        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
     def set_scm_mount_ownership(self, user=None, verbose=False):
@@ -508,10 +541,11 @@ class DaosServerManager(SubprocessManager):
            The servers must have been previously formatted and started.
 
         Args:
-            hosts (list): List of servers to restart.
-            wait (bool): Whether or not to wait until the servers have joined.
+            hosts (NodeSet): hosts on which to restart the servers.
+            wait (bool, optional): Whether or not to wait until the servers have joined. Defaults to
+                False.
         """
-        orig_hosts = self.manager.hosts
+        orig_hosts = self.manager.hosts.copy()
         self.manager.assign_hosts(hosts)
         orig_pattern = self.manager.job.pattern
         orig_count = self.manager.job.pattern_count
@@ -776,7 +810,7 @@ class DaosServerManager(SubprocessManager):
         return data
 
     @fail_on(CommandFailure)
-    def stop_ranks(self, ranks, daos_log, force=False):
+    def stop_ranks(self, ranks, daos_log, force=False, copy=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
@@ -784,6 +818,7 @@ class DaosServerManager(SubprocessManager):
             daos_log (DaosLog): object for logging messages
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
+            copy (bool, optional): Copy dmg command. Defaults to False.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
@@ -795,7 +830,10 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
+        if copy:
+            self.dmg.copy().system_stop(ranks=list_to_str(value=ranks), force=force)
+        else:
+            self.dmg.system_stop(ranks=list_to_str(value=ranks), force=force)
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
@@ -839,14 +877,19 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        # Try to dump all server's ULTs stacks before kill.
-        result = stop_processes(self._hosts, regex)
-        if 0 in result and len(result) == 1:
-            print("No remote {} server processes killed (none found), done.".format(regex))
+        detected, running = stop_processes(self.log, self._hosts, regex)
+        if not detected:
+            self.log.info(
+                "No remote %s server processes killed on %s (none found), done.",
+                regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote server %s process on %s! Please investigate/report.***",
+                regex, running)
         else:
-            print(
-                "***At least one remote {} server process needed to be killed! "
-                "Please investigate/report.***".format(regex))
+            self.log.info(
+                "***At least one remote server %s process needed to be killed on %s! Please "
+                "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
@@ -922,167 +965,6 @@ class DaosServerManager(SubprocessManager):
             storage[key] = min(storage_capacity[key])
             self.log.info("  %-4s:  %s", key.upper(), get_display_size(storage[key]))
         return storage
-
-    def autosize_pool_params(self, size, tier_ratio, scm_size, nvme_size,
-                             min_targets=1, quantity=1):
-        """Update any pool size parameter ending in a %.
-
-        Use the current NVMe and SCM storage sizes to assign values to the size,
-        scm_size, and or nvme_size dmg pool create arguments which end in "%".
-        The numerical part of these arguments will be used to assign a value
-        that is X% of the available storage capacity.  The updated size and
-        nvme_size arguments will be assigned values that are multiples of 1GiB
-        times the number of targets assigned to each server engine.  If needed
-        the number of targets will be reduced (to not exceed min_targets) in
-        order to support the requested size.  An optional number of expected
-        pools (quantity) can also be specified to divide the available storage
-        capacity.
-
-        Note: depending upon the inputs this method may return dmg pool create
-            parameter combinations that are not supported, e.g. tier_ratio +
-            nvme_size.  This is intended to allow testing of these combinations.
-
-        Args:
-            size (object): the str, int, or None value for the dmg pool create size parameter.
-            tier_ratio (object): the int or None value for the dmg pool create size parameter.
-            scm_size (object): the str, int, or None value for the dmg pool
-                create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmg pool
-                create nvme_size parameter.
-            min_targets (int, optional): the minimum number of targets per
-                engine that can be configured. Defaults to 1.
-            quantity (int, optional): Number of pools to account for in the size
-                calculations. The pool size returned is only for a single pool.
-                Defaults to 1.
-
-        Raises:
-            ServerFailed: if there was a error obtaining auto-sized TestPool parameters.
-            AutosizeCancel: if a valid pool parameter size could not be obtained
-
-        Returns:
-            dict: the parameters for a TestPool object.
-
-        """
-        # Adjust any pool size parameter by the requested percentage
-        params = {"tier_ratio": tier_ratio}
-        adjusted = {"size": size, "scm_size": scm_size, "nvme_size": nvme_size}
-        keys = [
-            key for key in ("size", "scm_size", "nvme_size")
-            if adjusted[key] is not None and str(adjusted[key]).endswith("%")]
-        if keys:
-            # Verify the minimum number of targets configured per engine
-            targets = min(self.manager.job.get_engine_values("targets"))
-            if targets < min_targets:
-                raise ServerFailed(
-                    "Minimum target quantity ({}) exceeds current target "
-                    "quantity ({})".format(min_targets, targets))
-
-            self.log.info("-" * 100)
-            pool_msg = "{} pool{}".format(quantity, "s" if quantity > 1 else "")
-            self.log.info(
-                "Autosizing TestPool parameters ending with a \"%%\" for %s:",
-                pool_msg)
-            for key in ("size", "scm_size", "nvme_size"):
-                self.log.info("  - %-9s : %s (%s)", key, adjusted[key], key in keys)
-
-            # Determine the largest SCM and NVMe pool sizes can be used with
-            # this server configuration with an optionally applied ratio.
-            try:
-                available_storage = self.get_available_storage()
-            except ServerFailed as error:
-                raise ServerFailed("Error obtaining available storage") from error
-
-            # Determine the SCM and NVMe size limits for the size and tier_ratio
-            # arguments for the total number of engines
-            if tier_ratio is None:
-                # Use the default value if not provided
-                tier_ratio = 6
-            engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
-            available_storage["size"] = min(
-                engine_qty * available_storage["nvme"],
-                (engine_qty * available_storage["scm"]) / float(tier_ratio / 100)
-            )
-            available_storage["tier_ratio"] = available_storage["size"] * float(tier_ratio / 100)
-            self.log.info(
-                "Largest storage size available for %s engines with a %.2f%% "
-                "tier_ratio:", engine_qty, tier_ratio)
-            self.log.info(
-                "  - NVME     : %s",
-                get_display_size(available_storage["size"]))
-            self.log.info(
-                "  - SCM      : %s",
-                get_display_size(available_storage["tier_ratio"]))
-            self.log.info(
-                "  - COMBINED : %s",
-                get_display_size(available_storage["size"] + available_storage["tier_ratio"]))
-
-            # Apply any requested percentages to the pool parameters
-            available = {
-                "size": {"size": available_storage["size"], "type": "NVMe"},
-                "scm_size": {"size": available_storage["scm"], "type": "SCM"},
-                "nvme_size": {"size": available_storage["nvme"], "type": "NVMe"}
-            }
-            self.log.info("Adjusted pool sizes for %s:", pool_msg)
-            for key in keys:
-                try:
-                    ratio = int(str(adjusted[key]).replace("%", ""))
-                except NameError as error:
-                    raise ServerFailed(
-                        "Invalid '{}' format: {}".format(key, adjusted[key])) from error
-                adjusted[key] = (available[key]["size"] * float(ratio / 100)) / quantity
-                self.log.info(
-                    "  - %-9s : %-4s storage adjusted by %.2f%%: %s",
-                    key, available[key]["type"], ratio,
-                    get_display_size(adjusted[key]))
-
-            # Display the pool size increment value for each size argument
-            increment = {
-                "size": human_to_bytes("1GiB"),
-                "scm_size": human_to_bytes("16MiB"),
-                "nvme_size": human_to_bytes("1GiB")}
-            self.log.info("Increment sizes per target:")
-            for key in keys:
-                self.log.info("  - %-9s : %s", key, get_display_size(increment[key]))
-
-            # Adjust the size to use a SCM/NVMe target multiplier
-            self.log.info("Pool sizes adjusted to fit by increment sizes:")
-            adjusted_targets = targets
-            for key in keys:
-                multiplier = math.floor(adjusted[key] / increment[key])
-                params[key] = multiplier * increment[key]
-                self.log.info(
-                    "  - %-9s : %s * %s = %s",
-                    key, multiplier, increment[key],
-                    get_display_size(params[key]))
-                if multiplier < adjusted_targets:
-                    adjusted_targets = multiplier
-                    if adjusted_targets < min_targets:
-                        raise AutosizeCancel(
-                            "Unable to autosize the {} pool parameter due to "
-                            "exceeding the minimum of {} targets: {}".format(
-                                key, min_targets, adjusted_targets))
-                if key == "size":
-                    tier_ratio_size = params[key] * float(tier_ratio / 100)
-                    self.log.info(
-                        "  - %-9s : %.2f%% tier_ratio = %s",
-                        key, tier_ratio, get_display_size(tier_ratio_size))
-                    params[key] += tier_ratio_size
-                    self.log.info(
-                        "  - %-9s : NVMe + SCM = %s",
-                        key, get_display_size(params[key]))
-                params[key] = bytes_to_human(params[key], binary=True)
-
-            # Reboot the servers if a reduced number of targets is required
-            if adjusted_targets < targets:
-                self.log.info(
-                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
-                self.set_config_value("targets", adjusted_targets)
-                self.stop()
-                self.start()
-
-            self.log.info("-" * 100)
-
-        return params
 
     def get_daos_metrics(self, verbose=False, timeout=60):
         """Get daos_metrics for the server.

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2023 Intel Corporation.
 
@@ -33,9 +32,9 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
                   verify read finish without any error with verification.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_single,ec_online_rebuild,rebuild
-        :avocado: tags=ec_online_rebuild_single,test_ec_online_rebuild_single
+        :avocado: tags=EcodOnlineRebuildSingle,test_ec_online_rebuild_single
         """
         # Kill last server rank
         self.rank_to_kill = self.server_count - 1
@@ -66,4 +65,4 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         # should be intact and no data corruption observed.
         self.start_online_single_operation("READ", parity=2)
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()

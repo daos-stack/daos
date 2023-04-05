@@ -53,32 +53,27 @@ class RbldCascadingFailures(RebuildTestBase):
         """Start the rebuild process."""
         if self.mode == "simultaneous":
             # Exclude both ranks from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks(
-                self.inputs.rank.value, self.d_log)
+            self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log)
         else:
             # Exclude the first rank from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks(
-                [self.inputs.rank.value[0]], self.d_log)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[0]], self.d_log)
 
         if self.mode == "sequential":
             # Exclude the second rank from the pool
-            self.server_managers[0].stop_ranks(
-                [self.inputs.rank.value[1]], self.d_log)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True, 1)
+        self.pool.wait_for_rebuild_to_start(1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
         self.daos_cmd = DaosCommand(self.bin)
         if self.mode == "cascading":
             # Exclude the second rank from the pool during rebuild
-            self.server_managers[0].stop_ranks(
-                [self.inputs.rank.value[1]], self.d_log)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log)
 
-        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
-                                         cont=self.container.uuid,
-                                         prop="status", value="healthy")
+        self.daos_cmd.container_set_prop(
+            pool=self.pool.uuid, cont=self.container.uuid, prop="status", value="healthy")
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)
 
@@ -97,8 +92,8 @@ class RbldCascadingFailures(RebuildTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild
-        :avocado: tags=multitarget,simultaneous,test_simultaneous_failures
+        :avocado: tags=rebuild,multitarget,simultaneous
+        :avocado: tags=RbldCascadingFailures,test_simultaneous_failures
         """
         self.mode = "simultaneous"
         self.execute_rebuild_test()
@@ -119,8 +114,8 @@ class RbldCascadingFailures(RebuildTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild
-        :avocado: tags=multitarget,sequential,test_sequential_failures
+        :avocado: tags=rebuild,multitarget,sequential
+        :avocado: tags=RbldCascadingFailures,test_sequential_failures
         """
         self.mode = "sequential"
         self.execute_rebuild_test()
@@ -141,8 +136,8 @@ class RbldCascadingFailures(RebuildTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild
-        :avocado: tags=multitarget,cascading,test_cascading_failures
+        :avocado: tags=rebuild,multitarget,sequential
+        :avocado: tags=RbldCascadingFailures,test_cascading_failures
         """
         self.mode = "cascading"
         self.execute_rebuild_test()

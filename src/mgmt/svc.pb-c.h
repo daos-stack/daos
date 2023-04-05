@@ -249,10 +249,15 @@ struct  _Mgmt__ClientNetHint
    * Server SRX setting (-1, 0, 1; -1 == unset)
    */
   int32_t srv_srx_set;
+  /*
+   * Client-side environment variables to set
+   */
+  size_t n_env_vars;
+  char **env_vars;
 };
 #define MGMT__CLIENT_NET_HINT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0,NULL }
 
 
 struct  _Mgmt__GetAttachInfoResp__RankUri

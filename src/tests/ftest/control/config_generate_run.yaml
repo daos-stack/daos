@@ -8,7 +8,7 @@ server_config:
       storage:
         0:
           class: ram
-          scm_mount: /mnt/daos
+          scm_mount: /mnt/daos0
           scm_size: 16
 pool:
   control_method: dmg
@@ -22,14 +22,14 @@ config_generate_params: !mux
   single_engine:
     num_engines: 1
     net_provider: ofi+tcp;ofi_rxm
-  # 3. Use min_ssd=1. This will still use the maximum number of SSDs, so the
+  # 3. Use scm_only=false. This will use the maximum number of SSDs, so the
   # generated config file should be identical to all_default.
-  one_min_ssd:
-    min_ssds: 1
+  scm_only_false:
+    scm_only: false
     net_provider: ofi+tcp;ofi_rxm
-  # 4. Use min_ssd=0. No NVMe entry. SCM only.
-  zero_min_ssd:
-    min_ssds: 0
+  # 4. Use scm_only=true. No NVMe entry. SCM only.
+  scm_only_true:
+    scm_only: true
     net_provider: ofi+tcp;ofi_rxm
   # 5. Use infiniband. This is usually the default behavior, so the generated
   # config file would be identical to all_default if the feature is working
@@ -43,4 +43,8 @@ config_generate_params: !mux
   ethernet:
     net_class: ethernet
     num_engines: 1
+    net_provider: ofi+tcp;ofi_rxm
+  # 7. Use tmpfs for scm instead of pmem.
+  tmpfs_scm_true:
+    use_tmpfs_scm: true
     net_provider: ofi+tcp;ofi_rxm

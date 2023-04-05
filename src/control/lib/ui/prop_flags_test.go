@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,7 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 		expErr   error
 	}{
 		"empty": {
-			expErr: errors.New("invalid property"),
+			expErr: errors.New("empty property"),
 		},
 		"invalid property": {
 			settable: []string{"a", "b"},
@@ -35,20 +35,16 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			expErr:   errors.New("not a settable property"),
 		},
 		"empty key": {
-			fv:     ":value",
+			fv:     " :value",
 			expErr: errors.New("must not be empty"),
 		},
 		"empty value": {
-			fv:     "key:",
+			fv:     "key: ",
 			expErr: errors.New("must not be empty"),
 		},
 		"key too long": {
 			fv:     strings.Repeat("x", ui.MaxPropKeyLen+1) + ":value",
 			expErr: errors.New("key too long"),
-		},
-		"value too long": {
-			fv:     "key:" + strings.Repeat("x", ui.MaxPropValLen+1),
-			expErr: errors.New("value too long"),
 		},
 		"valid properties": {
 			settable: []string{"a", "b"},
@@ -64,6 +60,30 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			deprKeys: map[string]string{"e": "a"},
 			fv:       "e:b,b:d",
 			expProps: map[string]string{"a": "b", "b": "d"},
+		},
+		"avocado unescaped chars": {
+			fv:       `attr4:~@#$%^*-=_+[]{}/?.,~@#$%^*-=_+[]{}/?.:attr11`,
+			expProps: map[string]string{"attr4": `~@#$%^*-=_+[]{}/?.`, `~@#$%^*-=_+[]{}/?.`: "attr11"},
+		},
+		"avocado escaped chars": {
+			fv:       `attr5:&()\\;!<>\,\:,&()\\;!<>\,\::attr12`,
+			expProps: map[string]string{"attr5": `&()\\;!<>\,\:`, `&()\\;!<>\,\:`: "attr12"},
+		},
+		", in quotes": {
+			fv:       `a:"b,c",b:'d,e',c:"'f,g'",d:'"h,i"',"e,f":g`,
+			expProps: map[string]string{"a": `"b,c"`, "b": `'d,e'`, "c": `"'f,g'"`, "d": `'"h,i"'`, `"e,f"`: "g"},
+		},
+		": in quotes": {
+			fv:       `a:"b:c",b:'d:e',c:"'f:g'",d:'"h:i"',"e,f":g`,
+			expProps: map[string]string{"a": `"b:c"`, "b": `'d:e'`, "c": `"'f:g'"`, "d": `'"h:i"'`, `"e,f"`: "g"},
+		},
+		": escaped": {
+			fv:       `a:b\:c,b\\\:c:d`,
+			expProps: map[string]string{"a": `b\:c`, `b\\\:c`: "d"},
+		},
+		", escaped": {
+			fv:       `a:b\,c,b\\\,c:d`,
+			expProps: map[string]string{"a": `b\,c`, `b\\\,c`: "d"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -84,6 +104,21 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 	}
 
 }
+
+/* NB: Doesn't work with go < 1.18
+func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
+	f.Fuzz(func(t *testing.T, fv string) {
+		f := ui.SetPropertiesFlag{}
+
+		// Simple fuzzing; just make sure it doesn't panic on
+		// bad inputs.
+		gotErr := f.UnmarshalFlag(fv)
+		if gotErr != nil {
+			t.Log(gotErr)
+		}
+	})
+}
+*/
 
 func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
 	comps := ui.CompletionMap{
@@ -210,9 +245,21 @@ func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			fv:     strings.Repeat("x", ui.MaxPropKeyLen+1),
 			expErr: errors.New("key too long"),
 		},
-		"key contains property separator": {
+		"key is just a space": {
+			fv:     " ",
+			expErr: errors.New("must not be empty"),
+		},
+		"key contains unescaped property separator": {
 			fv:     "a:b",
 			expErr: errors.New("cannot contain"),
+		},
+		"key contains escaped property separator": {
+			fv:      `a\:b`,
+			expKeys: []string{`a\:b`},
+		},
+		"quoted properties with commas": {
+			fv:      `"a,b",c`,
+			expKeys: []string{`"a,b"`, `c`},
 		},
 		"valid properties": {
 			gettable: []string{"a", "b"},

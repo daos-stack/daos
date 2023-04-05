@@ -8,15 +8,28 @@ package main
 
 import (
 	"bytes"
-	"encoding/csv"
 	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/dustin/go-humanize"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
+
+type singleHostFlag ui.HostSetFlag
+
+func (shf *singleHostFlag) UnmarshalFlag(value string) error {
+	if err := (*ui.HostSetFlag)(shf).UnmarshalFlag(value); err != nil {
+		return err
+	}
+
+	if shf.Count() != 1 {
+		return errors.New("must specify a single host")
+	}
+
+	return nil
+}
 
 // formatHostGroups adds group title header per group results.
 func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
@@ -40,20 +53,4 @@ func errIncompatFlags(key string, incompat ...string) error {
 	}
 
 	return errors.Errorf("%s with --%s", base, strings.Join(incompat, " or --"))
-}
-
-func parseUint64Array(in string) (out []uint64, err error) {
-	arr, err := csv.NewReader(strings.NewReader(in)).Read()
-	if err != nil {
-		return
-	}
-
-	out = make([]uint64, len(arr))
-	for idx, elemStr := range arr {
-		out[idx], err = humanize.ParseBytes(elemStr)
-		if err != nil {
-			return
-		}
-	}
-	return
 }

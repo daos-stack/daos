@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: %s\n", d_errstr(rc));
+	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -174,11 +174,15 @@ obj_tls_init(int xs_id, int tgt_id)
 	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bulk_lat,
 			    "bulk_fetch", "Bulk fetch processing time");
 
-
 	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_vos_lat,
 			    "vos_update", "VOS update processing time");
 	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_vos_lat,
 			    "vos_fetch", "VOS fetch processing time");
+
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_bio_lat,
+			    "bio_update", "BIO update processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bio_lat,
+			    "bio_fetch", "BIO fetch processing time");
 
 	return tls;
 }

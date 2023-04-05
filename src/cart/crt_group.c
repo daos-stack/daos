@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2285,6 +2285,27 @@ out_unlock:
 	return rc;
 }
 
+void
+crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+		      enum crt_event_type type)
+{
+	struct crt_event_cb_priv	*cbs_event;
+	size_t				 cbs_size;
+	int				 cb_idx;
+	crt_event_cb			 cb_func;
+	void				*cb_args;
+
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
+		cb_func = cbs_event[cb_idx].cecp_func;
+		cb_args = cbs_event[cb_idx].cecp_args;
+
+		if (cb_func != NULL)
+			cb_func(rank, incarnation, src, type, cb_args);
+	}
+}
+
 int
 crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 {
@@ -2519,7 +2540,7 @@ crt_rank_self_set(d_rank_t rank)
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
 	hg_class_t		*hg_class;
-	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
+	hg_size_t		size;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	d_list_t		*ctx_list;
@@ -2556,6 +2577,7 @@ crt_rank_self_set(d_rank_t rank)
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
+		size = CRT_ADDR_STR_MAX_LEN;
 		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
 			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);

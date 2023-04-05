@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@
 
 import platform
 import distro
+from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
-# from prereq_tools import WebRetriever
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -58,7 +58,8 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        print(f'Using build version of {name}')
+        if not GetOption('help'):
+            print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
@@ -68,7 +69,8 @@ def include(reqs, name, use_value, exclude_value):
     if reqs.included(name):
         print(f'Including {name} optional component from build')
         return use_value
-    print(f'Excluding {name} optional component from build')
+    if not GetOption('help'):
+        print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
@@ -88,14 +90,17 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
+    print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
-    return config.TryCompile(code, ".c")
+    rc = config.TryCompile(code, ".c")
+    print('yes' if rc else 'no')
+    return rc
 
 
 def define_mercury(reqs):
-    """mercury definitions"""
+    """Mercury definitions"""
     libs = ['rt']
 
     if reqs.get_env('PLATFORM') == 'darwin':
@@ -152,7 +157,8 @@ def define_mercury(reqs):
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'])
+                patch_rpath=['lib'],
+                build_env={'CFLAGS': "-fstack-usage"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -212,57 +218,39 @@ def define_mercury(reqs):
                 pkgconfig='mercury',
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None)
+                package='mercury-devel' if inst(reqs, 'mercury') else None,
+                build_env={'CFLAGS': '-fstack-usage'})
 
 
 def define_common(reqs):
-    """common system component definitions"""
+    """Common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
 
-    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
-                package='libunwind-devel')
+    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'], package='libunwind-devel')
 
     reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
 
-    reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
-                package='valgrind-devel')
+    reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'], package='valgrind-devel')
 
-    reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'],
-                package='CUnit-devel')
+    reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
 
-    reqs.define('python34_devel', headers=['python3.4m/Python.h'],
-                package='python34-devel')
-
-    reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
-
-    reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
-
-    reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
-
-    reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-python36-devel')
+    reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
 
-    reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
-                package='openssl-devel')
+    reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
 
-    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'],
-                package='json-c-devel')
+    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'], package='json-c-devel')
 
-    if reqs.get_env('PLATFORM') == 'darwin':
-        reqs.define('uuid', headers=['uuid/uuid.h'])
-    else:
-        reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
-                    package='libuuid-devel')
+    reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
+
+    reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
 
 def define_ompi(reqs):
     """OMPI and related components"""
-    reqs.define('hwloc', headers=['hwloc.h'], libs=['hwloc'],
-                package='hwloc-devel')
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
@@ -362,7 +350,8 @@ def define_components(reqs):
                            '--without-iscsi-initiator',
                            '--without-isal',
                            '--without-vtune',
-                           '--with-shared'],
+                           '--with-shared',
+                           f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
