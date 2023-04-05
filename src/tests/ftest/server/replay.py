@@ -283,7 +283,7 @@ class ReplayTests(TestWithServers):
         for container in containers:
             for index, item in enumerate((container.pool, container)):
                 # Modify a random pool/container property value
-                name = random.choice(modify_attributes[index])  # nosec
+                name = random.choice(list(modify_attributes[index].keys()))  # nosec
                 modified = False
                 for entry in expected:
                     if entry['name'] == name:
