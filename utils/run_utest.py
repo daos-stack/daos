@@ -326,7 +326,7 @@ class Test():
             self.env["VOS_BDEV_CLASS"] = "AIO"
 
     def subst(self, cmd, replacements, path_info):
-        """Make any substituations for variables in path_info"""
+        """Make any substitutions for variables in path_info"""
         if not replacements:
             return cmd
 
