@@ -7,6 +7,7 @@ url_to_repo() {
     local url="$1"
 
     local repo=${url#*://}
+    repo="${repo#/}"
     repo="${repo//%/}"
     repo="${repo//\//_}"
 

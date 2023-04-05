@@ -279,6 +279,10 @@ post_provision_config_nodes() {
     fi
 
     if [ -n "$INST_REPOS" ]; then
+        # repo sharing hack
+        mkdir /job_repos
+        mount -r wolf-231:/data/gha_runners/job_repos /job_repos/
+
         local repo
         for repo in $INST_REPOS; do
             branch="master"
@@ -291,7 +295,7 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            local repo_url="file:///job_repos/daos-stack/$repo/${branch//\//%252F}/$build_number/$DISTRO_NAME/"
             dnf -y config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done
