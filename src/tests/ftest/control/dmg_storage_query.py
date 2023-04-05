@@ -25,49 +25,48 @@ class DmgStorageQuery(ControlTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for dmg storage query."""
-        super().setUp()
-        self.targets = self.server_managers[-1].get_config_value('targets')
-        md_on_ssd = False
+    def get_bdev_info(self):
+        """Get information about the server storage bdev configuration.
 
-        self.log_step('Determining server storage config')
+        Returns:
+            list: a list of dictionaries including information for each bdev device included in the
+                storage configuration
+        """
+        targets = self.server_managers[-1].get_config_value('targets')
+        md_on_ssd = False
         bdev_tiers = 0
-        self.bdev_list = []
+        bdev_info = []
         for engine in self.server_managers[-1].manager.job.yaml.engine_params:
             for index, tier in enumerate(engine.storage.storage_tiers):
                 if tier.storage_class.value == 'ram':
                     md_on_ssd = True
                 elif tier.storage_class.value == 'nvme':
                     bdev_tiers += 1
-                    for device in tier.bdev_list.value:
-                        self.bdev_list.append(
-                            {'bdev': device, 'roles': tier.roles.value, 'tier': index})
+                    for item, device in enumerate(tier.bdev_list.value):
+                        bdev_info.append(
+                            {'bdev': device,
+                             'roles': tier.roles.value,
+                             'tier': index,
+                             'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
         if md_on_ssd:
-            for device in self.bdev_list:
+            for device in bdev_info:
                 if device['roles']:
+                    # Use predefined roles
                     continue
-                if bdev_tiers == 1 and device['tier'] == 1:
-                    # First bdev storage tier of 1 tier: all roles
-                    device['roles'] = 'wal,data,meta'
-                elif bdev_tiers == 2 and device['tier'] == 1:
-                    # First bdev storage tier of 2 tiers: wal roles
-                    device['roles'] = 'wal'
-                elif bdev_tiers == 2 and device['tier'] == 2:
-                    # Second bdev storage tier of 2 tiers: data & meta roles
-                    device['roles'] = 'data,meta'
-                elif bdev_tiers > 2 and device['tier'] == 1:
-                    # First bdev storage tier of >2 tiers: wal
-                    device['roles'] = 'wal'
-                elif bdev_tiers > 2 and device['tier'] == 2:
-                    # Second bdev storage tier of >2 tiers: meta
-                    device['roles'] = 'meta'
+                if device['tier'] == 1:
+                    # Roles of 1st bdev storage tier of 1 tier is wal,data,meta; of 2+ tiers is wal
+                    device['roles'] = 'wal,data,meta' if bdev_tiers == 1 else 'wal'
+                elif device['tier'] == 2:
+                    # Roles of 2nd bdev storage tier of 2 tiers is data,meta; of 2+ tiers is meta
+                    device['roles'] = 'data,meta' if bdev_tiers == 2 else 'meta'
                 else:
-                    # Additional bdev storage tier of >2 tiers: data
+                    # Roles of additional bdev storage tiers is data
                     device['roles'] = 'data'
+
         self.log.info('Detected NVMe devices in config')
-        for bdev in self.bdev_list:
+        for bdev in bdev_info:
             self.log.info('  %s', dict_to_str(bdev, items_joiner=':'))
+        return bdev_info
 
     def check_dev_state(self, device_info, state):
         """Check the state of the device.
@@ -97,47 +96,49 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
+        self.log_step('Determining server storage config')
+        expected_bdev_info = self.get_bdev_info()
+
         # Get the storage device information, parse and check devices info
         self.log_step('Get the storage device information')
         device_info = get_storage_query_device_info(self, self.dmg)
 
         # Check if the number of devices match the config
         self.log_step('Verify storage device count')
-        if len(self.bdev_list) != len(device_info):
+        if len(expected_bdev_info) != len(device_info):
             self.fail(
                 'Number of devices ({}) do not match server config ({})'.format(
-                    len(device_info), len(self.bdev_list)))
+                    len(device_info), len(expected_bdev_info)))
 
         # Check that number of targets match the config
         self.log_step('Verify storage device targets and roles')
         errors = 0
-        targets = 0
         for device in device_info:
             self.log.info('Verifying device %s', device['tr_addr'])
-            targets += len(device['tgt_ids'])
-            self.log.info('  targets: detected=%s', len(device['tgt_ids']))
-            message = ''
-            for bdev in self.bdev_list:
+            messages = []
+            for bdev in expected_bdev_info:
                 # Convert the bdev address (e.g., '0000:85:05.5') to a VMD-style tr_addr (e.g.,
                 # '850505:') by splitting the bdev address on either ':' or '.' and joining the
                 # last three elements as double digit hex characters.
                 bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
                     *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
                 if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
-                    message = 'detected={}, expected={}'.format(device['roles'], bdev['roles'])
-                    if device['roles'] != bdev['roles']:
-                        message += ' <= ERROR unexpected role'
-                        errors += 1
-            if not message:
-                message = 'detected={}, expected=*NO MATCH* <= ERROR unexpected role'.format(
-                    device['roles'])
+                    for key in ('tgt_ids', 'roles'):
+                        messages.append(
+                            '{}:   detected={}, expected={}'.format(key, device[key], bdev[key]))
+                        if device[key] != bdev[key]:
+                            messages[-1] += ' <= ERROR'
+                            errors += 1
+            if not messages:
+                bdev_ids = list(bdev['bdev'] for bdev in expected_bdev_info)
+                messages.append('No match found in storage config: {} <= ERROR'.format(bdev_ids))
                 errors += 1
-            self.log.info('  roles:   %s', message)
 
-        if self.targets != targets:
-            self.fail('Wrong number of targets found: {}'.format(targets))
+        for message in messages:
+            self.log.info('  %s', message)
+
         if errors:
-            self.fail('Errors detected verifying roles: {}'.format(errors))
+            self.fail('Errors detected verifying storage devices: {}'.format(errors))
         self.log.info('Test passed')
 
     @avocado.fail_on(CommandFailure)
@@ -152,6 +153,8 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
+        targets = self.server_managers[-1].get_config_value('targets')
+
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
         pool_info = get_storage_query_pool_info(self, self.dmg, verbose=True)
@@ -165,15 +168,15 @@ class DmgStorageQuery(ControlTestBase):
                     "Incorrect pool UUID for %s: detected=%s", str(self.pool), pool['uuid'])
                 errors += 1
                 continue
-            if self.targets != len(pool['tgt_ids']):
+            if targets != len(pool['tgt_ids']):
                 self.log.info(
                     "Incorrect number of targets for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['tgt_ids']), self.targets)
+                    str(self.pool), len(pool['tgt_ids']), targets)
                 errors += 1
-            if self.targets != len(pool['blobs']):
+            if targets != len(pool['blobs']):
                 self.log.info(
                     "Incorrect number of blobs for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['blobs']), self.targets)
+                    str(self.pool), len(pool['blobs']), targets)
                 errors += 1
         if errors:
             self.fail(
