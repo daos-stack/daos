@@ -4574,16 +4574,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (task->dt_result == -DER_CSUM || task->dt_result == -DER_TX_UNCERTAIN ||
 		    task->dt_result == -DER_NVME_IO) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
-			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				if (task->dt_result == -DER_CSUM)
-					obj_auxi->csum_retry = 1;
-				else if (task->dt_result == -DER_TX_UNCERTAIN)
-					obj_auxi->tx_uncertain = 1;
-				else
-					obj_auxi->nvme_io_err = 1;
+			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov) {
+				/* Retry fetch on alternative shard */
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+					if (task->dt_result == -DER_CSUM)
+						obj_auxi->csum_retry = 1;
+					else if (task->dt_result == -DER_TX_UNCERTAIN)
+						obj_auxi->tx_uncertain = 1;
+					else
+						obj_auxi->nvme_io_err = 1;
+				} else if (task->dt_result != -DER_NVME_IO) {
+					/* Don't retry update for CSUM & UNCERTAIN errors */
+					obj_auxi->io_retry = 0;
+				}
 			} else {
-				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
 			}
 		}
