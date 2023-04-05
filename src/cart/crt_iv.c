@@ -2740,7 +2740,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	 * unexpectedly
 	 */
 	if (cb_info->cci_rc == -DER_TIMEDOUT || cb_info->cci_rc == -DER_EXCLUDED ||
-	     cb_info->cci_rc == -DER_CANCELED)
+	    cb_info->cci_rc == -DER_CANCELED)
 		goto callback;
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
