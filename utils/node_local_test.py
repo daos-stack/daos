@@ -3064,9 +3064,11 @@ class PosixTests():
         # Read it through both.
         with open(test_file, 'r') as fd:
             data = fd.read()
+            data = data.decode('utf-8-sig').strip()
             assert data == 'data'
         with open(side_test_file, 'r') as fd:
             data = fd.read()
+            data = data.decode('utf-8-sig').strip()
             assert data == 'data'
 
         # Remove all permissions on the file.
@@ -3085,6 +3087,7 @@ class PosixTests():
         # Read it through first instance, this should work as the contents are cached.
         with open(test_file, 'r') as fd:
             data = fd.read()
+            data = data.decode('utf-8-sig').strip()
             assert data == 'data'
 
         # Let the cache expire.
