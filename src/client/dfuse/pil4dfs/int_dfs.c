@@ -712,8 +712,8 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		return 0;
 	}
 	if ((strncmp(szInput, "http://", 7) == 0) ||
-	     (strncmp(szInput, "https://", 8) == 0) ||
-	     (strncmp(szInput, "git://", 6) == 0)) {
+	    (strncmp(szInput, "https://", 8) == 0) ||
+	    (strncmp(szInput, "git://", 6) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -3800,11 +3800,6 @@ new_fcntl(int fd, int cmd, ...)
 	return libc_fcntl(fd, cmd);
 }
 
-struct dfuse_user_reply {
-	uid_t uid;
-	gid_t gid;
-};
-
 int
 ioctl(int fd, unsigned long request, ...)
 {
@@ -3826,7 +3821,7 @@ ioctl(int fd, unsigned long request, ...)
 	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
 	/* Provided to pass dfuse_test                                  */
 	if ((request & 0xFFFFFFFF) == 0x8008A3cA) {
-		reply = (dfuse_user_reply *)param;
+		reply = (struct dfuse_user_reply *)param;
 		reply->uid = getuid();
 		reply->gid = getgid();
 		return 0;
