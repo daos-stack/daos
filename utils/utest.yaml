@@ -3,7 +3,6 @@
   tests:
     - cmd: ["src/common/tests/umem_test"]
     - cmd: ["src/common/tests/sched"]
-    - cmd: ["src/common/tests/drpc_tests"]
     - cmd: ["src/common/tests/acl_api_tests"]
     - cmd: ["src/common/tests/acl_valid_tests"]
     - cmd: ["src/common/tests/acl_util_tests"]
@@ -36,22 +35,20 @@
     - cmd: ["src/common/tests/btree.sh", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn"]
-- name: engine
+- name: drpc
   base: "BUILD_DIR"
   tests:
+    - cmd: ["src/common/tests/drpc_tests"]
     - cmd: ["src/engine/tests/drpc_client_tests"]
     - cmd: ["src/engine/tests/drpc_progress_tests"]
     - cmd: ["src/engine/tests/drpc_handler_tests"]
     - cmd: ["src/engine/tests/drpc_listener_tests"]
+    - cmd: ["src/mgmt/tests/srv_drpc_tests"]
 - name: gurt
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
-- name: mgmt
-  base: "BUILD_DIR"
-  tests:
-    - cmd: ["src/mgmt/tests/srv_drpc_tests"]
 - name: placement
   base: "PREFIX"
   tests:
