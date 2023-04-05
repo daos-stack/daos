@@ -56,7 +56,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     RUN_TEST_VALGRIND="--memcheck"
 fi
 VDB_ARG=""
-if [ -d "/dev/vdb" ]; then
+if [ -b "/dev/vdb" ]; then
     VDB_ARG="--bdev=/dev/vdb"
 fi
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG
