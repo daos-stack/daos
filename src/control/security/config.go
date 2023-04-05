@@ -39,6 +39,50 @@ type TransportConfig struct {
 	CertificateConfig `yaml:",inline"`
 }
 
+func (tc *TransportConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type fromYAML TransportConfig
+	aux := &struct {
+		AllowInsecure *bool `yaml:"allow_insecure"`
+		EnableTLS     *bool `yaml:"enable_tls"` // alias for !allow_insecure
+		// inline fields
+		ClientCertDir   string `yaml:"client_cert_dir"`
+		CARootPath      string `yaml:"ca_cert"`
+		CertificatePath string `yaml:"cert"`
+		PrivateKeyPath  string `yaml:"key"`
+		*fromYAML
+	}{
+		fromYAML: (*fromYAML)(tc),
+	}
+
+	if err := unmarshal(aux); err != nil {
+		return err
+	}
+	if aux.ClientCertDir != "" {
+		tc.ClientCertDir = aux.ClientCertDir
+	}
+	if aux.CARootPath != "" {
+		tc.CARootPath = aux.CARootPath
+	}
+	if aux.CertificatePath != "" {
+		tc.CertificatePath = aux.CertificatePath
+	}
+	if aux.PrivateKeyPath != "" {
+		tc.PrivateKeyPath = aux.PrivateKeyPath
+	}
+
+	if aux.AllowInsecure != nil && aux.EnableTLS != nil {
+		return errors.New("cannot specify both allow_insecure and enable_tls")
+	}
+	if aux.AllowInsecure != nil {
+		tc.AllowInsecure = *aux.AllowInsecure
+	}
+	if aux.EnableTLS != nil {
+		tc.AllowInsecure = !*aux.EnableTLS
+	}
+
+	return nil
+}
+
 func (tc *TransportConfig) String() string {
 	return fmt.Sprintf("allow insecure: %v", tc.AllowInsecure)
 }

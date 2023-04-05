@@ -29,9 +29,9 @@
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # In order to disable transport security, uncomment and set allow_insecure
-#  # to true. Not recommended for production configurations.
-#  allow_insecure: false
+#  # In order to disable transport security, uncomment and set enable_tls
+#  # to false. Not recommended for production configurations.
+#  enable_tls: true
 #
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: /etc/daos/certs/daosCA.crt

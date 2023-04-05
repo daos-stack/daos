@@ -39,9 +39,9 @@
 ## Transport credentials specifying certificates to secure communications
 #
 #transport_config:
-#  # In order to disable transport security, uncomment and set allow_insecure
-#  # to true. Not recommended for production configurations.
-#  allow_insecure: false
+#  # In order to disable transport security, uncomment and set enable_tls
+#  # to false. Not recommended for production configurations.
+#  enable_tls: true
 #
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: /etc/daos/certs/clients

@@ -16,9 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func InsecureTC() *TransportConfig {
@@ -350,6 +352,103 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 			)); diff != "" {
 				t.Fatalf("(want-, got+)\n %s", diff)
 			}
+		})
+	}
+}
+
+func TestSecurity_EnableTLS_Unmarshal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testYAML         string
+		transport        *TransportConfig
+		expAllowInsecure bool
+		expErr           error
+	}{
+		"garbage input": {
+			testYAML: "garbage",
+			expErr:   errors.New("cannot unmarshal"),
+		},
+		"allow insecure: true": {
+			testYAML: `
+allow_insecure: true
+`,
+			expAllowInsecure: true,
+		},
+		"allow insecure: false": {
+			testYAML: `
+allow_insecure: false
+`,
+			expAllowInsecure: false,
+		},
+		"allow insecure: false (default true)": {
+			testYAML: `
+allow_insecure: false
+`,
+			transport: &TransportConfig{
+				AllowInsecure: true,
+			},
+			expAllowInsecure: false,
+		},
+		"allow insecure: true; enable_tls: true": {
+			testYAML: `
+allow_insecure: true
+enable_tls: true
+`,
+			expErr: errors.New("allow_insecure and enable_tls"),
+		},
+		"allow insecure: true; enable_tls: false": {
+			testYAML: `
+allow_insecure: true
+enable_tls: false
+`,
+			expErr: errors.New("allow_insecure and enable_tls"),
+		},
+		"enable_tls: true (default AllowInsecure = true)": {
+			testYAML: `
+enable_tls: true
+`,
+			transport: &TransportConfig{
+				AllowInsecure: true,
+			},
+			expAllowInsecure: false,
+		},
+		"enable_tls: true (default AllowInsecure = false)": {
+			testYAML: `
+enable_tls: true
+`,
+			transport: &TransportConfig{
+				AllowInsecure: false,
+			},
+			expAllowInsecure: false,
+		},
+		"enable_tls: false (default AllowInsecure = true)": {
+			testYAML: `
+enable_tls: false
+`,
+			transport: &TransportConfig{
+				AllowInsecure: true,
+			},
+			expAllowInsecure: true,
+		},
+		"enable_tls: false (default AllowInsecure = false)": {
+			testYAML: `
+enable_tls: false
+`,
+			transport: &TransportConfig{
+				AllowInsecure: false,
+			},
+			expAllowInsecure: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.transport == nil {
+				tc.transport = new(TransportConfig)
+			}
+			err := yaml.Unmarshal([]byte(tc.testYAML), tc.transport)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+			test.AssertEqual(t, tc.expAllowInsecure, tc.transport.AllowInsecure, "unexpected AllowInsecure value")
 		})
 	}
 }
