@@ -143,22 +143,42 @@ func (f *fiInfo) hfiUnit() (uint, error) {
 
 // fiGetInfo fetches the list of fi_info structs with the desired provider (if non-empty), or all of
 // them otherwise. It also returns the cleanup function to free the fi_info.
-func fiGetInfo(hdl *dlopen.LibHandle) ([]*fiInfo, func() error, error) {
+func fiGetInfo(hdl *dlopen.LibHandle, prov string) ([]*fiInfo, func() error, error) {
 	getInfoPtr, err := getLibFuncPtr(hdl, "fi_getinfo")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var fi *C.struct_fi_info
-	result := C.call_fi_getinfo(getInfoPtr, nil, &fi)
-	if result < 0 {
-		return nil, nil, errors.Errorf("fi_getinfo() failed: %s", fiStrError(hdl, -result))
+	var hint *C.struct_fi_info
+	if len(prov) != 0 {
+		hint = (*C.struct_fi_info)(C.calloc(C.ulong(unsafe.Sizeof(C.struct_fi_info{})), 1))
+		if hint == nil {
+			return nil, nil, errors.New("unable to allocate hint")
+		}
+		defer C.free(unsafe.Pointer(hint))
+
+		hint.fabric_attr = (*C.struct_fi_fabric_attr)(C.calloc(C.ulong(unsafe.Sizeof(C.struct_fi_fabric_attr{})), 1))
+		if hint.fabric_attr == nil {
+			return nil, nil, errors.New("unable to allocate fabric attributes for hint")
+		}
+		defer C.free(unsafe.Pointer(hint.fabric_attr))
+
+		hint.fabric_attr.prov_name = C.CString(prov)
+		defer C.free(unsafe.Pointer(hint.fabric_attr.prov_name))
 	}
-	if fi == nil {
+
+	var fi *C.struct_fi_info
+	fiList := make([]*fiInfo, 0)
+	result := C.call_fi_getinfo(getInfoPtr, hint, &fi)
+	switch {
+	case result == -C.FI_ENODATA: // unable to get anything for the requested provider
+		return fiList, func() error { return nil }, nil
+	case result < 0:
+		return nil, nil, errors.Errorf("fi_getinfo() failed: %s", fiStrError(hdl, -result))
+	case fi == nil:
 		return nil, nil, errors.Errorf("fi_getinfo() returned no results")
 	}
 
-	fiList := make([]*fiInfo, 0)
 	for ; fi != nil; fi = fi.next {
 		fiList = append(fiList, &fiInfo{
 			cFI: fi,
