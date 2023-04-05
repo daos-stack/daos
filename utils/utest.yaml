@@ -11,6 +11,16 @@
     - cmd: ["src/common/tests/acl_real_tests"]
     - cmd: ["src/common/tests/prop_tests"]
     - cmd: ["src/common/tests/fault_domain_tests"]
+    - cmd: ["src/common/tests/ad_mem_tests"]
+      warn_if_missing: "ad_mem_tests is missing, are you on feature/vos_on_blob branch?"
+    - cmd: ["src/common/tests/umem_tests_bmem"]
+      warn_if_missing: "umem_tests_bmem is missing, are you on feature/vos_on_blob branch?"
+- name: common_md_on_ssd
+  base: "BUILD_DIR"
+  required_src: ["src/common/tests/ad_mem_tests.c"]
+  tests:
+    - cmd: ["src/common/tests/ad_mem_tests"]
+    - cmd: ["src/common/tests/umem_tests_bmem"]
 - name: btree_stress
   memcheck: False
   tests:
@@ -81,9 +91,11 @@
   tests:
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10"]
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10",
-            "-A", "-D", "/mnt/../mnt/daos"]
+            "-A", "-D", "/mnt/..MOUNT"]
+      replace_path: {"MOUNT": "MOUNT_DIR"}
     - cmd: ["bin/vos_perf", "-R", '"U Q;p V"', "-o", "5", "-d", "5", "-n", "10", "-A", "-i",
-            "-I", "-D", "/mnt.daos"]
+            "-I", "-D", "MOUNT"]
+      replace_path: {"MOUNT": "MOUNT_DIR"}
     - cmd: ["bin/vos_tests", "-A", "500"]
     - cmd: ["bin/vos_tests", "-r",
             "-c pool -w key@0-4 -w key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"]
@@ -109,6 +121,18 @@
   tests:
     - cmd: ["bin/vos_tests", "-a"]
       aio: "AIO_1"
+      size: 4
+- name: VOS_md_on_ssd
+  base: "PREFIX"
+  sudo: True
+  memcheck: False
+  required_src: ["src/bio/tests/bio_ut.c"]
+  tests:
+    - cmd: ["bin/vos_tests", "-A", "50"]
+      aio: "AIO_7"
+      size: 13
+    - cmd: ["bin/bio_ut"]
+      aio: "AIO_7"
       size: 4
 - name: csum_scrubber
   base: "PREFIX"
@@ -145,3 +169,8 @@
   tests:
     - cmd: ["bin/nvme_control_ctests"]
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
+- name: ddb
+  base: "PREFIX"
+  required_src: ["src/ddb/tests/SConscript"]
+  tests:
+    - cmd: ["bin/ddb_tests"]

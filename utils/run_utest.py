@@ -302,9 +302,9 @@ class Test():
 
     test_num = 1
 
-    def __init__(self, config, build_info, args):
+    def __init__(self, config, path_info, args):
         """Initialize a test"""
-        self.cmd = config["cmd"]
+        self.cmd = self.subst(config["cmd"], config.get("replace_path", {}), path_info)
         self.env = os.environ.copy()
         self.last = []
         env_vars = config.get("env_vars", {})
@@ -317,13 +317,31 @@ class Test():
             print(f"Filtered test  {' '.join(self.cmd)}")
             raise TestSkipped()
 
-        self.root = build_info["DAOS_BASE"]
+        self.root = path_info["DAOS_BASE"]
         self.res_path = os.path.join(self.root, "test_results")
         self.env["D_LOG_FILE"] = os.path.join("/tmp", f"{self.name}.log")
         Test.test_num = Test.test_num + 1
 
         if self.needs_aio():
             self.env["VOS_BDEV_CLASS"] = "AIO"
+
+    def subst(self, cmd, replacements, path_info):
+        """Make any substituations for variables in path_info"""
+        if not replacements:
+            return cmd
+
+        new_cmd = []
+        for entry in cmd:
+            for key, value in replacements.items():
+                try:
+                    path = path_info[value]
+                except KeyError as exception:
+                    print(f"Invalid path_info key {value} in configuration for {self.name}")
+                    raise exception
+                entry = entry.replace(key, path)
+            new_cmd.append(entry)
+
+        return new_cmd
 
     def filter(self, test_filter):
         """Determine if the test should run"""
@@ -391,34 +409,25 @@ class Test():
 
 class Suite():
     """Define a suite"""
-    def __init__(self, build_info, config, args):
+    def __init__(self, path_info, config, args):
         """Initialize a test suite"""
         self.name = config["name"]
         val = config.get("base", "DAOS_BASE")
-        self.base = build_info.get(val, None)
+        self.base = path_info.get(val, None)
         if self.base is None:
-            print(f"{val} not found in build_info")
+            print(f"{val} not found in path_info")
             raise SuiteConfigError()
         self.sudo = config.get("sudo", None)
         self.memcheck = config.get("memcheck", True)
         self.tests = []
         self.has_aio = False
 
-        if self.filter(args.suite_filter):
-            print(f"Filtered suite {self.name}")
-            raise SuiteSkipped()
-
-        if args.no_sudo and self.sudo:
-            print(f"Skipped  suite {self.name}, requires sudo")
-            raise SuiteSkipped()
-
-        if args.memcheck and not self.memcheck:
-            print(f"Skipped  suite {self.name}, valgrind not supported")
+        if self.skip(path_info, config, args):
             raise SuiteSkipped()
 
         for test in config["tests"]:
             try:
-                real_test = Test(test, build_info, args)
+                real_test = Test(test, path_info, args)
             except TestSkipped:
                 continue
             if real_test.needs_aio():
@@ -427,6 +436,29 @@ class Suite():
         if not self.tests:
             print(f"Skipped  suite {self.name}, no tests matched filters")
             raise SuiteSkipped()
+
+    def skip(self, path_info, config, args):
+        """Check all of the conditions for skipping the suite"""
+        required = config.get("required_src", [])
+
+        for file in required:
+            fname = os.path.join(path_info["DAOS_BASE"], file)
+            if not os.path.isfile(fname):
+                print(f"Skipped  suite {self.name}, not enabled on branch")
+                return True
+
+        if self.filter(args.suite_filter):
+            print(f"Filtered suite {self.name}")
+            return True
+
+        if args.no_sudo and self.sudo:
+            print(f"Skipped  suite {self.name}, requires sudo")
+            return True
+
+        if args.memcheck and not self.memcheck:
+            print(f"Skipped  suite {self.name}, valgrind not supported")
+            raise SuiteSkipped()
+        return False
 
     def needs_aio(self):
         """The suite needs to use aio"""
@@ -517,31 +549,32 @@ def get_args():
     return parser.parse_args()
 
 
-def get_build_info():
+def get_path_info(args):
     """Retrieve the build variables"""
     script_dir = os.path.dirname(os.path.realpath(__file__))
     daos_base = os.path.realpath(os.path.join(script_dir, '..'))
     build_vars_file = os.path.join(daos_base, '.build_vars.json')
-    build_info = {"DAOS_BASE": daos_base,
-                  "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml")}
+    path_info = {"DAOS_BASE": daos_base,
+                 "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml"),
+                 "MOUNT_DIR": args.mount}
     try:
         with open(build_vars_file, "r", encoding="UTF-8") as vars_file:
             build_vars = json.load(vars_file)
-        build_info.update(build_vars)
+        path_info.update(build_vars)
     except ValueError as error:
         print(f"Could not load json build info {build_vars_file}, have you built DAOS")
         print(f"{error}")
         sys.exit(-1)
 
-    return build_info
+    return path_info
 
 
 def main():
     """Run the the core tests"""
     args = get_args()
-    build_info = get_build_info()
+    path_info = get_path_info(args)
 
-    os.makedirs(os.path.join(build_info["DAOS_BASE"], "test_results"), exist_ok=True)
+    os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 
     aio = None
 
@@ -549,19 +582,19 @@ def main():
         aio = AIO(args.mount, args.bdev)
 
     suites = []
-    with open(build_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
+    with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
         all_suites = yaml.safe_load(file)
 
     for suite_yaml in all_suites:
         try:
-            real_suite = Suite(build_info, suite_yaml, args)
+            real_suite = Suite(path_info, suite_yaml, args)
         except SuiteSkipped:
             continue
         except SuiteConfigError as exception:
-            print(f"Error processing {build_info['UTEST_YAML']} {exception}")
+            print(f"Error processing {path_info['UTEST_YAML']} {exception}")
             raise exception
         except (KeyError, ValueError) as exception:
-            print(f"Error processing {build_info['UTEST_YAML']}")
+            print(f"Error processing {path_info['UTEST_YAML']}")
             raise exception
         suites.append(real_suite)
     results = Results(args.memcheck)
@@ -571,7 +604,7 @@ def main():
 
     results.create_junit()
 
-    move_codecov(build_info["DAOS_BASE"])
+    move_codecov(path_info["DAOS_BASE"])
 
     if args.no_fail_on_error:
         return
