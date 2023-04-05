@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Test script for running all DAOS unit tests
+"""
+  (C) Copyright 2023 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+
+  Test script for running all DAOS unit tests
 """
 # pylint: disable=broad-except
 import os
