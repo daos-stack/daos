@@ -59,4 +59,21 @@ VDB_ARG=""
 if [ -b "/dev/vdb" ]; then
     VDB_ARG="--bdev=/dev/vdb"
 fi
-utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG
+
+: "${STAGE_NAME:="Unit Test"}"
+
+case $STAGE_NAME in
+    *Bullseye*)
+	test_log_dir="$SL_SRC_DIR/covc_test_logs"
+	;;
+    *memcheck*)
+	test_log_dir="$SL_SRC_DIR/unit_test_memcheck_logs"
+	;;
+    *Unit*)
+	test_log_dir="$SL_SRC_DIR/unit_test_logs"
+	;;
+esac
+
+rm -rf "$test_log_dir"
+
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir"
