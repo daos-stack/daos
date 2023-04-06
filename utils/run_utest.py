@@ -20,6 +20,9 @@ from junit_xml import TestSuite, TestCase
 import yaml
 
 
+HAS_CAPTURE = sys.version_info.major >= 3 and sys.version_info.minor >= 7
+
+
 def write_xml_result(name, suite_junit):
     """Write an junit result"""
     with open(f"test_results/test_{name}.xml", "w", encoding='UTF-8') as file:
@@ -138,7 +141,14 @@ class ValgrindHelper():
 def run_cmd(cmd, capture_output=False, env=None):
     """Run a command"""
     print(f"RUNNING COMMAND {' '.join(cmd)}")
-    ret = subprocess.run(cmd, check=False, env=env, capture_output=capture_output)
+    # capture_output is only available in 3.7+
+    output = {}
+    if HAS_CAPTURE:
+        output["capture_output"] = capture_output
+    elif capture_output:
+        output["stdout"] = subprocess.PIPE
+        output["stderr"] = subprocess.PIPE
+    ret = subprocess.run(cmd, check=False, env=env, **output)
     print(f'rc is {ret.returncode}')
     if capture_output:
         return ret.returncode, ret.stdout, ret.stderr
