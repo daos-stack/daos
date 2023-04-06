@@ -1349,7 +1349,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)
 /** Ensure there is no overlap with public iterator flags (defined in
- *  src/include/daos_srv/vos_types.h).
+ *  src/include/internal/daos_srv/vos_types.h).
  */
 D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
 
