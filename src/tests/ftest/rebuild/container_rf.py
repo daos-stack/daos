@@ -7,7 +7,6 @@ from container_rf_test_base import ContRedundancyFactor
 
 
 class RbldContRfTest(ContRedundancyFactor):
-    # pylint: disable=too-many-ancestors
     """Test container redundancy factor with various rebuilds.
 
     :avocado: recursive

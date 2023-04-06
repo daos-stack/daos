@@ -7,7 +7,6 @@ from ec_utils import ErasureCodeMdtest
 
 
 class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
-    # pylint: disable=too-many-ancestors
     """EC MDtest on-line rebuild test class.
 
     Test Class Description: To validate Erasure code object type classes works

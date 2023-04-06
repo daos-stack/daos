@@ -7,7 +7,6 @@ from daos_perf_base import DaosPerfBase
 
 
 class DaosPerf(DaosPerfBase):
-    # pylint: disable=too-many-ancestors
     """Test cases for the daos_perf command.
 
     Test Class Description:
