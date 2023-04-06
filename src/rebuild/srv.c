@@ -1704,8 +1704,8 @@ static void
 rgt_leader_stop(struct rebuild_global_pool_tracker *rgt)
 {
 	rgt_get(rgt);
-	D_DEBUG(DB_REBUILD, "try abort rebuild "DF_UUID" version %d\n",
-		DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver);
+	D_INFO("try abort rebuild "DF_UUID" version %d\n",
+	       DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver);
 	rgt->rgt_abort = 1;
 
 	/* Remove it from the rgt list to avoid stopping rgt duplicately */
@@ -1715,8 +1715,8 @@ rgt_leader_stop(struct rebuild_global_pool_tracker *rgt)
 	ABT_cond_wait(rgt->rgt_done_cond, rgt->rgt_lock);
 	ABT_mutex_unlock(rgt->rgt_lock);
 
-	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID"/ %d is stopped.\n",
-		DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver);
+	D_INFO("rebuild "DF_UUID"/ %d is stopped.\n",
+	       DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver);
 
 	rgt_put(rgt);
 }
