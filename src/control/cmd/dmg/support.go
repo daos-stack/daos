@@ -169,7 +169,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	err := support.CollectSupportLog(cmd.Logger, params)
 
 	if err != nil {
-		return errors.Wrap(err, "DAOS Management Service is down")
+		return err
 	}
 
 	// Default TargetFolder location where logs will be copied.
