@@ -11,22 +11,23 @@ from dmg_utils import get_storage_query_device_info, get_dmg_response
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
-from led import VmdLedStatus
 from nvme_utils import set_device_faulty
+from osa_utils import OSAUtils
 
 
-class NvmeFaultReintegrate(VmdLedStatus):
+class NvmeFaultReintegrate(OSAUtils):
     """
     Test Class Description: This test runs
     NVME fault and reintegration test cases.
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
     def setUp(self):
         """Set up for test case."""
         super().setUp()
         self.daos_command = self.get_daos_command()
+        self.dmg = self.get_dmg_command()
+        self.dmg.hostlist = self.hostlist_servers[0]
 
     def verify_dev_led_state(self, device, dev_state="NORMAL", led_state="OFF"):
         """Verify device dev_state and led_state.
@@ -40,7 +41,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
             bool: True if the expected dev_state and led_state.
 
         """
-        return self.check_result(self.get_led_status_value(device), dev_state, led_state)
+        return self.check_result(
+            get_dmg_response(self, self.dmg.storage_led_check, ids=device), dev_state, led_state)
 
     def check_result(self, result, dev_state, led_state):
         """Check for result of storage device and led states.
@@ -54,22 +56,14 @@ class NvmeFaultReintegrate(VmdLedStatus):
             True if the expected dev_state and led_state.
 
         """
-        if "response" in result.keys():
-            for value in list(result['response']['host_storage_map'].values()):
-                if value['storage']['smd_info']['devices']:
-                    for device in value['storage']['smd_info']['devices']:
-                        if device['dev_state'] == dev_state and device['led_state'] == led_state:
-                            return True
-        elif "host_storage_map" in result.keys():
-            for value in list(result['host_storage_map'].values()):
-                if value['storage']['smd_info']['devices']:
-                    for device in value['storage']['smd_info']['devices']:
-                        if device['dev_state'] == dev_state and device['led_state'] == led_state:
-                            return True
-        else:
-            self.log.debug(
-                "Neither 'response' nor 'host_storage_map' found in dmg command json output:")
-            self.log.debug('  %s', result)
+        for value in list(result['host_storage_map'].values()):
+            if value['storage']['smd_info']['devices']:
+                for device in value['storage']['smd_info']['devices']:
+                    self.log.debug(
+                        'Verifying: dev_state (%s == %s) and led_state (%s == %s)',
+                        device['dev_state'], dev_state, device['led_state'], led_state)
+                    if device['dev_state'] == dev_state and device['led_state'] == led_state:
+                        return True
         return False
 
     def reset_fault_device(self, device):
@@ -177,7 +171,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
         check = self.check_result(
-            set_device_faulty(self, self.dmg, self.hostlist_servers[0], test_dev, self.pool),
+            set_device_faulty(self, self.dmg, self.dmg.hostlist, test_dev, self.pool),
             "EVICTED", "ON")
 
         if not check:
@@ -230,7 +224,8 @@ class NvmeFaultReintegrate(VmdLedStatus):
 
         # 9.
         self.log_step("Replace the same drive back.")
-        result = self.dmg.storage_replace_nvme(old_uuid=test_dev, new_uuid=test_dev)
+        result = get_dmg_response(
+            self, self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
@@ -253,7 +248,7 @@ class NvmeFaultReintegrate(VmdLedStatus):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=vmd,vmd_led,VmdLedStatus
+        :avocado: tags=vmd,vmd_led
         :avocado: tags=NvmeFaultReintegrate,test_nvme_fault_reintegration
         """
         self.run_ior_with_nvme_fault()
