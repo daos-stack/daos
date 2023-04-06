@@ -1,8 +1,8 @@
-# Multi user dfuse.
+# Multi-user dfuse.
 
 ## Overview
 
-Multi user dfuse is a operating mode of dfuse where it is able to provide filesystem access to
+Multi user dfuse is an operating mode of dfuse where it is able to provide filesystem access to
 multiple users/groups on a node through the same dfuse daemon.  This can be used persistently
 on a node to provide data sharing and scratch style access or on-demand by specific users to allow
 others to access their data.
@@ -16,7 +16,7 @@ users on a node.  Only root can enable this, but once set it applies to all user
 ## Recommended use-case
 
 Persistent multi user dfuse instances make sense on login nodes to allow permanent access to DAOS
-for multiple users without the overhead of spinning up per-user instances on login, it allows
+for multiple users without the overhead of spinning up per-user instances on login. it allows
 better use of kernel resources, is easier to administer and more flexibile than per-user dfuse
 processes.
 
@@ -40,21 +40,21 @@ ACLs required for pools is the 'r' permission on any pool for the user running
 dfuse.  This administrator may choose to set this when creating pools.
 
 It is possible for a user to run multi-user dfuse and to do so purely to expose data in their own
-containers to other users, in this case the user running dfuse is the same as the user owning the
+containers to other users. In this case the user running dfuse is the same as the user owning the
 containers so no modification of ACLs is required.
 
 ### Automatic setting of ACLs.
 
 For containers the 'r', 't' and 'w' permissions are required on the container for the user running
 dfuse.  When containers are created though the `daos` command using a path which resides in
-a multi-user dfuse mount then these ACLs are set automaticlaly by the `daos` command and this
-is reported to the user.  (TODO: Check this is reported).
+a multi-user dfuse mount then these ACLs are set automatically and this is reported to the user.
+(TODO: Check this is reported).
 
-If a container is created using a path not backed by multi-user dfure, for example on a per-user
-dfuse instance or where a `path` option is not provided at all then in order for
-anyone to access the container then the user will need to add this permission themselves.  This
-includes the user that owns the pool, without the dfuse users being able to access the container
-it cannot server the contents, even to the container owner.  This applies equally well to containers
+If a container is created using a path not backed by multi-user dfuse - for example, on a per-user
+dfuse instance or where a `path` option is not provided at all - then in order for
+anyone to access the container the user will need to add this permission themselves.  This
+includes the user that owns the pool. Without the dfuse users being able to access the container
+it cannot serve the contents, even to the container owner.  This applies equally well to containers
 where the Unified Namespace link is created after the container itself is created.
 
 TODO: Check this, create a container single-user, access it via multi-user and check for errors,
@@ -64,40 +64,40 @@ can 'daos cont set-acl' work on a dfuse-path in the multi-user setup?
 
 DFuse itself does not handle permissions checks regardless of options but rather provides file
 and directory ownership and permissions bits information to the kernel which then checks if user
-is entitedled to perform the requested operation.  As such once a multi-user dfuse instance is
-running then it will serve to the kernel the contents of any containers that the dfuse instance
+is entitled to perform the requested operation.  As such once a multi-user dfuse instance is
+running it will serve to the kernel the contents of any containers that the dfuse instance
 itself can access, and the kernel will then use standard Unix file/directory permissions to decide
 if operations are permitted.  It is therefore possible for users be able to access POSIX data across
 containers seamlessly where permissions is granted only at the POSIX file/directory layer.
 
-Consider the following example, in this case dfuse is configured and run in the recommended manner,
+Consider the following example: dfuse is configured to run in the recommended manner,
 with two users Anthony and Berlinda who use it to share data, yet Berlinda does not have ACL
-permissions to read Anthonys data, only POSIX permissions.
+permissions to read Anthony's data - only POSIX permissions.
 
 Example:
 
 ### Setup user to serve dfuse and create containers, mount points etc.
+```
 sudo -u dserve dmg --insecure pool create root_pool --size 1g
 sudo -u dserve daos cont create --type POSIX root_pool root_container
 sudo mkdir /crate
 sudo chown dserve.dserve /crate
+```
 
 ### Run dfuse, this should be done via systemd to be automatically mounted at boot time.
-sudo -u dserve dfuse --multi-user --foreground /crate root_pool root_container
+```sudo -u dserve dfuse --multi-user --foreground /crate root_pool root_container```
 
 ### Create a directory for anthony to own, and create a pool for him.
-sudo mkdir -m 0700 /crate/anthony
+```sudo mkdir -m 0700 /crate/anthony
 sudo chown anthony.anthony /crate/anthony
-sudo dmg --insecure pool create -u anyhony -g anthony anthony_pool --size 1g
+sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
 sudo -u dserve dmg --insecure pool update-acl anthony_pool -e "A::dserve@:r"
-
-
 sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool --type POSIX
 sudo -u anthony chmod 755 /crate/anthony
-sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"
+sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"```
 
 ### Now read the file.
-sudo -u berlinda cat /crate/anthony/my-data new-file
+```sudo -u berlinda cat /crate/anthony/my-data new-file```
 
 ## Interception library
 
@@ -109,6 +109,9 @@ overhead in opening files.  This change should be seamless to the user.
 
 ## plans?
 
-Kris has the ACL PR which can be used to enforce 
+TODO: Check this, create a container single-user, access it via multi-user and check for errors,
+can 'daos cont set-acl' work on a dfuse-path in the multi-user setup?
 
-https://github.com/daos-stack/daos/pull/11359
+
+TODO: Support for checking ACLs.
+https://github.com/daos-stack/daos/pull/11544
