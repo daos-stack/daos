@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-const recreateRegionsStr = "Remove regions (and any namespaces) by running the command with the --reset option, reboot, run the command again without --reset to recreate regions in AppDirect interleaved mode, reboot and then run the command again without --reset to create the PMem namespaces"
+const recreateRegionsStr = "Remove regions (and any namespaces) by running the reset subcommand, reboot, then run the prepare subcommand again to recreate regions in AppDirect interleaved mode, reboot and then run the prepare subcommand one more time to create the PMem namespaces"
 
 // FaultScmNotInterleaved creates a fault for the case where the PMem region is in non-interleaved
 // mode, this is unsupported.
@@ -39,7 +39,7 @@ func FaultScmPartialCapacity(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d only has partial capacity free", sockID),
-		"Creating namespaces on regions with partial free-capacity is unsupported, remove namespaces by running the command with --reset and then without --reset, no reboot should be required")
+		"Creating namespaces on regions with partial free-capacity is unsupported, remove namespaces by running the reset subcommand then run the prepare subcommand to recreate namespaces. No reboot is required between commands.")
 }
 
 // FaultScmUnknownMemoryMode creates a Fault for the case where the PMem region has an unsupported

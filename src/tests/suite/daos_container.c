@@ -3366,9 +3366,7 @@ co_evict_hdls(void **state)
 	uuid_t		 uuid;
 	daos_handle_t	 coh0;
 	daos_handle_t	 coh1;
-#if 0
 	daos_handle_t	 coh2;
-#endif
 	daos_cont_info_t info;
 	int		 rc;
 
@@ -3423,11 +3421,6 @@ co_evict_hdls(void **state)
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
 
-#if 0
-	/*
-	 * Temporarily commented out due to what appears to be an nhandles bug
-	 * that happens when closing a batch of two or more handles.
-	 */
 	print_message("SUBTEST: EVICT my own RO and RW handles; shall succeed\n");
 	print_message(" performing an RO open\n");
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
@@ -3450,7 +3443,6 @@ co_evict_hdls(void **state)
 	print_message(" closing the RW|EVICT handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
-#endif
 
 	print_message("SUBTEST: RO|EVICT_ALL and RW|EVICT_ALL are not supported\n");
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT_ALL, &coh0, NULL,
@@ -3487,11 +3479,6 @@ co_evict_hdls(void **state)
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
 
-#if 0
-	/*
-	 * Temporarily commented out due to what appears to be an nhandles bug
-	 * that happens when closing a batch of two or more handles.
-	 */
 	print_message("SUBTEST: EVICT_ALL my own RO and RW handles; shall succeed\n");
 	print_message(" performing an RO open\n");
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
@@ -3515,7 +3502,6 @@ co_evict_hdls(void **state)
 	print_message(" closing the EX|EVICT_ALL handle\n");
 	rc = daos_cont_close(coh0, NULL);
 	assert_rc_equal(rc, 0);
-#endif
 
 	print_message("destroying container '%s'\n", label);
 	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);

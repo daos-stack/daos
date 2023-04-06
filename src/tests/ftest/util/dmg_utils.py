@@ -265,7 +265,7 @@ class DmgCommand(DmgCommandBase):
             force (bool, optional): Force setting device state to FAULTY.
                 Defaults to True.
         """
-        return self._get_result(
+        return self._get_json_result(
             ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
 
     def storage_query_list_devices(self, rank=None, health=False):

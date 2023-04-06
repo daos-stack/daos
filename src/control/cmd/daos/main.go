@@ -54,8 +54,7 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	status := 0
 	var errStr *string
 	if cmdErr != nil {
-		errStr = new(string)
-		*errStr = cmdErr.Error()
+		errStr = func() *string { str := cmdErr.Error(); return &str }()
 		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {

@@ -22,6 +22,7 @@ controllerd
 ether
 expport
 coo
+otype
 spawnve
 inflight
 warmup
