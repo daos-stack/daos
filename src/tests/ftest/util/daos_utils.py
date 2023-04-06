@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +8,7 @@ import re
 import traceback
 
 from daos_utils_base import DaosCommandBase
+from general_utils import list_to_str
 
 
 class DaosCommand(DaosCommandBase):
@@ -367,7 +368,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container set-prop command fails.
 
         """
-        prop_value = ":".join([prop, value])
+        prop_value = list_to_str([prop, value], ":")
         return self._get_result(
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
@@ -507,7 +508,7 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        props = ','.join(properties) if properties else None
+        props = list_to_str(properties, ',') if properties else None
 
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)

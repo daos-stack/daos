@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -174,8 +174,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	for (i = 0; i < args_cnt; i++) {
-		daos_cont_status_clear(args[i]->coh, NULL);
-
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
 	}
@@ -587,9 +585,6 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	int	rc;
 	int	i;
 
-	rc = daos_cont_status_clear(arg->coh, NULL);
-	assert_rc_equal(rc, 0);
-
 	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
@@ -835,13 +830,15 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 
 	dfs_attr_t attr = {};
 
-	attr.da_props = daos_prop_alloc(1);
+	attr.da_props = daos_prop_alloc(3);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
-
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
-			     &dfs_mt);
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[2].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[2].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
 	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -928,15 +925,24 @@ int
 rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 		    struct test_pool *pool)
 {
-	int rc;
+	daos_prop_t	*props = NULL;
+	int		rc;
 
-	/* create/connect another pool */
-	rc = test_setup((void **)new_arg, flag, old_arg->multi_rank,
-			REBUILD_SUBTEST_POOL_SIZE, 0, pool);
+	rc = test_setup((void **)new_arg, flag < SETUP_POOL_CONNECT ? flag : SETUP_POOL_CONNECT,
+			old_arg->multi_rank, REBUILD_SUBTEST_POOL_SIZE, 0, pool);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return rc;
 	}
+
+	/* sustain 2 failure here */
+	props = daos_prop_alloc(1);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	while (!rc && (*new_arg)->setup_state != flag)
+		rc = test_setup_next_step((void **)new_arg, NULL, NULL, props);
+	assert_int_equal(rc, 0);
+	daos_prop_free(props);
 
 	(*new_arg)->index = old_arg->index;
 	return 0;
@@ -1069,18 +1075,32 @@ restore_group_state(void **state)
 }
 
 int
-rebuild_sub_setup(void **state)
+rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf)
 {
 	test_arg_t	*arg;
+	daos_prop_t	*props = NULL;
 	int		rc;
 
 	save_group_state(state);
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SUBTEST_POOL_SIZE, 0, NULL);
-	if (rc)
-		return rc;
+	rc = test_setup(state, SETUP_POOL_CONNECT, true,
+			pool_size, node_nr, NULL);
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool, probably due"
+			      " to not enough ranks %d\n", rc);
+		return 0;
+	}
 
 	arg = *state;
+	props = daos_prop_alloc(1);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[0].dpe_val = rf;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
+	assert_int_equal(rc, 0);
+	daos_prop_free(props);
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
 		arg->obj_class = dt_obj_class;
 	else
@@ -1092,22 +1112,43 @@ rebuild_sub_setup(void **state)
 int
 rebuild_small_sub_setup(void **state)
 {
-	test_arg_t	*arg;
-	int rc;
+	return rebuild_sub_setup_common(state, REBUILD_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF2);
+}
 
-	save_group_state(state);
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_POOL_SIZE, 0, NULL);
-	if (rc)
-		return rc;
+int
+rebuild_small_sub_rf1_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF1);
+}
 
-	arg = *state;
-	if (dt_obj_class != DAOS_OC_UNKNOWN)
-		arg->obj_class = dt_obj_class;
-	else
-		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+int
+rebuild_small_sub_rf0_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF0);
+}
 
-	return 0;
+int
+rebuild_sub_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF2);
+}
+
+int
+rebuild_sub_rf1_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF1);
+}
+
+int
+rebuild_sub_rf0_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
+					DAOS_PROP_CO_REDUN_RF0);
 }
 
 int

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,8 +42,8 @@ rsvc_class(enum ds_rsvc_class_id id)
 	return rsvc_classes[id];
 }
 
-static char *
-state_str(enum ds_rsvc_state state)
+char *
+ds_rsvc_state_str(enum ds_rsvc_state state)
 {
 	switch (state) {
 	case DS_RSVC_UP_EMPTY:
@@ -387,7 +387,7 @@ static void
 change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 {
 	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name,
-		svc->s_term, state_str(svc->s_state), state_str(state));
+		svc->s_term, ds_rsvc_state_str(svc->s_state), ds_rsvc_state_str(state));
 	svc->s_state = state;
 	ABT_cond_broadcast(svc->s_state_cv);
 }
@@ -1056,6 +1056,18 @@ out_stop:
 				  NULL, true /* destroy */);
 	}
 	return rc;
+}
+
+enum ds_rsvc_state
+ds_rsvc_get_state(struct ds_rsvc *svc)
+{
+	return svc->s_state;
+}
+
+void
+ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
+{
+	change_state(svc, state);
 }
 
 int

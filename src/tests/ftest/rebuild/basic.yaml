@@ -15,6 +15,7 @@ pool:
   scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30
+  properties: rf:2
 container:
   akey_size: 5
   dkey_size: 5
@@ -36,6 +37,7 @@ container:
     ten_records:
       record_qty: 10
   debug: True
+  properties: rf:2
 testparams:
   ranks: !mux
     rank1:

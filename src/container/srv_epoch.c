@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -506,14 +506,18 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 		goto out_lock;
 	}
 
-	rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
-				      snapshots, snap_count);
-	if (rc != 0)
-		D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-
-	D_FREE(snapshots);
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
+	if (rc == 0) {
+		rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
+					      snapshots, snap_count);
+		if (rc != 0)
+			D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
+				DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+	}
+
+	if (snapshots != NULL)
+		D_FREE(snapshots);
+
 }

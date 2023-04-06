@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,6 +132,9 @@ int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		      const d_rank_list_t *ranks, d_rank_list_t *excluded,
 		      bool destroy);
+char *ds_rsvc_state_str(enum ds_rsvc_state state);
+enum ds_rsvc_state ds_rsvc_get_state(struct ds_rsvc *svc);
+void ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state);
 int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
 			   size_t size);
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,

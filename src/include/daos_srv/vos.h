@@ -194,15 +194,13 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  * Establish the indexed committed DTX table in DRAM.
  *
  * \param coh	[IN]		Container open handle.
- * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
- *				contains committed DTX entries to be handled.
  *
  * \return	Zero on success, need further re-index.
  *		Positive, re-index is completed.
  *		Negative value if error.
  */
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+vos_dtx_cmt_reindex(daos_handle_t coh);
 
 /**
  * Cleanup local DTX when local modification failed.

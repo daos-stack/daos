@@ -702,6 +702,9 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
+    RESULTS_DIRS = (
+        "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
+
     def __init__(self, name, mode):
         """Initialize a Launch object.
 
@@ -2326,6 +2329,9 @@ class Launch():
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
         ]
+        # Predefine the sub directories used to collect the files process()/_archive_files()
+        for directory in self.RESULTS_DIRS:
+            commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
@@ -2473,7 +2479,7 @@ class Launch():
             remote_files = OrderedDict()
             remote_files["local configuration files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
                 "depth": 1,
@@ -2481,7 +2487,7 @@ class Launch():
             }
             remote_files["remote configuration files"] = {
                 "source": os.path.join(os.sep, "etc", "daos"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "daos_*.yml",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2489,7 +2495,7 @@ class Launch():
             }
             remote_files["daos log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[1]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2497,7 +2503,7 @@ class Launch():
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[2]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 2,
@@ -2505,7 +2511,7 @@ class Launch():
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[3]),
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2513,7 +2519,7 @@ class Launch():
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
-                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[4]),
                 "pattern": "valgrind*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2522,7 +2528,8 @@ class Launch():
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
-                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
                     "pattern": core_files[hosts]["pattern"],
                     "hosts": NodeSet(hosts),
                     "depth": 1,
@@ -3003,7 +3010,7 @@ class Launch():
             tmp_copy_dir = os.path.join(source, tmp_copy_dir)
             sudo_command = ""
 
-        # Create a temporary remote directory
+        # Create a temporary remote directory - should already exist, see _setup_test_directory()
         command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
@@ -3064,14 +3071,22 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+            logger.debug(
+                "Skipping checking core file detection for %s as it is not supported on this OS",
+                str(test))
+            return 0
+
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
+
         if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256
+
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):

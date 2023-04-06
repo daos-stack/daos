@@ -1790,7 +1790,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 cont->c_uuid, prop);
+				 cont->c_uuid, prop, true);
 	daos_prop_free(prop);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
@@ -2781,35 +2781,6 @@ capas_can_set_prop(struct cont *cont, uint64_t sec_capas,
 	return true;
 }
 
-/* pre-processing for DAOS_PROP_CO_STATUS, set the pool map version */
-static bool
-set_prop_co_status_pre_process(struct ds_pool *pool, struct cont *cont,
-			       daos_prop_t *prop_in)
-{
-	struct daos_prop_entry	*entry;
-	struct daos_co_status	 co_status = { 0 };
-	bool			 clear_stat;
-
-	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_STATUS);
-	if (entry == NULL)
-		return false;
-
-	daos_prop_val_2_co_status(entry->dpe_val, &co_status);
-	D_ASSERT(co_status.dcs_status == DAOS_PROP_CO_HEALTHY ||
-		 co_status.dcs_status == DAOS_PROP_CO_UNCLEAN);
-	clear_stat = (co_status.dcs_status == DAOS_PROP_CO_HEALTHY);
-	co_status.dcs_pm_ver = ds_pool_get_version(pool);
-	co_status.dcs_flags = 0;
-	entry->dpe_val = daos_prop_co_status_2_val(&co_status);
-	D_DEBUG(DB_MD, DF_CONT" updating co_status - status %s, pm_ver %d.\n",
-		DP_CONT(pool->sp_uuid, cont->c_uuid),
-		co_status.dcs_status == DAOS_PROP_CO_HEALTHY ?
-		"DAOS_PROP_CO_HEALTHY" : "DAOS_PROP_CO_UNCLEAN",
-		co_status.dcs_pm_ver);
-
-	return clear_stat;
-}
-
 /* Sanity check set-prop label, and update cs_uuids KVS */
 static int
 check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
@@ -2918,7 +2889,6 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	int			 rc;
 	daos_prop_t		*prop_old = NULL;
 	daos_prop_t		*prop_iv = NULL;
-	bool			 clear_stat;
 	struct daos_prop_entry	*entry;
 
 	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_GLOBAL_VERSION);
@@ -2941,7 +2911,6 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(prop_old != NULL);
-	clear_stat = set_prop_co_status_pre_process(pool, cont, prop_in);
 	prop_iv = daos_prop_merge(prop_old, prop_in);
 	if (prop_iv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -2954,22 +2923,6 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	rc = cont_prop_write(tx, &cont->c_prop, prop_in, false);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	/* Update prop IV with merged prop */
-	rc = cont_iv_prop_update(pool->sp_iv_ns, cont->c_uuid, prop_iv);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to update prop IV for cont, "
-			DF_RC"\n", DP_UUID(cont->c_uuid), DP_RC(rc));
-		goto out;
-	}
-
-	if (clear_stat) {
-		/* to notify each tgt server to do ds_cont_rf_check() */
-		rc = ds_pool_iv_map_update(pool, NULL, 0);
-		if (rc)
-			D_ERROR(DF_UUID": ds_pool_iv_map_update failed, "
-				DF_RC"\n", DP_UUID(cont->c_uuid), DP_RC(rc));
-	}
 
 out:
 	daos_prop_free(prop_old);
@@ -3069,7 +3022,7 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_UUID(in->caui_op.ci_hdl));
 
 	acl_in = in->caui_acl;
-	if (daos_acl_cont_validate(acl_in) != 0)
+	if (daos_acl_validate(acl_in) != 0)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = get_acl(tx, cont, &acl);
@@ -3619,7 +3572,7 @@ out:
 			}
 			ap->cont_upgraded_nrs++;
 			rc = cont_iv_prop_update(ap->svc->cs_pool->sp_iv_ns,
-						 cont_uuid, prop);
+						 cont_uuid, prop, true);
 			if (rc)
 				D_ERROR(DF_UUID": failed to update prop IV for cont, "
 					DF_RC"\n", DP_UUID(cont_uuid), DP_RC(rc));
@@ -3673,6 +3626,156 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 
 out_svc:
 	if (need_put_leader)
+		cont_svc_put_leader(svc);
+
+	return rc;
+}
+
+int
+ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
+{
+	struct cont_svc		*svc = NULL;
+	struct cont		*cont = NULL;
+	struct ds_pool		*pool;
+	daos_prop_t		*prop = NULL;
+	daos_prop_t		*stat_prop = NULL;
+	struct daos_prop_entry	*entry;
+	struct daos_co_status	stat = { 0 };
+	int			rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = cont_lookup(tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
+			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	pool = svc->cs_pool;
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to read prop for cont, rc=%d\n",
+			DP_CONT(pool_uuid, cont_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	D_ASSERT(entry != NULL);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	if (stat.dcs_status == DAOS_PROP_CO_UNCLEAN) {
+		D_DEBUG(DB_MD, DF_CONT" %u status %u is unhealthy.\n",
+			DP_CONT(pool_uuid, cont_uuid), stat.dcs_pm_ver, stat.dcs_status);
+		D_GOTO(out, rc = -DER_RF);
+	}
+
+	rc = ds_pool_rf_verify(pool, stat.dcs_pm_ver, daos_cont_prop2redunfac(prop));
+	if (rc != -DER_RF) {
+		D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_CONT", verify" DF_RC"\n",
+			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DB_MD, DF_CONT" ver %u set unhealthy.\n",
+		DP_CONT(pool_uuid, cont_uuid), ds_pool_get_version(pool));
+	stat_prop = daos_prop_alloc(1);
+	if (stat_prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	stat.dcs_pm_ver = ds_pool_get_version(pool);
+	stat.dcs_status = DAOS_PROP_CO_UNCLEAN;
+
+	/* Update healthy status RDB property */
+	stat_prop->dpp_entries[0].dpe_val = daos_prop_co_status_2_val(&stat);
+	stat_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
+	rc = cont_prop_write(tx, &cont->c_prop, stat_prop, false);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Update prop IV with merged prop */
+	entry->dpe_val = daos_prop_co_status_2_val(&stat);
+	rc = cont_iv_prop_update(pool->sp_iv_ns, cont_uuid, prop, false);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to update prop IV for cont, "
+			DF_RC"\n", DP_UUID(cont_uuid), DP_RC(rc));
+		goto out;
+	}
+out:
+	if (cont != NULL)
+		cont_put(cont);
+	if (prop != NULL)
+		daos_prop_free(prop);
+	if (stat_prop != NULL)
+		daos_prop_free(stat_prop);
+	if (svc != NULL)
+		cont_svc_put_leader(svc);
+
+	D_DEBUG(DB_MD, "check pool/cont: "DF_CONT": "DF_RC"\n",
+		DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+
+	return rc;
+}
+
+struct cont_rdb_iter_arg {
+	struct cont_svc	*svc;
+	struct rdb_tx	*tx;
+	cont_rdb_iter_cb_t iter_cb;
+	void		*cb_arg;
+};
+
+static int
+cont_rdb_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct cont_rdb_iter_arg *args = varg;
+	uuid_t			 cont_uuid;
+	int			 rc;
+
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	rc = args->iter_cb(args->svc->cs_pool->sp_uuid, cont_uuid, args->tx, args->cb_arg);
+
+	return rc;
+}
+
+int
+ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
+{
+	struct cont_rdb_iter_arg	args = { 0 };
+	struct cont_svc			*svc = NULL;
+	struct rdb_tx			tx;
+	int				rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	args.svc = svc;
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	args.tx = &tx;
+	args.cb_arg = cb_arg;
+	args.iter_cb = iter_cb;
+	ABT_rwlock_wrlock(svc->cs_lock);
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, cont_rdb_iter_cb, &args);
+	ABT_rwlock_unlock(svc->cs_lock);
+	if (rc < 0) {
+		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(pool_uuid), rc);
+		D_GOTO(tx_end, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc)
+		D_ERROR("rdb tx commit error: %d\n", rc);
+tx_end:
+	rdb_tx_end(&tx);
+
+out_svc:
+	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(pool_uuid), rc);
+	if (svc != NULL)
 		cont_svc_put_leader(svc);
 
 	return rc;
@@ -3785,6 +3888,53 @@ out:
 	return rc;
 }
 
+void
+ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct rdb_tx	tx;
+	struct cont	*cont = NULL;
+	daos_prop_t	*prop = NULL;
+	int		rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to start rdb tx: %d\n",
+			DP_UUID(svc->cs_pool_uuid), rc);
+		return;
+	}
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed to look container: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	if (rc)
+		D_ERROR(DF_CONT": prop read failed:"DF_RC"\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), DP_RC(rc));
+	cont_put(cont);
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	if (rc == 0) {
+		/* Update prop IV with merged prop */
+		rc = cont_iv_prop_update(svc->cs_pool->sp_iv_ns, cont_uuid, prop, true);
+		if (rc)
+			D_ERROR(DF_CONT": failed to update prop IV for cont, "
+				DF_RC"\n", DP_CONT(svc->cs_pool_uuid, cont_uuid),
+				DP_RC(rc));
+	}
+
+	if (prop != NULL)
+		daos_prop_free(prop);
+}
+
 /*
  * Look up the container, or if the RPC does not need this, call the final
  * handler.
@@ -3864,8 +4014,12 @@ out_lock:
 	rdb_tx_end(&tx);
 out:
 	/* Propagate new snapshot list by IV */
-	if (rc == 0 && (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
-		ds_cont_update_snap_iv(svc, in->ci_uuid);
+	if (rc == 0) {
+		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
+			ds_cont_update_snap_iv(svc, in->ci_uuid);
+		else if (opc == CONT_PROP_SET)
+			ds_cont_prop_iv_update(svc, in->ci_uuid);
+	}
 
 	return rc;
 }

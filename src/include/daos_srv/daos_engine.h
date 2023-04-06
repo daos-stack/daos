@@ -659,13 +659,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {

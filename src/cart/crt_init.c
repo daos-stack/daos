@@ -19,6 +19,19 @@ static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
 static void
+apply_if_not_set(const char *env_name, const char *new_value)
+{
+	char *old_val;
+
+	old_val = getenv(env_name);
+
+	if (old_val == NULL) {
+		D_INFO("%s not set, setting to %s\n", env_name, new_value);
+		setenv(env_name, new_value, true);
+	}
+}
+
+static void
 dump_envariables(void)
 {
 	int	i;
@@ -500,13 +513,12 @@ do_init:
 
 		if (prov == CRT_NA_OFI_VERBS_RXM ||
 		    prov == CRT_NA_OFI_TCP_RXM) {
-			char *srx_env;
 
-			srx_env = getenv("FI_OFI_RXM_USE_SRX");
-			if (srx_env == NULL) {
-				D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
-				setenv("FI_OFI_RXM_USE_SRX", "1", true);
-			}
+			apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
+
+			/* Only apply on the server side */
+			if (prov == CRT_NA_OFI_TCP_RXM && crt_is_service())
+				apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
 		}
 
 		/* Print notice that "ofi+psm2" will be deprecated*/

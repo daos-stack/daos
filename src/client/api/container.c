@@ -378,7 +378,7 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 	daos_prop_t	*prop;
 	int		rc;
 
-	if (daos_acl_cont_validate(acl) != 0) {
+	if (daos_acl_validate(acl) != 0) {
 		D_ERROR("invalid acl parameter\n");
 		return -DER_INVAL;
 	}

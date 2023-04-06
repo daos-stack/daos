@@ -66,14 +66,14 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	rc = dbtree_iter_delete(ih, NULL);
-	if (rc != 0)
-		return rc;
-
 	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
 		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
 		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
+
+	rc = dbtree_iter_delete(ih, NULL);
+	if (rc != 0)
+		return rc;
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,

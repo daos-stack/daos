@@ -41,7 +41,7 @@ enum dc_tx_status {
 
 /*
  * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
- *	classified and stored separatedly (but adjacent each other). The Read
+ *	classified and stored separately (but adjacent each other). The Read
  *	ones are in front of the write ones. Such layout will simplify server
  *	side CPD RPC processing.
  *
@@ -78,6 +78,7 @@ struct dc_tx {
 				 tx_retry:1, /** Retry the commit RPC. */
 				 tx_set_resend:1, /** Set 'resend' flag. */
 				 tx_for_convert:1,
+				 tx_renew:1,
 				 tx_has_cond:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -923,17 +924,23 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
-	if (unlikely(rc == -DER_TX_ID_REUSED)) {
-		if (tx->tx_retry)
+	if (unlikely(rc == -DER_TX_ID_REUSED ||
+		     (task->dt_result == -DER_EP_OLD && !tx->tx_has_cond))) {
+		struct dtx_id	old_dti;
+
+		if (rc == -DER_TX_ID_REUSED && tx->tx_retry)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
 			D_ASSERTF(0,
 				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
 				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
 
-		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
-		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_copy(&old_dti, &tx->tx_id);
 		daos_dti_gen(&tx->tx_id, false);
 		tx->tx_status = TX_FAILED;
+		tx->tx_renew = 1;
+		D_DEBUG(DB_IO, "refresh CPD DTX ID (err %d) from "DF_DTI" to "DF_DTI"\n",
+			rc, DP_DTI(&old_dti), DP_DTI(&tx->tx_id));
+
 		D_GOTO(out, rc = -DER_TX_RESTART);
 	}
 
@@ -1865,7 +1872,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER;
+	if (tx->tx_set_resend && !tx->tx_renew)
+		oci->oci_flags |= ORF_RESEND;
+	tx->tx_renew = 0;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

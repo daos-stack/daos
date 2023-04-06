@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,7 +19,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, convert_list, get_log_file
+    run_pcmd, list_to_str, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
@@ -944,7 +944,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.namespace = macsio_params
             macsio.get_params(self)
             macsio.daos_pool = pool.uuid
-            macsio.daos_svcl = convert_list(pool.svc_ranks)
+            macsio.daos_svcl = list_to_str(pool.svc_ranks)
             macsio.daos_cont = self.container[-1].uuid
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, o_type, nodesperjob * ppn, nodesperjob, ppn)

@@ -822,12 +822,16 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	test_rebuild_wait(&arg, 1);
 
 	print_message("lookup 100 dkeys\n");
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 100 && oclass != OC_SX; i++) {
 		char buffer[32];
 
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+		/* SX only has one replica, and reintegration will delete the "stale"
+		 * data anyway, so it may lose data here, so do not need verify data
+		 * for SX object. Incremental reintegration might fix this.
+		 */
 		assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
@@ -888,6 +892,34 @@ rebuild_large_object(void **state)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+}
+
+int
+rebuild_small_pool_n4_rf1_setup(void **state)
+{
+	test_arg_t	*arg;
+	int rc;
+
+	save_group_state(state);
+	rc = rebuild_sub_setup_common(state, REBUILD_SMALL_POOL_SIZE, 4, DAOS_PROP_CO_REDUN_RF1);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, 4, NULL);
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
@@ -1219,7 +1251,9 @@ rebuild_with_dfs_open_create_punch(void **state)
 
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
+
 	reintegrate_single_pool_rank_no_disconnect(arg, rank);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);
@@ -1233,7 +1267,6 @@ rebuild_with_dfs_open_create_punch(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	daos_cont_status_clear(co_hdl, NULL);
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -1335,25 +1368,25 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
-	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	 rebuild_sx_object, rebuild_small_sub_rf0_setup, test_teardown},
 	{"REBUILD13: rebuild xsf object",
 	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD14: rebuild large stripe object",
-	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_large_object, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD16: rebuild with full stripe",
-	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_full_shards, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD17: rebuild with punch recxs",
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD18: rebuild with multiple group",
-	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	 rebuild_multiple_group, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD19: rebuild with large offset",
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD20: rebuild with large key",
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
-	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD22: rebuild lot of objects with failure",
 	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
 };

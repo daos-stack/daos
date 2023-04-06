@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -250,8 +250,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	vmd_led_period = env ? atoi(env) : 0;
 	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	if (numa_node > 0)
+	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;
+	} else if (numa_node == -1) {
+		D_WARN("DMA buffer will be allocated from any NUMA node available\n");
+		bio_numa_node = SPDK_ENV_SOCKET_ID_ANY;
+	}
 
 	nvme_glb.bd_mem_size = mem_size;
 	nvme_glb.bd_nvme_conf = nvme_conf;

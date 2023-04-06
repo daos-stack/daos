@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -469,7 +469,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
@@ -773,24 +773,48 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def convert_list(value, separator=","):
-    """Convert a list into a separator-separated string of its items.
-
-    Examples:
-        convert_list([1,2,3])        -> '1,2,3'
-        convert_list([1,2,3], " ")   -> '1 2 3'
-        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+def list_to_str(value, joiner=","):
+    """Convert a list to a string by joining its items.
 
     Args:
-        value (list): list to convert into a string
-        separator (str, optional): list item separator. Defaults to ",".
+        value (list): list to convert to a string
+        joiner (str, optional): _description_. Defaults to ",".
 
     Returns:
-        str: a single string containing all the list items separated by the
-            separator.
+        str: a string of each list entry joined by the joiner string
 
     """
-    return separator.join([str(item) for item in value])
+    return joiner.join(map(str, value))
+
+
+def dict_to_list(value, joiner="="):
+    """Convert a dictionary to a list of joined key and value pairs.
+
+    Args:
+        value (dict): dictionary to convert into a list
+        joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        list: a list of joined dictionary key and value strings
+
+    """
+    return [list_to_str(items, joiner) for items in value.items()]
+
+
+def dict_to_str(value, joiner=", ", items_joiner="="):
+    """Convert a dictionary to a string of joined key and value joined pairs.
+
+    Args:
+        value (dict): dictionary to convert into a string
+        joiner (str, optional): string to use to join dict_to_list() item. Defaults to ", ".
+        items_joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        str: a string of each dictionary key and value pair joined by the items_joiner string all
+            joined by the joiner string
+
+    """
+    return list_to_str(dict_to_list(value, items_joiner), joiner)
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
@@ -1073,7 +1097,7 @@ def convert_string(item, separator=","):
 
     """
     if isinstance(item, (list, tuple, set)):
-        item = convert_list(item, separator)
+        item = list_to_str(item, separator)
     elif not isinstance(item, str):
         item = str(item)
     return item

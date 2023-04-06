@@ -90,7 +90,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(13);
+	props = daos_prop_alloc(14);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -107,6 +107,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_STATUS;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -830,7 +831,7 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 
 static int
 cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
-		 struct ds_cont_child **cont_out)
+		 bool *started, struct ds_cont_child **cont_out)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child	*cont_child;
@@ -873,6 +874,8 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
 		ds_cont_child_get(cont_child);
+		if (started)
+			*started = true;
 	}
 
 	if (!rc && cont_out != NULL) {
@@ -893,7 +896,7 @@ cont_child_start_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct ds_pool_child	*pool_child = data;
 
-	return cont_child_start(pool_child, entry->ie_couuid, NULL);
+	return cont_child_start(pool_child, entry->ie_couuid, NULL, NULL);
 }
 
 int
@@ -1266,7 +1269,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
  **/
 static int
 cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
-			struct ds_cont_child **cont_out)
+			bool *started, struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child	*pool_child;
 	int rc;
@@ -1278,7 +1281,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 		return -DER_NO_HDL;
 	}
 
-	rc = cont_child_start(pool_child, cont_uuid, cont_out);
+	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0) {
 			D_ASSERT(*cont_out != NULL);
@@ -1293,7 +1296,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
-		rc = cont_child_start(pool_child, cont_uuid, cont_out);
+		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
 			(*cont_out)->sc_status_pm_ver = pm_ver;
 		} else {
@@ -1372,7 +1375,7 @@ ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 	int rc;
 
 	/* status_pm_ver has no sense for rebuild container */
-	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, cont);
+	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, NULL, cont);
 	if (rc == 1)
 		rc = 0;
 
@@ -1382,7 +1385,7 @@ ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 static int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t flags, uint64_t sec_capas, uint32_t status_pm_ver,
-		   struct ds_cont_hdl **cont_hdl)
+		   bool *started, struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child	*cont = NULL;
@@ -1426,7 +1429,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	/* cont_uuid is NULL when open rebuild global cont handle */
 	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		rc = cont_child_create_start(pool_uuid, cont_uuid,
-					     status_pm_ver, &cont);
+					     status_pm_ver, started, &cont);
 		if (rc < 0)
 			D_GOTO(err_hdl, rc);
 
@@ -1566,6 +1569,7 @@ struct cont_tgt_open_arg {
 	uuid_t		pool_uuid;
 	uuid_t		cont_uuid;
 	uuid_t		cont_hdl_uuid;
+	bool		cont_started;
 	uint64_t	flags;
 	uint64_t	sec_capas;
 	uint32_t	status_pm_ver;
@@ -1582,7 +1586,7 @@ cont_open_one(void *vin)
 
 	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
 				  arg->cont_uuid, arg->flags, arg->sec_capas,
-				  arg->status_pm_ver, NULL);
+				  arg->status_pm_ver, &arg->cont_started, NULL);
 }
 
 int
@@ -1660,14 +1664,17 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
 		D_DEBUG(DB_MD, DF_CONT": closing (%d): hdl="DF_UUID"\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid,
-				cont_child->sc_uuid),
+			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
 			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
 			dtx_cont_close(cont_child);
+
+		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
+			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
@@ -2412,226 +2419,54 @@ out:
 		cont_ec_eph_destroy(ec_eph);
 }
 
-struct cont_rf_check_arg {
-	uuid_t			 crc_pool_uuid;
-	ABT_eventual		 crc_eventual;
-};
-
-struct cont_set_arg {
-	uuid_t			csa_pool_uuid;
-	uuid_t			csa_cont_uuid;
-	uint32_t		csa_status_pm_ver;
-	bool			csa_rw_disable;
+struct cont_prop_set_arg {
+	uuid_t	cpa_cont_uuid;
+	uuid_t	cpa_pool_uuid;
+	daos_prop_t *cpa_prop;
 };
 
 static int
-cont_rw_capa_set(void *data)
+cont_child_prop_update(void *data)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
-	struct cont_set_arg	*arg = data;
+	struct cont_prop_set_arg *arg = data;
+	struct daos_prop_entry	*iv_entry;
 	struct ds_cont_child	*cont_child;
 	int			 rc = 0;
 
-	rc = cont_child_lookup(tls->dt_cont_cache, arg->csa_cont_uuid,
-			       arg->csa_pool_uuid, false /* create */,
+	rc = cont_child_lookup(tls->dt_cont_cache, arg->cpa_cont_uuid,
+			       arg->cpa_pool_uuid, false /* create */,
 			       &cont_child);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
 			D_ERROR(DF_CONT" cont_child_lookup failed, "DF_RC"\n",
-				DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
 				DP_RC(rc));
 		return rc;
 	}
 	D_ASSERT(cont_child != NULL);
+	daos_props_2cont_props(arg->cpa_prop, &cont_child->sc_props);
 
-	cont_child->sc_rw_disabled = arg->csa_rw_disable;
-	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_DEBUG(DB_IO, DF_CONT" read/write permission %s.\n",
-			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-			cont_child->sc_rw_disabled ? "disabled" : "enabled");
+	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
+	if (iv_entry != NULL) {
+		struct daos_co_status co_stat = { 0 };
 
-	ds_cont_child_put(cont_child);
-	return rc;
-}
-
-static int
-cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
-{
-	struct cont_set_arg		rw_arg;
-	int				rc = 0;
-
-	rc = ds_pool_rf_verify(ds_pool, cont_child->sc_status_pm_ver,
-			       cont_child->sc_props.dcp_redun_fac);
-	if (rc != 0 && rc != -DER_RF)
-		goto out;
-
-	rw_arg.csa_rw_disable = (rc == -DER_RF);
-	if (rc == -DER_RF)
-		D_ERROR(DF_CONT": RF broken, last_ver %d, rf %d, "DF_RC"\n",
-			DP_CONT(cont_child->sc_pool_uuid, cont_child->sc_uuid),
-			cont_child->sc_status_pm_ver, cont_child->sc_props.dcp_redun_fac,
-			DP_RC(rc));
-	if (rw_arg.csa_rw_disable == cont_child->sc_rw_disabled)
-		D_GOTO(out, rc = 0);
-
-	uuid_copy(rw_arg.csa_cont_uuid, cont_child->sc_uuid);
-	uuid_copy(rw_arg.csa_pool_uuid, ds_pool->sp_uuid);
-	rc = dss_task_collective(cont_rw_capa_set, &rw_arg, 0);
-	if (rc)
-		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
-			DP_RC(rc));
-
-out:
-	return rc;
-}
-
-static void
-cont_rf_check_ult(void *data)
-{
-	struct cont_rf_check_arg	*arg = data;
-	struct ds_pool			*ds_pool;
-	struct ds_pool_child		*pool_child;
-	struct ds_cont_child		*cont_child;
-	int				 rc = 0;
-
-	pool_child = ds_pool_child_lookup(arg->crc_pool_uuid);
-	D_ASSERTF(pool_child != NULL, DF_UUID" : failed to find pool child\n",
-		 DP_UUID(arg->crc_pool_uuid));
-
-	ds_pool = pool_child->spc_pool;
-	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link) {
-		if (cont_child->sc_stopping)
-			continue;
-		rc = cont_rf_check(ds_pool, cont_child);
-		if (rc) {
-			D_DEBUG(DB_TRACE, DF_CONT" cont_rf_check failed, "
-				DF_RC"\n",
-				DP_CONT(ds_pool->sp_uuid, cont_child->sc_uuid),
-				DP_RC(rc));
-			break;
-		}
+		daos_prop_val_2_co_status(iv_entry->dpe_val, &co_stat);
+		if (co_stat.dcs_pm_ver < cont_child->sc_status_pm_ver)
+			goto out;
+		if (dss_get_module_info()->dmi_tgt_id == 0)
+			D_DEBUG(DB_MD, DF_CONT" statu_pm_ver %d -> %d status %u\n",
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+				cont_child->sc_status_pm_ver, co_stat.dcs_pm_ver,
+				co_stat.dcs_status);
+		cont_child->sc_status_pm_ver = co_stat.dcs_pm_ver;
+		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+			cont_child->sc_rw_disabled = 1;
+		else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+			cont_child->sc_rw_disabled = 0;
 	}
-
-	ds_pool_child_put(pool_child);
-	ABT_eventual_set(arg->crc_eventual, (void *)&rc, sizeof(rc));
-}
-
-static int
-cont_rf_check_get_tgt(uuid_t pool_uuid)
-{
-	int		*failed_tgts = NULL;
-	unsigned int	 failed_tgts_cnt;
-	bool		 alive;
-	int		 rc, i, j;
-
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &failed_tgts,
-					&failed_tgts_cnt);
-	if (rc) {
-		D_ERROR(DF_UUID "failed to get tgt_idx, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
-	}
-
-	D_ASSERTF(failed_tgts_cnt <= dss_tgt_nr,
-		  "BAD failed_tgts_cnt %d, dss_tgt_nr %d\n",
-		  failed_tgts_cnt, dss_tgt_nr);
-	if (failed_tgts_cnt == dss_tgt_nr) {
-		D_GOTO(out, rc = -DER_NONEXIST);
-	} else if (failed_tgts_cnt == 0) {
-		/* if all alive, select one random tgt */
-		rc = rand() % dss_tgt_nr;
-		goto out;
-	} else {
-		/* if partial failed, select first alive tgt */
-		for (i = 0; i < dss_tgt_nr; i++) {
-			alive = true;
-			for (j = 0; j < failed_tgts_cnt; j++) {
-				if (i == failed_tgts[j]) {
-					alive = false;
-					break;
-				}
-			}
-			if (alive) {
-				rc = i;
-				goto out;
-			}
-		}
-	}
-
-out:
-	if (failed_tgts != NULL)
-		D_FREE(failed_tgts);
-	return rc;
-}
-
-/** Check active container, if its RF value match with new pool map */
-int
-ds_cont_rf_check(uuid_t pool_uuid)
-{
-	struct cont_rf_check_arg	 check_arg;
-	int				*status;
-	int				 tgt_idx;
-	int				 rc = 0;
-
-	uuid_copy(check_arg.crc_pool_uuid, pool_uuid);
-	rc = ABT_eventual_create(sizeof(*status), &check_arg.crc_eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	/* check RF on one alive tgt's VOS main XS */
-	rc = cont_rf_check_get_tgt(pool_uuid);
-	if (rc < 0) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		goto out;
-	}
-	tgt_idx = rc;
-	rc = dss_ult_create(cont_rf_check_ult, &check_arg, DSS_XS_VOS, tgt_idx,
-			    0, NULL);
-	if (rc)
-		D_GOTO(out, rc);
-
-	rc = ABT_eventual_wait(check_arg.crc_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-	rc = *status;
-
-out:
-	ABT_eventual_free(&check_arg.crc_eventual);
-	return rc;
-}
-
-static int
-cont_status_pm_ver_set(void *data)
-{
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct cont_set_arg	*arg = data;
-	struct ds_cont_child	*cont_child;
-	int			 rc = 0;
-
-	rc = cont_child_lookup(tls->dt_cont_cache, arg->csa_cont_uuid,
-			       arg->csa_pool_uuid, false /* create */,
-			       &cont_child);
-	if (rc) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		else
-			D_ERROR(DF_CONT" cont_child_lookup failed, "DF_RC"\n",
-				DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-				DP_RC(rc));
-		return rc;
-	}
-	D_ASSERT(cont_child != NULL);
-
-	if (arg->csa_status_pm_ver <= cont_child->sc_status_pm_ver)
-		goto out;
-	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_DEBUG(DB_TRACE, DF_CONT" statu_pm_ver set from %d to %d.\n",
-			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-			cont_child->sc_status_pm_ver, arg->csa_status_pm_ver);
-	cont_child->sc_status_pm_ver = arg->csa_status_pm_ver;
 
 out:
 	ds_cont_child_put(cont_child);
@@ -2639,16 +2474,19 @@ out:
 }
 
 int
-ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
-			     uint32_t pm_ver)
+ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop)
 {
-	struct cont_set_arg	arg;
-	int			rc = 0;
+	struct cont_prop_set_arg arg;
+	int			rc;
 
-	uuid_copy(arg.csa_cont_uuid, cont_uuid);
-	uuid_copy(arg.csa_pool_uuid, pool_uuid);
-	arg.csa_status_pm_ver = pm_ver;
-	rc = dss_task_collective(cont_status_pm_ver_set, &arg, 0);
+	if (daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) == NULL)
+		return 0;
+
+	D_DEBUG(DB_MD, DF_CONT" property update.\n", DP_CONT(pool_uuid, cont_uuid));
+	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
+	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
+	arg.cpa_prop = prop;
+	rc = dss_task_collective(cont_child_prop_update, &arg, 0);
 	if (rc)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));

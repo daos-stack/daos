@@ -314,7 +314,7 @@ minutes, hours or days.
 
 dfuse-data-cache should be set to "on", or "off" if set, any other value will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open
-files will be honoured with this option enabled, files which do not set
+files will be honored with this option enabled, files which do not set
 O\_DIRECT will be cached.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,

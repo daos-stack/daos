@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -913,7 +913,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
-		D_ERROR("No space when create actvie DTX table.\n");
+		D_ERROR("No space when create active DTX table.\n");
 		return -DER_NOSPACE;
 	}
 
@@ -2309,6 +2309,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	struct vos_dtx_blob_df		*tmp;
 	uint64_t			 epoch;
 	umem_off_t			 dbd_off;
+	umem_off_t			 next = UMOFF_NULL;
 	int				 rc;
 	int				 i;
 
@@ -2368,7 +2369,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		cont_df->cd_newest_aggregated = epoch;
 	}
 
-	tmp = umem_off2ptr(umm, dbd->dbd_next);
+	next = dbd->dbd_next;
+	tmp = umem_off2ptr(umm, next);
 	if (tmp == NULL) {
 		/* The last blob for committed DTX blob. */
 		D_ASSERT(cont_df->cd_dtx_committed_tail ==
@@ -2406,7 +2408,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 		goto out;
 	}
 
-	cont_df->cd_dtx_committed_head = dbd->dbd_next;
+	cont_df->cd_dtx_committed_head = next;
 
 	rc = umem_free(umm, dbd_off);
 
@@ -2415,6 +2417,8 @@ out:
 	if (rc != 0)
 		D_ERROR("Failed to aggregate DTX blob "UMOFF_PF": "
 			DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+	else if (cont->vc_cmt_dtx_reindex_pos == dbd_off)
+		cont->vc_cmt_dtx_reindex_pos = next;
 
 	return rc;
 }
@@ -2645,14 +2649,12 @@ out:
 }
 
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
+vos_dtx_cmt_reindex(daos_handle_t coh)
 {
 	struct umem_instance		*umm;
 	struct vos_container		*cont;
-	struct vos_cont_df		*cont_df;
 	struct vos_dtx_cmt_ent		*dce;
 	struct vos_dtx_blob_df		*dbd;
-	umem_off_t			*dbd_off = hint;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
 	int				 rc = 0;
@@ -2665,13 +2667,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 		return 1;
 
 	umm = vos_cont2umm(cont);
-	cont_df = cont->vc_cont_df;
-
-	if (umoff_is_null(*dbd_off))
-		dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_head);
-	else
-		dbd = umem_off2ptr(umm, *dbd_off);
-
+	dbd = umem_off2ptr(umm, cont->vc_cmt_dtx_reindex_pos);
 	if (dbd == NULL)
 		D_GOTO(out, rc = 1);
 
@@ -2714,11 +2710,13 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 	if (dbd->dbd_count < dbd->dbd_cap || umoff_is_null(dbd->dbd_next))
 		D_GOTO(out, rc = 1);
 
-	*dbd_off = dbd->dbd_next;
+	cont->vc_cmt_dtx_reindex_pos = dbd->dbd_next;
 
 out:
-	if (rc > 0)
+	if (rc > 0) {
+		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
+	}
 
 	return rc;
 }
@@ -3058,6 +3056,7 @@ cmt:
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;
 		cont->vc_cmt_dtx_indexed = 0;
+		cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0, DTX_BTREE_ORDER, &uma,

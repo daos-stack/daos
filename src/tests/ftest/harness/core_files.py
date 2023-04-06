@@ -34,7 +34,7 @@ class HarnessCoreFilesTest(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        :avocado: tags=all
+        :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=harness,core_files
         :avocado: tags=HarnessCoreFilesTest,test_core_files

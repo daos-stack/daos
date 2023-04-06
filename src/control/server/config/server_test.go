@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -933,7 +933,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -945,7 +945,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -957,7 +957,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -969,7 +969,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
-					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
 				}
 				return nil
 			},
@@ -985,7 +985,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
-					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
 				}
 				want := storage.MustNewBdevBusRange("0x00-0x80")
 				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
@@ -1040,6 +1040,18 @@ func TestServerConfig_Parsing(t *testing.T) {
 			inTxt:       "disable_vfio: true",
 			outTxt:      "enable_vmd: true",
 			expParseErr: FaultConfigVMDSettingDuplicate,
+		},
+		"additional empty storage tier": {
+			// Add empty storage tier to engine-0 and verify it is ignored.
+			inTxt:  "    bdev_busid_range: 0x80-0x8f",
+			outTxt: "  -",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
+				}
+				return nil
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1591,7 +1603,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			},
 			expNumaSet: []int{2, 1},
 		},
-		"multi engine with first_core set; detected affinities take precedence": {
+		"multi engine with first_core set; detected affinities overridden": {
 			cfg: baseSrvCfg().
 				WithEngines(
 					engine.MockConfig().
@@ -1608,7 +1620,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 				genAffFn("ib1", 2),
 			},
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
-			expFabNumas: []int{1, 2},
+			expFabNumas: []int{0, 0},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
