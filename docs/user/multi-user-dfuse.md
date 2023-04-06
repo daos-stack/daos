@@ -57,8 +57,6 @@ includes the user that owns the pool. Without the dfuse users being able to acce
 it cannot serve the contents, even to the container owner.  This applies equally well to containers
 where the Unified Namespace link is created after the container itself is created.
 
-TODO: Check this, create a container single-user, access it via multi-user and check for errors,
-can 'daos cont set-acl' work on a dfuse-path in the multi-user setup?
 
 ## Controlling data sharing and access.
 
@@ -114,6 +112,9 @@ the interception library will itself call pool connect and container open leadin
 overhead in opening files.  This change should be seamless to the user.
 
 ## plans?
+
+TODO: Check application of ACLs is reported.
+TODO: Check daos container link is setting ACLs.
 
 TODO: Check this, create a container single-user, access it via multi-user and check for errors,
 can 'daos cont set-acl' work on a dfuse-path in the multi-user setup?
