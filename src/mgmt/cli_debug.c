@@ -15,7 +15,7 @@
 
 #include <daos/agent.h>
 #include <daos/drpc_modules.h>
-#include <daos/drpc.pb-c.h>
+#include <drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
 #include "rpc.h"

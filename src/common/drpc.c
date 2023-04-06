@@ -6,7 +6,7 @@
 
 #include <daos/common.h>
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
+#include <drpc.pb-c.h>
 #include <daos_errno.h>
 
 #include <stdlib.h>
