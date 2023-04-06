@@ -902,7 +902,7 @@ class TestContainer(TestDaosApiBase):
         if not self.daos:
             raise DaosTestError("Undefined daos command")
         return self.daos.container_set_prop(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+            pool=self.pool.identifier, cont=self.label.value, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def get_prop(self, properties=None):
