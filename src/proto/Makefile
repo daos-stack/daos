@@ -5,7 +5,8 @@
 #
 DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 
-C_HEADER_FILES = include/daos/drpc.pb-c.h\
+C_HEADER_FILES = include/internal/drpc.pb-c.h\
+		 include/internal/svc.pb-c.h\
 		 engine/srv.pb-c.h\
 		 engine/event.pb-c.h\
 		 mgmt/acl.pb-c.h\
@@ -14,7 +15,6 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 mgmt/smd.pb-c.h\
 		 bio/smd.pb-c.h\
 		 mgmt/server.pb-c.h\
-		 include/svc.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
 C_SOURCE_FILES = common/drpc.pb-c.c\
@@ -185,7 +185,7 @@ $(DAOS_ROOT)/src/mgmt/svc.pb-c.c: $(PROTO_SOURCE_DIR)/mgmt/svc.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 	rm $(basename $@).h
 
-$(DAOS_ROOT)/src/include/internal/daos/drpc.pb-c.h: $(PROTO_SOURCE_DIR)/drpc.proto
+$(DAOS_ROOT)/src/include/internal/drpc.pb-c.h: $(PROTO_SOURCE_DIR)/drpc.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 	rm $(basename $@).c
 
