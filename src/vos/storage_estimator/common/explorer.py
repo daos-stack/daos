@@ -198,10 +198,11 @@ class DFS(CommonBase):
     def set_dfs_file_meta(self, dkey):
         self._check_value_type(dkey, DKey)
         self._dkey0 = dkey
+        print(f"dkey0 = {dkey.dump()}")
 
     def set_dfs_inode(self, akey):
         self._check_value_type(akey, AKey)
-        self._dfs_inode_akey = akey
+        self._dfs_inode_akey = copy.deepcopy(akey)
 
     def get_container(self):
         container = Container(objects=self._objects)
@@ -246,9 +247,10 @@ class DFS(CommonBase):
         self._objects[oid].add_value(dkey)
 
     def _add_entry(self, oid, name, dkey_count=1):
+        akey = copy.deepcopy(self._dfs_inode_akey)
         dkey = DKey(key=name)
+        dkey.add_value(akey)
         dkey.set_count(dkey_count)
-        dkey.add_value(self._dfs_inode_akey)
 
         self._objects[oid].add_value(dkey)
 
@@ -270,10 +272,11 @@ class DFS(CommonBase):
 
     def _create_default_dkey0(self):
         akey = AKey(
-            key_type=KeyType.INTEGER,
+            key='0',
+            key_type=KeyType.HASHED,
             overhead=Overhead.META,
             value_type=ValType.ARRAY)
-        value = VosValue(count=1, size=192)
+        value = VosValue(count=1, size=32)
         akey.add_value(value)
         dkey = DKey(
             key_type=KeyType.INTEGER,
@@ -282,7 +285,7 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _create_default_inode_akey(self, key='DFS_INODE', size=64):
+    def _create_default_inode_akey(self, key='DFS_INODE', size=96):
         value = VosValue(size=size)
         akey = AKey(key=key,
                     overhead=Overhead.META,
@@ -454,7 +457,6 @@ class DFS(CommonBase):
         file_object.set_num_of_targets(self._oclass.get_file_targets())
         file_object.set_count(identical_files)
 
-        self._add_file_dkey0(file_object, parity_stats)
         self._add_elements(file_object, file_size, parity_stats)
 
         parity_stats.mul(identical_files)

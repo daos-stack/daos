@@ -666,6 +666,16 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	daos_crt_init_opt.cio_use_unexpected_size = 1;
 	daos_crt_init_opt.cio_max_unexpected_size = limit ? limit : DAOS_RPC_SIZE;
 
+	if (!server) {
+		/* to workaround a bug in mercury/ofi, that the basic EP cannot
+		 * communicate with SEP. Setting 2 for client to make it to use
+		 * SEP for client.
+		 */
+		daos_crt_init_opt.cio_ctx_max_num = 2;
+	} else {
+		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
+	}
+
 	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
 	if (!sep)
@@ -685,17 +695,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 		goto out;
 	}
 
-	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
 	daos_crt_init_opt.cio_use_sep = 1;
-	if (!server) {
-		/* to workaround a bug in mercury/ofi, that the basic EP cannot
-		 * communicate with SEP. Setting 2 for client to make it to use
-		 * SEP for client.
-		 */
-		daos_crt_init_opt.cio_ctx_max_num = 2;
-	} else {
-		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
-	}
 
 out:
 	return &daos_crt_init_opt;

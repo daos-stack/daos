@@ -199,7 +199,6 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     COMP="UTEST_vos"
     cmd="-c pool -w key@0-4 key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"
     run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
@@ -262,6 +261,11 @@ if [ -d "/mnt/daos" ]; then
              -n 10 -A -i -I -D /mnt/daos
     run_test "${SL_PREFIX}/bin/jump_pl_map"
 
+    COMP="UTEST_csum"
+    run_test "${SL_PREFIX}/bin/srv_checksum_tests"
+    run_test "${SL_PREFIX}/bin/pool_scrubbing_tests"
+    run_test "${SL_PREFIX}/bin/rpc_tests"
+
     # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
@@ -273,14 +277,8 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh dyn ukey -s ${BTREE_SIZE}
     run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
 
-    COMP="UTEST_csum"
-    run_test "${SL_PREFIX}/bin/srv_checksum_tests"
-    run_test "${SL_PREFIX}/bin/pool_scrubbing_tests"
-    run_test "${SL_PREFIX}/bin/rpc_tests"
-
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
-    run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
 

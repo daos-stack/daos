@@ -62,7 +62,7 @@ def generate(env):
     env.PrependENVPath("LD_LIBRARY_PATH", detector["lib"])
     env['CC'] = 'icx'
     env['CXX'] = 'icpx'
-    env['AR'] = 'xiar'
+    env['AR'] = 'ar'
     env['LD'] = 'xild'  # not used by default
 
 
