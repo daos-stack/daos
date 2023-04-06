@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -382,16 +382,18 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
+	var user *C.char
+	var group *C.char
 	if cmd.User != "" {
-		ap.user = C.CString(cmd.User)
-		defer C.free(unsafe.Pointer(ap.user))
+		user = C.CString(cmd.User)
+		defer C.free(unsafe.Pointer(user))
 	}
 	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group)
-		defer C.free(unsafe.Pointer(ap.group))
+		group = C.CString(cmd.Group)
+		defer C.free(unsafe.Pointer(group))
 	}
 
-	rc := C.daos_cont_set_owner(ap.cont, ap.user, ap.group, nil)
+	rc := C.daos_cont_set_owner(ap.cont, user, group, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to set owner for container %s",
