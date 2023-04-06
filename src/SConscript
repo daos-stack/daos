@@ -77,6 +77,7 @@ def scons():
     base_env.AppendUnique(CPPPATH=[Dir('include')])
     if base_env_mpi:
         base_env_mpi.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+        base_env_mpi.AppendUnique(CPPPATH=[Dir('include')])
 
     if not env.GetOption('clean') and not env.GetOption('help'):
         conf = env.Clone().Configure()
