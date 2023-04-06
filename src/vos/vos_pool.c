@@ -369,33 +369,32 @@ vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, i
 {
 	int rc;
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_duration, D_TM_DURATION,
-			     "Checkpoint duration", NULL, "%s/%s/duration/tgt_%lu", path,
-			     CHKPT_TELEMETRY_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_duration, D_TM_DURATION, "Checkpoint duration", NULL,
+			     "%s/%s/duration/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
 		D_WARN("failed to create checkpoint_duration metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_pages, D_TM_STATS_GAUGE,
 			     "Number of dirty page blocks checkpointed", "16MiB",
-			     "%s/%s/dirty_pages/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+			     "%s/%s/dirty_pages/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
 		D_WARN("failed to create checkpoint_dirty_pages metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_chunks, D_TM_STATS_GAUGE,
 			     "Number of umem chunks checkpointed", "4KiB",
-			     "%s/%s/dirty_chunks/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+			     "%s/%s/dirty_chunks/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
 		D_WARN("failed to create checkpoint_dirty_chunks metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_iovs_copied, D_TM_STATS_GAUGE,
 			     "Number of sgl iovs used to copy dirty chunks", NULL,
-			     "%s/%s/iovs_copied/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+			     "%s/%s/iovs_copied/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
 		D_WARN("failed to create checkpoint_iovs_copied metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_wal_purged, D_TM_STATS_GAUGE,
 			     "Size of WAL purged by the checkpoint", "4KiB",
-			     "%s/%s/wal_purged/tgt_%lu", path, CHKPT_TELEMETRY_DIR, tgt_id);
+			     "%s/%s/wal_purged/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
 		D_WARN("failed to create checkpoint_wal_purged metric: "DF_RC"\n", DP_RC(rc));
 
@@ -747,8 +746,11 @@ pool_hop_free(struct d_ulink *hlink)
 
 	vos_dedup_fini(pool);
 
-	if (pool->vp_dummy_ioctxt)
-		bio_ioctxt_close(pool->vp_dummy_ioctxt);
+	if (pool->vp_dummy_ioctxt) {
+		rc = bio_ioctxt_close(pool->vp_dummy_ioctxt);
+		if (rc != 0)
+			D_WARN("Failed to close dummy ioctxt: rc=%d\n", rc);
+	}
 
 	if (pool->vp_dying)
 		vos_delete_blob(pool->vp_id, 0);
