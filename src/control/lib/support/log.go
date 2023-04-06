@@ -267,12 +267,6 @@ func GetHostName() (string, error) {
 
 // Create the local folder on each servers
 func createFolder(target string, log logging.Logger) error {
-	hn, _ := exec.Command("whoami").Output()
-	log.Debugf(" -- SAMIR whoami -- %s", strings.Split(string(hn), "\n"))
-
-	hn, _ = exec.Command("ls", "-l", target).Output()
-	log.Debugf(" -- SAMIR ls -l -- %s", strings.Split(string(hn), "\n"))
-
 	if _, err := os.Stat(target); err != nil {
 		log.Debugf("Log folder is not Exists, so creating %s", target)
 

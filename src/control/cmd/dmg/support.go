@@ -160,24 +160,25 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 	progress.Steps = 100 / progress.Total
 
-	// Check if DAOS Management Service is up and running
-	params := support.CollectLogsParams{}
-	params.Config = cmd.cfgCmd.config.Path
-	params.LogFunction = support.CollectDmgCmdEnum
-	params.LogCmd = "dmg system query"
-
-	err := support.CollectSupportLog(cmd.Logger, params)
-
-	if err != nil {
-		return err
-	}
-
 	// Default TargetFolder location where logs will be copied.
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	// Check if DAOS Management Service is up and running
+	params := support.CollectLogsParams{}
+	params.Config = cmd.cfgCmd.config.Path
+	params.LogFunction = support.CollectDmgCmdEnum
+	params.TargetFolder = cmd.TargetFolder
+	params.LogCmd = "dmg system query"
+
+	err := support.CollectSupportLog(cmd.Logger, params)
+
+	if err != nil {
 		return err
 	}
 
