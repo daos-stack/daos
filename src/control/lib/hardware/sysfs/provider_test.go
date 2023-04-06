@@ -531,6 +531,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		p         *Provider
+		provider  string
 		setup     func(*testing.T, string)
 		expErr    error
 		expResult *hardware.FabricInterfaceSet
@@ -566,6 +567,35 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				},
 			),
 		},
+		"CXI specified": {
+			p:        &Provider{},
+			provider: "ofi+cxi",
+			expResult: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+				&hardware.FabricInterface{
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+			),
+		},
+		"specified different fabric provider": {
+			p:         &Provider{},
+			provider:  "ofi+tcp",
+			expResult: hardware.NewFabricInterfaceSet(),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -586,7 +616,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetFabricInterfaces(context.Background())
+			result, err := tc.p.GetFabricInterfaces(context.Background(), tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
 

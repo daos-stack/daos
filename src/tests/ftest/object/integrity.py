@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -84,7 +83,7 @@ class ObjectDataValidation(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=invalid_tx,test_invalid_tx_commit_close
+        :avocado: tags=ObjectDataValidation,test_invalid_tx_commit_close
 
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
@@ -192,7 +191,7 @@ class ObjectDataValidation(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=single_object,test_single_object_validation
+        :avocado: tags=ObjectDataValidation,test_single_object_validation
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -217,7 +216,7 @@ class ObjectDataValidation(TestWithServers):
         transaction_index = 0
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) * self.record_length[record_index])
+                indata = str(akey)[0] * self.record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
@@ -245,7 +244,7 @@ class ObjectDataValidation(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=array_object,test_array_object_validation
+        :avocado: tags=ObjectDataValidation,test_array_object_validation
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0

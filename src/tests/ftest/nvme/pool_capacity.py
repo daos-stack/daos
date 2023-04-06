@@ -11,7 +11,6 @@ import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
-from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from exception_utils import CommandFailure
@@ -87,7 +86,7 @@ class NvmePoolCapacity(TestWithServers):
         except CommandFailure:
             results.put("FAIL")
 
-    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
+    def run_test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
         Test Description:
             This method is used to create/delete pools
@@ -101,7 +100,6 @@ class NvmePoolCapacity(TestWithServers):
                 None
         """
         self.pool = []
-        cont = {}
         nvme_size_begin = {}
         nvme_size_end = {}
 
@@ -115,8 +113,10 @@ class NvmePoolCapacity(TestWithServers):
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
                 nvme_size_begin[val] = self.pool[-1].get_pool_free_space("NVME")
-                for cont_val in range(0, num_cont):
-                    cont[cont_val] = TestContainer(self.pool[-1])
+                # To be fixed by DAOS-12974
+                for _ in range(num_cont):
+                    # self.get_container(self.pool[-1])
+                    pass
 
             m_leak = 0
 
@@ -135,7 +135,7 @@ class NvmePoolCapacity(TestWithServers):
             if m_leak != 0:
                 self.fail("Memory leak : iteration {0} \n".format(m_leak))
 
-    def test_run(self, num_pool=1):
+    def run_test(self, num_pool=1):
         """
         Method Description:
             This method is called with different test_cases.
@@ -214,16 +214,17 @@ class NvmePoolCapacity(TestWithServers):
         Use case:
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ib2,nvme,nvme_pool_capacity,test_nvme_pool_capacity
+        :avocado: tags=nvme,pool
+        :avocado: tags=NvmePoolCapacity,test_nvme_pool_capacity
         """
         # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")
-        self.test_run(1)
+        self.run_test(1)
         time.sleep(5)
         # Run test with two pools.
         self.log.info("Running Test Case 1 with two Pools")
-        self.test_run(2)
+        self.run_test(2)
         time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.test_create_delete(10, 50, 20)
+        self.run_test_create_delete(10, 50, 20)

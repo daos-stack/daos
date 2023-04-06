@@ -111,8 +111,25 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint64_t           doh_write_count;
 
+	/* Linear read function, if a file is read from start to end then this normally requires
+	 * a final read request at the end of the file that returns zero bytes.  Detect this case
+	 * and when the final read is detected then just return without a round trip.
+	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
+	 * to false), the expected position of the next read and a boonean for if EOF has been
+	 * detected.
+	 */
+	off_t                     doh_linear_read_pos;
+	bool                      doh_linear_read;
+	bool                      doh_linear_read_eof;
+
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
+
+	/* True if the kernel may have been told to keep the cache for this open.  This is used
+	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
+	 * here and this flag may be set on create even if the kernel flag isn't provided.
+	 */
+	bool                      doh_keep_cache;
 
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                      doh_writeable;
@@ -196,6 +213,7 @@ struct dfuse_event {
 	struct dfuse_eq              *de_eqt;
 	struct dfuse_obj_hdl         *de_oh;
 	off_t                         de_req_position; /**< The file position requested by fuse */
+	size_t                        de_req_len;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
@@ -264,7 +282,7 @@ struct dfuse_cont {
 	double			dfc_dentry_timeout;
 	double			dfc_dentry_dir_timeout;
 	double			dfc_ndentry_timeout;
-	bool			dfc_data_caching;
+	double			dfc_data_timeout;
 	bool			dfc_direct_io_disable;
 };
 

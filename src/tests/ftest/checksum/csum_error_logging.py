@@ -48,7 +48,7 @@ class CsumErrorLog(DaosCoreBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=checksum,faults
+        :avocado: tags=checksum,faults,daos_test
         :avocado: tags=CsumErrorLog,test_csum_error_logging
         """
         dmg = self.get_dmg_command()
