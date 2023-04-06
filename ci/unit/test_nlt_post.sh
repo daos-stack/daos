@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This is a post test processing script for post processing the
-# run_test.sh stage CI run
+# NLT stage CI run
 
 set -uex
 

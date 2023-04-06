@@ -38,7 +38,7 @@ type smdQueryCmd struct {
 }
 
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -155,7 +155,7 @@ type usageQueryCmd struct {
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{Usage: true}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -188,7 +188,7 @@ type smdManageCmd struct {
 }
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {

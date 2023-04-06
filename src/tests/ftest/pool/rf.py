@@ -7,7 +7,6 @@ from ior_test_base import IorTestBase
 
 
 class PoolRedunFacProperty(IorTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """Run tests with different pool redundancy factor.
 

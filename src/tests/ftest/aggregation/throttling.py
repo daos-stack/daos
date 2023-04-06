@@ -10,7 +10,6 @@ from ior_utils import IorCommand, IorMetrics
 
 
 class DaosAggregationThrottling(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
 
        Verify ior performance during aggregation throttling
