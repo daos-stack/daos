@@ -92,6 +92,7 @@ struct obj_auxi_args {
 					 force_degraded:1,
 					 shards_scheded:1,
 					 tx_convert:1,
+					 tx_renew:1,
 					 cond_modify:1,
 					 /* degraded fetch */
 					 deg_fetch:1,
@@ -3217,8 +3218,9 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	 * shard if leader switched. That is why the resend logic
 	 * is handled at object layer rather than shard layer.
 	 */
-	if (obj_auxi->io_retry)
+	if (obj_auxi->io_retry && !obj_auxi->tx_renew)
 		obj_auxi->flags |= ORF_RESEND;
+	obj_auxi->tx_renew = 0;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
@@ -4798,42 +4800,41 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
-	if (unlikely(task->dt_result == -DER_TX_ID_REUSED)) {
-		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+	if (unlikely(task->dt_result == -DER_TX_ID_REUSED || task->dt_result == -DER_EP_OLD)) {
+		struct dtx_id	*new_dti;
+		struct dtx_id	 old_dti;
+		uint64_t	 api_flags;
 
-		if (obj_auxi->retry_cnt != 0)
+		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+		D_ASSERT(obj_is_modification_opc(obj_auxi->opc));
+
+		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
 			D_ASSERTF(0,
 				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
 				  obj_auxi->flags, task, obj_auxi->retry_cnt);
 
-		/* For non-retry case, restart TX with new TX ID. */
-		switch (obj_auxi->opc) {
-		case DAOS_OBJ_RPC_UPDATE: {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			daos_obj_rw_t		*api_args = dc_task_get_args(obj_auxi->obj_task);
 			struct shard_rw_args	*rw_arg = &obj_auxi->rw_args;
 
-			D_INFO("DTX ID "DF_DTI" for update is reused, re-generate\n",
-			       DP_DTI(&rw_arg->dti));
-			daos_dti_gen(&rw_arg->dti, false);
-			obj_auxi->io_retry = 1;
-			break;
-		}
-		case DAOS_OBJ_RPC_PUNCH:
-			/* fall through */
-		case DAOS_OBJ_RPC_PUNCH_DKEYS:
-			/* fall through */
-		case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+			api_flags = api_args->flags;
+			new_dti = &rw_arg->dti;
+		} else {
+			daos_obj_punch_t	*api_args = dc_task_get_args(obj_auxi->obj_task);
 			struct shard_punch_args	*punch_arg = &obj_auxi->p_args;
 
-			D_INFO("DTX ID "DF_DTI" for punch (%u) is reused, re-generate\n",
-			       DP_DTI(&punch_arg->pa_dti), obj_auxi->opc);
-			daos_dti_gen(&punch_arg->pa_dti, false);
-			obj_auxi->io_retry = 1;
-			break;
+			api_flags = api_args->flags;
+			new_dti = &punch_arg->pa_dti;
 		}
-		default:
-			D_ASSERTF(0, "Unexpected opc %u for '-DER_TX_ID_REUSED'\n", obj_auxi->opc);
-			break;
+
+		if (task->dt_result == -DER_TX_ID_REUSED || !obj_req_with_cond_flags(api_flags)) {
+			daos_dti_copy(&old_dti, new_dti);
+			daos_dti_gen(new_dti, false);
+			obj_auxi->io_retry = 1;
+			obj_auxi->tx_renew = 1;
+			D_DEBUG(DB_IO, "refresh DTX ID opc %d (err %d) from "DF_DTI" to "DF_DTI"\n",
+				obj_auxi->opc, task->dt_result, DP_DTI(&old_dti), DP_DTI(new_dti));
 		}
 	}
 
