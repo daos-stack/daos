@@ -72,7 +72,9 @@ def scons():
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    env.AppendUnique(CPPPATH=[Dir('include')])
     base_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    base_env.AppendUnique(CPPPATH=[Dir('include')])
     if base_env_mpi:
         base_env_mpi.AppendUnique(CPPPATH=[Dir('include').srcnode()])
 
