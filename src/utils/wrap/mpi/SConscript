@@ -5,6 +5,8 @@ def build_dpar(env, mpi_env):
     """Build MPI abstraction library"""
 
     senv = env.Clone()
+    senv.AppendUnique(CPPPATH=[Dir('../../../include/internal').srcnode()])
+
     senv.compiler_setup()
 
     serial_lib = senv.d_library('dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
@@ -14,6 +16,7 @@ def build_dpar(env, mpi_env):
         return
 
     denv = mpi_env.Clone()
+    denv.AppendUnique(CPPPATH=[Dir('../../../include/internal').srcnode()])
 
     mpi_lib = denv.d_library('dpar_mpi', ['dpar_mpi.c'])
     denv.Install('$PREFIX/lib64/', mpi_lib)

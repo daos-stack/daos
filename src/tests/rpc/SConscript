@@ -9,6 +9,7 @@ def scons():
     sources = ['rpc_tests.c']
 
     denv = env.Clone()
+    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
     # Testing internal interfaces ...

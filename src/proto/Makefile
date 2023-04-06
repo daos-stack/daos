@@ -177,7 +177,7 @@ $(DAOS_ROOT)/src/tests/drpc/%.pb-c.h: $(PROTO_SOURCE_DIR)/test/%.proto
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.c: $(PROTO_SOURCE_DIR)/test/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/include/svc.pb-c.h: $(PROTO_SOURCE_DIR)/mgmt/svc.proto
+$(DAOS_ROOT)/src/include/internal/svc.pb-c.h: $(PROTO_SOURCE_DIR)/mgmt/svc.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 	rm $(basename $@).c
 
@@ -185,7 +185,7 @@ $(DAOS_ROOT)/src/mgmt/svc.pb-c.c: $(PROTO_SOURCE_DIR)/mgmt/svc.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 	rm $(basename $@).h
 
-$(DAOS_ROOT)/src/include/daos/drpc.pb-c.h: $(PROTO_SOURCE_DIR)/drpc.proto
+$(DAOS_ROOT)/src/include/internal/daos/drpc.pb-c.h: $(PROTO_SOURCE_DIR)/drpc.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 	rm $(basename $@).c
 

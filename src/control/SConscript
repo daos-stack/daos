@@ -89,6 +89,8 @@ def scons():
 
     denv = env.Clone()
 
+    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+
     if denv.get("COMPILER") == 'covc':
         denv.Replace(CC='gcc', CXX='g++')
 

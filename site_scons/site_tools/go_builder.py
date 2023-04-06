@@ -44,7 +44,8 @@ def _scan_go_file(node, env, _path):
                 if dep[-1] == '"':
                     includes.append(File(os.path.join(src_dir, header)))
                 else:
-                    includes.append(f'../../../include/{header}')
+                    assert header.startswith('daos/')
+                    includes.append(f'../../../include/internal/{header}')
 
     return includes
 

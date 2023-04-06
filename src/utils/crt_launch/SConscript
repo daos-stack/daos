@@ -13,6 +13,7 @@ def scons():
     Import('env', 'prereqs')
 
     tenv = env.Clone()
+    tenv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
 
     libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
 

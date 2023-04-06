@@ -10,6 +10,7 @@ def scons():
     acl_sources = ['acl_dump_test.c']
 
     denv = env.Clone()
+    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 

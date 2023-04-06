@@ -72,7 +72,7 @@ def scons():
     Export('daos_version', 'API_VERSION')
 
     # For Common library and headers.
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
+    # env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
@@ -92,12 +92,11 @@ def scons():
         conf.Finish()
 
     for header in HEADERS:
-        header_file = os.path.join('include', header)
-        env.Install(os.path.join('$PREFIX', 'include'), header_file)
+        env.Install(os.path.join('$PREFIX', 'include'), os.path.join('include', header))
     if prereqs.server_requested():
         for header in HEADERS_SRV:
-            header_file = os.path.join('include', 'daos_srv', header)
-            env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_file)
+            env.Install(os.path.join('$PREFIX', 'include', 'internal', 'daos_srv'),
+                        os.path.join('include', 'internal', 'daos_srv', header))
     for header in HEADERS_GURT:
         check_install_header(env, os.path.join('include', 'gurt', header))
     for header in HEADERS_CART:

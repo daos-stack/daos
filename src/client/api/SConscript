@@ -11,6 +11,8 @@ def scons():
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
     prereqs.require(denv, 'protobufc')
     libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 

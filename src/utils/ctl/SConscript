@@ -14,6 +14,7 @@ def scons():
     Import('env', 'prereqs', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
+    tenv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
     tenv.AppendUnique(CPPPATH=[Dir('../../cart').srcnode()])
     tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
