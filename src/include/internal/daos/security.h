@@ -14,8 +14,8 @@
 
 /** Structure representing a resource's ownership by user and group, respectively. */
 struct d_ownership {
-	char *user;  /** name of the user owner */
-	char *group; /** name of the group owner */
+	char *user;	/** name of the user owner */
+	char *group;	/** name of the group owner */
 };
 
 /**
@@ -37,8 +37,7 @@ struct d_ownership {
  *		-DER_NOREPLY	No response from agent
  *		-DER_MISC	Invalid response from agent
  */
-int
-dc_sec_request_creds(d_iov_t *creds);
+int dc_sec_request_creds(d_iov_t *creds);
 
 /**
  * Request a user's permissions for a specific pool.
