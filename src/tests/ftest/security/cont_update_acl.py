@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Test to verify ACL entry update.
     :avocado: recursive
