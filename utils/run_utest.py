@@ -324,7 +324,7 @@ class Test():
 
         self.root = path_info["DAOS_BASE"]
         self.res_path = os.path.join(self.root, "test_results")
-        self.env["D_LOG_FILE"] = os.path.join("/tmp", f"{self.name()}.log")
+        self.env["D_LOG_FILE"] = os.path.join("/tmp", f"daos_{self.name()}.log")
         Test.test_num = Test.test_num + 1
 
         if self.needs_aio():
