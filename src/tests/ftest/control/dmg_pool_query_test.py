@@ -10,7 +10,6 @@ from control_test_base import ControlTestBase
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test dmg query command.
 
     Test Class Description:

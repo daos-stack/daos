@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 
 
 class OverwriteContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify ACL entry overwrite.

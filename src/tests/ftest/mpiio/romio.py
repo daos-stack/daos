@@ -7,7 +7,6 @@
 from mpiio_test_base import MpiioTests
 
 
-# pylint: disable=too-many-ancestors
 class Romio(MpiioTests):
     """Run the Romio test.
 
