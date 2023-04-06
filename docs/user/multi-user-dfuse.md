@@ -77,27 +77,33 @@ permissions to read Anthony's data - only POSIX permissions.
 Example:
 
 ### Setup user to serve dfuse and create containers, mount points etc.
-```
-sudo -u dserve dmg --insecure pool create root_pool --size 1g
-sudo -u dserve daos cont create --type POSIX root_pool root_container
-sudo mkdir /crate
-sudo chown dserve.dserve /crate
+```bash
+$ sudo -u dserve dmg --insecure pool create root_pool --size 1g
+$ sudo -u dserve daos cont create --type POSIX root_pool root_container
+$ sudo mkdir /crate
+$ sudo chown dserve.dserve /crate
 ```
 
 ### Run dfuse, this should be done via systemd to be automatically mounted at boot time.
-```sudo -u dserve dfuse --multi-user --foreground /crate root_pool root_container```
+```bash
+$ sudo -u dserve dfuse --multi-user /crate root_pool root_container
+```
 
 ### Create a directory for anthony to own, and create a pool for him.
-```sudo mkdir -m 0700 /crate/anthony
-sudo chown anthony.anthony /crate/anthony
-sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
-sudo -u dserve dmg --insecure pool update-acl anthony_pool -e "A::dserve@:r"
-sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool --type POSIX
-sudo -u anthony chmod 755 /crate/anthony
-sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"```
+```bash
+$ sudo mkdir -m 0700 /crate/anthony
+$ sudo chown anthony.anthony /crate/anthony
+$ sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
+$ sudo -u dserve dmg --insecure pool update-acl anthony_pool -e "A::dserve@:r"
+$ sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool --type POSIX
+$ sudo -u anthony chmod 755 /crate/anthony
+$ sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"
+```
 
 ### Now read the file.
-```sudo -u berlinda cat /crate/anthony/my-data new-file```
+```bash
+$ sudo -u berlinda cat /crate/anthony/my-data new-file
+```
 
 ## Interception library
 
