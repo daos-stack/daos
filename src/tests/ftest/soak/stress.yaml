@@ -133,7 +133,7 @@ ior_stress:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
+    cores: '0-3'
 fio_stress:
   api:
     - POSIX
@@ -175,7 +175,7 @@ fio_stress:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
     thread_count: 8
-    cores: '0-7'
+    cores: '0-3'
 daos_racer:
   runtime: 120
 vpic_stress:
@@ -212,7 +212,7 @@ lammps_stress:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
+    cores: '0-3'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 mdtest_stress:
@@ -253,7 +253,7 @@ mdtest_stress:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
+    cores: '0-3'
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -284,7 +284,7 @@ macsio_stress:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
+    cores: '0-3'
 datamover_stress:
   job_timeout: 10
   nodesperjob:
