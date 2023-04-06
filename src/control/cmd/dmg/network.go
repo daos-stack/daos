@@ -36,7 +36,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		Provider: cmd.FabricProvider,
 	}
 
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 
 	cmd.Debugf("network scan req: %+v", req)
 

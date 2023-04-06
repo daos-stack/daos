@@ -1671,6 +1671,12 @@ ec_cond_fetch(void **state)
 			     NULL);
 	assert_rc_equal(rc, 0);
 
+	/** fetch with NULL sgl but iod_size is non-zero */
+	print_message("negative test - fetch with non-zero iod_size and NULL sgl\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
 	/** normal fetch */
 	for (i = 0; i < 2; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
