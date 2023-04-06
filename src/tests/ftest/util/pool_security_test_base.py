@@ -268,7 +268,7 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
         """
         action = "cont_delete"
-        result = self.destroy_test_container(self.pool.uuid, self.container)
+        result = self.destroy_test_container(self.pool.identifier, self.container.identifier)
         self.log.info(
             "  In verify_cont_delete %s.\n =destroy_test_container() result:"
             "\n%s", action, result)

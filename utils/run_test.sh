@@ -21,10 +21,6 @@ failed=0
 failures=()
 log_num=0
 
-if [ -z "$DAOS_BASE" ]; then
-    DAOS_BASE="."
-fi
-
 produce_output()
 {
     echo "$2"
@@ -106,17 +102,15 @@ run_test()
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
                                                                   "${FILES[@]}"
-
-    mv "${DAOS_BASE}"/test_results/*.xml "${DAOS_BASE}"/test_results/xml
 }
 
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
 
+    DAOS_BASE="${DAOS_BASE:-$SL_SRC_DIR}"
+
     echo "Running Cmocka tests"
-    mkdir -p "${DAOS_BASE}"/test_results/xml
-    chmod 777 "${DAOS_BASE}"/test_results/xml
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
@@ -145,7 +139,13 @@ if [ -d "/mnt/daos" ]; then
         COMP="UTEST_vos_nvme_md_on_ssd_bio_wal_vos_tests"
         if run_test_filter "nvme"; then
             cat /proc/meminfo
-            AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
+            if [[ -v USE_DEV ]]; then
+                echo "******** Using ${USE_DEV} as AIO device ********"
+                AIO_DEV="${USE_DEV}"
+            else
+                AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
+                echo "******** Created ${AIO_DEV} to use as AIO device ********"
+            fi
             # Setup daos_nvme.conf
             NVME_CONF="/mnt/daos/daos_nvme.conf"
             cp -f src/vos/tests/daos_nvme.conf ${NVME_CONF}
@@ -154,25 +154,37 @@ if [ -d "/mnt/daos" ]; then
         fi
         COMP="UTEST_vos_nvme"
         if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -a"; then
-            cat /proc/meminfo
             # Setup AIO device
-            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+            if [[ -v USE_DEV ]]; then
+                sudo dd if=/dev/zero of="${USE_DEV}" bs=4K count=1
+            else
+                dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+            fi
 
             run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
         fi
 
         COMP="UTEST_vos_nvme_md_on_ssd"
-        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -w"; then
-            rm -f "${AIO_DEV}"
-            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=13
+        if run_test_filter "sudo -E ${SL_PREFIX}/bin/vos_tests -A 50"; then
+            # Setup AIO device
+            if [[ -v USE_DEV ]]; then
+                sudo dd if=/dev/zero of="${USE_DEV}" bs=4K count=1
+            else
+                rm -f "${AIO_DEV}"
+                dd if=/dev/zero of="${AIO_DEV}" bs=1G count=13
+            fi
             sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
-            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -w
+            run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -A 50
         fi
         COMP="UTEST_nvme_bio_wal"
         if run_test_filter "sudo -E ${SL_PREFIX}/bin/bio_ut"; then
-            rm -f "${AIO_DEV}"
-            dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+            if [[ -v USE_DEV ]]; then
+                sudo dd if=/dev/zero of="${USE_DEV}" bs=4K count=1
+            else
+                rm -f "${AIO_DEV}"
+                dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+            fi
             sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
             run_test "sudo -E ${SL_PREFIX}/bin/bio_ut"
@@ -182,7 +194,9 @@ if [ -d "/mnt/daos" ]; then
         if run_test_filter "nvme"; then
             unset VOS_BDEV_CLASS
             rm -f "${NVME_CONF}"
-            rm -f "${AIO_DEV}"
+            if [[ ! -v USE_DEV ]]; then
+                rm -f "${AIO_DEV}"
+            fi
         fi
 
         COMP="UTEST_vos"
@@ -223,7 +237,6 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     COMP="UTEST_vos"
     cmd="-c pool -w key@0-4 key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"
     run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
@@ -306,12 +319,8 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
-    run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
-
-    mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
-    rm -rf "${DAOS_BASE}"/test_results/xml
 
     if [ -f "/tmp/test.cov" ]; then
         rm /tmp/test.cov

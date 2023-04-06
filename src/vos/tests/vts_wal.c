@@ -536,8 +536,6 @@ wal_args_reset(struct io_test_args *args)
 		args->dkey = NULL;
 		args->dkey_size = sizeof(uint64_t);
 	}
-	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
-		 vos_path, otype);
 }
 
 static int
@@ -1110,31 +1108,23 @@ wal_io_multiple_objects_ovwr(void **state)
 }
 
 static const struct CMUnitTest wal_tests[] = {
-	{ "WAL01: Basic pool/cont create/destroy test",
-	  wal_tst_01, NULL, NULL },
+    {"WAL01: Basic pool/cont create/destroy test", wal_tst_01, NULL, NULL},
 };
 
 static const struct CMUnitTest wal_kv_basic_tests[] = {
-	{ "WAL10: Basic SV/EV small/large update/fetch/verify",
-	  wal_kv_basic, NULL, NULL },
-	{ "WAL11: Basic SV/EV large TX update/fetch/verify",
-	  wal_kv_large, NULL, NULL },
+    {"WAL10: Basic SV/EV small/large update/fetch/verify", wal_kv_basic, NULL, NULL},
+    {"WAL11: Basic SV/EV large TX update/fetch/verify", wal_kv_large, NULL, NULL},
 };
 
 static const struct CMUnitTest wal_io_tests[] = {
-	{ "WAL20: Update/fetch/verify test",
-	  wal_io_multiple_refills, NULL, NULL },
-	{ "WAL21: 10K update/fetch/verify test",
-	  wal_io_multiple_updates, NULL, NULL },
-	{ "WAL22: Objects Update(overwrite)/fetch test",
-	  wal_io_multiple_objects_ovwr, NULL, NULL },
-	{ "WAL23: Objects Update/fetch test",
-	  wal_io_multiple_objects, NULL, NULL },
+    {"WAL20: Update/fetch/verify test", wal_io_multiple_refills, NULL, NULL},
+    {"WAL21: 10K update/fetch/verify test", wal_io_multiple_updates, NULL, NULL},
+    {"WAL22: Objects Update(overwrite)/fetch test", wal_io_multiple_objects_ovwr, NULL, NULL},
+    {"WAL23: Objects Update/fetch test", wal_io_multiple_objects, NULL, NULL},
 };
 
 static const struct CMUnitTest wal_io_int_tests[] = {
-	{ "WAL24: Key query punch with subsequent update",
-	  wal_io_query_key_punch_update, NULL, NULL },
+    {"WAL24: Key query punch with subsequent update", wal_io_query_key_punch_update, NULL, NULL},
 };
 
 int
@@ -1155,7 +1145,7 @@ run_wal_tests(const char *cfg)
 	rc = cmocka_run_group_tests_name(test_name, wal_tests, setup_wal_test,
 					   teardown_wal_test);
 
-	dts_create_config(test_name, "WAL Basic SV/EV update/fetch/verify tests %s", cfg);
+	dts_create_config(test_name, "WAL Basic SV and EV IO tests %s", cfg);
 	D_PRINT("Running %s\n", test_name);
 	otype = 0;
 	rc += cmocka_run_group_tests_name(test_name, wal_kv_basic_tests,
@@ -1171,9 +1161,8 @@ run_wal_tests(const char *cfg)
 			akey = "uint";
 		if (is_daos_obj_type_set(otype, DAOS_OT_AKEY_LEXICAL))
 			akey = "lex";
-		dts_create_config(test_name,
-				  "WAL# Basic I/O tests dkey=%-6s akey=%s %s",
-				  dkey, akey, cfg);
+		dts_create_config(test_name, "WAL0 Basic IO tests dkey=%-6s akey=%s %s", dkey, akey,
+				  cfg);
 		test_name[3] = '1';
 		D_PRINT("Running %s\n", test_name);
 		rc += cmocka_run_group_tests_name(test_name, wal_io_tests,
