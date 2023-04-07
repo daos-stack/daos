@@ -2148,6 +2148,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (bio_health == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	bio_health->mb_meta_size = req->meta_size;
+	bio_health->mb_rdb_size = req->rdb_size;
 	rc = ds_mgmt_bio_health_query(bio_health, uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to query BIO health data :"DF_RC"\n",
@@ -2183,6 +2185,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 	resp->cluster_size = stats.cluster_size;
+	resp->meta_wal_size = stats.meta_wal_size;
+	resp->rdb_wal_size = stats.rdb_wal_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;

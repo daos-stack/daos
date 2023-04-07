@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -256,4 +256,51 @@ func FindBinary(binName string) (string, error) {
 	}
 
 	return adjPath, nil
+}
+
+// Normalize the input path with removing redundant separators, up-level reference, changing relative
+// path to absolute one, etc.
+func NormalizePath(p string) (np string, err error) {
+	np, err = filepath.EvalSymlinks(p)
+	if err != nil {
+		return
+	}
+
+	if !filepath.IsAbs(np) {
+		np, err = filepath.Abs(np)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// HasPrefixPath reports whether if sub parameter path is a prefix of the base parameter one.
+func HasPrefixPath(base, sub string) (bool, error) {
+	var err error
+
+	base, err = NormalizePath(base)
+	if err != nil {
+		return false, err
+	}
+	baseList := strings.Split(base, string(os.PathSeparator))[1:]
+
+	sub, err = NormalizePath(sub)
+	if err != nil {
+		return false, err
+	}
+	subList := strings.Split(sub, string(os.PathSeparator))[1:]
+
+	if len(baseList) > len(subList) {
+		return false, nil
+	}
+
+	for i, file := range baseList {
+		if file != subList[i] {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
