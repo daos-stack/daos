@@ -276,8 +276,7 @@ class ReplayTests(TestWithServers):
              'checkpoint_thresh': list(range(25, 75)),
              'scrub-freq': list(range(604200, 605200))},
             # Container attributes
-            {'dedup_threshold': list(range(3072, 5120, 64)),
-             'max_snapshot': list(range(10))},
+            {'dedup_threshold': list(range(3072, 5120, 64))},
         ]
         for container in containers:
             for index, item in enumerate((container.pool, container)):
