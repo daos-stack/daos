@@ -982,7 +982,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_MD, "class_id %d master %d crt class id %d opc %d\n",
+	D_ERROR("class_id %d master %d crt class id %d opc %d\n",
 		key_iv->class_id, key_iv->rank, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
@@ -1016,12 +1016,14 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 		D_ASSERT(0);
 	}
 
-	if (rc)
+	if (rc) {
+		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
+	D_ERROR("class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
 out:
 	ds_iv_ns_put(ns);
 	ABT_future_free(&future);
@@ -1057,7 +1059,7 @@ retry:
 			 * retry at all, because IV sync always start from
 			 * the leader.
 			 */
-			D_WARN("sync (class %d) leader changed\n", key->class_id);
+			D_ERROR("sync (class %d) leader changed\n", key->class_id);
 			return rc;
 		}
 
@@ -1066,7 +1068,7 @@ retry:
 		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
+		D_ERROR("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
 		       ns->iv_ns_id, rc, key->class_id, opc, key->rank,
 		       ns->iv_master_rank);
 		/* sleep 1sec and retry */

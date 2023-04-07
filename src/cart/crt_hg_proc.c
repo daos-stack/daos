@@ -652,7 +652,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 					  "RPC failed to execute on target. "
 					  "error code: "DF_RC"\n", DP_RC(rc2));
 			else
-				RPC_TRACE(DB_NET, rpc_priv,
+				RPC_ERROR(rpc_priv,
 					  "RPC failed to execute on target. "
 					  "error code: "DF_RC"\n", DP_RC(rc2));
 
