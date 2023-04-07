@@ -25,6 +25,8 @@ struct dev_state_msg_arg {
 	struct bio_xs_context		*xs;
 	struct nvme_stats		 devstate;
 	uuid_t				 dev_uuid;
+	uint64_t			 meta_size;
+	uint64_t			 rdb_size;
 	ABT_eventual			 eventual;
 };
 
@@ -65,13 +67,21 @@ static void
 bio_get_dev_state_internal(void *msg_arg)
 {
 	struct dev_state_msg_arg	*dsm = msg_arg;
-	struct bio_xs_blobstore		 *bxb;
+	struct bio_xs_blobstore		*bxb;
 
 	D_ASSERT(dsm != NULL);
 	bxb = bio_xs_blobstore_by_devid(dsm->xs, dsm->dev_uuid);
 	D_ASSERT(bxb != NULL);
 	dsm->devstate = bxb->bxb_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(bxb->bxb_blobstore->bb_bs, &dsm->devstate);
+
+	/**
+	 * XXX DAOS-12750: At this time the WAL size can not be manually defined.  However, if such
+	 * feature is added, then the following assignment shall be updated according to it.
+	 */
+	dsm->devstate.meta_wal_size = default_wal_sz(dsm->meta_size);
+	dsm->devstate.rdb_wal_size = default_wal_sz(dsm->rdb_size);
+
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -125,7 +135,8 @@ bio_log_data_csum_err(struct bio_xs_context *bxc)
 /* Call internal method to get BIO device state from the device owner xstream */
 int
 bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
-		  struct bio_xs_context *xs)
+		  struct bio_xs_context *xs, uint64_t meta_size,
+		  uint64_t rdb_size)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -141,6 +152,8 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
 
 	dsm.xs = xs;
 	uuid_copy(dsm.dev_uuid, dev_uuid);
+	dsm.meta_size = meta_size;
+	dsm.rdb_size = rdb_size;
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_get_dev_state_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, NULL);

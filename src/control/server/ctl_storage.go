@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -161,7 +162,7 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
-func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
+func (cs *ControlService) scanAssignedBdevs(ctx context.Context, nsps []*ctl.ScmNamespace, statsReq bool) (*storage.BdevScanResponse, error) {
 	instances := cs.harness.Instances()
 	ctrlrs := new(storage.NvmeControllers)
 
@@ -196,11 +197,40 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 		cs.log.Debugf("updating stats for %d bdev(s) on instance %d", len(tierCtrlrs),
 			ei.Index())
 
+		// Maximal metadata (i.e. VOS index file) size should be equal to the SCM available
+		// size divided by the number of targets of the engine.
+		var md_size uint64
+		var rdb_size uint64
+		for _, nsp := range nsps {
+			mp := nsp.GetMount()
+			if mp == nil {
+				continue
+			}
+			if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
+				continue
+			}
+			md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+
+			engineCfg, err := cs.getEngineCfg(mp.GetPath())
+			if err != nil {
+				return nil, err
+			}
+			rdb_size, err = cs.getRdbSize(engineCfg)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+
+		if md_size == 0 {
+			cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
+		}
+
 		// If engine is running and has claimed the assigned devices for
 		// each tier, iterate over scan results for each tier and send query
 		// over drpc to update controller details with current health stats
 		// and smd info.
-		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs)
+		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs, md_size, rdb_size)
 		if err != nil {
 			return nil, errors.Wrapf(err, "instance %d: update online bdevs", ei.Index())
 		}
