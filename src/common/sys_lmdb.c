@@ -20,6 +20,7 @@
 
 #define SYS_DB_VERSION_1	1
 #define SYS_DB_VERSION		SYS_DB_VERSION_1
+#define SYS_DB_MAX_MAP_SIZE	(1024 * 1024 *1024)
 
 /** private information of LMDB based system DB */
 struct lmm_sys_db {
@@ -125,6 +126,13 @@ lmm_db_open_create(struct sys_db *db, bool try_create)
 	if (rc) {
 		rc = mdb_error2daos_error(rc);
 		D_CRIT("Failed to create env handle for sysdb: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = mdb_env_set_mapsize(ldb->db_env, SYS_DB_MAX_MAP_SIZE);
+	if (rc) {
+		rc = mdb_error2daos_error(rc);
+		D_CRIT("Failed to set env map size: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
