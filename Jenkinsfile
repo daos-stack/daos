@@ -823,7 +823,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/'],
+                                                     'unit_test_memcheck_logs/**/*.log'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
