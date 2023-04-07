@@ -922,15 +922,15 @@ int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
 	hg_return_t hg_ret;
-	int         rc = -DER_SUCCESS;
+	int         rc = DER_SUCCESS;
 
 	crt_hg_pool_fini(hg_ctx);
 
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Could not destroy HG context, hg_ret: %d %s.\n", hg_ret,
-				HG_Error_to_string(hg_ret));
+			D_ERROR("Could not destroy HG context, hg_ret: " DF_HG_RC "\n",
+				DP_HG_RC(hg_ret));
 
 			/* TODO: Fix mercury handle leak under valgrind and remove this */
 			if (D_ON_VALGRIND && hg_ret == HG_BUSY) {
@@ -947,13 +947,10 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		goto out;
 
 	if (hg_ctx->chc_hgcla) {
-		/* ignore below error with warn msg */
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
-		if (hg_ret != HG_SUCCESS) {
-			D_WARN("Could not finalize HG class, hg_ret: %d %s.\n", hg_ret,
-			       HG_Error_to_string(hg_ret));
-			rc = crt_hgret_2_der(hg_ret);
-		}
+		if (hg_ret != HG_SUCCESS)
+			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
+			       DP_HG_RC(hg_ret));
 	}
 out:
 	return rc;
@@ -1131,7 +1128,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		if (hg_ret == HG_SUCCESS) {
 			hg_created = true;
 		} else {
-			RPC_ERROR(rpc_priv, "HG_Create failed, hg_ret: %d\n", hg_ret);
+			RPC_ERROR(rpc_priv, "HG_Create failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	} else {
@@ -1140,7 +1138,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 				  0 /* reuse original rpcid */);
 		if (hg_ret != HG_SUCCESS) {
 			rpc_priv->crp_hg_hdl = NULL;
-			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: %d\n", hg_ret);
+			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
@@ -1151,7 +1150,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		if (hg_ret != HG_SUCCESS) {
 			if (hg_created)
 				HG_Destroy(rpc_priv->crp_hg_hdl);
-			RPC_ERROR(rpc_priv, "HG_Set_target_id failed, hg_ret: %d\n", hg_ret);
+			RPC_ERROR(rpc_priv, "HG_Set_target_id failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
@@ -1170,8 +1170,8 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 					&rpc_priv->crp_pub.cr_output);
 		if (hg_ret != HG_SUCCESS) {
 			RPC_ERROR(rpc_priv,
-				  "HG_Free_output failed, hg_ret: %d\n",
-				  hg_ret);
+				  "HG_Free_output failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 		}
 	}
 	if (rpc_priv->crp_input_got != 0) {
@@ -1179,8 +1179,8 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 				       &rpc_priv->crp_pub.cr_input);
 		if (hg_ret != HG_SUCCESS)
 			RPC_ERROR(rpc_priv,
-				  "HG_Free_input failed, hg_ret: %d\n",
-				  hg_ret);
+				  "HG_Free_input failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 	}
 
 	crt_rpc_priv_fini(rpc_priv);
@@ -1204,8 +1204,8 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		 */
 		hg_ret = HG_Destroy(rpc_priv->crp_hg_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			RPC_ERROR(rpc_priv, "HG_Destroy failed, hg_ret: %d\n",
-				  hg_ret);
+			RPC_ERROR(rpc_priv, "HG_Destroy failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
 		}
 	}
 
@@ -1260,7 +1260,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 		rc = crt_hgret_2_der(hg_cbinfo->ret);
 		hg_ret = hg_cbinfo->ret;
-		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: " DF_HG_RC ".\n",
+			  DP_HG_RC(hg_cbinfo->ret));
 		break;
 	}
 
@@ -1276,8 +1277,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
 				rc = crt_hgret_2_der(hg_ret);
-				RPC_ERROR(rpc_priv, "HG_Get_output failed, rc: " DF_RC "\n",
-					  DP_RC(rc));
+				RPC_ERROR(rpc_priv, "HG_Get_output failed, hg_ret: " DF_HG_RC "\n",
+					  DP_HG_RC(hg_ret));
 			}
 		}
 
@@ -1318,11 +1319,10 @@ out:
 	return hg_ret;
 }
 
-int
+void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
 	hg_return_t	 hg_ret;
-	int		 rc = DER_SUCCESS;
 
 	D_ASSERT(rpc_priv != NULL);
 
@@ -1336,8 +1336,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			    &rpc_priv->crp_pub.cr_input);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv,
-			  "HG_Forward failed, hg_ret: %d\n",
-			  hg_ret);
+			  "HG_Forward failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
 	} else {
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "sent to rank %d uri: %s\n",
@@ -1351,7 +1351,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
 			 */
-			crt_req_force_timeout(rpc_priv);
+			crt_req_force_completion(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else {
@@ -1359,8 +1359,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	}
 
 	RPC_DECREF(rpc_priv);
-
-	return rc;
 }
 
 int
@@ -1375,8 +1373,8 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 
 	hg_ret = HG_Cancel(rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, hg_ret: %d\n",
-			  hg_ret);
+		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
@@ -1400,7 +1398,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: %d, opc: %#x.\n", hg_ret, opc);
+		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
+		       DP_HG_RC(hg_ret), opc);
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);
@@ -1420,9 +1419,8 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv,
-			  "HG_Respond failed, hg_ret: %d\n",
-			  hg_ret);
+		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -DER_HG_FATAL : -DER_HG;
@@ -1445,8 +1443,8 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv,
-			  "Failed to send CART error code back. HG_Respond failed, hg_ret: %d\n",
-			  hg_ret);
+			  "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
 	} else {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Sent CART level error message back to client. error_code: %d\n",
@@ -1482,7 +1480,8 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		if (hg_ret == HG_TIMEOUT) {
 			rc = -DER_TIMEDOUT;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
+			D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n",
+				DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1492,7 +1491,8 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			/** nothing to trigger */
 			return rc;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n",
+				DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1563,7 +1563,8 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
 	} else {
-		D_ERROR("HG_Bulk_create failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_create failed, hg_ret: " DF_HG_RC "\n",
+			DP_HG_RC(hg_ret));
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
@@ -1584,7 +1585,8 @@ crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 
 	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
 	if (hg_ret != HG_SUCCESS)
-		D_ERROR("HG_Bulk_bind failed, hg_ret %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
+			DP_HG_RC(hg_ret));
 
 	return crt_hgret_2_der(hg_ret);
 }
@@ -1644,7 +1646,8 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	hg_ret = HG_Bulk_access(hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
 				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_access failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_access failed, hg_ret: " DF_HG_RC "\n",
+			DP_HG_RC(hg_ret));
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 	D_ASSERT(actual_sgnum == bulk_sgnum);
@@ -1700,8 +1703,8 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 			D_DEBUG(DB_NET, "bulk transferring canceled.\n");
 			rc = -DER_CANCELED;
 		} else {
-			D_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
-				hg_cbinfo->ret);
+			D_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: " DF_HG_RC "\n",
+				DP_HG_RC(hg_cbinfo->ret));
 			hg_ret = hg_cbinfo->ret;
 			rc     = crt_hgret_2_der(hg_ret);
 		}
@@ -1787,7 +1790,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 				opid != NULL ? (hg_op_id_t *)opid :
 				HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
+			DP_HG_RC(hg_ret));
 		D_FREE(bulk_cbinfo);
 		D_FREE(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);

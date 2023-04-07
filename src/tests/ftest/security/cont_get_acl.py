@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 
 
 class GetContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify container ACL get command..

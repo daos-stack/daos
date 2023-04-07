@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,13 +19,13 @@ func TestTelemetryCommands(t *testing.T) {
 			"list with too many hosts",
 			"telemetry metrics list -l host1,host2",
 			"",
-			errors.New("exactly 1 host"),
+			errors.New("single host"),
 		},
 		{
 			"query with too many hosts",
 			"telemetry metrics query -l host1,host2",
 			"",
-			errors.New("exactly 1 host"),
+			errors.New("single host"),
 		},
 	})
 }
@@ -46,10 +46,7 @@ func TestTelemetry_getMetricsHost(t *testing.T) {
 		},
 		"too many hosts": {
 			list:   []string{"one", "two"},
-			expErr: errors.New("exactly 1 host"),
-		},
-		"no hosts": {
-			expResult: "localhost",
+			expErr: errors.New("too many hosts"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
