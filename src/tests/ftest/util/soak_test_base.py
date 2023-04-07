@@ -414,7 +414,7 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
-                            self.fail("Error cancelling Job {}".format(job))
+                            self.fail("Error canceling Job {}".format(job))
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
