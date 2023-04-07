@@ -4607,8 +4607,8 @@ out:
 }
 
 static int
-pool_upgrade_one_prop_int(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
-			  const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
+pool_upgrade_one_prop_int64(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
+			    const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
 {
 	d_iov_t			value;
 	uint64_t		val;
@@ -4624,6 +4624,31 @@ pool_upgrade_one_prop_int(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, 
 		if (rc) {
 			D_ERROR(DF_UUID": failed to upgrade '%s' of pool: %d.\n",
 				DP_UUID(uuid), friendly_name, rc);
+			return rc;
+		}
+		*need_commit = true;
+	}
+	return 0;
+}
+
+static int
+pool_upgrade_one_prop_int32(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
+			    const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
+{
+	d_iov_t  value;
+	uint32_t val;
+	int      rc;
+
+	d_iov_set(&value, &val, sizeof(default_value));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		return rc;
+	} else if (rc == -DER_NONEXIST) {
+		val = default_value;
+		rc  = rdb_tx_update(tx, &svc->ps_root, prop_iov, &value);
+		if (rc) {
+			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
+				friendly_name, rc);
 			return rc;
 		}
 		*need_commit = true;
@@ -4772,38 +4797,38 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	}
 
 	/* Upgrade to have scrubbing properties */
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub mode",
-				       &ds_pool_prop_scrub_mode, DAOS_PROP_PO_SCRUB_MODE_DEFAULT);
+	rc = pool_upgrade_one_prop_int64(tx, svc, pool_uuid, &need_commit, "scrub mode",
+					 &ds_pool_prop_scrub_mode, DAOS_PROP_PO_SCRUB_MODE_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub freq",
-				       &ds_pool_prop_scrub_freq, DAOS_PROP_PO_SCRUB_FREQ_DEFAULT);
+	rc = pool_upgrade_one_prop_int64(tx, svc, pool_uuid, &need_commit, "scrub freq",
+					 &ds_pool_prop_scrub_freq, DAOS_PROP_PO_SCRUB_FREQ_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub thresh",
-				       &ds_pool_prop_scrub_thresh,
-				       DAOS_PROP_PO_SCRUB_THRESH_DEFAULT);
+	rc = pool_upgrade_one_prop_int64(tx, svc, pool_uuid, &need_commit, "scrub thresh",
+					 &ds_pool_prop_scrub_thresh,
+					 DAOS_PROP_PO_SCRUB_THRESH_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
 	/** WAL Checkpointing properties */
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint mode",
-				       &ds_pool_prop_checkpoint_mode,
-				       DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT);
+	rc = pool_upgrade_one_prop_int32(tx, svc, pool_uuid, &need_commit, "checkpoint mode",
+					 &ds_pool_prop_checkpoint_mode,
+					 DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint freq",
-				       &ds_pool_prop_checkpoint_freq,
-				       DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT);
+	rc = pool_upgrade_one_prop_int32(tx, svc, pool_uuid, &need_commit, "checkpoint freq",
+					 &ds_pool_prop_checkpoint_freq,
+					 DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
-	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "checkpoint thresh",
-				       &ds_pool_prop_checkpoint_thresh,
-				       DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT);
+	rc = pool_upgrade_one_prop_int32(tx, svc, pool_uuid, &need_commit, "checkpoint thresh",
+					 &ds_pool_prop_checkpoint_thresh,
+					 DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
@@ -4983,14 +5008,10 @@ ds_pool_mark_upgrade_completed_internal(struct pool_svc *svc, int ret)
 {
 	int rc;
 
-	D_DEBUG(DB_REBUILD, "ret passed in is " DF_RC "\n", DP_RC(ret));
-
 	if (ret == 0)
 		ret = ds_cont_upgrade(svc->ps_uuid, svc->ps_cont_svc);
-	D_DEBUG(DB_REBUILD, "ret now is " DF_RC "\n", DP_RC(ret));
 
 	rc = __ds_pool_mark_upgrade_completed(svc->ps_uuid, svc, ret);
-	D_DEBUG(DB_REBUILD, "rc is " DF_RC "\n", DP_RC(rc));
 	if (rc == 0 && ret)
 		rc = ret;
 
