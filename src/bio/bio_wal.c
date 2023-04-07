@@ -964,11 +964,11 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 		goto out;
 
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, off2lba(si, unused_off));
-	bio_iov_set(&bsgl->bs_iovs[0], addr, blks * blk_bytes);
+	bio_iov_set(&bsgl->bs_iovs[0], addr, (uint64_t)blks * blk_bytes);
 	if (iov_nr == 2) {
 		bio_addr_set(&addr, DAOS_MEDIA_NVME, off2lba(si, 0));
 		blks = blk_desc.bd_blks - blks;
-		bio_iov_set(&bsgl->bs_iovs[1], addr, blks * blk_bytes);
+		bio_iov_set(&bsgl->bs_iovs[1], addr, (uint64_t)blks * blk_bytes);
 	}
 	bsgl->bs_nr_out = iov_nr;
 
@@ -1159,7 +1159,7 @@ load_wal(struct bio_meta_context *mc, char *buf, unsigned int max_blks, uint64_t
 		blks = min(max_blks, nr_blks);
 		if (off + blks > tot_blks)
 			blks = tot_blks - off;
-		bio_iov_set(biov, addr, blks * blk_bytes);
+		bio_iov_set(biov, addr, (uint64_t)blks * blk_bytes);
 
 		bsgl.bs_nr_out++;
 		max_blks -= blks;

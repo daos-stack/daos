@@ -78,6 +78,7 @@ ut_init(struct bio_ut_args *args)
 		D_ERROR("Allocate Per-xstream NVMe context failed. "DF_RC"\n", DP_RC(rc));
 		goto out_smd;
 	}
+	args->bua_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 
 	return 0;
 out_smd:

@@ -32,6 +32,7 @@ struct bio_ut_args {
 	struct bio_xs_context	*bua_xs_ctxt;
 	struct bio_meta_context	*bua_mc;
 	uuid_t			 bua_pool_id;
+	unsigned int		 bua_seed;
 };
 
 /* bio_ut.c */
