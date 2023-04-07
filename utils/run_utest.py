@@ -324,7 +324,7 @@ class Test():
 
         self.root = path_info["DAOS_BASE"]
         self.res_path = os.path.join(self.root, "test_results")
-        self.env["D_LOG_FILE"] = os.path.join("/tmp", f"{self.name}.log")
+        self.env["D_LOG_FILE"] = os.path.join("/tmp", f"daos_{self.name()}.log")
         Test.test_num = Test.test_num + 1
 
         if self.needs_aio():
@@ -341,7 +341,7 @@ class Test():
                 try:
                     path = path_info[value]
                 except KeyError as exception:
-                    print(f"Invalid path_info key {value} in configuration for {self.name}")
+                    print(f"Invalid path_info key {value} in configuration for {self.name()}")
                     raise exception
                 entry = entry.replace(key, path)
             new_cmd.append(entry)
@@ -547,8 +547,6 @@ def get_args():
     parser.add_argument('--no-fail-on-error', action='store_true',
                         help='Disable non-zero return code on failure')
     parser.add_argument('--no_sudo', action='store_true', help='Disable tests requiring sudo')
-    parser.add_argument('--mount', default="/mnt/daos",
-                        help="Specify location of mounted dax system to use")
     parser.add_argument('--bdev', default=None,
                         help="Device to use for AIO, will create file by default")
     return parser.parse_args()
@@ -561,7 +559,7 @@ def get_path_info(args):
     build_vars_file = os.path.join(daos_base, '.build_vars.json')
     path_info = {"DAOS_BASE": daos_base,
                  "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml"),
-                 "MOUNT_DIR": args.mount}
+                 "MOUNT_DIR": "/mnt/daos"}
     try:
         with open(build_vars_file, "r", encoding="UTF-8") as vars_file:
             build_vars = json.load(vars_file)
@@ -584,7 +582,7 @@ def main():
     aio = None
 
     if not args.no_sudo:
-        aio = AIO(args.mount, args.bdev)
+        aio = AIO(path_info["MOUNT_DIR"], args.bdev)
 
     suites = []
     with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:

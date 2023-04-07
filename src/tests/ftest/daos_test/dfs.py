@@ -9,7 +9,6 @@ from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTestDfs(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
     """Runs DAOS File System (DFS) tests.
 
     :avocado: recursive

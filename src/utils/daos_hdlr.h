@@ -197,10 +197,6 @@ int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap);
-int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
-int cont_rollback_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -209,7 +205,5 @@ int cont_rollback_hdlr(struct cmd_args_s *ap);
  * int cont_stat_hdlr()
  * int cont_rollback_hdlr()
  */
-
-int obj_query_hdlr(struct cmd_args_s *ap);
 
 #endif /* __DAOS_HDLR_H__ */

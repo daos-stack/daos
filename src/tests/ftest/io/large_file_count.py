@@ -5,8 +5,8 @@
 from file_count_test_base import FileCountTestBase
 
 
+# pylint: disable=too-many-ancestors
 class LargeFileCount(FileCountTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create large number of files.
 
     :avocado: recursive
