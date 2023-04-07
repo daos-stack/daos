@@ -23,6 +23,13 @@ import yaml
 HAS_CAPTURE = sys.version_info.major >= 3 and sys.version_info.minor >= 7
 
 
+def check_version():
+    """Ensure python version is compatible"""
+    if sys.version_info < (3, 6):
+        print("Python version 3.6 or greater is required""")
+        sys.exit(-1)
+
+
 def write_xml_result(name, suite_junit):
     """Write an junit result"""
     with open(f"test_results/test_{name}.xml", "w", encoding='UTF-8') as file:
@@ -682,4 +689,5 @@ def main():
 
 
 if __name__ == '__main__':
+    check_version()
     main()
