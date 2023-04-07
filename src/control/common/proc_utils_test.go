@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 )
@@ -65,6 +66,33 @@ func Test_Common_checkDupeProcess(t *testing.T) {
 	}
 }
 
+func Test_Common_getProcName(t *testing.T) {
+	procRoot := makeProcTree(t, 5)
+
+	for name, tc := range map[string]struct {
+		procPid int
+		expName string
+		expErr  error
+	}{
+		"valid process": {
+			procPid: 2,
+			expName: "test-2",
+		},
+		"invalid process": {
+			procPid: 42,
+			expErr:  errors.New("failed to read"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotName, gotErr := getProcName(tc.procPid, procRoot)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if diff := cmp.Diff(tc.expName, gotName); diff != "" {
+				t.Fatalf("unexpected process name (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func Test_Common_getProcPids(t *testing.T) {
 	procRoot := makeProcTree(t, 5)
 	addProcEntry(t, procRoot, 5, "test-1")
@@ -104,6 +132,7 @@ func Test_Common_getProcPids(t *testing.T) {
 			},
 		},
 		"empty cmdline file is skipped": {
+			procName: "empty",
 			setup: func(t *testing.T) {
 				addProcEntry(t, procRoot, 7, "empty")
 				if err := os.Truncate(procRoot+"/7/cmdline", 0); err != nil {
