@@ -18,7 +18,7 @@ source build/.build_vars.sh
 sudo mkdir -p "${SL_SRC_DIR}"
 sudo mount --bind build "${SL_SRC_DIR}"
 
-test_log_dir="$SL_LOG_DIR/unit_test_logs"
+test_log_dir="unit_test_logs"
 
 if [ -n "$BULLSEYE" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
@@ -30,7 +30,7 @@ if [ -n "$BULLSEYE" ]; then
     rm -rf bullseye
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
-    test_log_dir="$SL_LOG_DIR/covc_test_logs"
+    test_log_dir="covc_test_logs"
 fi
 
 cd "${SL_SRC_DIR}"
@@ -56,7 +56,7 @@ fi
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 RUN_TEST_VALGRIND=""
 if [ "$WITH_VALGRIND" = "memcheck" ]; then
-    test_log_dir="$SL_LOG_DIR/unit_test_memcheck_logs"
+    test_log_dir="unit_test_memcheck_logs"
     RUN_TEST_VALGRIND="--memcheck"
 fi
 VDB_ARG=""
