@@ -4981,10 +4981,14 @@ ds_pool_mark_upgrade_completed_internal(struct pool_svc *svc, int ret)
 {
 	int rc;
 
+	D_DEBUG(DB_REBUILD, "ret passed in is " DF_RC "\n", DP_RC(ret));
+
 	if (ret == 0)
 		ret = ds_cont_upgrade(svc->ps_uuid, svc->ps_cont_svc);
+	D_DEBUG(DB_REBUILD, "ret now is " DF_RC "\n", DP_RC(ret));
 
 	rc = __ds_pool_mark_upgrade_completed(svc->ps_uuid, svc, ret);
+	D_DEBUG(DB_REBUILD, "rc is " DF_RC "\n", DP_RC(rc));
 	if (rc == 0 && ret)
 		rc = ret;
 
