@@ -5,7 +5,7 @@ hosts:
   test_clients: 4
 timeout: 4000
 timeouts:
-  test_daos_dfs_parallel: 1000
+  test_daos_dfs_parallel: 110
 pool:
   scm_size: 8G
 server_config:
