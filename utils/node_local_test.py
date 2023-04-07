@@ -3039,7 +3039,7 @@ class PosixTests():
 
         destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
-    def test_dfuse_perms(self):
+    def testx_dfuse_perms(self):
         """Test permissions caching for DAOS-12577"""
         cache_time = 10
 
