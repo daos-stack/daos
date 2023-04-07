@@ -210,6 +210,8 @@ type NvmeHealth struct {
 	NandBytesWritten        uint64 `json:"nand_bytes_written"`
 	HostBytesWritten        uint64 `json:"host_bytes_written"`
 	ClusterSize             uint64 `json:"cluster_size"`
+	MetaWalSize             uint64 `json:"meta_wal_size"`
+	RdbWalSize              uint64 `json:"rdb_wal_size"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -244,7 +246,12 @@ type SmdDevice struct {
 	Rank        ranklist.Rank `json:"rank"`
 	TotalBytes  uint64        `json:"total_bytes"`
 	AvailBytes  uint64        `json:"avail_bytes"`
+	UsableBytes uint64        `json:"usable_bytes"`
 	ClusterSize uint64        `json:"cluster_size"`
+	MetaSize    uint64        `json:"meta_size"`
+	MetaWalSize uint64        `json:"meta_wal_size"`
+	RdbSize     uint64        `json:"rdb_size"`
+	RdbWalSize  uint64        `json:"rdb_wal_size"`
 	Health      *NvmeHealth   `json:"health"`
 	TrAddr      string        `json:"tr_addr"`
 	Roles       BdevRoles     `json:"roles"`

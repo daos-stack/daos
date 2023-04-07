@@ -1244,10 +1244,10 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 			continue
 		}
 
-		scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+		usableBytes := scmNamespace.Mount.UsableBytes
 
-		if scmBytes > scmNamespaceFreeBytes {
-			scmBytes = scmNamespaceFreeBytes
+		if scmBytes > usableBytes {
+			scmBytes = usableBytes
 		}
 
 		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
@@ -1283,11 +1283,11 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
 			}
 
-			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.AvailBytes
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
 			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
 				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
-				smdDevice.AvailBytes, rankNVMeFreeSpace[smdDevice.Rank])
+				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
 
@@ -1317,7 +1317,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	for _, key := range resp.HostStorage.Keys() {
 		hostStorage := resp.HostStorage[key].HostStorage
 
-		if hostStorage.ScmNamespaces.Free() == 0 {
+		if hostStorage.ScmNamespaces.Usable() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
 				resp.HostStorage[key].HostSet.String())
 		}

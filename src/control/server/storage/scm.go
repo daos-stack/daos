@@ -90,13 +90,14 @@ type (
 
 	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
-		Class      Class         `json:"class"`
-		DeviceList []string      `json:"device_list"`
-		Info       string        `json:"info"`
-		Path       string        `json:"path"`
-		Rank       ranklist.Rank `json:"rank"`
-		TotalBytes uint64        `json:"total_bytes"`
-		AvailBytes uint64        `json:"avail_bytes"`
+		Class       Class         `json:"class"`
+		DeviceList  []string      `json:"device_list"`
+		Info        string        `json:"info"`
+		Path        string        `json:"path"`
+		Rank        ranklist.Rank `json:"rank"`
+		TotalBytes  uint64        `json:"total_bytes"`
+		AvailBytes  uint64        `json:"avail_bytes"`
+		UsableBytes uint64        `json:"usable_bytes"`
 	}
 
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
@@ -211,6 +212,14 @@ func (sn ScmNamespace) Free() uint64 {
 	return sn.Mount.AvailBytes
 }
 
+// Free returns the available free bytes on mounted PMem namespace as reported by OS.
+func (sn ScmNamespace) Usable() uint64 {
+	if sn.Mount == nil {
+		return 0
+	}
+	return sn.Mount.UsableBytes
+}
+
 // Capacity reports total storage capacity (bytes) across all namespaces.
 func (sns ScmNamespaces) Capacity() (tb uint64) {
 	for _, sn := range sns {
@@ -231,6 +240,14 @@ func (sns ScmNamespaces) Total() (tb uint64) {
 func (sns ScmNamespaces) Free() (tb uint64) {
 	for _, sn := range sns {
 		tb += (*ScmNamespace)(sn).Free()
+	}
+	return
+}
+
+// Free returns the cumulative effective available bytes on all mounted PMem namespaces.
+func (sns ScmNamespaces) Usable() (tb uint64) {
+	for _, sn := range sns {
+		tb += (*ScmNamespace)(sn).Usable()
 	}
 	return
 }
