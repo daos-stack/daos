@@ -591,13 +591,15 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_obj_version, &value);
 			break;
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
-			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			val32 = entry->dpe_val;
+			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_checkpoint_mode, &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
-			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			val32 = entry->dpe_val;
+			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_checkpoint_freq, &value);
 			if (rc)
 				return rc;
@@ -2454,33 +2456,33 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	}
 
 	if (bits & DAOS_PO_QUERY_PROP_CHECKPOINT_MODE) {
-		d_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_checkpoint_mode, &value);
 		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
 			rc  = 0;
-			val = DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT;
+			val32 = DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_CHECKPOINT_MODE;
-		prop->dpp_entries[idx].dpe_val  = val;
+		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ) {
-		d_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_checkpoint_freq, &value);
 		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
 			rc  = 0;
-			val = DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT;
+			val32 = DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_CHECKPOINT_FREQ;
-		prop->dpp_entries[idx].dpe_val  = val;
+		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH) {
