@@ -20,7 +20,7 @@
 
 #define SYS_DB_VERSION_1	1
 #define SYS_DB_VERSION		SYS_DB_VERSION_1
-#define SYS_DB_MAX_MAP_SIZE	(1024 * 1024 *1024)
+#define SYS_DB_MAX_MAP_SIZE	(1024 * 1024 *32)
 
 /** private information of LMDB based system DB */
 struct lmm_sys_db {
