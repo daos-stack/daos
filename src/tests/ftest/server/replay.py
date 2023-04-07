@@ -285,7 +285,7 @@ class ReplayTests(TestWithServers):
                 # Modify a random pool/container property value
                 name = random.choice(list(modify_attributes[index].keys()))  # nosec
                 modified = False
-                for entry in expected:
+                for entry in expected[item.identifier]:
                     if entry['name'] == name:
                         original = entry['value']
                         while entry['value'] == original:
@@ -311,12 +311,12 @@ class ReplayTests(TestWithServers):
         for container in containers:
             for item in (container.pool, container):
                 detected = item.get_prop()['response']
-                for entry in expected:
+                for entry in expected[item.identifier]:
                     if entry not in detected:
                         errors.append(
                             join(' ', 'Expected', item.identifier, 'property not detected:', entry))
                 for entry in detected:
-                    if entry not in expected:
+                    if entry not in expected[item.identifier]:
                         errors.append(
                             join(' ', 'Detected', item.identifier, 'property not expected:', entry))
         if errors:
