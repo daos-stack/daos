@@ -36,7 +36,6 @@ def convert_to_number(size):
 
 
 class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 
