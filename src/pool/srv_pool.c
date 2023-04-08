@@ -4607,63 +4607,59 @@ out:
 }
 
 static int
-pool_upgrade_one_prop_int64(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
-			    const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
+pool_upgrade_one_prop(struct rdb_tx *tx, struct pool_svc *svc, bool *need_commit, d_iov_t *prop_iov,
+		      d_iov_t *value)
 {
-	d_iov_t			value;
-	uint64_t		val;
 	int			rc;
 
-	d_iov_set(&value, &val, sizeof(default_value));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
+	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, value);
 	if (rc && rc != -DER_NONEXIST) {
-		if (rc) {
-			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
-				friendly_name, rc);
+		if (rc)
 			return rc;
-		}
 		return rc;
 	} else if (rc == -DER_NONEXIST) {
-		val = default_value;
-		rc = rdb_tx_update(tx, &svc->ps_root, prop_iov, &value);
-		if (rc) {
-			D_ERROR(DF_UUID": failed to upgrade '%s' of pool: %d.\n",
-				DP_UUID(uuid), friendly_name, rc);
+		rc = rdb_tx_update(tx, &svc->ps_root, prop_iov, value);
+		if (rc)
 			return rc;
-		}
 		*need_commit = true;
 	}
 	return 0;
 }
 
 static int
-pool_upgrade_one_prop_int32(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
+pool_upgrade_one_prop_int64(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
 			    const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
+{
+	d_iov_t  value;
+	uint64_t val;
+	int      rc;
+
+	val = default_value;
+	d_iov_set(&value, &val, sizeof(default_value));
+	rc = pool_upgrade_one_prop(tx, svc, need_commit, prop_iov, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
+			friendly_name, rc);
+	}
+	return rc;
+}
+
+static int
+pool_upgrade_one_prop_int32(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
+			    const char *friendly_name, d_iov_t *prop_iov, uint32_t default_value)
 {
 	d_iov_t  value;
 	uint32_t val;
 	int      rc;
 
+	val = default_value;
 	d_iov_set(&value, &val, sizeof(default_value));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
-	if (rc && rc != -DER_NONEXIST) {
-		if (rc) {
-			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
-				friendly_name, rc);
-			return rc;
-		}
-		return rc;
-	} else if (rc == -DER_NONEXIST) {
-		val = default_value;
-		rc  = rdb_tx_update(tx, &svc->ps_root, prop_iov, &value);
-		if (rc) {
-			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
-				friendly_name, rc);
-			return rc;
-		}
-		*need_commit = true;
+	rc = pool_upgrade_one_prop(tx, svc, need_commit, prop_iov, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
+			friendly_name, rc);
 	}
-	return 0;
+	return rc;
 }
 
 static int
