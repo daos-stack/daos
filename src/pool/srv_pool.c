@@ -4617,6 +4617,11 @@ pool_upgrade_one_prop_int64(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid
 	d_iov_set(&value, &val, sizeof(default_value));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
 	if (rc && rc != -DER_NONEXIST) {
+		if (rc) {
+			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
+				friendly_name, rc);
+			return rc;
+		}
 		return rc;
 	} else if (rc == -DER_NONEXIST) {
 		val = default_value;
@@ -4642,6 +4647,11 @@ pool_upgrade_one_prop_int32(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid
 	d_iov_set(&value, &val, sizeof(default_value));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
 	if (rc && rc != -DER_NONEXIST) {
+		if (rc) {
+			D_ERROR(DF_UUID ": failed to upgrade '%s' of pool: %d.\n", DP_UUID(uuid),
+				friendly_name, rc);
+			return rc;
+		}
 		return rc;
 	} else if (rc == -DER_NONEXIST) {
 		val = default_value;
