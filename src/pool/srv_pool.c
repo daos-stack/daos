@@ -1143,13 +1143,10 @@ static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
 static void
 handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 {
-	daos_prop_t		prop = {0};
-	struct daos_prop_entry *entry;
-	int			rc;
+	int rc;
 
-	/* Only used for exclude the rank for the moment */
 	if ((event->psv_src != CRT_EVS_GRPMOD && event->psv_src != CRT_EVS_SWIM) ||
-	    event->psv_type != CRT_EVT_DEAD || pool_disable_exclude) {
+	    (event->psv_type == CRT_EVT_DEAD && pool_disable_exclude)) {
 		D_DEBUG(DB_MD, "ignore event: "DF_PS_EVENT" exclude=%d\n", DP_PS_EVENT(event),
 			pool_disable_exclude);
 		goto out;
@@ -1164,30 +1161,59 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
 		DP_PS_EVENT(event));
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			DP_RC(rc));
-		goto out;
-	}
+	if (event->psv_src == CRT_EVS_SWIM && event->psv_type == CRT_EVT_ALIVE) {
+		/*
+		 * Check if the rank is up in the pool map. If in the future we
+		 * add automatic reintegration below, for instance, we may need
+		 * to not only take svc->ps_lock, but also employ an RDB TX by
+		 * the book.
+		 */
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+		rc = ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank);
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		if (!rc)
+			goto out;
 
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
-		D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n", DP_UUID(svc->ps_uuid));
-		goto out_prop;
-	}
+		/*
+		 * The rank is up in the pool map. Request a pool map
+		 * distribution just in case the rank has recently restarted
+		 * and does not have a copy of the pool map.
+		 */
+		ds_rsvc_request_map_dist(&svc->ps_rsvc);
+		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
+	} else if (event->psv_type == CRT_EVT_DEAD) {
+		daos_prop_t		prop = {0};
+		struct daos_prop_entry *entry;
 
-	rc = pool_svc_exclude_rank(svc, event->psv_rank);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			event->psv_rank, DP_RC(rc));
-		goto out_prop;
-	}
+		rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			goto out;
+		}
 
-	D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid), event->psv_rank);
+		entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+		D_ASSERT(entry != NULL);
+		if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+			D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n",
+				DP_UUID(svc->ps_uuid));
+			goto out_prop;
+		}
+
+		rc = pool_svc_exclude_rank(svc, event->psv_rank);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), event->psv_rank, DP_RC(rc));
+			goto out_prop;
+		}
+
+		D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
 out_prop:
-	daos_prop_fini(&prop);
+		daos_prop_fini(&prop);
+	}
+
 out:
 	return;
 }
@@ -4947,7 +4973,7 @@ out:
 /* check and upgrade the object layout if needed. */
 static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
-				 bool *schedule_layout_upgrade)
+				 bool *scheduled_layout_upgrade)
 {
 	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
@@ -4966,7 +4992,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
 					 RB_OP_UPGRADE, 0);
 		if (rc == 0)
-			*schedule_layout_upgrade = true;
+			*scheduled_layout_upgrade = true;
 	}
 	return rc;
 }
@@ -5013,19 +5039,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
 	int				rc;
-	bool				schedule_layout_upgrade = false;
-	bool				need_put_leader = false;
+	bool				scheduled_layout_upgrade = false;
+	bool				dmg_upgrade_cmd = false;
+	bool				request_schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
 		if (rc != 0)
 			return rc;
-		need_put_leader = true;
+		dmg_upgrade_cmd = true;
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_put_leader, rc);
 
 	/**
 	 * Four kinds of pool upgrading states:
@@ -5057,7 +5084,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_tx, rc);
 	} else if (rc == -DER_NONEXIST) {
-		if (!need_put_leader)
+		if (!dmg_upgrade_cmd)
 			D_GOTO(out_tx, rc = 0);
 		D_GOTO(out_upgrade, rc);
 	} else {
@@ -5078,7 +5105,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
 			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     need_put_leader) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -5092,7 +5119,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
-			if (need_put_leader)
+			if (dmg_upgrade_cmd)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -5104,7 +5131,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
 					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
-			} else if (need_put_leader) { /* not from resume */
+			} else if (dmg_upgrade_cmd) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
 			} else {
 				D_GOTO(out_upgrade, rc = 0);
@@ -5117,6 +5144,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
+	request_schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5124,18 +5152,18 @@ out_upgrade:
 	if (rc)
 		D_GOTO(out_tx, rc);
 
-	rc = pool_check_upgrade_object_layout(&tx, svc, &schedule_layout_upgrade);
+	rc = pool_check_upgrade_object_layout(&tx, svc, &scheduled_layout_upgrade);
 	if (rc < 0)
 		D_GOTO(out_tx, rc);
 
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	if (!schedule_layout_upgrade) {
+
+	if (request_schedule_upgrade && !scheduled_layout_upgrade) {
 		int rc1;
 
-		if (rc == 0 && need_put_leader &&
+		if (rc == 0 && dmg_upgrade_cmd &&
 		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
 			D_GOTO(out_put_leader, rc = -DER_AGAIN);
 		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
@@ -5143,7 +5171,7 @@ out_svc:
 			rc = rc1;
 	}
 out_put_leader:
-	if (need_put_leader) {
+	if (dmg_upgrade_cmd) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
 		pool_svc_put_leader(svc);
 	}
@@ -6850,9 +6878,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
-			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN,
-			       &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATUS, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));

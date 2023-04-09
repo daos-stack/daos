@@ -57,6 +57,10 @@ type DdbContext struct {
 	ctx C.struct_ddb_ctx
 }
 
+func ddbPoolIsOpen(ctx *DdbContext) bool {
+	return bool(C.ddb_pool_is_open(&ctx.ctx))
+}
+
 func ddbLs(ctx *DdbContext, path string, recursive bool) error {
 	/* Set up the options */
 	options := C.struct_ls_options{}

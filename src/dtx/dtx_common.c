@@ -166,6 +166,17 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	ds_cont_child_put(cont);
 }
 
+static inline uint64_t
+dtx_sec2age(uint64_t sec)
+{
+	uint64_t	cur = daos_gettime_coarse();
+
+	if (unlikely(cur <= sec))
+		return 0;
+
+	return cur - sec;
+}
+
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
@@ -206,8 +217,7 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
-	    DTX_CLEANUP_THD_AGE_LO)
+	if (dtx_sec2age(ent->ie_dtx_start_time) <= DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
@@ -410,11 +420,10 @@ dtx_aggregate(void *arg)
 		if (stat.dtx_cont_cmt_count == 0 ||
 		    stat.dtx_first_cmt_blob_time_lo == 0 ||
 		    (stat.dtx_cont_cmt_count <= dtx_agg_thd_cnt_lo &&
-		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
-		     dtx_agg_thd_age_lo))
+		     dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= dtx_agg_thd_age_lo))
 			break;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			break;
 	}
 
@@ -472,14 +481,13 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    stat.dtx_first_cmt_blob_time_lo == 0)
 			continue;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			continue;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
-		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
-		      dtx_agg_thd_age_up))) {
+		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
@@ -709,8 +717,7 @@ dtx_batched_commit(void *arg)
 		if (dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
-		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
-		    DTX_CLEANUP_THD_AGE_UP) {
+		    dtx_sec2age(stat.dtx_oldest_active_time) >= DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
 			dtx_get_dbca(dbca);
 
@@ -823,7 +830,6 @@ dtx_handle_reinit(struct dtx_handle *dth)
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_cos_done = 0;
-	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 
 	dth->dth_op_seq = 0;
@@ -877,7 +883,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 	dth->dth_prepared = prepared ? 1 : 0;
-	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -997,6 +1002,13 @@ out:
 	return 0;
 }
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
+{
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+}
+
 /**
  * Initialize the DTX handle for per modification based part.
  *
@@ -1087,7 +1099,7 @@ out:
  * \param dti_cos	[IN]	The DTX array to be committed because of shared.
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
- * \param tgt_cnt	[IN]	number of targets.
+ * \param tgt_cnt	[IN]	number of targets (not count the leader itself).
  * \param flags		[IN]	See dtx_flags.
  * \param mbs		[IN]	DTX participants information.
  * \param p_dlh		[OUT]	Pointer to the DTX handle.
@@ -1136,9 +1148,9 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
-		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
+		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
-		DP_UOID(*leader_oid), dti_cos_cnt, flags, DP_RC(rc));
+		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh);
@@ -1194,44 +1206,58 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 	dtx_shares_fini(dth);
 
-	if (unlikely(result == -DER_ALREADY))
-		result = 0;
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
+		goto out;
 
-	if (result == 0 && rc == 0 && unlikely(coh->sch_closed)) {
+	if (unlikely(coh->sch_closed)) {
 		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
 			DP_UUID(coh->sch_uuid));
-		result = -DER_IO;
+		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
+		    result == -DER_STALE || daos_crt_network_error(result))
+			result = -DER_IO;
+		goto abort;
 	}
 
-	if (daos_is_zero_dti(&dth->dth_xid))
-		D_GOTO(out, result = result < 0 ? result : rc);
+	/* For solo transaction, the validation has already been processed inside vos
+	 * when necessary. That is enough, do not need to revalid again.
+	 */
+	if (dth->dth_solo)
+		goto out;
 
 	if (dth->dth_need_validation) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it.
+		 * by race. Let's check it before handling the case of 'result < 0' to
+		 * avoid aborting 'ready' one.
 		 */
 		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE))
-			D_GOTO(out, result = 0);
+		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
+			     status == DTX_ST_COMMITTING))
+			D_GOTO(out, result = -DER_ALREADY);
 	}
 
-	if (result < 0 || rc < 0 || dth->dth_solo)
-		D_GOTO(abort, result = result < 0 ? result : rc);
+	if (result < 0)
+		goto abort;
 
 	switch (status) {
 	case -1:
-	case DTX_ST_PREPARED:
 		break;
-	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0 || !dth->dth_active)
+	case DTX_ST_PREPARED:
+		if (likely(!dth->dth_aborted))
 			break;
 		/* Fall through */
-	case DTX_ST_ABORTED:
+	case DTX_ST_INITED:
+	case DTX_ST_PREPARING:
 		aborted = true;
-		D_GOTO(out, result = -DER_INPROGRESS);
+		result = -DER_AGAIN;
+		goto out;
+	case DTX_ST_ABORTED:
+	case DTX_ST_ABORTING:
+		aborted = true;
+		result = -DER_INPROGRESS;
+		goto out;
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
 
 	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
@@ -1250,46 +1276,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (!dth->dth_active) {
 		unpin = true;
 		D_GOTO(abort, result = 0);
-	}
-
-	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possible that the DTX resync ULT may have aborted or committed
-	 * the DTX during current ULT waiting for other non-leaders' reply.
-	 * Let's check DTX status locally before marking as 'committable'.
-	 */
-	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL, false);
-		/* Committed by race, do nothing. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
-			D_GOTO(abort, result = 0);
-
-		/* The DTX is marked as 'corrupted' by DTX resync by race,
-		 * then let's abort it.
-		 */
-		if (rc == DTX_ST_CORRUPTED) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is marked as corrupted "
-			       "by resync because of lost some participants\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		/* Aborted by race, restart it. */
-		if (rc == -DER_NONEXIST) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is aborted with "
-			       "old epoch "DF_U64" by resync\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-			       dth->dth_epoch);
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		if (rc != DTX_ST_PREPARED) {
-			D_ASSERTF(rc < 0, "Invalid status %d for DTX "DF_DTI"\n",
-				  rc, DP_DTI(&dth->dth_xid));
-
-			D_WARN(DF_UUID": Failed to check local DTX "DF_DTI" status: "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(abort, result = rc);
-		}
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
@@ -1380,47 +1366,57 @@ sync:
 	}
 
 abort:
-	/* Some remote replica(s) ask retry. We do not make such replica
-	 * to locally retry for avoiding RPC timeout. The leader replica
-	 * will trigger retry globally without aborting 'prepared' ones.
+	/* If some remote participant ask retry. We do not make such participant
+	 * to locally retry for avoiding related forwarded RPC timeout, instead,
+	 * The leader will trigger retry globally without abort 'prepared' ones.
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
-		/* Drop partial modification for distributed transaction. */
+		/* 1. Drop partial modification for distributed transaction.
+		 * 2. Remove the pinned DTX entry.
+		 */
 		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
 
 out:
+	if (unlikely(result == -DER_ALREADY))
+		result = 0;
+
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
-		if (result < 0 && !aborted)
-			vos_dtx_cleanup(dth, true);
+		if (result < 0) {
+			/* 1. Drop partial modification for distributed transaction.
+			 * 2. Remove the pinned DTX entry.
+			 */
+			if (!aborted)
+				vos_dtx_cleanup(dth, true);
+
+			/* For solo DTX, just let client retry for DER_AGAIN case. */
+			if (result == -DER_AGAIN && dth->dth_solo)
+				result = -DER_INPROGRESS;
+		}
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
-
-		D_DEBUG(DB_IO,
-			"Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, "
-			"%s participator(s), cos %d/%d: rc "DF_RC"\n",
-			DP_DTI(&dth->dth_xid), dth->dth_ver,
-			(unsigned long)dth->dth_dkey_hash,
-			dth->dth_sync ? "sync" : "async",
-			dth->dth_solo ? "single" : "multiple",
-			dth->dth_dti_cos_count,
-			dth->dth_cos_done ? dth->dth_dti_cos_count : 0,
-			DP_RC(result));
 	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	/* Local modification is done, then need to handle CoS cache. */
-	if (dth->dth_cos_done) {
+	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
+	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	 */
+	if (result == 0 && dth->dth_cos_done) {
 		int	i;
 
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
 			dtx_del_cos(cont, &dth->dth_dti_cos[i],
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
+
+	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
+		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
+		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
 
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
@@ -1497,14 +1493,13 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
-			/* XXX: For non-leader replica, even if we fail to
-			 *	make related modification for some reason,
-			 *	we still need to commit the DTXs for CoS.
-			 *	Because other replica may have already
-			 *	committed them. For leader case, it is
-			 *	not important even if we fail to commit
-			 *	the CoS DTXs, because they are still in
-			 *	CoS cache, and can be committed next time.
+			/* NOTE: For non-leader participant, even if we fail to make
+			 *	 related modification for some reason, we still need
+			 *	 to commit the piggyback DTXs those may have already
+			 *	 been committed on other participants.
+			 *	 For leader case, it is not important even if we fail
+			 *	 to commit them, because they are still in CoS cache,
+			 *	 and can be committed next time.
 			 */
 			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
 					    dth->dth_dti_cos_count, NULL);
@@ -1723,7 +1718,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 
 	cont->sc_dtx_committable_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
-	cont->sc_dtx_resync_ver = cont->sc_pool->spc_map_version;
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;

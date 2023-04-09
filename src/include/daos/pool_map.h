@@ -220,6 +220,27 @@ static inline unsigned int pool_buf_nr(size_t size)
 		sizeof(struct pool_component);
 }
 
+static inline const char *
+pool_map_status2name(uint32_t status)
+{
+	switch (status) {
+	case PO_COMP_ST_UNKNOWN:
+		return "unknown";
+	case PO_COMP_ST_NEW:
+		return "new";
+	case PO_COMP_ST_UP:
+		return "up";
+	case PO_COMP_ST_DOWN:
+		return "down";
+	case PO_COMP_ST_DOWNOUT:
+		return "downout";
+	case PO_COMP_ST_DRAIN:
+		return "drain";
+	default:
+		D_ASSERTF(0, "Invalid status %u\n", status);
+	}
+}
+
 struct pool_map;
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);

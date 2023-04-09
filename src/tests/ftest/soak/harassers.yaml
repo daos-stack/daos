@@ -85,6 +85,8 @@ soak_harassers:
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate
     - server-stop_server-reintegrate-offline
+    # - vmd-identify-check
+    # - vmd-identify-check-offline
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true

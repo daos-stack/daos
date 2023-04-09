@@ -156,17 +156,31 @@ the first positional parameter will be opened before commands are executed.`
 		}
 	}
 
+	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+		return errors.New("Cannot use both command file and a command string")
+	}
+
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
-		if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-			return errors.New("Cannot use both command file and a command string")
-		}
-
 		if opts.Args.RunCmd != "" {
-			return runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			if err != nil {
+				log.Errorf("Error running command %s\n", string(opts.Args.RunCmd))
+			}
+		} else {
+			err := runFileCmds(log, app, opts.CmdFile)
+			if err != nil {
+				log.Error("Error running command file\n")
+			}
 		}
 
-		return runFileCmds(log, app, opts.CmdFile)
+		if ddbPoolIsOpen(ctx) {
+			err := ddbClose(ctx)
+			if err != nil {
+				log.Error("Error closing pool\n")
+			}
+		}
+		return err
 	}
 
 	// Interactive mode
@@ -174,7 +188,15 @@ the first positional parameter will be opened before commands are executed.`
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
 	os.Args = args
-	return app.Run()
+	result := app.Run()
+	// make sure pool is closed
+	if ddbPoolIsOpen(ctx) {
+		err := ddbClose(ctx)
+		if err != nil {
+			log.Error("Error closing pool\n")
+		}
+	}
+	return result
 }
 
 func main() {

@@ -16,6 +16,7 @@ from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import Dfuse
+from dmg_utils import get_storage_query_device_info
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
@@ -70,29 +71,22 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     """Create a list of containers that the various jobs use for storage.
 
     Args:
-        pool: pool to create container
-        file_oclass: file oclass for daos container cmd
-        dir oclass: directory oclass for daos container cmd
+        pool (TestPool): pool to read/write random data file
+        file_oclass (str): file oclass for daos container cmd
+        dir oclass (str): directory oclass for daos container cmd
+        path (str): namespace for container
 
     """
-    rd_fac = None
-    # Create a container and add it to the overall list of containers
-    self.container.append(
-        TestContainer(pool, daos_command=self.get_daos_command()))
-    self.container[-1].namespace = path
-    self.container[-1].get_params(self)
-    # include rd_fac based on the oclass
+    kwargs = {}
     if file_oclass:
-        self.container[-1].file_oclass.update(file_oclass)
+        kwargs['file_oclass'] = file_oclass
+        properties = self.params.get('properties', path, "")
         redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+        kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
     if dir_oclass:
-        self.container[-1].dir_oclass.update(dir_oclass)
-    properties = self.container[-1].properties.value
-    cont_properties = (",").join(filter(None, [properties, rd_fac]))
-    if cont_properties is not None:
-        self.container[-1].properties.update(cont_properties)
-    self.container[-1].create()
+        kwargs['dir_oclass'] = dir_oclass
+    self.container.append(self.get_container(pool, path, **kwargs))
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -377,11 +371,9 @@ def wait_for_pool_rebuild(self, pool, name):
     """Launch the rebuild process with system.
 
     Args:
-
         self (obj): soak obj
         pools (obj): TestPool obj
         name (str): name of soak harasser
-
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
@@ -405,11 +397,9 @@ def launch_snapshot(self, pool, name):
     """Create a basic snapshot of the reserved pool.
 
     Args:
-
         self (obj): soak obj
         pool (obj): TestPool obj
         name (str): harasser
-
     """
     self.log.info(
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
@@ -476,6 +466,52 @@ def launch_snapshot(self, pool, name):
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
+def launch_vmd_identify_check(self, name, results, args):
+    """Run dmg cmds to blink/check VMD leds.
+
+    Args:
+        self (obj): soak obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    status = True
+    failing_vmd = []
+    device_info = get_storage_query_device_info(self, self.dmg_command)
+    uuid_list = [device['uuid'] for device in device_info]
+    # limit the number of leds to blink to 1024
+    if len(uuid_list) > 1024:
+        uuids = random.sample(uuid_list, 1024)
+    else:
+        uuids = uuid_list
+    self.log.info("VMD device UUIDs: %s", uuids)
+
+    for uuid in uuids:
+        # Blink led
+        self.dmg_command.storage_led_identify(ids=uuid, timeout=5, reset=True)
+        time.sleep(2)
+        # check if led is blinking
+        result = self.dmg_command.storage_led_check(ids=uuid)
+        # determine if leds are blinking as expected
+        for value in list(result['response']['host_storage_map'].values()):
+            if value['storage']['smd_info']['devices']:
+                for device in value['storage']['smd_info']['devices']:
+                    if device['led_state'] != "QUICK_BLINK":
+                        failing_vmd.append([device['tr_addr'], value['hosts']])
+                        status = False
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"failing_vmd_devices": failing_vmd}}
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 

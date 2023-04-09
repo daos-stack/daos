@@ -213,7 +213,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 }
 
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nvmePrepareResetFn) error {
-	cmd.Info("Prepare locally-attached NVMe storage...")
+	cmd.Debug("Prepare locally-attached NVMe storage...")
 
 	cfgParam := cmd.config
 	if cmd.IgnoreConfig {
@@ -283,7 +283,7 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 }
 
 func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend nvmePrepareResetFn) error {
-	cmd.Info("Reset locally-attached NVMe storage...")
+	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,

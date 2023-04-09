@@ -41,10 +41,16 @@ ddb_run_quit(struct ddb_ctx *ctx)
 	return 0;
 }
 
+bool
+ddb_pool_is_open(struct ddb_ctx *ctx)
+{
+	return daos_handle_is_valid(ctx->dc_poh);
+}
+
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
-	if (daos_handle_is_valid(ctx->dc_poh)) {
+	if (ddb_pool_is_open(ctx)) {
 		ddb_error(ctx, "Must close pool before can open another\n");
 		return -DER_EXIST;
 	}
@@ -52,11 +58,12 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 	return dv_pool_open(opt->path, &ctx->dc_poh);
 }
 
-int ddb_run_close(struct ddb_ctx *ctx)
+int
+ddb_run_close(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	if (daos_handle_is_inval(ctx->dc_poh)) {
+	if (!ddb_pool_is_open(ctx)) {
 		ddb_error(ctx, "No pool open to close\n");
 		return 0;
 	}

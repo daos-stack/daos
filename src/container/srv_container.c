@@ -369,55 +369,177 @@ enum nhandles_op {
 	NHANDLES_PRE_DECREMENT
 };
 
+/** Number of handles hash table record - cache rdb num_handles within one tx closing a batch. */
+struct nhandles_ht_rec {
+	uuid_t		nhr_cuuid;
+	uint32_t	nhr_nhandles;
+	uint32_t	nhr_ref;
+	d_list_t	nhr_hlink;
+};
 
-/* Get container number of open handles, if the key exists in rdb ; optionally update based on op */
-static int
-get_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t *nhandles)
+static inline struct nhandles_ht_rec *
+nhandles_rec_obj(d_list_t *rlink)
 {
-	uint32_t	result = 0;
-	d_iov_t		value;
-	bool		do_update = true;
-	int		rc;
+	return container_of(rlink, struct nhandles_ht_rec, nhr_hlink);
+}
 
-	d_iov_set(&value, &result, sizeof(result));
-	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
-	if (rc == -DER_NONEXIST)
-		goto out;		/* pool/container has old layout without nhandles */
-	else if (rc != 0) {
-		D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto err;
+static void
+nhandles_ht_rec_addref(struct d_hash_table *ht, d_list_t *link)
+{
+	struct nhandles_ht_rec *rec = nhandles_rec_obj(link);
+
+	rec->nhr_ref++;
+	D_DEBUG(DB_TRACE, "rec=%p, incremented nhr_ref to %u\n", rec, rec->nhr_ref);
+}
+
+static bool
+nhandles_ht_rec_decref(struct d_hash_table *ht, d_list_t *link)
+{
+	struct nhandles_ht_rec *rec = nhandles_rec_obj(link);
+
+	rec->nhr_ref--;
+	D_DEBUG(DB_TRACE, "rec=%p, decremented nhr_ref to %u\n", rec, rec->nhr_ref);
+	return (rec->nhr_ref == 0);
+}
+
+static bool
+nhandles_ht_cmp_keys(struct d_hash_table *ht, d_list_t *rlink, const void *key, unsigned int ksize)
+{
+	struct nhandles_ht_rec *rec = nhandles_rec_obj(rlink);
+
+	return uuid_compare(key, rec->nhr_cuuid) == 0;
+}
+
+static void
+nhandles_ht_rec_free(struct d_hash_table *htable, d_list_t *link)
+{
+	struct nhandles_ht_rec *rec = nhandles_rec_obj(link);
+
+	D_ASSERT(d_hash_rec_unlinked(&rec->nhr_hlink));
+	D_DEBUG(DB_MD, "Free rec=%p\n", rec);
+	D_FREE(rec);
+}
+
+static d_hash_table_ops_t nhandles_hops = {
+	.hop_key_cmp = nhandles_ht_cmp_keys,
+	.hop_rec_addref = nhandles_ht_rec_addref,
+	.hop_rec_decref = nhandles_ht_rec_decref,
+	.hop_rec_free = nhandles_ht_rec_free,
+};
+
+static int
+nhandles_ht_create(struct d_hash_table *nht)
+{
+	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 6 /* bits */, NULL /* priv */,
+					   &nhandles_hops, nht);
+}
+
+static int
+nhandles_ht_destroy(struct d_hash_table *nht)
+{
+	int rc;
+
+	rc = d_hash_table_destroy_inplace(nht, true);
+	if (rc)
+		D_ERROR("d_hash_table_destroy_inplace() failed, "DF_RC"\n", DP_RC(rc));
+	return rc;
+}
+
+/* Get, optionally update container number of handles. Use "nhandles cache" (nhc) if provided. */
+static int
+get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enum nhandles_op op,
+	     uint32_t *nhandles)
+{
+	uint32_t		result = 0;
+	d_iov_t			value;
+	uint32_t		lookup_val;		/* value from DRAM cache or rdb */
+	struct nhandles_ht_rec *rec = NULL;
+	bool			do_update = true;
+	uint32_t		pool_global_version = cont->c_svc->cs_pool->sp_global_version;
+	int			rc = 0;
+
+	/* Test if pool/container has old layout without nhandles */
+	if (pool_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES)
+		goto out;
+
+	/* Caller performing multiple updates in the tx: insert into, or get value from HT cache. */
+	if (nhc) {
+		d_list_t *hlink = d_hash_rec_find(nhc, cont->c_uuid, sizeof(uuid_t));
+
+		if (hlink) {
+			rec = nhandles_rec_obj(hlink);
+			lookup_val = rec->nhr_nhandles;
+		}
+	}
+
+	/* If no cache, or miss, lookup value in rdb. */
+	if (rec == NULL) {
+		d_iov_set(&value, &lookup_val, sizeof(lookup_val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+		if (rc) {
+			D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+
+		/* ... and cache it, if applicable. */
+		if (nhc) {
+			D_ALLOC_PTR(rec);
+			if (rec == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			rec->nhr_ref = 1;
+			D_DEBUG(DB_MD, DF_CONT": alloc rec=%p\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rec);
+			uuid_copy(rec->nhr_cuuid, cont->c_uuid);
+			rec->nhr_nhandles = lookup_val;
+			rc = d_hash_rec_insert(nhc, rec->nhr_cuuid, sizeof(uuid_t), &rec->nhr_hlink,
+					       true);
+			if (rc != 0) {
+				D_ERROR(DF_CONT": error inserting into nhandles cache" DF_RC"\n",
+					DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+					DP_RC(rc));
+				D_FREE(rec);
+				goto out;
+			}
+		}
 	}
 
 	switch (op) {
 	case NHANDLES_GET:
 		do_update = false;
+		result = lookup_val;
 		break;
 	case NHANDLES_PRE_INCREMENT:
-		result++;
+		result = lookup_val + 1;
 		break;
 	case NHANDLES_PRE_DECREMENT:
-		result--;
+		result = lookup_val - 1;
 		break;
 	default:
 		D_ASSERTF(0, "invalid op=%d\n", op);
 		break;
 	}
 
+	/* Update persistent and, if applicable, cached nhandles value */
 	if (do_update) {
+		d_iov_set(&value, &result, sizeof(result));
 		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-			goto err;
+			goto out;
 		}
+
+		if (rec)
+			rec->nhr_nhandles = result;
 	}
 
 out:
-	if (nhandles != NULL)
+	if (rec)
+		d_hash_rec_decref(nhc, &rec->nhr_hlink);
+	/* Note: if rc != 0, and rec was allocated/inserted, it will be freed in HT destroy. */
+	if ((rc == 0) && (nhandles != NULL))
 		*nhandles = result;
-	return 0;
-err:
 	return rc;
 }
 
@@ -2229,7 +2351,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Get number of open handles (pre-incremented to reflect the effects of this open) */
 	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
-		rc = get_nhandles(tx, cont, NHANDLES_PRE_INCREMENT, &nhandles);
+		rc = get_nhandles(tx, NULL /* nhc */, cont, NHANDLES_PRE_INCREMENT, &nhandles);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": get_nhandles() failed: "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
@@ -2298,7 +2420,8 @@ out:
 }
 
 static int
-cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, crt_context_t ctx, const uuid_t uuid)
+cont_close_one_hdl(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont_svc *svc,
+		   crt_context_t ctx, const uuid_t uuid)
 {
 	d_iov_t			key;
 	d_iov_t			value;
@@ -2317,8 +2440,8 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, crt_context_t ctx, c
 	if (rc != 0)
 		return rc;
 
-	/* Decrement number of open handles */
-	rc = get_nhandles(tx, cont, NHANDLES_PRE_DECREMENT, NULL /* nhandles */);
+	/* Get, decrement/update number of open handles. Use nhandles cache if provided. */
+	rc = get_nhandles(tx, nhc, cont, NHANDLES_PRE_DECREMENT, NULL /* nhandles */);
 	if (rc != 0)
 		goto out;
 
@@ -2338,9 +2461,12 @@ static int
 cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		int nrecs, crt_context_t ctx)
 {
-	struct rdb_tx	tx;
-	int		i;
-	int		rc;
+	struct rdb_tx		tx;
+	struct d_hash_table	txs_nhc;	/* TX per-container number of handles cache (HT). */
+	int			i;
+	int			num_tx = 0;
+	int			rc;
+	int			rc1;
 
 	D_ASSERTF(nrecs > 0, "%d\n", nrecs);
 	D_DEBUG(DB_MD, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
@@ -2357,14 +2483,24 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		goto out;
+	num_tx++;
+
+	/* TX nhandles cache (for multiple close, tx cannot read back its uncommitted updates. */
+	rc = nhandles_ht_create(&txs_nhc);
+	if (rc) {
+		D_ERROR("failed to create HT txs_nhc, tx %d"DF_RC"\n", num_tx, DP_RC(rc));
+		goto out_tx;
+	}
+	D_DEBUG(DB_TRACE, DF_CONT": created txs_nhc HT, tx batch %d\n",
+		DP_CONT(svc->cs_pool_uuid, NULL), num_tx);
 
 	for (i = 0; i < nrecs; i++) {
-		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
+		rc = cont_close_one_hdl(&tx, &txs_nhc, svc, ctx, recs[i].tcr_hdl);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": failed to close handle: "DF_UUID", "DF_RC"\n",
 				DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[i].tcr_hdl),
 				DP_RC(rc));
-			goto out_tx;
+			goto out_ht;
 		}
 
 		/*
@@ -2372,21 +2508,49 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		 * vos_obj_punch operations invoked by rdb_tx_commit for
 		 * deleting the handles. (If there is no other RDB replica, the
 		 * TX operations will not yield, and this loop would occupy the
-		 * xstream for too long.)
+		 * xstream for too long.). Also, destroy/re-create TX-scoped nhandles HT.
 		 */
 		if ((i + 1) % 32 == 0) {
 			rc = rdb_tx_commit(&tx);
 			if (rc != 0)
-				goto out_tx;
+				goto out_ht;
 			rdb_tx_end(&tx);
+			rc = nhandles_ht_destroy(&txs_nhc);
+			if (rc) {
+				D_ERROR(DF_CONT": failed to destroy HT txs_nhc, tx  %d, "DF_RC"\n",
+					DP_CONT(svc->cs_pool_uuid, NULL), num_tx, DP_RC(rc));
+				goto out;
+			}
+			D_DEBUG(DB_TRACE, DF_CONT": destroyed txs_nhc HT, tx %d\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), num_tx);
 			ABT_thread_yield();
 			rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 			if (rc != 0)
 				goto out;
+			num_tx++;
+			rc = nhandles_ht_create(&txs_nhc);
+			if (rc) {
+				D_ERROR(DF_CONT": failed to create HT txs_nhc, tx %d, "DF_RC"\n",
+					DP_CONT(svc->cs_pool_uuid, NULL), num_tx, DP_RC(rc));
+				goto out_tx;
+			}
+			D_DEBUG(DB_TRACE, DF_CONT": created txs_nhc HT, tx %d\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), num_tx);
 		}
 	}
 
 	rc = rdb_tx_commit(&tx);
+
+out_ht:
+	rc1 = nhandles_ht_destroy(&txs_nhc);
+	if (rc1) {
+		D_ERROR("failed to destroy HT: txs_nhc: "DF_RC"\n", DP_RC(rc1));
+		if (rc == 0)
+			rc = rc1;
+	} else {
+		D_DEBUG(DB_TRACE, DF_CONT": destroyed txs_nhc HT after tx %d and nrecs %d\n",
+			DP_CONT(svc->cs_pool_uuid, NULL), num_tx, nrecs);
+	}
 
 out_tx:
 	rdb_tx_end(&tx);
@@ -2438,7 +2602,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_close_one_hdl(tx, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
+	rc = cont_close_one_hdl(tx, NULL /* nhc */, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
 
 	/* On success update modify time (except if open specified read-only metadata stats) */
 	if (rc == 0 && !(chdl.ch_flags & DAOS_COO_RO_MDSTATS))
@@ -3026,7 +3190,7 @@ cont_info_read(struct rdb_tx *tx, struct cont *cont, int cont_proto_ver, daos_co
 
 	/* Get number of open handles (without updating it) */
 	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
-		rc = get_nhandles(tx, cont, NHANDLES_GET, &out.ci_nhandles);
+		rc = get_nhandles(tx, NULL /* nhc */, cont, NHANDLES_GET, &out.ci_nhandles);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": get_nhandles failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
