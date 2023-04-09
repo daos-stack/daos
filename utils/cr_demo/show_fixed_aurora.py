@@ -31,10 +31,18 @@ hostlist = list(node_set)
 # Call dmg system query to obtain the IP address of necessary ranks.
 rank_to_ip = {}
 stdout = system_query(json=True)
-print(f"dmg system query stdout = {stdout}")
+# Printing system query output helps, but the output will be long if there are many ranks.
+# print(f"dmg system query stdout = {stdout}")
 generated_yaml = yaml.safe_load(stdout)
+rank_count = 0
+joined_count = 0
 for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
+    rank_count += 1
+    if member["state"] == "joined":
+        joined_count += 1
+# Print the number of ranks and joined ranks as a reference.
+print(f"\n#### {rank_count} ranks; {joined_count} joined ####")
 
 # Add input here to make sure all ranks are joined before starting the script.
 POOL_LABEL_1 = POOL_LABEL + "_F1"

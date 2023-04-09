@@ -25,10 +25,11 @@ test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
 
-POOL_SIZE = "100GB"
+POOL_SIZE = "2T"
 POOL_SIZE_F5 = "3T"
 POOL_LABEL = "tank"
 CONT_LABEL = "bucket"
+FORMAT_SLEEP_SEC = 25
 
 print("\nF1: Dangling pool")
 print("F2: Lost the majority of pool service replicas")
@@ -48,22 +49,30 @@ HOSTLIST = ARGS["hostlist"]
 print(f"\n1. Format storage on {HOSTLIST}.")
 format_storage(host_list=HOSTLIST)
 
-print("\nWait for 15 sec for format...")
-time.sleep(15)
+print(f"\nWait for {FORMAT_SLEEP_SEC} sec for format...")
+time.sleep(FORMAT_SLEEP_SEC)
 
 # Call dmg system query to obtain the IP address of necessary ranks.
 rank_to_ip = {}
 stdout = system_query(json=True)
-print(f"dmg system query stdout = {stdout}")
+# Printing system query output helps, but the output will be long if there are many ranks.
+# print(f"dmg system query stdout = {stdout}")
 generated_yaml = yaml.safe_load(stdout)
+rank_count = 0
+joined_count = 0
 for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
-
-# Create rank to mount point map and host to ranks map for F2 and F5.
-# 1. scp daos_control.log from all nodes to here, where this script runs. scp the local
-# file as well. Add hostname to the end of the file name. The log contains rank and PID.
+    rank_count += 1
+    if member["state"] == "joined":
+        joined_count += 1
+# Print the number of ranks and joined ranks as a reference.
 node_set = NodeSet(HOSTLIST)
 hostlist = list(node_set)
+print(f"\n#### {len(hostlist)} nodes; {rank_count} ranks; {joined_count} joined ####")
+
+# Create rank to mount point map and host to ranks map for F1, F2, and F5.
+# 1. scp daos_control.log from all nodes to here, where this script runs. scp the local
+# file as well. Add hostname to the end of the file name. The log contains rank and PID.
 # Number of nodes used for F2.
 node_count = 2
 print(f"## Use first {node_count} nodes in {hostlist}")
@@ -120,7 +129,14 @@ for i in range(node_count):
                 pid_to_mount[pid] = mount_1
 print(f"## pid_to_mount = {pid_to_mount}")
 
-# 4. Determine the four ranks in hostlist[0] and hostlist[1] to create F2 pool.
+# 4. Determine the two ranks in hostlist[0] to create F1 pool.
+f1_ranks = []
+f1_ranks.extend(host_to_ranks[hostlist[0]])
+# Ranks in the map are int, so convert them to string and separate them with comma.
+f1_ranks_str = convert_list_to_str(original_list=f1_ranks, separator=",")
+print(f"## f1_ranks_str = {f1_ranks_str}")
+
+# 5. Determine the four ranks in hostlist[0] and hostlist[1] to create F2 pool.
 f2_ranks = []
 f2_ranks.extend(host_to_ranks[hostlist[0]])
 f2_ranks.extend(host_to_ranks[hostlist[1]])
@@ -128,7 +144,7 @@ f2_ranks.extend(host_to_ranks[hostlist[1]])
 f2_ranks_str = convert_list_to_str(original_list=f2_ranks, separator=",")
 print(f"## f2_ranks_str = {f2_ranks_str}")
 
-# 5. Determine the two ranks in hostlist[0] to create F5 pool.
+# 6. Determine the two ranks in hostlist[0] to create F5 pool.
 f5_ranks = []
 f5_ranks.extend(host_to_ranks[hostlist[0]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
@@ -154,7 +170,7 @@ CONT_LABEL_7 = CONT_LABEL + "_F7"
 CONT_LABEL_8 = CONT_LABEL + "_F8"
 
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
-create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1, ranks=f1_ranks_str)
 # F2. CIC_POOL_LESS_SVC_WITHOUT_QUORUM
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2, ranks=f2_ranks_str, nsvc="3")
 # F3. CIC_POOL_NONEXIST_ON_MS - orphan pool
@@ -173,12 +189,18 @@ print()
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_8)
 create_container(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8)
 
-print("(Create label to UUID mapping.)")
+print("(Create label to UUID mapping and obtain service replicas for F2.)")
 label_to_uuid = {}
+f2_service_replicas = []
 stdout = list_pool(json=True)
 generated_yaml = yaml.safe_load(stdout)
 for pool in generated_yaml["response"]["pools"]:
     label_to_uuid[pool["label"]] = pool["uuid"]
+    # Collect service replicas for F2.
+    if pool["label"] == POOL_LABEL_2:
+        f2_service_replicas = pool["svc_reps"]
+
+print(f"\n(F2 service replicas = {f2_service_replicas})")
 
 print(f"\n3-F5. Print storage usage to show original usage of {POOL_LABEL_5}. "
       f"Pool is created on {hostlist[0]}.")
@@ -211,20 +233,23 @@ inject_fault_daos(
 input("\n5-1. Stop servers to manipulate for F2, F5, F6, F7. Hit enter...")
 system_stop()
 
-# F2: Destroy tank_2 rdb-pool on rank 0 and 2.
-rank_0_ip = rank_to_ip[0]
-rank_2_ip = rank_to_ip[2]
-rank_0_mount = pid_to_mount[rank_to_pid[0]]
-rank_2_mount = pid_to_mount[rank_to_pid[2]]
-rm_rank_0 = f"sudo rm {rank_0_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
-rm_rank_2 = f"sudo rm {rank_2_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
-clush_rm_rank_0 = ["clush", "-w", rank_0_ip, rm_rank_0]
-clush_rm_rank_2 = ["clush", "-w", rank_2_ip, rm_rank_2]
-print("(F2: Destroy tank_2 rdb-pool on rank 0 and 2.)")
-print(f"Command for rank 0: {clush_rm_rank_0}\n")
-print(f"Command for rank 2: {clush_rm_rank_2}\n")
-subprocess.run(clush_rm_rank_0, check=False)
-subprocess.run(clush_rm_rank_2, check=False)
+# F2: Destroy tank_2 rdb-pool on two of the three service replicas. Call them rank a and
+# b. Select the first two service replicas.
+svc_rep_a = f2_service_replicas[0]
+svc_rep_b = f2_service_replicas[1]
+rank_a_ip = rank_to_ip[svc_rep_a]
+rank_b_ip = rank_to_ip[svc_rep_b]
+rank_a_mount = pid_to_mount[rank_to_pid[svc_rep_a]]
+rank_b_mount = pid_to_mount[rank_to_pid[svc_rep_b]]
+rm_rank_a = f"sudo rm {rank_a_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
+rm_rank_b = f"sudo rm {rank_b_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
+clush_rm_rank_a = ["clush", "-w", rank_a_ip, rm_rank_a]
+clush_rm_rank_b = ["clush", "-w", rank_b_ip, rm_rank_b]
+print("(F2: Destroy tank_2 rdb-pool on rank a and b.)")
+print(f"Command for rank a: {clush_rm_rank_a}\n")
+print(f"Command for rank b: {clush_rm_rank_b}\n")
+subprocess.run(clush_rm_rank_a, check=False)
+subprocess.run(clush_rm_rank_b, check=False)
 
 # F5: Copy tank_5 pool directory from /mnt/daos1 in hostlist[0] to /mnt/daos0 in
 # hostlist[1]. Match owner. (Mount points are arbitrary.)
@@ -332,10 +357,13 @@ print("F7: Use ddb to show that the container is left in shards.")
 pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
 # Run ddb on /mnt/daos0 of rank 0 node.
 ddb_cmd = f"sudo ddb /mnt/daos0/{pool_uuid_7}/vos-0 ls"
-clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
-print(f"Command: {clush_ddb_cmd}\n")
+# ddb with clush causes some authentication error. tank_F7 is created across all ranks, so
+# just run ddb locally as a workaround.
+# clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
 # System will not start if we run ddb. DAOS-12843
-# subprocess.run(clush_ddb_cmd, check=False)
+ddb_cmd_list = ddb_cmd.split(" ")
+# print(f"Command: {ddb_cmd}")
+# subprocess.run(ddb_cmd_list, check=False)
 
 # (optional) F3: Show pool directory at mount point to verify that the pool exists on
 # engine.
