@@ -3121,9 +3121,6 @@ class PosixTests():
         """Test DAOS FS Checker"""
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
-        pool = self.pool.id()
-        cont = self.container
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
@@ -3217,7 +3214,7 @@ class PosixTests():
         if nr_entries != 4:
             raise NLTestFail('Wrong number of entries')
 
-        cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir/1d1/"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir/1d1/"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
@@ -3232,7 +3229,7 @@ class PosixTests():
         if nr_entries != 3:
             raise NLTestFail('Wrong number of entries')
 
-        cmd = [daos_mw_fi, pool, cont, "punch_entry", "/test_dir"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
@@ -3244,7 +3241,8 @@ class PosixTests():
         assert rc.returncode == 0
 
         # run the checker while dfuse is still mounted (should fail - EX open)
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print', '--dir-name', 'lf1']
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
+               'lf1']
         rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
         print(rc)
         assert rc.returncode != 0
@@ -3259,7 +3257,8 @@ class PosixTests():
 
         # fs check with relink should find the 2 leaked directories.
         # Everything under them should be relinked but not reported as leaked.
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf1']
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink',
+               '--dir-name', 'lf1']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3269,7 +3268,7 @@ class PosixTests():
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink']
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3315,7 +3314,7 @@ class PosixTests():
 
         # punch the test_dir2 object.
         # this makes test_dir2 an empty dir (leaking everything under it)
-        cmd = [daos_mw_fi, pool, cont, "punch_obj", "/test_dir2"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_obj", "/test_dir2"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
@@ -3332,7 +3331,8 @@ class PosixTests():
 
         # fs check with relink should find 3 leaked dirs and 1 leaked file that were directly under
         # test_dir2. Everything under those leaked dirs are relinked but not reported as leaked.
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink', '--dir-name', 'lf2']
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink',
+               '--dir-name', 'lf2']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3342,7 +3342,7 @@ class PosixTests():
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
-        cmd = ['fs', 'check', pool, cont, '--flags', 'print,relink']
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3387,9 +3387,6 @@ class PosixTests():
     def test_daos_fs_fix(self):
         """Test DAOS FS Fix Tool"""
 
-        pool = self.pool.id()
-        cont = self.container
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
@@ -3423,17 +3420,17 @@ class PosixTests():
         daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
         cmd_env = get_base_env()
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
-        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/f1"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/f1"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
         assert rc.returncode == 0
-        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/1d1/f3"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d1/f3"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
         assert rc.returncode == 0
-        cmd = [daos_mw_fi, pool, cont, "corrupt_entry", "/test_dir/1d2"]
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d2"]
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=cmd_env, check=False, cwd=dfuse.dir)
@@ -3459,8 +3456,8 @@ class PosixTests():
             assert error.errno == errno.EINVAL
 
         # fix corrupted entries while dfuse is running - should fail
-        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
-               '--chunk-size', '1048576']
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
+               '--type', '--chunk-size', '1048576']
         rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
         print(rc)
         assert rc.returncode != 0
@@ -3474,8 +3471,8 @@ class PosixTests():
             self.fatal_errors = True
 
         # fix corrupted entries
-        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/f1', '--type',
-               '--chunk-size', '1048576']
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
+               '--type', '--chunk-size', '1048576']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3484,8 +3481,8 @@ class PosixTests():
         if line[-1] != 'Adjusting chunk size of /test_dir/f1 to 1048576':
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
-        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/1d1/f3', '--type',
-               '--chunk-size', '1048576']
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path',
+               '/test_dir/1d1/f3', '--type', '--chunk-size', '1048576']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
@@ -3494,7 +3491,8 @@ class PosixTests():
         if line[-1] != 'Adjusting chunk size of /test_dir/1d1/f3 to 1048576':
             raise NLTestFail('daos fs fix-entry /test_dir/1d1/f3')
 
-        cmd = ['fs', 'fix-entry', pool, cont, '--dfs-path', '/test_dir/1d2', '--type']
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path',
+               '/test_dir/1d2', '--type']
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
