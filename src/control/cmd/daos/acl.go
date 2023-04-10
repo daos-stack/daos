@@ -193,7 +193,7 @@ func aclToC(acl *control.AccessControlList) (*C.struct_daos_acl, func(), error) 
 			"unable to create ACL structure")
 	}
 
-	return cACL, func() { C.free(unsafe.Pointer(cACL)) }, nil
+	return cACL, func() { C.daos_acl_free(cACL) }, nil
 }
 
 type containerUpdateACLCmd struct {
