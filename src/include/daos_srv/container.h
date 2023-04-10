@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,8 +123,6 @@ struct ds_cont_child {
 	struct btr_root		 sc_dtx_cos_btr;
 	/* The global list for committable DTXs. */
 	d_list_t		 sc_dtx_cos_list;
-	/* The pool map version for the latest DTX resync on the container. */
-	uint32_t		 sc_dtx_resync_ver;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */

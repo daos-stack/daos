@@ -680,6 +680,9 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	csum_orw->orw_sgls.ca_arrays = NULL;
 	csum_orw->orw_bulks.ca_count = 0;
 	csum_orw->orw_bulks.ca_arrays = NULL;
+	csum_orw->orw_dkey_csum = NULL;
+	csum_orw->orw_iod_array.oia_iod_nr = 0;
+	csum_orw->orw_nr = 0;
 	crt_req_addref(csum_rpc);
 	crt_req_addref(rpc);
 	return crt_req_send(csum_rpc, csum_report_cb, rpc);

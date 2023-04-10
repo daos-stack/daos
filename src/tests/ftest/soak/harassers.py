@@ -8,7 +8,6 @@ from soak_test_base import SoakTestBase
 
 
 class SoakHarassers(SoakTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs soak with harassers.
 
     :avocado: recursive
