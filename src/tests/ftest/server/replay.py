@@ -271,12 +271,12 @@ class ReplayTests(TestWithServers):
 
         self.log_step('Modify at least one different attribute on each pool and container')
         modify_attributes = [
-            # Pool attributes
+            # Settable pool attributes
             {'checkpoint_freq': list(range(1, 10)),
              'checkpoint_thresh': list(range(25, 75)),
              'scrub-freq': list(range(604200, 605200))},
-            # Container attributes
-            {'dedup_threshold': list(range(3072, 5120, 64))},
+            # Settable container attributes
+            {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)]},
         ]
         for container in containers:
             for index, item in enumerate((container.pool, container)):
