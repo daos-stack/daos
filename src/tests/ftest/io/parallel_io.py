@@ -16,7 +16,6 @@ from ior_test_base import IorTestBase
 from run_utils import run_remote
 
 
-# pylint: disable=too-many-ancestors
 class ParallelIo(FioBase, IorTestBase):
     """Base Parallel IO test class.
 

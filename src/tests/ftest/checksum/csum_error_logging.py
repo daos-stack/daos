@@ -17,7 +17,7 @@ class CsumErrorLog(DaosCoreBase):
     in the NVME device due to checksum fault injection.
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes,too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
 
     def get_checksum_error_value(self, dmg, device_id):
         """Get checksum error value from dmg storage_query_device_health.

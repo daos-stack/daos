@@ -12,7 +12,6 @@ from job_manager_utils import get_job_manager
 
 
 class DaosAggregationMultiPoolCont(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
 
        Run IOR with same file option to verify the

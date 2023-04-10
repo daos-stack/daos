@@ -17,7 +17,6 @@ from exception_utils import CommandFailure
 
 
 class NvmePoolCapacity(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify NOSPC
     condition is reported when accessing data beyond
     pool size.
