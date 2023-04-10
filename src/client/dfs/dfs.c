@@ -7120,7 +7120,7 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 out_super:
 	rc2 = daos_obj_close(super_oh, NULL);
 	if (rc == 0)
-		rc = rc2;
+		rc = daos_der2errno(rc2);
 out_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -7141,7 +7141,7 @@ dfs_relink_root(daos_handle_t coh)
 	struct dfs_entry		rentry = {0};
 	struct timespec			now;
 	int				i;
-	int				rc;
+	int				rc, rc2;
 
 	prop = daos_prop_alloc(num_props);
 	if (prop == NULL)
@@ -7206,7 +7206,9 @@ dfs_relink_root(daos_handle_t coh)
 	}
 
 out_super:
-	daos_obj_close(super_oh, NULL);
+	rc2 = daos_obj_close(super_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
 out_prop:
 	daos_prop_free(prop);
 	return rc;

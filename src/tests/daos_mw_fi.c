@@ -258,7 +258,7 @@ main(int argc, char **argv)
 	struct daos_prop_entry		*entry = NULL;
 	int				i;
 	int				op;
-	int				rc;
+	int				rc, rc2;
 
 	if (argc != 5 && argc != 4) {
 		print_usage();
@@ -343,9 +343,13 @@ main(int argc, char **argv)
 out_prop:
 	daos_prop_free(prop);
 out_cont:
-	daos_cont_close(coh, NULL);
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_pool:
-	daos_pool_disconnect(poh, NULL);
+	rc2 = daos_pool_disconnect(poh, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_init:
 	dfs_fini();
 	return rc;
