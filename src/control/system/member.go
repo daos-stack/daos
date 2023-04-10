@@ -58,6 +58,8 @@ const (
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
 	// AllMemberFilter will match all valid member states.
 	AllMemberFilter = MemberState(0xFFFF)
+	// NonExcludedMemberFilter matches all members that don't match the ExcludedMemberFilter.
+	NonExcludedMemberFilter = AllMemberFilter ^ ExcludedMemberFilter
 )
 
 func (ms MemberState) String() string {
