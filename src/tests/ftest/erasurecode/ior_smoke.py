@@ -7,7 +7,6 @@ from ior_test_base import IorTestBase
 
 
 class EcodIor(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """EC IOR class to run smoke tests.
 
     Test Class Description: To validate Erasure code object type classes.
