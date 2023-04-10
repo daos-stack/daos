@@ -104,6 +104,7 @@ if ! post_provision_config_nodes; then
   rc=${PIPESTATUS[0]}
   exit "$rc"
 fi
+rpm -qa | sort
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
 # to nvme.  Sometimes the device gets unbound from vfio-pci, but it is not removed the iommu group
