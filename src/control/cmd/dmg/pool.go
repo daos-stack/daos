@@ -46,6 +46,11 @@ type PoolCmd struct {
 	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
+var (
+	// Default to 6% SCM:94% NVMe
+	defaultTierRatios = []float64{0.06, 0.94}
+)
+
 type tierRatioFlag struct {
 	ratios []float64
 }
@@ -59,14 +64,13 @@ func (trf tierRatioFlag) Ratios() []float64 {
 		return trf.ratios
 	}
 
-	// Default to 6% SCM:94% NVMe
-	return []float64{0.06, 0.94}
+	return defaultTierRatios
 }
 
 func (trf tierRatioFlag) String() string {
 	var ratioStrs []string
 	for _, ratio := range trf.Ratios() {
-		ratioStrs = append(ratioStrs, fmt.Sprintf("%.2f", ratio))
+		ratioStrs = append(ratioStrs, pretty.PrintTierRatio(ratio))
 	}
 	return strings.Join(ratioStrs, ",")
 }
@@ -85,7 +89,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	}
 
 	for _, trStr := range strings.Split(fv, ",") {
-		tr, err := strconv.ParseFloat(strings.TrimSpace(trStr), 64)
+		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
 		if err != nil {
 			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
 		}
@@ -101,7 +105,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 
 	var totalRatios float64
 	for _, ratio := range trf.ratios {
-		if ratio > 1 {
+		if ratio < 0 || ratio > 1 {
 			return errors.New("Storage tier ratio must be a value between 0-100")
 		}
 		totalRatios += ratio
