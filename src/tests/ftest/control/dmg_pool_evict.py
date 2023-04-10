@@ -3,8 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
+
 from apricot import TestWithServers
 from exception_utils import CommandFailure
+from pydaos.raw import daos_cref, DaosApiError, DaosContPropEnum
 
 
 class DmgPoolEvictTest(TestWithServers):
@@ -42,7 +45,23 @@ class DmgPoolEvictTest(TestWithServers):
             self.pool.append(self.get_pool())
             self.container.append(self.get_container(self.pool[-1]))
 
-        # Call dmg pool evict on the second pool.
+        # Open the second container via DAOS API.
+        self.container[-1].open(pool_handle=self.pool[-1].pool.handle)
+
+        # Perform a simple property query on the second container
+        # to verify that the pool handle is valid.
+        cont_prop = daos_cref.DaosProperty(1)
+        cont_prop.dpp_entries[0].dpe_type = ctypes.c_uint32(
+            DaosContPropEnum.DAOS_PROP_CO_LABEL.value)
+
+        try:
+            self.container[-1].container.query(cont_prop=cont_prop)
+        except DaosApiError as error:
+            self.fail("unexpected error querying container: {}".format(error))
+
+        # Call dmg pool evict on the second pool. We should see that the handle
+        # has been evicted in the server logs, and subsequent API calls with this
+        # handle should fail.
         self.pool[-1].evict()
 
         daos_cmd = self.get_daos_command()
@@ -64,6 +83,16 @@ class DmgPoolEvictTest(TestWithServers):
         except CommandFailure:
             self.fail(
                 "daos pool list-cont with second pool failed after pool evict!")
+
+        # Query again on the second container to verify that the pool handle is
+        # invalid due to the eviction.
+        try:
+            self.container[-1].container.query(cont_prop=cont_prop)
+        except DaosApiError:
+            pass
+        else:
+            self.fail(
+                "container API query with second pool succeeded after pool evict!")
 
         self.container.pop()
 
