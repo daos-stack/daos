@@ -68,13 +68,15 @@ func FaultScmInvalidPMem(msg string) *fault.Fault {
 }
 
 // FaultRamdiskLowMem indicates that total RAM is insufficient to support given configuration.
-func FaultRamdiskLowMem(memRamdiskMin, ramdiskSize uint64) *fault.Fault {
+func FaultRamdiskLowMem(confRamdiskSize, memNeed, memHave uint64) *fault.Fault {
 	return storageFault(
 		code.RamdiskLowMem,
-		fmt.Sprintf("Total system memory (RAM) insufficient for tmpfs SCM, want %s have "+
-			"%s", humanize.IBytes(memRamdiskMin), humanize.IBytes(ramdiskSize)),
+		fmt.Sprintf("Total system memory (RAM) insufficient for configured %s ram-disk "+
+			"size, want %s RAM but only have %s",
+			humanize.IBytes(confRamdiskSize), humanize.IBytes(memNeed),
+			humanize.IBytes(memHave)),
 		"Reduce engine targets or the system_ram_reserved values in server config "+
-			"file if increasing the amount of RAM is not possible")
+			"file if reducing the requested amount of RAM is not possible")
 }
 
 // FaultConfigRamdiskUnderMinMem indicates that the tmpfs size requested in config is less than
@@ -82,7 +84,7 @@ func FaultRamdiskLowMem(memRamdiskMin, ramdiskSize uint64) *fault.Fault {
 func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault {
 	return storageFault(
 		code.ServerConfigRamdiskUnderMinMem,
-		fmt.Sprintf("configured scm tmpfs size %s is lower than the minimum (%s) required "+
+		fmt.Sprintf("configured ram-disk size %s is lower than the minimum (%s) required "+
 			"for SCM", humanize.IBytes(confSize), humanize.IBytes(memRamdiskMin)),
 		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
 			"or manually set to a value above %s in the config file",

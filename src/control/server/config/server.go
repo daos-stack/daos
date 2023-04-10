@@ -512,6 +512,18 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 		storage.DefaultEngineMemRsvd, len(cfg.Engines))
 }
 
+// CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
+func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
+		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+}
+
 // SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
 // Then either validate configured engine storage values or assign if not already set.
 func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
@@ -533,7 +545,13 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 
 	if ramdiskSize < storage.MinRamdiskMem {
 		// Total RAM is insufficient to meet minimum size.
-		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, ramdiskSize)
+		minMem, err := cfg.CalcMemForRamdiskSize(log, mi.HugepageSizeKiB,
+			storage.MinRamdiskMem)
+		if err != nil {
+			log.Error(err.Error())
+		}
+		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, minMem,
+			uint64(mi.MemTotalKiB)*humanize.KiByte)
 	}
 
 	for _, ec := range cfg.Engines {

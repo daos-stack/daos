@@ -544,30 +544,53 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 }
 
 // CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
-// (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
+// (allowed mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
-func CalcRamdiskSize(log logging.Logger, memTot, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
-	if memTot == 0 {
-		return 0, errors.New("requires nonzero total mem")
+func CalcRamdiskSize(log logging.Logger, memAllow, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
+	if memAllow == 0 {
+		return 0, errors.New("requires nonzero allowed mem")
 	}
 	if engCount == 0 {
 		return 0, errors.New("requires nonzero nr engines")
 	}
 
 	msgStats := fmt.Sprintf("mem total: %s (%d), mem hugepage: %s, nr engines: %d, "+
-		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memTot), memTot,
+		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memAllow), memAllow,
 		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
 		humanize.IBytes(memEng))
 
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
-	if memTot < memRsvd {
+	if memAllow < memRsvd {
 		return 0, errors.Errorf("insufficient ram to meet minimum requirements (%s)",
 			msgStats)
 	}
 
-	ramdiskSize := (memTot - memRsvd) / uint64(engCount)
+	ramdiskSize := (memAllow - memRsvd) / uint64(engCount)
 
-	log.Debugf("tmpfs scm size %s calculated using %s", humanize.IBytes(ramdiskSize), msgStats)
+	log.Debugf("ram-disk size %s calculated using %s", humanize.IBytes(ramdiskSize), msgStats)
 
 	return ramdiskSize, nil
+}
+
+// CalcMemForRamdiskSize returns the minimum RAM required for the input requested RAM-disk size.
+func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
+	if ramdiskSize == 0 {
+		return 0, errors.New("requires nonzero ram-disk size")
+	}
+	if engCount == 0 {
+		return 0, errors.New("requires nonzero nr engines")
+	}
+
+	msgStats := fmt.Sprintf("required ram-disk size: %s (%d), mem hugepage: %s, nr engines: %d, "+
+		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(ramdiskSize), ramdiskSize,
+		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
+		humanize.IBytes(memEng))
+
+	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
+	memReqd := memRsvd + (ramdiskSize * uint64(engCount))
+
+	log.Debugf("%s RAM needed for ram-disk size calculated using %s", humanize.IBytes(memReqd),
+		msgStats)
+
+	return memReqd, nil
 }

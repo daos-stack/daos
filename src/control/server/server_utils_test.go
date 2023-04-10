@@ -31,6 +31,42 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// basic engine configs populated enough to complete validation
+func basicEngineCfg(i int) *engine.Config {
+	return engine.MockConfig().WithFabricInterfacePort(20000).
+		WithFabricInterface(fmt.Sprintf("ib%d", i))
+}
+func pmemTier(i int) *storage.TierConfig {
+	return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
+		WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
+		WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i))
+}
+func ramTier(i, ramdiskSize int) *storage.TierConfig {
+	return storage.NewTierConfig().WithStorageClass(storage.ClassRam.String()).
+		WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
+		WithScmRamdiskSize(uint(ramdiskSize))
+}
+func nvmeTier(i int) *storage.TierConfig {
+	return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
+		WithBdevDeviceList(test.MockPCIAddr(int32(i)))
+}
+func fakeNvmeTier() *storage.TierConfig {
+	return storage.NewTierConfig().WithStorageClass(storage.ClassFile.String()).
+		WithBdevFileSize(10).WithBdevDeviceList("bdev1", "bdev2")
+}
+func pmemOnlyEngine(i int) *engine.Config {
+	return basicEngineCfg(i).WithStorage(pmemTier(i)).WithTargetCount(8)
+}
+func pmemEngine(i int) *engine.Config {
+	return basicEngineCfg(i).WithStorage(pmemTier(i), nvmeTier(i)).WithTargetCount(16)
+}
+func pmemFakeNvmeEngine(i int) *engine.Config {
+	return basicEngineCfg(i).WithStorage(pmemTier(i), fakeNvmeTier()).WithTargetCount(16)
+}
+func ramEngine(i, ramdiskSize int) *engine.Config {
+	return basicEngineCfg(i).WithStorage(ramTier(i, ramdiskSize), nvmeTier(i)).WithTargetCount(16)
+}
+
 var mockFabIfSet = hardware.NewFabricInterfaceSet(
 	&hardware.FabricInterface{
 		Name:          "eth0",
@@ -260,34 +296,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		t.Fatal("prepBdevStorage tests cannot be run as root user")
 	}
 
-	// basic engine configs populated enough to complete validation
-	basicEngineCfg := func(i int) *engine.Config {
-		return engine.MockConfig().WithFabricInterfacePort(20000).
-			WithFabricInterface(fmt.Sprintf("ib%d", i))
-	}
-	scmTier := func(i int) *storage.TierConfig {
-		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
-			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i))
-	}
-	nvmeTier := func(i int) *storage.TierConfig {
-		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
-			WithBdevDeviceList(test.MockPCIAddr(int32(i)))
-	}
-	nonNvmeTier := func() *storage.TierConfig {
-		return storage.NewTierConfig().WithStorageClass(storage.ClassFile.String()).
-			WithBdevFileSize(10).WithBdevDeviceList("bdev1", "bdev2")
-	}
-	scmEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i)).WithTargetCount(8)
-	}
-	nvmeEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
-	}
-	nonNvmeEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i), nonNvmeTier()).WithTargetCount(16)
-	}
-
 	for name, tc := range map[string]struct {
 		iommuDisabled   bool
 		srvCfgExtra     func(*config.Server) *config.Server
@@ -303,14 +311,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"vfio disabled; non-root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
-					WithEngines(nvmeEngine(0))
+					WithEngines(pmemEngine(0))
 			},
 			expPrepErr: FaultVfioDisabled,
 		},
 		"vfio disabled; root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
-					WithEngines(nvmeEngine(0))
+					WithEngines(pmemEngine(0))
 			},
 			overrideUser:  "root",
 			hugepagesFree: 8192,
@@ -327,7 +335,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"non-nvme bdevs; vfio disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
-					WithEngines(nonNvmeEngine(0))
+					WithEngines(pmemFakeNvmeEngine(0))
 			},
 			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -342,14 +350,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(nvmeEngine(0), nvmeEngine(1))
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
 			},
 			expPrepErr: FaultIommuDisabled,
 		},
 		"iommu disabled; root user": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(nvmeEngine(0))
+				return sc.WithEngines(pmemEngine(0))
 			},
 			overrideUser:  "root",
 			hugepagesFree: 8192,
@@ -365,7 +373,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"non-nvme bdevs; iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(nonNvmeEngine(0))
+				return sc.WithEngines(pmemFakeNvmeEngine(0))
 			},
 			hugepagesFree: 8192,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -379,13 +387,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableHugepages(true).
-					WithEngines(scmEngine(0), scmEngine(1))
+					WithEngines(pmemOnlyEngine(0), pmemOnlyEngine(1))
 			},
 		},
 		"no bdevs configured; nr_hugepages unset": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(0).
-					WithEngines(scmEngine(0), scmEngine(1))
+					WithEngines(pmemOnlyEngine(0), pmemOnlyEngine(1))
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugepageCount: scanMinHugepageCount,
@@ -396,7 +404,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"no bdevs configured; nr_hugepages set": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(1024).
-					WithEngines(scmEngine(0), scmEngine(1))
+					WithEngines(pmemOnlyEngine(0), pmemOnlyEngine(1))
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugepageCount: 1024,
@@ -407,7 +415,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"2 engines both numa 0; hugepage alloc only on numa 0": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0), nvmeEngine(1).WithPinnedNumaNode(0)).
+					WithEngines(pmemEngine(0), pmemEngine(1).WithPinnedNumaNode(0)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 			hugepagesFree: 16384,
@@ -426,7 +434,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"2 engines both numa 1; hugepage alloc only on numa 1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0).WithPinnedNumaNode(1), nvmeEngine(1))
+					WithEngines(pmemEngine(0).WithPinnedNumaNode(1), pmemEngine(1))
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -443,7 +451,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"2 engines; hugepage alloc across numa 0,1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0), nvmeEngine(1))
+					WithEngines(pmemEngine(0), pmemEngine(1))
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -460,7 +468,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"2 engines; hugepage alloc across numa 0,1; insufficient free": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0), nvmeEngine(1))
+					WithEngines(pmemEngine(0), pmemEngine(1))
 			},
 			hugepagesFree: 8191,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -511,7 +519,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"reset fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0), nvmeEngine(1)).
+					WithEngines(pmemEngine(0), pmemEngine(1)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 			hugepagesFree: 16384,
@@ -534,7 +542,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"vmd disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(16384).
-					WithEngines(nvmeEngine(0), nvmeEngine(1)).
+					WithEngines(pmemEngine(0), pmemEngine(1)).
 					WithDisableVMD(true)
 			},
 			hugepagesFree: 16384,
@@ -552,7 +560,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		"non-nvme bdevs; vmd enabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugepages(8192).
-					WithEngines(nonNvmeEngine(0))
+					WithEngines(pmemFakeNvmeEngine(0))
 			},
 			hugepagesFree: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
@@ -568,16 +576,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithNrHugepages(16384).WithEngines(
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
 					engine.MockConfig().WithFabricInterfacePort(21000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
-						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
 					engine.MockConfig().WithFabricInterfacePort(21000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
-						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
 				)
 			},
 			hugepagesFree: 16384,
@@ -597,16 +605,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithNrHugepages(16384).WithEngines(
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
 					engine.MockConfig().WithFabricInterfacePort(21000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
 					engine.MockConfig().WithFabricInterfacePort(22000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
 					engine.MockConfig().WithFabricInterfacePort(20000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
-						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
 				)
 			},
 			expPrepErr: errors.New("uneven distribution"),
@@ -719,6 +727,93 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				"unexpected memory size")
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
+		})
+	}
+}
+
+func TestServer_checkMemAvailable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		srvCfgExtra func(*config.Server) *config.Server
+		memAvailGiB int
+		expErr      error
+	}{
+		"pmem tier; skip check": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0)).
+					WithBdevExclude(test.MockPCIAddr(1))
+			},
+		},
+		"ram tier; perform check": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10)).
+					WithBdevExclude(test.MockPCIAddr(1))
+			},
+			memAvailGiB: 16,
+		},
+		"ram tier; perform check; low mem": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10)).
+					WithBdevExclude(test.MockPCIAddr(1))
+			},
+			memAvailGiB: 15,
+			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
+				16*humanize.GiByte, 15*humanize.GiByte),
+		},
+		"ram tier; perform check; low mem; reduced sys reserved": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10)).
+					WithBdevExclude(test.MockPCIAddr(1)).
+					WithSystemRamReserved(5)
+			},
+			memAvailGiB: 15,
+		},
+		"dual engine; ram tier; perform check": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
+					WithBdevExclude(test.MockPCIAddr(1))
+			},
+			// Mem required = (20gib ram-disks + 6gib sys + 2gib engines) - 10%
+			memAvailGiB: 26,
+		},
+		"dual engine; ram tier; perform check; low mem": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
+					WithBdevExclude(test.MockPCIAddr(1))
+			},
+			// Mem required = (20gib ram-disks + 6gib sys + 2gib engines) - 10%
+			memAvailGiB: 25,
+			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
+				26*humanize.GiByte, 25*humanize.GiByte),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
+			cfg = tc.srvCfgExtra(cfg)
+
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+				MemAvailableKiB: (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte,
+			}
+
+			if len(cfg.Engines) == 0 {
+				t.Fatal("test expects at least one engine in config")
+			}
+
+			ec := cfg.Engines[0]
+			runner := engine.NewRunner(log, ec)
+			provider := storage.MockProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
+			instance := NewEngineInstance(log, provider, nil, runner)
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotErr := checkMemAvailable(srv, instance, mi)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

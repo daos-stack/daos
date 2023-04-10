@@ -484,7 +484,10 @@ func cleanEngineHugepages(srv *server) error {
 	return nil
 }
 
-func checkAvailMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+// Check to be performed after hugepages have been allocated, as such the available memory MemInfo
+// value will show that Hugetlb has already been allocated (and therefore no longer available) so
+// don't need to take into account hugepage allowances during calculation.
+func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
 	sc, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return err
@@ -494,20 +497,29 @@ func checkAvailMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
 		return nil // no ramdisk to size
 	}
 
-	ramdiskSize, err := srv.cfg.CalcRamdiskSize(srv.log, mi.HugepageSizeKiB, mi.MemAvailableKiB)
+	// Pass zero hugepage size as hugemem reservation already factored in available memory.
+	ramdiskSize, err := srv.cfg.CalcRamdiskSize(srv.log, 0, mi.MemAvailableKiB)
 	if err != nil {
-		return errors.Wrapf(err, "calculate ramdisk size")
+		return err
 	}
 
 	// Fail if size calculated using available memory is less than 90% of what has been set in
 	// the configuration.
-	minSize := uint64(((sc.Scm.RamdiskSize * humanize.GiByte) / 100) * 90)
-	if ramdiskSize < minSize {
-		srv.log.Errorf("available memory reported (%s) is too low to support configured"+
-			"ramdisk size (%s)",
-			humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)),
-			humanize.IBytes(uint64(sc.Scm.RamdiskSize)))
-		return storage.FaultRamdiskLowMem(minSize, ramdiskSize)
+	sizeMin := uint64(((sc.Scm.RamdiskSize * humanize.GiByte) / 100) * 90)
+	if ramdiskSize < sizeMin {
+		bytesAvail := uint64(mi.MemAvailableKiB * humanize.KiByte)
+		bytesInCfg := uint64(sc.Scm.RamdiskSize * humanize.GiByte)
+
+		srv.log.Errorf("available memory reported (%s) is too low to support configured "+
+			"ramdisk size (%s)", humanize.IBytes(bytesAvail),
+			humanize.IBytes(bytesInCfg))
+
+		memMin, err := srv.cfg.CalcMemForRamdiskSize(srv.log, 0, sizeMin)
+		if err != nil {
+			srv.log.Error(err.Error())
+		}
+
+		return storage.FaultRamdiskLowMem(bytesInCfg, memMin, bytesAvail)
 	}
 
 	return nil
@@ -551,8 +563,8 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Check available RAM is sufficient before starting engines.
-		if err := checkAvailMem(srv, engine, mi); err != nil {
-			return errors.Wrap(err, "check available memory resources")
+		if err := checkMemAvailable(srv, engine, mi); err != nil {
+			return err
 		}
 
 		return nil

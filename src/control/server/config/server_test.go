@@ -983,7 +983,9 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expErr: storage.FaultRamdiskLowMem(storage.MinRamdiskMem, humanize.GiByte*3),
+			// error indicates min RAM needed = 40 + 4 gib per engine
+			expErr: storage.FaultRamdiskLowMem(storage.MinRamdiskMem,
+				humanize.GiByte*48, humanize.GiByte*46),
 		},
 		"custom value set": {
 			memTotBytes: humanize.GiByte * 60,
