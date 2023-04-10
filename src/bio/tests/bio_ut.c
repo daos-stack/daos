@@ -78,7 +78,6 @@ ut_init(struct bio_ut_args *args)
 		D_ERROR("Allocate Per-xstream NVMe context failed. "DF_RC"\n", DP_RC(rc));
 		goto out_smd;
 	}
-	args->bua_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 
 	return 0;
 out_smd:
@@ -96,13 +95,14 @@ out_debug:
 static inline void
 print_usage(void)
 {
-	fprintf(stdout, "bio_ut [-d <db_path>]\n");
+	fprintf(stdout, "bio_ut [-d <db_path>] [-s rand_seed]\n");
 }
 
 int main(int argc, char **argv)
 {
 	static struct option long_ops[] = {
 		{ "db_path",	required_argument,	NULL,	'd' },
+		{ "seed",	required_argument,	NULL,	's' },
 		{ "help",	no_argument,		NULL,	'h' },
 		{ NULL,		0,			NULL,	0   },
 	};
@@ -110,11 +110,15 @@ int main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	while ((rc = getopt_long(argc, argv, "d:h", long_ops, NULL)) != -1) {
+	ut_args.bua_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
+	while ((rc = getopt_long(argc, argv, "d:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'd':
 			memset(db_path, 0, sizeof(db_path));
 			strncpy(db_path, optarg, sizeof(db_path) - 1);
+			break;
+		case 's':
+			ut_args.bua_seed = atol(optarg);
 			break;
 		case 'h':
 			print_usage();
@@ -129,6 +133,7 @@ int main(int argc, char **argv)
 	if (strlen(db_path) == 0)
 		strncpy(db_path, "/mnt/daos", sizeof(db_path) - 1);
 
+	fprintf(stdout, "Run all BIO unit tests with rand seed:%u\n", ut_args.bua_seed);
 	rc = run_wal_tests();
 
 	return rc;
