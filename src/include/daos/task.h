@@ -56,7 +56,7 @@ struct daos_task_args {
 		daos_cont_create_snap_t	cont_create_snap;
 		daos_cont_destroy_snap_t cont_destroy_snap;
 		daos_cont_snap_oit_oid_get_t cont_get_oit_oid;
-		daos_cont_snap_oit_dump_t cont_snap_oit_dump;
+		daos_cont_snap_oit_create_t cont_snap_oit_dump;
 
 		/** Transaction */
 		daos_tx_open_t		tx_open;

@@ -120,8 +120,7 @@ typedef enum {
 
 	DAOS_OPC_POOL_FILTER_CONT,
 	DAOS_OPC_OBJ_KEY2ANCHOR,
-	DAOS_OPC_CONT_SNAP_OIT_OID_GET,
-	DAOS_OPC_CONT_SNAP_OIT_DUMP,
+	DAOS_OPC_CONT_SNAP_OIT_CREATE,
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -533,7 +532,7 @@ typedef struct {
 	uint32_t		*ver;
 } daos_cont_snap_oit_oid_get_t;
 
-/** Container snapshot oit dump args */
+/** Container snapshot oit create args */
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		 coh;
@@ -541,7 +540,7 @@ typedef struct {
 	daos_epoch_t		 epoch;
 	/** Optional null terminated name for snapshot. */
 	char			*name;
-} daos_cont_snap_oit_dump_t;
+} daos_cont_snap_oit_create_t;
 
 /** Transaction Open args */
 typedef struct {

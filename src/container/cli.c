@@ -2974,7 +2974,7 @@ dc_cont_create_snap(tse_task_t *task)
 int
 dc_cont_snap_oit_dump(tse_task_t *task)
 {
-	daos_cont_snap_oit_dump_t *args;
+	daos_cont_snap_oit_create_t *args;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2985,7 +2985,7 @@ dc_cont_snap_oit_dump(tse_task_t *task)
 		return -DER_NOSYS;
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_OIT_DUMP, &args->epoch,
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_CREATE, &args->epoch,
 			   0, task);
 }
 

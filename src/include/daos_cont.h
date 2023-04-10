@@ -715,8 +715,8 @@ daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gi
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_snap_oit_dump(daos_handle_t coh, daos_epoch_t epoch, char *name,
-			daos_event_t *ev);
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
+			  daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

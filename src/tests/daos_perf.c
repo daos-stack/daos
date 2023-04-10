@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -182,7 +182,7 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 	if (rc)
 		fprintf(stderr, "failed to create snapshot\n");
 
-	rc = daos_cont_snap_oit_dump(ts_ctx.tsc_coh, epoch, NULL, NULL);
+	rc = daos_cont_snap_oit_create(ts_ctx.tsc_coh, epoch, NULL, NULL);
 	if (rc)
 		fprintf(stderr, "failed to dump oit\n");
 

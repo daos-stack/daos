@@ -89,7 +89,7 @@
 	X(CONT_SNAP_OIT_OID_GET,							\
 		0, &CQF_cont_snap_oit_oid_get,						\
 		hdlr, NULL),								\
-	X(CONT_SNAP_OIT_DUMP,								\
+	X(CONT_SNAP_OIT_CREATE,								\
 		0, &CQF_cont_epoch_op,							\
 		hdlr, NULL)
 

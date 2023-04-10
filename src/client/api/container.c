@@ -719,14 +719,14 @@ daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 }
 
 int
-daos_cont_snap_oit_dump(daos_handle_t coh, daos_epoch_t epoch, char *name,
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
 			daos_event_t *ev)
 {
-	daos_cont_snap_oit_dump_t *args;
+	daos_cont_snap_oit_create_t *args;
 	tse_task_t		  *task;
 	int			   rc;
 
-	DAOS_API_ARG_ASSERT(*args, CONT_SNAP_OIT_DUMP);
+	DAOS_API_ARG_ASSERT(*args, CONT_SNAP_OIT_CREATE);
 
 	rc = dc_task_create(dc_cont_snap_oit_dump, NULL, ev, &task);
 	if (rc)

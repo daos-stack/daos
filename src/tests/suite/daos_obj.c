@@ -4892,7 +4892,7 @@ oit_list_filter(void **state)
 	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_snap_oit_dump(arg->coh, snap_epoch, NULL, NULL);
+	rc = daos_cont_snap_oit_create(arg->coh, snap_epoch, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_oit_open(arg->coh, snap_epoch, &toh, NULL);
