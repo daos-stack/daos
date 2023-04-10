@@ -2306,8 +2306,7 @@ class DaosSnapshot():
         epr.epr_hi = epoch
         retcode = func(coh, epr, evnt)
         if retcode != 0:
-            raise Exception("Failed to destroy the snapshot. RC: {0}"
-                            .format(retcode))
+            raise DaosApiError("Failed to destroy the snapshot. RC: {}".format(retcode))
 
 
 class DaosContext():
