@@ -8,7 +8,6 @@ from ec_utils import ErasureCodeSingle
 
 
 class EcodDisabledRebuildSingle(ErasureCodeSingle):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object for single data
             type, after killing servers when pool rebuild is off.
