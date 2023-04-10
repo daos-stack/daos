@@ -745,7 +745,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_logs/*']
+                            unitTestPost artifacts: ['unit_test_logs/']
                             job_status_update()
                         }
                     }
@@ -809,7 +809,7 @@ pipeline {
                             // test results, and while code coverage is being
                             // added.
                             unitTestPost ignore_failure: true,
-                                         artifacts: ['covc_test_logs/*',
+                                         artifacts: ['covc_test_logs/',
                                                      'covc_vm_test/**']
                             job_status_update()
                         }
@@ -834,7 +834,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/*.log'],
+                                                     'unit_test_memcheck_logs/**/*.log'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
