@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -500,6 +500,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void

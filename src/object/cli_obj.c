@@ -209,6 +209,20 @@ dc_obj_hdl2cont_hdl(daos_handle_t oh)
 	return hdl;
 }
 
+uint32_t
+dc_obj_hdl2layout_ver(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	uint32_t ver;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	ver = obj->cob_layout_version;
+	obj_decref(obj);
+	return ver;
+
+}
+
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
