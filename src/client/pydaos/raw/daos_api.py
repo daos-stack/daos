@@ -15,9 +15,7 @@ import sys
 import time
 import enum
 
-# pylint: disable=relative-beyond-top-level
-from .. import pydaos_shim
-# pylint: enable=relative-beyond-top-level
+from .. import pydaos_shim  # pylint: disable=relative-beyond-top-level
 
 from . import daos_cref
 from . import conversion
