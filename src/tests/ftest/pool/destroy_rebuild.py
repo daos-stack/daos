@@ -15,9 +15,6 @@ class DestroyRebuild(TestWithServers):
     :avocado: recursive
     """
 
-    # also remove the commented line form yaml file for rank 0
-    CANCEL_FOR_TICKET = [["DAOS-4891", "rank_to_kill", "[0]"]]
-
     def test_destroy_while_rebuilding(self):
         """Jira ID: DAOS-xxxx.
 
