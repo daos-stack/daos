@@ -1482,7 +1482,9 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
-        scm_size = 16
+        scm_size = 0
+        if args.tmpfs and args.tmpfs != "auto":
+            scm_size = int(args.tmpfs)
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1504,7 +1506,8 @@ class Launch():
             # Change the auto-storage extra yaml format if md_on_ssd is requested
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
-                scm_size = 100
+                if scm_size != 0:
+                    scm_size = 100
                 max_nvme_tiers = 5
 
         self.details["storage"] = storage_info.device_dict()
@@ -3120,6 +3123,12 @@ def main():
         "-ss", "--slurm_setup",
         action="store_true",
         help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "-t", "--tmpfs",
+        action="store",
+        default="auto",
+        help="set tmpfs size, in GB, for DAOS servers. e.g. '-t 1'"
+             "or 'auto' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",
