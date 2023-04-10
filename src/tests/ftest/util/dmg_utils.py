@@ -58,9 +58,6 @@ class DmgCommand(DmgCommandBase):
     METHOD_REGEX = {
         "run":
             r"(.*)",
-        "storage_set_faulty":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
-            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
     def _get_new(self):

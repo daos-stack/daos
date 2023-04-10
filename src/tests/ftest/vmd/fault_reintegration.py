@@ -12,17 +12,16 @@ from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from nvme_utils import set_device_faulty
-from osa_utils import OSAUtils
+from apricot import TestWithServers
 
 
-class NvmeFaultReintegrate(OSAUtils):
+class NvmeFaultReintegrate(TestWithServers):
     """
     Test Class Description: This test runs
     NVME fault and reintegration test cases.
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
     def setUp(self):
         """Set up for test case."""
         super().setUp()
@@ -75,6 +74,7 @@ class NvmeFaultReintegrate(OSAUtils):
 
         Returns:
             list: a list of any errors detected when removing the pool
+
         """
         error_list = []
         try:
@@ -84,8 +84,12 @@ class NvmeFaultReintegrate(OSAUtils):
             error_list.append("Error resetting device {}: {}".format(device, error))
         return error_list
 
-    def run_ior_with_nvme_fault(self, oclass=None):
-        """Perform ior write with nvme fault testing.
+    def test_nvme_fault_reintegration(self):
+        """Test ID: DAOS-10034.
+
+        Test Description:
+            This method is called from the avocado test infrastructure. This method
+                invokes NVME set fault, reintegration and led verification test.
 
         Test steps:
             1. Start the DAOS servers.
@@ -98,13 +102,19 @@ class NvmeFaultReintegrate(OSAUtils):
             8. Verify IOR data and check container.
             9. Replace the same drive back.
             10. Drive status LED should be off indicating good device is plugged-in.
-        Args:
-            oclass (str, optional): object class (eg: RP_2G8, S1,etc). Defaults to None
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=vmd,vmd_led
+        :avocado: tags=NvmeFaultReintegrate,test_nvme_fault_reintegration
+
         """
         # 1.
         self.log_step("Bring up server and reset led of all devices.")
-        if oclass is None:
-            oclass = self.ior_cmd.dfs_oclass.value
+        ior_test_seq = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")[0]
+        oclass = self.params.get("dfs_oclass", "/run/ior/iorflags/*")
+        wr_flags = self.params.get("write_flags", "/run/ior/iorflags/*")
+        read_flags = self.params.get("read_flags", "/run/ior/iorflags/*")
         device_info = get_storage_query_device_info(self, self.dmg)
         devices = [device['uuid'] for device in device_info]
         self.log.info("Device information")
@@ -133,7 +143,6 @@ class NvmeFaultReintegrate(OSAUtils):
         job_manager = get_job_manager(self, subprocess=None, timeout=120)
         thread_queue = Queue()
 
-        ior_test_seq = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")[0]
         thread = []
         kwargs = {"thread_queue": thread_queue, "job_id": 1}
         ior_kwargs = {
@@ -156,7 +165,7 @@ class NvmeFaultReintegrate(OSAUtils):
             "namespace": "/run/ior/*",
             "ior_params": {
                 "oclass": oclass,
-                "flags": self.ior_w_flags,
+                "flags": wr_flags,
                 "transfer_size": ior_test_seq[0],
                 "block_size": ior_test_seq[1]
             }
@@ -212,7 +221,7 @@ class NvmeFaultReintegrate(OSAUtils):
 
         # 8. Verify IOR data and check container
         self.log_step("Verify IOR data and check container")
-        ior_kwargs["ior_params"]["flags"] = self.ior_r_flags
+        ior_kwargs["ior_params"]["flags"] = read_flags
         ior_kwargs["log"] = "ior_read_pool_test.log"
         try:
             run_ior(**ior_kwargs)
@@ -236,20 +245,5 @@ class NvmeFaultReintegrate(OSAUtils):
         # 10.
         self.log_step("Drive status LED should be off indicating good device is plugged-in.")
         if not self.check_result(result, "NORMAL", "OFF"):
-            self.register_cleanup(self.reset_fault_device, device=test_dev)
             self.fail("#After storage replace nvme, device not in expected NORMAL, OFF state")
         self.log.info("Test passed")
-
-    def test_nvme_fault_reintegration(self):
-        """Test ID: DAOS-10034.
-
-        Test Description:
-            This method is called from the avocado test infrastructure. This method
-                invokes NVME set fault, reintegration and led verification test.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=vmd,vmd_led
-        :avocado: tags=NvmeFaultReintegrate,test_nvme_fault_reintegration
-        """
-        self.run_ior_with_nvme_fault()
