@@ -37,8 +37,7 @@ case $STAGE_NAME in
 	;;
 esac
 
-rm -rf $test_log_dir
-mkdir $test_log_dir
+mkdir -p $test_log_dir
 
 rsync -v -rlpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ .
 
