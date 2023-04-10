@@ -127,9 +127,8 @@ run_daos_upgrade_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests_only("DAOS_Rebuild_Simple", upgrade_tests,
-				     ARRAY_SIZE(upgrade_tests), sub_tests,
-				     sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS_upgrade", upgrade_tests, ARRAY_SIZE(upgrade_tests),
+				     sub_tests, sub_tests_size);
 
 	par_barrier(PAR_COMM_WORLD);
 

@@ -98,8 +98,8 @@ struct ds_pool {
 	uint64_t		sp_scrub_freq_sec;
 	uint64_t		sp_scrub_thresh;
 	/** WAL checkpointing properties */
-	uint64_t                 sp_checkpoint_mode;
-	uint64_t                 sp_checkpoint_freq;
+	uint32_t                 sp_checkpoint_mode;
+	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
 };
 

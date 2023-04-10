@@ -7,7 +7,6 @@ from daos_io_conf import IoConfTestBase
 
 
 class RbldRunIoConf(IoConfTestBase):
-    # pylint: disable=too-many-ancestors
     """Test daos_run_io_conf.
 
     :avocado: recursive
