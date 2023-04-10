@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
+# pylint: disable=invalid-name
+# pylint: disable=consider-using-f-string
 """
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
@@ -193,6 +195,7 @@ class DDictIter():
         self._kv = ddict
 
     def next(self):
+        # pylint: disable=unnecessary-dunder-call
         """for python 2 compatibility"""
         return self.__next__()
 

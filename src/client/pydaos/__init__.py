@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
+# pylint: disable=consider-using-f-string
 """
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
 import atexit
 # pylint: disable=relative-beyond-top-level
+# pylint: disable-next=import-self
 from . import pydaos_shim
 # pylint: enable=relative-beyond-top-level
 
@@ -36,6 +38,7 @@ class PyDError(Exception):
 
 class DaosClient():
     # pylint: disable=too-few-public-methods
+    # pylint: disable=attribute-defined-outside-init
     """
     DaosClient is responsible for handling DAOS init/fini.
 
