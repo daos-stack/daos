@@ -23,7 +23,7 @@ class DaosAgentSupportCollectLogTest(SupportTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=control,basic,support,daos_server
-        :avocado: tags=test_daos_agent_support_collect_log
+        :avocado: tags=DaosAgentSupportCollectLogTest,test_daos_agent_support_collect_log
         """
         # Create the custom log data which will be collected via support collect-log,
         # Later verify the data file is archived as part of collection.
@@ -42,9 +42,7 @@ class DaosAgentSupportCollectLogTest(SupportTestBase):
             self.fail("Failed to run daos_agent support collect-log command")
 
         # Extract the collected tar.gz file
-        result = self.extract_logs(self.target_folder + ".tar.gz")
-        if result is not None:
-            self.fail(result)
+        self.extract_logs(self.target_folder + ".tar.gz")
 
         # Verify the custom log file collected on each clients.
         self.verify_custom_log_data()

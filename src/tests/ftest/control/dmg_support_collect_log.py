@@ -22,7 +22,7 @@ class DmgSupportCollectLogTest(SupportTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=basic,control,support,dmg
-        :avocado: tags=test_dmg_support_collect_log
+        :avocado: tags=DmgSupportCollectLogTest,test_dmg_support_collect_log
         """
         self.log_hosts = self.hostlist_servers
         # Create the custom log data which will be collected via support collect-log,
@@ -36,17 +36,13 @@ class DmgSupportCollectLogTest(SupportTestBase):
                                               target_folder=self.target_folder,
                                               archive=True)
         status = result["status"]
-        self.assertEqual(status, 0, "bad return status")
+        self.assertEqual(status, 0, "bad return status from dmg support collect-log")
 
         # Extract the collected tar.gz file
-        result = self.extract_logs(self.target_folder + ".tar.gz")
-        if result is not None:
-            self.fail(result)
+        self.extract_logs(self.target_folder + ".tar.gz")
 
         # Verify server logs file collected.
-        result = self.validate_server_log_files()
-        if result is not None:
-            self.fail(result)
+        self.validate_server_log_files()
 
         # Verify the custom log file collected.
         self.verify_custom_log_data()

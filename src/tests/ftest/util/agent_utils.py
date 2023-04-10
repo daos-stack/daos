@@ -193,7 +193,7 @@ class DaosAgentCommand(YamlCommand):
 
         """
         self.set_command(("support", "collect-log"), **kwargs)
-        return self._get_result()
+        return self._get_json_result()
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -297,7 +297,8 @@ class DaosAgentManager(SubprocessManager):
             CommandFailure: if the daos_agent command fails.
 
         Returns:
-            dict: the daos_agent command output converted to a python dictionary
+            RemoteCommandResult: a grouping of the command results from
+                the same hosts with the same return status
 
         """
         cmd = DaosAgentCommand(self.manager.job.command_path)

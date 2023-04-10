@@ -529,15 +529,6 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary
 
         """
-        # Example JSON output:
-        # {
-        #   "response": {
-        #     "host_errors": {}
-        #   },
-        #   "error": null,
-        #   "status": 0
-        # }
-
         kwargs = {
             "stop_on_error": stop_on_error,
             "target_folder": target_folder,
