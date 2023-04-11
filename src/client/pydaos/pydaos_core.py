@@ -10,9 +10,8 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import enum
 
-# pylint: disable=relative-beyond-top-level
+# pylint: disable-next=relative-beyond-top-level
 from . import pydaos_shim
-# pylint: enable=relative-beyond-top-level
 
 from . import DAOS_MAGIC
 from . import PyDError
@@ -178,11 +177,9 @@ class _DObj():
     def __repr__(self):
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
-# pylint: disable=too-few-public-methods
-
 
 class DDictIter():
-
+    # pylint: disable=too-few-public-methods
     """ Iterator class for DDict """
 
     def __init__(self, ddict):
@@ -224,7 +221,6 @@ class DDictIter():
         if len(self._entries) != 0:
             return self._entries.pop()
         raise StopIteration()
-# pylint: enable=too-few-public-methods
 
 
 class DDict(_DObj):
