@@ -668,7 +668,7 @@ func (o *NetworkDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfa
 
 		dev, exists := devsByName[topoName]
 		if !exists {
-			o.log.Debugf("ignoring fabric interface %q (%s) not found in topology", name, topoName)
+			o.log.Tracef("ignoring fabric interface %q (%s) not found in topology", name, topoName)
 			fis.Remove(name)
 			continue
 		}
@@ -772,7 +772,7 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 
 		dev, exists := devsByName[topoName]
 		if !exists {
-			n.log.Debugf("fabric interface %q (%s) not found in topology", name, topoName)
+			n.log.Tracef("fabric interface %q (%s) not found in topology", name, topoName)
 			continue
 		}
 
@@ -819,13 +819,13 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 		}
 
 		if len(fi.NetInterfaces) == 0 {
-			n.log.Debugf("fabric interface %q has no corresponding OS-level device", name)
+			n.log.Tracef("fabric interface %q has no corresponding OS-level device", name)
 			continue
 		}
 
 		ndc, err := n.provider.GetNetDevClass(fi.NetInterfaces.ToSlice()[0])
 		if err != nil {
-			n.log.Debugf("failed to get device class for %q: %s", name, err.Error())
+			n.log.Tracef("failed to get device class for %q: %s", name, err.Error())
 		}
 
 		fi.DeviceClass = ndc
@@ -1064,7 +1064,7 @@ func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan e
 			case NetDevStateDown, NetDevStateUnknown:
 				// Down or unknown can be interpreted as disabled/unusable
 				if params.IgnoreUnusable {
-					log.Debugf("ignoring unusable fabric interface %q", iface)
+					log.Tracef("ignoring unusable fabric interface %q", iface)
 					unusableSet.Add(iface)
 				} else {
 					ch <- errors.Errorf("requested fabric interface %q is unusable", iface)
