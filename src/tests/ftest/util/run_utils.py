@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from socket import gethostname
 import subprocess   # nosec
 import shlex
+import time
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -162,62 +163,29 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
-def get_switch_user(user="root"):
-    """Get the switch user command for the requested user.
-
-    Args:
-        user (str): user account. Defaults to "root".
-
-    Returns:
-        list: the sudo command as a list
-
-    """
-    command = ["sudo", "-n"]
-    if user != "root":
-        # Use runuser to avoid using a password
-        command.extend(["runuser", "-u", user, "--"])
-    return command
-
-
-def get_clush_command_list(hosts, args=None, sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
     """Get the clush command with optional sudo arguments.
 
     Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        list: list of the clush command
-
-    """
-    command = ["clush", "-w", str(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", get_switch_user()])
-        command.extend(get_switch_user())
-    return command
-
-
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
+        hosts (NodeSet): hosts with which to use the clush command.
+        args (str, optional): additional clush command line arguments. Defaults to None.
+        command (str, optional): command to execute with clush. Defaults to empty string.
+        command_env (EnvironmentVariables, optional): environment variables to export with the
+            command. Defaults to None.
+        sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
 
     Returns:
         str: the clush command
 
     """
-    return " ".join(get_clush_command_list(hosts, args, sudo))
+    cmd_list = ["clush"]
+    if args:
+        cmd_list.append(args)
+    cmd_list.extend(["-w", str(hosts)])
+    # If ever needed, this is how to disable host key checking:
+    # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
+    cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
+    return " ".join(cmd_list)
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
@@ -331,21 +299,33 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     return results
 
 
-def command_as_user(command, user):
+def command_as_user(command, user, env=None):
     """Adjust a command to be ran as another user.
 
     Args:
         command (str): the original command
         user (str): user to run as
+        env (EnvironmentVariables, optional): environment variables to export with the command.
+            Defaults to None.
 
     Returns:
         str: command adjusted to run as another user
 
     """
     if not user:
-        return command
-    switch_command = " ".join(get_switch_user(user))
-    return f"{switch_command} {command}"
+        if not env:
+            return command
+        return " ".join([env.to_export_str(), command]).strip()
+
+    cmd_list = ["sudo"]
+    if env:
+        cmd_list.extend(env.to_list())
+    cmd_list.append("-n")
+    if user != "root":
+        # Use runuser to avoid using a password
+        cmd_list.extend(["runuser", "-u", user, "--"])
+    cmd_list.append(command)
+    return " ".join(cmd_list)
 
 
 def find_command(source, pattern, depth, other=None):
@@ -368,3 +348,70 @@ def find_command(source, pattern, depth, other=None):
     elif isinstance(other, str):
         command.append(other)
     return " ".join(command)
+
+
+def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to stop any processes matching the pattern
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
+        exclude (str, optional): negative filter to better identify processes. Defaults to None.
+        force (bool, optional): if set use the KILL signal to immediately stop any running
+            processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
+            signal, and finally with the KILL signal.
+
+    Returns:
+        tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
+            matching the pattern were initially detected and the second NodeSet indicates on which
+            hosts the processes matching the pattern are still running (will be empty if every
+            process was killed or no process matching the pattern were found).
+
+    """
+    processes_detected = NodeSet()
+    processes_running = NodeSet()
+    command = f"/usr/bin/pgrep --list-full {pattern}"
+    pattern_match = str(pattern)
+    if exclude:
+        command = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
+        pattern_match += " and doesn't match " + str(exclude)
+
+    # Search for any active processes
+    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
+    result = run_remote(log, hosts, command, verbose, timeout)
+    if not result.passed_hosts:
+        log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
+        return processes_detected, processes_running
+
+    # Indicate on which hosts processes matching the pattern were found running in the return status
+    processes_detected.add(result.passed_hosts)
+
+    # Initialize on which hosts the processes matching the pattern are still running
+    processes_running.add(result.passed_hosts)
+
+    # Attempt to kill any processes found on any of the hosts with increasing force
+    steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
+    if force:
+        steps = [(" --signal KILL", 5)]
+    while steps and result.passed_hosts:
+        step = steps.pop(0)
+        log.debug(
+            "Killing%s any processes on %s that match %s and then waiting %s seconds",
+            step[0], result.passed_hosts, pattern_match, step[1])
+        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
+        time.sleep(step[1])
+        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+        if not result.passed_hosts:
+            # Indicate all running processes matching the pattern were stopped in the return status
+            log.debug(
+                "All processes running on %s that match %s have been stopped.",
+                result.failed_hosts, pattern_match)
+        # Update the set of hosts on which the processes matching the pattern are still running
+        processes_running.difference_update(result.failed_hosts)
+    if processes_running:
+        log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
+    return processes_detected, processes_running

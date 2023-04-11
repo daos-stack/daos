@@ -10,6 +10,8 @@ import yaml
 
 from ClusterShell.NodeSet import NodeSet
 
+from data_utils import list_unique, list_flatten, dict_extract_values
+
 
 class YamlException(BaseException):
     """Base exception for this module."""
@@ -44,7 +46,10 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
-    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+    if not os.path.isfile(yaml_file):
+        raise YamlException(f"File not found: {yaml_file}")
+
+    class DaosLoader(yaml.SafeLoader):
         """Helper class for parsing avocado yaml files."""
 
         def forward_mux(self, node):
@@ -58,104 +63,33 @@ def get_yaml_data(yaml_file):
     DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
     DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
 
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
-            except yaml.YAMLError as error:
-                raise YamlException(f"Error reading {yaml_file}") from error
-    return yaml_data
-
-
-def find_values(obj, keys, key=None, val_type=str):
-    """Find dictionary values of a certain type specified with certain keys.
-
-    Args:
-        obj (obj): a python object; initially the dictionary to search
-        keys (list): list of keys to find their matching list values
-        key (str, optional): key to check for a match. Defaults to None.
-        val_type (object, optional): object type to allow when finding values. A list of object
-            types can be used to filter on multiple object types. If a value found is not of type
-            val_type it will not be included in the returned dictionary.
-
-    Returns:
-        dict: a dictionary of each matching key and its value
-
-    """
-    def add_matches(found):
-        """Add found matches to the match dictionary entry of the same key.
-
-        If a match does not already exist for this key add all the found values.
-        When a match already exists for a key, append the existing match with
-        any new found values.
-
-        For example:
-            Match       Found           Updated Match
-            ---------   ------------    -------------
-            None        [A, B]          [A, B]
-            [A, B]      [C]             [A, B, C]
-            [A, B, C]   [A, B, C, D]    [A, B, C, D]
-
-        Args:
-            found (dict): dictionary of matches found for each key
-        """
-        for found_key in found:
-            if found_key not in matches:
-                # Simply add the new value found for this key
-                matches[found_key] = found[found_key]
-
-            else:
-                is_list = isinstance(matches[found_key], list)
-                if not is_list:
-                    matches[found_key] = [matches[found_key]]
-                if isinstance(found[found_key], list):
-                    for found_item in found[found_key]:
-                        if found_item not in matches[found_key]:
-                            matches[found_key].append(found_item)
-                elif found[found_key] not in matches[found_key]:
-                    matches[found_key].append(found[found_key])
-
-                if not is_list and len(matches[found_key]) == 1:
-                    matches[found_key] = matches[found_key][0]
-
-    matches = {}
-    if isinstance(obj, val_type) and isinstance(key, str) and key in keys:
-        # Match found
-        matches[key] = obj
-    elif isinstance(obj, dict):
-        # Recursively look for matches in each dictionary entry
-        for obj_key, obj_val in list(obj.items()):
-            add_matches(find_values(obj_val, keys, obj_key, val_type))
-    elif isinstance(obj, list):
-        # Recursively look for matches in each list entry
-        for item in obj:
-            add_matches(find_values(item, keys, None, val_type))
-
-    return matches
+    with open(yaml_file, "r", encoding="utf-8") as open_file:
+        try:
+            return yaml.load(open_file.read(), Loader=DaosLoader)
+        except yaml.YAMLError as error:
+            raise YamlException(f"Error reading {yaml_file}") from error
 
 
 class YamlUpdater():
     """A class for updating placeholders in test yaml files."""
 
-    YAML_KEYS = OrderedDict(
-        [
-            ("test_servers", "_servers"),
-            ("test_clients", "_clients"),
-            ("bdev_list", "_storage"),
-            ("timeout", "_timeout"),
-            ("timeouts", "_timeout"),
-            ("clush_timeout", "_timeout"),
-            ("ior_timeout", "_timeout"),
-            ("job_manager_timeout", "_timeout"),
-            ("pattern_timeout", "_timeout"),
-            ("pool_query_timeout", "_timeout"),
-            ("rebuild_timeout", "_timeout"),
-            ("srv_timeout", "_timeout"),
-            ("storage_prepare_timeout", "_timeout"),
-            ("storage_format_timeout", "_timeout"),
-        ]
-    )
+    # List of (yaml key, attribute name, val_type)
+    YAML_KEYS = [
+        ("test_servers", "_servers", (list, int, str)),
+        ("test_clients", "_clients", (list, int, str)),
+        ("bdev_list", "_storage", list),
+        ("timeout", "_timeout", int),
+        ("timeouts", "_timeout", dict),
+        ("clush_timeout", "_timeout", int),
+        ("ior_timeout", "_timeout", int),
+        ("job_manager_timeout", "_timeout", int),
+        ("pattern_timeout", "_timeout", int),
+        ("pool_query_timeout", "_timeout", int),
+        ("rebuild_timeout", "_timeout", int),
+        ("srv_timeout", "_timeout", int),
+        ("storage_prepare_timeout", "_timeout", int),
+        ("storage_format_timeout", "_timeout", int),
+    ]
 
     def __init__(self, logger, servers, clients, storage, timeout, override, verbose):
         """Initialize a YamlUpdater object.
@@ -223,13 +157,18 @@ class YamlUpdater():
         # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
         self.log.debug("Detected yaml data: %s", yaml_data)
-        placeholder_keys = list(self.YAML_KEYS.keys())
-        placeholder_data = find_values(yaml_data, placeholder_keys, val_type=(list, int, dict, str))
+        placeholder_data = {}
+        for key, _, val_type in self.YAML_KEYS:
+            # Get the unique values with lists flattened
+            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], val_type)))
+            if values:
+                # Use single value if list only contains 1 element
+                placeholder_data[key] = values if len(values) > 1 else values[0]
 
         # Generate a list of values that can be used as replacements
         replacement_data = OrderedDict()
-        for key, value in list(self.YAML_KEYS.items()):
-            args_value = getattr(self, value)
+        for key, attr_name, _ in self.YAML_KEYS:
+            args_value = getattr(self, attr_name)
             if isinstance(args_value, NodeSet):
                 replacement_data[key] = list(args_value)
             elif isinstance(args_value, str):
@@ -240,6 +179,7 @@ class YamlUpdater():
                 replacement_data[key] = None
 
         # Assign replacement values for the test yaml entries to be replaced
+        placeholder_keys = [yaml_key[0] for yaml_key in self.YAML_KEYS]
         self.log.debug("Detecting replacements for %s in %s", placeholder_keys, yaml_file)
         self.log.debug("  Placeholder data: %s", placeholder_data)
         self.log.debug("  Replacement data:  %s", dict(replacement_data))
@@ -296,11 +236,11 @@ class YamlUpdater():
         """Replace the server or client placeholders.
 
         Args:
-            replacements (_type_): _description_
-            placeholder_data (_type_): _description_
-            key (_type_): _description_
-            replacement (_type_): _description_
-            node_mapping (_type_): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
+            placeholder_data (dict): test yaml values requesting replacements
+            key (str): test yaml entry key
+            replacement (list): available values to use as replacements for the test yaml entries
+            node_mapping (dict): dictionary of nodes and their replacement values
 
         Raises:
             YamlException: if there was a problem replacing any of the placeholders
@@ -421,7 +361,7 @@ class YamlUpdater():
         Args:
             yaml_file (str): test yaml file to update
             yaml_dir (str): directory in which to write the updated test yaml file
-            replacements (dict): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
 
         Raises:
             YamlException: if any placeholders are found without a replacement

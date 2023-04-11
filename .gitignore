@@ -63,3 +63,4 @@ utils/githooks/*.d/*-user-*
 .prepare-commit-msg
 .pre-commit
 .vscode
+src/include/daos_version.h

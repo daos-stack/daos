@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 3
+  test_servers: 6
   test_clients: 1
 
 timeouts:
@@ -7,28 +7,12 @@ timeouts:
 
 server_config:
   name: daos_server
-  engines_per_host: 2
+  engines_per_host: 1
   engines:
     0:
-      pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
-      log_file: daos_server0.log
       log_mask: DEBUG
-      targets: 4
-      env_vars:
-        - DD_MASK=group_metadata_only
-        - D_LOG_FLUSH=DEBUG
-      storage: auto
-    1:
-      pinned_numa_node: 1
-      nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
-      log_file: daos_server1.log
-      log_mask: DEBUG
-      targets: 4
+      targets: 1
       env_vars:
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
@@ -36,7 +20,7 @@ server_config:
 
 pool:
   control_method: dmg
-  scm_size: 60%
-  nvme_size: 60%
+  scm_size: 192MiB
+  nvme_size: 1024MiB
   quantity: 200
   set_logmasks: False

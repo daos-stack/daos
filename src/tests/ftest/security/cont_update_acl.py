@@ -3,17 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
+
+from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
 from exception_utils import CommandFailure
-from avocado import fail_on
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Test to verify ACL entry update.
     :avocado: recursive
@@ -40,8 +39,8 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_update_acl_inputs,test_acl_update_invalid_inputs
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_acl_update_invalid_inputs
         """
         # Get lists of invalid
         invalid_entries = self.params.get("invalid_acl_entries", "/run/*")
@@ -88,8 +87,8 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_update_invalid_acl,test_update_invalid_acl
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_update_invalid_acl
         """
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
@@ -127,8 +126,8 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_update_acl,test_update_acl_file
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_update_acl_file
         """
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
@@ -180,8 +179,8 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_update_acl_noperms,test_no_user_permissions
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_no_user_permissions
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

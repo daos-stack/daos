@@ -118,6 +118,10 @@ func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
 		return nil, nil, err
 	}
 
+	if cmd.DfsPath == "" && cmd.Path == "" {
+		deallocCmdArgs()
+		return nil, nil, errors.New("If not using --path, --dfs-path must be specified along with pool/container IDs")
+	}
 	if cmd.DfsPath != "" {
 		if cmd.Path != "" {
 			deallocCmdArgs()

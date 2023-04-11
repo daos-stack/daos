@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2022 Intel Corporation.
+ *  (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,7 @@ obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr)
 
 /* Choose EC start offset within the group. */
 int
-obj_ec_grp_start(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_size)
+obj_ec_grp_start(uint16_t layout_gl_ver, uint64_t hash, uint32_t grp_size)
 {
 	if (layout_gl_ver == 0)
 		return 0;
@@ -30,7 +30,7 @@ obj_ec_grp_start(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_size)
 
 /* Generate the object layout */
 int
-obj_pl_place(struct pl_map *map, uint32_t layout_gl_ver, struct daos_obj_md *md,
+obj_pl_place(struct pl_map *map, uint16_t layout_gl_ver, struct daos_obj_md *md,
 	     unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
@@ -67,7 +67,7 @@ obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint3
 	/* If the new layout changes dkey placement, i.e. dkey->grp, dkey->ec_start changes,
 	 * then all shards needs to be changed.
 	 */
-	if (new_ver == 1) { /* LAYOUT_VER == 1 change dkey mapping */
+	if (new_ver == 1 && daos_obj_id_is_ec(oid.id_pub)) {
 		*tgt = new_layout->ol_shards[shard].po_target;
 		*shard_p = shard;
 		D_GOTO(out, rc = 1);

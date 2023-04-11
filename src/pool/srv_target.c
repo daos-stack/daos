@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1366,8 +1366,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
-			    PO_COMP_ST_DRAIN, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1507,8 +1506,6 @@ out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)
 		pool_map_decref(map);
-	if (rc == 0)
-		rc = ds_cont_rf_check(pool->sp_uuid);
 	return rc;
 }
 
@@ -1571,15 +1568,19 @@ update_vos_prop_on_targets(void *in)
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	if (ret)
+		goto out;
 
-	if (ret == 0) {
-		/** If necessary, upgrade the vos pool format */
-		if (pool->sp_global_version >= 2)
-			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-		else if (pool->sp_global_version == 1)
-			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
-	}
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_SPACE_RB, &pool->sp_space_rb);
+	if (ret)
+		goto out;
 
+	/** If necessary, upgrade the vos pool format */
+	if (pool->sp_global_version >= 2)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+	else if (pool->sp_global_version == 1)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+out:
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1597,6 +1598,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_space_rb = iv_prop->pip_space_rb;
 
 	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
 		pool->sp_disable_rebuild = 0;

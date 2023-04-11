@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/pool_map.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include <daos_cont.h>
 #include <daos/cont_props.h>
 #include "checksum.h"
 
@@ -109,5 +110,38 @@ int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
+
+static inline bool
+dc_cont_open_flags_valid(uint64_t flags)
+{
+	unsigned int	f;
+	unsigned int	m;
+
+	/* No unknown flags. */
+	if ((flags & DAOS_COO_MASK) != flags)
+		return false;
+
+	/* Avoid mixing 32-bit and 64-bit operands below. */
+	f = flags;
+
+	/* One and only one of DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX. */
+	m = f & (DAOS_COO_RO | DAOS_COO_RW | DAOS_COO_EX);
+	if (m != DAOS_COO_RO && m != DAOS_COO_RW && m != DAOS_COO_EX)
+		return false;
+
+	/* At most one of DAOS_COO_EVICT and DAOS_COO_EVICT_ALL. */
+	if ((f & DAOS_COO_EVICT) && (f & DAOS_COO_EVICT_ALL))
+		return false;
+
+	/* Disallowed due to a lack of clear use cases. */
+	if ((f & (DAOS_COO_RO | DAOS_COO_RW)) && (f & DAOS_COO_EVICT_ALL))
+		return false;
+
+	/* Disallowed due to a lack of clear use cases. */
+	if ((f & DAOS_COO_EX) && (f & DAOS_COO_EVICT))
+		return false;
+
+	return true;
+}
 
 #endif /* __DD_CONT_H__ */

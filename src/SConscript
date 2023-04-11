@@ -18,6 +18,41 @@ HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.9.0"
 
+API_VERSION_MAJOR = "2"
+API_VERSION_MINOR = "7"
+API_VERSION_FIX = "0"
+API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
+
+
+def read_and_save_version(env):
+    """Read version from VERSION file and update daos_version.h"""
+
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
+
+    with open(os.path.join(Dir('#').abspath, "VERSION"), "r") as version_file:
+        version = version_file.read().rstrip()
+
+        (major, minor, fix) = version.split('.')
+
+        env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + version + '\\"'])
+
+        if GetOption('help'):
+            return version
+
+        tmpl_hdr_in = os.path.join('include', 'daos_version.h.in')
+        subst_dict = {'@TMPL_MAJOR@': API_VERSION_MAJOR,
+                      '@TMPL_MINOR@': API_VERSION_MINOR,
+                      '@TMPL_FIX@': API_VERSION_FIX,
+                      '@TMPL_PKG_MAJOR@': major,
+                      '@TMPL_PKG_MINOR@': minor,
+                      '@TMPL_PKG_FIX@': fix,
+                      '@Template for @': ''}
+
+        out = env.Substfile(tmpl_hdr_in, SUBST_DICT=subst_dict)
+        print(f'generated daos version header file: {out[0].abspath}')
+
+        return version
+
 
 def check_install_header(env, header):
     """Runs a builder to ensure the header can standalone compile and installs it"""
@@ -30,8 +65,11 @@ def check_install_header(env, header):
 
 def scons():
     """Execute build"""
-
     Import('env', 'base_env', 'base_env_mpi', 'prereqs')
+
+    daos_version = read_and_save_version(env)
+
+    Export('daos_version', 'API_VERSION')
 
     # For Common library and headers.
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
@@ -107,6 +145,10 @@ def scons():
     # Build test
     SConscript('placement/tests/SConscript')
     SConscript('tests/SConscript')
+
+    if prereqs.client_requested():
+        api_version = env.Command('API_VERSION', "SConscript", f"echo {API_VERSION} > $TARGET")
+        env.Install("$PREFIX/lib64/daos", api_version)
 
 
 if __name__ == "SCons.Script":

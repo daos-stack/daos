@@ -19,42 +19,6 @@ wrap scons-3.""")
 SCons.Warnings.warningAsException()
 
 
-API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "7"
-API_VERSION_FIX = "0"
-API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
-
-
-def read_and_save_version(env):
-    """Read version from VERSION file and update daos_version.h"""
-
-    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-
-    with open("VERSION", "r") as version_file:
-        version = version_file.read().rstrip()
-
-        (major, minor, fix) = version.split('.')
-
-        env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + version + '\\"'])
-
-        if GetOption('help'):
-            return version
-
-        tmpl_hdr_in = os.path.join('src', 'include', 'daos_version.h.in')
-        subst_dict = {'@TMPL_MAJOR@': API_VERSION_MAJOR,
-                      '@TMPL_MINOR@': API_VERSION_MINOR,
-                      '@TMPL_FIX@': API_VERSION_FIX,
-                      '@TMPL_PKG_MAJOR@': major,
-                      '@TMPL_PKG_MINOR@': minor,
-                      '@TMPL_PKG_FIX@': fix,
-                      '@Template for @': ''}
-
-        out = env.Substfile(tmpl_hdr_in, SUBST_DICT=subst_dict)
-        print(f'generated daos version header file: {out[0].abspath}')
-
-        return version
-
-
 def add_command_line_options():
     """Add command line options"""
 
@@ -419,7 +383,7 @@ def scons():
     opts = parse_and_save_conf(deps_env, opts_file)
 
     if deps_env.get('SCONS_ENV') == 'full':
-        deps_env.Replace(ENV=os.environ)
+        deps_env.Replace(ENV=os.environ.copy())
     else:
 
         def _copy_env(var_list):
@@ -456,9 +420,6 @@ def scons():
     env_script = deps_env.get('ENV_SCRIPT')
     if os.path.exists(env_script):
         load_local(env_script, deps_env)
-
-    # This used to be set in prereqs so move it here but it may be best to remove entirely.
-    SetOption('implicit_cache', True)
 
     # Perform this check early before loading PreReqs as if this header is missing then we want
     # to exit before building any dependencies.
@@ -504,14 +465,13 @@ def scons():
 
     env.compiler_setup()
     build_prefix = prereqs.get_src_build_dir()
+    comp_prefix = prereqs.get_build_dir()
 
     args = GetOption('analyze_stack')
     if args is not None:
-        env.Tool('stack_analyzer', prefix=build_prefix, args=args)
+        env.Tool('stack_analyzer', daos_prefix=build_prefix, comp_prefix=comp_prefix, args=args)
 
-    daos_version = read_and_save_version(env)
-
-    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs', 'conf_dir')
+    Export('env', 'base_env', 'base_env_mpi', 'prereqs', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
     path = os.path.join(build_prefix, 'src')
@@ -526,10 +486,6 @@ def scons():
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
-    if prereqs.client_requested():
-        api_version = env.Command(os.path.join(build_prefix, 'API_VERSION'),
-                                  "SConstruct", f"echo {API_VERSION} > $TARGET")
-        env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(os.path.join(conf_dir, 'bash_completion.d'), 'utils/completion/daos.bash')
 
     build_misc(build_prefix)

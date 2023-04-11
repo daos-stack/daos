@@ -25,7 +25,6 @@ server_config:
 pool:
   size: 90%
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -53,5 +52,4 @@ ior:
     1M:
       transfer_size: '1M'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true

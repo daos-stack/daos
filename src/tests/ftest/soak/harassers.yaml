@@ -22,38 +22,27 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
-      fabric_iface: ib0
+      nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
       storage: auto
     1:
       pinned_numa_node: 1
-      nr_xs_helpers: 1
-      fabric_iface: ib1
+      nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
+        - FI_UNIVERSE_SIZE=16383
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 200GB
-  nvme_size: 1TB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
-  rebuild_timeout: 240
-  pool_query_timeout: 120
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
-  rebuild_timeout: 240
-  pool_query_timeout: 120
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -62,7 +51,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -95,6 +85,8 @@ soak_harassers:
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate
     - server-stop_server-reintegrate-offline
+    # - vmd-identify-check
+    # - vmd-identify-check-offline
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true
@@ -130,11 +122,11 @@ ior_harasser:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior"
     disable_caching: true
@@ -162,11 +154,11 @@ fio_harasser:
       - 'rw'
       - 'randrw'
     oclass:
-      - "EC_2P1GX"
-      # - "EC_4P1G1"
-      # - "EC_4P2GX"
-      # - "EC_8P2G1"
-      # - "EC_16P2GX"
+      - ["EC_2P1GX", "RP_2GX"]
+      #  - ["EC_4P1G1", "RP_2GX"]
+      - ["EC_4P2GX", "RP_3GX"]
+      #  - ["EC_8P2G1", "RP_3GX"]
+      #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
@@ -196,11 +188,11 @@ mdtest_harasser:
     - 10
     - 0
   dfs_oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2G1"
-    # - "EC_8P2G1"
-    # - "EC_16P2G1"
+    - ["EC_2P1G1", "RP_2G1"]
+    #  - ["EC_4P1G1", "RP_2G1"]
+    - ["EC_4P2GX", "RP_3G1"]
+    #  - ["EC_8P2G1", "RP_3G1"]
+    #  - ["EC_16P2GX", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"

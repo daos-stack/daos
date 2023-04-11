@@ -123,13 +123,12 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 
 	localState := ei.LocalState()
 	if localState != system.MemberStateReady {
-		// member not ready for dRPC comms, annotate result with last
-		// error as Msg field if found to be stopped
-		result := &system.MemberResult{Rank: rank, State: localState}
+		// member not ready for dRPC comms, annotate result with last error if stopped
+		var err error
 		if localState == system.MemberStateStopped && ei._lastErr != nil {
-			result.Msg = ei._lastErr.Error()
+			err = ei._lastErr
 		}
-		return result
+		return system.NewMemberResult(rank, err, localState)
 	}
 
 	// system member state that should be set on dRPC success
@@ -154,10 +153,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return &system.MemberResult{
-				Rank: rank, Msg: ctx.Err().Error(),
-				State: system.MemberStateUnresponsive,
-			}
+			return system.NewMemberResult(rank, ctx.Err(), system.MemberStateUnresponsive)
 		}
 		return nil // shutdown
 	case result := <-resChan:

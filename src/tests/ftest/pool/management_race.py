@@ -100,7 +100,7 @@ class PoolManagementRace(TestWithServers):
         test_loop = self.params.get("test_loop", '/run/boundary_test/*')
         self.pool = []
         for pool_number in range(num_pools):
-            self.pool.append(self.get_pool())
+            self.pool.append(self.get_pool(dmg=self.get_dmg_command().copy()))
             self.log.info("==(1.%d) pool created, %s.", pool_number, self.pool[-1].identifier)
 
         # Randomly select a pool for delete, recreate and query

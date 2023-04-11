@@ -35,13 +35,15 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException, \
+    stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
+from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
     YamlException    # noqa: E402
+from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -52,6 +54,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
@@ -61,6 +64,9 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+PROCS_TO_CLEANUP = [
+    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -495,7 +501,13 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
-        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+        info = {}
+        for key in self.YAML_INFO_KEYS:
+            # Get the unique values with lists flattened
+            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], (str, list))))
+            if values:
+                # Use single value if list only contains 1 element
+                info[key] = values if len(values) > 1 else values[0]
 
         logger.debug("Test yaml information for %s:", self.test_file)
         for key in self.YAML_INFO_KEYS:
@@ -536,9 +548,7 @@ class TestInfo():
 
         """
         yaml_data = get_yaml_data(self.yaml_file)
-        client_users = find_values(yaml_data, ["client_users"], val_type=list)
-        client_users = client_users['client_users'] if client_users else []
-        return client_users
+        return list_flatten(dict_extract_values(yaml_data, ["client_users"], list))
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -564,16 +574,17 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    RESULTS_DIRS = (
+        "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
+
+    def __init__(self, name, mode):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
-            repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
         self.name = name
-        self.repeat = repeat
         self.mode = mode
 
         self.avocado = AvocadoInfo()
@@ -582,6 +593,7 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.repeat = 1
         self.local_host = get_local_host()
 
         # Results tracking settings
@@ -636,8 +648,7 @@ class Launch():
         if test_result:
             test_result.end()
 
-    @staticmethod
-    def _pass_test(test_result, message=None):
+    def _pass_test(self, test_result, message=None):
         """Set the test result as passed.
 
         Args:
@@ -646,10 +657,21 @@ class Launch():
         """
         if message is not None:
             logger.debug(message)
-        test_result.status = TestResult.PASS
+        self.__set_test_status(test_result, TestResult.PASS, None, None)
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -659,12 +681,35 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
+
+    @staticmethod
+    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            status (str): TestResult status to set.
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if test_result.status is None:
+                test_result.status = status
+            return
+
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -674,15 +719,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Additional errors only update the test result fail reason with a fail counter
+
+        if test_result.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -776,6 +821,16 @@ class Launch():
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
+        # Set the number of times to repeat execution of each test
+        if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            self._warn_test(setup_result, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
+
         # Record the command line arguments
         logger.debug("Arguments:")
         for key in sorted(args.__dict__.keys()):
@@ -847,9 +902,10 @@ class Launch():
 
         try:
             self.setup_fuse_config(args.test_servers | args.test_clients)
-        except LaunchException as error:
+        except LaunchException:
             # Warn but don't fail
-            logger.warning(error)
+            message = "Issue detected setting up the fuse configuration"
+            self._warn_test(setup_result, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -1490,10 +1546,17 @@ class Launch():
         engine_storage_yaml = {}
         for test in self.tests:
             yaml_data = get_yaml_data(test.yaml_file)
-            info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
-            logger.debug("Checking for auto-storage request in %s: %s", test.yaml_file, info)
-            if "storage" in info and info["storage"] == "auto":
-                engines = info["engines_per_host"]
+            logger.debug("Checking for auto-storage request in %s", test.yaml_file)
+
+            storage = dict_extract_values(yaml_data, ["server_config", "engines", "*", "storage"])
+            if "auto" in storage:
+                if len(list_unique(storage)) > 1:
+                    raise StorageException("storage: auto only supported for all or no engines")
+                engines = list_unique(dict_extract_values(yaml_data, ["engines_per_host"]))
+                if len(engines) > 1:
+                    raise StorageException(
+                        "storage: auto not supported for varying engines_per_host")
+                engines = engines[0]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
@@ -1972,6 +2035,9 @@ class Launch():
             f"ls -al {test_dir}",
             f"mkdir -p {user_dir}"
         ]
+        # Predefine the sub directories used to collect the files process()/_archive_files()
+        for directory in self.RESULTS_DIRS:
+            commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
@@ -2108,6 +2174,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2125,7 +2192,7 @@ class Launch():
             remote_files = OrderedDict()
             remote_files["local configuration files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
                 "depth": 1,
@@ -2133,7 +2200,7 @@ class Launch():
             }
             remote_files["remote configuration files"] = {
                 "source": os.path.join(os.sep, "etc", "daos"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "daos_*.yml",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2141,7 +2208,7 @@ class Launch():
             }
             remote_files["daos log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[1]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2149,7 +2216,7 @@ class Launch():
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[2]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 2,
@@ -2157,7 +2224,7 @@ class Launch():
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[3]),
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2165,7 +2232,7 @@ class Launch():
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
-                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[4]),
                 "pattern": "valgrind*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2174,7 +2241,8 @@ class Launch():
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
-                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
                     "pattern": core_files[hosts]["pattern"],
                     "hosts": NodeSet(hosts),
                     "depth": 1,
@@ -2346,6 +2414,51 @@ class Launch():
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
 
+    def _cleanup_procs(self, test):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+        hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.debug("Looking for running processes: %s", proc_pattern)
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
+        if running:
+            message = f"Failed to kill processes on {running}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+        elif detected:
+            message = f"Running processes found on {detected}"
+            self._warn_test(self.result.tests[-1], "Process", message)
+
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            any_found = True
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        return 4096 if any_found else 0
+
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
         """Archive the files from the source to the destination.
@@ -2510,7 +2623,7 @@ class Launch():
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
         result = run_remote(
-            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
+            logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2605,7 +2718,7 @@ class Launch():
             tmp_copy_dir = os.path.join(source, tmp_copy_dir)
             sudo_command = ""
 
-        # Create a temporary remote directory
+        # Create a temporary remote directory - should already exist, see _setup_test_directory()
         command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
@@ -2666,14 +2779,22 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+            logger.debug(
+                "Skipping checking core file detection for %s as it is not supported on this OS",
+                str(test))
+            return 0
+
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
+
         if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256
+
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
@@ -2795,6 +2916,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
@@ -2968,10 +3090,6 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--slurm_setup",
-        action="store_true",
-        help="setup any slurm partitions required by the tests")
-    parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
         default=str(get_local_host()),
@@ -2979,9 +3097,9 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "-u", "--user_create",
+        "-ss", "--slurm_setup",
         action="store_true",
-        help="create additional users defined by each test's yaml file")
+        help="setup any slurm partitions required by the tests")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3012,6 +3130,10 @@ def main():
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
     parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "-v", "--verbose",
         action="count",
         default=0,
@@ -3027,7 +3149,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
+    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":

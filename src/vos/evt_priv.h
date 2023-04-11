@@ -62,7 +62,9 @@ struct evt_context {
 	/** refcount on the context */
 	unsigned int			 tc_ref;
 	/** cached tree order (reduce PMEM access) */
-	uint16_t			 tc_order;
+	uint8_t                          tc_order;
+	/** Cached maximum tree order (reduce PMEM access) */
+	uint8_t                          tc_max_order;
 	/** cached tree depth (reduce PMEM access) */
 	uint16_t			 tc_depth;
 	/** number of credits for "drain" operation */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -272,6 +272,8 @@ enum {
 	VOS_OF_SKIP_FETCH		= (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
 	VOS_OF_EC			= (1 << 19),
+	/** Update from rebuild */
+	VOS_OF_REBUILD			= (1 << 20),
 };
 
 enum {
@@ -279,6 +281,8 @@ enum {
 	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
 	/** Pool check is supported for this pool */
 	VOS_POOL_FEAT_CHK = (1ULL << 1),
+	/** Dynamic evtree root supported for this pool */
+	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -553,12 +557,9 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_co:1,
-			ia_reprobe_obj:1,
-			ia_reprobe_dkey:1,
-			ia_reprobe_akey:1,
-			ia_reprobe_sv:1,
-			ia_reprobe_ev:1;
+	unsigned int    ia_reprobe_co : 1, ia_reprobe_obj : 1, ia_reprobe_dkey : 1,
+	    ia_reprobe_akey : 1, ia_reprobe_sv : 1, ia_reprobe_ev : 1;
+	unsigned int ia_probe_level;
 };
 
 /* Ignores DTX as they are transient records */

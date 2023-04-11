@@ -764,15 +764,15 @@ explicitly granted by the `GROUP@` entry in the ACL.
 #### Setting Ownership at Creation
 
 The default owner user and group are the effective user and group of the user
-creating the container. However, a specific user and/or group may be specified
-at container creation time.
+creating the container. However, an owner-group may be specified at container
+creation time.
 
 ```bash
-$ daos cont create $DAOS_POOL --label $DAOS_CONT --user=<owner-user> --group=<owner-group>
+$ daos cont create --group=<owner-group> $DAOS_POOL $DAOS_CONT
 ```
 
-The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://docs.daos.io/v2.4/overview/security/#principal).
+The group names are case sensitive and must be formatted as
+[DAOS ACL group principals](https://docs.daos.io/v2.4/overview/security/#principal).
 
 #### Changing Ownership
 

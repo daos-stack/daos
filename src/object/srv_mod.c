@@ -44,7 +44,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: %s\n", d_errstr(rc));
+	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 

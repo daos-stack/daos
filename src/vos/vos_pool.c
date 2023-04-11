@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,8 +22,8 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <vos_layout.h>
-#include <vos_internal.h>
+#include "vos_layout.h"
+#include "vos_internal.h"
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
@@ -987,6 +987,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 			pool->vp_policy_desc.params[i] = p->params[i];
 
+		break;
+	case VOS_PO_CTL_SET_SPACE_RB:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		i = *((unsigned int *)param);
+		if (i >= 100 || i < 0) {
+			D_ERROR("Invalid space reserve ratio for rebuild. %d\n", i);
+			return -DER_INVAL;
+		}
+		pool->vp_space_rb = i;
 		break;
 	}
 

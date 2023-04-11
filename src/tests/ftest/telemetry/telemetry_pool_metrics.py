@@ -9,7 +9,6 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry pool basic metrics.
 
@@ -29,19 +28,32 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
 
         self.dfs_oclass = self.params.get("oclass", '/run/container/*', self.dfs_oclass)
 
-    def get_expected_value_range(self, resent_ops):
-        """Return the expected metrics value output
+    def get_expected_value_range(self, timeout_ops, resent_ops):
+        """Return the expected metrics value output.
 
-            This function returns a hash map of pairs defining min and max values of each tested
-            telemetry metrics.  The hash map of pairs returned depends of the tested object class,
-            and the values are weighted according to the number of resent update rpc.
+        This function returns a hash map of pairs defining min and max values of each tested
+        telemetry metrics.  The hash map of pairs returned depends on the tested object class, and
+        the values are weighted according to the number of timeout rpc and resent update rpc.
+
+        Note:
+            There is not yet a telemetry counter defining the number of failing fetch operations.
+            However, the number of timeout_ops should be at least equal to the number of fetch which
+            have failed and thus have been redo one or more times.
+
+        Args:
+            timeout_ops (int): Total number of timed out RPC requests.
+            resent_ops (int): Total number of timed out RPC requests.
+
+        Returns:
+            dict: Dictionary of the expected metrics value output.
         """
+
         ops_number = int(self.ior_cmd.block_size.value / self.ior_cmd.transfer_size.value)
         pool_ops_minmax = {
             "SX": {
                 "engine_pool_ops_fetch": (
                     ops_number + 7,
-                    ops_number + 8
+                    ops_number + timeout_ops + 8
                 ),
                 "engine_pool_ops_update": (
                     ops_number + 1,
@@ -49,7 +61,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 1) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     ops_number * self.ior_cmd.transfer_size.value,
@@ -59,7 +71,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "RP_3GX": {
                 "engine_pool_ops_fetch": (
                     ops_number + 7,
-                    ops_number + 8
+                    ops_number + timeout_ops + 8
                 ),
                 "engine_pool_ops_update": (
                     ops_number + 1,
@@ -67,7 +79,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 1) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     3 * ops_number * self.ior_cmd.transfer_size.value,
@@ -77,23 +89,25 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         }
         return pool_ops_minmax[self.dfs_oclass]
 
-    def get_metric_value(self, name, metrics_data):
-        """Aggregate the metric value of the DAOS targets"""
-        metric_value = 0
-        metric_data = metrics_data[0]
-        for host in metric_data[name]:
-            for rank in metric_data[name][host]:
-                for target in metric_data[name][host][rank]:
-                    value_init = metric_data[name][host][rank][target]
-                    value_end = metrics_data[1][name][host][rank][target]
-                    self.assertLessEqual(
-                        value_init, value_end,
-                        "Inconsistent metric values: metric_name={}, host={}, rank={}, target={},"
-                        " value_init={}, value_end={}"
-                        .format(name, host, rank, target, value_init, value_end))
-                    metric_value += value_end - value_init
+    def get_metrics(self, names):
+        """Obtain the specified metrics information.
 
-        return metric_value
+        Args:
+            name (list): List of metric names to query.
+
+        Returns:
+            dict: a dictionary of metric keys linked to their aggregated values.
+        """
+        metrics = {}
+        for name in names:
+            metrics[name] = 0
+
+        for data in self.telemetry.get_metrics(",".join(names)).values():
+            for name, value in data.items():
+                for metric in value["metrics"]:
+                    metrics[name] += metric["value"]
+
+        return metrics
 
     def test_telemetry_pool_metrics(self):
         """JIRA ID: DAOS-8357
@@ -132,10 +146,10 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "engine_pool_ops_update",
             "engine_pool_xferred_fetch",
             "engine_pool_xferred_update",
+            "engine_net_req_timeout",
             "engine_pool_resent"
         ]
-        metrics_data = []
-        metrics_data.append(self.telemetry.get_pool_metrics(metric_names))
+        metrics_init = self.get_metrics(metric_names)
 
         # Run ior command.
         try:
@@ -148,16 +162,21 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             self.log.info("#ior command failed!")
 
         # collect second set of pool metric data after read/write
-        metrics_data.append(self.telemetry.get_pool_metrics(metric_names))
+        metrics_end = self.get_metrics(metric_names)
 
-        metric_values = {}
+        metrics = {}
         for name in metric_names:
-            metric_values[name] = self.get_metric_value(name, metrics_data)
+            metrics[name] = metrics_end[name] - metrics_init[name]
+            self.log.debug(
+                "Successfully retrieve metric: %s=%d (init=%d, end=%d)",
+                name, metrics[name], metrics_init[name], metrics_end[name])
 
         # perform verification check
-        expected_values = self.get_expected_value_range(metric_values["engine_pool_resent"])
+        timeout_ops = metrics["engine_net_req_timeout"]
+        resent_ops = metrics["engine_pool_resent"]
+        expected_values = self.get_expected_value_range(timeout_ops, resent_ops)
         for name in expected_values:
-            val = metric_values[name]
+            val = metrics[name]
             min_val, max_val = expected_values[name]
             self.assertTrue(
                 min_val <= val <= max_val,

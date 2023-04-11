@@ -14,8 +14,8 @@
 #define __VOS_TS__
 
 #include <daos/dtx.h>
-#include <lru_array.h>
-#include <vos_tls.h>
+#include "lru_array.h"
+#include "vos_tls.h"
 
 struct vos_ts_table;
 struct vos_ts_entry;

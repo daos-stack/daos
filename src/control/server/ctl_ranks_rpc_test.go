@@ -139,8 +139,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 1, Errored: true, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, Errored: true, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is canceled
@@ -491,8 +491,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 1, Errored: true, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, Errored: true, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled

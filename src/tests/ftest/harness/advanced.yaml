@@ -1,5 +1,6 @@
 hosts:
   test_servers: 2
+  test_clients: 1
 timeout: 120
 server_config:
   engines_per_host: 1
@@ -13,3 +14,6 @@ server_config:
 pool:
   size: 2G
   control_method: dmg
+container:
+  type: POSIX
+  control_method: daos

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,51 +26,6 @@ import (
 
 const defaultConfigFile = "daos_server.yml"
 
-// helperLogCmd is an embeddable type that extends a command with
-// helper privileged binary logging capabilities.
-type helperLogCmd struct {
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_server_helper binary"`
-}
-
-func (hlc *helperLogCmd) setHelperLogFile() error {
-	filename := hlc.HelperLogFile
-	if filename == "" {
-		return nil
-	}
-
-	return errors.Wrap(os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, filename),
-		"unable to configure privileged helper logging")
-}
-
-type iommuCheckFn func() (bool, error)
-
-type iommuChecker interface {
-	setIOMMUChecker(iommuCheckFn)
-}
-
-type iommuCheckerCmd struct {
-	isIOMMUEnabled iommuCheckFn
-}
-
-func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
-	if icc == nil {
-		return
-	}
-	icc.isIOMMUEnabled = fn
-}
-
-// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
-func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
-	if icc == nil {
-		return false, errors.New("nil pointer receiver")
-	}
-	if icc.isIOMMUEnabled == nil {
-		return false, errors.New("nil isIOMMUEnabled function")
-	}
-
-	return icc.isIOMMUEnabled()
-}
-
 type execTestFn func() error
 
 type mainOpts struct {
@@ -84,8 +39,8 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM           scmCmd                 `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe          nvmeCmd                `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	SCM           scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe          nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
 	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
 	Start         startCmd               `command:"start" description:"Start daos_server"`
 	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
@@ -176,10 +131,6 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		} else if opts.ConfigPath != "" {
 			return errors.Errorf("DAOS Server config filepath has been supplied but " +
 				"this command will not use it")
-		}
-
-		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

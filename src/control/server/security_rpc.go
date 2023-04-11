@@ -52,12 +52,12 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	if m.config.AllowInsecure {
 		key = nil
 	} else {
-		certName := fmt.Sprintf("%s.%s", cred.Origin, "crt")
+		certName := fmt.Sprintf("%s.crt", cred.Origin)
 		certPath := filepath.Join(m.config.ClientCertDir, certName)
 		cert, err := security.LoadCertificate(certPath)
 		if err != nil {
 			m.log.Errorf("loading certificate %s failed: %v", certPath, err)
-			return m.validateRespWithStatus(daos.BadPath)
+			return m.validateRespWithStatus(daos.NoCert)
 		}
 		key = cert.PublicKey
 	}

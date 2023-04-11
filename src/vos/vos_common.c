@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -257,9 +257,11 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   bool started, int err)
 {
 	struct dtx_handle	*dth = dth_in;
+	struct vos_dtx_act_ent	*dae;
 	struct dtx_rsrvd_uint	*dru;
 	struct vos_dtx_cmt_ent	*dce = NULL;
 	struct dtx_handle	 tmp = {0};
+	int			 rc;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -303,19 +305,67 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
+	if (dtx_is_valid_handle(dth_in)) {
+		dae = dth->dth_ent;
+		if (dae != NULL)
+			dae->dae_preparing = 0;
+
+		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+			/* Aborted by race during the yield for local TX commit. */
+			rc = vos_dtx_validation(dth);
+			switch (rc) {
+			case DTX_ST_INITED:
+			case DTX_ST_PREPARED:
+			case DTX_ST_PREPARING:
+				/* The DTX has been ever aborted and related resent RPC
+				 * is in processing. Return -DER_AGAIN to make this ULT
+				 * to retry sometime later without dtx_abort().
+				 */
+				err = -DER_AGAIN;
+				break;
+			case DTX_ST_ABORTED:
+				D_ASSERT(dae == NULL);
+				/* Aborted, return -DER_INPROGRESS for client retry.
+				 *
+				 * Fall through.
+				 */
+			case DTX_ST_ABORTING:
+				err = -DER_INPROGRESS;
+				break;
+			case DTX_ST_COMMITTED:
+			case DTX_ST_COMMITTING:
+			case DTX_ST_COMMITTABLE:
+				/* Aborted then prepared/committed by race.
+				 * Return -DER_ALREADY to avoid repeated modification.
+				 */
+				dth->dth_already = 1;
+				err = -DER_ALREADY;
+				break;
+			default:
+				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
+					  DP_DTI(&dth->dth_xid), rc);
+			}
+		} else if (dae != NULL) {
+			if (dth->dth_solo) {
+				if (err == 0 && cont->vc_solo_dtx_epoch < dth->dth_epoch)
+					cont->vc_solo_dtx_epoch = dth->dth_epoch;
+
+				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
+			} else {
+				D_ASSERT(dce == NULL);
+				if (err == 0)
+					dae->dae_prepared = 1;
+			}
+		}
+	}
+
 	if (err != 0) {
-		/* The transaction aborted or failed to commit. */
+		/* Do not set dth->dth_pinned. Upper layer caller can do that via
+		 * vos_dtx_cleanup() when necessary.
+		 */
 		vos_tx_publish(dth, false);
 		if (dtx_is_valid_handle(dth_in))
 			vos_dtx_cleanup_internal(dth);
-	}
-
-	if (dce != NULL) {
-		struct vos_dtx_act_ent	*dae = dth_in->dth_ent;
-
-		vos_dtx_post_handle(cont, &dae, &dce, 1, false,
-				    err != 0 ? true : false);
-		dth_in->dth_ent = NULL;
 	}
 
 	return err;
@@ -530,6 +580,7 @@ vos_metrics_free(void *data)
 }
 
 #define VOS_AGG_DIR	"vos_aggregation"
+#define VOS_SPACE_DIR	"vos_space"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -549,10 +600,11 @@ agg_op2str(unsigned int agg_op)
 static void *
 vos_metrics_alloc(const char *path, int tgt_id)
 {
-	struct vos_pool_metrics	*vp_metrics;
-	struct vos_agg_metrics	*vam;
-	char			 desc[40];
-	int			 i, rc;
+	struct vos_pool_metrics		*vp_metrics;
+	struct vos_agg_metrics		*vam;
+	struct vos_space_metrics	*vsm;
+	char				desc[40];
+	int				i, rc;
 
 	D_ASSERT(tgt_id >= 0);
 
@@ -567,6 +619,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	}
 
 	vam = &vp_metrics->vp_agg_metrics;
+	vsm = &vp_metrics->vp_space_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -637,6 +690,21 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "%s/%s/merged_size/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS space SCM used metric */
+	rc = d_tm_add_metric(&vsm->vsm_scm_used, D_TM_GAUGE, "SCM space used", "bytes",
+			     "%s/%s/scm_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'scm_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS space NVME used metric */
+	rc = d_tm_add_metric(&vsm->vsm_nvme_used, D_TM_GAUGE, "NVME space used", "bytes",
+			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* Initialize the vos_space_metrics timeout counter */
+	vsm->vsm_last_update_ts = 0;
 
 	return vp_metrics;
 }

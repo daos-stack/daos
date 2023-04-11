@@ -3276,6 +3276,7 @@ fetch_replica_unavail(void **state)
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
+		daos_cont_status_clear(arg->coh, NULL);
 	}
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);
@@ -3773,7 +3774,7 @@ split_sgl_internal(void **state, int size)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
 
-	/** Let's use differet iod_size to see if fetch
+	/** Let's use different iod_size to see if fetch
 	 *  can reset the correct iod_size
 	 */
 	iod.iod_size = size/2;
@@ -5118,6 +5119,7 @@ obj_setup_internal(void **state)
 	else if (arg->obj_class != OC_UNKNOWN)
 		dts_obj_class = arg->obj_class;
 
+	dt_redun_lvl = DAOS_PROP_CO_REDUN_RANK;
 	return 0;
 }
 

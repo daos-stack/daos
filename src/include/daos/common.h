@@ -66,11 +66,11 @@ struct daos_tree_overhead {
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
-	int				to_dyn_count;
+	int                             to_dyn_count;
 	/** Inline metadata size for each record */
-	int				to_node_rec_msize;
+	int                             to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int				to_record_msize;
+	int                             to_record_msize;
 };
 
 /** Points to a byte in an iov, in an sgl */
@@ -878,6 +878,11 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 #define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
 #define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
+
+/** check if recx_1 is covered by recx_2 */
+#define DAOS_RECX_COVERED(recx_1, recx_2)				\
+	(((recx_1).rx_idx >= (recx_2).rx_idx) &&			\
+	 (DAOS_RECX_END(recx_1) <= DAOS_RECX_END(recx_2)))
 
 /**
  * Merge \a src recx to \a dst recx.

@@ -95,9 +95,7 @@ daos_handle_is_valid(daos_handle_t hdl)
  *
  * DAOS_PC_RW connects to the pool for reading and writing.
  *
- * DAOS_PC_EX connects to the pool for reading and writing exclusively. In the
- * presence of an exclusive pool handle, no connection with DSM_PC_RW is
- * permitted.
+ * DAOS_PC_EX connects to the pool for reading and writing exclusively.
  *
  * The three flags above are mutually exclusive.
  */

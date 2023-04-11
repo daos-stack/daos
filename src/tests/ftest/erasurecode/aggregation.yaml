@@ -26,8 +26,7 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  scm_size: 20%
-  nvme_size: 90%
+  size: 90%
   control_method: dmg
   pool_query_timeout: 30
 container:

@@ -68,9 +68,8 @@ class DaosCommandBase(CommandWithSubCommand):
 
             Use BasicParameter for positional parameter subcommands. The
             value passed in defines the position. "pool" comes first, so it gets
-            1. Other subcommands get 2 or later. For example set-attr's attr and
-            value gets 2 and 3 because the order is "daos pool set-attr <attr>
-            <value>".
+            1. Other subcommands get 2 or later. For example set-attr's attr:value
+            gets 2 because the order is "daos pool set-attr <attr>:<value>".
             """
 
             def __init__(self, sub_command):
@@ -130,7 +129,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 """Create a daos pool set-attr command object."""
                 super().__init__("set-attr")
                 self.attr = BasicParameter(None, position=2)
-                self.value = BasicParameter(None, position=3)
                 self.sys_name = FormattedParameter("--sys-name={}")
 
         class AutotestSubCommand(CommonPoolSubCommand):
@@ -360,7 +358,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-prop command object."""
                 super().__init__("get-prop")
-                self.prop = FormattedParameter("--properties={}")
+                self.prop = BasicParameter(None, position=3)
 
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the daos container list command."""
@@ -425,7 +423,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 """Create a daos container set-attr command object."""
                 super().__init__("set-attr")
                 self.attr = BasicParameter(None, position=3)
-                self.value = BasicParameter(None, position=4)
 
         class SetOwnerSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container set-owner command."""
@@ -442,7 +439,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container set-prop command object."""
                 super().__init__("set-prop")
-                self.prop = FormattedParameter("--properties={}")
+                self.prop = BasicParameter(None, position=3)
 
         class StatSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container stat command."""

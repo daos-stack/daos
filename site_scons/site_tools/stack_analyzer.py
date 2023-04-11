@@ -1,4 +1,10 @@
-"""Analyze stack usage output"""
+"""
+(C) Copyright 2019-2023 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
+Analyze stack usage output
+"""
 import os
 import argparse
 import atexit
@@ -13,12 +19,13 @@ def exit_handler(handle):
 class Analyzer():
     """Class to parse .su files"""
 
-    def __init__(self, env, basedir, arg=""):
+    def __init__(self, env, daos_prefix, comp_prefix, arg=""):
         """Class for reading and printing stack usage statistics"""
         self.dir_exclusions = []
         self.dir_inclusions = []
         self.file_inclusions = []
-        self.base_dir = basedir
+        self.daos_prefix = daos_prefix
+        self.comp_prefix = comp_prefix
         self.cutoff = 0
         self.parse_args(arg)
         if '-fstack-usage' not in env["CCFLAGS"]:
@@ -75,22 +82,14 @@ class Analyzer():
         """Setup the analyzer to run on exit"""
         atexit.register(exit_handler, self)
 
-    def analyze(self):
-        """Run the analysis"""
-        function_map = {}
-
-        print(f'"Analyzing {self.base_dir}')
-        print('Options:')
-        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
-        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
-        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
-        print('\tcutoff                    : {self.cutoff}')
-
-        if not os.path.exists(self.base_dir):
-            print('No files in {self.build_dir}')
+    def _gather_path(self, comp, path, function_map):
+        """Analyze a single component"""
+        print(f'"Analyzing {comp} at {path}')
+        if not os.path.exists(path):
+            print('No files in {path}')
             return
 
-        for root, _dirs, files in os.walk(self.base_dir):
+        for root, _dirs, files in os.walk(path):
             if self.excluded(root):
                 continue
             if not self.included(root, self.dir_inclusions):
@@ -104,7 +103,7 @@ class Analyzer():
                             split = line.split()
                             if len(split) < 3:
                                 continue
-                            func = split[0]
+                            func = f"{comp}:{split[0]}"
                             usage = int(split[-2])
                             if usage < self.cutoff:
                                 continue
@@ -112,6 +111,23 @@ class Analyzer():
                                 function_map[func] = usage
                             elif usage > function_map[func]:
                                 function_map[func] = usage
+
+    def analyze(self):
+        """Run the analysis"""
+        function_map = {}
+
+        self._gather_path('daos', self.daos_prefix, function_map)
+        for path in os.listdir(self.comp_prefix):
+            comp_path = os.path.join(self.comp_prefix, path)
+            path = path.replace(".build", "")
+            if os.path.isdir(comp_path):
+                self._gather_path(path, comp_path, function_map)
+
+        print('Options:')
+        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
+        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
+        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
+        print('\tcutoff                    : {self.cutoff}')
 
         size_map = {}
         for key, value in function_map.items():
@@ -126,9 +142,9 @@ class Analyzer():
                 print(f'    {value}')
 
 
-def generate(env, prefix, args):
+def generate(env, daos_prefix, comp_prefix, args):
     """Add daos specific methods to environment"""
-    analyzer = Analyzer(env, prefix, args)
+    analyzer = Analyzer(env, daos_prefix, comp_prefix, args)
     analyzer.analyze_on_exit()
 
 

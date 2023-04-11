@@ -641,10 +641,12 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	 * shard, which might cause parity corruption.
 	 */
 	obj = obj_hdl2ptr(oh);
-	if (tls->mpt_opc == RB_OP_FAIL && daos_oclass_is_ec(&mrone->mo_oca) &&
-	    iods[0].iod_type != DAOS_IOD_SINGLE &&
-	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard))
+	if (iods[0].iod_type != DAOS_IOD_SINGLE &&
+	    daos_oclass_is_ec(&mrone->mo_oca) &&
+	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard) &&
+	    obj_ec_parity_alive(oh, mrone->mo_dkey_hash, NULL))
 		flags |= DIOF_FOR_FORCE_DEGRADE;
+
 	obj_decref(obj);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
@@ -817,7 +819,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
-				    0, &mrone->mo_dkey, iod_cnt, &iods[start],
+				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt, &iods[start],
 				    iod_csums, &sgls[start]);
 		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
@@ -839,7 +841,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
-				    0, &mrone->mo_dkey, iod_cnt,
+				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
 		if (rc) {
@@ -926,7 +928,7 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    parity_eph, mrone->mo_version,
-				    0, &mrone->mo_dkey, 1, iod, iod_csums,
+				    VOS_OF_REBUILD, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -1069,7 +1071,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	d_iov_t			*p_csum_iov = NULL;
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
-	uint64_t		 update_flags = 0;
+	uint64_t		 update_flags = VOS_OF_REBUILD;
 	uint32_t		tgt_off = 0;
 	int			 i;
 	int			 rc;
@@ -1234,7 +1236,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
-	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, 0,
+	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, VOS_OF_REBUILD,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
 			      0, &ioh, NULL);
 	if (rc != 0) {
@@ -1683,8 +1685,8 @@ migrate_one_ult(void *arg)
 	while (tls->mpt_inflight_size + data_size >=
 	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
 	       && !tls->mpt_fini) {
-		D_INFO("mrone %p wait "DF_U64"/"DF_U64"\n", mrone, tls->mpt_inflight_size,
-			tls->mpt_inflight_max_size);
+		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -2311,7 +2313,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if ((rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
 	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) ||
-	    (tls->mpt_opc == RB_OP_FAIL && io->ui_oid.id_shard == shard)) {
+	    (tls->mpt_opc == RB_OP_EXCLUDE && io->ui_oid.id_shard == shard)) {
 		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
 			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);

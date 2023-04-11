@@ -19,11 +19,12 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
-	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -31,9 +32,103 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-var (
-	defaultPoolUUID = MockUUID()
-)
+func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expRatios []float64
+		expString string
+		expErr    error
+	}{
+		"empty": {
+			expErr: errors.New("no tier ratio specified"),
+		},
+		"less than 100%": {
+			input:  "10,80",
+			expErr: errors.New("must add up to"),
+		},
+		"total more than 100%": {
+			input:  "30,90",
+			expErr: errors.New("must add up to"),
+		},
+		"non-numeric": {
+			input:  "0.3,foo",
+			expErr: errors.New("invalid"),
+		},
+		"negative adds up to 100": {
+			input:  "-30,130",
+			expErr: errors.New("0-100"),
+		},
+		"0,0": {
+			input:  "0,0",
+			expErr: errors.New("must add up to"),
+		},
+		"%,%": {
+			input:  "%,%",
+			expErr: errors.New("invalid"),
+		},
+		"defaults": {
+			input:     "defaults",
+			expRatios: defaultTierRatios,
+			expString: func() string {
+				rStrs := make([]string, len(defaultTierRatios))
+				for i, ratio := range defaultTierRatios {
+					rStrs[i] = pretty.PrintTierRatio(ratio)
+				}
+				return strings.Join(rStrs, ",")
+			}(),
+		},
+		"0": {
+			input:     "0",
+			expRatios: []float64{0, 1},
+			expString: "0.00%,100.00%",
+		},
+		"100": {
+			input:     "100",
+			expRatios: []float64{1},
+			expString: "100.00%",
+		},
+		"single tier padded": {
+			input:     "45.3",
+			expRatios: []float64{0.453, 0.547},
+			expString: "45.30%,54.70%",
+		},
+		"valid two tiers": {
+			input:     "0.3,99.7",
+			expRatios: []float64{0.003, 0.997},
+			expString: "0.30%,99.70%",
+		},
+		"valid three tiers": {
+			input:     "0.3,69.7,30.0",
+			expRatios: []float64{0.003, 0.697, 0.3},
+			expString: "0.30%,69.70%,30.00%",
+		},
+		"valid with %": {
+			input:     "7 %,93%",
+			expRatios: []float64{0.07, 0.93},
+			expString: "7.00%,93.00%",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var trf tierRatioFlag
+			if tc.input != "defaults" {
+				err := trf.UnmarshalFlag(tc.input)
+				test.CmpErr(t, tc.expErr, err)
+				if err != nil {
+					return
+				}
+			}
+			cmpOpts := []cmp.Option{
+				cmpopts.EquateApprox(0.01, 0),
+			}
+			if diff := cmp.Diff(tc.expRatios, trf.Ratios(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected tier ratio (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expString, trf.String()); diff != "" {
+				t.Fatalf("unexpected string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) string {
 	t.Helper()
@@ -53,7 +148,7 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tmpDir, tmpCleanup := CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	// Some tests need a valid ACL file
@@ -200,6 +295,40 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolCreateReq{
 					TotalBytes: uint64(testSize),
 					TierRatio:  []float64{0.1, 0.9},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with fine-grained tier-ratios (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 3.23,96.77", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.0323, 0.9677},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with really fine-grained tier-ratios (auto; rounded)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 23.725738953,76.274261047", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.2373, 0.7626999999999999},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
@@ -584,7 +713,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("must not be empty"),
+			errors.New("invalid property"),
 		},
 		{
 			"Set pool property bad value",
@@ -882,9 +1011,9 @@ func TestPoolCommands(t *testing.T) {
 
 func TestPoolGetACLToFile_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	aclFile := filepath.Join(tmpDir, "out.txt")

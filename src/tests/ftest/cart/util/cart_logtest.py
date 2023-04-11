@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""
-This provides consistency checking for CaRT log files.
-"""
+"""This provides consistency checking for CaRT log files."""
 
 import re
 import sys
@@ -26,6 +24,7 @@ except ImportError:
 
 class LogCheckError(Exception):
     """Error in the log parsing code"""
+
     def __str__(self):
         return self.__doc__
 
@@ -52,6 +51,7 @@ class LogError(LogCheckError):
 
 class RegionContig():
     """Class to represent a memory region"""
+
     def __init__(self, start, end):
         self.start = start
         self.end = end
@@ -77,6 +77,7 @@ def _ts_to_float(times):
 
 class RegionCounter():
     """Class to represent regions read/written to a file"""
+
     def __init__(self, start, end, times):
         self.start = start
         self.end = end
@@ -150,7 +151,6 @@ wf = None  # pylint: disable=invalid-name
 
 def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
-
     # Only report each individual line once.
 
     log = "{}:{}:1: {}: {} '{}'".format(line.filename,
@@ -284,7 +284,6 @@ class LogTest():
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
-
         for pid in self._li.get_pids():
 
             client_pids = OrderedDict()
@@ -313,7 +312,6 @@ class LogTest():
     # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
         """Check a pid from a single log file for consistency"""
-
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -390,6 +388,11 @@ class LogTest():
                         elif line.get_msg().endswith(': 12 (Cannot allocate memory)'):
                             # dfs and dfuse use system error numbers, rather
                             # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
+                            show = False
+                        elif line.get_msg().endswith(': 5 (HG_NOMEM)'):
+                            # Mercury uses hg error numbers, rather
+                            # than daos, so allow HG_NOMEM as well as
                             # -DER_NOMEM
                             show = False
                     elif line.rpc:
@@ -472,8 +475,11 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.calloc_pointer()
                     if pointer in regions:
+                        # Report both the old and new allocation points here.
                         show_line(regions[pointer], 'NORMAL',
-                                  'new allocation seen for same pointer')
+                                  'new allocation seen for same pointer (old)')
+                        show_line(line, 'NORMAL',
+                                  'new allocation seen for same pointer (new)')
                         err_count += 1
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
@@ -593,7 +599,6 @@ class RpcReporting():
 
     def add_line(self, line):
         """Parse a output line"""
-
         try:
             if line.function not in self.known_functions:
                 return
@@ -644,7 +649,6 @@ class RpcReporting():
 
     def report(self):
         """Print report to stdout"""
-
         if not bool(self._op_state_counters):
             return
 

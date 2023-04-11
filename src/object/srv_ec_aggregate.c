@@ -961,8 +961,8 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, DF_UOID
-			 " fetch parity from peer shard %d, "DF_RC".\n",
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
 			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
 		if (rc)
 			goto out;

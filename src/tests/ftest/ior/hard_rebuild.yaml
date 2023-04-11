@@ -31,8 +31,10 @@ server_config:
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
+create_pool_max_size:
+  scm: true
+  percentage: 90
 pool:
-  scm_size: 90%
   control_method: dmg
 container:
   type: POSIX

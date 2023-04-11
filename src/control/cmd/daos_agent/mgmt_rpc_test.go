@@ -130,6 +130,38 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
+		"certificate fault": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: &fault.Fault{
+						Code: code.SecurityInvalidCert,
+					},
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					resp: &mgmtpb.GetAttachInfoResp{
+						Status: int32(daos.BadCert),
+					},
+				},
+			},
+		},
+		"connection fault": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: &fault.Fault{
+						Code: code.ClientConnectionRefused,
+					},
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					resp: &mgmtpb.GetAttachInfoResp{
+						Status: int32(daos.Unreachable),
+					},
+				},
+			},
+		},
 		"cache disabled": {
 			cacheDisabled: true,
 			rpcResps:      hostResps(testResps),

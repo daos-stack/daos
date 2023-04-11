@@ -10,13 +10,13 @@ import errno
 from dfuse_test_base import DfuseTestBase
 
 
-class Enospace(DfuseTestBase):
+class DfuseEnospace(DfuseTestBase):
     """Dfuse ENOSPC File base class.
 
     :avocado: recursive
     """
 
-    def test_enospace(self):
+    def test_dfuse_enospace(self):
         """Jira ID: DAOS-8264.
 
         Test Description:
@@ -32,7 +32,7 @@ class Enospace(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuseenospace,test_enospace
+        :avocado: tags=DfuseEnospace,test_dfuse_enospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)

@@ -3,11 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from multiprocessing import Queue
 import time
 import random
 import threading
 import re
 
+from exception_utils import CommandFailure
+from ior_utils import run_ior, thread_run_ior
+from job_manager_utils import get_job_manager
 from test_utils_pool import add_pool
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
@@ -27,8 +31,7 @@ class NvmePoolExclude(OSAUtils):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = self.get_daos_command()
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -65,18 +68,47 @@ class NvmePoolExclude(OSAUtils):
             pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
+        job_manager = get_job_manager(self, subprocess=None, timeout=120)
+        thread_queue = Queue()
         for val in range(0, num_pool):
             self.pool = pool[val]
             self.add_container(self.pool)
             self.cont_list.append(self.container)
             rf = ''.join(self.container.properties.value.split(":"))
             rf_num = int(re.search(r"rd_fac([0-9]+)", rf).group(1))
+
             for test in range(0, rf_num):
+                ior_test_seq = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")[test]
                 threads = []
-                threads.append(threading.Thread(target=self.run_ior_thread,
-                                                kwargs={"action": "Write",
-                                                        "oclass": oclass,
-                                                        "test": test}))
+                kwargs = {"thread_queue": thread_queue, "job_id": test}
+                ior_kwargs = {
+                    "test": self,
+                    "manager": job_manager,
+                    "log": "ior_thread_write_pool_{}_test_{}.log".format(val, test),
+                    "hosts": self.hostlist_clients,
+                    "path": self.workdir,
+                    "slots": None,
+                    "group": self.server_group,
+                    "pool": pool[val],
+                    "container": self.cont_list[-1],
+                    "processes": self.params.get("np", "/run/ior/client_processes/*"),
+                    "ppn": self.params.get("ppn", "/run/ior/client_processes/*"),
+                    "intercept": None,
+                    "plugin_path": None,
+                    "dfuse": None,
+                    "display_space": True,
+                    "fail_on_warning": False,
+                    "namespace": "/run/ior/*",
+                    "ior_params": {
+                        "oclass": oclass,
+                        "flags": self.ior_w_flags,
+                        "transfer_size": ior_test_seq[2],
+                        "block_size": ior_test_seq[3]
+                    }
+                }
+                kwargs.update(ior_kwargs)
+                threads.append(threading.Thread(target=thread_run_ior, kwargs=kwargs))
+
                 # Launch the IOR threads
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
@@ -99,13 +131,34 @@ class NvmePoolExclude(OSAUtils):
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 self.assertTrue(pver_exclude > pver_begin, "Pool Version Error:  After exclude")
+
                 # Wait to finish the threads
                 for thrd in threads:
                     thrd.join()
-                    if not self.out_queue.empty():
-                        self.assert_on_exception()
+                errors = 0
+                while not thread_queue.empty():
+                    result = thread_queue.get()
+                    self.log.debug("Results from thread %s (log %s)", result["job_id"],
+                                   result["log"])
+                    for name in ("command", "exit_status", "interrupted", "duration"):
+                        self.log.debug("  %s: %s", name, getattr(result["result"], name))
+                    for name in ("stdout", "stderr"):
+                        self.log.debug("  %s:", name)
+                        for line in getattr(result["result"], name).splitlines():
+                            self.log.debug("    %s:", line)
+                    if result["result"].exit_status != 0:
+                        errors += 1
+                if errors:
+                    self.fail("Errors running {} threads".format(errors))
+
                 # Verify the data after pool exclude
-                self.run_ior_thread("Read", oclass, test)
+                ior_kwargs["ior_params"]["flags"] = self.ior_r_flags
+                ior_kwargs["log"] = "ior_read_pool_{}_test_{}.log".format(val, test)
+                try:
+                    run_ior(**ior_kwargs)
+                except CommandFailure as error:
+                    self.fail("Error in ior read {}.".format(error))
+
                 display_string = "Pool{} space at the End".format(val)
                 self.pool.display_pool_daos_space(display_string)
                 kwargs = {"pool": self.pool.uuid,
@@ -121,7 +174,7 @@ class NvmePoolExclude(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=nvme,checksum,nvme_osa
+        :avocado: tags=nvme,checksum,nvme_osa,daos_cmd
         :avocado: tags=NvmePoolExclude,test_nvme_pool_excluded
         """
         self.run_nvme_pool_exclude(1)

@@ -42,5 +42,8 @@ for file in "${FILES[@]}"; do
             sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
             echo "</testsuites>" >> "$file"
         fi
+        dir=$(dirname "$file")
+        base=$(basename "$file")
+        mv "$file" "${dir}/${COMP}_${base}"
     fi
 done

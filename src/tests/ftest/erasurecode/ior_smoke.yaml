@@ -27,8 +27,7 @@ server_config:
       storage: auto
 pool:
   control_method: dmg
-  scm_size: 25%
-  nvme_size: 93%
+  size: 93%
 container:
   type: POSIX
   control_method: daos

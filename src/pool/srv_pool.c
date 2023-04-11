@@ -38,6 +38,8 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
+#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED 1
+
 /* Pool service crt event */
 struct pool_svc_event {
 	d_list_t		psv_link;
@@ -61,8 +63,8 @@ struct pool_svc_events {
 	bool			pse_stop;
 };
 
-/* Pool service reconfiguration state */
-struct pool_svc_reconf {
+/* Pool service schedule state */
+struct pool_svc_sched {
 	int		psc_svc_rf;
 	bool		psc_force_notify;	/* for pool_svc_step_up_cb */
 	ABT_mutex	psc_mutex;		/* only for psc_cv */
@@ -72,62 +74,62 @@ struct pool_svc_reconf {
 };
 
 static int
-reconf_init(struct pool_svc_reconf *reconf)
+sched_init(struct pool_svc_sched *sched)
 {
 	int rc;
 
-	rc = ABT_mutex_create(&reconf->psc_mutex);
+	rc = ABT_mutex_create(&sched->psc_mutex);
 	if (rc != ABT_SUCCESS) {
 		return dss_abterr2der(rc);
 	}
 
-	rc = ABT_cond_create(&reconf->psc_cv);
+	rc = ABT_cond_create(&sched->psc_cv);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&reconf->psc_mutex);
+		ABT_mutex_free(&sched->psc_mutex);
 		return dss_abterr2der(rc);
 	}
 
-	reconf->psc_svc_rf = -1;
-	reconf->psc_force_notify = false;
-	reconf->psc_in_progress = false;
-	reconf->psc_canceled = false;
+	sched->psc_svc_rf = -1;
+	sched->psc_force_notify = false;
+	sched->psc_in_progress = false;
+	sched->psc_canceled = false;
 	return 0;
 }
 
 static void
-reconf_fini(struct pool_svc_reconf *reconf)
+sched_fini(struct pool_svc_sched *sched)
 {
-	ABT_cond_free(&reconf->psc_cv);
-	ABT_mutex_free(&reconf->psc_mutex);
+	ABT_cond_free(&sched->psc_cv);
+	ABT_mutex_free(&sched->psc_mutex);
 }
 
 static void
-reconf_begin(struct pool_svc_reconf *reconf)
+sched_begin(struct pool_svc_sched *sched)
 {
-	reconf->psc_in_progress = true;
-	reconf->psc_canceled = false;
+	sched->psc_in_progress = true;
+	sched->psc_canceled = false;
 }
 
 static void
-reconf_end(struct pool_svc_reconf *reconf)
+sched_end(struct pool_svc_sched *sched)
 {
-	reconf->psc_in_progress = false;
-	reconf->psc_canceled = false;
+	sched->psc_in_progress = false;
+	sched->psc_canceled = false;
 }
 
 static void
-reconf_cancel_and_wait(struct pool_svc_reconf *reconf)
+sched_cancel_and_wait(struct pool_svc_sched *sched)
 {
 	/*
 	 * The CV requires a mutex. We don't otherwise need it for ULTs within
 	 * the same xstream.
 	 */
-	ABT_mutex_lock(reconf->psc_mutex);
-	if (reconf->psc_in_progress)
-		reconf->psc_canceled = true;
-	while (reconf->psc_in_progress)
-		ABT_cond_wait(reconf->psc_cv, reconf->psc_mutex);
-	ABT_mutex_unlock(reconf->psc_mutex);
+	ABT_mutex_lock(sched->psc_mutex);
+	if (sched->psc_in_progress)
+		sched->psc_canceled = true;
+	while (sched->psc_in_progress)
+		ABT_cond_wait(sched->psc_cv, sched->psc_mutex);
+	ABT_mutex_unlock(sched->psc_mutex);
 }
 
 /* Pool service */
@@ -142,7 +144,10 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
-	struct pool_svc_reconf	ps_reconf;
+	struct pool_svc_sched	ps_reconf_sched;
+
+	/* Check all containers RF for the pool */
+	struct pool_svc_sched	ps_rfcheck_sched;
 	/* The global pool map version on all pool targets */
 	uint32_t		ps_global_map_version;
 };
@@ -1026,20 +1031,25 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 		goto err_events_mutex;
 	}
 
-	rc = reconf_init(&svc->ps_reconf);
+	rc = sched_init(&svc->ps_reconf_sched);
 	if (rc != 0)
 		goto err_events_cv;
+
+	rc = sched_init(&svc->ps_rfcheck_sched);
+	if (rc != 0)
+		goto err_sched;
 
 	rc = ds_cont_svc_init(&svc->ps_cont_svc, svc->ps_uuid, 0 /* id */,
 			      &svc->ps_rsvc);
 	if (rc != 0)
-		goto err_reconf;
+		goto err_cont_rf_sched;
 
 	*rsvc = &svc->ps_rsvc;
 	return 0;
-
-err_reconf:
-	reconf_fini(&svc->ps_reconf);
+err_cont_rf_sched:
+	sched_fini(&svc->ps_rfcheck_sched);
+err_sched:
+	sched_fini(&svc->ps_reconf_sched);
 err_events_cv:
 	ABT_cond_free(&svc->ps_events.pse_cv);
 err_events_mutex:
@@ -1121,13 +1131,10 @@ static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
 static void
 handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 {
-	daos_prop_t		prop = {0};
-	struct daos_prop_entry *entry;
-	int			rc;
+	int rc;
 
-	/* Only used for exclude the rank for the moment */
 	if ((event->psv_src != CRT_EVS_GRPMOD && event->psv_src != CRT_EVS_SWIM) ||
-	    event->psv_type != CRT_EVT_DEAD || pool_disable_exclude) {
+	    (event->psv_type == CRT_EVT_DEAD && pool_disable_exclude)) {
 		D_DEBUG(DB_MD, "ignore event: "DF_PS_EVENT" exclude=%d\n", DP_PS_EVENT(event),
 			pool_disable_exclude);
 		goto out;
@@ -1142,30 +1149,59 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
 		DP_PS_EVENT(event));
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			DP_RC(rc));
-		goto out;
-	}
+	if (event->psv_src == CRT_EVS_SWIM && event->psv_type == CRT_EVT_ALIVE) {
+		/*
+		 * Check if the rank is up in the pool map. If in the future we
+		 * add automatic reintegration below, for instance, we may need
+		 * to not only take svc->ps_lock, but also employ an RDB TX by
+		 * the book.
+		 */
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+		rc = ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank);
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		if (!rc)
+			goto out;
 
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
-		D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n", DP_UUID(svc->ps_uuid));
-		goto out_prop;
-	}
+		/*
+		 * The rank is up in the pool map. Request a pool map
+		 * distribution just in case the rank has recently restarted
+		 * and does not have a copy of the pool map.
+		 */
+		ds_rsvc_request_map_dist(&svc->ps_rsvc);
+		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
+	} else if (event->psv_type == CRT_EVT_DEAD) {
+		daos_prop_t		prop = {0};
+		struct daos_prop_entry *entry;
 
-	rc = pool_svc_exclude_rank(svc, event->psv_rank);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-			event->psv_rank, DP_RC(rc));
-		goto out_prop;
-	}
+		rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			goto out;
+		}
 
-	D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid), event->psv_rank);
+		entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+		D_ASSERT(entry != NULL);
+		if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+			D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n",
+				DP_UUID(svc->ps_uuid));
+			goto out_prop;
+		}
+
+		rc = pool_svc_exclude_rank(svc, event->psv_rank);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), event->psv_rank, DP_RC(rc));
+			goto out_prop;
+		}
+
+		D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank);
 out_prop:
-	daos_prop_fini(&prop);
+		daos_prop_fini(&prop);
+	}
+
 out:
 	return;
 }
@@ -1304,7 +1340,8 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	struct pool_svc *svc = pool_svc_obj(rsvc);
 
 	ds_cont_svc_fini(&svc->ps_cont_svc);
-	reconf_fini(&svc->ps_reconf);
+	sched_fini(&svc->ps_reconf_sched);
+	sched_fini(&svc->ps_rfcheck_sched);
 	ABT_cond_free(&svc->ps_events.pse_cv);
 	ABT_mutex_free(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_user);
@@ -1454,9 +1491,9 @@ check_map:
 	svc_rf_entry = daos_prop_entry_get(*prop, DAOS_PROP_PO_SVC_REDUN_FAC);
 	D_ASSERT(svc_rf_entry != NULL);
 	if (daos_prop_is_set(svc_rf_entry))
-		svc->ps_reconf.psc_svc_rf = svc_rf_entry->dpe_val;
+		svc->ps_reconf_sched.psc_svc_rf = svc_rf_entry->dpe_val;
 	else
-		svc->ps_reconf.psc_svc_rf = -1;
+		svc->ps_reconf_sched.psc_svc_rf = -1;
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -1555,8 +1592,10 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
-static void pool_svc_schedule_reconf(struct pool_svc *svc);
-static void pool_svc_cancel_and_wait_reconf(struct pool_svc *svc);
+static void pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+			      void (*func)(void *));
+static void pool_svc_reconf_ult(void *arg);
+static void pool_svc_rfcheck_ult(void *arg);
 
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
@@ -1569,7 +1608,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	bool			reconf_scheduled = false;
+	bool			svc_scheduled = false;
 	d_rank_t		rank = dss_self_rank();
 	int			rc;
 
@@ -1616,9 +1655,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * Just in case the previous leader didn't finish the last series of
 	 * reconfigurations or the last MS notification.
 	 */
-	svc->ps_reconf.psc_force_notify = true;
-	pool_svc_schedule_reconf(svc);
-	reconf_scheduled = true;
+	svc->ps_reconf_sched.psc_force_notify = true;
+	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
+	pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
+	svc_scheduled = true;
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
@@ -1657,8 +1697,11 @@ out:
 	if (rc != 0) {
 		if (events_initialized)
 			fini_events(svc);
-		if (reconf_scheduled)
-			pool_svc_cancel_and_wait_reconf(svc);
+		if (svc_scheduled) {
+			sched_cancel_and_wait(&svc->ps_reconf_sched);
+			sched_cancel_and_wait(&svc->ps_rfcheck_sched);
+		}
+
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1682,7 +1725,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	d_rank_t		rank = dss_self_rank();
 
 	fini_events(svc);
-	pool_svc_cancel_and_wait_reconf(svc);
+	sched_cancel_and_wait(&svc->ps_reconf_sched);
+	sched_cancel_and_wait(&svc->ps_rfcheck_sched);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
 
@@ -2582,8 +2626,8 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 static void
 ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
-	struct pool_connect_v4_in       *in = crt_req_get(rpc);
-	struct pool_connect_v5_out      *out = crt_reply_get(rpc);
+	struct pool_connect_v4_in      *in = crt_req_get(rpc);
+	struct pool_connect_v5_out     *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
@@ -2593,20 +2637,21 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
-	struct pool_hdl			*hdl = NULL;
+	struct pool_hdl		       *hdl = NULL;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
 	daos_prop_t		       *prop = NULL;
 	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
-	struct ownership		owner;
+	struct d_ownership		owner;
 	struct daos_prop_entry	       *owner_entry, *global_ver_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	struct daos_prop_entry	       *obj_ver_entry;
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
+	bool				transfer_map = false;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2777,25 +2822,13 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	/*
-	 * Transfer the pool map to the client before adding the pool handle,
-	 * so that we don't need to worry about rolling back the transaction
-	 * when the transfer fails. The client has already been authenticated
-	 * and authorized at this point. If an error occurs after the transfer
-	 * completes, then we simply return the error and the client will throw
-	 * its pool_buf away.
-	 */
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
-	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
-				      in->pci_map_bulk, &out->pco_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
+	transfer_map = true;
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
@@ -2854,9 +2887,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, hdl, svc->ps_global_version != 0 ?
-				sizeof(struct pool_hdl) + hdl->ph_cred_len :
-				sizeof(struct pool_hdl_v0));
+	d_iov_set(&value, hdl,
+		  svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED ?
+		  sizeof(struct pool_hdl) + hdl->ph_cred_len : sizeof(struct pool_hdl_v0));
 	D_DEBUG(DB_MD, "writing a pool connect handle in db, size %zu, pool version %u\n",
 		value.iov_len, svc->ps_global_version);
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
@@ -2881,14 +2914,17 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
-	if (hdl)
-		D_FREE(hdl);
-	D_FREE(machine);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	if (rc == 0 && transfer_map) {
+		rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc, in->pci_map_bulk,
+					      &out->pco_map_buf_size);
+		/** TODO: roll back tx if transfer fails? */
+	}
+	D_FREE(map_buf);
+	D_FREE(hdl);
+	D_FREE(machine);
 	if (prop)
 		daos_prop_free(prop);
 out_svc:
@@ -4827,7 +4863,7 @@ out:
 /* check and upgrade the object layout if needed. */
 static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
-				 bool *schedule_layout_upgrade)
+				 bool *scheduled_layout_upgrade)
 {
 	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
@@ -4846,7 +4882,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
 					 RB_OP_UPGRADE, 0);
 		if (rc == 0)
-			*schedule_layout_upgrade = true;
+			*scheduled_layout_upgrade = true;
 	}
 	return rc;
 }
@@ -4893,19 +4929,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
 	int				rc;
-	bool				schedule_layout_upgrade = false;
-	bool				need_put_leader = false;
+	bool				scheduled_layout_upgrade = false;
+	bool				dmg_upgrade_cmd = false;
+	bool				request_schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
 		if (rc != 0)
 			return rc;
-		need_put_leader = true;
+		dmg_upgrade_cmd = true;
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_put_leader, rc);
 
 	/**
 	 * Four kinds of pool upgrading states:
@@ -4937,7 +4974,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_tx, rc);
 	} else if (rc == -DER_NONEXIST) {
-		if (!need_put_leader)
+		if (!dmg_upgrade_cmd)
 			D_GOTO(out_tx, rc = 0);
 		D_GOTO(out_upgrade, rc);
 	} else {
@@ -4958,7 +4995,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
 			if ((upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
-			     need_put_leader) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
+			     dmg_upgrade_cmd) || DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE))
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -4972,7 +5009,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
-			if (need_put_leader)
+			if (dmg_upgrade_cmd)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
@@ -4984,7 +5021,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
 					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
-			} else if (need_put_leader) { /* not from resume */
+			} else if (dmg_upgrade_cmd) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
 			} else {
 				D_GOTO(out_upgrade, rc = 0);
@@ -4997,6 +5034,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
+	request_schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5004,18 +5042,18 @@ out_upgrade:
 	if (rc)
 		D_GOTO(out_tx, rc);
 
-	rc = pool_check_upgrade_object_layout(&tx, svc, &schedule_layout_upgrade);
+	rc = pool_check_upgrade_object_layout(&tx, svc, &scheduled_layout_upgrade);
 	if (rc < 0)
 		D_GOTO(out_tx, rc);
 
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	if (!schedule_layout_upgrade) {
+
+	if (request_schedule_upgrade && !scheduled_layout_upgrade) {
 		int rc1;
 
-		if (rc == 0 && need_put_leader &&
+		if (rc == 0 && dmg_upgrade_cmd &&
 		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
 			D_GOTO(out_put_leader, rc = -DER_AGAIN);
 		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
@@ -5023,7 +5061,7 @@ out_svc:
 			rc = rc1;
 	}
 out_put_leader:
-	if (need_put_leader) {
+	if (dmg_upgrade_cmd) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
 		pool_svc_put_leader(svc);
 	}
@@ -5497,7 +5535,7 @@ static void
 pool_svc_reconf_ult(void *arg)
 {
 	struct pool_svc		*svc = arg;
-	struct pool_svc_reconf	*reconf = &svc->ps_reconf;
+	struct pool_svc_sched	*reconf = &svc->ps_reconf_sched;
 	d_rank_list_t		*current;
 	d_rank_list_t		*to_add;
 	d_rank_list_t		*to_remove;
@@ -5610,23 +5648,23 @@ out_to_add_remove:
 out_cur:
 	d_rank_list_free(current);
 out:
-	reconf_end(reconf);
+	sched_end(reconf);
 	ABT_cond_broadcast(reconf->psc_cv);
 	D_DEBUG(DB_MD, DF_UUID": end\n", DP_UUID(svc->ps_uuid));
 }
 
 static void
-pool_svc_schedule_reconf(struct pool_svc *svc)
+pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+		  void (*func)(void *))
 {
-	struct pool_svc_reconf *reconf = &svc->ps_reconf;
 	enum ds_rsvc_state	state;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
 	/*
-	 * Avoid scheduling new reconfigurations when the PS is stepping down
-	 * and has already called pool_svc_cancel_and_wait_reconf.
+	 * Avoid scheduling when the PS is stepping down
+	 * and has already called sched_cancel_and_wait.
 	 */
 	state = ds_rsvc_get_state(&svc->ps_rsvc);
 	if (state == DS_RSVC_DRAINING) {
@@ -5635,37 +5673,73 @@ pool_svc_schedule_reconf(struct pool_svc *svc)
 		return;
 	}
 
-	reconf_cancel_and_wait(reconf);
+	D_ASSERT(&svc->ps_reconf_sched == sched || &svc->ps_rfcheck_sched == sched);
+	sched_cancel_and_wait(sched);
 
-	/* Ended by pool_svc_reconf_ult. */
-	reconf_begin(reconf);
+	sched_begin(sched);
 
 	/*
 	 * An extra svc leader reference is not required, because
 	 * pool_svc_step_down_cb waits for this ULT to terminate.
 	 *
-	 * ULT tracking is achieved through svc->ps_reconf, not a ULT handle.
+	 * ULT tracking is achieved through sched, not a ULT handle.
 	 */
-	rc = dss_ult_create(pool_svc_reconf_ult, svc, DSS_XS_SELF, 0, 0, NULL /* ult */);
+	rc = dss_ult_create(func, svc, DSS_XS_SELF, 0, 0, NULL /* ult */);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create reconfiguration ULT: "DF_RC"\n",
+		D_ERROR(DF_UUID": failed to create ULT: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		reconf_end(reconf);
+		sched_end(sched);
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-}
-
-static void
-pool_svc_cancel_and_wait_reconf(struct pool_svc *svc)
-{
-	reconf_cancel_and_wait(&svc->ps_reconf);
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
 					 struct pool_target_addr_list *list,
 					 struct pool_target_id_list *tgt_list,
 					 struct pool_target_addr_list *inval);
+
+static int
+cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg)
+{
+	struct pool_svc_sched *sched = arg;
+	int rc;
+
+	/* If anything happened during rf check, let's continue to check the next container
+	 * for the moment.
+	 */
+	rc = ds_cont_rf_check(pool_uuid, cont_uuid, tx);
+	if (rc)
+		D_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, DF_CONT" check_rf: "DF_RC"\n",
+			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+
+	if (sched->psc_canceled) {
+		D_DEBUG(DB_MD, DF_CONT" is canceled.\n", DP_CONT(pool_uuid, cont_uuid));
+		return 1;
+	}
+
+	return 0;
+}
+
+static void
+pool_svc_rfcheck_ult(void *arg)
+{
+	struct pool_svc	*svc = arg;
+	int rc;
+
+	do {
+		/* retry until some one stop the pool svc(rc == 1) or succeed */
+		rc = ds_cont_rdb_iterate(svc->ps_uuid, cont_rf_check_cb,
+					 &svc->ps_rfcheck_sched);
+		if (rc >= 0)
+			break;
+		D_ERROR(DF_UUID" check rf with %d and retry\n", DP_UUID(svc->ps_uuid), rc);
+		dss_sleep(0);
+	} while (1);
+
+	sched_end(&svc->ps_rfcheck_sched);
+	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
+}
 
 /*
  * Perform an update to the pool map of \a svc.
@@ -5732,12 +5806,14 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
-		/* Extend the current pool map */
-		rc = pool_map_extend(map, map_version, map_buf);
-		pool_buf_free(map_buf);
-		map_buf = NULL;
-		if (rc != 0)
-			D_GOTO(out_map, rc);
+		if (map_buf != NULL) {
+			/* Extend the current pool map */
+			rc = pool_map_extend(map, map_version, map_buf);
+			pool_buf_free(map_buf);
+			map_buf = NULL;
+			if (rc != 0)
+				D_GOTO(out_map, rc);
+		}
 
 		/* Get a list of all the targets being added */
 		rc = pool_map_find_targets_on_ranks(map, extend_rank_list, tgts);
@@ -5821,7 +5897,9 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	pool_svc_schedule_reconf(svc);
+	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
+	if (opc == POOL_EXCLUDE)
+		pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -5983,7 +6061,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	switch (opc) {
 	case POOL_EXCLUDE:
-		op = RB_OP_FAIL;
+		op = RB_OP_EXCLUDE;
 		break;
 	case POOL_DRAIN:
 		op = RB_OP_DRAIN;
@@ -6232,7 +6310,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 	if (val->iov_len == sizeof(struct pool_hdl_v0)) {
 		/* old/2.0 pool handle format ? */
-		if (arg->eia_pool_svc->ps_global_version < 1) {
+		if (arg->eia_pool_svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
 			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
 			/* if looking for a specific machine, do not select this handle */
 			if (arg->eia_machine)
@@ -6246,10 +6324,11 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		struct pool_hdl *hdl = val->iov_buf;
 
 		if (val->iov_len != sizeof(struct pool_hdl) + hdl->ph_cred_len ||
-		    arg->eia_pool_svc->ps_global_version < 1) {
+		    arg->eia_pool_svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
 			D_ERROR("invalid value size: "DF_U64" for pool version %u, expected %zu\n",
 				val->iov_len, arg->eia_pool_svc->ps_global_version,
-				arg->eia_pool_svc->ps_global_version < 1 ?
+				arg->eia_pool_svc->ps_global_version <
+				DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED ?
 				sizeof(struct pool_hdl_v0) :
 				sizeof(struct pool_hdl) + hdl->ph_cred_len);
 			return -DER_IO;
@@ -6668,9 +6747,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
-			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN,
-			       &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATUS, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
@@ -7207,4 +7284,55 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 		*p_tgt = target;
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
+}
+
+/**
+ * A hack (since we don't take svc->ps_lock to avoid lock order issues with
+ * cont_svc->cs_lock) for cont_svc to look up the credential of a pool handle
+ * in the DB. If the return value is zero, the caller is responsible for
+ * freeing \a cred->iov_buf with D_FREE.
+ */
+int
+ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid, d_iov_t *cred)
+{
+	struct pool_svc	       *svc;
+	d_iov_t			key;
+	d_iov_t			value;
+	struct pool_hdl	       *hdl;
+	void		       *buf;
+	int			rc;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	if (svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
+		D_ERROR(DF_UUID": no credential in pool global version %u\n", DP_UUID(svc->ps_uuid),
+			svc->ps_global_version);
+		rc = -DER_NOTSUPPORTED;
+		goto out_svc;
+	}
+
+	d_iov_set(&key, pool_hdl_uuid, sizeof(uuid_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+	if (rc != 0)
+		goto out_svc;
+	hdl = value.iov_buf;
+
+	D_ALLOC(buf, hdl->ph_cred_len);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out_svc;
+	}
+	memcpy(buf, hdl->ph_cred, hdl->ph_cred_len);
+
+	cred->iov_buf = buf;
+	cred->iov_len = hdl->ph_cred_len;
+	cred->iov_buf_len = hdl->ph_cred_len;
+
+out_svc:
+	pool_svc_put_leader(svc);
+out:
+	return rc;
 }

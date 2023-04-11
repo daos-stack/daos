@@ -28,7 +28,6 @@ server_config:
       storage: auto
 pool:
   size: 95%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
@@ -72,7 +71,6 @@ mdtest_dfuse_s1:
   dfs_dir_oclass: SX  # Unused. Cannot be set at the container level
   dfs_chunk: 1MiB
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   disable_caching: true
 client:
   env_vars:

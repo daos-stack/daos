@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1449,12 +1449,16 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
  * taking a snapshot (i.e., simply increasing the log base index in our
  * implementation).
  */
-static int
-rdb_raft_trigger_compaction(struct rdb *db)
+int
+rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx)
 {
 	uint64_t	base;
 	int		n;
 	int		rc = 0;
+
+	/* Returning rc == 0 and idx nonzero means that compact/aggregation was started */
+	if (idx)
+		*idx = 0;
 
 	/*
 	 * If the number of applied entries reaches db->d_compact_thres,
@@ -1465,7 +1469,13 @@ rdb_raft_trigger_compaction(struct rdb *db)
 	D_ASSERTF(db->d_applied >= base, DF_U64" >= "DF_U64"\n", db->d_applied,
 		  base);
 	n = db->d_applied - base;
-	if (n >= db->d_compact_thres) {
+	if ((n >= 1) && compact_all) {
+		D_DEBUG(DB_TRACE, DF_DB": compact n=%d entries, to index "DF_U64"\n",
+			DP_DB(db), n, (base + n));
+		rc = rdb_raft_compact_to_index(db, (base + n));
+		if (idx && (rc == 0))
+			*idx = (base + n);
+	} else if (n >= db->d_compact_thres) {
 		uint64_t index;
 
 		/*
@@ -1479,7 +1489,11 @@ rdb_raft_trigger_compaction(struct rdb *db)
 		else
 			index = base + n / 2;
 
+		D_DEBUG(DB_TRACE, DF_DB": compact half of n=%d applied, up to index "DF_U64"\n",
+			DP_DB(db), n, index);
 		rc = rdb_raft_compact_to_index(db, index);
+		if (idx && (rc == 0))
+			*idx = index;
 	}
 	return rc;
 }
@@ -1513,6 +1527,9 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 		ABT_mutex_unlock(db->d_raft_mutex);
 		return rc;
 	}
+
+	/* If requesting ULT is waiting synchronously, notify. */
+	ABT_cond_broadcast(db->d_compacted_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
@@ -1802,7 +1819,8 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		D_DEBUG(DB_TRACE, DF_DB": committed/applied to "DF_U64"\n",
 			DP_DB(db), committed);
 		db->d_applied = committed;
-		compaction_rc = rdb_raft_trigger_compaction(db);
+		compaction_rc = rdb_raft_trigger_compaction(db, false /* compact_all */,
+							    NULL /* idx */);
 	}
 
 	/*
@@ -2501,6 +2519,14 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 		goto err_replies_cv;
 	}
 
+	rc = ABT_cond_create(&db->d_compacted_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB": failed to create compacted CV: %d\n", DP_DB(db),
+			rc);
+		rc = dss_abterr2der(rc);
+		goto err_compact_cv;
+	}
+
 	if (caller_term != RDB_NIL_TERM) {
 		uint64_t	term;
 		d_iov_t		value;
@@ -2510,29 +2536,31 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 		if (rc == -DER_NONEXIST)
 			term = 0;
 		else if (rc != 0)
-			goto err_compact_cv;
+			goto err_compacted_cv;
 
 		if (caller_term < term) {
 			D_DEBUG(DB_MD, DF_DB": stale caller term: "DF_X64" < "DF_X64"\n", DP_DB(db),
 				caller_term, term);
 			rc = -DER_STALE;
-			goto err_compact_cv;
+			goto err_compacted_cv;
 		} else if (caller_term > term) {
 			D_DEBUG(DB_MD, DF_DB": updating term: "DF_X64" -> "DF_X64"\n", DP_DB(db),
 				term, caller_term);
 			d_iov_set(&value, &caller_term, sizeof(caller_term));
 			rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_term, &value);
 			if (rc != 0)
-				goto err_compact_cv;
+				goto err_compacted_cv;
 		}
 	}
 
 	rc = rdb_raft_open_lc(db);
 	if (rc != 0)
-		goto err_compact_cv;
+		goto err_compacted_cv;
 
 	return 0;
 
+err_compacted_cv:
+	ABT_cond_free(&db->d_compacted_cv);
 err_compact_cv:
 	ABT_cond_free(&db->d_compact_cv);
 err_replies_cv:
@@ -2552,6 +2580,7 @@ rdb_raft_close(struct rdb *db)
 {
 	D_ASSERT(db->d_raft == NULL);
 	rdb_raft_close_lc(db);
+	ABT_cond_free(&db->d_compacted_cv);
 	ABT_cond_free(&db->d_compact_cv);
 	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);

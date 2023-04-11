@@ -24,8 +24,7 @@ server_config:
       storage: auto
 pool:
   control_method: dmg
-  scm_size: 25%
-  nvme_size: 93%
+  size: 93%
   cell_size: !mux
     cell_size_4K:
       properties: ec_cell_sz:4096
