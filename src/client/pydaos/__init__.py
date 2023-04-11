@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2022 Intel Corporation.
+# (C) Copyright 2019-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -8,10 +8,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
 import atexit
-# pylint: disable=relative-beyond-top-level
-# pylint: disable-next=import-self
-from . import pydaos_shim
-# pylint: enable=relative-beyond-top-level
+from . import pydaos_shim  # pylint: disable=relative-beyond-top-level,import-self
 
 DAOS_MAGIC = 0x7A89
 
@@ -25,7 +22,7 @@ class PyDError(Exception):
     # possible.  There is an odd effect with daos_init() errors that
     # pydaos_shim is valid during __init__ but None during __str__ so format
     # the string early and just report it later on.
-    def __init__(self, message, rc):
+    def __init__(self, message, rc):  # pylint: disable=super-init-not-called
         err = pydaos_shim.err_to_str(DAOS_MAGIC, rc)
         if err:
             self.message = '{}: {}'.format(message, err)

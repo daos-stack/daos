@@ -623,7 +623,7 @@ def get_args():
     return parser.parse_args()
 
 
-def get_path_info():
+def get_path_info(args):
     """Retrieve the build variables"""
     script_dir = os.path.dirname(os.path.realpath(__file__))
     daos_base = os.path.realpath(os.path.join(script_dir, '..'))
@@ -647,7 +647,7 @@ def get_path_info():
 def main():
     """Run the the core tests"""
     args = get_args()
-    path_info = get_path_info()
+    path_info = get_path_info(args)
 
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 

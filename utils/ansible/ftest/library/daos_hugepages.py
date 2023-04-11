@@ -4,7 +4,7 @@
 # pylint: disable=import-error
 # pylint: disable=broad-except
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,7 @@ import subprocess  # nosec B404
 from ansible.module_utils.basic import AnsibleModule
 
 __copyright__ = """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
