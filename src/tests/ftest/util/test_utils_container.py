@@ -884,6 +884,27 @@ class TestContainer(TestDaosApiBase):
         return count
 
     @fail_on(CommandFailure)
+    def set_prop(self, *args, **kwargs):
+        """Set container properties by calling daos container set-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
+
+        Returns:
+            str: JSON output of daos container set-prop.
+
+        Raises:
+            DaosTestError: if params are invalid
+            CommandFailure: Raised from the daos command call.
+
+        """
+        if not self.daos:
+            raise DaosTestError("Undefined daos command")
+        return self.daos.container_set_prop(
+            pool=self.pool.identifier, cont=self.uuid, *args, **kwargs)
+
+    @fail_on(CommandFailure)
     def get_prop(self, properties=None):
         """Get container property by calling daos container get-prop.
 

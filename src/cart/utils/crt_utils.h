@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,20 +70,19 @@ int
 crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 			  crt_group_t *grp, d_rank_t my_rank,
 			  bool delete_file);
-
 int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 			      crt_context_t *context);
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name);
 
-void
+int
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     crt_group_t **grp, d_rank_list_t **rank_list,
 		     crt_context_t *crt_ctx, pthread_t *progress_thread,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env);
-void
+int
 crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,
 		     uint32_t *grp_size, crt_init_options_t *init_opt);

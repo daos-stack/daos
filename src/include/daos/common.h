@@ -878,6 +878,11 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
 #define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
 
+/** check if recx_1 is covered by recx_2 */
+#define DAOS_RECX_COVERED(recx_1, recx_2)				\
+	(((recx_1).rx_idx >= (recx_2).rx_idx) &&			\
+	 (DAOS_RECX_END(recx_1) <= DAOS_RECX_END(recx_2)))
+
 /**
  * Merge \a src recx to \a dst recx.
  */

@@ -867,9 +867,9 @@ ec_singv_array_mixed_io(void **state)
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
 	d_iov_t		 dkey;
-	d_sg_list_t	 sgl[NUM_AKEYS];
+	d_sg_list_t	 sgl[NUM_AKEYS + 1];
 	d_iov_t	 sg_iov[NUM_AKEYS];
-	daos_iod_t	 iod[NUM_AKEYS];
+	daos_iod_t	 iod[NUM_AKEYS + 1];
 	daos_recx_t	 recx[NUM_AKEYS];
 	char		*buf[NUM_AKEYS];
 	char		*akey[NUM_AKEYS];
@@ -940,7 +940,16 @@ ec_singv_array_mixed_io(void **state)
 
 	for (i = 0; i < NUM_AKEYS; i++)
 		d_iov_set(&sg_iov[i], buf[i], size * (i + 1));
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+
+	/* one more akey fetch for non-exist single-value */
+	d_iov_set(&iod[NUM_AKEYS].iod_name, "non_exist_akey_111", strlen("non_exist_akey_111"));
+	iod[NUM_AKEYS].iod_recxs	= NULL;
+	iod[NUM_AKEYS].iod_type		= DAOS_IOD_SINGLE;
+	iod[NUM_AKEYS].iod_size		= 0;
+	iod[NUM_AKEYS].iod_nr		= 1;
+	sgl[NUM_AKEYS]			= sgl[NUM_AKEYS - 1];
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS + 1, iod, sgl,
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1602,6 +1611,12 @@ ec_cond_fetch(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
 			     NULL);
 	assert_rc_equal(rc, 0);
+
+	/** fetch with NULL sgl but iod_size is non-zero */
+	print_message("negative test - fetch with non-zero iod_size and NULL sgl\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	/** normal fetch */
 	for (i = 0; i < 2; i++)
