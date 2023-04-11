@@ -2483,7 +2483,7 @@ pmap_fail_ver_merge(struct pmap_fail_node *fnode)
 			  "bad order of pf_start_ver %d, %d\n",
 			  ver1->pf_start_ver, ver2->pf_start_ver);
 		/* exclude earlier, rebuild (exclude out) earlier */
-		D_ASSERTF(ver1->pf_end_ver <= ver2->pf_end_ver,
+		D_ASSERTF(ver1->pf_end_ver == PMAP_VER_MAX || ver1->pf_end_ver <= ver2->pf_end_ver,
 			  "bad order of pf_end_ver %d, %d\n",
 			  ver1->pf_end_ver, ver2->pf_end_ver);
 		if (!fver_overlap(ver1, ver2)) {
