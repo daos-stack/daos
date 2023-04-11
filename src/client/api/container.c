@@ -728,7 +728,7 @@ daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SNAP_OIT_CREATE);
 
-	rc = dc_task_create(dc_cont_snap_oit_dump, NULL, ev, &task);
+	rc = dc_task_create(dc_cont_snap_oit_create, NULL, ev, &task);
 	if (rc)
 		return rc;
 

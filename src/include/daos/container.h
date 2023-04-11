@@ -113,7 +113,7 @@ int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
 int dc_cont_snap_oit_oid_get(tse_task_t *task);
-int dc_cont_snap_oit_dump(tse_task_t *task);
+int dc_cont_snap_oit_create(tse_task_t *task);
 
 static inline bool
 dc_cont_open_flags_valid(uint64_t flags)

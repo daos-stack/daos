@@ -2972,7 +2972,7 @@ dc_cont_create_snap(tse_task_t *task)
 }
 
 int
-dc_cont_snap_oit_dump(tse_task_t *task)
+dc_cont_snap_oit_create(tse_task_t *task)
 {
 	daos_cont_snap_oit_create_t *args;
 

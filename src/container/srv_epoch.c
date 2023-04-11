@@ -189,8 +189,8 @@ struct oit_oid_value {
 };
 
 static int
-snap_oit_dump(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
-	      uint64_t opts, crt_context_t *ctx, daos_epoch_t *epoch)
+snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
+		uint64_t opts, crt_context_t *ctx, daos_epoch_t *epoch)
 {
 	struct cont_tgt_snapshot_notify_in	*in;
 	struct cont_tgt_snapshot_notify_out	*out;
@@ -258,7 +258,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	uint32_t				 nsnapshots;
 	int					 rc;
 
-	rc = snap_oit_dump(tx, cont, coh_uuid, opts, ctx, epoch);
+	rc = snap_oit_create(tx, cont, coh_uuid, opts, ctx, epoch);
 	if (rc)
 		return rc;
 
@@ -324,7 +324,7 @@ out:
 }
 
 int
-ds_cont_snap_oit_dump(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
@@ -341,8 +341,8 @@ ds_cont_snap_oit_dump(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	rc = snap_oit_dump(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT,
-			   rpc->cr_ctx, &in->cei_epoch);
+	rc = snap_oit_create(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT,
+			     rpc->cr_ctx, &in->cei_epoch);
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));

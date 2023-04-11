@@ -4952,7 +4952,7 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *c
 		return ds_cont_snap_oit_oid_get(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_OIT_CREATE:
 		*update_mtime = true;
-		return ds_cont_snap_oit_dump(tx, pool_hdl, cont, hdl, rpc);
+		return ds_cont_snap_oit_create(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}

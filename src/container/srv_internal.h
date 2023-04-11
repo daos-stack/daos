@@ -224,8 +224,8 @@ int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **sna
 void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 int ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			     struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
-int ds_cont_snap_oit_dump(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			  struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
+int ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			    struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
 
 /* srv_target.c */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
