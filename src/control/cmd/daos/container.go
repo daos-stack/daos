@@ -1297,19 +1297,23 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	ap.props = cmd.Args.Props.props
-
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rc := C.cont_set_prop_hdlr(ap)
+	rc := C.daos_cont_set_prop(ap.cont, cmd.Args.Props.props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Errorf("failed to set properties on container %s",
+		return errors.Wrapf(err, "failed to set properties on container %s",
 			cmd.ContainerID())
 	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, nil)
+	}
+
+	cmd.Info("Properties were successfully set\n")
 
 	return nil
 }
