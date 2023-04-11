@@ -1310,7 +1310,7 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 }
 
 static int
-open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *szCallerName,
+open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
 {
 	unsigned int     mode     = 0664;
@@ -1750,6 +1750,46 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int              is_target_path, rc;
 	dfs_obj_t       *parent;
+	dfs_obj_t       *obj;
+	struct DFSMOUNT *dfs_mt;
+	mode_t           mode;
+	char             item_name[DFS_MAX_NAME];
+	char             parent_dir[DFS_MAX_PATH];
+	char             full_path[DFS_MAX_PATH];
+
+	if (!hook_enabled)
+		return next_xstat(ver, path, stat_buf);
+
+	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	if (rc)
+		return (-1);
+	if (!is_target_path)
+		return next_xstat(ver, path, stat_buf);
+	if (bLog)
+		atomic_fetch_add_relaxed(&num_stat, 1);
+
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
+	} else {
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY, &obj, &mode,
+				    stat_buf);
+	}
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	stat_buf->st_ino = FAKE_ST_INO(full_path);
+	dfs_release(obj);
+
+	return 0;
+}
+
+static int
+new_lxstat(int ver, const char *path, struct stat *stat_buf)
+{
+	int              is_target_path, rc;
+	dfs_obj_t       *parent;
 	struct DFSMOUNT *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
 	char             parent_dir[DFS_MAX_PATH];
@@ -1775,7 +1815,6 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	}
 
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
-
 	return 0;
 }
 
@@ -1788,13 +1827,21 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	if (!hook_enabled)
 		return next_fxstatat(ver, dirfd, path, stat_buf, flags);
 
-	if (path[0] == '/')
+	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
-		return new_xstat(1, path, stat_buf);
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			return new_lxstat(1, path, stat_buf);
+		else
+			return new_xstat(1, path, stat_buf);
+	}
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
-	if (idx_dfs >= 0)
-		return new_xstat(1, full_path, stat_buf);
+	if (idx_dfs >= 0) {
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			return new_lxstat(1, full_path, stat_buf);
+		else
+			return new_xstat(1, full_path, stat_buf);
+	}
 
 	return next_fxstatat(ver, dirfd, path, stat_buf, flags);
 }
@@ -1841,53 +1888,25 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {
-		rc = new_xstat(1, path, &stat_buf);
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			rc = new_lxstat(1, path, &stat_buf);
+		else
+			rc = new_xstat(1, path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
 	if (idx_dfs >= 0) {
-		rc = new_xstat(1, full_path, &stat_buf);
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			rc = new_lxstat(1, full_path, &stat_buf);
+		else
+			rc = new_xstat(1, full_path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
 	return next_statx(dirfd, path, flags, mask, statx_buf);
-}
-
-static int
-new_lxstat(int ver, const char *path, struct stat *stat_buf)
-{
-	int              is_target_path, rc;
-	dfs_obj_t       *parent;
-	struct DFSMOUNT *dfs_mt;
-	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
-
-	if (!hook_enabled)
-		return next_xstat(ver, path, stat_buf);
-
-	rc = parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
-	if (rc)
-		return (-1);
-	if (!is_target_path)
-		return next_xstat(ver, path, stat_buf);
-	if (bLog)
-		atomic_fetch_add_relaxed(&num_stat, 1);
-	/* Need to compare with using dfs_lookup!!! */
-	if (!parent && (strncmp(item_name, "/", 2) == 0))
-		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
-	else
-		rc = dfs_stat(dfs_mt->dfs, parent, item_name, stat_buf);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	stat_buf->st_ino = FAKE_ST_INO(full_path);
-	return 0;
 }
 
 static off_t
@@ -2106,14 +2125,10 @@ opendir(const char *path)
 		atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
-		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &dir_obj, &mode, NULL);
+		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &dir_obj, &mode, NULL);
 	else
 		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFDIR, O_RDONLY, 0, 0, NULL,
 			      &dir_obj);
-
-	/*	rc = dfs_lookup(dfs, full_path, O_RDWR, &dir_obj, &mode, NULL); */
-
-	/*	rc = dfs_lookup(dfs, full_path, O_RDONLY | O_NOFOLLOW, &dir_obj, &mode, NULL); */
 	if (rc) {
 		errno = rc;
 		return NULL;
@@ -2956,7 +2971,7 @@ rename(const char *old_name, const char *new_name)
 		}
 
 		/* This could be improved later by calling daos_obj_update() directly. */
-		rc = dfs_chmod(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode);
+		rc = dfs_chmod(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode, 0);
 		if (rc) {
 			errno = rc;
 			return (-1);
@@ -3309,7 +3324,6 @@ truncate(const char *path, off_t length)
 	if (!is_target_path)
 		return next_truncate(path, length);
 
-	/* rc = dfs_lookup(dfs, full_path, O_RDWR, &file_obj, &mode, NULL); */
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
 	if (rc) {
 		errno = rc;
@@ -3329,8 +3343,8 @@ truncate(const char *path, off_t length)
 	return 0;
 }
 
-int
-chmod(const char *path, mode_t mode)
+static int
+chmod_with_flag(const char *path, mode_t mode, int flag)
 {
 	int              rc, is_target_path;
 	dfs_obj_t       *parent;
@@ -3351,17 +3365,36 @@ chmod(const char *path, mode_t mode)
 	if (rc)
 		return (-1);
 	if (is_target_path) {
+		/* POSIX API uses AT_SYMLINK_NOFOLLOW; DFS dfs_lookup() uses O_NOFOLLOW. */
+		if (flag & AT_SYMLINK_NOFOLLOW)
+			flag |= O_NOFOLLOW;
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
-			rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode);
+			rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode, flag);
 		else
-			rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode);
+			rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode, flag);
 		if (rc) {
 			errno = rc;
 			return (-1);
 		}
+		return 0;
 	}
 
 	return next_chmod(path, mode);
+}
+
+/* dfs_chmod will dereference symlinks as default */
+int
+chmod(const char *path, mode_t mode)
+{
+	if (next_chmod == NULL) {
+		next_chmod = dlsym(RTLD_NEXT, "chmod");
+		assert(next_chmod != NULL);
+	}
+
+	if (!hook_enabled)
+		return next_chmod(path, mode);
+
+	return chmod_with_flag(path, mode, 0);
 }
 
 int
@@ -3384,7 +3417,7 @@ fchmod(int fd, mode_t mode)
 
 	rc =
 	    dfs_chmod(file_list[fd - FD_FILE_BASE].dfs_mt->dfs, file_list[fd - FD_FILE_BASE].parent,
-		      file_list[fd - FD_FILE_BASE].item_name, mode);
+		      file_list[fd - FD_FILE_BASE].item_name, mode, 0);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -3408,11 +3441,11 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 		return next_fchmodat(dirfd, path, mode, flag);
 
 	if (path[0] == '/')
-		return chmod(path, mode);
+		return chmod_with_flag(path, mode, flag);
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
 	if (idx_dfs >= 0)
-		return chmod(full_path, mode);
+		return chmod_with_flag(full_path, mode, flag);
 
 	return next_fchmodat(dirfd, path, mode, flag);
 }
@@ -3421,7 +3454,8 @@ int
 utime(const char *path, const struct utimbuf *times)
 {
 	int              is_target_path, rc;
-	dfs_obj_t       *file_obj, *parent;
+	dfs_obj_t       *obj, *parent;
+	mode_t           mode;
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
@@ -3443,10 +3477,9 @@ utime(const char *path, const struct utimbuf *times)
 		return next_utime(path, times);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
-		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &obj, &mode, &stbuf);
 	else
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
-			      &file_obj);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
@@ -3466,13 +3499,13 @@ utime(const char *path, const struct utimbuf *times)
 		stbuf.st_mtim.tv_nsec = 0;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, file_obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
 	}
 
-	rc = dfs_release(file_obj);
+	rc = dfs_release(obj);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -3485,7 +3518,8 @@ int
 utimes(const char *path, const struct timeval times[2])
 {
 	int              is_target_path, rc;
-	dfs_obj_t       *file_obj, *parent;
+	dfs_obj_t       *obj, *parent;
+	mode_t           mode;
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct DFSMOUNT *dfs_mt;
@@ -3507,10 +3541,9 @@ utimes(const char *path, const struct timeval times[2])
 		return next_utimes(path, times);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
-		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &obj, &mode, &stbuf);
 	else
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
-			      &file_obj);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
@@ -3530,13 +3563,13 @@ utimes(const char *path, const struct timeval times[2])
 		stbuf.st_mtim.tv_nsec = times[1].tv_usec * 1000;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, file_obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
 	}
 
-	rc = dfs_release(file_obj);
+	rc = dfs_release(obj);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -3546,10 +3579,11 @@ utimes(const char *path, const struct timeval times[2])
 }
 
 static int
-utimens_timespec(const char *path, const struct timespec times[2])
+utimens_timespec(const char *path, const struct timespec times[2], int flags)
 {
 	int              is_target_path, rc;
-	dfs_obj_t       *file_obj, *parent;
+	dfs_obj_t       *obj, *parent;
+	mode_t           mode;
 	struct stat      stbuf;
 	struct timespec  times_loc;
 	struct timeval   times_us[2];
@@ -3569,13 +3603,15 @@ utimens_timespec(const char *path, const struct timespec times[2])
 		return next_utimes(path, times_us);
 	}
 
+	flags |= O_RDWR;
+	/* POSIX API uses AT_SYMLINK_NOFOLLOW; DFS dfs_lookup() uses O_NOFOLLOW. */
+	if (flags & AT_SYMLINK_NOFOLLOW)
+		flags |= O_NOFOLLOW;
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
-		rc = dfs_open(dfs_mt->dfs, NULL, NULL, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
+		rc = dfs_lookup(dfs_mt->dfs, "/", flags, &obj, &mode, &stbuf);
 	else
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL,
-			      &file_obj);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, flags, &obj, &mode, &stbuf);
 	if (rc) {
-		printf("utime> Error: Fail to dfs_open %s. %s\n", full_path, strerror(rc));
 		errno = rc;
 		return (-1);
 	}
@@ -3593,13 +3629,13 @@ utimens_timespec(const char *path, const struct timespec times[2])
 		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, file_obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
 	}
 
-	rc = dfs_release(file_obj);
+	rc = dfs_release(obj);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -3608,16 +3644,6 @@ utimens_timespec(const char *path, const struct timespec times[2])
 	return 0;
 }
 
-/**
- * TODO:
- *	The flags field is a bit mask that may be 0, or include the
- *	following constant, defined in <fcntl.h>:
- *
- *	AT_SYMLINK_NOFOLLOW
- *	If pathname specifies a symbolic link, then update the
- *	timestamps of the link, rather than the file to which it
- *	refers.
- */
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
@@ -3638,11 +3664,11 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times);
+		return utimens_timespec(path, times, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, full_path, path);
 	if (idx_dfs >= 0)
-		return utimens_timespec(full_path, times);
+		return utimens_timespec(full_path, times, flags);
 
 	return next_utimensat(dirfd, path, times, flags);
 }

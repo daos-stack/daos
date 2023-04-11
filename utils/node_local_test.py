@@ -28,11 +28,11 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
+import re
 import xattr
 import junit_xml
 import tabulate
 import yaml
-import re
 
 
 class NLTestFail(Exception):

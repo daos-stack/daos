@@ -4958,7 +4958,7 @@ out:
 }
 
 int
-dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, const int flag)
 {
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -5014,9 +5014,12 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	if (!exists)
 		return ENOENT;
+	if (!S_ISLNK(entry.mode) && flag & O_NOFOLLOW) {
+		return ENOTSUP;
+	}
 
 	/** resolve symlink */
-	if (S_ISLNK(entry.mode)) {
+	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
 		D_ASSERT(entry.value);
 
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
@@ -5082,7 +5085,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 out:
-	if (S_ISLNK(entry.mode)) {
+	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
 	}

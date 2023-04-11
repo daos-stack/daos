@@ -694,7 +694,7 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_chmod(dfs_sys->dfs, sys_path.parent, sys_path.name, mode);
+	rc = dfs_chmod(dfs_sys->dfs, sys_path.parent, sys_path.name, mode, 0);
 
 	sys_path_free(dfs_sys, &sys_path);
 
