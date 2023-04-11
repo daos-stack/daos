@@ -1280,6 +1280,7 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
 			return err
 		}
+		defer cmd.Args.Props.Cleanup()
 	}
 	if len(cmd.PropsFlag.ParsedProps) > 0 {
 		if len(cmd.Args.Props.ParsedProps) > 0 {
@@ -1309,11 +1310,7 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, nil)
-	}
-
-	cmd.Info("Properties were successfully set\n")
+	cmd.Info("Properties were successfully set")
 
 	return nil
 }
