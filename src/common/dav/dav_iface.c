@@ -356,7 +356,7 @@ dav_class_register(dav_obj_t *pop, struct dav_alloc_class_desc *p)
 		return -1;
 	}
 
-	if (p->class_id < 0 || p->class_id >= MAX_ALLOCATION_CLASSES) {
+	if (p->class_id >= MAX_ALLOCATION_CLASSES) {
 		ERR("class id outside of the allowed range");
 		errno = ERANGE;
 		return -1;
