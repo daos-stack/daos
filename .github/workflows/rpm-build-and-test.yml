@@ -17,6 +17,43 @@ defaults:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
 jobs:
+  dump_contexts_to_log:
+    runs-on: [self-hosted, light]
+    steps:
+      - name: Dump GitHub context
+        id: github_context_step
+        run: echo '${{ toJSON(github) }}'
+      - name: Dump job context
+        run: echo '${{ toJSON(job) }}'
+      - name: Dump steps context
+        run: echo '${{ toJSON(steps) }}'
+      - name: Dump runner context
+        run: echo '${{ toJSON(runner) }}'
+      - name: Dump strategy context
+        run: echo '${{ toJSON(strategy) }}'
+      - name: Dump matrix context
+        run: echo '${{ toJSON(matrix) }}'
+      - name: Dump vars context
+        run: echo '${{ toJSON(vars) }}'
+
+  Show-inputs:
+    name: Show inputs
+    runs-on: [self-hosted, light]
+    steps:
+      - name: Show inputs
+        run: |
+          set -x
+          echo "${{ github.event.inputs.pr-repos }}"
+          echo "${{ inputs.pr-repos }}"
+
+  Show-client-paylod:
+    name: Show client_paylod
+    runs-on: [self-hosted, light]
+    steps:
+      - name: Show client_payload
+        run: |
+          echo "payload raw: ${{ github.event.client_payload }}"
+          echo "payload as json: ${{ toJson(github.event.client_payload) }}"
 
   # it's a real shame that this step is even needed.  push events have the commit message # in
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
@@ -55,10 +92,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import Commit Pragmas
         id: commit_pragmas
-        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+        run: set -x; echo "text<<EOF" >> $GITHUB_OUTPUT;
              echo '${{ needs.Import-commit-message.outputs.message }}' |
                ci/get_commit_pragmas.sh >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
+             cat $GITHUB_OUTPUT
 
   Import-commit-pragmas2:
     name: Make commit pragma variables
@@ -86,33 +124,45 @@ jobs:
       - name: Set skip-build-el8-rpm variable
         id: skip-build-el8-rpm
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_BUILD_EL8_RPM:-false}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set skip-func-test-el8 variable
         id: skip-func-test-el8
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_FUNC_TEST_EL8:-true}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set skip-build-leap15-rpm variable
         id: skip-build-leap15-rpm
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_BUILD_LEAP15_RPM:-false}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set skip-func-test-leap15 variable
         id: skip-func-test-leap15
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_FUNC_TEST_LEAP15:-true}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set rpm-test-version variable
         id: rpm-test-version
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${RPM_TEST_VERSION:-}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set pr-repos variable
         id: pr-repos
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${PR_REPOS:-}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
 
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
@@ -124,6 +174,7 @@ jobs:
       - name: Calculate RPM Build Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             set -x
              l=()
              if ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-el8-rpm }}; then
                  l+=('el8')
@@ -137,6 +188,16 @@ jobs:
              done
              s=${s:2}
              echo "text=[$s]" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
+
+  Show-rpm-build-matrix:
+    name: Show Matrix
+    runs-on: [self-hosted, wolf]
+    needs: [Calc-rpm-build-matrix]
+    steps:
+      - name: Show  Matrix
+        run: echo '${{ needs.Calc-rpm-build-matrix.outputs.matrix }}';
+             echo '${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}'
 
   Build-RPM:
     name: Build RPM
@@ -164,6 +225,16 @@ jobs:
       RUN_ID: ${{ github.run_id }}
       TARGET: ${{ matrix.distro }}
     steps:
+      - name: Debug matrix exclusion
+        run: echo ${{ github.event_name == 'pull_request' &&
+                      (needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm == 'true' &&
+                       needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 == 'true') &&
+                        'dummy' || 'leap15' }};
+             echo "github.event_name == ${{ github.event_name }}";
+             echo -n "needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm = ";
+             echo "${{ needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm }}";
+             echo -n "needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 = ";
+             echo "${{ needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 }}"
       - name: Set variables
         run: |
             case ${{ matrix.distro }} in
@@ -183,9 +254,17 @@ jobs:
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+      # - name: Show most recent commit
+      #   run: echo '${{ needs.Import-commit-message.outputs.message }}'
+      # - name: Show commit pragmas
+      #   run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}'
+      - name: Show pr-repos commit pragma
+        run: echo '${{ needs.Import-commit-pragmas2.outputs.pr-repos }}'
       - name: Import commit pragmas
-        run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
+        run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
+      # - name: Show env
+      #   run: env | sort
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -211,7 +290,8 @@ jobs:
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
-        run: rm -rf mock_result;
+        run: set -x;
+             rm -rf mock_result;
              mkdir -p mock_result;
              docker run --name mock-build-${{ github.run_id }}-${{ matrix.distro }}
                         --user build
@@ -240,7 +320,13 @@ jobs:
         id: create-repo
         if: steps.build-rpm.outcome == 'success'
         continue-on-error: true
-        run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+        run: env >&2;
+             CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+      - name: Debug Create repo
+        id: debug-create-repo
+        if: steps.build-rpm.outcome != 'success'
+        continue-on-error: true
+        run: echo ${{ steps.build-rpm.outcome }}
       - name: Test repo
         id: test-repo
         if: steps.create-repo.outcome == 'success'
@@ -269,6 +355,7 @@ jobs:
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             set -x
              l=()
              if ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-el8-rpm &&
                       needs.Import-commit-pragmas2.outputs.skip-func-test-el8 }}; then
@@ -288,6 +375,16 @@ jobs:
              done
              s=${s:2}
              echo "text=[$s]" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
+
+  Show-functional-matrix:
+    name: Show Functional Testing Matrix
+    runs-on: [self-hosted, wolf]
+    needs: [Calc-functional-matrix]
+    steps:
+      - name: Show  Matrix
+        run: echo '${{ needs.Calc-functional-matrix.outputs.matrix }}';
+             echo '${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}'
 
   Functional:
     name: Functional Testing
@@ -317,6 +414,16 @@ jobs:
       ARTEFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
     steps:
+      - name: Debug matrix exclusion
+        run: echo ${{ github.event_name == 'pull_request' &&
+                        (needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm == 'true' &&
+                         needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 == 'true') &&
+                        'dummy' || 'leap15' }};
+             echo "github.event_name == ${{ github.event_name }}";
+             echo -n "needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm = ";
+             echo "${{ needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm }}";
+             echo -n "needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 = ";
+             echo "${{ needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 }}"
       - name: Set variables
         run: |
             case ${{ matrix.distro }} in
@@ -354,15 +461,31 @@ jobs:
             echo -n " hdf5-$OPENMPI-tests hdf5-vol-daos-$OPENMPI-tests" >> $GITHUB_ENV
             echo -n " hdf5-vol-daos-mpich-tests simul-mpich simul-$OPENMPI" >> $GITHUB_ENV
             echo -n " MACSio-mpich MACSio-$OPENMPI mpifileutils-mpich" >> $GITHUB_ENV
+      - name: Debug Build-RPM.result
+        run: echo ${{ needs.Build-RPM.result }}
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: echo "$GITHUB_CONTEXT"
+      - name: See if we can reduce job name duplication
+        run: set -x;
+             echo "${{ github.job }}"
       - name: Import commit pragmas
-        run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
+        run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
+      # - name: Show env
+      #   run: env | sort
+      # - name: Show Skip-func-test commit pragma
+      # yamllint disable-line rule:line-length
+      #   run: echo '${{ needs.Import-commit-pragmas2.outputs.skip-func-test }}'
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
+      # - name: Show most recent commit
+      #   run: echo '${{ needs.Import-commit-message.outputs.message }}'
       - uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
@@ -380,13 +503,22 @@ jobs:
              echo "NODELIST=$NODESTRING" >> $GITHUB_ENV;
              echo "NODE_COUNT=$(echo "$NODESTRING" | tr ',' ' ' | wc -w)" >> $GITHUB_ENV;
              cat $GITHUB_ENV;
-             ssh -oPasswordAuthentication=false root@${NODESTRING%%vm*} \
+             ssh -oPasswordAuthentication=false -v root@${NODESTRING%%vm*} \
                  "POOL=${{ env.cp_PROVISIONING_POOL }}
                   NODESTRING=$NODESTRING
                   NODELIST=$NODESTRING
                   DISTRO="$DISTRO_WITH_VERSION"
                   $(cat ci/provisioning/provision_cluster.sh)"
       - name: Wait for nodes to be ready
+        #  uses: appleboy/ssh-action@master
+        #  with:
+        #    host: ${{ env.NODESTRING }}
+        #    username: root
+        #    key: ${{ secrets.GHA_RUNNER_POC }}
+        #    # ssh_config: |
+        #    #   Host *
+        #    #   ConnectTimeout=420
+        #    script: timeout=$((SECONDS+420));
         run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x;
                   waited=0;
                   while [ \$waited -lt 420 ]; do
@@ -419,8 +551,23 @@ jobs:
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
-             rm -f /scratch/Get\ a\ cluster/${{ env.CLUSTER_REQUEST_UUID }};
+             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
+                id;
+                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
+             fi;
              ci/functional/job_cleanup.sh
+      - name: Debug - find junit files
+        if: always()
+        run: . ci/gha_functions.sh;
+             hostname;
+             pwd;
+             find Functional\ on\ * -type f
+      # - name: Debug Publish NLT test results
+      #   if: always()
+      #   run: pwd;
+      #        ls -l ../../{,_temp/{,_github_workflow/}};
+      #        echo mkdir -p ../../_temp/_github_home;
+      #        ls -l ../../{,_temp/{,_github_workflow/}}
       - name: Publish test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2

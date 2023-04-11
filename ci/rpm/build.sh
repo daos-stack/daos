@@ -47,6 +47,8 @@ EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
 rm -rf "artifacts/${TARGET}/"
 if ! mkdir -p "artifacts/${TARGET}/"; then
     echo "Failed to create directory \"artifacts/${TARGET}/\""
+    ls -ld . || true
+    pwd || true
     exit 1
 fi
 
