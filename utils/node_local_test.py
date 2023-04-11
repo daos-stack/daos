@@ -748,7 +748,10 @@ class DaosServer():
 
         agent_config = join(self.agent_dir, 'nlt_agent.yaml')
         with open(agent_config, 'w') as fd:
-            agent_data = {'access_points': scyaml['access_points']}
+            agent_data = {
+                'access_points': scyaml['access_points'],
+                'control_log_mask': 'NOTICE',  # INFO logs every client process connection
+            }
             json.dump(agent_data, fd)
 
         agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
