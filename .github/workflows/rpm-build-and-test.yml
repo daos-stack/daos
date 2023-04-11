@@ -257,6 +257,11 @@ jobs:
         if: steps.test-repo.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
+      - name: Publish RPMs
+        uses: actions/upload-artifact@v3
+        with:
+          name: $DISTRO_NAME $DISTRO_VERSION" RPM repository
+          path: ${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
 
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
@@ -287,16 +292,6 @@ jobs:
              done
              s=${s:2}
              echo "text=[$s]" >> $GITHUB_OUTPUT
-
-  Show-matrix:
-    name: Show Matrix
-    runs-on: [self-hosted, wolf]
-    needs: [Get-functional-matrix]
-    steps:
-      - name: Show  Matrix
-        run: echo '${{ needs.Get-functional-matrix.outputs.matrix }}';
-             echo '${{ fromJSON(needs.Get-functional-matrix.outputs.matrix) }}'
->>>>>>> 219090e51c (Build array manually)
 
   Functional:
     name: Functional Testing
