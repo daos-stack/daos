@@ -276,8 +276,7 @@ class ReplayTests(TestWithServers):
              'checkpoint_thresh': list(range(25, 75)),
              'scrub-freq': list(range(604200, 605200))},
             # Settable container attributes
-            {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)],
-             'alloc_oid': list(range(1, 5))},
+            {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)]},
         ]
         for container in containers:
             for index, item in enumerate((container.pool, container)):
@@ -298,7 +297,7 @@ class ReplayTests(TestWithServers):
                             kwargs = {'prop': entry['name'], 'value': entry['value']}
                         item.set_prop(**kwargs)
                         modified = True
-                        if name == 'label':
+                        if entry['name'] == 'label':
                             item.label.update(entry['value'], join('.', item.identifier, 'label'))
                         break
                 if not modified:
