@@ -1548,7 +1548,7 @@ class Launch():
             yaml_data = get_yaml_data(test.yaml_file)
             logger.debug("Checking for auto-storage request in %s", test.yaml_file)
 
-            storage = dict_extract_values(yaml_data, ["storage"])
+            storage = dict_extract_values(yaml_data, ["server_config", "engines", "*", "storage"])
             if "auto" in storage:
                 if len(list_unique(storage)) > 1:
                     raise StorageException("storage: auto only supported for all or no engines")
@@ -2623,7 +2623,7 @@ class Launch():
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
         result = run_remote(
-            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
+            logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)

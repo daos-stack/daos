@@ -59,6 +59,9 @@ struct file_dfs {
 static int
 parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl);
 
+static int
+cont_destroy_snap_hdlr(struct cmd_args_s *ap);
+
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
@@ -155,129 +158,7 @@ out:
 	return rc;
 }
 
-/* TODO implement the following container op functions
- * all with signatures similar to this:
- * int cont_FN_hdlr(struct cmd_args_s *ap)
- *
- * int cont_stat_hdlr()
- */
-
-/* this routine can be used to list all snapshots or to map a snapshot name
- * to its epoch number.
- */
-int
-cont_list_snaps_hdlr(struct cmd_args_s *ap)
-{
-	daos_epoch_t	*epochs = NULL;
-	char		**names = NULL;
-	daos_anchor_t	anchor;
-	int		rc;
-	int		i;
-	int		snaps_count;
-	int		expected_count;
-
-	/* evaluate size for listing */
-	snaps_count = 0;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve number of snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (ap->snapname_str == NULL)
-		D_PRINT("Container's snapshots :\n");
-
-	if (!daos_anchor_is_eof(&anchor)) {
-		fprintf(ap->errstream, "too many snapshots returned\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (snaps_count == 0) {
-		D_PRINT("no snapshots\n");
-		D_GOTO(out, rc);
-	}
-
-	D_ALLOC_ARRAY(epochs, snaps_count);
-	if (epochs == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_ARRAY(names, snaps_count);
-	if (names == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	for (i = 0; i < snaps_count; i++) {
-		D_ALLOC_ARRAY(names[i], DAOS_SNAPSHOT_MAX_LEN);
-		if (names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	expected_count = snaps_count;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, epochs, names, &anchor,
-				 NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-	if (expected_count < snaps_count)
-		fprintf(ap->errstream,
-			"snapshot list has been truncated (size changed)\n");
-
-	if (ap->snapname_str == NULL && ap->epc == 0) {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			D_PRINT("0x"DF_X64" %s\n", epochs[i], names[i]);
-	} else {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			if (ap->snapname_str != NULL &&
-			    strcmp(ap->snapname_str, names[i]) == 0) {
-				ap->epc = epochs[i];
-				break;
-			} else if (ap->epc == epochs[i]) {
-				break;
-			}
-		if (i == min(expected_count, snaps_count)) {
-			if (ap->snapname_str != NULL)
-				fprintf(ap->errstream,
-					"%s not found in snapshots list\n",
-				ap->snapname_str);
-			else
-				fprintf(ap->errstream, "0x"DF_X64" not found in snapshots list\n",
-					ap->epc);
-			rc = -DER_NONEXIST;
-		}
-	}
-
-out:
-	D_FREE(epochs);
-	if (names != NULL) {
-		for (i = 0; i < snaps_count; i++)
-			D_FREE(names[i]);
-		D_FREE(names);
-	}
-
-	return rc;
-}
-
-int
-cont_create_snap_hdlr(struct cmd_args_s *ap)
-{
-	int rc;
-
-	rc = daos_cont_create_snap(ap->cont, &ap->epc, ap->snapname_str, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to create snapshot for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	fprintf(ap->outstream, "snapshot/epoch 0x"DF_X64" has been created\n", ap->epc);
-out:
-	return rc;
-}
-
-int
+static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 {
 	daos_epoch_range_t epr;
@@ -3111,75 +2992,5 @@ cont_set_owner_hdlr(struct cmd_args_s *ap)
 	}
 
 	fprintf(ap->outstream, "successfully updated owner for container\n");
-	return rc;
-}
-
-int
-cont_rollback_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (ap->epc == 0 && ap->snapname_str == NULL) {
-		fprintf(ap->errstream,
-			"either parameter --epc or --snap is required\n");
-		return -DER_INVAL;
-	}
-	if (ap->epc != 0 && ap->snapname_str != NULL) {
-		fprintf(ap->errstream,
-			"both parameters --epc and --snap could not be specified\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->snapname_str != NULL) {
-		rc = cont_list_snaps_hdlr(ap);
-		if (rc != 0)
-			return rc;
-	}
-	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to roll back container %s to snapshot 0x"DF_X64": %s (%d)\n",
-			ap->cont_str, ap->epc, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully rollback container\n");
-	return rc;
-}
-
-int
-obj_query_hdlr(struct cmd_args_s *ap)
-{
-	struct daos_obj_layout *layout;
-	int			i;
-	int			j;
-	int			rc;
-
-	rc = daos_obj_layout_get(ap->cont, ap->oid, &layout);
-	if (rc) {
-		fprintf(ap->errstream,
-			"failed to retrieve layout for object "DF_OID
-			": %s (%d)\n", DP_OID(ap->oid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* Print the object layout */
-	fprintf(ap->outstream,
-		"oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
-		layout->ol_ver, layout->ol_nr);
-
-	for (i = 0; i < layout->ol_nr; i++) {
-		struct daos_obj_shard *shard;
-
-		shard = layout->ol_shards[i];
-		fprintf(ap->outstream, "grp: %d\n", i);
-		for (j = 0; j < shard->os_replica_nr; j++)
-			fprintf(ap->outstream, "replica %d %d\n", j,
-				shard->os_shard_loc[j].sd_rank);
-	}
-
-	daos_obj_layout_free(layout);
-
-out:
 	return rc;
 }

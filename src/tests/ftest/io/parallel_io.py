@@ -9,15 +9,13 @@ import subprocess  # nosec
 import time
 from getpass import getuser
 
-from ClusterShell.NodeSet import NodeSet
 
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
 from ior_test_base import IorTestBase
-from general_utils import pcmd
+from run_utils import run_remote
 
 
-# pylint: disable=too-many-ancestors
 class ParallelIo(FioBase, IorTestBase):
     """Base Parallel IO test class.
 
@@ -125,7 +123,7 @@ class ParallelIo(FioBase, IorTestBase):
             Check dfuse again.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,tx,dfuse
+        :avocado: tags=daosio,tx,dfuse,fio
         :avocado: tags=ParallelIo,test_parallelio
         """
         # get test params for cont and pool count
@@ -146,16 +144,10 @@ class ParallelIo(FioBase, IorTestBase):
             cmd = "ls -a {}".format(dfuse_cont_dir)
             try:
                 # execute bash cmds
-                ret_code = pcmd(
-                    self.hostlist_clients, cmd, timeout=30)
-                if 0 not in ret_code:
-                    error_hosts = NodeSet(
-                        ",".join(
-                            [str(node_set) for code, node_set in
-                             list(ret_code.items()) if code != 0]))
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
+                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=30)
+                if result.failed_hosts:
+                    raise CommandFailure("Error running '{}' on the following hosts: {}".format(
+                        cmd, result.failed_hosts))
             # report error if any command fails
             except CommandFailure as error:
                 self.log.error("ParallelIo Test Failed: %s",

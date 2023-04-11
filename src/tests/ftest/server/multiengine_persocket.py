@@ -17,7 +17,6 @@ from storage_utils import StorageInfo, StorageException
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Daos server configuration tests.
     Test Class Description:
         Tests to verify that the multiple engines per socket on daos_server.

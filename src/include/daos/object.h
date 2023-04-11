@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,8 +124,12 @@ typedef struct {
 	/** Private section, object shard identifier */
 	uint32_t		id_shard;
 	/** object layout version */
-	uint32_t		id_layout_ver;
+	uint16_t		id_layout_ver;
+	uint16_t		id_padding;
 } daos_unit_oid_t;
+
+/* Leave a few extra bits for now */
+#define MAX_OBJ_LAYOUT_VERSION		0xFFF0
 
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
@@ -496,6 +500,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void
