@@ -260,8 +260,8 @@ jobs:
       - name: Publish RPMs
         uses: actions/upload-artifact@v3
         with:
-          name: $DISTRO_NAME $DISTRO_VERSION" RPM repository
-          path: ${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
+          name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
+          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
 
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
