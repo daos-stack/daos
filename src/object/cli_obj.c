@@ -1717,9 +1717,7 @@ recov_task_abort(tse_task_t *task, void *arg)
 static int
 recov_task_cb(tse_task_t *task, void *data)
 {
-	struct obj_auxi_args	*obj_auxi = *((struct obj_auxi_args **)data);
-	daos_obj_fetch_t	*fetch_arg = dc_task_get_args(task);
-	int			 i;
+	struct obj_ec_recov_task	*recov_task = *((struct obj_ec_recov_task **)data);
 
 	if (task->dt_result != -DER_FETCH_AGAIN)
 		return 0;
@@ -1727,8 +1725,9 @@ recov_task_cb(tse_task_t *task, void *data)
 	/* For the case of EC singv overwritten, in degraded fetch data recovery possibly always
 	 * hit conflict case and need fetch again. Should update iod_size to avoid endless retry.
 	 */
-	for (i = 0; i < obj_auxi->reasb_req.orr_iod_nr; i++)
-		obj_auxi->reasb_req.orr_uiods[i].iod_size = fetch_arg->iods[i].iod_size;
+	recov_task->ert_uiod->iod_size = recov_task->ert_iod.iod_size;
+	D_DEBUG(DB_IO, "update iod_size as "DF_U64"\n", recov_task->ert_oiod->iod_size);
+
 	return 0;
 }
 
@@ -1866,8 +1865,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 
 		tse_task_list_add(sub_task, &task_list);
 
-		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &obj_auxi,
-					       sizeof(obj_auxi));
+		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &recov_task,
+					       sizeof(recov_task));
 		if (rc) {
 			D_ERROR("task %p "DF_OID" tse_task_register_comp_cb failed "DF_RC"\n",
 				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
