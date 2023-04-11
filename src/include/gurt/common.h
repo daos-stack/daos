@@ -15,6 +15,8 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
+#include <malloc.h>
+
 #include <uuid/uuid.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -269,6 +271,8 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
+			size_t _frs = malloc_usable_size(ptr);                                     \
+			memset(ptr, 0x42, _frs);                                                   \
 			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
 			d_free(ptr);                                                               \
 			(ptr) = NULL;                                                              \
