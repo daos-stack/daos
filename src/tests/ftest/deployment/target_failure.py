@@ -144,6 +144,10 @@ class TargetFailure(IorTestBase):
         self.pool.measure_rebuild_time(
             operation="Reintegrate rank 0 -> target 1", interval=5)
 
+        # Container status doesn't automatically go back to healthy after reintegrate. We
+        # need to manually set it.
+        self.container.set_prop(prop='status', value="healthy")
+
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -202,7 +206,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_wo_rf
+        :avocado: tags=TargetFailure,target_failure_wo_rf
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
@@ -248,6 +252,10 @@ class TargetFailure(IorTestBase):
         self.pool.reintegrate(rank="1", tgt_idx="0")
         self.pool.measure_rebuild_time(operation="Reintegrate 1 target", interval=5)
 
+        # Container status doesn't automatically go back to healthy after reintegrate. We
+        # need to manually set it.
+        self.container.set_prop(prop='status', value="healthy")
+
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -281,7 +289,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_rp
+        :avocado: tags=TargetFailure,target_failure_with_rp
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_rp/*")
 
@@ -297,7 +305,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_ec
+        :avocado: tags=TargetFailure,target_failure_with_ec
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_ec/*")
 
@@ -320,7 +328,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_parallel
+        :avocado: tags=TargetFailure,target_failure_parallel
         """
         self.pool = []
         self.container = []
@@ -390,6 +398,10 @@ class TargetFailure(IorTestBase):
         self.pool[excluded_pool_num].reintegrate(rank="1", tgt_idx="0")
         self.pool[excluded_pool_num].measure_rebuild_time(
             operation="Reintegrate 1 target", interval=5)
+
+        # Container status doesn't automatically go back to healthy after reintegrate. We
+        # need to manually set it.
+        self.container[1].set_prop(prop='status', value="healthy")
 
         # 8. Verify that self.container[1]'s Health property is HEALTHY.
         if not self.container[1].verify_health(expected_health="HEALTHY"):
