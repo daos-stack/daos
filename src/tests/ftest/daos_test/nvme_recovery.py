@@ -7,7 +7,6 @@ from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTestNvme(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
     """Run just the daos_test NVMe Recovery tests.
 
     :avocado: recursive
