@@ -3120,7 +3120,6 @@ class PosixTests():
             assert data == 'data'
         with open(side_test_file, 'r') as fd:
             data = fd.read()
-            print(data)
             assert data == 'data'
 
         # Remove all permissions on the file.

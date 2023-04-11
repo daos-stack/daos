@@ -24,8 +24,6 @@
 
 #include "dfuse_common.h"
 
-#define DRC_MAGIC 0xdf055001
-
 struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
@@ -37,6 +35,12 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+
+	/* Per process spinlock
+	 * This is only used to lock readdir against closedir where they share a readdir handle,
+	 * so this could be per inode however that's lots of additional memory and the locking
+	 * is only needed for minimal list management so isn't locked often or for long.
+	 */
 	pthread_spinlock_t   di_lock;
 };
 
@@ -148,21 +152,17 @@ struct dfuse_readdir_entry {
 	/* Offset of this directory entry */
 	off_t dre_offset;
 
-	/* Offset of the next directory entry
-	 * A value of DFUSE_READDIR_EOD means end
-	 * of directory.
+	/* Offset of the next directory entry  A value of DFUSE_READDIR_EOD means end of directory.
+	 * This could in theory be a boolean.
 	 */
 	off_t dre_next_offset;
 };
 
 /* Readdir entry as saved by the cache.  These are backwards looking from the current position
- * and will be used by other open handles on the same inode doing subsequent readdir calls
+ * and will be used by other open handles on the same inode doing subsequent readdir calls.
  */
 struct dfuse_readdir_c {
-	uint64_t    drc_magic;
-
 	d_list_t    drc_list;
-
 	struct stat drc_stbuf;
 	d_list_t   *drc_rlink;
 	off_t       drc_offset;
@@ -684,10 +684,7 @@ struct dfuse_inode_entry {
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t           ie_il_count;
 
-	/* Readdir handle, if shared
-	 * TODO: Verify the locking on this, the code will assert on concurrent readdir however we
-	 * do see readdir and closedir at the same time so protect this with di_lock.
-	 */
+	/* Readdir handle, if present.  May be shared */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
 
 	/** Number of active readdir operations */
