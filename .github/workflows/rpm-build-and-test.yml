@@ -500,12 +500,12 @@ jobs:
                  echo "Failed to request a cluster."
                  exit 1
              fi
-             curl -f --user ${{ secrets.JENKINS_TOKEN }} "$queue_url" | jq -r .why
+             curl -f --user ${{ secrets.JENKINS_TOKEN }} "$queue_url/api/json/" | jq -r .why
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
                  echo "Waiting for a cluster"
                  if [ $((SECONDS % 10)) -eq 0 ]; then
                      { read -r cancelled; read -r reason; } <
-                         <(curl -sf --user ${{ secrets.JENKINS_TOKEN }} "$queue_url" |
+                         <(curl -sf --user ${{ secrets.JENKINS_TOKEN }} "$queue_url/api/json/" |
                            jq -r .cancelled,.why)
                      if [ "$cancelled" == "true" ]; then
                          echo "Cluster request cancelled from Jenkins"
