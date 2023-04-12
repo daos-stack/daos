@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -240,6 +241,8 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 		outCleanup()
 		errCleanup()
 		freeCmdArgs(ap)
+		// Give the streams a chance to flush.
+		time.Sleep(250 * time.Millisecond)
 		cancel()
 	}, nil
 }

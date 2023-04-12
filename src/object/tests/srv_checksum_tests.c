@@ -1465,6 +1465,7 @@ update_fetch_sv(void **state)
 			    from_vos_begin.cs_len);
 
 	daos_csummer_destroy(&csummer);
+	dcs_csum_info_list_fini(&from_vos_begin_list);
 }
 
 #define assert_csum_err(fn) assert_rc_equal(-DER_CSUM, (fn))
