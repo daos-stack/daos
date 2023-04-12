@@ -491,11 +491,12 @@ jobs:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
       - name: Request and Provision a Cluster
         run: |
+             set -x
              uuid=$(uuidgen)
              echo "CLUSTER_REQUEST_UUID=$uuid" >> $GITHUB_ENV
              url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"UUID=$uuid"
              if ! queue_url=$(curl -D - -f -v -X POST --user ${{ secrets.JENKINS_TOKEN }} "$url" |
-                              sed -ne '/Location/s/.*: //p'); then
+                              sed -ne '/Location:/s/.*: //p'); then
                  echo "Failed to request a cluster."
                  exit 1
              fi
