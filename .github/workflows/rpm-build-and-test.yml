@@ -228,18 +228,14 @@ jobs:
                         -e JENKINS_URL="$JENKINS_URL"
                         -e TARGET="$TARGET"
                         mock-build ci/rpm/build.sh
-      - name: Save root.log
+      - name: Save RPM build logs
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ env.STAGE_NAME }} root.log
-          path: mock_result/root.log
-      - name: Save build.log
-        continue-on-error: true
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ env.STAGE_NAME }} build.log
-          path: mock_result/build.log
+          name: ${{ env.STAGE_NAME }} build logs
+          path: |
+            mock_result/root.log
+            mock_result/build.log
       - name: Create repo
         id: create-repo
         if: steps.build-rpm.outcome == 'success'
