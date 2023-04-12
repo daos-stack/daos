@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1114,29 +1114,27 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 
 			if (array_size <= start_off + idx) {
 				/** Don't touch buf if beyond EOF */
-				rc = daos_sgl_processor(sgl, true, sg_idx,
-							bytes_proc, noop_cb,
+				rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc, noop_cb,
 							NULL);
 			} else if (array_size > start_off + end) {
 				/** all 0s if within array size */
-				rc = daos_sgl_processor(sgl, true, sg_idx,
-							bytes_proc, zero_out_cb,
+				rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc, zero_out_cb,
 							NULL);
 			} else {
 				daos_size_t temp;
 
 				/** partial fetch in regards to EOF */
 				temp = array_size - (start_off + idx);
-				rc = daos_sgl_processor(sgl, true, sg_idx,
-							temp, noop_cb, NULL);
+				rc = daos_sgl_processor(sgl, true, sg_idx, temp, noop_cb, NULL);
 				if (rc)
 					return rc;
-				rc = daos_sgl_processor(sgl, true, sg_idx,
-							bytes_proc - temp,
+				rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc - temp,
 							zero_out_cb, NULL);
 			}
-			if (rc)
+			if (rc) {
+				D_ERROR("daos_sgl_processor() failed: "DF_RC"\n", DP_RC(rc));
 				return rc;
+			}
 			break;
 		}
 
@@ -1147,31 +1145,31 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 				" end "DF_U64" iom idx "DF_U64" idx "DF_U64"\n",
 				sg_idx->iov_idx, sg_idx->iov_offset,
 				end, iom->iom_recxs[i].rx_idx, idx);
-			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						zero_out_cb, NULL);
-			if (rc)
+			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc, zero_out_cb, NULL);
+			if (rc) {
+				D_ERROR("daos_sgl_processor() failed: "DF_RC"\n", DP_RC(rc));
 				return rc;
+			}
 			break;
 		}
 
 		if (idx == iom->iom_recxs[i].rx_idx) {
 			/** iom at current index, this is a valid extent */
 			bytes_proc = iom->iom_recxs[i].rx_nr;
-			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						noop_cb, NULL);
+			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc, noop_cb, NULL);
 			i++;
 		} else {
 			/** iom beyond current index, this is a hole */
 			bytes_proc = iom->iom_recxs[i].rx_idx - idx;
 			D_DEBUG(DB_IO, "zero out sg_idx %u/"DF_U64"/"DF_U64"\n",
-				sg_idx->iov_idx, sg_idx->iov_offset,
-				bytes_proc);
-			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
-						zero_out_cb, NULL);
+				sg_idx->iov_idx, sg_idx->iov_offset, bytes_proc);
+			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc, zero_out_cb, NULL);
 		}
 
-		if (rc)
+		if (rc) {
+			D_ERROR("daos_sgl_processor() failed: "DF_RC"\n", DP_RC(rc));
 			return rc;
+		}
 		idx += bytes_proc;
 	}
 
@@ -1209,9 +1207,8 @@ process_iomap(struct hole_params *params, daos_array_io_t *args)
 
 		iom_nr = 0;
 		for (i = 0; i < current->iod.iod_nr; i++) {
-			rc = process_iod(start_off, params->array_size, sgl,
-					 &idx, &current->iod.iod_recxs[i],
-					 &current->iom, &iom_nr);
+			rc = process_iod(start_off, params->array_size, sgl, &idx,
+					 &current->iod.iod_recxs[i], &current->iom, &iom_nr);
 			if (rc)
 				return rc;
 		}
@@ -1416,8 +1413,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	}
 
 	array = array_hdl2ptr(array_oh);
-	if (array == NULL)
+	if (array == NULL) {
+		D_ERROR("Invalid array handle: "DF_RC"\n", DP_RC(-DER_NO_HDL));
 		D_GOTO(err_task, rc = -DER_NO_HDL);
+	}
 
 	if (op_type == DAOS_OPC_ARRAY_PUNCH) {
 		D_ASSERT(user_sgl == NULL);
@@ -1483,16 +1482,14 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			continue;
 		}
 
-		rc = compute_dkey(array, array_idx, &num_records, &record_i,
-				  &dkey_val);
+		rc = compute_dkey(array, array_idx, &num_records, &record_i, &dkey_val);
 		if (rc != 0) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_iotask, rc);
 		}
 
 		D_DEBUG(DB_IO, "DKEY IOD "DF_U64": idx = "DF_U64"\t num_records = %zu"
-			"\t record_i = "DF_U64"\n", dkey_val, array_idx, num_records,
-			record_i);
+			"\t record_i = "DF_U64"\n", dkey_val, array_idx, num_records, record_i);
 
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
@@ -1501,9 +1498,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		params->dkey_val = dkey_val;
 
 		/*
-		 * since we probably have multiple dkey ios, put them in linked
-		 * list to free later. Insert in decreasing order for easier
-		 * short fetch detection.
+		 * since we probably have multiple dkey ios, put them in linked list to free
+		 * later. Insert in decreasing order for easier short fetch detection.
 		 */
 		if (num_ios == 0) {
 			head = params;
@@ -1546,7 +1542,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		/** Set integer dkey descriptor */
 		d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
-		/** Set character akey descriptor - TODO: should be NULL*/
+		/** Set character akey descriptor - TODO: should be NULL */
 		d_iov_set(&iod->iod_name, &params->akey_val, 1);
 		/** Initialize the rest of the IOD fields */
 		iod->iod_nr	= 0;
@@ -1565,17 +1561,16 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		dkey_records = 0;
 
 		/*
-		 * Create the IO descriptor for this dkey. If the entire range
-		 * fits in the dkey, continue to the next range to see if we can
-		 * combine it fully or partially in the current dkey IOD.
+		 * Create the IO descriptor for this dkey. If the entire range fits in the dkey,
+		 * continue to the next range to see if we can combine it fully or partially in the
+		 * current dkey IOD.
 		 */
 		do {
 			daos_off_t	old_array_idx;
 			daos_recx_t	*new_recxs;
 
 			/** add another element to recxs */
-			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
-					iod->iod_nr, iod->iod_nr + 1);
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr, iod->iod_nr + 1);
 			if (new_recxs == NULL)
 				D_GOTO(err_iotask, rc = -DER_NOMEM);
 
@@ -1584,18 +1579,15 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 			/** set the record access for this range */
 			iod->iod_recxs[i].rx_idx = record_i;
-			iod->iod_recxs[i].rx_nr = (num_records > records) ?
-				records : num_records;
+			iod->iod_recxs[i].rx_nr = (num_records > records) ? records : num_records;
 
 			D_DEBUG(DB_IO, "%zu: index = "DF_U64", size = %zu\n",
-				u, iod->iod_recxs[i].rx_idx,
-				iod->iod_recxs[i].rx_nr);
+				u, iod->iod_recxs[i].rx_idx, iod->iod_recxs[i].rx_nr);
 
 			/*
-			 * if the current range is bigger than what the dkey can
-			 * hold, update the array index and number of records in
-			 * the current range and break to issue the I/O on the
-			 * current dkey.
+			 * If the current range is bigger than what the dkey can hold, update the
+			 * array index and number of records in the current range and break to issue
+			 * the I/O on the current dkey.
 			 */
 			if (records > num_records) {
 				array_idx += num_records;
@@ -1618,25 +1610,21 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			array_idx = rg_iod->arr_rgs[u].rg_idx;
 
 			/*
-			 * Boundary case where number of records align with the
-			 * end boundary of the dkey. break after we have
-			 * advanced to the next range in the array iod.
+			 * Boundary case where number of records align with the end boundary of the
+			 * dkey. break after we have advanced to the next range in the array iod.
 			 */
 			if (records == num_records)
 				break;
 
 			/** process the next range in the cur dkey */
 			if (array_idx < old_array_idx + num_records &&
-			    array_idx >= ((old_array_idx + num_records) -
-					  array->chunk_size)) {
+			    array_idx >= ((old_array_idx + num_records) - array->chunk_size)) {
 				/*
-				 * verify that the dkey is the same as the one
-				 * we are working on given the array index, and
-				 * also compute the number of records left in
-				 * the dkey and the record indexin the dkey.
+				 * verify that the dkey is the same as the one we are working on
+				 * given the array index, and also compute the number of records
+				 * left in the dkey and the record indexin the dkey.
 				 */
-				rc = compute_dkey(array, array_idx,
-						  &num_records, &record_i,
+				rc = compute_dkey(array, array_idx, &num_records, &record_i,
 						  &dkey_val);
 				if (rc != 0) {
 					D_ERROR("Failed to compute dkey\n");
@@ -1652,8 +1640,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		D_DEBUG(DB_IO, "DKEY IOD "DF_U64" ---------------\n", dkey_val);
 
 		/*
-		 * if the user sgl maps directly to the array range, no need to
-		 * partition it.
+		 * if the user sgl maps directly to the array range, no need to partition it.
 		 */
 		if ((op_type == DAOS_OPC_ARRAY_PUNCH) ||
 		    (1 == rg_iod->arr_nr && 1 == user_sgl->sg_nr &&
@@ -1664,27 +1651,24 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		/** create an sgl from the user sgl for the current IOD */
 		else {
 			/* set sgl for current dkey */
-			rc = create_sgl(user_sgl, array->cell_size,
-					dkey_records, &cur_off, &cur_i, sgl);
+			rc = create_sgl(user_sgl, array->cell_size, dkey_records, &cur_off, &cur_i,
+					sgl);
 			if (rc != 0) {
-				D_ERROR("Failed to create sgl "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR("Failed to create sgl "DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 		}
-
 		params->num_records = dkey_records;
 
 		/* Create the Fetch or Update task */
 		if (op_type == DAOS_OPC_ARRAY_READ) {
 			daos_obj_fetch_t *io_arg;
 
-			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
-					      tse_task2sched(task),
-					      0, NULL, &io_task);
+			rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL,
+					      &io_task);
 			if (rc != 0) {
-				D_ERROR("Fetch dkey "DF_U64" failed "DF_RC"\n",
-					params->dkey_val, DP_RC(rc));
+				D_ERROR("Fetch dkey "DF_U64" failed "DF_RC"\n", params->dkey_val,
+					DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
@@ -1714,16 +1698,14 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					D_GOTO(err_iotask, rc);
 				}
 			}
-		} else if (op_type == DAOS_OPC_ARRAY_WRITE ||
-			   op_type == DAOS_OPC_ARRAY_PUNCH) {
+		} else if (op_type == DAOS_OPC_ARRAY_WRITE || op_type == DAOS_OPC_ARRAY_PUNCH) {
 			daos_obj_update_t *io_arg;
 
-			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-					      tse_task2sched(task),
-					      0, NULL, &io_task);
+			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL,
+					      &io_task);
 			if (rc != 0) {
-				D_ERROR("Update dkey "DF_U64" failed "DF_RC"\n",
-					params->dkey_val, DP_RC(rc));
+				D_ERROR("Update dkey "DF_U64" failed "DF_RC"\n", params->dkey_val,
+					DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
@@ -1776,20 +1758,19 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			}
 
 			daos_task_set_priv(stask, sparams);
-			rc = tse_task_register_cbs(stask, check_short_read_cb,
-						   NULL, 0, NULL, NULL, 0);
+			rc = tse_task_register_cbs(stask, check_short_read_cb, NULL, 0, NULL, NULL,
+						   0);
 			if (rc) {
 				D_FREE(sparams);
 				D_GOTO(err_iotask, rc);
 			}
-
 			tse_task_list_add(stask, &io_task_list);
 		}
 	}
 
 	tse_task_list_sched(&io_task_list, false);
-	array_decref(array);
 	tse_sched_progress(tse_task2sched(task));
+	array_decref(array);
 	return 0;
 
 err_iotask:
@@ -2256,8 +2237,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	iod->iod_recxs[0].rx_idx = record_i;
 	iod->iod_recxs[0].rx_nr = 1;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL,
-			      &io_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
 		D_ERROR("Task create failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc);
@@ -2272,8 +2252,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	io_arg->sgls	= sgl;
 	io_arg->ioms	= NULL;
 
-	rc = tse_task_register_comp_cb(io_task, check_record_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(io_task, check_record_cb, &params, sizeof(params));
 	if (rc)
 		D_GOTO(err, rc);
 
