@@ -308,8 +308,14 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	nvme_glb.bd_mem_size = mem_size;
-	if (nvme_conf)
+	if (nvme_conf) {
 		D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
+		if (nvme_glb.bd_nvme_conf == NULL) {
+			D_ERROR("Failed to dup nvme_conf.\n");
+			rc = -DER_NOMEM;
+			goto free_cond;
+		}
+	}
 
 	rc = bio_spdk_env_init();
 	if (rc) {
