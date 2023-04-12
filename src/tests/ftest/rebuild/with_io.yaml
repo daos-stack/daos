@@ -13,7 +13,7 @@ server_config:
       nr_xs_helpers: 0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=group_metadata_only
+        - DD_MASK=group_metadata_only,rebuild
         - FI_LOG_LEVEL=warning
         - HG_LOG_LEVEL=warning
         - HG_LOG_SUBSYS=hg,na

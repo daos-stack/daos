@@ -73,7 +73,7 @@ stop_flush_ult(struct ds_pool_child *child)
 }
 
 struct ds_pool_child *
-ds_pool_child_lookup(const uuid_t uuid)
+ds_pool_child_lookup_int(const uuid_t uuid)
 {
 	struct ds_pool_child   *child;
 	struct pool_tls	       *tls = pool_tls_get();
@@ -90,7 +90,7 @@ ds_pool_child_lookup(const uuid_t uuid)
 }
 
 struct ds_pool_child *
-ds_pool_child_get(struct ds_pool_child *child)
+ds_pool_child_get_int(struct ds_pool_child *child)
 {
 	child->spc_ref++;
 	D_INFO(DF_UUID": spc_ref=%d after increment/get\n", DP_UUID(child->spc_uuid),
@@ -99,7 +99,7 @@ ds_pool_child_get(struct ds_pool_child *child)
 }
 
 void
-ds_pool_child_put(struct ds_pool_child *child)
+ds_pool_child_put_int(struct ds_pool_child *child)
 {
 	D_ASSERTF(child->spc_ref > 0, "%d\n", child->spc_ref);
 	child->spc_ref--;

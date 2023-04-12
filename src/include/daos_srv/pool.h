@@ -167,9 +167,16 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
-struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
-void ds_pool_child_put(struct ds_pool_child *child);
+struct ds_pool_child *ds_pool_child_lookup_int(const uuid_t uuid);
+struct ds_pool_child *ds_pool_child_get_int(struct ds_pool_child *child);
+void ds_pool_child_put_int(struct ds_pool_child *child);
+
+#define ds_pool_child_lookup(uuid) ds_pool_child_lookup_int(uuid);\
+	D_INFO(DF_UUID": lookup ds_pool_child from %s()\n", DP_UUID(uuid), __FUNCTION__)
+#define ds_pool_child_get(pc) ds_pool_child_get_int((pc));\
+	D_INFO(DF_UUID": get ds_pool_child from %s()\n", DP_UUID((pc)->spc_uuid), __FUNCTION__)
+#define ds_pool_child_put(pc) ds_pool_child_put_int((pc));\
+	D_INFO("put ds_pool_child(ptr=%p) from %s()\n", (pc), __FUNCTION__)
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,

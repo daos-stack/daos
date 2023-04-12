@@ -2003,6 +2003,8 @@ static void
 obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
+		D_INFO("hdl="DF_UUID": sch_ref=%d before ds_cont_hdl_put()\n",
+		       DP_UUID(ioc->ioc_coh->sch_uuid), ioc->ioc_coh->sch_ref);
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
 	}
