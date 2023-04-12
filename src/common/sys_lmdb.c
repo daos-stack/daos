@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,7 @@
 
 #define SYS_DB_VERSION_1	1
 #define SYS_DB_VERSION		SYS_DB_VERSION_1
+#define SYS_DB_MAX_MAP_SIZE	(1024 * 1024 *32)
 
 /** private information of LMDB based system DB */
 struct lmm_sys_db {
@@ -125,6 +126,13 @@ lmm_db_open_create(struct sys_db *db, bool try_create)
 	if (rc) {
 		rc = mdb_error2daos_error(rc);
 		D_CRIT("Failed to create env handle for sysdb: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = mdb_env_set_mapsize(ldb->db_env, SYS_DB_MAX_MAP_SIZE);
+	if (rc) {
+		rc = mdb_error2daos_error(rc);
+		D_CRIT("Failed to set env map size: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -299,12 +307,14 @@ lmm_db_upsert(struct sys_db *db, char *table, d_iov_t *key, d_iov_t *val)
 	db_data.mv_data = val->iov_buf;
 
 	rc = mdb_put(ldb->db_txn, ldb->db_dbi, &db_key, &db_data, 0);
+	if (rc)
+		D_ERROR("Failed to put in mdb: %d\n", rc);
 	D_FREE(db_key.mv_data);
 
 out:
 	rc = mdb_error2daos_error(rc);
 	if (end_tx)
-		lmm_db_tx_end(db, rc);
+		rc = lmm_db_tx_end(db, rc);
 	return rc;
 }
 
@@ -328,12 +338,14 @@ lmm_db_delete(struct sys_db *db, char *table, d_iov_t *key)
 		goto out;
 
 	rc = mdb_del(ldb->db_txn, ldb->db_dbi, &db_key, NULL);
+	if (rc)
+		D_ERROR("Failed to delete in mdb: %d\n", rc);
 	D_FREE(db_key.mv_data);
 
 out:
 	rc = mdb_error2daos_error(rc);
 	if (end_tx)
-		lmm_db_tx_end(db, rc);
+		rc = lmm_db_tx_end(db, rc);
 	return rc;
 }
 
@@ -407,6 +419,8 @@ lmm_db_tx_end(struct sys_db *db, int rc)
 	}
 
 	rc = mdb_txn_commit(txn);
+	if (rc)
+		D_ERROR("Failed to commit txn in mdb: %d\n", rc);
 
 	return mdb_error2daos_error(rc);
 }
