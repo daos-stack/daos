@@ -8,11 +8,8 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 4
+      storage: auto
+  system_ram_reserved: 1
 pool:
   control_method: dmg
   scm_size: 1GB

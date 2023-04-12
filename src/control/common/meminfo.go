@@ -109,7 +109,7 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 }
 
 // GetMemInfo reads /proc/meminfo and returns information about
-// system hugepages and available memory (RAM).
+// system hugepages and memory (RAM).
 func GetMemInfo() (*MemInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
