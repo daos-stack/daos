@@ -232,7 +232,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ env.STAGE_NAME }} build logs
+          name: ${{ env.STAGE_NAME }} logs
           path: |
             mock_result/root.log
             mock_result/build.log
@@ -369,7 +369,7 @@ jobs:
       - name: Request and Provision a Cluster
         run: uuid=$(uuidgen);
              echo "CLUSTER_REQUEST_UUID=$uuid" >> $GITHUB_ENV;
-             url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
+             url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"UUID=$uuid";
              curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} "$url";
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
                  echo "Waiting for a cluster";
