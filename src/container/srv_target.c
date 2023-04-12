@@ -818,6 +818,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		d_list_del_init(&cont_child->sc_link);
 
 		dtx_cont_deregister(cont_child);
+		D_ASSERT(cont_child->sc_dtx_registered == 0);
 
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
@@ -1164,12 +1165,16 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc);
 
 		if (cont->sc_open > 0) {
-			D_ERROR(DF_CONT": Container is still in open(%d)\n",
-				DP_CONT(cont->sc_pool->spc_uuid,
-					cont->sc_uuid), cont->sc_open);
+			if (retry_cnt > 0)
+				D_ERROR(DF_CONT": Container is re-opened (%d) by race\n",
+					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+					cont->sc_open);
+			else
+				D_ERROR(DF_CONT": Container is still in open(%d)\n",
+					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+					cont->sc_open);
 			cont_child_put(tls->dt_cont_cache, cont);
-			rc = -DER_BUSY;
-			goto out_pool;
+			D_GOTO(out_pool, rc = -DER_BUSY);
 		}
 
 		cont_child_stop(cont);
@@ -1179,6 +1184,10 @@ cont_child_destroy_one(void *vin)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
+		/* Give chance to DTX reindex ULT for exit. */
+		if (unlikely(cont->sc_dtx_reindex))
+			ABT_thread_yield();
+
 		/* Make sure checksum scrubbing has stopped */
 		ABT_mutex_lock(cont->sc_mutex);
 		if (cont->sc_scrubbing) {
@@ -1186,17 +1195,18 @@ cont_child_destroy_one(void *vin)
 			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
 		}
 		ABT_mutex_unlock(cont->sc_mutex);
-		/*
-		 * If this is the last user, ds_cont_child will be removed from
-		 * hash & freed on put.
-		 */
-		cont_child_put(tls->dt_cont_cache, cont);
 
 		retry_cnt++;
 		if (retry_cnt > 1) {
-			D_ERROR("container is still in-use\n");
+			D_ERROR("container is still in-use: open %u, resync %s, reindex %s\n",
+				cont->sc_open, cont->sc_dtx_resyncing ? "yes" : "no",
+				cont->sc_dtx_reindex ? "yes" : "no");
+			cont_child_put(tls->dt_cont_cache, cont);
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
+
+		/* If it is the last user, ds_cont_child will be removed from hash & freed. */
+		cont_child_put(tls->dt_cont_cache, cont);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",

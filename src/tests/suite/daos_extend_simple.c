@@ -335,12 +335,15 @@ extend_cb_internal(void *arg)
 		      cb_arg->rank, opc);
 	sleep(10);
 
-	if (cb_arg->kill)
+	if (cb_arg->kill) {
 		daos_kill_server(test_arg, test_arg->pool.pool_uuid, test_arg->group,
 				 test_arg->pool.alive_svc, cb_arg->rank);
-	else
-		dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
-				test_arg->group, &cb_arg->rank, 1);
+	} else {
+		/* it should fail with -DER_BUSY */
+		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
+				     test_arg->group, &cb_arg->rank, 1);
+		assert_int_not_equal(rc, 0);
+	}
 	/* Kill another rank during extend */
 	switch(opc) {
 	case EXTEND_PUNCH:
@@ -649,6 +652,8 @@ static const struct CMUnitTest extend_tests[] = {
 	 dfs_extend_write_kill, extend_small_sub_setup, test_teardown},
 	{"EXTEND15: write object during extend and extend",
 	 dfs_extend_write_extend, extend_small_sub_setup, test_teardown},
+	{"EXTEND16: extend fail then retry",
+	 dfs_extend_fail_retry, extend_small_sub_setup, test_teardown},
 };
 
 int

@@ -13,7 +13,6 @@ from general_utils import list_to_str
 
 
 class DmgStorageQuery(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.

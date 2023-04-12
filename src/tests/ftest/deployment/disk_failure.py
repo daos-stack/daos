@@ -70,7 +70,8 @@ class DiskFailureTest(OSAUtils):
             original_hostlist = self.dmg_command.hostlist
             try:
                 self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
-                self.dmg_command.storage_set_faulty(uuid=evict_device["uuid"])
+                get_dmg_response(
+                    self, self.dmg_command.storage_set_faulty, uuid=evict_device["uuid"])
             except CommandFailure:
                 self.fail("Error evicting target {}".format(evict_device["uuid"]))
             finally:
@@ -143,8 +144,19 @@ class DiskFailureTest(OSAUtils):
                 self.log.info("  %s: %s", key, device[key])
             try:
                 self.dmg_command.hostlist = NodeSet(host)
+                # Set the device as faulty
                 get_dmg_response(
-                    self, self.dmg_command.storage_replace_nvme,
-                    old_uuid=device["uuid"], new_uuid=device["uuid"])
+                    self, self.dmg_command.storage_set_faulty, uuid=device["uuid"])
+                # Replace the device with same uuid.
+                passed = False
+                for _ in range(10):
+                    data = self.dmg_command.storage_replace_nvme(old_uuid=device["uuid"],
+                                                                 new_uuid=device["uuid"])
+                    if not data['error'] and len(data['response']['host_errors']) == 0:
+                        passed = True
+                        break
+                    time.sleep(5)
+                if not passed:
+                    self.fail('Replacing faulty device did not pass after 10 retries')
             finally:
                 self.dmg_command.hostlist = self.server_managers[0].hosts
