@@ -299,6 +299,7 @@ class ReplayTests(TestWithServers):
                         modified = True
                         if entry['name'] == 'label':
                             item.label.update(entry['value'], join('.', item.identifier, 'label'))
+                            expected[entry['value']] = expected[original]
                         break
                 if not modified:
                     self.fail('Missing {} {} attribute to modify'.format(item.identifier, name))
