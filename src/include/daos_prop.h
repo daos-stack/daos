@@ -214,6 +214,8 @@ enum {
 
 #define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
 #define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5  /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1  /* 1 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MAX       (1 << 20) /* 1 million seconds */
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */

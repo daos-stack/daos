@@ -392,6 +392,9 @@ to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
 default. If specified during a pool create operation, this property overrides
 any `--nsvc` options. This property cannot yet be changed afterward.
 
+See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
+erasure coding at the container level.
+
 ### Properties for Controlling Checkpoints (MD on SSD only)
 
 Checkpointing is a background process that flushes VOS metadata from the ephemeral
@@ -412,17 +415,17 @@ three supported options:
 
 #### Checkpoint frequency (checkpoint\_freq)
 
-This property controls how often checkpoints are triggered.  If the checkpoint policy is
-not "timed", this property is ignored. The value is specified in seconds.
+This property controls how often checkpoints are triggered. It is only relevant
+if the checkpoint policy is "timed". The value is specified in seconds in the
+range [1, 1000000] with a default of 5.  Values outside the range are
+automatically adjusted.
 
 #### Checkpoint threshold (checkpoint\_thresh)
 
 This property controls the percentage of WAL usage to automatically trigger a checkpoint.
-The value is specified as a percentage between 10-75.  Anything outside the range will be
+It is only relevant when the checkpoint policy is not "disabled". The value is specified
+as a percentage in the range [10-75] with a default of 50. Values outside the range are
 automatically adjusted.
-
-See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
-erasure coding at the container level.
 
 ## Access Control Lists
 
