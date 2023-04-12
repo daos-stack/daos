@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2604,22 +2604,28 @@ struct dc_tx_check_existence_cb_args {
 };
 
 static int
-dc_tx_check_update(uint64_t flags, int result)
+dc_tx_check_update(tse_task_t *task, uint64_t flags)
 {
+	int result = task->dt_result;
+
 	if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_DKEY_INSERT)) {
 		if (result == 0)
-			return -DER_EXIST;
+			D_GOTO(out, result = -DER_EXIST);
 
 		if (result != -DER_NONEXIST)
-			return result;
+			D_GOTO(out, result);
 
-		return 0;
+		D_GOTO(out, result = 0);
 	}
 
 	if (flags & (DAOS_COND_AKEY_UPDATE | DAOS_COND_DKEY_UPDATE) && result != 0)
-		return result;
+		D_GOTO(out, result);
 
-	return 0;
+	result = 0;
+
+out:
+	task->dt_result = result;
+	return result;
 }
 
 static int
@@ -2632,7 +2638,7 @@ dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
 	D_ASSERT(args->tmp_iods != NULL);
 	D_ASSERT(args->tmp_iod_nr == 1);
 
-	task->dt_result = dc_tx_check_update(args->tmp_iods->iod_flags, task->dt_result);
+	dc_tx_check_update(task, args->tmp_iods->iod_flags);
 
 	daos_iov_free(&args->tmp_iods->iod_name);
 	D_FREE(args->tmp_iods);
@@ -2683,7 +2689,7 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 
 	switch (args->opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		rc = dc_tx_check_update(args->flags, task->dt_result);
+		rc = dc_tx_check_update(task, args->flags);
 		if (rc != 0)
 			D_GOTO(out, rc);
 

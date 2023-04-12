@@ -47,4 +47,5 @@ int ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
 		      uint64_t term);
+void ds_rebuild_running_query(uuid_t pool_uuid, uint32_t *upper_ver);
 #endif
