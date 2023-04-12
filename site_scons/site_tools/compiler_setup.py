@@ -54,14 +54,10 @@ def _base_setup(env):
                         '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
-    env.Append(CCFLAGS=['-Wno-unused-function'])
-    env.Append(CCFLAGS=['-Wno-unused-label'])
-    env.Append(CCFLAGS=['-Wno-unused-variable'])
-    env.Append(CCFLAGS=['-Wno-unused-but-set-variable'])
-    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
+
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-O0'])
+            env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:

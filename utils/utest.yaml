@@ -123,11 +123,12 @@
       aio: "AIO_7"
       size: 4
 - name: csum
-  base: "PREFIX"
+  base: "BUILD_DIR"
   tests:
-    - cmd: ["bin/rpc_tests"]
-    - cmd: ["bin/pool_scrubbing_tests"]
-    - cmd: ["bin/srv_checksum_tests"]
+    - cmd: ["src/tests/rpc/rpc_tests"]
+    - cmd: ["src/vos/tests/pool_scrubbing_tests"]
+    - cmd: ["src/object/tests/srv_checksum_tests"]
+    - cmd: ["src/object/tests/cli_checksum_tests"]
 - name: bio
   base: "BUILD_DIR"
   tests:
