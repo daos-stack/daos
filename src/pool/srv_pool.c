@@ -2910,7 +2910,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	d_tm_inc_counter(metrics->connect_total, 1);
 
 	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
-		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
+		rc = pool_space_query_bcast(dss_get_module_info()->dmi_ctx, svc, in->pci_op.pi_hdl,
 					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
@@ -3012,8 +3012,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	 * TODO: Send POOL_TGT_CLOSE_CONTS and somehow retry until every
 	 * container service has responded (through ds_pool).
 	 */
-	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids,
-					ctx);
+	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -3083,7 +3082,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_disconnect_hdls(&tx, svc, &pdi->pdi_op.pi_hdl,
-				  1 /* n_hdl_uuids */, rpc->cr_ctx);
+				  1 /* n_hdl_uuids */, dss_get_module_info()->dmi_ctx);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -3763,7 +3762,7 @@ out_lock:
 	/* See comment above, rebuild doesn't connect the pool */
 	if ((in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
-		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
+		rc = pool_space_query_bcast(dss_get_module_info()->dmi_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
 		if (unlikely(rc))
 			goto out_svc;
@@ -3908,7 +3907,7 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
 	if (tgt_state == PO_COMP_ST_UPIN) {
-		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl,
+		rc = pool_query_tgt_space(dss_get_module_info()->dmi_ctx, svc, in->pqii_op.pi_hdl,
 					  in->pqii_rank, in->pqii_tgt,
 					  &out->pqio_space);
 		if (rc)
@@ -4583,7 +4582,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 
 	if (n_hdl_uuids > 0) {
 		rc = pool_disconnect_hdls(tx, svc, hdl_uuids, n_hdl_uuids,
-					  rpc->cr_ctx);
+					  dss_get_module_info()->dmi_ctx);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
 		need_commit = true;
@@ -6237,7 +6236,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT) {
-		rc = pool_discard(rpc->cr_ctx, svc, &list);
+		rc = pool_discard(dss_get_module_info()->dmi_ctx, svc, &list);
 		if (rc)
 			goto out_svc;
 	}
@@ -6504,7 +6503,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		} else {
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
-						  n_hdl_uuids, rpc->cr_ctx);
+						  n_hdl_uuids, dss_get_module_info()->dmi_ctx);
 			if (rc != 0) {
 				D_GOTO(out_free, rc);
 			} else {
