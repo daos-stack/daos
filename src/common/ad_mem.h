@@ -73,6 +73,9 @@ enum ad_grp_flags {
 	GRP_FL_SPARSE		= (1 << 1),
 };
 
+#define GRP_UNIT_SZ_MAX		(1U << 20)
+#define GRP_UNIT_NR_MAX		(1U << 20)
+
 /** Durable format of group (128 bytes) */
 struct ad_group_df {
 	/** base address */
