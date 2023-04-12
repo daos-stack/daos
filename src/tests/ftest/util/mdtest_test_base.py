@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 from dfuse_test_base import DfuseTestBase
 from mdtest_utils import MdtestCommand
 from exception_utils import CommandFailure
@@ -159,7 +160,8 @@ class MdtestBase(DfuseTestBase):
             self.mdtest_cmd.depth.update(params[5])
             self.mdtest_cmd.flags.update(params[6])
             if params[7]:
-                self.mdtest_cmd.env['LD_PRELOAD'] = '/usr/lib64/libpil4dfs.so'
+                self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(
+                    self.prefix, 'lib64', 'libpil4dfs.so')
             # run mdtest
             self.execute_mdtest()
             if params[7]:

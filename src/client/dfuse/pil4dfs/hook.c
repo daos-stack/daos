@@ -90,7 +90,7 @@ static char     path_ld[512] = "";
 static char    *path_libc;
 static char    *path_libpthread;
 
-#define MAP_SIZE_SMALL (32768)
+#define MAP_SIZE_SMALL (232144)
 
 /*
  * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 from fio_test_base import FioBase
 
 
@@ -36,5 +37,5 @@ class FioILSmall(FioBase):
         :avocado: tags=dfuse,fio,checksum,tx
         :avocado: tags=FioSmall,test_fio_small,test_fio_pil4dfs_small
         """
-        self.fio_cmd.command_prepend_il('/usr/lib64/libpil4dfs.so')
+        self.fio_cmd.command_prepend_il(os.path.join(self.prefix, 'lib64', 'libpil4dfs.so'))
         self.execute_fio()
