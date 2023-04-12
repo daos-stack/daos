@@ -197,43 +197,6 @@ out:
 	return rc;
 }
 
-int
-cont_set_prop_hdlr(struct cmd_args_s *ap)
-{
-	int			 rc;
-	struct daos_prop_entry	*entry;
-	uint32_t		 i;
-
-	if (ap->props == NULL || ap->props->dpp_nr == 0) {
-		fprintf(ap->errstream,
-			"at least one property must be requested\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
-	/* Validate the properties are supported for set */
-	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &ap->props->dpp_entries[i];
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
-		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
-			fprintf(ap->errstream,
-				"property not supported for set\n");
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-	}
-
-	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to set properties for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	D_PRINT("Properties were successfully set\n");
-
-err_out:
-	return rc;
-}
-
 static size_t
 get_num_prop_entries_to_add(struct cmd_args_s *ap)
 {
