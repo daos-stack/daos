@@ -395,7 +395,7 @@ any `--nsvc` options. This property cannot yet be changed afterward.
 See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
-### Properties for Controlling Checkpoints (MD on SSD only)
+### Properties for Controlling Checkpoints (Metadata on SSD only)
 
 Checkpointing is a background process that flushes VOS metadata from the ephemeral
 copy to the metadata blob storing the VOS file, enabling Write Ahead Log (WAL) space
@@ -423,7 +423,7 @@ automatically adjusted.
 #### Checkpoint threshold (checkpoint\_thresh)
 
 This property controls the percentage of WAL usage to automatically trigger a checkpoint.
-It is only relevant when the checkpoint policy is not "disabled". The value is specified
+It is not relevant when the checkpoint policy is "disabled". The value is specified
 as a percentage in the range [10-75] with a default of 50. Values outside the range are
 automatically adjusted.
 
