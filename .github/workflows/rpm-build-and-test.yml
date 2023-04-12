@@ -133,7 +133,7 @@ jobs:
         run: |  # do not use the non-| format for this script
              set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
-             echo "text=${SKIP_FUNC_TEST_EL8:-true}" >> $GITHUB_OUTPUT
+             echo "text=${SKIP_FUNC_TEST_EL8:-false}" >> $GITHUB_OUTPUT
              cat $GITHUB_OUTPUT
       - name: Set skip-build-leap15-rpm variable
         id: skip-build-leap15-rpm
