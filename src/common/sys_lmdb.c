@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,8 @@ struct lmm_sys_db {
 	MDB_txn			*db_txn;
 	/* Address where the new MDB_dbi handle will be stored */
 	MDB_dbi			 db_dbi;
+	/* If MDB_dbi handle is valid or not */
+	bool			 db_dbi_valid;
 	char			*db_file;
 	char			*db_path;
 	/* DB should be destroyed on exit */
@@ -109,11 +111,6 @@ lmm_db_open_create(struct sys_db *db, bool try_create)
 			rc = daos_errno2der(errno);
 			return rc;
 		}
-	} else if (access(ldb->db_file, F_OK) != 0) {
-		D_DEBUG(DB_IO, "%s doesn't exist, bypassing lmdb open\n",
-			ldb->db_file);
-		rc = -DER_NONEXIST;
-		return rc;
 	} else if (access(ldb->db_file, R_OK | W_OK) != 0) {
 		rc = -DER_NO_PERM;
 		D_CRIT("No access to existing db file %s\n", ldb->db_file);
@@ -148,7 +145,7 @@ lmm_db_open_create(struct sys_db *db, bool try_create)
 		D_CRIT("Failed to open sysdb: "DF_RC"\n", DP_RC(rc));
 		goto txn_abort;
 	}
-
+	ldb->db_dbi_valid = true;
 
 	d_iov_set(&key, SYS_DB_MD_VER, strlen(SYS_DB_MD_VER));
 	d_iov_set(&val, &ver, sizeof(ver));
@@ -430,11 +427,13 @@ lmm_db_fini(void)
 	if (lmm_db.db_lock)
 		ABT_mutex_free(&lmm_db.db_lock);
 	if (lmm_db.db_file) {
-		if (lmm_db.db_env)
-			mdb_env_close(lmm_db.db_env);
 		if (lmm_db.db_destroy_db)
 			lmm_db_unlink(&lmm_db.db_pub);
-		mdb_dbi_close(lmm_db.db_env, lmm_db.db_dbi);
+		if (lmm_db.db_env) {
+			if (lmm_db.db_dbi_valid)
+				mdb_dbi_close(lmm_db.db_env, lmm_db.db_dbi);
+			mdb_env_close(lmm_db.db_env);
+		}
 		free(lmm_db.db_file);
 	}
 
@@ -445,7 +444,6 @@ lmm_db_fini(void)
 int
 lmm_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool destroy_db_on_fini)
 {
-	int	create;
 	int	rc;
 
 	D_ASSERT(db_path != NULL);
@@ -460,7 +458,8 @@ lmm_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	rc = asprintf(&lmm_db.db_path, "%s", db_path);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb path failed. %d\n", rc);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto failed;
 	}
 
 	if (!db_name)
@@ -486,19 +485,23 @@ lmm_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	if (force_create)
 		lmm_db_unlink(&lmm_db.db_pub);
 
-	for (create = 0; create <= 1; create++) {
-		rc = lmm_db_open_create(&lmm_db.db_pub, !!create);
-		if (rc == 0) {
-			D_DEBUG(DB_IO, "successfully open system DB\n");
-			break;
-		}
-		if (create || rc != -DER_NONEXIST) {
-			D_ERROR("Failed to open/create(%d) sys DB: "DF_RC"\n",
-				create, DP_RC(rc));
+	rc = access(lmm_db.db_file, F_OK);
+	if (rc == 0) {
+		rc = lmm_db_open_create(&lmm_db.db_pub, false);
+		if (rc) {
+			D_ERROR("Failed to open sys DB: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
-		D_DEBUG(DB_DF, "Try to create system DB\n");
+		D_DEBUG(DB_IO, "successfully open system DB\n");
+	} else {
+		rc = lmm_db_open_create(&lmm_db.db_pub, true);
+		if (rc) {
+			D_ERROR("Failed to create sys DB: "DF_RC"\n", DP_RC(rc));
+			goto failed;
+		}
+		D_DEBUG(DB_IO, "successfully create system DB\n");
 	}
+
 	return 0;
 
 failed:
