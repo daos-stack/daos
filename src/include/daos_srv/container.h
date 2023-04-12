@@ -66,6 +66,7 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
