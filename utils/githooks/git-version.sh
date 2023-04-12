@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=$(git --version | sed -ne 's/^[^0-9]*//p')
+VERSION=$(git --version | sed -ne 's/^[^0-9]*//p' | cut -d ' ' -f 1)
 if [ -z "$VERSION" ]; then
     echo "  ERROR: Could not determine git version."
     exit 1
