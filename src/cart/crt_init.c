@@ -495,10 +495,7 @@ do_init:
 		 * Ensure multi-recv is disabled and tag msgs are used for all
 		 * providers to preserve backward compatibility
 		 */
-		if (getenv("NA_OFI_UNEXPECTED_TAG_MSG") == NULL) {
-			D_INFO("NA_OFI_UNEXPECTED_TAG_MSG not set, set=1\n");
-			setenv("NA_OFI_UNEXPECTED_TAG_MSG", "1", true);
-		}
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
 
 		/* Enable mrc by default for CXI */
 		if (prov == CRT_NA_OFI_CXI)
