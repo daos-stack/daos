@@ -27,19 +27,6 @@ def build_tests(prereqs, env):
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'isal')
 
-    simple_pipeline_common = denv.StaticObject(['pipeline_common.c'])
-
-    simple_pipeline = denv.d_program('simple_pipeline',
-                                     ['simple_pipeline.c', simple_pipeline_common],
-                                     LIBS=libs_client)
-    simple_pipeline_arrays = denv.d_program('simple_pipeline_arrays',
-                                            ['simple_pipeline_arrays.c', simple_pipeline_common],
-                                            LIBS=libs_client)
-    simple_pipeline_str_arrays = denv.d_program('simple_pipeline_str_arrays',
-                                                ['simple_pipeline_str_arrays.c',
-                                                 simple_pipeline_common],
-                                                LIBS=libs_client)
-
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
 
