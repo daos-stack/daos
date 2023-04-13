@@ -434,10 +434,10 @@ lmm_db_fini(void)
 				mdb_dbi_close(lmm_db.db_env, lmm_db.db_dbi);
 			mdb_env_close(lmm_db.db_env);
 		}
-		free(lmm_db.db_file);
+		D_FREE(lmm_db.db_file);
 	}
 
-	free(lmm_db.db_path);
+	D_FREE(lmm_db.db_path);
 	memset(&lmm_db, 0, sizeof(lmm_db));
 }
 
@@ -455,8 +455,8 @@ lmm_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	if (rc != ABT_SUCCESS)
 		return -DER_NOMEM;
 
-	rc = asprintf(&lmm_db.db_path, "%s", db_path);
-	if (rc < 0) {
+	D_ASPRINTF(lmm_db.db_path, "%s", db_path);
+	if (lmm_db.db_path == NULL) {
 		D_ERROR("Generate sysdb path failed. %d\n", rc);
 		rc = -DER_NOMEM;
 		goto failed;
@@ -465,8 +465,8 @@ lmm_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	if (!db_name)
 		db_name = SYS_DB_NAME;
 
-	rc = asprintf(&lmm_db.db_file, "%s/%s", lmm_db.db_path, db_name);
-	if (rc < 0) {
+	D_ASPRINTF(lmm_db.db_file, "%s/%s", lmm_db.db_path, db_name);
+	if (lmm_db.db_file == NULL) {
 		D_ERROR("Generate sysdb filename failed. %d\n", rc);
 		rc = -DER_NOMEM;
 		goto failed;
