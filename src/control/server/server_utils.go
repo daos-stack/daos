@@ -497,6 +497,9 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 		return nil // no ramdisk to size
 	}
 
+	srv.log.Debugf("checking config ram-disk size (%s) against MemAvailable (%s)",
+		sc.Scm.RamdiskSize, uint64(mi.MemAvailableKiB)*humanize.KiByte)
+
 	// Pass zero hugepage size as hugemem reservation already factored in available memory.
 	ramdiskSize, err := srv.cfg.CalcRamdiskSize(srv.log, 0, mi.MemAvailableKiB)
 	if err != nil {
