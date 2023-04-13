@@ -1175,6 +1175,8 @@ daos_oit_close(daos_handle_t oh, daos_event_t *ev);
  *			by caller between calls.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
+ *			Async mode is not supported for now, if \a ev is not NULL, it
+ *			still run in the blocking mode and complete the event at the end.
  *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
@@ -1263,6 +1265,8 @@ typedef int
  * \param[in]	filter	OIT filter callback.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
+ *			Async mode is not supported for now, if \a ev is not NULL, it
+ *			still run in the blocking mode and complete the event at the end.
  *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:

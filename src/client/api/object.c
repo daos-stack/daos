@@ -366,7 +366,6 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 	uint32_t		      cont_rf;
 	uint32_t		      co_global_ver;
 	int			      rc;
-	struct daos_task_args	     *task_args;
 	daos_cont_snap_oit_oid_get_t *goo_args;
 
 	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
@@ -390,8 +389,7 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 	if (rc)
 		return rc;
 
-	task_args = tse_task_buf_embedded(task, sizeof(struct daos_task_args));
-	goo_args = (void *)&task_args->ta_u;
+	goo_args = dc_task_get_args(task);
 	goo_args->coh = coh;
 	goo_args->epoch = epoch;
 	goo_args->oid = &oid;
@@ -498,7 +496,7 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 		*oids_nr = 0;
 		if (ev)
 			daos_event_complete(ev, 0);
-		return 0;
+		return bucket > max_bucket ? -DER_INVAL : 0;
 	}
 
 	D_ALLOC_PTR(oa);
@@ -870,7 +868,8 @@ daos_oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 
 		oa->oa_listed_nr += *oa->oa_oids_nr;
 		/* we are done, move to next if needed */
-		if (oa->oa_listed_nr >= oa->oa_want_nr) {
+		D_ASSERT(oa->oa_listed_nr <= oa->oa_want_nr);
+		if (oa->oa_listed_nr == oa->oa_want_nr) {
 			if (oa->oa_bucket < max_bucket - 1 &&
 			    daos_anchor_is_eof(anchor)) {
 				memset(anchor, 0, sizeof(*anchor));

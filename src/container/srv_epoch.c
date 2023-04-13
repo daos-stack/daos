@@ -329,6 +329,8 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	int				rc;
+	d_iov_t				key;
+	d_iov_t				value;
 
 	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
@@ -338,6 +340,15 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_ERROR(DF_CONT": permission denied to dump oit\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		rc = -DER_NO_PERM;
+		goto out;
+	}
+
+	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
 		goto out;
 	}
 
