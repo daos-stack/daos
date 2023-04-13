@@ -553,6 +553,10 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
+	else {
+		/* Use tagged messages for other providers, disable multi-recv */
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
+	}
 
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
