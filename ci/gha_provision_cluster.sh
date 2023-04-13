@@ -2,6 +2,7 @@
 
 set -euxo pipefail
 
+env | sort
 reqid=${REQID:-$(reqidgen)}
 echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
 url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"REQID=$reqid"
