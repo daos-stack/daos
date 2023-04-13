@@ -93,7 +93,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 # the rank back and then drain.
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 # Get initial total free space (scm+nvme)
-                initial_free_space = self.pool.get_total_free_space(refresh=True)
+                initial_total_space = self.pool.get_total_space(refresh=True)
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if self.test_during_aggregation is True and index == 0:
@@ -109,28 +109,28 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     continue
                 output = self.pool.drain(rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
-                free_space_after_drain = self.pool.get_total_free_space(refresh=True)
+                total_space_after_drain = self.pool.get_total_space(refresh=True)
 
                 pver_drain = self.pool.get_version(True)
                 self.log.info("Pool Version after drain %d", pver_drain)
                 # Check pool version incremented after pool drain
                 self.assertTrue(pver_drain > (pver_begin + 1), "Pool Version Error:  After drain")
                 if self.test_during_aggregation is False:
-                    self.assertTrue(initial_free_space > free_space_after_drain,
-                                    "Expected free space after drain is less than initial")
+                    self.assertTrue(initial_total_space > total_space_after_drain,
+                                    "Expected total space after drain is less than initial")
                 if num_pool > 1:
                     output = self.pool.reintegrate(rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
-                    free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
-                    self.assertTrue(free_space_after_reintegration > free_space_after_drain,
-                                    "Expected free space after reintegration is less than drain")
+                    total_space_after_reintegration = self.pool.get_total_space(refresh=True)
+                    self.assertTrue(total_space_after_reintegration > total_space_after_drain,
+                                    "Expected total space after reintegration is less than drain")
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
                     output = self.pool.reintegrate("3")
                     self.print_and_assert_on_rebuild_failure(output)
-                    free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
-                    self.assertTrue(free_space_after_reintegration > free_space_after_drain,
-                                    "Expected free space after reintegration is less than drain")
+                    total_space_after_reintegration = self.pool.get_total_space(refresh=True)
+                    self.assertTrue(total_space_after_reintegration > total_space_after_drain,
+                                    "Expected total space after reintegration is less than drain")
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
