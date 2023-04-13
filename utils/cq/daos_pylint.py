@@ -534,7 +534,7 @@ def get_git_files(directory=None):
     if directory:
         cmd.append(directory)
 
-    ret = subprocess.run(cmd, check=True, capture_output=True)
+    ret = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)

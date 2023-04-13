@@ -45,7 +45,7 @@ class IoAggregation(IorTestBase):
             for 4 attempts.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,ioaggregation,tx
         :avocado: tags=test_ioaggregation
         """
