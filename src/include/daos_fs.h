@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1015,11 +1015,12 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
  * \param[in]	mask	accessibility check(s) to be performed.
  *			It should be either the value F_OK, or a mask with
  *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
+ * \param[in]	flag	bitwise flag. Handles O_NOFOLLOW.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag);
 
 /**
  * Change permission access bits. Symlinks are dereferenced.

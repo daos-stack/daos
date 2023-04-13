@@ -4880,7 +4880,7 @@ out:
 }
 
 int
-dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag)
 {
 	daos_handle_t		oh;
 	bool			exists;
@@ -4922,7 +4922,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	if (!exists)
 		return ENOENT;
 
-	if (!S_ISLNK(entry.mode)) {
+	if (!S_ISLNK(entry.mode) || (flag & O_NOFOLLOW)) {
 		if (mask == F_OK)
 			return 0;
 

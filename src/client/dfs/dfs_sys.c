@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -672,7 +672,7 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 	/* Either we are following symlinks, the obj is root,
 	 * or the obj is not a symlink. So just call dfs_access.
 	 */
-	rc = dfs_access(dfs_sys->dfs, sys_path.parent, sys_path.name, mask);
+	rc = dfs_access(dfs_sys->dfs, sys_path.parent, sys_path.name, mask, 0);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
