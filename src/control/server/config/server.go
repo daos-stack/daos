@@ -543,8 +543,8 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		return errors.Wrapf(err, "calculate ramdisk size")
 	}
 
-	srv.log.Debugf("calculated ram-disk size (%s) using MemTotal (%s)",
-		scmCfgs[0].Scm.RamdiskSize, uint64(mi.MemTotalKiB)*humanize.KiByte)
+	log.Debugf("calculated ram-disk size (%s) using MemTotal (%s)", scmCfgs[0].Scm.RamdiskSize,
+		uint64(mi.MemTotalKiB)*humanize.KiByte)
 
 	if ramdiskSize < storage.MinRamdiskMem {
 		// Total RAM is insufficient to meet minimum size.

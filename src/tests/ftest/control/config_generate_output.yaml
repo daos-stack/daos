@@ -6,7 +6,7 @@ server_config:
   engines:
     0:
       storage: auto
-  system_ram_reserved: 1
+  system_ram_reserved: 2
 pool:
   control_method: dmg
   scm_size: 1G

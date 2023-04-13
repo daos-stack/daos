@@ -8,4 +8,4 @@ server_config:
       targets: 4
       nr_xs_helpers: 0
       storage: auto
-  system_ram_reserved: 1
+  system_ram_reserved: 2
