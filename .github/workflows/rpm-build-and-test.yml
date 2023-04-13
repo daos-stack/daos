@@ -138,8 +138,10 @@ jobs:
       - name: Set skip-func-test variable
         id: skip-func-test
         run: |  # do not use the non-| format for this script
+             set -x
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_FUNC_TEST:-false}" >> $GITHUB_OUTPUT
+             cat $GITHUB_OUTPUT
       - name: Set skip-func-test-el8 variable
         id: skip-func-test-el8
         run: |  # do not use the non-| format for this script
