@@ -63,6 +63,7 @@ jobs:
     # Map a step output to a job output
     outputs:
       message: ${{ steps.commit_message.outputs.text }}
+      dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -74,6 +75,11 @@ jobs:
         id: commit_message
         run: echo "text<<EOF" >> $GITHUB_OUTPUT;
              git show -s --format=%B >> $GITHUB_OUTPUT;
+             echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Import and Dequote Commit Message
+        id: dequoted_commit_message
+        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+             git show -s --format=%B | sed -e "s/'/'\"'\"'/g" >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
 
   Import-commit-pragmas:
@@ -93,7 +99,7 @@ jobs:
       - name: Import Commit Pragmas
         id: commit_pragmas
         run: set -x; echo "text<<EOF" >> $GITHUB_OUTPUT;
-             echo '${{ needs.Import-commit-message.outputs.message }}' |
+             echo '${{ needs.Import-commit-message.outputs.dequoted_message }}' |
                ci/get_commit_pragmas.sh >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
              cat $GITHUB_OUTPUT
