@@ -401,6 +401,7 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas,
             Import-commit-pragmas2]
+    if: always()
     steps:
       - name: Show if conditions
         run: |
