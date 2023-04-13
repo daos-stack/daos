@@ -47,6 +47,13 @@ class EcodServerRestart(ErasureCodeIor):
             time.sleep(20)
 
         if agg_check == "Before":
+            # Over-write all EC object data to NVMe
+            self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
+            self.log.info(self.pool.pool_percentage_used())
+            # Over-write all EC object data to SCM
+            self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
+            self.log.info(self.pool.pool_percentage_used())
+            self.pool.pool_percentage_used()
             # Verify if Aggregation is getting started
             if not any(self.check_aggregation_status(attempt=50).values()):
                 self.fail("Aggregation failed to start Before server restart..")
