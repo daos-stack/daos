@@ -224,6 +224,10 @@ jobs:
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       RUN_ID: ${{ github.run_id }}
       TARGET: ${{ matrix.distro }}
+      # keep VS Code's GHA linting happy
+      STAGE_NAME:
+      DISTRO_NAME:
+      DISTRO_VERSION:
     steps:
       - name: Debug matrix exclusion
         run: echo ${{ github.event_name == 'pull_request' &&
@@ -413,6 +417,12 @@ jobs:
       # DO NOT LAND -- this should be on stable, backedup storage
       ARTEFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      # keep VS Code's GHA linting happy
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_TEST_TAG:
+      CLUSTER_REQUEST_UUID:
+      STAGE_NAME:
     steps:
       - name: Debug matrix exclusion
         run: echo ${{ github.event_name == 'pull_request' &&
@@ -531,7 +541,7 @@ jobs:
           done
           NODE_COUNT="$NODE_COUNT" TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
       - name: Job cleanup
-        if: always()
+        if: ${{ !cancelled() && (success() || failure()) }}
         run: . ci/gha_functions.sh;
              if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
                 id;
@@ -539,19 +549,19 @@ jobs:
              fi;
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files
-        if: always()
+        if: ${{ !cancelled() && (success() || failure()) }}
         run: . ci/gha_functions.sh;
              hostname;
              pwd;
              find Functional\ on\ * -type f
       # - name: Debug Publish NLT test results
-      #   if: always()
+      #   if: ${{ !cancelled() && (success() || failure()) }}
       #   run: pwd;
       #        ls -l ../../{,_temp/{,_github_workflow/}};
       #        echo mkdir -p ../../_temp/_github_home;
       #        ls -l ../../{,_temp/{,_github_workflow/}}
       - name: Publish test results
-        if: always()
+        if: ${{ !cancelled() && (success() || failure()) }}
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
@@ -560,7 +570,7 @@ jobs:
       - name: Test Report
         uses: phoenix-actions/test-reporting@v10
         id: test-report
-        if: always()
+        if: ${{ !cancelled() && (success() || failure()) }}
         with:
           name: ${{ env.STAGE_NAME }} Test Results (new)
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -568,7 +578,7 @@ jobs:
           fail-on-error: false
 
       - name: Publish artifacts
-        if: always()
+        if: ${{ !cancelled() && (success() || failure()) }}
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.STAGE_NAME }} artifacts

@@ -13,8 +13,7 @@ fi
 set +x
 curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" | jq -r .why
 while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
-    echo "Waiting for a cluster"
-    if [ $((SECONDS % 10)) -eq 0 ]; then
+    if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \
             <(curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" |
               jq -r .cancelled,.why)
