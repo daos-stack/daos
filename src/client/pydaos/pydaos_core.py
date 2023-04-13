@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2022 Intel Corporation.
+# (C) Copyright 2019-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -107,11 +107,12 @@ class DCont():
     def __getitem__(self, name):
         return self.get(name)
 
-    def dict(self, name, v: dict = None):
+    def dict(self, name, v: dict = None, cid="OC_SX"):
         """ Create new DDict object """
 
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
+                                                ObjClassID[cid].value,
                                                 pydaos_shim.PYDAOS_DICT)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS dict", ret)
@@ -124,12 +125,13 @@ class DCont():
 
         return dd
 
-    def array(self, name, v: list = None):
+    def array(self, name, v: list = None, cid="OC_SX"):
         # pylint: disable=unused-argument
         """ Create new DArray object """
 
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
+                                                ObjClassID[cid].value,
                                                 pydaos_shim.PYDAOS_ARRAY)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS array", ret)

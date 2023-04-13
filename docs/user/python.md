@@ -74,6 +74,17 @@ stadium
 2
 ```
 
+User can pass the predefined object class id during dict() method call.
+
+```
+>>> dd_oid = dcont.dict("stadium_2024", {"France" : "Stade de France"}, "OC_RP_2G1")
+>>> print(dd_oid)
+stadium_2024
+>>> print(len(dd_oid))
+1
+>>>
+```
+
 This creates a new persistent object named "stadium" and initializes it with two
 key-value pairs.
 
