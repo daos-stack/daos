@@ -12,7 +12,6 @@ if ! queue_url=$(curl -D - -f -v -X POST --user "$JENKINS_TOKEN" "$url" |
     exit 1
 fi
 set +x
-curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" | jq -r .why
 while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \

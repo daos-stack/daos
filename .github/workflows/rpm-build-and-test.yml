@@ -406,7 +406,6 @@ jobs:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      always() &&
       (needs.Build-RPM.result == 'success' ||
        needs.Build-RPM.result == 'skipped') &&
       needs.Import-commit-pragmas2.outputs.skip-func-test != 'true'
