@@ -39,22 +39,11 @@ int ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args);
 void ddb_str2argv_free(struct argv_parsed *parse_args);
 
 /* Parse argc/argv into the program arguments/options */
-int
-ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa);
+int ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv,
+			   struct program_args *pa);
 
-/* Parse a string into the parts of a vos tree path (cont, object, ...) */
-int ddb_vtp_init(daos_handle_t poh, const char *path, struct dv_tree_path_builder *vt_path);
-void ddb_vtp_fini(struct dv_tree_path_builder *vt_path);
-
-#define DDB_IDX_UNSET ((uint32_t)-1)
-static inline void ddb_vos_tree_path_setup(struct dv_tree_path_builder *vt_path)
-{
-	vt_path->vtp_cont_idx = DDB_IDX_UNSET;
-	vt_path->vtp_oid_idx = DDB_IDX_UNSET;
-	vt_path->vtp_dkey_idx = DDB_IDX_UNSET;
-	vt_path->vtp_akey_idx = DDB_IDX_UNSET;
-	vt_path->vtp_recx_idx = DDB_IDX_UNSET;
-}
+/* See ddb_iov_to_printable_buf for how the keys will be printed */
+int ddb_parse_key(const char *input, daos_key_t *key);
 
 /* Parse a string into the parts of a dtx_id. See DF_DTIF for how the format of the dtx_id is
  * expected to be.
