@@ -396,6 +396,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
+                                   branch: 'amd/no-checkpatch-comment',
                                    ignored_files: 'src/control/vendor/*:' +
                                                   '*.pb-c.[ch]:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
