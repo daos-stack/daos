@@ -201,7 +201,7 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Calc-rpm-build-matrix]
     steps:
-      - name: Show  Matrix
+      - name: Show Matrix
         run: echo '${{ needs.Calc-rpm-build-matrix.outputs.matrix }}';
              echo '${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}'
 
@@ -392,9 +392,24 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Calc-functional-matrix]
     steps:
-      - name: Show  Matrix
+      - name: Show Matrix
         run: echo '${{ needs.Calc-functional-matrix.outputs.matrix }}';
              echo '${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}'
+
+  Debug-functional-if:
+    name: Debug Functional if
+    runs-on: [self-hosted, wolf]
+    needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas,
+            Import-commit-pragmas2]
+    steps:
+      - name: Show if conditions
+        run: |
+          echo ${{ (needs.Build-RPM.result == 'success' ||
+                    needs.Build-RPM.result == 'skipped') &&
+                   needs.Import-commit-pragmas2.outputs.skip-func-test != 'true' }}
+          echo ${{ needs.Build-RPM.result == 'success' }}
+          echo ${{ needs.Build-RPM.result == 'skipped' }}
+          echo ${{ needs.Import-commit-pragmas2.outputs.skip-func-test }}
 
   Functional:
     name: Functional Testing
