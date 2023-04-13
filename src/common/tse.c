@@ -624,8 +624,10 @@ tse_task_post_process(tse_task_t *task)
 		dsp_tmp = dtp_tmp->dtp_sched;
 		diff_sched = dsp != dsp_tmp;
 
-		if (diff_sched)
+		if (diff_sched) {
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
 			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
+		}
 
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
@@ -655,8 +657,10 @@ tse_task_post_process(tse_task_t *task)
 
 		/* -1 for tlink (addref by add_dependent) */
 		tse_task_decref_free_locked(task_tmp);
-		if (diff_sched)
+		if (diff_sched) {
 			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
+			D_MUTEX_LOCK(&dsp->dsp_lock);
+		}
 	}
 
 	D_ASSERT(dsp->dsp_inflight > 0);
@@ -987,8 +991,9 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	if ((dtp->dtp_func == NULL || instant) && dtp->dtp_dep_cnt == 0) {
-		/** If task has no body function, mark it as running */
+	if ((dtp->dtp_func == NULL || instant) && dtp->dtp_dep_cnt == 0 &&
+	    d_list_empty(&dtp->dtp_prep_cb_list)) {
+		/** If task has no body function or instant, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
 		dtp->dtp_wakeup_time = 0;
@@ -1012,7 +1017,7 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	/* if caller wants to run the task instantly, call the task body
 	 * function now.
 	 */
-	if (instant && dtp->dtp_dep_cnt == 0) {
+	if (instant && dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list)) {
 		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		dtp->dtp_func(task);
 		D_MUTEX_LOCK(&dsp->dsp_lock);
