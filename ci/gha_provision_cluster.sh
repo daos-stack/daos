@@ -2,9 +2,9 @@
 
 set -euxo pipefail
 
-uuid=$(uuidgen)
-echo "CLUSTER_REQUEST_UUID=$uuid" >> "$GITHUB_ENV"
-url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"UUID=$uuid"
+reqid=${REQID:-$(reqidgen)}
+echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
+url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"REQID=$reqid"
 if ! queue_url=$(curl -D - -f -v -X POST --user "$JENKINS_TOKEN" "$url" |
                  sed -ne 's/\r//' -e '/Location:/s/.*: //p'); then
     echo "Failed to request a cluster."
@@ -12,7 +12,7 @@ if ! queue_url=$(curl -D - -f -v -X POST --user "$JENKINS_TOKEN" "$url" |
 fi
 set +x
 curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" | jq -r .why
-while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
+while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \
             <(curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" |
@@ -25,7 +25,7 @@ while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
     fi
     sleep 1
 done
-NODESTRING=$(cat /scratch/Get\ a\ cluster/"$uuid")
+NODESTRING=$(cat /scratch/Get\ a\ cluster/"$reqid")
 if [ "$NODESTRING" = "cancelled" ]; then
     echo "Cluster request cancelled from Jenkins"
     exit 1

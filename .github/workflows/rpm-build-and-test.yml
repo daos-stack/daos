@@ -506,7 +506,9 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
       - name: Request and Provision a Cluster
-        run: JENKINS_TOKEN="${{ secrets.JENKINS_TOKEN }}" ci/gha_provision_cluster.sh
+        run: JENKINS_TOKEN='${{ secrets.JENKINS_TOKEN }}'
+             REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
+             ci/gha_provision_cluster.sh
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master
         #  with:
