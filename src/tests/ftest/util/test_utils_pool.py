@@ -1195,7 +1195,6 @@ class TestPool(TestDaosApiBase):
         tier_stats = self.get_tier_stats(refresh)
         return sum(stat["total"] for stat in tier_stats.values())
 
-
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.
 
