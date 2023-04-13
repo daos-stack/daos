@@ -500,6 +500,7 @@ jobs:
                  echo "Failed to request a cluster."
                  exit 1
              fi
+             set +x
              curl -sf --user ${{ secrets.JENKINS_TOKEN }} "${queue_url}api/json/" | jq -r .why
              while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
                  echo "Waiting for a cluster"
