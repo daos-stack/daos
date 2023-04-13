@@ -265,7 +265,7 @@ jobs:
             echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       # - name: Show most recent commit
-      #   run: echo '${{ needs.Import-commit-message.outputs.message }}'
+      #   run: echo '${{ needs.Import-commit-message.outputs.dequoted_message }}'
       # - name: Show commit pragmas
       #   run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}'
       - name: Show pr-repos commit pragma
@@ -501,7 +501,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       # - name: Show most recent commit
-      #   run: echo '${{ needs.Import-commit-message.outputs.message }}'
+      #   run: echo '${{ needs.Import-commit-message.outputs.dequoted_message }}'
       - uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
