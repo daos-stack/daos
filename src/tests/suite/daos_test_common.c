@@ -739,7 +739,9 @@ rebuild_pool_wait(test_arg_t *arg)
 	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
 	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
-	    rst->rs_version > arg->rebuild_pre_pool_ver) {
+	    ((rst->rs_version > arg->rebuild_pre_pool_ver) ||
+	     (rst->rs_version == arg->rebuild_pre_pool_ver &&
+	      arg->no_rebuild_version_change))) {
 		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,

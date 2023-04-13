@@ -466,6 +466,36 @@ drain_objects(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
+static void
+drain_fail_and_retry_objects(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0,
+					    0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+		oids[i] = dts_oid_set_tgt(oids[i], DEFAULT_FAIL_TGT);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
 	{"DRAIN1: drain small rec multiple dkeys",
@@ -484,6 +514,8 @@ static const struct CMUnitTest drain_tests[] = {
 	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
 	{"DRAIN8: drain multiple objects",
 	 drain_objects, rebuild_sub_rf0_setup, test_teardown},
+	{"DRAIN9: drain fail and retry",
+	 drain_fail_and_retry_objects, rebuild_sub_rf0_setup, test_teardown},
 };
 
 int

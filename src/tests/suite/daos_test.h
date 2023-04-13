@@ -149,7 +149,8 @@ typedef struct {
 	uint32_t		overlap:1,
 				not_check_result:1,
 				idx_no_jump:1,
-				no_rebuild:1;
+				no_rebuild:1,
+				no_rebuild_version_change:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;

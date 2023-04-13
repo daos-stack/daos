@@ -5315,7 +5315,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	switch (opc) {
 	case POOL_EXCLUDE:
-		op = RB_OP_FAIL;
+		op = RB_OP_EXCLUDE;
 		break;
 	case POOL_DRAIN:
 		op = RB_OP_DRAIN;
@@ -5399,10 +5399,14 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 	if (rc != 0)
 		D_GOTO(out_map_buf, rc);
 
-	/* Extend the current pool map */
-	rc = pool_map_extend(map, map_version, map_buf);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
+	if (map_buf != NULL) {
+		/* Extend the current pool map */
+		rc = pool_map_extend(map, map_version, map_buf);
+		pool_buf_free(map_buf);
+		map_buf = NULL;
+		if (rc != 0)
+			D_GOTO(out_map, rc);
+	}
 
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);

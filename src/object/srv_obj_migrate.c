@@ -2290,7 +2290,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 
 	shard = arg->arg->shard % obj_ec_tgt_nr(&arg->oc_attr);
 	if ((rc == 1 && is_ec_data_shard(io->ui_oid.id_shard, &arg->oc_attr)) ||
-	    (tls->mpt_opc == RB_OP_FAIL && io->ui_oid.id_shard == shard)) {
+	    (tls->mpt_opc == RB_OP_EXCLUDE && io->ui_oid.id_shard == shard)) {
 		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard);
 		D_GOTO(put, rc = 0);

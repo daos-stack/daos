@@ -179,7 +179,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 	}
 }
 
-
 void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1471,11 +1471,10 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	struct pool_domain	*found_dom;
 	uint32_t		num_comps;
 	uint8_t			new_status;
-	bool			updated;
+	int			add_nodes = 0;
+	bool			found_new_nodes = false;
 	int			i, rc;
 	uint32_t		num_domain_comps;
-
-	updated = false;
 
 	/*
 	 * Estimate number of domains for allocating the pool buffer
@@ -1494,8 +1493,10 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 
 	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
 				     domains);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to attach pool buf, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_buf, rc);
+	}
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
@@ -1510,11 +1511,17 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	for (i = 0; i < nnodes; i++) {
 		if (map) {
 			found_dom = pool_map_find_node_by_rank(map, ranks->rl_ranks[i]);
-			if (found_dom)
+			if (found_dom) {
+				/* If the found dom is NEW, it might be left by previous failure
+				 * extend, so let's still do extend.
+				 */
+				if (found_dom->do_comp.co_status == PO_COMP_ST_NEW)
+					found_new_nodes = true;
 				continue;
+			}
 		}
 
-		updated = true;
+		add_nodes++;
 		map_comp.co_type = PO_COMP_TP_RANK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
@@ -1535,8 +1542,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		}
 	}
 
-	if (!updated)
-		D_GOTO(out_map_buf, rc = -DER_ALREADY);
+	if (add_nodes == 0) {
+		if (found_new_nodes)
+			D_GOTO(out_map_buf, rc = 0);
+		else
+			D_GOTO(out_map_buf, rc = -DER_ALREADY);
+	}
 
 	if (map != NULL)
 		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
@@ -1544,7 +1555,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		num_comps = 0;
 
 	/* fill targets */
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < add_nodes; i++) {
 		int j;
 
 		for (j = 0; j < dss_tgt_nr; j++) {
@@ -1961,7 +1972,8 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 		struct pool_component *comp = &domain->do_targets[i].ta_comp;
 
 		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
-					  comp->co_status == PO_COMP_ST_UP)) {
+					  comp->co_status == PO_COMP_ST_UP ||
+					  comp->co_status == PO_COMP_ST_DRAIN)) {
 			comp->co_status = PO_COMP_ST_UPIN;
 			domain->do_comp.co_status = PO_COMP_ST_UPIN;
 			return 1;

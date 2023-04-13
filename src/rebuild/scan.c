@@ -492,7 +492,7 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
 
-		if (rebuild_op == RB_OP_FAIL) {
+		if (rebuild_op == RB_OP_EXCLUDE) {
 			rc = pl_obj_find_rebuild(map, md, NULL,
 						 rebuild_ver,
 						 *tgts, *shards,
@@ -511,7 +511,7 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 						  *tgts, *shards,
 						  max_shards);
 		} else {
-			D_ASSERT(rebuild_op == RB_OP_FAIL ||
+			D_ASSERT(rebuild_op == RB_OP_EXCLUDE ||
 				 rebuild_op == RB_OP_DRAIN ||
 				 rebuild_op == RB_OP_REINT ||
 				 rebuild_op == RB_OP_EXTEND);
@@ -586,7 +586,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
-	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
+	if (rpt->rt_rebuild_op == RB_OP_EXCLUDE ||
 	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
 	    rpt->rt_rebuild_op == RB_OP_REINT ||
 	    rpt->rt_rebuild_op == RB_OP_EXTEND) {
@@ -671,7 +671,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		/* Reclaim does not require sending any objects */
 		rebuild_nr = 0;
 	} else {
-		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
+		D_ASSERT(rpt->rt_rebuild_op == RB_OP_EXCLUDE ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
 			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
