@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
-  SPDX-License-Identifier: BSD-2-Clause-Patent
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main RPC routines.
