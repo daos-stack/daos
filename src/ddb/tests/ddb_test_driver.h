@@ -47,6 +47,7 @@ int ddb_commands_tests_run(void);
 int ddb_main_tests_run(void);
 int ddb_cmd_options_tests_run(void);
 int ddb_commands_print_tests_run(void);
+int ddb_path_tests_run(void);
 
 /*
  * Insert data into the pool. The cont, objs, ... parameters indicate how many of each to
@@ -58,9 +59,14 @@ void dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t 
 int ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx);
 
 extern uint32_t dvt_fake_print_called;
-extern char dvt_fake_print_buffer[1024];
+extern bool dvt_fake_print_just_count;
+#define DVT_FAKE_PRINT_BUFFER_SIZE 1024*1024
+extern char dvt_fake_print_buffer[DVT_FAKE_PRINT_BUFFER_SIZE];
 int dvt_fake_print(const char *fmt, ...);
 void dvt_fake_print_reset(void);
+#define assert_printed_exact(str) assert_string_equal(str, dvt_fake_print_buffer)
+#define assert_printed_not_equal(str) assert_string_not_equal(str, dvt_fake_print_buffer)
+#define assert_printed_contains(str) assert_string_contains(dvt_fake_print_buffer, str)
 
 
 extern size_t dvt_fake_get_file_size_result;

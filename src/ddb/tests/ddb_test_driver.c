@@ -133,17 +133,21 @@ dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, c
  */
 
 uint32_t dvt_fake_print_called;
-char dvt_fake_print_buffer[1024];
+bool dvt_fake_print_just_count;
+char dvt_fake_print_buffer[DVT_FAKE_PRINT_BUFFER_SIZE];
 
 int
 dvt_fake_print(const char *fmt, ...)
 {
 	va_list args;
-	uint32_t buffer_offset = strlen(dvt_fake_print_buffer);
+	uint32_t buffer_offset;
 	uint32_t buffer_left;
-
-	buffer_left = ARRAY_SIZE(dvt_fake_print_buffer) - buffer_offset;
 	dvt_fake_print_called++;
+	if (dvt_fake_print_just_count)
+		return 0;
+
+	buffer_offset = strlen(dvt_fake_print_buffer);
+	buffer_left = ARRAY_SIZE(dvt_fake_print_buffer) - buffer_offset;
 	va_start(args, fmt);
 	vsnprintf(dvt_fake_print_buffer + buffer_offset, buffer_left, fmt, args);
 	va_end(args);
@@ -628,6 +632,7 @@ int main(int argc, char *argv[])
 		RUN_TEST_SUIT('d', ddb_commands_tests_run);
 		RUN_TEST_SUIT('e', ddb_main_tests_run);
 		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
+		RUN_TEST_SUIT('g', ddb_path_tests_run);
 
 done:
 	ddb_fini();
