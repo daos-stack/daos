@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import time
 import urllib
 import random
 import string
@@ -73,8 +74,17 @@ def fetch_pr_data():
         github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
         gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
-        with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
-            pr_data = json.loads(raw_pr_data.read())
+        # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
+        # while and re-try once.
+        try:
+            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                pr_data = json.loads(raw_pr_data.read())
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                time.sleep(60 * 10)
+                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                    pr_data = json.loads(raw_pr_data.read())
+            raise
     else:
         print('Pass PR number on command line')
         sys.exit(1)
