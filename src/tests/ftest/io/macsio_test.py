@@ -9,7 +9,6 @@ from macsio_test_base import MacsioTestBase
 
 
 class MacsioTest(DfuseTestBase, MacsioTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs a basic MACSio test.
 
     :avocado: recursive
