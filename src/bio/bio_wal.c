@@ -896,6 +896,31 @@ generate_data_csum(struct bio_meta_context *mc, struct bio_desc *biod_data,
 	return rc;
 }
 
+static void
+wait_tx_committed(struct wal_tx_desc *wal_tx)
+{
+	struct bio_desc		*biod_tx = wal_tx->td_biod_tx;
+	struct bio_desc		*biod_data = wal_tx->td_biod_data;
+	struct bio_xs_context	*xs_ctxt = biod_tx->bd_ctxt->bic_xs_ctxt;
+	int			 rc;
+
+	D_ASSERT(biod_tx->bd_dma_done != ABT_EVENTUAL_NULL);
+	D_ASSERT(xs_ctxt != NULL);
+
+	if (xs_ctxt->bxc_self_polling) {
+		D_DEBUG(DB_IO, "Self poll completion\n");
+		rc = xs_poll_completion(xs_ctxt, &biod_tx->bd_inflights, 0);
+		if (rc)
+			D_ERROR("Self pool completion failed. "DF_RC"\n", DP_RC(rc));
+	} else if (biod_tx->bd_inflights != 0 || biod_data != NULL) {
+		rc = ABT_eventual_wait(biod_tx->bd_dma_done, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT_eventual_wait failed. %d\n", rc);
+	}
+	/* The completion must have been called */
+	D_ASSERT(d_list_empty(&wal_tx->td_link));
+}
+
 int
 bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data)
 {
@@ -1023,10 +1048,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 		D_ERROR("WAL commit failed. "DF_RC"\n", DP_RC(rc));
 
 	/* Wait for WAL commit completion */
-	D_ASSERT(biod->bd_dma_done != ABT_EVENTUAL_NULL);
-	iod_dma_wait(biod);
-	/* The completion must have been called */
-	D_ASSERT(d_list_empty(&wal_tx.td_link));
+	wait_tx_committed(&wal_tx);
 out:
 	free_data_csum(&dc_arr);
 	if (biod != NULL)

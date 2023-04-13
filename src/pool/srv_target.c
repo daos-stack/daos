@@ -1936,7 +1936,7 @@ ds_pool_tgt_discard_ult(void *data)
 		}
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
