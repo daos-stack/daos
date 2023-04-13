@@ -84,7 +84,8 @@ def fetch_pr_data():
                 time.sleep(60 * 10)
                 with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
                     pr_data = json.loads(raw_pr_data.read())
-            raise
+            else:
+                raise
     else:
         print('Pass PR number on command line')
         sys.exit(1)
@@ -95,7 +96,6 @@ def fetch_pr_data():
 
 def main():
     """Run the script"""
-
     # pylint: disable=too-many-branches
     pr_data = fetch_pr_data()
 
