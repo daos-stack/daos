@@ -16,7 +16,7 @@ users on a node.  Only root can enable this, but once set it applies to all user
 ## Recommended use-case
 
 Persistent multi user dfuse instances make sense on login nodes to allow permanent access to DAOS
-for multiple users without the overhead of spinning up per-user instances on login. it allows
+for multiple users without the overhead of spinning up per-user instances on login. It allows
 better use of kernel resources, is easier to administer and more flexibile than per-user dfuse
 processes.
 
