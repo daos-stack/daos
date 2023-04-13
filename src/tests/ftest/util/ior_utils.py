@@ -15,13 +15,12 @@ from command_utils import SubProcessCommand
 from general_utils import get_log_file
 
 
-def get_ior(test, manager, log, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
+def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
     """Get a Ior object.
 
     Args:
         test (Test): avocado Test object
         manager (JobManager): command to manage the multi-host execution of ior
-        log (str): log file.
         hosts (NodeSet): hosts on which to run the ior command
         path (str): hostfile path.
         slots (int): hostfile number of slots per host.
@@ -32,7 +31,7 @@ def get_ior(test, manager, log, hosts, path, slots, namespace="/run/ior/*", ior_
     Returns:
         Ior: the Ior object requested
     """
-    ior = Ior(test, manager, log, hosts, path, slots, namespace)
+    ior = Ior(test, manager, hosts, path, slots, namespace)
     if ior_params:
         for name, value in ior_params.items():
             ior.update(name, value)
@@ -77,10 +76,11 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         CmdResult: result of the ior command
 
     """
-    ior = get_ior(test, manager, log, hosts, path, slots, namespace, ior_params)
+    ior = get_ior(test, manager, hosts, path, slots, namespace, ior_params)
+    ior.update_log_file(log)
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
-        fail_on_warning)
+        fail_on_warning, False)
 
 
 def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
@@ -455,13 +455,12 @@ class IorMetrics(IntEnum):
 class Ior:
     """Defines a class that runs the ior command through a job manager, e.g. mpirun."""
 
-    def __init__(self, test, manager, log, hosts, path=None, slots=None, namespace="/run/ior/*"):
+    def __init__(self, test, manager, hosts, path=None, slots=None, namespace="/run/ior/*"):
         """Initialize an Ior object.
 
         Args:
             test (Test): avocado Test object
             manager (JobManager): command to manage the multi-host execution of ior
-            log (str): log file.
             hosts (NodeSet): hosts on which to run the ior command
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): hostfile number of slots per host. Defaults to None.
@@ -474,7 +473,8 @@ class Ior:
         self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
         self.label_generator = test.label_generator
-        self.env = self.command.get_default_env(str(self.manager), log)
+        self.test_id = test.test_id
+        self.env = self.command.get_default_env(str(self.manager))
 
     @property
     def command(self):
@@ -498,8 +498,35 @@ class Ior:
             if isinstance(param, BasicParameter):
                 param.update(value, ".".join([self.command.command, name]))
 
+    def update_log_file(self, log_file):
+        """Update the log file for the ior command.
+
+        Args:
+            log_file (str): new ior log file
+        """
+        self.command.env["D_LOG_FILE"] = get_log_file(
+            log_file or "{}_daos.log".format(self.command.command))
+
+    def get_unique_log(self, container):
+        """Get a unique ior log file name.
+
+        Args:
+            container (TestContainer): container involved with the command
+
+        Returns:
+            str: a log file name
+        """
+        label = self.label_generator.get_label("ior")
+        parts = [self.test_id, container.pool.identifier, container.identifier, label]
+        flags = self.command.flags.value
+        if flags and '-w' in flags.lower():
+            parts.append('write')
+        if flags and '-r' in flags.lower():
+            parts.append('read')
+        return '.'.join(['_'.join(parts), 'log'])
+
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -518,6 +545,8 @@ class Ior:
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
             fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
                 is found. Default is False.
+            unique_log (bool, optional): whether or not to update the log file with a new unique log
+                file name. Defaults to True.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -565,6 +594,9 @@ class Ior:
 
         if fail_on_warning and "WARNING" not in self.manager.check_results_list:
             self.manager.check_results_list.append("WARNING")
+
+        if unique_log:
+            self.update_log_file(self.get_unique_log(container))
 
         try:
             if display_space:

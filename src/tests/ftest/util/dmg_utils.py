@@ -828,12 +828,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
