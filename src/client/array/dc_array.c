@@ -590,10 +590,8 @@ dc_array_create(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(open_task, false);
-	tse_task_schedule(update_task, false);
-	tse_sched_progress(tse_task2sched(task));
-
+	tse_task_schedule(open_task, true);
+	tse_task_schedule(update_task, true);
 	return rc;
 
 err_put2:
@@ -739,11 +737,9 @@ dc_array_open(tse_task_t *task)
 	}
 
 	/** Create task to open object */
-	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
-			      0, NULL, &open_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task), 0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_open task "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to open object_open task "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_ptask, rc);
 	}
 
@@ -762,54 +758,48 @@ dc_array_open(tse_task_t *task)
 			D_GOTO(err_put1, rc);
 		}
 
-		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
-					       sizeof(args));
+		rc = tse_task_register_comp_cb(task, open_handle_cb, &args, sizeof(args));
 		if (rc != 0) {
 			D_ERROR("Failed to register completion cb "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
-		tse_task_schedule(open_task, false);
-		tse_sched_progress(tse_task2sched(task));
+		tse_task_schedule(open_task, true);
 		return rc;
 	}
 
-	/** Create task to fetch object metadata */
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
-			      1, &open_task, &fetch_task);
+	/** Create task to fetch object metadata depending on the open task to complete first. */
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 1, &open_task, &fetch_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_fetch task\n");
+		D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_put1, rc);
 	}
 
 	/** add a prepare CB to set the args for the metadata fetch */
-	rc = tse_task_register_cbs(fetch_task, fetch_md_cb, &args,
-				   sizeof(args), NULL, NULL, 0);
+	rc = tse_task_register_cbs(fetch_task, fetch_md_cb, &args, sizeof(args), NULL, NULL, 0);
 	if (rc != 0) {
-		D_ERROR("Failed to register prep CB\n");
+		D_ERROR("tse_task_register_cbs() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
 
-	/** The upper task completes when the fetch task completes */
+	/** The API task completes when the fetch task completes */
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
+		D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
 
 	/*
-	 * Allocate params for fetch task. need to do that here since we use
-	 * that as priv value for upper task to verify metadata before creating
-	 * the open handle.
+	 * Allocate params for fetch task. need to do that here since we use that as priv value for
+	 * upper task to verify metadata before creating the open handle.
 	 */
 	D_ALLOC_PTR(params);
 	if (params == NULL)
 		D_GOTO(err_put2, rc = -DER_NOMEM);
 
-	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params, sizeof(params));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
+		D_ERROR("tse_task_register_cbs() failed: "DF_RC"\n", DP_RC(rc));
 		D_FREE(params);
 		D_GOTO(err_put2, rc);
 	}
@@ -819,17 +809,14 @@ dc_array_open(tse_task_t *task)
 	daos_task_set_priv(task, params);
 
 	/** Add a completion CB on the upper task to generate the array OH */
-	rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
-				       sizeof(args));
+	rc = tse_task_register_comp_cb(task, open_handle_cb, &args, sizeof(args));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
+		D_ERROR("tse_task_register_comp_cb() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(open_task, false);
-	tse_task_schedule(fetch_task, false);
-	tse_sched_progress(tse_task2sched(task));
-
+	tse_task_schedule(open_task, true);
+	tse_task_schedule(fetch_task, true);
 	return rc;
 err_put2:
 	tse_task_complete(fetch_task, rc);
@@ -879,9 +866,7 @@ dc_array_close(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(close_task, false);
-	tse_sched_progress(tse_task2sched(task));
-
+	tse_task_schedule(close_task, true);
 	return rc;
 err_put2:
 	tse_task_complete(close_task, rc);
@@ -926,10 +911,8 @@ dc_array_destroy(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(punch_task, false);
-	tse_sched_progress(tse_task2sched(task));
+	tse_task_schedule(punch_task, true);
 	array_decref(array);
-
 	return rc;
 err_put2:
 	tse_task_complete(punch_task, rc);
@@ -1746,9 +1729,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	head_cb_registered = true;
 
 	/*
-	 * If this is a byte array, schedule the get_size task with a prep
-	 * callback that decides if the get size is necessary for short read
-	 * handling. The prep callback also handles the hole management.
+	 * If this is a byte array, schedule the get_size task with a prep callback that decides if
+	 * the get size is necessary for short read handling. The prep callback also handles the
+	 * hole management.
 	 */
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
 		if (head == NULL) {
@@ -1782,8 +1765,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		}
 	}
 
-	tse_task_list_sched(&io_task_list, false);
-	tse_sched_progress(tse_task2sched(task));
+	tse_task_list_sched(&io_task_list, true);
 	array_decref(array);
 	return 0;
 
@@ -1911,8 +1893,7 @@ dc_array_get_size(tse_task_t *task)
 	kqp->size	= args->size;
 	kqp->array	= array;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, tse_task2sched(task),
-			      0, NULL, &query_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, tse_task2sched(task), 0, NULL, &query_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -2171,8 +2152,7 @@ check_record_cb(tse_task_t *task, void *data)
 	D_DEBUG(DB_IO, "update record (%zu, %zu), iod_size %zu.\n",
 		iod->iod_recxs[0].rx_idx, iod->iod_recxs[0].rx_nr,
 		iod->iod_size);
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
-			      NULL, &io_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
 		D_ERROR("Task create failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
@@ -2186,8 +2166,7 @@ check_record_cb(tse_task_t *task, void *data)
 	io_arg->iods	= iod;
 	io_arg->sgls	= sgl;
 
-	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -2204,7 +2183,7 @@ check_record_cb(tse_task_t *task, void *data)
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = tse_task_schedule(io_task, false);
+	rc = tse_task_schedule(io_task, true);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -2327,8 +2306,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 	iod->iod_recxs[0].rx_idx = props->record_i;
 	iod->iod_recxs[0].rx_nr = 1;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(props->ptask),
-			      0, NULL, &io_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(props->ptask), 0, NULL, &io_task);
 	if (rc) {
 		D_FREE(sgl->sg_iovs);
 		D_GOTO(err, rc);
@@ -2341,8 +2319,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 	io_arg->iods	= iod;
 	io_arg->sgls	= sgl;
 
-	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -2370,7 +2347,7 @@ adjust_array_size_task_process(tse_task_t *task, void *arg)
 	tse_task_list_del(task);
 
 	if (rc == 0)
-		tse_task_schedule(task, false);
+		tse_task_schedule(task, true);
 	else
 		tse_task_complete(task, rc);
 
@@ -2421,8 +2398,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				D_ASSERT(props->record_i + 1 <
 					 props->chunk_size);
 				/** Punch all records above record_i */
-				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n",
-					dkey_val);
+				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n", dkey_val);
 				rc = punch_extent(args->oh, args->th, dkey_val, props->record_i,
 						  props->num_records, props->ptask, &task_list);
 				if (rc)
@@ -2444,8 +2420,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		args->sgl->sg_nr = 1;
 		d_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
-		rc = tse_task_register_cbs(task, NULL, NULL, 0,
-					   adjust_array_size_cb, &props,
+		rc = tse_task_register_cbs(task, NULL, NULL, 0, adjust_array_size_cb, &props,
 					   sizeof(props));
 		if (rc)
 			goto out;
@@ -2500,8 +2475,7 @@ dc_array_set_size(tse_task_t *task)
 		num_records = array->chunk_size;
 		record_i = 0;
 	} else {
-		rc = compute_dkey(array, args->size - 1, &num_records,
-				  &record_i, &dkey_val);
+		rc = compute_dkey(array, args->size - 1, &num_records, &record_i, &dkey_val);
 		if (rc) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_task, rc);
@@ -2531,11 +2505,9 @@ dc_array_set_size(tse_task_t *task)
 	memset(&set_size_props->anchor, 0, sizeof(set_size_props->anchor));
 	set_size_props->sgl.sg_nr = 1;
 	set_size_props->sgl.sg_iovs = &set_size_props->iov;
-	d_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf,
-		     ENUM_DESC_BUF);
+	d_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf, ENUM_DESC_BUF);
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
-			      0, NULL, &enum_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task), 0, NULL, &enum_task);
 	if (rc)
 		D_GOTO(err_task, rc);
 
@@ -2547,8 +2519,7 @@ dc_array_set_size(tse_task_t *task)
 	enum_args->sgl		= &set_size_props->sgl;
 	enum_args->dkey_anchor	= &set_size_props->anchor;
 
-	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
-				   adjust_array_size_cb, &set_size_props,
+	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, adjust_array_size_cb, &set_size_props,
 				   sizeof(set_size_props));
 	if (rc)
 		D_GOTO(err_enum_task, rc);
@@ -2562,14 +2533,11 @@ dc_array_set_size(tse_task_t *task)
 	if (rc)
 		D_GOTO(err_enum_task, rc);
 
-	rc = tse_task_schedule(enum_task, false);
+	rc = tse_task_schedule(enum_task, true);
 	if (rc)
 		D_GOTO(err_enum_task, rc);
 
-	tse_sched_progress(tse_task2sched(task));
-
 	return 0;
-
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
