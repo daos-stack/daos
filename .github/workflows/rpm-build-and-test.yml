@@ -122,6 +122,7 @@ jobs:
     outputs:
       skip-build-el8-rpm: ${{ steps.skip-build-el8-rpm.outputs.text }}
       skip-build-leap15-rpm: ${{ steps.skip-build-leap15-rpm.outputs.text }}
+      skip-func-test: ${{ steps.skip-func-test.outputs.text }}
       skip-func-test-el8: ${{ steps.skip-func-test-el8.outputs.text }}
       skip-func-test-leap15: ${{ steps.skip-func-test-leap15.outputs.text }}
       rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
@@ -134,6 +135,11 @@ jobs:
              ${{ needs.Import-commit-pragmas.outputs.pragmas }}
              echo "text=${SKIP_BUILD_EL8_RPM:-false}" >> $GITHUB_OUTPUT
              cat $GITHUB_OUTPUT
+      - name: Set skip-func-test variable
+        id: skip-func-test
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${SKIP_FUNC_TEST:-false}" >> $GITHUB_OUTPUT
       - name: Set skip-func-test-el8 variable
         id: skip-func-test-el8
         run: |  # do not use the non-| format for this script
@@ -422,6 +428,7 @@ jobs:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
+      (!cancelled() && (success() || failure())) &&
       (needs.Build-RPM.result == 'success' ||
        needs.Build-RPM.result == 'skipped') &&
       needs.Import-commit-pragmas2.outputs.skip-func-test != 'true'
