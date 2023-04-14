@@ -477,8 +477,11 @@ class TestInfo():
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
-        if yaml_extension and os.path.exists(".".join([self.yaml_file, str(yaml_extension)])):
-            self.yaml_file = ".".join([self.yaml_file, str(yaml_extension)])
+        if yaml_extension:
+            custom_yaml = ".".join(
+                [os.path.splitext(self.test_file)[0], str(yaml_extension), "yaml"])
+            if os.path.exists(custom_yaml):
+                self.yaml_file = custom_yaml
         parts = self.test_file.split(os.path.sep)[1:]
         self.python_file = parts.pop()
         self.directory = os.path.join(*parts)
@@ -3153,7 +3156,7 @@ def main():
         action="store",
         default=None,
         help="extension used to run custom test yaml files. If a test yaml file "
-             "exists with the specified extension - e.g. dtx/basic.yaml.custom "
+             "exists with the specified extension - e.g. dtx/basic.custom.yaml "
              "for --yaml_extension=custom - this file will be used instead of the "
              "standard test yaml file.")
     args = parser.parse_args()
