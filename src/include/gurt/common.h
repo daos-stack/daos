@@ -35,8 +35,8 @@
 #else
 #define D_ON_VALGRIND 0
 #define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
+	(void)(addr);\
+	(void)(len);\
 } while (0)
 #endif
 
