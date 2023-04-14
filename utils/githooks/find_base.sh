@@ -18,7 +18,7 @@ if command -v gh > /dev/null 2>&1; then
         TARGET=HEAD
     else
         state="$ORIGIN"/$(gh pr view "$BRANCH" --json state -t "{{.state}}")
-        if [ "$state" = "MERGED" ]; then
+        if [ "$state" != "OPEN" ]; then
             TARGET=HEAD
         fi
     fi
