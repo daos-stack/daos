@@ -223,10 +223,8 @@ dc_kv_open(tse_task_t *task)
 		D_GOTO(err_put1, rc);
 	}
 
-	tse_task_schedule(open_task, false);
-	tse_sched_progress(tse_task2sched(task));
+	tse_task_schedule(open_task, true);
 	return rc;
-
 err_put1:
 	tse_task_complete(open_task, rc);
 err_ptask:
@@ -273,9 +271,7 @@ dc_kv_close(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(close_task, false);
-	tse_sched_progress(tse_task2sched(task));
-
+	tse_task_schedule(close_task, true);
 	return rc;
 err_put2:
 	tse_task_complete(close_task, rc);
@@ -320,10 +316,8 @@ dc_kv_destroy(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(punch_task, false);
-	tse_sched_progress(tse_task2sched(task));
+	tse_task_schedule(punch_task, true);
 	kv_decref(kv);
-
 	return rc;
 err_put2:
 	tse_task_complete(punch_task, rc);
@@ -414,14 +408,11 @@ dc_kv_put(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(update_task, false);
+	rc = tse_task_schedule(update_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
-	tse_sched_progress(tse_task2sched(task));
 	kv_decref(kv);
 	return 0;
-
 err_task:
 	D_FREE(params);
 	if (update_task)
@@ -509,15 +500,11 @@ dc_kv_get(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(fetch_task, false);
+	rc = tse_task_schedule(fetch_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
-	tse_sched_progress(tse_task2sched(task));
 	kv_decref(kv);
-
 	return 0;
-
 err_task:
 	D_FREE(params);
 	if (fetch_task)
@@ -574,15 +561,11 @@ dc_kv_remove(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(punch_task, false);
+	rc = tse_task_schedule(punch_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
-	tse_sched_progress(tse_task2sched(task));
 	kv_decref(kv);
-
 	return 0;
-
 err_task:
 	D_FREE(params);
 	if (punch_task)
@@ -623,15 +606,11 @@ dc_kv_list(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(list_task, false);
+	rc = tse_task_schedule(list_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
-	tse_sched_progress(tse_task2sched(task));
 	kv_decref(kv);
-
 	return 0;
-
 err_task:
 	if (list_task)
 		tse_task_complete(list_task, rc);
