@@ -53,6 +53,9 @@ const (
 	DefaultEngineMemRsvd = humanize.GiByte * 1
 	// MinRamdiskMem is the minimum amount of memory needed for each engine's tmpfs RAM-disk.
 	MinRamdiskMem = humanize.GiByte * 4
+	// DefaultRamCheckThreshold is the default percentage to be used when evaluating the
+	// viability of the configured RAM-disk size before starting the engine.
+	DefaultRamCheckThreshold = 90
 )
 
 func (ss ScmState) String() string {
@@ -554,7 +557,7 @@ func CalcRamdiskSize(log logging.Logger, memAllow, memHuge, memSys, memEng uint6
 		return 0, errors.New("requires nonzero nr engines")
 	}
 
-	msgStats := fmt.Sprintf("mem total: %s (%d), mem hugepage: %s, nr engines: %d, "+
+	msgStats := fmt.Sprintf("mem allowed: %s (%d), mem hugepage: %s, nr engines: %d, "+
 		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memAllow), memAllow,
 		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
 		humanize.IBytes(memEng))
@@ -581,7 +584,7 @@ func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys, mem
 		return 0, errors.New("requires nonzero nr engines")
 	}
 
-	msgStats := fmt.Sprintf("required ram-disk size: %s (%d), mem hugepage: %s, nr engines: %d, "+
+	msgStats := fmt.Sprintf("required ram-disk size %s (%d). mem hugepage: %s, nr engines: %d, "+
 		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(ramdiskSize), ramdiskSize,
 		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
 		humanize.IBytes(memEng))
@@ -589,8 +592,7 @@ func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys, mem
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
 	memReqd := memRsvd + (ramdiskSize * uint64(engCount))
 
-	log.Debugf("%s RAM needed for ram-disk size calculated using %s", humanize.IBytes(memReqd),
-		msgStats)
+	log.Debugf("%s RAM needed for %s", humanize.IBytes(memReqd), msgStats)
 
 	return memReqd, nil
 }

@@ -10,6 +10,7 @@ server_config:
       nr_xs_helpers: 0
       storage: auto
   system_ram_reserved: 2
+  ram_check_threshold: 50
 pool:
   control_method: dmg
   scm_size: 1GB

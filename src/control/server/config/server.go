@@ -48,6 +48,7 @@ type Server struct {
 	EnableHotplug       bool                      `yaml:"enable_hotplug"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`        // total for all engines
 	SystemRamReserved   int                       `yaml:"system_ram_reserved"` // total for all engines
+	RamCheckThreshold   int                       `yaml:"ram_check_threshold"` // percentage integer
 	DisableHugepages    bool                      `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
@@ -282,6 +283,12 @@ func (cfg *Server) WithSystemRamReserved(nr int) *Server {
 	return cfg
 }
 
+// WithRamCheckThreshold sets the runtime RAM check threshold (percentage).
+func (cfg *Server) WithRamCheckThreshold(nr int) *Server {
+	cfg.RamCheckThreshold = nr
+	return cfg
+}
+
 // WithControlLogMask sets the daos_server log level.
 func (cfg *Server) WithControlLogMask(lvl common.ControlLogLevel) *Server {
 	cfg.ControlLogMask = lvl
@@ -329,6 +336,7 @@ func DefaultServer() *Server {
 		TransportConfig:   security.DefaultServerTransportConfig(),
 		Hyperthreads:      false,
 		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
+		RamCheckThreshold: storage.DefaultRamCheckThreshold,
 		Path:              defaultConfigPath,
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
 		EnableHotplug:     false, // disabled by default
@@ -538,23 +546,27 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		return nil // no ramdisk to size
 	}
 
-	ramdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
+	maxRamdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
 	if err != nil {
 		return errors.Wrapf(err, "calculate ramdisk size")
 	}
 
-	log.Debugf("calculated ram-disk size (%s) using MemTotal (%s)", scmCfgs[0].Scm.RamdiskSize,
-		uint64(mi.MemTotalKiB)*humanize.KiByte)
+	memTotBytes := uint64(mi.MemTotalKiB) * humanize.KiByte
 
-	if ramdiskSize < storage.MinRamdiskMem {
+	msg := fmt.Sprintf("calculated max ram-disk size (%s) using MemTotal (%s)",
+		humanize.IBytes(maxRamdiskSize), humanize.IBytes(memTotBytes))
+
+	if maxRamdiskSize < storage.MinRamdiskMem {
 		// Total RAM is insufficient to meet minimum size.
+		log.Errorf("%s: insufficient total memory", msg)
+
 		minMem, err := cfg.CalcMemForRamdiskSize(log, mi.HugepageSizeKiB,
 			storage.MinRamdiskMem)
 		if err != nil {
 			log.Error(err.Error())
 		}
-		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, minMem,
-			uint64(mi.MemTotalKiB)*humanize.KiByte)
+
+		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, minMem, memTotBytes)
 	}
 
 	for _, ec := range cfg.Engines {
@@ -565,13 +577,17 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		}
 
 		// Validate or set configured scm sizes based on calculated value.
-		confSize := uint64(humanize.GiByte * scs[0].Scm.RamdiskSize)
+		confSize := uint64(scs[0].Scm.RamdiskSize) * humanize.GiByte
 		if confSize == 0 {
-			// Apply calculated size as not already set.
-			scs[0].WithScmRamdiskSize(uint(ramdiskSize / humanize.GiByte))
-		} else if confSize > ramdiskSize {
+			// Apply calculated size in config as not already set.
+			log.Debugf("%s: auto-sized ram-disk in engine %d config", msg, ec.Index)
+			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
+		} else if confSize > maxRamdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			return FaultConfigRamdiskOverMaxMem(confSize, ramdiskSize,
+			log.Errorf("%s: engine %d config size too large for total memory", msg,
+				ec.Index)
+
+			return FaultConfigRamdiskOverMaxMem(confSize, maxRamdiskSize,
 				storage.MinRamdiskMem)
 		}
 	}
