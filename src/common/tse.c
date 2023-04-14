@@ -1018,16 +1018,17 @@ tse_task_insert_sleeping(struct tse_task_private *dtp,
 int
 tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 {
-	struct tse_task_private  *dtp = tse_task2priv(task);
-	struct tse_sched_private *dsp = dtp->dtp_sched;
-	int rc = 0;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	struct tse_sched_private	*dsp = dtp->dtp_sched;
+	bool				ready;
+	int				rc = 0;
 
 	D_ASSERT(!instant || (dtp->dtp_func && delay == 0));
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	if ((dtp->dtp_func == NULL || instant) && dtp->dtp_dep_cnt == 0 &&
-	    d_list_empty(&dtp->dtp_prep_cb_list)) {
+	ready = (dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list));
+	if ((dtp->dtp_func == NULL || instant) && ready) {
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
@@ -1048,22 +1049,18 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	}
 	/* decref when remove the task from dsp (tse_sched_process_complete) */
 	tse_sched_priv_addref_locked(dsp);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-	/* if caller wants to run the task instantly, call the task body
-	 * function now.
-	 */
-	if (instant && dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list)) {
-		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+	/** if caller wants to run the task instantly, call the task body function now. */
+	if (instant && ready) {
 		dtp->dtp_func(task);
-		D_MUTEX_LOCK(&dsp->dsp_lock);
 
 		/** If task was completed return the task result */
 		if (dtp->dtp_completed)
 			rc = task->dt_result;
 
-		tse_task_decref_free_locked(task);
+		tse_task_decref(task);
 	}
-	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return rc;
 }
 
