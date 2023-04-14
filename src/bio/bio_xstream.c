@@ -92,7 +92,7 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	opts;
-	bool			enable_rpc_srv;
+	bool			enable_rpc_srv = false;
 	int			rc;
 	int			roles = 0;
 
@@ -340,6 +340,7 @@ bio_spdk_env_fini(void)
 	if (bio_spdk_inited) {
 		spdk_thread_lib_fini();
 		spdk_env_fini();
+		bio_spdk_inited = false;
 	}
 }
 
@@ -1504,6 +1505,9 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			ctxt->bxc_tgt_id);
 
 		spdk_thread_exit(ctxt->bxc_thread);
+		while (rc == 0 && !spdk_thread_is_exited(ctxt->bxc_thread))
+			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
+		spdk_thread_destroy(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
 	}
 
