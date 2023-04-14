@@ -330,8 +330,8 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	if (!tls)
 		return;
 	d_list_del(&tls->mpt_list);
-	D_INFO("TLS destroy %p for "DF_UUID" ver %d\n",
-	       tls, DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
+	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
+		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
 		ds_pool_child_put(tls->mpt_pool);
 	if (tls->mpt_svc_list.rl_ranks)
@@ -354,31 +354,24 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 }
 
 void
-migrate_pool_tls_get_int(struct migrate_pool_tls *tls)
+migrate_pool_tls_get(struct migrate_pool_tls *tls)
 {
 	if (!tls)
 		return;
 	tls->mpt_refcount++;
-	D_INFO("TLS get %p refcount="DF_U64"\n", tls, tls->mpt_refcount);
 }
 
 void
-migrate_pool_tls_put_int(struct migrate_pool_tls *tls)
+migrate_pool_tls_put(struct migrate_pool_tls *tls)
 {
 	if (!tls)
 		return;
 	tls->mpt_refcount--;
-	D_INFO("TLS put %p refcount="DF_U64"\n", tls, tls->mpt_refcount);
 	if (tls->mpt_fini && tls->mpt_refcount == 1)
 		ABT_eventual_set(tls->mpt_done_eventual, NULL, 0);
 	if (tls->mpt_refcount == 0)
 		migrate_pool_tls_destroy(tls);
 }
-
-#define migrate_pool_tls_get(tls) migrate_pool_tls_get_int((tls));\
-	D_INFO("TLS get %p from %s()\n", (tls), __FUNCTION__)
-#define migrate_pool_tls_put(tls) migrate_pool_tls_put_int((tls));\
-	D_INFO("TLS put %p from %s()\n", (tls), __FUNCTION__)
 
 struct migrate_pool_tls *
 migrate_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
@@ -472,10 +465,10 @@ migrate_pool_tls_create_one(void *data)
 			D_GOTO(out, rc);
 	}
 
-	D_INFO("TLS create %p for "DF_UUID" "DF_UUID"/"DF_UUID
-	       " ver %d "DF_RC"\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
-	       DP_UUID(arg->pool_hdl_uuid), DP_UUID(arg->co_hdl_uuid),
-	       arg->version, DP_RC(rc));
+	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" "DF_UUID"/"DF_UUID
+		" ver %d "DF_RC"\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
+		DP_UUID(arg->pool_hdl_uuid), DP_UUID(arg->co_hdl_uuid),
+		arg->version, DP_RC(rc));
 	d_list_add(&pool_tls->mpt_list, &tls->ot_pool_list);
 out:
 	if (rc && pool_tls)
