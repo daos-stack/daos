@@ -804,11 +804,11 @@ vos_self_fini_locked(void)
 		self_mode.self_xs_ctxt = NULL;
 	}
 
-	vos_self_nvme_fini();
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		vos_db_fini();
 	else
 		lmm_db_fini();
+	vos_self_nvme_fini();
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(self_mode.self_tls);

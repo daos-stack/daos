@@ -888,6 +888,8 @@ server_fini(bool force)
 	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	bio_nvme_fini();
+	D_INFO("bio_nvme_fini() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
 	dss_module_unload_all();
