@@ -556,6 +556,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	if err != nil {
 		return errors.Wrapf(err, "retrieve system memory info")
 	}
+	log.Debugf("mem total: %d, free: %d, avail: %d", mi.MemTotalKiB, mi.MemFreeKiB, mi.MemAvailableKiB)
 
 	if err = processConfig(log, cfg, fis, mi, lookupIF, genFiAffFn(fis)); err != nil {
 		return err
