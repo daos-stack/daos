@@ -30,9 +30,14 @@
 #include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
 #define D_ON_VALGRIND 0
+#define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void) (addr);\
+	(void) (len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>
