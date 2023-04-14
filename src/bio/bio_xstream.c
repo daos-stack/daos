@@ -308,7 +308,14 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	nvme_glb.bd_mem_size = mem_size;
-	D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
+	if (nvme_conf) {
+		D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
+		if (nvme_glb.bd_nvme_conf == NULL) {
+			D_ERROR("Failed to dup nvme_conf.\n");
+			rc = -DER_NOMEM;
+			goto free_cond;
+		}
+	}
 
 	rc = bio_spdk_env_init();
 	if (rc) {
@@ -1137,7 +1144,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 	struct bio_bdev		*d_bdev;
 	struct bio_bdev		*chosen_bdev = NULL;
 	int			 lowest_tgt_cnt = 1 << 30, rc;
-	struct smd_dev_info	*dev_info;
+	struct smd_dev_info	*dev_info = NULL;
 
 	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
 	/*
@@ -1149,7 +1156,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 		if (!d_bdev->bb_tgt_cnt_init) {
 			rc = smd_dev_get_by_id(d_bdev->bb_uuid, &dev_info);
 			if (rc == 0) {
-				D_ASSERT(dev_info->sdi_tgt_cnt != 0);
+				D_ASSERT(dev_info != NULL && dev_info->sdi_tgt_cnt != 0);
 				d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
 				smd_dev_free_info(dev_info);
 			} else if (rc == -DER_NONEXIST) {
