@@ -477,10 +477,10 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t *upper_ver)
 
 	*upper_ver = 0;
 	rpt = rpt_lookup(pool_uuid, -1, -1);
-	if (rpt != NULL) {
+	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort)
 		*upper_ver = rpt->rt_rebuild_ver;
+	if (rpt)
 		rpt_put(rpt);
-	}
 }
 
 /* TODO: Add something about what the current operation is for output status */

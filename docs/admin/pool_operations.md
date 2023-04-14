@@ -395,6 +395,38 @@ any `--nsvc` options. This property cannot yet be changed afterward.
 See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
+### Properties for Controlling Checkpoints (Metadata on SSD only)
+
+Checkpointing is a background process that flushes VOS metadata from the ephemeral
+copy to the metadata blob storing the VOS file, enabling Write Ahead Log (WAL) space
+to be reclaimed.  These properties are available to allow a user experiment with
+timing of checkpointing.  They are experimental and may be removed in future versions
+of DAOS.
+
+#### Checkpoint policy (checkpoint)
+
+This property controls how checkpoints are triggered for each target.  When enabled,
+checkpointing will always trigger if there is space pressure in the WAL. There are
+three supported options:
+
+* "timed"       : Checkpointing is also triggered periodically (default option).
+* "lazy"        : Checkpointing is only triggered when there is WAL space pressure.
+* "disabled"    : Checkpointing is disabled.  WAL space may be exhausted.
+
+#### Checkpoint frequency (checkpoint\_freq)
+
+This property controls how often checkpoints are triggered. It is only relevant
+if the checkpoint policy is "timed". The value is specified in seconds in the
+range [1, 1000000] with a default of 5.  Values outside the range are
+automatically adjusted.
+
+#### Checkpoint threshold (checkpoint\_thresh)
+
+This property controls the percentage of WAL usage to automatically trigger a checkpoint.
+It is not relevant when the checkpoint policy is "disabled". The value is specified
+as a percentage in the range [10-75] with a default of 50. Values outside the range are
+automatically adjusted.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by

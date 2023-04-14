@@ -599,6 +599,10 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
 			val32 = entry->dpe_val;
+			if (val32 > DAOS_PROP_PO_CHECKPOINT_FREQ_MAX)
+				val32 = DAOS_PROP_PO_CHECKPOINT_FREQ_MAX;
+			else if (val32 < DAOS_PROP_PO_CHECKPOINT_FREQ_MIN)
+				val32 = DAOS_PROP_PO_CHECKPOINT_FREQ_MIN;
 			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_checkpoint_freq, &value);
 			if (rc)
@@ -5901,6 +5905,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
+	uint32_t		rebuild_ver = 0;
 	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
 	int			rc;
@@ -5908,6 +5913,19 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	D_DEBUG(DB_MD, DF_UUID": opc=%u exclude_rank=%d ntgts=%d ntgt_addrs=%d\n",
 		DP_UUID(svc->ps_uuid), opc, exclude_rank, tgts->pti_number,
 		tgt_addrs == NULL ? 0 : tgt_addrs->pta_number);
+
+	/* Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	 * updating the pool map during rebuild, which might screw the object layout.
+	 */
+	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc, DER_BUSY);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
