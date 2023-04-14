@@ -394,9 +394,7 @@ oit_open_cb(tse_task_t *task, void *cb_args)
 		goto out;
 	}
 
-	rc = tse_task_schedule(subtask, false);
-	if (rc)
-		tse_task_complete(subtask, rc);
+	rc = tse_task_schedule(subtask, true);
 out:
 	D_FREE(ooa);
 	return rc;
@@ -1073,7 +1071,7 @@ oit_filter_list_cb(tse_task_t *task, void *args)
 	if (rc != 0)
 		D_GOTO(task_complete, rc);
 
-	return tse_task_schedule(ftask, false);
+	return tse_task_schedule(ftask, true);
 
 task_complete:
 	tse_task_complete(ftask, rc);

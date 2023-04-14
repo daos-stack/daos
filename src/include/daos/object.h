@@ -495,6 +495,7 @@ int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
+int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);

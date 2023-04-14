@@ -4826,7 +4826,7 @@ oid_in_list(daos_obj_id_t oid, daos_obj_id_t *oid_list, uint32_t nr)
 	return false;
 }
 
-#define OIT_TEST_OID_NR	(16)
+#define OIT_TEST_OID_NR	(128)
 
 static int
 oit_get_markdata_as1(daos_obj_id_t oid, d_iov_t *marker)
@@ -4847,8 +4847,8 @@ oit_list_filter(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	struct ioreq		req;
-	daos_obj_id_t		oid[OIT_TEST_OID_NR], oid_new;
-	daos_obj_id_t		oid_list[OIT_TEST_OID_NR] = {0};
+	daos_obj_id_t		*oid, oid_new;
+	daos_obj_id_t		*oid_list;
 	char			*ow_buf;
 	char			*fbuf;
 	d_iov_t			 marker;
@@ -4874,6 +4874,11 @@ oit_list_filter(void **state)
 	/* Alloc the fetch buffer */
 	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
+
+	D_ALLOC_ARRAY(oid, OIT_TEST_OID_NR);
+	assert_non_null(oid);
+	D_ALLOC_ARRAY(oid_list, OIT_TEST_OID_NR);
+	assert_non_null(oid_list);
 
 	for (i = 0; i < OIT_TEST_OID_NR; i++) {
 		oid[i] = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -5007,11 +5012,19 @@ oit_list_filter(void **state)
 		}
 	}
 
+	rc = daos_cont_snap_oit_destroy(arg->coh, toh, NULL);
+	D_ASSERT(rc == 0);
+
 	rc = daos_oit_close(toh, NULL);
 	D_ASSERT(rc == 0);
 
+	rc = daos_oit_open(arg->coh, snap_epoch, &toh, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
+	D_FREE(oid);
+	D_FREE(oid_list);
 	test_teardown((void **)&arg);
 }
 

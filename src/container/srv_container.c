@@ -4953,6 +4953,9 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *c
 	case CONT_SNAP_OIT_CREATE:
 		*update_mtime = true;
 		return ds_cont_snap_oit_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_DESTROY:
+		*update_mtime = true;
+		return ds_cont_snap_oit_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}
@@ -5202,6 +5205,7 @@ cont_cli_opc_name(crt_opcode_t opc)
 	case CONT_DESTROY_BYLABEL:	return "DESTROY_BYLABEL";
 	case CONT_SNAP_OIT_OID_GET:	return "SNAP_OIT_OID_GET";
 	case CONT_SNAP_OIT_CREATE:	return "SNAP_OIT_CREATE";
+	case CONT_SNAP_OIT_DESTROY:	return "SNAP_OIT_DESTROY";
 	default:			return "?";
 	}
 }

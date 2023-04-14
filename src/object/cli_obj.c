@@ -426,6 +426,20 @@ dc_obj_get_grp_size(daos_handle_t oh, int *grp_size)
 }
 
 int
+dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*oid = obj->cob_md.omd_id;
+	obj_decref(obj);
+	return 0;
+}
+
+int
 obj_get_grp_nr(struct dc_object *obj)
 {
 	return obj->cob_grp_nr;

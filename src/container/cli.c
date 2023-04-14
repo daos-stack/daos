@@ -2989,6 +2989,24 @@ dc_cont_snap_oit_create(tse_task_t *task)
 			   0, task);
 }
 
+int
+dc_cont_snap_oit_destroy(tse_task_t *task)
+{
+	daos_cont_snap_oit_create_t *args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->name != NULL) {
+		D_ERROR("Named Snapshots not yet supported\n");
+		tse_task_complete(task, -DER_NOSYS);
+		return -DER_NOSYS;
+	}
+
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_DESTROY, &args->epoch,
+			   0, task);
+}
+
 struct get_oit_oid_arg {
 	/* eoa_req must always be the first member of epoch_op_arg */
 	struct cont_req_arg	 goo_req;

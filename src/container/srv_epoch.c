@@ -317,7 +317,7 @@ out:
 
 int
 ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+			struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	int				rc;
@@ -346,6 +346,57 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	rc = snap_oit_create(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT,
 			     rpc->cr_ctx, &in->cei_epoch);
+out:
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
+	return rc;
+}
+
+int
+ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+{
+	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	int				rc;
+	d_iov_t				key;
+	d_iov_t				value;
+
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
+
+	/* Verify handle has write access */
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to dump oit\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
+	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		goto out;
+	}
+
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_oit_oids, &key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup oit oid for snapshot [%lu]: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		goto out;
+	}
+
+	rc = rdb_tx_delete(tx, &cont->c_oit_oids, &key);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to delete oit oid for snapshot [%lu]: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			in->cei_epoch, rc);
+		goto out;
+	}
+
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));

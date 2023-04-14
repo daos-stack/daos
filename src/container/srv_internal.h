@@ -226,6 +226,8 @@ int ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			     struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
 int ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			    struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
+int ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			    struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
 
 /* srv_target.c */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);

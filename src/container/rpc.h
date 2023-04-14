@@ -91,6 +91,9 @@
 		hdlr, NULL),								\
 	X(CONT_SNAP_OIT_CREATE,								\
 		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_OIT_DESTROY,							\
+		0, &CQF_cont_epoch_op,							\
 		hdlr, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -391,6 +394,8 @@ CRT_RPC_DECLARE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
 CRT_RPC_DECLARE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_snap_oit_create, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DECLARE(cont_snap_oit_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 
 #define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET /* input fields */	 \

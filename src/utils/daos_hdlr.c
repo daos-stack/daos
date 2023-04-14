@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	unsigned long		inconsistent = 0;
 	uint32_t		oids_nr;
 	int			rc, i;
+	int			rc2;
 
 	/* Create a snapshot with OIT */
 	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
@@ -151,9 +152,16 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	}
 
 out_close:
-	daos_oit_close(oit, NULL);
+	rc2 = daos_cont_snap_oit_destroy(ap->cont, oit, NULL);
+	if (rc == 0)
+		rc = rc2;
+	rc2 = daos_oit_close(oit, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_snap:
-	cont_destroy_snap_hdlr(ap);
+	rc2 = cont_destroy_snap_hdlr(ap);
+	if (rc == 0)
+		rc = rc2;
 out:
 	return rc;
 }
@@ -2678,6 +2686,9 @@ err_dst:
 		DH_PERROR_DER(ap, rc2, "Failed to close source object");
 	}
 out_oit:
+	rc2 = daos_cont_snap_oit_destroy(ca->src_coh, toh, NULL);
+	if (rc2 != 0)
+		DH_PERROR_DER(ap, rc2, "Failed to destroy oit");
 	rc2 = daos_oit_close(toh, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to close object iterator");
