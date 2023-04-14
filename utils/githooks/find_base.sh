@@ -19,7 +19,6 @@ if command -v gh > /dev/null 2>&1; then
     else
         state=$(gh pr view "$BRANCH" --json state -t "{{.state}}")
         if [ ! "$state" = "OPEN" ]; then
-            echo "Thinks state is not OPEN, $state"
             TARGET=HEAD
         fi
     fi
