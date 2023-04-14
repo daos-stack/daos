@@ -430,10 +430,10 @@ jobs:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      always() &&
-      (needs.Build-RPM.result == 'success' ||
-       needs.Build-RPM.result == 'skipped') &&
-      needs.Import-commit-pragmas2.outputs.skip-func-test != 'true'
+      ${{ !cancelled() && (success() || failure() ||
+          (needs.Build-RPM.result == 'success' ||
+           needs.Build-RPM.result == 'skipped') &&
+          needs.Import-commit-pragmas2.outputs.skip-func-test != 'true') }}
     env:
       TEST_TAG: pr,-hw
       CONFIG_POWER_ONLY: false
@@ -454,11 +454,6 @@ jobs:
       CLUSTER_REQUEST_UUID:
       STAGE_NAME:
     steps:
-      - name: Debug if conditions
-        run: |
-          echo ${{ cancelled() }}
-          echo ${{ success() }}
-          echo ${{ failure() }}
       - name: Debug matrix exclusion
         run: echo ${{ github.event_name == 'pull_request' &&
                         (needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm == 'true' &&
