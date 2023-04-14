@@ -309,13 +309,18 @@ void
 iod_dma_wait(struct bio_desc *biod)
 {
 	struct bio_xs_context	*xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	int			 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll completion\n");
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		if (rc)
+			D_ERROR("Self poll completion failed. "DF_RC"\n", DP_RC(rc));
 	} else if (biod->bd_inflights != 0) {
-		ABT_eventual_wait(biod->bd_dma_done, NULL);
+		rc = ABT_eventual_wait(biod->bd_dma_done, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT eventual wait failed. %d\n", rc);
 	}
 }
 

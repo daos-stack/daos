@@ -140,11 +140,17 @@ ut_tx_alloc(uint32_t act_nr, uint32_t buf_sz)
 }
 
 static inline uint64_t
-rand_addr(void)
+rand_addr()
 {
-	uint64_t addr  = rand();
+	uint64_t addr  = rand_r(&ut_args.bua_seed);
 
-	return (addr << 32) + rand();
+	return (addr << 32) + rand_r(&ut_args.bua_seed);
+}
+
+static inline uint32_t
+rand_int()
+{
+	return rand_r(&ut_args.bua_seed);
 }
 
 static void
@@ -173,7 +179,7 @@ ut_tx_add_action(struct umem_wal_tx *tx, unsigned int act_opc)
 	case UMEM_ACT_COPY_PTR:
 		act->ac_copy_ptr.addr = rand_addr();
 		if (fake_tx->ft_copy_ptr_sz == 0)
-			act->ac_copy_ptr.size = (rand() % fake_tx->ft_buf_sz) + 1;
+			act->ac_copy_ptr.size = (rand_int() % fake_tx->ft_buf_sz) + 1;
 		else
 			act->ac_copy_ptr.size = fake_tx->ft_copy_ptr_sz;
 		D_ASSERT(act->ac_copy_ptr.size <= fake_tx->ft_buf_sz);
@@ -181,30 +187,30 @@ ut_tx_add_action(struct umem_wal_tx *tx, unsigned int act_opc)
 		fake_tx->ft_payload_sz += act->ac_copy_ptr.size;
 		break;
 	case UMEM_ACT_ASSIGN:
-		num = rand() % 3;
+		num = rand_int() % 3;
 		if (num == 0)
 			act->ac_assign.size = 1;
 		else if (num == 2)
 			act->ac_assign.size = 2;
 		else
 			act->ac_assign.size = 4;
-		act->ac_assign.val = rand();
+		act->ac_assign.val = rand_int();
 		act->ac_assign.addr = rand_addr();
 		break;
 	case UMEM_ACT_MOVE:
-		act->ac_move.size = rand();
+		act->ac_move.size = rand_int();
 		act->ac_move.src = rand_addr();
 		act->ac_move.dst = rand_addr();
 		fake_tx->ft_payload_sz += sizeof(uint64_t);
 		break;
 	case UMEM_ACT_SET:
-		act->ac_set.val = rand() % 256;
-		act->ac_set.size = rand();
+		act->ac_set.val = rand_int() % 256;
+		act->ac_set.size = rand_int();
 		act->ac_set.addr = rand_addr();
 		break;
 	case UMEM_ACT_SET_BITS:
 	case UMEM_ACT_CLR_BITS:
-		act->ac_op_bits.pos = rand() % 64;
+		act->ac_op_bits.pos = rand_int() % 64;
 		act->ac_op_bits.num = 64 - act->ac_op_bits.pos;
 		act->ac_op_bits.addr = rand_addr();
 		break;

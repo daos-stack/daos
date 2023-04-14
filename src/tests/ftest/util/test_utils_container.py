@@ -488,6 +488,22 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos.container_destroy_snap(**kwargs)
         self.epoch = None
 
+    @fail_on(CommandFailure)
+    def list_snaps(self):
+        """List the snapshots defined for this container.
+
+        Raises:
+            DaosTestError: if the daos container list-snaps command fails
+
+        Returns:
+            list: a list of snapshot epochs defined for this container
+        """
+        if not self.daos:
+            raise DaosTestError(
+                "Undefined daos command for listing snapshots for container {}".format(self))
+        data = self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
+        return data["epochs"] if "epochs" in data else []
+
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
         """Open the container with pool handle and container UUID if provided.
@@ -954,6 +970,26 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             raise DaosTestError("Undefined daos command")
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def get_prop_values(self, *args, **kwargs):
+        """Get container property values by calling daos container get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
+
+        Returns:
+            list: a list of values matching the or specified property names.
+
+        """
+        values = []
+        self.log.info("Getting property values for container %s", self)
+        data = self.get_prop(*args, **kwargs)
+        if data['status'] != 0:
+            return values
+        for entry in data['response']:
+            values.append(entry['value'])
+        return values
 
     def verify_prop(self, expected_props):
         """Verify daos container get-prop returns expected values.
