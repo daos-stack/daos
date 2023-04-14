@@ -183,11 +183,6 @@ gen_oit_oid(struct rdb_tx *tx, struct cont *cont, daos_epoch_t epoch, daos_obj_i
 	return 0;
 }
 
-struct oit_oid_value {
-	daos_obj_id_t	oov_id;	/* OIT OID */
-	uint32_t	oov_ver; /* pool map version */
-};
-
 static int
 snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 		uint64_t opts, crt_context_t *ctx, daos_epoch_t *epoch)
@@ -199,7 +194,6 @@ snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	d_iov_t					 value;
 	int					 rc;
 	uint32_t				 cont_ver;
-	struct oit_oid_value			 oov;
 
 	rc = ds_cont_bcast_create(ctx, cont->c_svc,
 				  CONT_TGT_SNAPSHOT_NOTIFY, &rpc);
@@ -232,9 +226,7 @@ snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	/* oit oids index kvs not existed for containers created before release2.4 */
 	if (cont_ver >= 2) {
 		d_iov_set(&key, epoch, sizeof(*epoch));
-		oov.oov_id = in->tsi_oit_oid;
-		oov.oov_ver = pool_map_get_version(cont->c_svc->cs_pool->sp_map);
-		d_iov_set(&value, &oov, sizeof(oov));
+		d_iov_set(&value, &in->tsi_oit_oid, sizeof(in->tsi_oit_oid));
 		rc = rdb_tx_update(tx, &cont->c_oit_oids, &key, &value);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": failed to store oit oid: %d\n",
@@ -448,7 +440,6 @@ ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_t				  key;
 	d_iov_t				  value;
 	int				  rc;
-	struct oit_oid_value		  oov;
 	struct cont_snap_oit_oid_get_in	 *in = crt_req_get(rpc);
 	struct cont_snap_oit_oid_get_out *out = crt_reply_get(rpc);
 
@@ -464,16 +455,13 @@ ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	d_iov_set(&key, &in->ogi_epoch, sizeof(daos_epoch_t));
-	d_iov_set(&value, &oov, sizeof(oov));
+	d_iov_set(&value, &out->ogo_oid, sizeof(out->ogo_oid));
 	rc = rdb_tx_lookup(tx, &cont->c_oit_oids, &key, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->ogi_epoch, DP_RC(rc));
 		goto out;
 	}
-	out->ogo_oid = oov.oov_id;
-	out->ogo_ver = oov.oov_ver;
-
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ogi_op.ci_uuid), rpc, DP_RC(rc));

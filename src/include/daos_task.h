@@ -528,8 +528,6 @@ typedef struct {
 	daos_epoch_t		 epoch;
 	/* Returned OIT OID for the epoch snapshot */
 	daos_obj_id_t		*oid;
-	/* Returned pool map version when generating OIT oid */
-	uint32_t		*ver;
 } daos_cont_snap_oit_oid_get_t;
 
 /** Container snapshot oit create args */

@@ -362,7 +362,6 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 {
 	tse_task_t		     *task;
 	daos_obj_id_t		      oid;
-	uint32_t		      oit_oid_ver;
 	uint32_t		      cont_rf;
 	uint32_t		      co_global_ver;
 	int			      rc;
@@ -393,7 +392,6 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 	goo_args->coh = coh;
 	goo_args->epoch = epoch;
 	goo_args->oid = &oid;
-	goo_args->ver = &oit_oid_ver;
 
 	rc = dc_task_schedule(task, true);
 	if (rc) {

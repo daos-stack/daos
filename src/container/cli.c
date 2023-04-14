@@ -2993,7 +2993,6 @@ struct get_oit_oid_arg {
 	/* eoa_req must always be the first member of epoch_op_arg */
 	struct cont_req_arg	 goo_req;
 	daos_obj_id_t		*goo_oid;
-	uint32_t		*goo_ver;
 };
 
 static int
@@ -3009,7 +3008,6 @@ cont_get_oit_oid_req_complete(tse_task_t *task, void *data)
 
 	oit_out = crt_reply_get(arg->goo_req.cra_rpc);
 	*arg->goo_oid = oit_out->ogo_oid;
-	*arg->goo_ver = oit_out->ogo_ver;
 
 	return 0;
 }
@@ -3037,7 +3035,6 @@ int dc_cont_snap_oit_oid_get(tse_task_t *task)
 	in = crt_req_get(arg.goo_req.cra_rpc);
 	in->ogi_epoch = dc_args->epoch;
 	arg.goo_oid = dc_args->oid;
-	arg.goo_ver = dc_args->ver;
 	rc = tse_task_register_comp_cb(task, cont_get_oit_oid_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {

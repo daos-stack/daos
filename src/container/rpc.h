@@ -399,8 +399,7 @@ CRT_RPC_DECLARE(cont_snap_oit_create, DAOS_ISEQ_CONT_EPOCH_OP,
 
 #define DAOS_OSEQ_CONT_SNAP_OIT_OID_GET /* output fields */	 \
 	((struct cont_op_out)	(ogo_op)		CRT_VAR) \
-	((daos_obj_id_t)	(ogo_oid)		CRT_VAR) \
-	((uint32_t)		(ogo_ver)		CRT_VAR)
+	((daos_obj_id_t)	(ogo_oid)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_snap_oit_oid_get, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET,
 		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
