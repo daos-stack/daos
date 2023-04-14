@@ -110,7 +110,8 @@ def define_mercury(reqs):
         reqs.define('rt', libs=['rt'])
 
     reqs.define('psm2',
-                retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
+                retriever=GitRepoRetriever(
+                    'https://github.com/cornelisnetworks/opa-psm2.git'),
                 # psm2 hard-codes installing into /usr/...
                 commands=[['sed',
                            '-i',
@@ -131,7 +132,7 @@ def define_mercury(reqs):
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
-                 '--disable-opx',
+                 '--enable-opx',
                  '--without-gdrcopy']
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -210,7 +211,7 @@ def define_mercury(reqs):
                                []))
 
     reqs.define('mercury',
-                retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
+                retriever=GitRepoRetriever('https://github.com/bwilsoncn/mercury.git', True),
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],

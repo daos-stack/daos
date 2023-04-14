@@ -740,6 +740,20 @@ crt_get_port_psm2(int *port)
 	return rc;
 }
 
+static inline int
+crt_get_port_opx(int *port)
+{
+	int     rc = 0;
+	uint16_t    pid;
+
+	pid = getpid();
+	*port = pid;
+	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
+
+	return rc;
+}
+
+
 #define PORT_RANGE_STR_SIZE 32
 
 static void
@@ -919,8 +933,9 @@ int crt_na_ofi_config_init(int provider, crt_init_options_t *opt)
 
 			if (provider == CRT_NA_OFI_PSM2)
 				port = (uint16_t)port << 8;
+
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
-					"port.\n", port);
+				"port.\n", port);
 		}
 	} else if (provider == CRT_NA_OFI_PSM2) {
 		rc = crt_get_port_psm2(&port);
@@ -928,7 +943,14 @@ int crt_na_ofi_config_init(int provider, crt_init_options_t *opt)
 			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
+	} else if (provider == CRT_NA_OFI_OPX) {
+		rc = crt_get_port_opx(&port);
+		if (rc != 0) {
+			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
+
 	na_ofi_cfg->noc_port = port;
 
 out:

@@ -43,6 +43,12 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
+		.nad_type	= CRT_NA_OFI_OPX,
+		.nad_str	= "ofi+opx",
+		.nad_alt_str	= "opx",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
+	}, {
 		.nad_type	= CRT_NA_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
@@ -489,7 +495,7 @@ crt_provider_ip_str_get(int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_NA_OFI_PSM2)
+	if (provider == CRT_NA_OFI_PSM2 || provider == CRT_NA_OFI_OPX)
 		return false;
 
 	return true;
@@ -578,8 +584,49 @@ d_list_t
 }
 
 static int
+crt_get_opx_info_string(char *provider, char *domain, char *ip,
+	char **string, int start_port, int ctx_idx)
+{
+	int rc = 0;
+	int hfi = -1;
+	int delimiter;
+	char *hfi_str = NULL;
+	char domain_name [10];
+
+	/* Current support for the following domains: ib<hfi> or opx<hfi> */
+	if (strncmp(domain, "ib", 2) == 0)
+		delimiter = 1;
+	else if (strncmp(domain, "opx", 3) == 0)
+		delimiter = 2;
+	else {
+		D_ERROR("Invalid OPX domain name.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	strcpy(domain_name, domain);
+	strtok_r(domain_name, &domain[delimiter], &hfi_str);
+	hfi = (unsigned int) strtoul(hfi_str, NULL, 10);
+
+	if (ip == NULL)
+		D_ASPRINTF(*string, "%s://%s:%d:%d",
+			provider, domain, hfi,
+			start_port + ctx_idx);
+	else
+		D_ASPRINTF(*string, "%s://%s/%s:%d:%d",
+		   provider, domain, ip, hfi,
+		   start_port + ctx_idx);
+
+out:
+	if (!rc && *string == NULL)
+		return -DER_NOMEM;
+
+	return rc;
+}
+
+static int
 crt_get_info_string(int provider, char **string, int ctx_idx)
 {
+	int	rc = 0;
 	char	*provider_str;
 	int	 start_port;
 	char	*domain_str;
@@ -592,19 +639,26 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 
 	if (provider == CRT_NA_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 	}
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s:%d",
-				   provider_str, domain_str,
-				   start_port + ctx_idx);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str,
-				   start_port + ctx_idx);
+		if (provider == CRT_NA_OFI_OPX) {
+			rc = crt_get_opx_info_string(provider_str, domain_str, ip_str,
+					string, start_port, ctx_idx);
+			if (rc)
+				D_GOTO(out, rc);
+		} else {
+			if (ip_str == NULL)
+				D_ASPRINTF(*string, "%s://%s:%d",
+					provider_str, domain_str,
+					start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s/%s:%d",
+					provider_str, domain_str, ip_str,
+					start_port + ctx_idx);
+		}
 	} else {
 		if (ip_str == NULL)
 			D_ASPRINTF(*string, "%s://%s",
@@ -615,10 +669,10 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 	}
 
 out:
-	if (*string == NULL)
+	if (!rc && *string == NULL)
 		return -DER_NOMEM;
 
-	return 0;
+	return rc;
 }
 
 static int
