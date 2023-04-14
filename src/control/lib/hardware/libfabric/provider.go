@@ -55,7 +55,7 @@ func (p *Provider) getFabricInterfaces(provider string, ch chan *fabricResult) {
 	}
 	defer hdl.Close()
 
-	fiInfo, cleanup, err := fiGetInfo(hdl, extProviderToLibFabric(provider))
+	fiInfo, cleanup, err := fiGetInfo(p.log, hdl, extProviderToLibFabric(provider))
 	if err != nil {
 		ch <- &fabricResult{
 			err: err,
