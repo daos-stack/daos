@@ -16,7 +16,6 @@ server_config:
         - DD_MASK=mgmt
       storage: auto
   system_ram_reserved: 2
-  ram_check_threshold: 50
 pool:
   scm_size: 1073741824
   control_method: dmg

@@ -385,7 +385,6 @@ disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
 system_ram_reserved: 6
-ram_check_threshold: 90
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log

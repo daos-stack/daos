@@ -497,31 +497,32 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 		return nil // no ramdisk to size
 	}
 
-	confSizeBytes := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
-	memAvailBytes := uint64(mi.MemAvailableKiB) * humanize.KiByte
-
-	msg := fmt.Sprintf("checking config ram-disk size (%s) against MemAvailable (%s)",
-		humanize.IBytes(confSizeBytes), humanize.IBytes(memAvailBytes))
+	srv.log.Debugf("checking config ram-disk size (%s) against MemAvailable (%s)",
+		sc.Scm.RamdiskSize, uint64(mi.MemAvailableKiB)*humanize.KiByte)
 
 	// Pass zero hugepage size as hugemem reservation already factored in available memory.
-	// Calculate max feasible RAM-disk size factoring in current memory usage.
-	sizeMaxNow, err := srv.cfg.CalcRamdiskSize(srv.log, 0, mi.MemAvailableKiB)
+	ramdiskSize, err := srv.cfg.CalcRamdiskSize(srv.log, 0, mi.MemAvailableKiB)
 	if err != nil {
 		return err
 	}
 
-	// Fail if size calculated using available memory is less than the acceptable proportion
-	// (configurable value) of the RAM-disk size that has been set in the storage config.
-	sizeMinConf := (confSizeBytes / 100) * uint64(srv.cfg.RamCheckThreshold)
-	if sizeMaxNow < sizeMinConf {
-		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
+	// Fail if size calculated using available memory is less than 90% of what has been set in
+	// the configuration.
+	sizeMin := uint64(((sc.Scm.RamdiskSize * humanize.GiByte) / 100) * 90)
+	if ramdiskSize < sizeMin {
+		bytesAvail := uint64(mi.MemAvailableKiB * humanize.KiByte)
+		bytesInCfg := uint64(sc.Scm.RamdiskSize * humanize.GiByte)
 
-		memMin, err := srv.cfg.CalcMemForRamdiskSize(srv.log, 0, sizeMinConf)
+		srv.log.Errorf("available memory reported (%s) is too low to support configured "+
+			"ramdisk size (%s)", humanize.IBytes(bytesAvail),
+			humanize.IBytes(bytesInCfg))
+
+		memMin, err := srv.cfg.CalcMemForRamdiskSize(srv.log, 0, sizeMin)
 		if err != nil {
 			srv.log.Error(err.Error())
 		}
 
-		return storage.FaultRamdiskLowMem(confSizeBytes, memMin, memAvailBytes)
+		return storage.FaultRamdiskLowMem(bytesInCfg, memMin, bytesAvail)
 	}
 
 	return nil
