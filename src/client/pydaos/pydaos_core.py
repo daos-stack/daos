@@ -107,13 +107,24 @@ class DCont():
     def __getitem__(self, name):
         return self.get(name)
 
-    def dict(self, name, v: dict = None, cid="OC_SX"):
+    def _get_object_id(self, cid):
+        """ Get the existing DAOS object class ID based on name.  """
+
+        # Default to OC_UNKNOWN (0), which will automatically select an object class.
+        if cid == "0":
+            return 0
+        if cid != "0":
+            return ObjClassID[cid].value
+
+    def dict(self, name, v: dict = None, cid="0"):
         """ Create new DDict object """
+
+        # Get the existing class ID based on class name given. Default to 0
+        objId = self._get_object_id(cid)
 
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                ObjClassID[cid].value,
-                                                pydaos_shim.PYDAOS_DICT)
+                                                objId, pydaos_shim.PYDAOS_DICT)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS dict", ret)
 
@@ -125,14 +136,16 @@ class DCont():
 
         return dd
 
-    def array(self, name, v: list = None, cid="OC_SX"):
+    def array(self, name, v: list = None, cid="0"):
         # pylint: disable=unused-argument
         """ Create new DArray object """
 
+        # Get the existing class ID based on class name given. Default to 0
+        objId = self._get_object_id(cid)
+
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                ObjClassID[cid].value,
-                                                pydaos_shim.PYDAOS_ARRAY)
+                                                objId, pydaos_shim.PYDAOS_ARRAY)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS array", ret)
 
