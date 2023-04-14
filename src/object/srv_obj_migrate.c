@@ -3411,6 +3411,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_t			co_uuid;
 	uuid_t			co_hdl_uuid;
 	struct ds_pool		*pool = NULL;
+	uint32_t		rebuild_ver;
 	int			rc;
 
 	migrate_in = crt_req_get(rpc);
@@ -3432,6 +3433,13 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	if (migrate_in->om_tgt_idx >= dss_tgt_nr) {
 		D_ERROR("Wrong tgt idx %d\n", migrate_in->om_tgt_idx);
 		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver);
+	if (rebuild_ver == 0) {
+		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
+			DP_UUID(migrate_in->om_pool_uuid));
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 	}
 
 	uuid_copy(co_uuid, migrate_in->om_cont_uuid);
