@@ -16,6 +16,11 @@ if command -v gh > /dev/null 2>&1; then
     # If there is no PR created yet then do not check anything.
     if ! TARGET="$ORIGIN"/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}"); then
         TARGET=HEAD
+    else
+        state="$ORIGIN"/$(gh pr view "$BRANCH" --json state -t "{{.state}}")
+        if [ "$state" = "MERGED" ]; then
+            TARGET=HEAD
+        fi
     fi
 else
     # With no 'gh' command installed then check against origin/master.
