@@ -455,6 +455,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test,test_daos_pipeline
+        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=DaosCoreTest,test_daos_pipeline
         """
         self.run_subtest()
