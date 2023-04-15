@@ -5,7 +5,7 @@ cd daos
 # Probably not needed now, but leave on PRs until we have confidence of landings builds.
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
-scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only
+scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only TARGET_TYPE=debug
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"
@@ -19,7 +19,7 @@ echo ::endgroup::
 
 echo ::group::Test client only debug build
 scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
-       TARGET_TYPE=release -c install
+       TARGET_TYPE=debug -c install
 utils/ci/gha-file-check.sh -n /opt/daos/bin/dmg
 scons --jobs "$DEPS_JOBS" client install
 utils/ci/gha-file-check.sh -n /opt/daos/bin/daos_engine
@@ -51,19 +51,19 @@ utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
 utils/ci/gha-file-check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
-echo ::group::Rebuild ofi in alternative location
-rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
-scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
-      "$DEPS_JOBS"
-echo ::endgroup::
-
-echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
-scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
-      DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
-utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
-utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
-utils/ci/gha-file-check.sh /opt/daos/bin/dmg
-echo ::endgroup::
+#echo ::group::Rebuild ofi in alternative location
+#rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
+#scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
+#      "$DEPS_JOBS"
+#echo ::endgroup::
+#
+#echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
+#scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
+#      DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
+#utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
+#utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
+#utils/ci/gha-file-check.sh /opt/daos/bin/dmg
+#echo ::endgroup::
 
 echo ::group::Config file after ALT_PREFIX build
 cat daos.conf
@@ -80,6 +80,16 @@ echo ::group::Setting up daos_server_helper
 ./utils/setup_daos_server_helper.sh
 echo ::endgroup::
 
+echo ::group::Tar /opt/daos et /home/daos/daos
+echo backing-up /opt/daos in /tmp/${DOCKER_DISTRO}_${BASE_RUNNER}_opt_daos.tgz
+tar czf /tmp/${DOCKER_DISTRO}_${BASE_RUNNER}_opt_daos.tgz /opt/daos
+#echo backing-up /home/daos in  /tmp/${DOCKER_DISTRO}_${BASE_RUNNER}_home_daos.tgz
+#tar czf /tmp/${DOCKER_DISTRO}_${BASE_RUNNER}_home_daos.tgz /home/daos
+echo ::endgroup::
+
 echo ::group::Container copy test
+ulimit -c unlimited
+#echo /tmp/core > /proc/sys/kernel/core_pattern
+#echo 1 > /proc/sys/kernel/core_uses_pid
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::

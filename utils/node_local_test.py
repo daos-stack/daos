@@ -32,6 +32,7 @@ import xattr
 import junit_xml
 import tabulate
 import yaml
+from resource import *
 
 
 class NLTestFail(Exception):
@@ -413,6 +414,16 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+    # env['MALLOC_CHECK_'] = '3'
+    env['D_LOG_STDERR_IN_LOG'] = '1'
+    # env['HG_LOG_LEVEL'] = 'DEBUG'
+    # env['HG_LOG_SUBSYS'] = 'hg,na'
+    # env['FI_LOG_LEVEL'] = 'DEBUG'
+    # env['ABT_PRINT_CONFIG'] = '1'
+    # env['ABT_THREAD_STACKSIZE'] = '12288'
+    # env['ABT_USE_LOG'] = '1'
+    # env['ABT_USE_DEBUG'] = '1'
+    # env['ABT_USE_EVENT_DEBUG'] = '1'
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -917,7 +928,7 @@ class DaosServer():
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
-            self.server_logs.remove(log)
+            # self.server_logs.remove(log)
         self.running = False
         return ret
 
@@ -4863,6 +4874,9 @@ def main():
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    # set core limit to unlimited
+    setrlimit(RLIMIT_CORE, (-1, -1))
 
     if args.mode:
         mode_list = args.mode

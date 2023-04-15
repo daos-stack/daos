@@ -21,11 +21,14 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
+            runner: hosted
     env:
       DEPS_JOBS: 10
       COMPILER: clang
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
+      DOCKER_DISTRO: ${{ matrix.distro }}
+      BASE_RUNNER: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -53,9 +56,69 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image
-              ./daos/utils/ci/run_in_gha.sh
+        timeout-minutes: 60
+        run: |
+             ulimit -c unlimited
+             sudo bash -c 'echo /tmp/core > /proc/sys/kernel/core_pattern'
+             sudo bash -c 'echo 1 > /proc/sys/kernel/core_uses_pid'
+             sudo apt-get update
+             sudo apt-get install gdb
+             docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
+                        --env BASE_RUNNER --env DOCKER_DISTRO --env COMPILER --env DEPS_JOBS --user root:root build-image \
+                        ./daos/utils/ci/run_in_gha.sh
+      - name: Check for logfiles
+        if: always()
+        run: |
+             sudo bash -c 'ls -latr /tmp/*.log*' || true
+             sudo bash -c 'chmod a+r /tmp/*.log*' || true
+      - name: Check for corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'ls -latr /tmp/core.*' || true
+             sudo bash -c 'chmod a+r /tmp/core.*' || true
+      - name: Analyze corefiles
+        if: always()
+        run: |
+             docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 \
+                        --init --ulimit core=-1 --mount type=bind,source=/tmp/,target=/tmp/ \
+                        --env BASE_DISTRO --user root:root build-image \
+                        ./daos/utils/ci/corefile_in_gha.sh
+      - name: Archive corefiles
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: corefiles
+          path: /tmp/core.*
+      - name: Archive tarfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: tarfiles
+          path: /tmp/*_daos.tgz
+      - name: Archive logfiles
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logfiles
+          path: /tmp/*.log*
+      - name: Remove corefiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/core.*' || true
+      - name: Remove tarfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*_daos.tgz' || true
+      - name: Remove logfiles
+        if: always()
+        continue-on-error: true
+        run: |
+             sudo bash -c 'rm -f /tmp/*.log*' || true
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./

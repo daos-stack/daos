@@ -612,7 +612,7 @@ pipeline {
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
+                                       build_deps: 'yes',
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
@@ -694,7 +694,7 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: sconsFaultsArgs() +
                                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
+                                       build_deps: 'yes'))
                     }
                     post {
                         unsuccessful {
@@ -1018,7 +1018,7 @@ pipeline {
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
+                                       build_deps: 'yes'))
                         job_step_update(nlt_test())
                     }
                     post {

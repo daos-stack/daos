@@ -1,0 +1,153 @@
+diff --git a/src/include/abti.h b/src/include/abti.h
+index bfdbebb..783cf1e 100644
+--- a/src/include/abti.h
++++ b/src/include/abti.h
+@@ -404,6 +404,8 @@ struct ABTI_thread_mig_data {
+ };
+ 
+ struct ABTI_ythread {
++    /* Pad with size of original structure in front of it */
++    char paddding[8192];
+     ABTI_thread thread;       /* Common thread definition */
+     ABTD_ythread_context ctx; /* Context */
+     void *p_stack;            /* Stack address */
+diff --git a/src/include/abti_mem.h b/src/include/abti_mem.h
+index b958e40..593dbc7 100644
+--- a/src/include/abti_mem.h
++++ b/src/include/abti_mem.h
+@@ -259,7 +259,7 @@ ABTU_ret_err static inline int ABTI_mem_alloc_ythread_mempool_desc(
+     ABTI_ythread *p_ythread;
+     if (sizeof(ABTI_ythread) <= ABTI_MEM_POOL_DESC_ELEM_SIZE) {
+         /* Use a descriptor pool for ABT_thread. */
+-        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
++        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 8192);
+         int abt_errno =
+             ABTI_mem_alloc_nythread(p_local, (ABTI_thread **)&p_ythread);
+         ABTI_CHECK_ERROR(abt_errno);
+@@ -314,11 +314,13 @@ static inline void ABTI_mem_free_thread(ABTI_global *p_global,
+         ABTU_free(p_ythread->p_stack);
+     } else {
+         ABTI_ASSERT(p_thread->type & ABTI_THREAD_TYPE_MEM_MALLOC_DESC);
+-        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
++        ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 8192);
+         ABTI_ythread *p_ythread = ABTI_thread_get_ythread_or_null(p_thread);
+-        if (p_ythread)
++        if (p_ythread) {
+             ABTI_mem_unregister_stack(p_ythread->p_stack);
+-        ABTU_free(p_thread);
++            ABTU_free(p_ythread);
++        } else
++            ABTU_free(p_thread);
+     }
+ }
+ 
+diff --git a/src/include/abti_thread.h b/src/include/abti_thread.h
+index 1466e83..28dfee7 100644
+--- a/src/include/abti_thread.h
++++ b/src/include/abti_thread.h
+@@ -51,8 +51,8 @@ static inline ABT_unit_type ABTI_thread_type_get_type(ABTI_thread_type type)
+ 
+ static inline ABTI_ythread *ABTI_thread_get_ythread(ABTI_thread *p_thread)
+ {
+-    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 0);
+-    return (ABTI_ythread *)p_thread;
++    ABTI_STATIC_ASSERT(offsetof(ABTI_ythread, thread) == 8192);
++    return (ABTI_ythread *)((char *)p_thread - 8192);
+ }
+ 
+ static inline ABTI_ythread *
+diff --git a/src/include/abti_ythread.h b/src/include/abti_ythread.h
+index 4fb8bcd..ddf2443 100644
+--- a/src/include/abti_ythread.h
++++ b/src/include/abti_ythread.h
+@@ -15,11 +15,11 @@ static inline ABTI_ythread *ABTI_ythread_get_ptr(ABT_thread thread)
+     if (thread == ABT_THREAD_NULL) {
+         p_ythread = NULL;
+     } else {
+-        p_ythread = (ABTI_ythread *)thread;
++        p_ythread = (ABTI_ythread *)((char *)thread - offsetof(ABTI_ythread, thread));
+     }
+     return p_ythread;
+ #else
+-    return (ABTI_ythread *)thread;
++    return (ABTI_ythread *)((char *)thread - offsetof(ABTI_ythread, thread));
+ #endif
+ }
+ 
+@@ -30,11 +30,11 @@ static inline ABT_thread ABTI_ythread_get_handle(ABTI_ythread *p_ythread)
+     if (p_ythread == NULL) {
+         h_thread = ABT_THREAD_NULL;
+     } else {
+-        h_thread = (ABT_thread)p_ythread;
++        h_thread = (ABT_thread)&(p_ythread->thread);
+     }
+     return h_thread;
+ #else
+-    return (ABT_thread)p_ythread;
++    return (ABT_thread)&(p_ythread->thread);
+ #endif
+ }
+ 
+diff --git a/src/thread.c b/src/thread.c
+index aac05d1..e53c985 100644
+--- a/src/thread.c
++++ b/src/thread.c
+@@ -3,6 +3,8 @@
+  * See COPYRIGHT in top-level directory.
+  */
+ 
++#include <sys/mman.h>
++
+ #include "abti.h"
+ 
+ ABTU_ret_err static inline int
+@@ -2734,6 +2736,20 @@ ythread_create(ABTI_global *p_global, ABTI_local *p_local, ABTI_pool *p_pool,
+                                       NULL);
+     }
+ 
++    /* protect padding area to catch any corruption */
++    abt_errno = mprotect((void *)((uint64_t)&p_newthread->thread & 0xfffffffffffff000) == &p_newthread->thread ? (void *)((uint64_t)&p_newthread->thread - 4096) : (void *)(((uint64_t)&p_newthread->thread & 0xfffffffffffff000) - 4096), 4096, PROT_READ);
++    if (abt_errno != 0) {
++        fprintf(stderr, "[%s:%d] %s: mprotect() at addr = %p with length = %u failed rc = %d\n", __FILE__, __LINE__, __func__, (void *)((uint64_t)&p_newthread->thread & 0xfffffffffffff000) == &p_newthread->thread ? (void *)((uint64_t)&p_newthread->thread - 4096) : (void *)(((uint64_t)&p_newthread->thread & 0xfffffffffffff000) - 4096), 4096, abt_errno);
++#ifdef ABT_CONFIG_USE_DEBUG_LOG
++        LOG_DEBUG("mprotect() at addr = %p with length = %u failed, rc = %d\n", (void *)((uint64_t)&p_newthread->thread & 0xfffffffffffff000) == &p_newthread->thread ? (void *)((uint64_t)&p_newthread->thread - 4096) : (void *)(((uint64_t)&p_newthread->thread & 0xfffffffffffff000) - 4096), 4096, abt_errno);
++    } else {
++        LOG_DEBUG("mprotect() succeeded at addr = %p with length = %u\n", (void *)((uint64_t)&p_newthread->thread & 0xfffffffffffff000) == &p_newthread->thread ? (void *)((uint64_t)&p_newthread->thread - 4096) : (void *)(((uint64_t)&p_newthread->thread & 0xfffffffffffff000) - 4096), 4096);
++    }
++#else
++    }
++#endif
++
++
+     /* Return value */
+     *pp_newthread = p_newthread;
+     return ABT_SUCCESS;
+@@ -2766,6 +2782,8 @@ ABTU_ret_err static int thread_migrate_to_pool(ABTI_global *p_global,
+ static inline void thread_free(ABTI_global *p_global, ABTI_local *p_local,
+                                ABTI_thread *p_thread, ABT_bool free_unit)
+ {
++    int abt_errno;
++
+     /* Invoke a thread freeing event. */
+     ABTI_tool_event_thread_free(p_local, p_thread,
+                                 ABTI_local_get_xstream_or_null(p_local)
+@@ -2785,6 +2803,19 @@ static inline void thread_free(ABTI_global *p_global, ABTI_local *p_local,
+         ABTI_ktable_free(p_global, p_local, p_ktable);
+     }
+ 
++    /* unprotect padding area that was set to catch any corruption */
++    abt_errno = mprotect((void *)((uint64_t)p_thread & 0xfffffffffffff000) == p_thread ? (void *)((uint64_t)p_thread - 4096) : (void *)(((uint64_t)p_thread & 0xfffffffffffff000) - 4096), 4096, PROT_READ | PROT_WRITE);
++    if (abt_errno != 0) {
++        fprintf(stderr, "[%s:%d] %s: mprotect() at addr = %p with length = %u failed rc = %d\n", __FILE__, __LINE__, __func__, (void *)((uint64_t)p_thread & 0xfffffffffffff000) == p_thread ? (void *)((uint64_t)p_thread - 4096) : (void *)(((uint64_t)p_thread & 0xfffffffffffff000) - 4096), 4096, abt_errno);
++#ifdef ABT_CONFIG_USE_DEBUG_LOG
++        LOG_DEBUG("mprotect() at addr = %p with length = %u failed, rc = %d\n", (void *)((uint64_t)p_thread & 0xfffffffffffff000) == p_thread ? (void *)((uint64_t)p_thread - 4096) : (void *)(((uint64_t)p_thread & 0xfffffffffffff000) - 4096), 4096, abt_errno);
++    } else {
++        LOG_DEBUG("mprotect() succeeded at addr = %p with length = %u\n", (void *)((uint64_t)p_thread & 0xfffffffffffff000) == p_thread ? (void *)((uint64_t)p_thread - 4096) : (void *)(((uint64_t)p_thread & 0xfffffffffffff000) - 4096), 4096);
++    }
++#else
++    }
++#endif
++
+     /* Free ABTI_thread (stack will also be freed) */
+     ABTI_mem_free_thread(p_global, p_local, p_thread);
+ }

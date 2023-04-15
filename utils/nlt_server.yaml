@@ -14,7 +14,12 @@ engines:
       - DAOS_MD_CAP=1024
       - DAOS_STRICT_SHUTDOWN=1
       - CRT_CTX_SHARE_ADDR=0
-      - ABT_STACK_OVERFLOW_CHECK=mprotect
+#      - ABT_STACK_OVERFLOW_CHECK=mprotect_strict
+#      - ABT_PRINT_CONFIG=1
+#      - ABT_USE_LOG=1
+#      - ABT_USE_DEBUG=1
+#      - ABT_USE_EVENT_DEBUG=1
+
     storage:
       -
         class: ram

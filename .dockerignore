@@ -6,6 +6,7 @@
 *
 !src
 !utils/build.config
+!utils/Argobots_v1.1_mprotect_ABTI_ythread_with_bottom_padding.patch
 !utils/certs
 !utils/ci
 !utils/completion

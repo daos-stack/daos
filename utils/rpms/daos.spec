@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.2.0-6%{?dist}
-%global libfabric_version 1.15.1-1
+%global libfabric_version 1.17.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -553,6 +553,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+
+* Thu Mar 23 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.106-3
+- Update libfabric to version v1.17.0
+
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
 - Add numactl requires for server package
 
