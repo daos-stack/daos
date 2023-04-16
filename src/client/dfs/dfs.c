@@ -5021,11 +5021,6 @@ dfs_chmod_wflag(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, in
 	if (!exists)
 		return ENOENT;
 
-	/* Mimic the behavior of fchmodat() in libc. */
-	if (!S_ISLNK(entry.mode) && (flag & O_NOFOLLOW)) {
-		return EOPNOTSUPP;
-	}
-
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
 		D_ASSERT(entry.value);
