@@ -1028,10 +1028,10 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of the object. Can be NULL if parent is root,
- * 			which means operation will be on root object.
+ *			which means operation will be on root object.
  * \param[in]	mask	accessibility check(s) to be performed.
- * 			It should be either the value F_OK, or a mask with
- * 			bitwise OR of one or more of R_OK, W_OK, and X_OK.
+ *			It should be either the value F_OK, or a mask with
+ *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
  * \param[in]	flag	bitwise flag. Handles O_NOFOLLOW.
  *
  * \return		0 on success, errno code on failure.
@@ -1062,7 +1062,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of the object. Can be NULL if parent is root,
  * \param[in]	mode	New permission access modes. For now, we don't support
- * 			the sticky bit, setuid, and setgid.
+ *			the sticky bit, setuid, and setgid.
  * \param[in]	flag	bitwise flag. Handles O_NOFOLLOW.
  *
  * \return		0 on success, errno code on failure.
