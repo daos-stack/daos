@@ -451,6 +451,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 {
 	dfs_obj_t	*obj;
 	mode_t		actual_mode;
+	mode_t		actual_mode_link;
 	char		path[64];
 	int		rc;
 
@@ -466,6 +467,8 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 	assert_true(S_ISLNK(actual_mode));
+
+	actual_mode_link = actual_mode;
 
 	/** O_NOFOLLOW should open the link itself */
 	rc = dfs_lookup_rel(dfs_mt, NULL, name, O_RDWR | O_NOFOLLOW, &obj,
@@ -496,9 +499,32 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
 
 	/** Default access should follow the link */
-	rc = dfs_access(dfs_mt, NULL, name, R_OK | W_OK, 0);
+	rc = dfs_access(dfs_mt, NULL, name, R_OK | W_OK);
 	print_message("dfs_test_syml_follow_access(\"%s\") = %d\n", name, rc);
 	assert_int_equal(rc, 0);
+
+	/* Check with dfs_access_wflag() for link itself */
+	rc = dfs_access_wflag(dfs_mt, NULL, name, W_OK, O_NOFOLLOW);
+	print_message("dfs_test_syml_follow_access_wflag(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+
+	/* Remove the write permission for the link itself */
+	rc = dfs_chmod_wflag(dfs_mt, NULL, name, actual_mode_link & (~S_IWUSR), O_NOFOLLOW);
+	print_message("dfs_test_syml_follow_chmod_wflag(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+
+	/* Check write permission of the file/dir with following the link using dfs_lookup() */
+	rc = dfs_lookup(dfs_mt, path, O_RDONLY | O_NOFOLLOW, &obj,
+			&actual_mode, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_int_equal(actual_mode, actual_mode_link & (~S_IWUSR));
+
+	/* Check with dfs_access_wflag() */
+	rc = dfs_access_wflag(dfs_mt, NULL, name, W_OK, O_NOFOLLOW);
+	print_message("dfs_test_syml_follow_access_wflag(\"%s\") = %d\n", name, rc);
+	assert_int_not_equal(rc, 0);
 }
 
 static void

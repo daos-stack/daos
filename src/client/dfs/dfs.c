@@ -4880,7 +4880,7 @@ out:
 }
 
 int
-dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag)
+dfs_access_wflag(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag)
 {
 	daos_handle_t		oh;
 	bool			exists;
@@ -4958,7 +4958,13 @@ out:
 }
 
 int
-dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
+{
+	return dfs_access_wflag(dfs, parent, name, mask, 0);
+}
+
+int
+dfs_chmod_wflag(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag)
 {
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -5015,8 +5021,13 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (!exists)
 		return ENOENT;
 
+	/* Mimic the behavior of fchmodat() in libc. */
+	if (!S_ISLNK(entry.mode) && (flag & O_NOFOLLOW)) {
+		return EOPNOTSUPP;
+	}
+
 	/** resolve symlink */
-	if (S_ISLNK(entry.mode)) {
+	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
 		D_ASSERT(entry.value);
 
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
@@ -5082,11 +5093,17 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 out:
-	if (S_ISLNK(entry.mode)) {
+	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
 	}
 	return rc;
+}
+
+int
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
+{
+	return dfs_chmod_wflag(dfs, parent, name, mode, 0);
 }
 
 int

@@ -1015,12 +1015,29 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
  * \param[in]	mask	accessibility check(s) to be performed.
  *			It should be either the value F_OK, or a mask with
  *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
+
+/**
+ * Check access permissions on an object. Symlinks are not dereferenced if
+ * O_NOFOLLOW is set in flag. Otherwise, it is same as dfs_access.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ * 			which means operation will be on root object.
+ * \param[in]	mask	accessibility check(s) to be performed.
+ * 			It should be either the value F_OK, or a mask with
+ * 			bitwise OR of one or more of R_OK, W_OK, and X_OK.
  * \param[in]	flag	bitwise flag. Handles O_NOFOLLOW.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag);
+dfs_access_wflag(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag);
 
 /**
  * Change permission access bits. Symlinks are dereferenced.
@@ -1036,6 +1053,22 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask, int flag);
  */
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+
+/**
+ * Change permission access bits. Symlinks are not dereferenced if O_NOFOLLOW
+ * is set in flag. Otherwise, it is same as dfs_chmod.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ * \param[in]	mode	New permission access modes. For now, we don't support
+ * 			the sticky bit, setuid, and setgid.
+ * \param[in]	flag	bitwise flag. Handles O_NOFOLLOW.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_chmod_wflag(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag);
 
 /**
  * Change owner and group. Since uid and gid are not enforced
