@@ -531,10 +531,10 @@ func TestPromExp_extractLabels(t *testing.T) {
 			expLabels: labelMap{},
 		},
 		"net_provider_req_timeout": {
-			input:   "ID: 0/net/ofi+tcp;ofi_rxm/req_timeout/ctx_0",
+			input:   "ID: 0/net/ofi+tcp/req_timeout/ctx_0",
 			expName: "net_req_timeout",
 			expLabels: labelMap{
-				"provider": "ofi+tcp;ofi_rxm",
+				"provider": "ofi+tcp",
 				"context":  "0",
 			},
 		},
