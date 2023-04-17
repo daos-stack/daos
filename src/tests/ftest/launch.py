@@ -3041,7 +3041,7 @@ def main():
         help="modify the test yaml files but do not run the tests")
     parser.add_argument(
         "-mo", "--mode",
-        choices=['normal', 'manual', 'ci', 'gcp'],
+        choices=['normal', 'manual', 'ci'],
         default='normal',
         help="provide the mode of test to be run under. Default is normal, "
              "in which the final return code of launch.py is still zero if "
@@ -3161,9 +3161,6 @@ def main():
              "standard test yaml file.")
     args = parser.parse_args()
 
-    # Setup the Launch object
-    launch = Launch(args.name, args.mode)
-
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
@@ -3176,10 +3173,9 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
-    elif args.mode == "gcp":
-        args.archive = True
-        args.include_local_host = True
-        args.yaml_extension = args.mode
+
+    # Setup the Launch object
+    launch = Launch(args.name, args.mode)
 
     # Perform the steps defined by the arguments specified
     try:
