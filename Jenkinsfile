@@ -29,7 +29,6 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith('md-on-ssd-testing') &&
-     !env.BRANCH_NAME.startsWith('provider-testing') &&
      !env.BRANCH_NAME.startsWith('weekly-testing') &&
      !env.BRANCH_NAME.startsWith('release/') &&
      env.BRANCH_NAME != 'master')) {
@@ -42,7 +41,12 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'md-on-ssd-testing' ? 'TZ=UTC\n0 12 * * 0\n' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
+             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
+             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
+             env.BRANCH_NAME.startsWith('md-on-ssd-testing') ? 'H 12 * * 0' : '')
     }
 
     environment {
@@ -68,7 +72,7 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: 'pr daily_regression',
-               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
                defaultValue: 'auto_md_on_ssd',
                description: 'The launch.py --nvme argument to use for the Functional test ' +
@@ -80,14 +84,11 @@ pipeline {
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
-               defaultValue: '',
-               description: 'Test-provider to use for this run.  Specifies the default provider ' +
-                            'to use the daos_server config file when running functional tests' +
-                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
-                            '"ofi+tcp")')
+               defaultValue: 'ofi+tcp',
+               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
-               description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+               description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -100,44 +101,51 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+                     description: 'Run the CI Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-tcp-provider_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+                     description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
         booleanParam(name: 'CI_medium-ucx-provider_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
+                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large test stage')
+                     description: 'Run the CI Functional Hardware Large test stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
+               defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large tests')
+               description: 'Label to use for 9 node Functional Hardware Large stage')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
     }
 
     stages {
-        stage('Get Commit Message') {
+        stage('Set Description') {
             steps {
                 script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
+                    if (params.CI_BUILD_DESCRIPTION) {
+                        buildDescription params.CI_BUILD_DESCRIPTION
+                    }
                 }
+            }
+        }
+        stage('Get Commit Message') {
+            steps {
+                pragmasToEnv()
             }
         }
         stage('Cancel Previous Builds') {
             when {
+                beforeAgent true
                 expression { !skipStage() }
             }
             steps {
@@ -160,42 +168,44 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional Hardware Medium Verbs Provider') {
+                } // stage('Functional Hardware Medium')
+                stage('Functional Hardware Medium TCP Provider') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
-                } // stage('Functional_Hardware_Medium Verbs Provider')
+                } // stage('Functional Hardware Medium TCP Provider')
                 stage('Functional Hardware Medium UCX Provider') {
                     when {
                         beforeAgent true
@@ -206,19 +216,20 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
-                } // stage('Functional_Hardware_Medium UCX Provider')
+                } // stage('Functional Hardware Medium UCX Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -229,19 +240,20 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
+                } // stage('Functional Hardware Large')
             } // parallel
         } // stage('Test')
     } //stages
