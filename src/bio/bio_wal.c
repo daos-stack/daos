@@ -1701,6 +1701,8 @@ load_wal:
 		}
 
 		hdr = (struct wal_trans_head *)(buf + blk_off * blk_bytes);
+		if (DAOS_ON_VALGRIND)
+			VALGRIND_MAKE_MEM_DEFINED(hdr, sizeof(*hdr));
 		rc = verify_tx_hdr(si, hdr, tx_id);
 		if (rc)
 			break;
@@ -1717,6 +1719,8 @@ load_wal:
 			goto load_wal;
 		}
 
+		if (DAOS_ON_VALGRIND)
+			VALGRIND_MAKE_MEM_DEFINED(hdr, blk_desc.bd_blks * blk_bytes);
 		rc = verify_tx(mc, (char *)hdr, &blk_desc, &dbuf, &dbuf_len);
 		if (rc)
 			break;
