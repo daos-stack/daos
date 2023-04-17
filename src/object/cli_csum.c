@@ -142,14 +142,14 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 	singv_los = reasb_req->orr_singv_los;
 	for (i = 0; i < iod_nr; i++) {
 		singv_lo = &singv_los[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0)
+		iod = &iods[i];
+		sgl = &sgls[i];
+		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
+		    iod->iod_size == DAOS_REC_ANY)
 			continue;
 		/* the case of fetch singv with unknown rec size, now after the
 		 * fetch need to re-calculate the singv_lo again
 		 */
-		iod = &iods[i];
-		sgl = &sgls[i];
-		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
 		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
 					 reasb_req->orr_oca)) {
 			singv_lo->cs_even_dist = 0;
