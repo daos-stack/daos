@@ -576,7 +576,7 @@ class StorageInfo():
                 elif tier == 0:
                     lines.append('          class: ram')
                     lines.append(f'          scm_mount: /mnt/daos{engine}')
-                    lines.append(f'          scm_size: {scm_size}')
+                    lines.append(f'          scm_size: {int(scm_size / engines)}')
                 else:
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
