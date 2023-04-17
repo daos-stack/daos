@@ -237,16 +237,6 @@
 #system_ram_reserved: 5
 #
 #
-## Set threshold (percentage) for runtime memory availability check. If RAM is being used elsewhere
-## then this parameter can be used to allow overprovisioning.
-#
-## Optional parameter that should only be set if overriding the automatically calculated value is
-## necessary.
-#
-## default: 90
-#ram_check_threshold: 50
-#
-#
 ## Set specific debug mask for daos_server (control plane).
 ## The mask specifies minimum level of message significance to pass to logger.
 ## Currently supported values are DISABLED, ERROR, INFO and DEBUG.

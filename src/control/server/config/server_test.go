@@ -257,8 +257,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithClientEnvVars([]string{"foo=bar"}).
 		WithFabricAuthKey("foo:bar").
 		WithHyperthreads(true). // hyper-threads disabled by default
-		WithSystemRamReserved(5).
-		WithRamCheckThreshold(50)
+		WithSystemRamReserved(5)
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{

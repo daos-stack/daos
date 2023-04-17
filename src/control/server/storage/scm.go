@@ -53,9 +53,6 @@ const (
 	DefaultEngineMemRsvd = humanize.GiByte * 1
 	// MinRamdiskMem is the minimum amount of memory needed for each engine's tmpfs RAM-disk.
 	MinRamdiskMem = humanize.GiByte * 4
-	// DefaultRamCheckThreshold is the default percentage to be used when evaluating the
-	// viability of the configured RAM-disk size before starting the engine.
-	DefaultRamCheckThreshold = 90
 )
 
 func (ss ScmState) String() string {
