@@ -452,6 +452,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	dfs_obj_t	*obj;
 	mode_t		actual_mode;
 	mode_t		actual_mode_link;
+	mode_t		mode_new;
 	char		path[64];
 	int		rc;
 
@@ -509,7 +510,8 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(rc, 0);
 
 	/* Remove the write permission for the link itself */
-	rc = dfs_chmod_wflag(dfs_mt, NULL, name, actual_mode_link & (~S_IWUSR), O_NOFOLLOW);
+	mode_new = actual_mode_link & (~(S_IWUSR | S_IWGRP | S_IWOTH));
+	rc = dfs_chmod_wflag(dfs_mt, NULL, name, mode_new, O_NOFOLLOW);
 	print_message("dfs_test_syml_follow_chmod_wflag(\"%s\") = %d\n", name, rc);
 	assert_int_equal(rc, 0);
 
@@ -519,7 +521,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
-	assert_int_equal(actual_mode, actual_mode_link & (~S_IWUSR));
+	assert_int_equal(actual_mode, mode_new);
 
 	/* Check with dfs_access_wflag() */
 	rc = dfs_access_wflag(dfs_mt, NULL, name, W_OK, O_NOFOLLOW);
