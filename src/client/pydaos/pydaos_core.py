@@ -62,6 +62,7 @@ class DCont():
     array(name, kwargs):
         Create new DArray object.
     """
+    # pylint: disable=invalid-name
 
     def __init__(self, pool=None, cont=None, path=None):
         self._dc = DaosClient()
@@ -113,8 +114,7 @@ class DCont():
         # Default to OC_UNKNOWN (0), which will automatically select an object class.
         if cid == "0":
             return 0
-        if cid != "0":
-            return ObjClassID[cid].value
+        return ObjClassID[cid].value
 
     def dict(self, name, v: dict = None, cid="0"):
         """ Create new DDict object """
