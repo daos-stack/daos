@@ -104,7 +104,7 @@ int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
-int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
+void crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
@@ -137,6 +137,7 @@ void crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **li
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, int provider);
 
+
 static inline int
 crt_hgret_2_der(int hg_ret)
 {
@@ -145,6 +146,7 @@ crt_hgret_2_der(int hg_ret)
 		return 0;
 	case HG_TIMEOUT:
 		return -DER_TIMEDOUT;
+	case HG_FAULT:
 	case HG_INVALID_ARG:
 		return -DER_INVAL;
 	case HG_MSGSIZE:

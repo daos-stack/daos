@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -336,9 +336,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * related RPC to the new leader, but such DTX is still not
 		 * committable yet. Here, the resync logic will abort it by
 		 * race during the new leader waiting for other replica(s).
-		 * The dtx_abort() logic will abort the local DTX firstly.
-		 * When the leader get replies from other replicas, it will
-		 * check whether local DTX is still valid or not.
+		 *
+		 * So when the leader get replies from other replicas, it
+		 * needs to check whether local DTX is still valid or not.
 		 *
 		 * If we abort multiple non-ready DTXs together, then there
 		 * is race that one DTX may become committable when we abort
@@ -608,6 +608,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		return rc;
 	}
 
+	D_INFO("Enter DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
@@ -616,12 +619,13 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 					      dss_get_module_info()->dmi_tgt_id, &target);
 	D_ASSERT(rc == 1);
 
-	if (target->ta_comp.co_status == PO_COMP_ST_UP)
+	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-	ABT_rwlock_unlock(pool->sp_lock);
+		D_INFO("DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
+		       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	}
 
-	D_INFO("DTX resync for "DF_UUID"/"DF_UUID" with discard version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ABT_mutex_lock(cont->sc_mutex);
 
@@ -652,7 +656,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	cont->sc_dtx_resyncing = 1;
-	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	dra.cont = cont;
@@ -701,6 +704,9 @@ fail:
 out:
 	if (!dtx_cont_opened(cont))
 		stop_dtx_reindex_ult(cont);
+
+	D_INFO("Exit DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;

@@ -801,6 +801,15 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
+ * Renew the epoch for the update handle.
+ *
+ * \param ioh	[IN]	The I/O handle for update.
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.

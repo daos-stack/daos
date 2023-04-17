@@ -6,19 +6,23 @@
 import threading
 import re
 import time
-from exception_utils import CommandFailure
+
 from avocado.core.exceptions import TestFail
+
+from dmg_utils import get_storage_query_device_uuids, get_dmg_response
+from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
+from server_utils import ServerFailed
 
 
-def get_device_ids(dmg, servers):
+def get_device_ids(test, dmg, servers):
     """Get the NVMe Device ID from servers.
 
     Args:
-        dmg: DmgCommand class instance.
+        test (Test): avocado test class
+        dmg (DmgCommand): a DmgCommand class instance.
         servers (list): list of server hosts.
 
     Returns:
@@ -26,21 +30,67 @@ def get_device_ids(dmg, servers):
 
     """
     devices = {}
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("query")
-    dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
     for host in servers:
         dmg.hostlist = host
-        try:
-            result = dmg.run()
-        except CommandFailure as _error:
-            raise CommandFailure("dmg list-devices failed with error {}".format(_error)) from _error
-        drive_list = []
-        for line in result.stdout_text.split('\n'):
-            if 'UUID' in line:
-                drive_list.append(line.split('UUID:')[1].split(' ')[0])
-        devices[host] = drive_list
+        devices[host] = []
+        for uuid_list in get_storage_query_device_uuids(test, dmg).values():
+            devices[host].extend(uuid_list)
     return devices
+
+
+def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
+    """Set the device faulty and optionally wait for rebuild to complete.
+
+    Args:
+        test (Test): avocado test class
+        dmg (DmgCommand): a DmgCommand class instance
+        server (NodeSet): host on which to issue the dmg storage set nvme-faulty
+        uuid (str): the device UUID
+        pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
+            Defaults to None.
+        kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
+
+    Returns:
+        dict: the json response from the dmg storage set-faulty command.
+
+    """
+    dmg.hostlist = server
+    kwargs['uuid'] = uuid
+    response = get_dmg_response(test, dmg.storage_set_faulty, **kwargs)
+
+    # Add a tearDown method to reset the faulty device
+    test.register_cleanup(reset_fault_device, test=test, dmg=dmg, server=server, uuid=uuid)
+
+    if pool:
+        # Wait for rebuild to start
+        pool.wait_for_rebuild_to_start()
+        # Wait for rebuild to complete
+        pool.wait_for_rebuild_to_end()
+
+    return response
+
+
+def reset_fault_device(test, dmg, server, uuid):
+    """Call dmg storage led identify to reset the device.
+
+    Args:
+        test (Test): avocado test class
+        dmg (DmgCommand): a DmgCommand class instance
+        server (NodeSet): host on which to issue the dmg storage led identify
+        uuid (str): device to reset
+
+    Returns:
+        list: a list of any errors detected when removing the pool
+
+    """
+    error_list = []
+    dmg.hostlist = server
+    try:
+        get_dmg_response(test, dmg.storage_led_identify, reset=True, ids=uuid)
+    except TestFail as error:
+        test.log.info("#  %s", error)
+        error_list.append("Error resetting device {}: {}".format(uuid, error))
+    return error_list
 
 
 class ServerFillUp(IorTestBase):
@@ -202,36 +252,17 @@ class ServerFillUp(IorTestBase):
 
         return block_size
 
-    def set_device_faulty(self, server, disk_id):
-        """Set the devices to Faulty and wait for rebuild to complete.
-
-        Args:
-            server (string): server hostname where it generate the NVMe fault.
-            disk_id (string): NVMe disk ID where it will be changed to faulty.
-        """
-        self.dmg.hostlist = server
-        self.dmg.storage_set_faulty(disk_id)
-        result = self.dmg.storage_query_device_health(disk_id)
-        # Check if device state changed to EVICTED.
-        if 'State:EVICTED' not in result.stdout_text:
-            self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
-
-        # Wait for rebuild to start
-        self.pool.wait_for_rebuild_to_start()
-        # Wait for rebuild to complete
-        self.pool.wait_for_rebuild_to_end()
-
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""
         # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(self.dmg, self.hostlist_servers)
+        device_ids = get_device_ids(self, self.dmg, self.hostlist_servers)
 
         # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
         # single drive from single server
         for num in range(0, self.no_of_servers):
             server = self.hostlist_servers[num]
             for disk_id in range(0, self.no_of_drives):
-                self.set_device_faulty(server, device_ids[server][disk_id])
+                set_device_faulty(self, self.dmg, server, device_ids[server][disk_id], self.pool)
 
     def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.
@@ -287,7 +318,7 @@ class ServerFillUp(IorTestBase):
         Args:
             rank: Rank number to kill the daos server
         """
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True, copy=True)
 
     def exclude_target_thread(self, rank, target):
         """Target kill thread function.

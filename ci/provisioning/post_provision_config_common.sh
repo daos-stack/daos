@@ -58,4 +58,4 @@ case "$id" in
 esac
 
 # shellcheck disable=SC2034
-MLNX_VER_NUM=5.6-2.0.9.0
+MLNX_VER_NUM=5.8-1.1.2.1

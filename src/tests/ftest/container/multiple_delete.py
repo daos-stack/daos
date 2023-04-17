@@ -12,7 +12,6 @@ SCM_THRESHOLD = 400000
 
 
 class MultipleContainerDelete(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
        Test that multiple container create/delete reclaims the pool space without leak.
 
