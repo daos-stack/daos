@@ -4005,6 +4005,7 @@ def test_pydaos_kv_obj_class(server, conf):
     cont = create_cont(conf, pool, ctype="PYTHON")
 
     container = daos.DCont(pool.uuid, cont.uuid)
+    failed = False
     # Write kv1 dictionary with OC_S2 object type
     kv1 = container.dict('object1', {"Monday": "1"}, "OC_S2")
     if len(kv1) != 1:
@@ -4018,7 +4019,7 @@ def test_pydaos_kv_obj_class(server, conf):
         print(f'Expected length of kv object is 2 but got {len(kv2)}')
 
     # Run a command to list the objects
-    cmd = ['cont', 'list-objects', pool, cont]
+    cmd = ['cont', 'list-objects', pool.uuid, cont.uuid]
     print('list the objects from container')
     rc = run_daos_cmd(conf, cmd, use_json=True)
 
@@ -4031,14 +4032,14 @@ def test_pydaos_kv_obj_class(server, conf):
     print('query the object layout')
     actual_obj_layout = []
     for obj in data['response']:
-        cmd = ['object', 'query', pool, cont, obj]
+        cmd = ['object', 'query', pool.uuid, cont.uuid, obj]
         rc = run_daos_cmd(conf, cmd, use_json=True)
 
         query_data = rc.json
         assert query_data['status'] == 0, rc
         assert query_data['error'] is None, rc
         assert query_data['response'] is not None, rc
-        actual_obj_layout.append(query_data['class'])
+        actual_obj_layout.append(query_data['response']['class'])
 
     # Verify the object has the correct layout used during kv dictionary creation.
     expected_obj_layout = ['S2', 'S4']

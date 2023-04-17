@@ -11,6 +11,7 @@ import enum
 # pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
 # pylint: enable=relative-beyond-top-level
+# pylint: disable=invalid-name
 
 from . import DAOS_MAGIC
 from . import PyDError
@@ -62,7 +63,6 @@ class DCont():
     array(name, kwargs):
         Create new DArray object.
     """
-    # pylint: disable=invalid-name
 
     def __init__(self, pool=None, cont=None, path=None):
         self._dc = DaosClient()
