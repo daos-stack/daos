@@ -20,6 +20,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     :avocado: recursive
     """
 
+    # pylint: disable=too-many-ancestors
     def test_daos_pool_acl_enforcement(self):
         """
         Epic:

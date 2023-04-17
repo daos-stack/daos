@@ -204,7 +204,7 @@ class TestPool(TestDaosApiBase):
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.acl_file = BasicParameter(None)
-        self.label = BasicParameter(None, "TestPool")
+        self.label = BasicParameter(None, "TestLabel")
         self.label_generator = label_generator
 
         # Optional TestPool parameters used to autosize the dmg pool create

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -322,7 +322,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	call := &Call{
 		Module: int32(mod.ID()),
 	}
-	resp, err := client.SendMsg(context.TODO(), call)
+	resp, err := client.SendMsg(call)
 	if err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}

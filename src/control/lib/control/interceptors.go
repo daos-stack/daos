@@ -35,8 +35,6 @@ func connErrToFault(st *status.Status, target string) error {
 		return FaultConnectionBadHost(target)
 	case strings.Contains(st.Message(), "certificate has expired"):
 		return security.FaultInvalidCert(errors.New(st.Message()))
-	case strings.Contains(st.Message(), "i/o timeout"):
-		return FaultConnectionTimedOut(target)
 	default:
 		return st.Err()
 	}

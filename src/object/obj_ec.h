@@ -230,7 +230,6 @@ struct obj_ec_recov_task {
 	 * degraded fetch, set the iod_size.
 	 */
 	daos_iod_t		*ert_oiod;
-	daos_iod_t		*ert_uiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th;		/* read-only tx handle */
@@ -264,7 +263,7 @@ struct obj_ec_fail_info {
 };
 
 int
-obj_ec_grp_start(uint16_t layout_ver, uint64_t hash, uint32_t grp_size);
+obj_ec_grp_start(uint32_t layout_ver, uint64_t hash, uint32_t grp_size);
 
 struct obj_reasb_req;
 
@@ -371,7 +370,7 @@ is_ec_data_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_data_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
+is_ec_data_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
 			       struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
@@ -388,7 +387,7 @@ is_ec_parity_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_parity_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
+is_ec_parity_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
 				 struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));

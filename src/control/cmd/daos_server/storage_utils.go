@@ -108,10 +108,10 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	}
 }
 
-func getAffinitySource(log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
+func getAffinitySource(log logging.Logger) (config.EngineAffinityFn, error) {
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(context.Background(), cfg.Fabric.Provider)
+	fiSet, err := scanner.Scan(context.Background())
 	if err != nil {
 		return nil, errors.Wrap(err, "scan fabric")
 	}
@@ -175,7 +175,7 @@ func (cmd *scmCmd) init() error {
 		cmd.config = nil
 	} else if cmd.SocketID == nil {
 		// Read SocketID from config if not set explicitly in command.
-		affSrc, err := getAffinitySource(cmd.Logger, cmd.config)
+		affSrc, err := getAffinitySource(cmd.Logger)
 		if err != nil {
 			cmd.Error(err.Error())
 			return nil

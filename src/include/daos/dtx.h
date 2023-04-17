@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -227,12 +227,6 @@ enum dtx_status {
 	DTX_ST_COMMITTABLE	= 4,
 	/** The DTX is aborted. */
 	DTX_ST_ABORTED		= 5,
-	/** The DTX is in aborting, non-persistent status. */
-	DTX_ST_ABORTING		= 6,
-	/** The DTX is in committing, non-persistent status. */
-	DTX_ST_COMMITTING	= 7,
-	/** The DTX is in preparing, non-persistent status. */
-	DTX_ST_PREPARING	= 8,
 };
 
 enum daos_dtx_alb {

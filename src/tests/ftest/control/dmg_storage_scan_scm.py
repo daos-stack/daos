@@ -10,6 +10,7 @@ from control_test_base import ControlTestBase
 
 
 class DmgStorageScanSCMTest(ControlTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     This test partially covers the following requirement.

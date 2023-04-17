@@ -8,6 +8,7 @@ from ior_intercept_test_base import IorInterceptTestBase
 
 
 class IorInterceptMultiClient(IorInterceptTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Verify IOR performance with DFUSE + IL is similar to DFS
                                for a single server and multiple client nodes.
 

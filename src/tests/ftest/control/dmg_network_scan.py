@@ -9,6 +9,7 @@ from network_utils import get_network_information, get_dmg_network_information, 
 
 
 class DmgNetworkScanTest(TestWithServers):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Simple test to verify the network scan function of the dmg tool.

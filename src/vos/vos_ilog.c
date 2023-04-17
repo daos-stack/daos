@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,12 +46,10 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	uint32_t		 dtx = vos_dtx_get();
-	daos_handle_t		 coh;
 
-	coh.cookie = (unsigned long)args;
 	*same = false;
 
-	if (dtx_is_committed(tx_id, vos_hdl2cont(coh), epoch)) {
+	if (tx_id == DTX_LID_COMMITTED) {
 		/** If it's committed and the current update is not
 		 * transactional, treat it as the same transaction and let the
 		 * minor epoch handle any conflicts.
@@ -92,7 +90,7 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 	cbs->dc_log_status_cb	= vos_ilog_status_get;
 	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
 	cbs->dc_is_same_tx_cb = vos_ilog_is_same_tx;
-	cbs->dc_is_same_tx_args = (void *)(unsigned long)coh.cookie;
+	cbs->dc_is_same_tx_args = NULL;
 	cbs->dc_log_add_cb = vos_ilog_add;
 	cbs->dc_log_add_args = NULL;
 	cbs->dc_log_del_cb = vos_ilog_del;

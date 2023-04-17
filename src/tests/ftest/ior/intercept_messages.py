@@ -10,6 +10,7 @@ from ior_test_base import IorTestBase
 
 
 class IorInterceptMessages(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with interception.
 
        Look for messages provided by the library

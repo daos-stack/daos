@@ -8,6 +8,7 @@ from daos_utils import DaosCommand
 
 
 class RbldCascadingFailures(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 
     :avocado: recursive

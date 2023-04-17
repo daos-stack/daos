@@ -7,6 +7,7 @@ from ior_test_base import IorTestBase
 from general_utils import report_errors
 
 
+# pylint: disable=too-many-ancestors
 class ListVerboseTest(IorTestBase):
     """DAOS-8267: Test class for dmg pool list --verbose tests.
 

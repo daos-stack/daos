@@ -3,13 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from exception_utils import CommandFailure
+from avocado import fail_on
 
 
 class DeleteContainerACLTest(ContSecurityTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify ACL entry deletion.
@@ -42,8 +43,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=DeleteContainerACLTest,test_acl_delete_invalid_inputs
+        :avocado: tags=security,container_acl,daos_cmd
+        :avocado: tags=cont_delete_acl_inputs,test_acl_delete_invalid_inputs
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")
@@ -71,10 +72,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command successfully
             removes principal in ACL.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=DeleteContainerACLTest,test_delete_valid_acl
+        :avocado: tags=all,daily_regression,security,container_acl,daos_cmd
+        :avocado: tags=cont_delete_acl,test_delete_valid_acl
         """
         for principal, entry in self.principals_table.items():
             self.daos_cmd.container_delete_acl(
@@ -93,10 +92,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=DeleteContainerACLTest,test_no_user_permissions
+        :avocado: tags=all,daily_regression,security,container_acl,daos_cmd
+        :avocado: tags=cont_delete_acl_noperms,test_no_user_permissions
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

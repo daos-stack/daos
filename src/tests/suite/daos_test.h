@@ -384,7 +384,6 @@ void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       const char *grp, d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
-struct daos_acl *get_daos_acl_with_user_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
 daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +7,9 @@
 package scm
 
 import (
-	"fmt"
 	"os/exec"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/dustin/go-humanize"
@@ -34,40 +32,20 @@ const (
 )
 
 type (
-	pmemCmd struct {
-		BinaryName string
-		Args       []string
-	}
-	runCmdFn   func(logging.Logger, pmemCmd) (string, error)
+	runCmdFn   func(string) (string, error)
 	lookPathFn func(string) (string, error)
 )
 
-func (pc *pmemCmd) String() string {
-	return fmt.Sprintf("cmd %s, args %v", pc.BinaryName, pc.Args)
-}
-
-func run(log logging.Logger, cmd pmemCmd) (string, error) {
-	var bytes []byte
-	var err error
-
-	if cmd.BinaryName == "" || strings.Contains(cmd.BinaryName, " ") {
-		return "", errors.Errorf("invalid binary name %q", cmd.BinaryName)
-	} else if len(cmd.Args) == 0 {
-		bytes, err = exec.Command(cmd.BinaryName).Output()
-	} else {
-		bytes, err = exec.Command(cmd.BinaryName, cmd.Args...).Output()
-	}
-	out := string(bytes)
-
+func run(cmd string) (string, error) {
+	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
-		return "", errors.Wrap(&system.RunCmdError{
+		return "", &system.RunCmdError{
 			Wrapped: err,
-			Stdout:  out,
-		}, cmd.String())
+			Stdout:  string(out),
+		}
 	}
-	log.Debugf("%s returned: %q", cmd.String(), out)
 
-	return out, nil
+	return string(out), nil
 }
 
 type cmdRunner struct {
@@ -108,22 +86,14 @@ func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
 	return modules, nil
 }
 
-func checkStateHasSock(sockState *storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
-	if sockState == nil {
-		return errors.New("nil sockState arg")
-	}
+func checkStateHasSock(sockState storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
 	if sockState.SocketID == nil {
 		return errors.Errorf("expecting socket id with %s state", sockState.State)
 	}
-
 	return faultFunc(*sockState.SocketID)
 }
 
-func checkStateForErrors(sockState *storage.ScmSocketState) error {
-	if sockState == nil {
-		return errors.New("nil sockState arg")
-	}
-
+func checkStateForErrors(sockState storage.ScmSocketState) error {
 	switch sockState.State {
 	case storage.ScmNotInterleaved:
 		// Non-interleaved AppDirect memory mode is unsupported.
@@ -152,26 +122,11 @@ func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regi
 		return nil, nil, errors.Wrap(err, "mapRegionsToSocket")
 	}
 
-	numaIDs, err := cr.createNamespaces(regionPerSocket, nrNsPerSock)
-	if err != nil {
+	if err := cr.createNamespaces(regionPerSocket, nrNsPerSock); err != nil {
 		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
-	numaSelector := sockAny
-	switch len(numaIDs) {
-	case 0:
-		return nil, nil, errors.New("no numa nodes were processed")
-	case 1:
-		numaSelector = numaIDs[0]
-	default:
-		if sockSelector != sockAny {
-			return nil, nil,
-				errors.Errorf("unexpected number of numa nodes processed, want 1 got %d",
-					len(numaIDs))
-		}
-	}
-
-	nss, err := cr.getNamespaces(numaSelector)
+	nss, err := cr.getNamespaces(sockSelector)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "getNamespaces")
 	}
@@ -211,13 +166,13 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 	}
 
 	// Regardless of actionable state, remove any previously applied resource allocation goals.
-	if err := cr.deleteGoals(sockSelector); err != nil {
+	if err := cr.deleteGoals(sockAny); err != nil {
 		return nil, err
 	}
 
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: namespaces,
-		Socket: &storage.ScmSocketState{
+		Socket: storage.ScmSocketState{
 			State:    state,
 			SocketID: req.SocketID,
 		},
@@ -229,7 +184,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 		// PMem mode should be changed for all sockets as changing just for a single socket
 		// can be determined as an incorrect configuration on some platforms.
 		cr.log.Info("Creating PMem regions...")
-		if err := cr.createRegions(sockSelector); err != nil {
+		if err := cr.createRegions(sockAny); err != nil {
 			return nil, errors.Wrap(err, "createRegions")
 		}
 		resp.RebootRequired = true
@@ -242,7 +197,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 			return nil, errors.Wrap(err, "handleFreeCapacity")
 		}
 		resp.Namespaces = nss
-		resp.Socket = sockState
+		resp.Socket = *sockState
 	case storage.ScmNoFreeCap:
 		// Regions and namespaces exist so no changes to response necessary.
 		cr.log.Info("PMem namespaces already exist.")
@@ -346,7 +301,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		cr.log.Info("Skip SCM prep, no PMem modules.")
 		return &storage.ScmPrepareResponse{
 			Namespaces: storage.ScmNamespaces{},
-			Socket: &storage.ScmSocketState{
+			Socket: storage.ScmSocketState{
 				State: storage.ScmNoModules,
 			},
 		}, nil
@@ -379,7 +334,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 
 	// First identify any socket specific unexpected state that should trigger an immediate
 	// error response.
-	if err := checkStateForErrors(sockState); err != nil {
+	if err := checkStateForErrors(*sockState); err != nil {
 		return nil, errors.Wrap(err, "checkStateForErrors after getPMemState")
 	}
 
@@ -395,8 +350,6 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, storage.FaultScmInvalidPMem(err.Error())
 	}
 
-	cr.log.Info("Finished. If prompted then reboot and rerun command.")
-
 	return resp, nil
 }
 
@@ -410,7 +363,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	}
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: storage.ScmNamespaces{},
-		Socket:     &storage.ScmSocketState{},
+		Socket:     storage.ScmSocketState{},
 	}
 	if len(scanRes.Modules) == 0 {
 		cr.log.Info("Skip SCM prep as there are no PMem modules.")
@@ -433,14 +386,14 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if err != nil {
 		return nil, errors.Wrap(err, "getPMemState")
 	}
-	resp.Socket = sockState
-	if sockState.SocketID == nil {
+	resp.Socket = *sockState
+	if resp.Socket.SocketID == nil {
 		resp.Socket.SocketID = req.SocketID
 	}
 
-	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, resp.Socket)
+	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
 
-	if err := cr.deleteGoals(sockSelector); err != nil {
+	if err := cr.deleteGoals(sockAny); err != nil {
 		return nil, err
 	}
 
@@ -466,11 +419,10 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	cr.log.Info("Resetting memory allocations to remove PMem regions...")
 
-	if err := cr.removeRegions(sockSelector); err != nil {
+	// Remove all regions to avoid unsupported config on some platforms.
+	if err := cr.removeRegions(sockAny); err != nil {
 		return nil, err
 	}
-
-	cr.log.Info("Finished")
 
 	return resp, nil
 }

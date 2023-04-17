@@ -275,14 +275,14 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 			smbc: &scm.MockBackendConfig{
 				GetModulesRes: []*storage.ScmModule{},
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket: &storage.ScmSocketState{
+					Socket: storage.ScmSocketState{
 						State: storage.ScmNoModules,
 					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 				Namespaces: storage.ScmNamespaces{},
@@ -298,14 +298,14 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 					storage.MockScmModule(0),
 				},
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket: &storage.ScmSocketState{
+					Socket: storage.ScmSocketState{
 						State: storage.ScmFreeCap,
 					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{},

@@ -49,7 +49,7 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 	req := &control.SetEngineLogMasksReq{
 		Masks: cmd.Args.Masks,
 	}
-	req.SetHostList(cmd.getHostList())
+	req.SetHostList(cmd.hostlist)
 
 	cmd.Debugf("set log masks request: %+v", req)
 

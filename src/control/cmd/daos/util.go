@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,11 +8,9 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"io"
 	"os"
-	"time"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -126,7 +124,7 @@ func fd2FILE(fd uintptr, modeStr string) (out *C.FILE, err error) {
 	defer freeString(cModeStr)
 	out = C.fdopen(C.int(fd), cModeStr)
 	if out == nil {
-		return nil, errors.Errorf("fdopen() failed (fd: %d, mode: %s)", fd, modeStr)
+		return nil, errors.New("fdopen() failed")
 	}
 	return
 }
@@ -138,7 +136,7 @@ func freeString(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
 
-func createWriteStream(ctx context.Context, prefix string, printLn func(line string)) (*C.FILE, func(), error) {
+func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(), error) {
 	// Create a FILE object for the handler to use for
 	// printing output or errors, and call the callback
 	// for each line.
@@ -152,34 +150,30 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 		return nil, nil, err
 	}
 
-	go func(ctx context.Context, prefix string) {
+	go func(prefix string) {
+		defer r.Close()
+		defer w.Close()
+
 		if prefix != "" {
 			prefix = ": "
 		}
 
 		rdr := bufio.NewReader(r)
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				line, err := rdr.ReadString('\n')
-				if err != nil {
-					if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
-						printLn(fmt.Sprintf("read err: %s", err))
-					}
-					return
+			line, err := rdr.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					printLn(fmt.Sprintf("read err: %s", err))
 				}
-				printLn(fmt.Sprintf("%s%s", prefix, line))
+				return
 			}
+			printLn(fmt.Sprintf("%s%s", prefix, line))
 		}
-	}(ctx, prefix)
+	}(prefix)
 
 	return stream, func() {
 		C.fflush(stream)
 		C.fclose(stream)
-		r.Close()
-		w.Close()
 	}, nil
 }
 
@@ -206,33 +200,23 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	C.free(unsafe.Pointer(ap))
 }
 
-func freeDaosStr(str *C.char) {
-	if str == nil {
-		return
-	}
-	C.free_daos_alloc(unsafe.Pointer(str))
-}
-
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
 	// allocate the struct using C memory to avoid any issues with Go GC
 	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
 	ap.sysname = C.CString(build.DefaultSystemName)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	outStream, outCleanup, err := createWriteStream(ctx, "", log.Info)
+	outStream, outCleanup, err := createWriteStream("", log.Info)
 	if err != nil {
 		freeCmdArgs(ap)
-		cancel()
 		return nil, nil, err
 	}
 	ap.outstream = outStream
 
-	errStream, errCleanup, err := createWriteStream(ctx, "handler", log.Error)
+	errStream, errCleanup, err := createWriteStream("handler", log.Error)
 	if err != nil {
 		outCleanup()
 		freeCmdArgs(ap)
-		cancel()
 		return nil, nil, err
 	}
 	ap.errstream = errStream
@@ -241,9 +225,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 		outCleanup()
 		errCleanup()
 		freeCmdArgs(ap)
-		// Give the streams a chance to flush.
-		time.Sleep(250 * time.Millisecond)
-		cancel()
 	}, nil
 }
 

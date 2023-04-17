@@ -284,7 +284,8 @@ daos_event_register_comp_cb(struct daos_event *ev,
 	ecl->op_comp_arg = arg;
 	ecl->op_comp_cb = cb;
 
-	d_list_add_tail(&ecl->op_comp_list, &evx->evx_callback.evx_comp_list);
+	d_list_add_tail(&evx->evx_callback.evx_comp_list,
+			&ecl->op_comp_list);
 
 	return 0;
 }
@@ -881,9 +882,11 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	/** destroy the EQ cart context only if it's not the global one */
 	if (eqx->eqx_ctx != daos_eq_ctx) {
-		rc = crt_context_destroy(eqx->eqx_ctx, (flags & DAOS_EQ_DESTROY_FORCE));
+		rc = crt_context_destroy(eqx->eqx_ctx,
+					 (flags & DAOS_EQ_DESTROY_FORCE));
 		if (rc) {
-			D_ERROR("Failed to destroy CART context for EQ: " DF_RC "\n", DP_RC(rc));
+			D_ERROR("Failed to destroy CART context for EQ (%d)\n",
+				rc);
 			goto out;
 		}
 	}

@@ -168,7 +168,6 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	uoid->id_pub.hi = 0;
 	uoid->id_shard  = 0;
 	uoid->id_layout_ver = 0;
-	uoid->id_padding = 0;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
 		type = DAOS_OT_AKEY_UINT64;

@@ -74,5 +74,4 @@ fio:
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   thread_count: 8
-  eq_count: 2
   cores: '0-3'

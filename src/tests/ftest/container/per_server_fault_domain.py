@@ -7,6 +7,7 @@ from ior_test_base import IorTestBase
 
 
 class PerServerFaultDomainTest(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description:
     The granularity of redundancy factor can be changed to node (rf_lvl:2). This means

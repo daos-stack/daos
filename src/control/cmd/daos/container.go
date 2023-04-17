@@ -57,10 +57,9 @@ type containerCmd struct {
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
 	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot  containerSnapCreateCmd       `command:"create-snap" alias:"snap" description:"create container snapshot"`
-	DestroySnapshot containerSnapDestroyCmd      `command:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots   containerSnapListCmd         `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
-	Rollback        containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
+	CreateSnapshot  containerSnapCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot containerSnapDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots   containerSnapListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 }
 
 type containerBaseCmd struct {
@@ -716,10 +715,8 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to create snapshot for container %s", cmd.ContainerID())
 	}
 	defer func() {
-		var epr C.daos_epoch_range_t
-		epr.epr_lo = ap.epc
-		epr.epr_hi = ap.epc
-		if err := daosError(C.daos_cont_destroy_snap(ap.cont, epr, nil)); err != nil {
+		rc = C.cont_destroy_snap_hdlr(ap)
+		if err := daosError(rc); err != nil {
 			cmd.Errorf("failed to destroy snapshot in cleanup: %v", err)
 		}
 	}()

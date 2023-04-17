@@ -161,25 +161,13 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
-	rc = daos_acl_uid_to_principal(uid, &owner);
-	if (rc != 0) {
-		D_ERROR("Failed to parse uid "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_out, rc);
-	}
-
-	if (daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
-		struct daos_prop_entry *owner_entry;
-
-		owner_entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_OWNER);
-		D_ASSERT(owner_entry != NULL);
-		if (strncmp(owner_entry->dpe_str, owner, DAOS_ACL_MAX_PRINCIPAL_LEN) != 0) {
-			D_ERROR("creating a container with an owner other than the current user is "
-				"not permitted\n");
-			D_GOTO(err_out, rc = -DER_INVAL);
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
+		rc = daos_acl_uid_to_principal(uid, &owner);
+		if (rc != 0) {
+			D_ERROR("Failed to parse uid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_out, rc);
 		}
 
-		D_FREE(owner); /* don't add owner to the prop array below if it's already there */
-	} else {
 		entries++;
 	}
 

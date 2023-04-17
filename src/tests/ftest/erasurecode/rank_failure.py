@@ -11,6 +11,7 @@ class EcodRunIoConf(IoConfTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
 
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-7344.

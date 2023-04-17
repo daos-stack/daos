@@ -9,6 +9,7 @@ from mdtest_test_base import MdtestBase
 
 
 class AggregationPunching(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs Mdtest with in small config and
        verify aggregation after punching.
 

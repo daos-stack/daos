@@ -278,7 +278,7 @@ type (
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.
 	ScmPrepareResponse struct {
-		Socket         *ScmSocketState
+		Socket         ScmSocketState
 		RebootRequired bool
 		Namespaces     ScmNamespaces
 	}

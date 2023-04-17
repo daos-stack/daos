@@ -7,6 +7,7 @@ from mdtest_test_base import MdtestBase
 
 
 class EcodMdtest(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """EC MDtest class to run smoke tests.
 
     Test Class Description: To validate Erasure code object type classes.

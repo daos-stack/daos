@@ -85,6 +85,8 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
+					 /* The DTX handle has been verified. */
+					 dth_verified:1,
 					 /* The DTX handle is aborted. */
 					 dth_aborted:1,
 					 /* The modification is done by others. */
@@ -215,8 +217,6 @@ enum dtx_flags {
 	DTX_DROP_CMT		= (1 << 8),
 };
 
-void
-dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int

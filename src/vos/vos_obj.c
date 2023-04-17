@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -526,27 +526,27 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	if (rc == 0)
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+
+	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
+		if (daes != NULL) {
+			vos_dtx_post_handle(cont, daes, dces,
+					    dth->dth_dti_cos_count,
+					    false, false);
+			dth->dth_cos_done = 1;
+		}
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(cont, daes, dces,
+				    dth->dth_dti_cos_count, false, true);
+		dth->dth_cos_done = 1;
+	}
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
 		vos_ts_set_update(ts_set, epr.epr_hi);
-	}
-
-	if (rc == 0)
-		vos_ts_set_wupdate(ts_set, epr.epr_hi);
-
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
-	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
-			dth->dth_cos_done = 1;
-		else
-			dth->dth_cos_done = 0;
-
-		if (daes != NULL)
-			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0);
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
 	}
 
 	D_FREE(daes);

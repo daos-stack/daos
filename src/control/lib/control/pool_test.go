@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2043,11 +2043,11 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("host storage response"),
 			},
 		},
-		"query fails": {
+		"query fails (system not ready)": {
 			HostsConfigArray: []MockHostStorageConfig{},
 			ExpectedOutput: ExpectedOutput{
-				QueryError: errors.New("query whoops"),
-				Error:      errors.New("query whoops"),
+				QueryError: system.ErrRaftUnavail,
+				Error:      system.ErrRaftUnavail,
 			},
 		},
 		"No SCM storage": {

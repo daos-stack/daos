@@ -137,17 +137,14 @@ class FioCommand(ExecutableCommand):
         else:
             self.log.error("Invalid job name: %s", job_name)
 
-    @property
-    def with_bind(self):
-        """Get the command string with bind_cores.
-
-        Also adds fio job parameters.
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
 
         Returns:
-            str: the command string with bind_cores and fio job parameters.
+            str: the command with all the defined parameters
 
         """
-        command = [super().with_bind]
+        command = [super().__str__()]
         for name in sorted(self._jobs):
             if name == "global":
                 command.insert(1, str(self._jobs[name]))

@@ -7,6 +7,7 @@ from daos_perf_base import DaosPerfBase
 
 
 class DaosPerfLarge(DaosPerfBase):
+    # pylint: disable=too-many-ancestors
     """Tests daos_perf with different config.
 
     :avocado: recursive

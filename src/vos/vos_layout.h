@@ -169,7 +169,7 @@ struct vos_dtx_cmt_ent_df {
 	 *	vos_dtx_blob_df to shrink each committed DTX
 	 *	entry size.
 	 */
-	uint64_t			dce_cmt_time;
+	daos_epoch_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */

@@ -15,6 +15,7 @@ server_config:
           scm_size: 40
 pool:
   scm_size: 20G
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos

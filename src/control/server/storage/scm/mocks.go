@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,10 +7,7 @@
 package scm
 
 import (
-	"encoding/xml"
-	"math"
 	"sync"
-	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -18,245 +15,6 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
-)
-
-const testXMLRegions = `<?xml version="1.0"?>
- <RegionList>
-  <Region>
-   <SocketID>0x0000</SocketID>
-   <PersistentMemoryType>AppDirect</PersistentMemoryType>
-   <Capacity>1008.000 GiB</Capacity>
-   <FreeCapacity>0.000 GiB</FreeCapacity>
-   <HealthState>Healthy</HealthState>
-   <DimmID>0x0001, 0x0011, 0x0101, 0x0111, 0x0201, 0x0211, 0x0301, 0x0311</DimmID>
-   <RegionID>0x0001</RegionID>
-   <ISetID>0xb8c12120c7bd1110</ISetID>
-  </Region>
- </RegionList>
-`
-
-func mockXMLRegions(t *testing.T, variant string) string {
-	t.Helper()
-
-	var rl RegionList
-	if err := xml.Unmarshal([]byte(testXMLRegions), &rl); err != nil {
-		t.Fatal(err)
-	}
-
-	switch variant {
-	case "sock-zero", "no-free":
-	case "sock-one":
-		rl.Regions[0].ID = 2
-		rl.Regions[0].SocketID = 1
-		rl.Regions[0].ISetID++
-	case "sock-one-full-free":
-		rl.Regions[0].ID = 2
-		rl.Regions[0].SocketID = 1
-		rl.Regions[0].ISetID++
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-	case "unhealthy":
-		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
-	case "not-interleaved":
-		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
-	case "unknown-memtype":
-		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
-	case "part-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity / 2
-	case "full-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-	case "dual-sock", "dual-sock-no-free":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].ISetID++
-	case "dual-sock-full-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].ISetID++
-	case "dual-sock-isetid-switch":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[0].ISetID = 0x04a32120b4fe1110
-		rl.Regions[1].ISetID = 0x3a7b2120bb081110
-	case "same-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ISetID++
-	case "unhealthy-2nd-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
-	case "full-free-2nd-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].FreeCapacity = rl.Regions[1].Capacity
-	default:
-		t.Fatalf("unknown variant %q", variant)
-	}
-
-	out, err := xml.Marshal(&rl)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return string(out)
-}
-
-const (
-	// JSON output from "ndctl list -Rv" illustrating mismatch issue.
-	// See: https://github.com/pmem/ndctl/issues/235
-	ndctlRegionsDual = `[
-  {
-    "dev":"region1",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":0,
-    "target_node":3,
-    "iset_id":13312958398157623569,
-    "persistence_domain":"memory_controller"
-  },
-  {
-    "dev":"region0",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":1,
-    "target_node":2,
-    "iset_id":13312958398157623568,
-    "persistence_domain":"memory_controller"
-  }
-]
-`
-
-	// JSON output from "ndctl list -Nv" illustrating mismatch issue.
-	// See: https://github.com/pmem/ndctl/issues/235
-	ndctlNamespaceDualR1 = `[
-  {
-    "dev":"namespace1.0",
-    "mode":"fsdax",
-    "map":"dev",
-    "size":532708065280,
-    "uuid":"8075b7f1-2c68-45b9-81a9-7bc411ca0743",
-    "raw_uuid":"bac5a182-f9c3-49df-93fb-64fb1f7864d4",
-    "sector_size":512,
-    "align":2097152,
-    "blockdev":"pmem1",
-    "numa_node":0,
-    "target_node":3
-  },
-  {
-    "dev":"namespace1.1",
-    "mode":"fsdax",
-    "map":"dev",
-    "size":532708065280,
-    "uuid":"1057916f-b8a2-4aba-bd00-0cc9f843b1d9",
-    "raw_uuid":"07df4036-5728-4340-bc6d-b8bd682acd52",
-    "sector_size":512,
-    "align":2097152,
-    "blockdev":"pmem1.1",
-    "numa_node":0,
-    "target_node":3
-  }
-]
-`
-
-	ndctlNamespaceDualR0 = `[
-  {
-    "dev":"namespace0.0",
-    "mode":"fsdax",
-    "map":"dev",
-    "size":532708065280,
-    "uuid":"8075b7f1-2c68-45b9-81a9-7bc411ca0743",
-    "raw_uuid":"bac5a182-f9c3-49df-93fb-64fb1f7864d4",
-    "sector_size":512,
-    "align":2097152,
-    "blockdev":"pmem0",
-    "numa_node":1,
-    "target_node":2
-  },
-  {
-    "dev":"namespace0.1",
-    "mode":"fsdax",
-    "map":"dev",
-    "size":532708065280,
-    "uuid":"1057916f-b8a2-4aba-bd00-0cc9f843b1d9",
-    "raw_uuid":"07df4036-5728-4340-bc6d-b8bd682acd52",
-    "sector_size":512,
-    "align":2097152,
-    "blockdev":"pmem0.1",
-    "numa_node":1,
-    "target_node":2
-  }
-]
-`
-
-	// iset_ids swapped to illustrate mapping regions by it.
-	ndctlRegionsSwapISet = `[
-  {
-    "dev":"region1",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":0,
-    "target_node":3,
-    "iset_id":13312958398157623568,
-    "persistence_domain":"memory_controller"
-  },
-  {
-    "dev":"region0",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":1,
-    "target_node":2,
-    "iset_id":13312958398157623569,
-    "persistence_domain":"memory_controller"
-  }
-]
-`
-
-	// JSON output from "ndctl list -Nv" illustrating ISetID overflow.
-	ndctlRegionsNegISet = `[
-  {
-    "dev":"region1",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":0,
-    "target_node":3,
-    "iset_id":-1989147235780849392,
-    "persistence_domain":"memory_controller"
-  },
-  {
-    "dev":"region0",
-    "size":1082331758592,
-    "align":16777216,
-    "available_size":1082331758592,
-    "max_available_extent":1082331758592,
-    "type":"pmem",
-    "numa_node":1,
-    "target_node":2,
-    "iset_id":13312958398157623569,
-    "persistence_domain":"memory_controller"
-  }
-]
-`
 )
 
 type (
@@ -405,9 +163,7 @@ func (mb *MockBackend) prep(req storage.ScmPrepareRequest, _ *storage.ScmScanRes
 	if mb.cfg.PrepErr != nil {
 		return nil, mb.cfg.PrepErr
 	} else if mb.cfg.PrepRes == nil {
-		return &storage.ScmPrepareResponse{
-			Socket: &storage.ScmSocketState{},
-		}, nil
+		return &storage.ScmPrepareResponse{}, nil
 	}
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
@@ -420,9 +176,7 @@ func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmSc
 	if mb.cfg.PrepResetErr != nil {
 		return nil, mb.cfg.PrepResetErr
 	} else if mb.cfg.PrepResetRes == nil {
-		return &storage.ScmPrepareResponse{
-			Socket: &storage.ScmSocketState{},
-		}, nil
+		return &storage.ScmPrepareResponse{}, nil
 	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }

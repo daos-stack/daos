@@ -139,7 +139,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 	}{
 		"no modules": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -157,7 +157,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create regions; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 			},
@@ -165,7 +165,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create regions; reboot required": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
@@ -175,7 +175,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		"create regions; reboot required; single socket": {
 			sockID: &one,
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
@@ -189,7 +189,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			// If non-interleaved regions are detected, prep will return an
 			// error. So returning the state is unexpected.
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNotInterleaved,
 				},
 			},
@@ -202,7 +202,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create namespaces; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 			},
@@ -210,7 +210,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create namespaces; no namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
@@ -218,7 +218,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create namespaces; namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
@@ -312,7 +312,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; illegal state": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
@@ -321,7 +321,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; not interleaved": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNotInterleaved,
 				},
 				RebootRequired: true,
@@ -330,7 +330,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; free capacity": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
@@ -340,7 +340,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		"remove regions; reboot required; free capacity; single socket": {
 			sockID: &one,
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
@@ -352,7 +352,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; no free capacity": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				RebootRequired: true,
@@ -361,7 +361,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; partial free capacity": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmPartFreeCap,
 				},
 				RebootRequired: true,
@@ -370,7 +370,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; unhealthy": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNotHealthy,
 				},
 				RebootRequired: true,
@@ -379,7 +379,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"remove regions; reboot required; unknown memory type": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmUnknownMode,
 				},
 				RebootRequired: true,
@@ -388,7 +388,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"no modules": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -396,7 +396,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"no regions": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 			},
@@ -404,7 +404,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"regions not interleaved": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNotInterleaved,
 				},
 			},
@@ -412,7 +412,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"free capacity": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 			},
@@ -420,7 +420,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 		},
 		"no free capacity": {
 			prepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},

@@ -7,7 +7,6 @@ import time
 from datetime import datetime
 import os
 import threading
-from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -39,13 +38,10 @@ class AgentFailure(IorTestBase):
         testfile = os.path.join("/", file_name)
         ior_cmd.test_file.update(testfile)
 
-        # We need to provide hostnames to the util files with NodeSet.
-        clients_nodeset = NodeSet.fromlist(clients)
-
         manager = get_job_manager(
             test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
             mpi_type="mpich")
-        manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         manager.ppn.update(ppn, 'mpirun.ppn')
         manager.processes.update(None, 'mpirun.np')

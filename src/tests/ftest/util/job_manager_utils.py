@@ -293,7 +293,6 @@ class Orterun(JobManager):
             "btl_openib_warn_default_gid_prefix": "0",
             "btl": "tcp,self",
             "oob": "tcp",
-            "coll": "^hcoll",
             "pml": "ob1",
             "btl_tcp_if_include": "eth0",
         }
@@ -410,7 +409,6 @@ class Mpirun(JobManager):
                 "btl_openib_warn_default_gid_prefix": "0",
                 "btl": "tcp,self",
                 "oob": "tcp",
-                "coll": "^hcoll",
                 "pml": "ob1",
                 "btl_tcp_if_include": "eth0",
             }

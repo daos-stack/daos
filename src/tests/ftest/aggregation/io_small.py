@@ -10,7 +10,7 @@ from general_utils import human_to_bytes
 
 
 class DaosAggregationIOSmall(IorTestBase):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Test class for testing aggregation with small I/O.
 
     Test class Description:

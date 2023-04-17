@@ -43,6 +43,8 @@ struct pf_param {
 	union {
 		/* private parameter for iteration */
 		struct {
+			/* nested iterator */
+			bool	nested;
 			/* visible iteration */
 			bool	visible;
 		} pa_iter;

@@ -9,6 +9,7 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry pool basic metrics.
 

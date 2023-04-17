@@ -9,6 +9,7 @@ from ec_utils import ErasureCodeFio
 
 
 class EcodFioRebuild(ErasureCodeFio):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=protected-access
     """Test class Description: Runs Fio with EC object type over POSIX and
         verify on-line, off-line for rebuild and verify the data.
