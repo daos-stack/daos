@@ -475,7 +475,6 @@ struct chk_instance {
 
 	struct btr_root		 ci_pending_btr;
 	daos_handle_t		 ci_pending_hdl;
-	d_list_t		 ci_pending_list;
 
 	/* The slowest phase for the failed pool or rank. */
 	uint32_t		 ci_slowest_fail_phase;
@@ -531,6 +530,8 @@ struct chk_pool_rec {
 	d_list_t		 cpr_link;
 	/* The list of chk_pool_shard. */
 	d_list_t		 cpr_shard_list;
+	/* The list of chk_pending_rec. */
+	d_list_t		 cpr_pending_list;
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
 				 cpr_start_post:1,
@@ -562,8 +563,8 @@ struct chk_pool_rec {
 };
 
 struct chk_pending_rec {
-	/* Link into chk_instance::ci_pending_list. */
-	d_list_t		 cpr_ins_link;
+	/* Link into chk_pool_rec::cpr_pending_list. */
+	d_list_t		 cpr_pool_link;
 	/* Link into chk_rank_rec::crr_pending_list. */
 	d_list_t		 cpr_rank_link;
 	uuid_t			 cpr_uuid;
@@ -651,10 +652,12 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
 		       struct chk_pool_rec **cpr);
 
-int chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uuid_t uuid, uint64_t seq,
-		    uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
+int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
+		    uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
 
 int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
+
+int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
 
 void chk_pending_destroy(struct chk_pending_rec *cpr);
 
@@ -947,6 +950,7 @@ chk_pool_put(struct chk_pool_rec *cpr)
 	if (--(cpr->cpr_refs) == 0) {
 		d_list_del(&cpr->cpr_link);
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
+		D_ASSERT(d_list_empty(&cpr->cpr_pending_list));
 
 		while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
 					       cps_link)) != NULL) {
@@ -995,22 +999,6 @@ chk_pool_shutdown(struct chk_pool_rec *cpr, bool locked)
 
 	if (!locked)
 		ABT_mutex_unlock(cpr->cpr_mutex);
-}
-
-static inline void
-chk_pool_wait(struct chk_pool_rec *cpr)
-{
-	D_ASSERT(cpr->cpr_refs > 0);
-
-	ABT_mutex_lock(cpr->cpr_mutex);
-	if (cpr->cpr_thread != ABT_THREAD_NULL && !cpr->cpr_stop) {
-		cpr->cpr_stop = 1;
-		ABT_cond_broadcast(cpr->cpr_cond);
-		ABT_mutex_unlock(cpr->cpr_mutex);
-		ABT_thread_free(&cpr->cpr_thread);
-	} else {
-		ABT_mutex_unlock(cpr->cpr_mutex);
-	}
 }
 
 static inline bool
