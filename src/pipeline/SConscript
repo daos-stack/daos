@@ -27,8 +27,9 @@ def scons():
                          common_tgts + ['srv_pipeline.c', 'srv_mod.c',
                                         'filter.c', 'filter_funcs.c',
                                         'aggr_funcs.c', 'getdata_funcs.c'],
-                 	 install_off="../..")
+                         install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', srv)
+
 
 if __name__ == "SCons.Script":
     scons()
