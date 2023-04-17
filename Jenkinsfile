@@ -46,6 +46,7 @@ pipeline {
              env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
              /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME.startsWith('md-on-ssd-testing') ? 'H 12 * * 0' : '')
     }
 
@@ -84,8 +85,11 @@ pipeline {
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
-               defaultValue: 'ofi+tcp',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
+               defaultValue: '',
+               description: 'Test-provider to use for this run.  Specifies the default provider ' +
+                            'to use the daos_server config file when running functional tests' +
+                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
+                            '"ofi+tcp")')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
