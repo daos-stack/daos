@@ -194,8 +194,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((struct daos_pool_space) (pco_space)		CRT_RAW) \
 	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_RAW) \
 	/* only set on -DER_TRUNC */				 \
-	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
-	((uint32_t)		(pco_rebuild_ver)	CRT_VAR)
+	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect_v4, DAOS_ISEQ_POOL_CONNECT_V4, DAOS_OSEQ_POOL_CONNECT)
 
@@ -241,8 +240,7 @@ CRT_RPC_DECLARE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
 	((uint32_t)		(pqo_pool_layout_ver)	CRT_VAR) \
-	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR) \
-	((uint32_t)		(pqo_rebuild_ver)	CRT_VAR)
+	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 
@@ -486,8 +484,7 @@ CRT_RPC_DECLARE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE, DAOS_OSEQ_POOL_UPGRADE)
 #define DAOS_OSEQ_POOL_TGT_QUERY_MAP	/* output fields */	 \
 	((struct pool_op_out)	(tmo_op)		CRT_VAR) \
 	/* only set on -DER_TRUNC */				 \
-	((uint32_t)		(tmo_map_buf_size)	CRT_VAR) \
-	((uint32_t)		(tmo_rebuild_ver)	CRT_VAR)
+	((uint32_t)		(tmo_map_buf_size)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
