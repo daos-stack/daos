@@ -4052,6 +4052,9 @@ def test_pydaos_kv_obj_class(server, conf):
         print("Test step failed in test_pydaos_kv_obj_class()")
 
     # pylint: disable=protected-access
+    del kv1
+    del kv2
+    del container
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
