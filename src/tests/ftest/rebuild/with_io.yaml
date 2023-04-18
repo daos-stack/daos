@@ -10,6 +10,9 @@ server_config:
     0:
       targets: 2
       nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=rebuild
       storage:
         0:
           class: ram
