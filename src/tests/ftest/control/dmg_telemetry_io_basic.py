@@ -11,6 +11,7 @@ from telemetry_utils import TelemetryUtils
 
 
 class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 

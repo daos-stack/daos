@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -671,10 +671,10 @@ dc_pipeline_run(tse_task_t *api_task)
 	shard           = dc_obj_anchor2shard(api_args->anchor);
 
 	/** object id */
+
 	oid.id_pub		= obj_md.omd_id;
 	oid.id_shard		= shard;
-	oid.id_layout_ver	= dc_obj_hdl2layout_ver(api_args->oh);
-	oid.id_padding		= 0;
+	oid.id_layout_ver	= 0;
 
 	/** queue shard task */
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,19 +86,6 @@ struct ilog_context {
 D_CASSERT(sizeof(struct ilog_id) == sizeof(struct ilog_tree));
 D_CASSERT(sizeof(struct ilog_root) == sizeof(struct ilog_df));
 
-static inline struct vos_container *
-ilog_ctx2cont(struct ilog_context *lctx)
-{
-	daos_handle_t	coh;
-
-	if (lctx->ic_cbs.dc_is_same_tx_args == NULL)
-		return NULL;
-
-	coh.cookie = (unsigned long)lctx->ic_cbs.dc_is_same_tx_args;
-
-	return vos_hdl2cont(coh);
-}
-
 /**
  * Customized functions for btree.
  */
@@ -122,6 +109,9 @@ ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t in
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 	int			 rc;
 
+	if (id->id_tx_id == UMOFF_NULL)
+		return ILOG_COMMITTED;
+
 	if (!cbs->dc_log_status_cb)
 		return ILOG_COMMITTED;
 
@@ -144,8 +134,6 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 	if (!cbs->dc_log_add_cb)
 		return 0;
 
-	D_ASSERT(id->id_epoch != 0);
-
 	rc = cbs->dc_log_add_cb(lctx->ic_umm, lctx->ic_root_off, &id->id_tx_id, id->id_epoch,
 				cbs->dc_log_add_args);
 	if (rc != 0) {
@@ -167,7 +155,7 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id,
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 	int			 rc;
 
-	if (!cbs->dc_log_del_cb)
+	if (!cbs->dc_log_del_cb || !id->id_tx_id)
 		return 0;
 
 	rc = cbs->dc_log_del_cb(lctx->ic_umm, lctx->ic_root_off, id->id_tx_id, id->id_epoch,
@@ -587,7 +575,7 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out, const struct ilog
 			D_DEBUG(DB_IO, "No entry found, done\n");
 			return 0;
 		}
-		if (dtx_is_committed(id_in->id_tx_id, ilog_ctx2cont(lctx), id_in->id_epoch)) {
+		if (id_in->id_tx_id == DTX_LID_COMMITTED) {
 			/** Need to differentiate between updates that are
 			 * overwrites and others that are conflicts.  Return
 			 * a different error code in this case if the result
@@ -893,7 +881,6 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	}
 
 	D_ASSERT(!lctx->ic_in_txn);
-	D_ASSERTF(id_in->id_epoch != 0, "Invalid epoch for ilog opc %d\n", opc);
 
 	root = lctx->ic_root;
 
@@ -924,6 +911,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		tmp.lr_magic = ilog_ver_inc(lctx);
 		tmp.lr_ts_idx = root->lr_ts_idx;
 		tmp.lr_id = *id_in;
+		D_ASSERTF(id_in->id_epoch != 0, "epoch "DF_U64" opc %d\n",
+			  id_in->id_epoch, opc);
 		rc = ilog_ptr_set(lctx, root, &tmp);
 		if (rc == 0)
 			rc = ilog_log_add(lctx, &root->lr_id);

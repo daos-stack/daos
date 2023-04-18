@@ -11,7 +11,7 @@ from test_utils_pool import add_pool, get_size_params, check_pool_creation, time
 
 
 class PoolCreateTests(TestWithServers):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Pool create tests.
 
     All of the tests verify pool create performance with 7 servers and 1 client.
@@ -35,8 +35,8 @@ class PoolCreateTests(TestWithServers):
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests within 2 minutes.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """

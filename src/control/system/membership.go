@@ -547,25 +547,18 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	newState := MemberStateErrored
-	if member.State.isTransitionIllegal(newState) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
+	ns := MemberStateErrored
+	if member.State.isTransitionIllegal(ns) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
 		return
 	}
 
-	oldState := member.State
-	member.State = newState
+	member.State = ns
 	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
 	}
-
-	var msg string
-	if evt.Msg != "" {
-		msg = fmt.Sprintf(" (%s)", evt.Msg)
-	}
-	m.log.Errorf("rank %d: %s->%s%s", member.Rank, oldState, newState, msg)
 }
 
 // OnEvent handles events on channel and updates member states accordingly.

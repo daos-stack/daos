@@ -1429,14 +1429,12 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 	bool		 degraded_test = false;
 	uint16_t	 fail_shards[2];
 	uint64_t	 fail_val;
-	struct daos_oclass_attr	*oca;
 	int		 rc;
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
-	oca = daos_oclass_attr_find(oid, NULL);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -1478,10 +1476,7 @@ deg_test:
 	if (degraded_test) {
 		fail_shards[0] = 0;
 		fail_shards[1] = 3;
-		if (oca->u.ec.e_p > 1)
-			fail_val = daos_shard_fail_value(fail_shards, 2);
-		else
-			fail_val = daos_shard_fail_value(fail_shards, 1);
+		fail_val = daos_shard_fail_value(fail_shards, 2);
 		daos_fail_value_set(fail_val);
 		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	}
@@ -1533,13 +1528,11 @@ deg_test:
 	print_message("fetch with smaller incorrect iod_size\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_rc_equal(rc, -DER_REC2BIG);
-	assert_int_equal(iod.iod_size, length);
 	memset(fetch_buf, 0, size);
 
 	print_message("fetch with replied correct iod_size\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(iod.iod_size, length);
 	assert_memory_equal(buf, fetch_buf, length);
 	memset(fetch_buf, 0, size);
 
@@ -1588,9 +1581,6 @@ ec_singv_diff_size_fetch(void **state)
 	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 16 * 1024, 11);
 	print_message("test OC_EC_2P1G1, singv 133B overwritten by 17KB\n");
 	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 133, 17 * 1024);
-
-	print_message("test OC_EC_4P1G1, small singv 5750B overwritten by 2290B\n");
-	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 5750, 2290);
 
 	print_message("test OC_EC_4P2G1, small singv 127B\n");
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 127, 0);
@@ -1670,12 +1660,6 @@ ec_cond_fetch(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
 			     NULL);
 	assert_rc_equal(rc, 0);
-
-	/** fetch with NULL sgl but iod_size is non-zero */
-	print_message("negative test - fetch with non-zero iod_size and NULL sgl\n");
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, iod, NULL,
-			    NULL, NULL);
-	assert_rc_equal(rc, -DER_INVAL);
 
 	/** normal fetch */
 	for (i = 0; i < 2; i++)

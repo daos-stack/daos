@@ -2259,7 +2259,7 @@ _fail_reintegrate_multiple_ranks(void **state, uint32_t domain_nr, uint32_t node
 
 	pl_obj_layout_free(origin_layout);
 	origin_layout = reint_layout;
-	for (i = 0; i <= 2; i++) {
+	for (i = 0; i >= 2; i++) {
 		for (j = 0; j < fail_tgt_nrs[i]; j++) {
 			uint32_t tgt = j + fail_tgt_offsets[i];
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This is a post test processing script for post processing the
-# run_utest.py stage CI run
+# run_test.sh stage CI run
 
 set -uex
 

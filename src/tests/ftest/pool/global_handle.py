@@ -5,9 +5,8 @@
 '''
 import traceback
 
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
-
 from apricot import TestWithServers
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 
 class GlobalHandle(TestWithServers):
@@ -41,7 +40,8 @@ class GlobalHandle(TestWithServers):
         pool.set_svc(rank)
 
         # note that the handle is stored inside the pool as well
-        pool.global2local(self.context, iov_len, buf_len, buf)
+        dummy_local_handle = pool.global2local(self.context, iov_len,
+                                               buf_len, buf)
 
         # perform some operations that will use the new handle
         pool.pool_query()
@@ -56,7 +56,7 @@ class GlobalHandle(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,global_handle
-        :avocado: tags=GlobalHandle,test_global_handle
+        :avocado: tags=pool_global_handle,test_global_handle
         """
         # initialize a python pool object then create the underlying
         # daos storage

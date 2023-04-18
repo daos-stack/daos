@@ -149,12 +149,8 @@ type OidFlag struct {
 	Oid C.daos_obj_id_t
 }
 
-func oidString(oid C.daos_obj_id_t) string {
-	return fmt.Sprintf("%d.%d", oid.hi, oid.lo)
-}
-
 func (f *OidFlag) String() string {
-	return oidString(f.Oid)
+	return fmt.Sprintf("%d.%d", f.Oid.hi, f.Oid.lo)
 }
 
 func (f *OidFlag) UnmarshalFlag(fv string) error {

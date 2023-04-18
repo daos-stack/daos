@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -529,7 +529,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			pcCtx, pcCancel := context.WithTimeout(context.Background(), 260*time.Millisecond)
+			pcCtx, pcCancel := context.WithTimeout(context.Background(), defaultRetryAfter+10*time.Millisecond)
 			defer pcCancel()
 			gotResp, gotErr := tc.mgmtSvc.PoolCreate(pcCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -1429,9 +1429,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		Acl: &mgmtpb.AccessControlList{
-			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-		},
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1489,7 +1487,7 @@ func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
 	return &mgmtpb.ModifyACLReq{
 		Sys: build.DefaultSystemName,
 		Id:  mockUUID,
-		Entries: []string{
+		ACL: []string{
 			"A::OWNER@:rw",
 		},
 	}
@@ -1557,9 +1555,7 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		Acl: &mgmtpb.AccessControlList{
-			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-		},
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1637,9 +1633,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		Acl: &mgmtpb.AccessControlList{
-			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-		},
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
@@ -1725,9 +1719,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 
 	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
-		Acl: &mgmtpb.AccessControlList{
-			Entries: []string{"A::OWNER@:rw", "A:G:readers@:r"},
-		},
+		ACL:    []string{"A::OWNER@:rw", "A:G:readers@:r"},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 

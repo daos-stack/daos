@@ -1031,17 +1031,11 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 	iv_entry.iv_agg_eph.eph = eph;
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
 	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
-	if (rc) {
-		D_ERROR(DF_UUID" op %d, crt_group_rank failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+	if (rc)
 		return rc;
-	}
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, true /* retry */);
-	if (rc)
-		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+			    shortcut, sync_mode, false /* retry */);
 	return rc;
 }
 
@@ -1374,7 +1368,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    sync ? CRT_IV_SYNC_EAGER : CRT_IV_SYNC_LAZY,
-			    true/* retry */);
+			    !sync/* retry */);
 	D_FREE(iv_entry);
 	return rc;
 }

@@ -60,6 +60,12 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=DaosCoreTest,test_daos_pool
         """
         self.run_subtest()
+        try:
+            with open("/tmp/suite_dmg.log", 'r') as dmg_log:
+                log_data = dmg_log.readlines()
+                self.add_test_data("suite_pool_dmg.log", log_data)
+        except IOError as error:
+            print("unable to move dmg log:", error)
 
     def test_daos_container(self):
         """Jira ID: DAOS-1568

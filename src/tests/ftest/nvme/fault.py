@@ -8,6 +8,7 @@ from exception_utils import CommandFailure
 
 
 class NvmeFault(ServerFillUp):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate IO works fine when NVMe fault generated
                             on single or multiple servers with single drive.

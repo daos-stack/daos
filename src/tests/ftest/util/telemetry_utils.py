@@ -77,8 +77,7 @@ class TelemetryUtils():
         'engine_pool_scrubber_scrubber_started',
         'engine_pool_scrubber_ult_start',
         'engine_pool_scrubber_wait_gauge',
-        'engine_pool_vos_space_scm_used',
-        'engine_pool_vos_space_nvme_used']
+    ]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",

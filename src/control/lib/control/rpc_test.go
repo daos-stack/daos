@@ -447,19 +447,6 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			},
 			expErr: FaultRpcTimeout(new(testRequest)),
 		},
-		"request to non-leader replicas with no current leader hits retry cap": {
-			req: &testRequest{
-				HostList: nonLeaderReplicas,
-				retryableRequest: retryableRequest{
-					retryMaxTries: 2,
-				},
-				toMS: true,
-				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
-					return nil, errNotLeaderNoLeader
-				},
-			},
-			expErr: errors.New("max retries"),
-		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{
 				HostList: nonReplicaHosts,

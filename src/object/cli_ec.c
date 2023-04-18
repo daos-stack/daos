@@ -1403,7 +1403,7 @@ obj_ec_fail_info_insert(struct obj_reasb_req *reasb_req, uint16_t fail_tgt)
 }
 
 int
-obj_ec_singv_split(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
+obj_ec_singv_split(daos_unit_oid_t oid, uint32_t layout_ver, struct daos_oclass_attr *oca,
 		   uint64_t dkey_hash, daos_size_t iod_size, d_sg_list_t *sgl)
 {
 	uint64_t c_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
@@ -1442,7 +1442,7 @@ out:
 }
 
 int
-obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
+obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint32_t layout_ver, struct daos_oclass_attr *oca,
 			uint64_t dkey_hash, daos_iod_t *iod, d_sg_list_t *sgl,
 			d_iov_t *e_iov)
 {
@@ -2511,7 +2511,6 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods, uint32
 					    stripe_rec_nr;
 			}
 			rtask->ert_oiod = iod;
-			rtask->ert_uiod = &reasb_req->orr_uiods[i];
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
 			rtask->ert_iod.iod_size = recx_ep == NULL ?

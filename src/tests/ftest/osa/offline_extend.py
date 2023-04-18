@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -91,23 +91,19 @@ class OSAOfflineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            # Get initial total free space (scm+nvme)
-            initial_free_space = self.pool.get_total_free_space(refresh=True)
             # Enable aggregation for multiple pool testing only.
             if self.test_during_aggregation is True and (num_pool > 1):
                 self.delete_extra_container(self.pool)
             output = self.pool.extend(rank_val)
             self.print_and_assert_on_rebuild_failure(output)
-            free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
             self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
+
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            self.assertTrue(free_space_after_extend > initial_free_space,
-                            "Expected free space after extend is less than initial")
 
             if data:
                 # Perform the IOR read using the same

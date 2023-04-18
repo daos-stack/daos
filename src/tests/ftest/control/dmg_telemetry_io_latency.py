@@ -7,8 +7,8 @@
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
+from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
-from general_utils import report_errors
 
 
 def convert_to_number(size):
@@ -22,44 +22,57 @@ def convert_to_number(size):
 
     """
     num = 0
-    size_dict = {"B": 1,
+    SIZE_DICT = {"B": 1,
                  "K": 1024,
                  "M": 1024 * 1024,
                  "G": 1024 * 1024 * 1024,
                  "T": 1024 * 1024 * 1024 * 1024}
     # Convert string to bytes
     suffix = str(size)[-1]
-    for key, value in size_dict.items():
+    for key, value in SIZE_DICT.items():
         if suffix == key:
             num = int(value) * int(size[:-1])
     return int(num)
 
 
 class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 
     :avocado: recursive
     """
 
-    def add_containers(self, pool, oclass, path="/run/container/*"):
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super().__init__(*args, **kwargs)
+        self.rpc_latency = {}
+        self.iterations = 1
+
+    def add_containers(self, pool, oclass=None, path="/run/container/*"):
         """Create a list of containers that the various jobs use for storage.
 
         Args:
-            pool (TestPool): pool to create container
-            oclass (str): object class of container
-            path (str): container namespace path
+            pool: pool to create container
+            oclass: object class of container
+
 
         """
+        rd_fac = None
         # Create a container and add it to the overall list of containers
-        self.container.append(self.get_container(pool, namespace=path, create=False))
+        self.container.append(
+            TestContainer(pool, daos_command=self.get_daos_command()))
+        self.container[-1].namespace = path
+        self.container[-1].get_params(self)
         # include rd_fac based on the class
-        self.container[-1].oclass.update(oclass)
-        redundancy_factor = extract_redundancy_factor(oclass)
-        rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+        if oclass:
+            self.container[-1].oclass.update(oclass)
+            redundancy_factor = extract_redundancy_factor(oclass)
+            rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
         properties = self.container[-1].properties.value
-        cont_properties = ",".join(filter(None, [properties, rd_fac]))
-        self.container[-1].properties.update(cont_properties)
+        cont_properties = (",").join(filter(None, [properties, rd_fac]))
+        if cont_properties is not None:
+            self.container[-1].properties.update(cont_properties)
         self.container[-1].create()
 
     def get_ior_latency(self, cmdresult):
@@ -83,7 +96,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         idx = messages.index(ior_metric_summary)
         # idx + 1, idx + 2  and idx + 3  are headers.
         # idx + 4 will give ior perf info.
-        for iteration in range(self.ior_cmd.repetitions.value):
+        for iteration in range(self.iterations):
             ior_results = (" ".join(messages[idx + 4 + iteration].split())).split()
             # Latency will not include open and close time in order to compare to the
             # IO rpc latency reported by daos metrics
@@ -149,11 +162,12 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,telemetry,daos_cmd
-        :avocado: tags=TestWithTelemetryIOLatency,test_io_latency_telmetry_metrics
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=telemetry,daos_cmd
+        :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
+        self.iterations = self.params.get("repetitions", "/run/*")
         self.container = []
         verification_results = []
         metrics_data = {}
@@ -166,14 +180,17 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
             self.add_pool(connect=False)
-            self.add_containers(self.pool, oclass=self.ior_cmd.dfs_oclass.value)
+            oclass = self.ior_cmd.dfs_oclass.value
+            self.add_containers(self.pool, oclass)
             for operation in ["update", "fetch"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))
-                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
+                    operation))
+                self.log.info(
+                    "<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
                 self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].identifier)
+                    self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
                     timeout=200, create_pool=False, create_cont=False)
@@ -198,11 +215,11 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                 else:
                     verification_results.append(
                         ["FAILED", "engine_io_latency_" + operation, transfer_size])
-        errors = []
-        self.log.info("Summary of io latency min, max, mean and stddev comparison results:")
+        errors = False
+        self.log.error("Summary of io latency min, max, mean and stddev comparison results:")
         for item in verification_results:
-            msg = "  {} {} {}".format(item[0], item[1], item[2])
-            self.log.info(msg)
+            self.log.info("  %s  %s  %s", item[0], item[1], item[2])
             if item[0] == "FAILED":
-                errors.append(msg)
-        report_errors(self, errors)
+                errors = True
+        if errors:
+            self.fail("Test FAILED")

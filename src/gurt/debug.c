@@ -270,7 +270,6 @@ debug_mask_load(const char *mask_name)
 {
 	char			*mask_str;
 	char			*cur;
-	char			*saved_ptr;
 	int			 i;
 	struct d_debug_bit	*d;
 	struct d_debug_grp	*g;
@@ -284,7 +283,7 @@ debug_mask_load(const char *mask_name)
 		return;
 	}
 
-	cur = strtok_r(mask_str, DD_SEP, &saved_ptr);
+	cur = strtok(mask_str, DD_SEP);
 	d_dbglog_data.dd_mask = 0;
 	while (cur != NULL) {
 		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
@@ -312,7 +311,7 @@ debug_mask_load(const char *mask_name)
 				break;
 			}
 		}
-		cur = strtok_r(NULL, DD_SEP, &saved_ptr);
+		cur = strtok(NULL, DD_SEP);
 	}
 	/** Must not use D_ macros internally to avoid caching log mask
 	 *  during mask resync

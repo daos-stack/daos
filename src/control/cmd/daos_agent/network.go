@@ -33,19 +33,18 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	var prov string
-	if !strings.EqualFold(cmd.FabricProvider, "all") {
-		prov = cmd.FabricProvider
-	}
-
 	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	results, err := fabricScanner.Scan(context.Background(), prov)
+	results, err := fabricScanner.Scan(context.Background())
 	if err != nil {
 		return nil
 	}
 
-	hf := fabricInterfaceSetToHostFabric(results, prov)
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = "all"
+	}
+
+	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err

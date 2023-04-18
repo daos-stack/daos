@@ -66,9 +66,6 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	if resp == nil {
 		return errors.New("scm prepare returned nil response")
 	}
-	if resp.Socket == nil {
-		return errors.New("scm prepare returned nil socket state")
-	}
 	state := resp.Socket.State
 
 	if resp.RebootRequired {

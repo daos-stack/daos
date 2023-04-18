@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -336,9 +336,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * related RPC to the new leader, but such DTX is still not
 		 * committable yet. Here, the resync logic will abort it by
 		 * race during the new leader waiting for other replica(s).
-		 *
-		 * So when the leader get replies from other replicas, it
-		 * needs to check whether local DTX is still valid or not.
+		 * The dtx_abort() logic will abort the local DTX firstly.
+		 * When the leader get replies from other replicas, it will
+		 * check whether local DTX is still valid or not.
 		 *
 		 * If we abort multiple non-ready DTXs together, then there
 		 * is race that one DTX may become committable when we abort
@@ -652,6 +652,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	cont->sc_dtx_resyncing = 1;
+	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	dra.cont = cont;

@@ -56,7 +56,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		// don't strip nvme details if verbose or health or meta set
 		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
 	}
-	req.SetHostList(cmd.getHostList())
+	req.SetHostList(cmd.hostlist)
 
 	cmd.Debugf("storage scan request: %+v", req)
 
@@ -117,7 +117,7 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
 	req := &control.StorageFormatReq{Reformat: cmd.Force}
-	req.SetHostList(cmd.getHostList())
+	req.SetHostList(cmd.hostlist)
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
@@ -165,12 +165,12 @@ type nvmeRebindCmd struct {
 func (cmd *nvmeRebindCmd) Execute(args []string) error {
 	ctx := context.Background()
 
-	if len(cmd.getHostList()) != 1 {
+	if len(cmd.hostlist) != 1 {
 		return errors.New("command expects a single host in hostlist")
 	}
 
 	req := &control.NvmeRebindReq{PCIAddr: cmd.PCIAddr}
-	req.SetHostList(cmd.getHostList())
+	req.SetHostList(cmd.hostlist)
 
 	resp, err := control.StorageNvmeRebind(ctx, cmd.ctlInvoker, req)
 	if err != nil {
@@ -214,7 +214,7 @@ type nvmeAddDeviceCmd struct {
 func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	ctx := context.Background()
 
-	if len(cmd.getHostList()) != 1 {
+	if len(cmd.hostlist) != 1 {
 		return errors.New("command expects a single host in hostlist")
 	}
 
@@ -223,7 +223,7 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		EngineIndex:      cmd.EngineIndex,
 		StorageTierIndex: cmd.StorageTierIndex,
 	}
-	req.SetHostList(cmd.getHostList())
+	req.SetHostList(cmd.hostlist)
 
 	cmd.Debugf("nvme add device req: %+v", req)
 	resp, err := control.StorageNvmeAddDevice(ctx, cmd.ctlInvoker, req)

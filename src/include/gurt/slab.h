@@ -54,7 +54,6 @@ struct d_slab_type {
 	d_list_t          st_pending_list;
 	pthread_mutex_t   st_lock;
 	struct d_slab    *st_slab;
-	void             *st_arg;
 
 	/* Counters for current number of objects */
 	int               st_count;         /* Total currently created */
@@ -94,7 +93,7 @@ d_slab_destroy(struct d_slab *slab);
 
 /* Register a new type to a manager, called multiple times after init */
 int
-d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, void *arg, struct d_slab_type **type);
+d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type **type);
 
 /* Allocate a data structure in performant way */
 void *

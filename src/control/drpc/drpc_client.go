@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package drpc
 
 import (
-	"context"
 	"net"
 	"sync"
 
@@ -22,7 +21,7 @@ type DomainSocketClient interface {
 	IsConnected() bool
 	Connect() error
 	Close() error
-	SendMsg(context.Context, *Call) (*Response, error)
+	SendMsg(call *Call) (*Response, error)
 	GetSocketPath() string
 }
 
@@ -37,28 +36,17 @@ type ClientConnection struct {
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
 	conn       net.Conn           // Connection to socket
-	connMu     sync.RWMutex       // Connection lock
 	sequence   int64              // Increment each time we send
-}
-
-func (c *ClientConnection) isConnected() bool {
-	return c.conn != nil
 }
 
 // IsConnected indicates whether the client connection is currently active
 func (c *ClientConnection) IsConnected() bool {
-	c.connMu.RLock()
-	defer c.connMu.RUnlock()
-
-	return c.isConnected()
+	return c.conn != nil
 }
 
 // Connect opens a connection to the internal Unix Domain Socket path
 func (c *ClientConnection) Connect() error {
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
-
-	if c.isConnected() {
+	if c.IsConnected() {
 		// Nothing to do
 		return nil
 	}
@@ -75,10 +63,7 @@ func (c *ClientConnection) Connect() error {
 
 // Close shuts down the connection to the Unix Domain Socket
 func (c *ClientConnection) Close() error {
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
-
-	if !c.isConnected() {
+	if !c.IsConnected() {
 		// Nothing to do
 		return nil
 	}
@@ -92,27 +77,15 @@ func (c *ClientConnection) Close() error {
 	return nil
 }
 
-func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
+func (c *ClientConnection) sendCall(msg *Call) error {
 	// increment sequence every call, always nonzero
-	c.connMu.Lock()
 	c.sequence++
 	msg.Sequence = c.sequence
-	c.connMu.Unlock()
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal dRPC request")
 	}
-
-	callWrite := make(chan struct{})
-	defer close(callWrite)
-	go func() {
-		select {
-		case <-ctx.Done():
-			c.Close()
-		case <-callWrite:
-		}
-	}()
 
 	if _, err := c.conn.Write(callBytes); err != nil {
 		return errors.Wrap(err, "dRPC send")
@@ -121,17 +94,7 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 	return nil
 }
 
-func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) {
-	respRead := make(chan struct{})
-	defer close(respRead)
-	go func() {
-		select {
-		case <-ctx.Done():
-			c.Close()
-		case <-respRead:
-		}
-	}()
-
+func (c *ClientConnection) recvResponse() (*Response, error) {
 	respBytes := make([]byte, MaxMsgSize)
 	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
@@ -149,7 +112,7 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 
 // SendMsg sends a message to the connected dRPC server, and returns the
 // response to the caller.
-func (c *ClientConnection) SendMsg(ctx context.Context, msg *Call) (*Response, error) {
+func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 	if !c.IsConnected() {
 		return nil, errors.Errorf("dRPC not connected")
 	}
@@ -158,12 +121,12 @@ func (c *ClientConnection) SendMsg(ctx context.Context, msg *Call) (*Response, e
 		return nil, errors.Errorf("invalid dRPC call")
 	}
 
-	err := c.sendCall(ctx, msg)
+	err := c.sendCall(msg)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	return c.recvResponse(ctx)
+	return c.recvResponse()
 }
 
 // GetSocketPath returns client dRPC socket file path.

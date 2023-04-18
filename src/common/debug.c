@@ -102,16 +102,15 @@ io_bypass_init(void)
 {
 	char	*str = getenv(DENV_IO_BYPASS);
 	char	*tok;
-	char	*saved_ptr;
 
 	if (!str)
 		return;
 
-	tok = strtok_r(str, ",", &saved_ptr);
+	tok = strtok(str, ",");
 	while (tok) {
 		struct io_bypass *iob;
 
-		str = strtok_r(NULL, ",", &saved_ptr);
+		str = strtok(NULL, ",");
 		if (str)
 			str[-1] = '\0';
 

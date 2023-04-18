@@ -7,6 +7,7 @@ from apricot import TestWithServers
 
 
 class PoolPDAProperty(TestWithServers):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """run tests with pool pda property
 

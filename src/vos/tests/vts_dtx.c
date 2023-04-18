@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
 	dth->dth_prepared = 0;
+	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -92,7 +93,6 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
-	vos_dtx_attach(dth, false, false);
 
 	*dthp = dth;
 }

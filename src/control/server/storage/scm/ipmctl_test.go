@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,57 +36,6 @@ var (
 	sock0 = uint(0)
 	sock1 = uint(1)
 )
-
-func mockCmdShowRegionsWithSock(sid int) pmemCmd {
-	cmd := cmdShowRegions
-	cmd.Args = append(cmd.Args, "-socket", fmt.Sprintf("%d", sid))
-	return cmd
-}
-
-func mockCmdDeleteGoalsWithSock(sid int) pmemCmd {
-	cmd := cmdDeleteGoals
-	cmd.Args = append(cmd.Args, "-socket", fmt.Sprintf("%d", sid))
-	return cmd
-}
-
-func mockCmdCreateRegionsWithSock(sid int) pmemCmd {
-	return pmemCmd{
-		BinaryName: "ipmctl",
-		Args: []string{
-			"create", "-f", "-goal", "-socket", fmt.Sprintf("%d", sid),
-			"PersistentMemoryType=AppDirect",
-		},
-	}
-}
-
-func mockCmdCreateNamespace(regionID int, bytes int) pmemCmd {
-	return pmemCmd{
-		BinaryName: "ndctl",
-		Args: []string{
-			"create-namespace", "--region",
-			fmt.Sprintf("region%d", regionID),
-			"--size", fmt.Sprintf("%d", bytes),
-		},
-	}
-}
-
-func mockCmdDisableNamespace(name string) pmemCmd {
-	cmd := cmdDisableNamespace
-	cmd.Args = append(cmd.Args, name)
-	return cmd
-}
-
-func mockCmdDestroyNamespace(name string) pmemCmd {
-	cmd := cmdDestroyNamespace
-	cmd.Args = append(cmd.Args, name)
-	return cmd
-}
-
-func mockCmdListNamespacesWithNUMA(numaID int) pmemCmd {
-	cmd := cmdListNamespaces
-	cmd.Args = append(cmd.Args, "--numa-node", fmt.Sprintf("%d", numaID))
-	return cmd
-}
 
 func genNsJSON(t *testing.T, numa, nsNum, size, id string) string {
 	t.Helper()
@@ -197,7 +146,7 @@ func TestIpmctl_prep(t *testing.T) {
 		runErr      []error
 		expErr      error
 		expPrepResp *storage.ScmPrepareResponse
-		expCalls    []pmemCmd
+		expCalls    []string
 	}{
 		"nil scan response": {
 			nilScanResp: true,
@@ -207,7 +156,7 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -217,7 +166,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "not-interleaved"),
 			},
 			expErr: storage.FaultScmNotInterleaved(sock0),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -226,7 +175,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "unhealthy-2nd-sock"),
 			},
 			expErr: storage.FaultScmNotHealthy(sock1),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -235,7 +184,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "part-free"),
 			},
 			expErr: storage.FaultScmPartialCapacity(sock0),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -244,7 +193,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "unknown-memtype"),
 			},
 			expErr: storage.FaultScmUnknownMemoryMode(sock0),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -253,14 +202,14 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, outNoPMemRegions, "", "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				cmdCreateRegions,
+				fmt.Sprintf(cmdCreateRegions, " "),
 			},
 		},
 		"no regions; sock selected": {
@@ -271,15 +220,15 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, outNoPMemRegions, "", "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					SocketID: &sock1,
 					State:    storage.ScmNoRegions,
 				},
 				RebootRequired: true,
 			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
-				mockCmdDeleteGoalsWithSock(1), mockCmdCreateRegionsWithSock(1),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
+				cmdDeleteGoals, fmt.Sprintf(cmdCreateRegions, " "),
 			},
 		},
 		"no regions; delete goals fails": {
@@ -289,8 +238,8 @@ func TestIpmctl_prep(t *testing.T) {
 			runErr: []error{
 				nil, nil, errors.New("fail"),
 			},
-			expErr: errors.Errorf("%s: fail", cmdDeleteGoals.String()),
-			expCalls: []pmemCmd{
+			expErr: errors.Errorf("cmd %q: fail", cmdDeleteGoals),
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -301,10 +250,10 @@ func TestIpmctl_prep(t *testing.T) {
 			runErr: []error{
 				nil, nil, nil, errors.New("fail"),
 			},
-			expErr: errors.Errorf("%s: fail", cmdCreateRegions.String()),
-			expCalls: []pmemCmd{
+			expErr: errors.Errorf("cmd %q: fail", fmt.Sprintf(cmdCreateRegions, " ")),
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				cmdCreateRegions,
+				fmt.Sprintf(cmdCreateRegions, " "),
 			},
 		},
 		"no free capacity": {
@@ -317,11 +266,11 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNS,
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -338,11 +287,11 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNSPerSock,
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -363,7 +312,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "dual-sock"), "",
 			},
 			expErr: errors.New("namespace major versions (1) to equal num regions (2)"),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -394,7 +343,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "dual-sock"), "",
 			},
 			expErr: errors.New("namespaces on numa 0, want 2 got 1"),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -415,7 +364,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "sock-one"), "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{
@@ -428,7 +377,7 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -470,10 +419,10 @@ func TestIpmctl_prep(t *testing.T) {
 				},
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock"), "",
+				verStr, mockXMLRegions(t, "dual-sock"), "", "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{
@@ -507,7 +456,7 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -516,23 +465,23 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual,
-				"", "", ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "",
+				ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNS,
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
-				mockCmdCreateNamespace(0, 1082331758592),
-				mockCmdCreateNamespace(1, 1082331758592),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				"ndctl create-namespace --region 0 --size 1082331758592",
+				"ndctl create-namespace --region 1 --size 1082331758592",
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
-		"free capacity; two namespaces per socket requested": {
+		"free capacity; multiple namespaces requested": {
 			prepReq: &storage.ScmPrepareRequest{
 				NrNamespacesPerSocket: 2,
 			},
@@ -540,102 +489,22 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual,
-				"", "", "", "", ndctlDualNsPerSockStr,
-				mockXMLRegions(t, "dual-sock-no-free"),
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "", "", "", "",
+				ndctlDualNsPerSockStr, mockXMLRegions(t, "dual-sock-no-free"),
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNSPerSock,
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions,
-				cmdDeleteGoals, cmdListNdctlRegions,
-				mockCmdCreateNamespace(0, 541165879296),
-				mockCmdCreateNamespace(0, 541165879296),
-				mockCmdCreateNamespace(1, 541165879296),
-				mockCmdCreateNamespace(1, 541165879296),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				"ndctl create-namespace --region 0 --size 541165879296",
+				"ndctl create-namespace --region 0 --size 541165879296",
+				"ndctl create-namespace --region 1 --size 541165879296",
+				"ndctl create-namespace --region 1 --size 541165879296",
 				cmdListNamespaces, cmdShowRegions,
-			},
-		},
-		"free capacity; two namespaces per socket requested; sock 1 select; iset id match": {
-			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerSocket: 2,
-				SocketID:              &sock1,
-			},
-			scanResp: &storage.ScmScanResponse{
-				Modules: testModules,
-			},
-			runOut: []string{
-				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsSwapISet,
-				"", "", ndctlNamespaceDualR0, mockXMLRegions(t, "sock-one"),
-			},
-			expPrepResp: &storage.ScmPrepareResponse{
-				Namespaces: getNsFromJSON(t, ndctlNamespaceDualR0),
-				Socket: &storage.ScmSocketState{
-					State:    storage.ScmNoFreeCap,
-					SocketID: &sock1,
-				},
-			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
-				mockCmdDeleteGoalsWithSock(1), cmdListNdctlRegions,
-				mockCmdCreateNamespace(0, 541165879296),
-				mockCmdCreateNamespace(0, 541165879296),
-				mockCmdListNamespacesWithNUMA(1),
-				mockCmdShowRegionsWithSock(1),
-			},
-		},
-		"free capacity; iset id overflow": {
-			prepReq: &storage.ScmPrepareRequest{},
-			scanResp: &storage.ScmScanResponse{
-				Modules: testModules,
-			},
-			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsNegISet,
-				"", "", ndctlDualNsStr, mockXMLRegions(t, "dual-sock-no-free"),
-			},
-			expPrepResp: &storage.ScmPrepareResponse{
-				Namespaces: dualNS,
-				Socket: &storage.ScmSocketState{
-					State: storage.ScmNoFreeCap,
-				},
-			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
-				mockCmdCreateNamespace(0, 1082331758592),
-				mockCmdCreateNamespace(1, 1082331758592),
-				cmdListNamespaces, cmdShowRegions,
-			},
-		},
-		"free capacity; two namespaces per socket requested; sock 1 select; iset id overflow": {
-			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerSocket: 2,
-				SocketID:              &sock1,
-			},
-			scanResp: &storage.ScmScanResponse{
-				Modules: testModules,
-			},
-			runOut: []string{
-				verStr, mockXMLRegions(t, "sock-one-full-free"), "", ndctlRegionsNegISet,
-				"", "", ndctlNamespaceDualR1, mockXMLRegions(t, "sock-one"),
-			},
-			expPrepResp: &storage.ScmPrepareResponse{
-				Namespaces: getNsFromJSON(t, ndctlNamespaceDualR1),
-				Socket: &storage.ScmSocketState{
-					State:    storage.ScmNoFreeCap,
-					SocketID: &sock1,
-				},
-			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
-				mockCmdDeleteGoalsWithSock(1), cmdListNdctlRegions,
-				mockCmdCreateNamespace(1, 541165879296),
-				mockCmdCreateNamespace(1, 541165879296),
-				mockCmdListNamespacesWithNUMA(0),
-				mockCmdShowRegionsWithSock(1),
 			},
 		},
 		"free capacity; create namespace fails": {
@@ -643,26 +512,26 @@ func TestIpmctl_prep(t *testing.T) {
 				Modules: testModules,
 			},
 			runOut: []string{
-				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", ndctlRegionsDual, "",
+				verStr, mockXMLRegions(t, "dual-sock-full-free"), "", "",
 			},
 			runErr: []error{
-				nil, nil, nil, nil, errors.New("fail"),
+				nil, nil, nil, errors.New("fail"),
 			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals, cmdListNdctlRegions,
-				mockCmdCreateNamespace(0, 1082331758592),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				"ndctl create-namespace --region 0 --size 1082331758592",
 			},
-			expErr: errors.New("fail"),
+			expErr: errors.New("ndctl create-namespace --region 0 --size 1082331758592: fail"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			var calls []pmemCmd
+			var calls []string
 			var callIdx int
 
-			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
+			mockRun := func(cmd string) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -676,7 +545,7 @@ func TestIpmctl_prep(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, errors.Wrap(e, cmd.String())
+				return o, e
 			}
 
 			mockLookPath := func(string) (string, error) {
@@ -698,18 +567,7 @@ func TestIpmctl_prep(t *testing.T) {
 			}
 
 			resp, err := cr.prep(*tc.prepReq, tc.scanResp)
-			if len(tc.runOut) != len(calls) {
-				t.Fatal("runOut slice has different number of entries than calls made")
-			}
-			if len(tc.runErr) > 0 && len(tc.runErr) != len(calls) {
-				t.Fatal("runErr slice has different number of entries than calls made")
-			}
-			for i, s := range calls {
-				log.Debugf("call made: %v", s)
-				if tc.runOut[i] != "" {
-					log.Debugf("output: %s", tc.runOut[i])
-				}
-			}
+			log.Debugf("calls made %+q", calls)
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
@@ -737,7 +595,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 		runErr      []error
 		expPrepResp *storage.ScmPrepareResponse
 		expErr      error
-		expCalls    []pmemCmd
+		expCalls    []string
 	}{
 		"nil scan response": {
 			nilScanResp: true,
@@ -749,7 +607,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -762,8 +620,8 @@ func TestIpmctl_prepReset(t *testing.T) {
 				verStr, `text that is invalid xml`,
 			},
 			expErr: errors.New("parse show region cmd"),
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
 			},
 		},
 		"get pmem state fails": {
@@ -771,7 +629,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 				verStr, mockXMLRegions(t, "same-sock"),
 			},
 			expErr: errors.New("multiple regions assigned to the same socket"),
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
@@ -782,8 +640,8 @@ func TestIpmctl_prepReset(t *testing.T) {
 			runErr: []error{
 				nil, nil, errors.New("fail"),
 			},
-			expErr: errors.Errorf("%s: fail", cmdDeleteGoals.String()),
-			expCalls: []pmemCmd{
+			expErr: errors.New(cmdDeleteGoals),
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -793,11 +651,11 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},
 		},
@@ -810,14 +668,14 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					SocketID: &sock1,
 					State:    storage.ScmNoRegions,
 				},
 			},
-			expCalls: []pmemCmd{
-				cmdShowIpmctlVersion, mockCmdShowRegionsWithSock(1),
-				mockCmdDeleteGoalsWithSock(1),
+			expCalls: []string{
+				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
+				cmdDeleteGoals,
 			},
 		},
 		"remove regions; without namespaces": {
@@ -826,14 +684,14 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				cmdRemoveRegions,
+				fmt.Sprintf(cmdRemoveRegions, " "),
 			},
 		},
 		"remove regions; with namespaces": {
@@ -846,18 +704,16 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				Socket: &storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				RebootRequired: true,
 			},
-			expCalls: []pmemCmd{
+			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				mockCmdDisableNamespace("namespace0.0"),
-				mockCmdDestroyNamespace("namespace0.0"),
-				mockCmdDisableNamespace("namespace1.0"),
-				mockCmdDestroyNamespace("namespace1.0"),
-				cmdRemoveRegions,
+				"ndctl disable-namespace namespace0.0", "ndctl destroy-namespace namespace0.0",
+				"ndctl disable-namespace namespace1.0", "ndctl destroy-namespace namespace1.0",
+				fmt.Sprintf(cmdRemoveRegions, " "),
 			},
 		},
 	} {
@@ -874,10 +730,10 @@ func TestIpmctl_prepReset(t *testing.T) {
 				}
 			}
 
-			var calls []pmemCmd
+			var calls []string
 			var callIdx int
 
-			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
+			mockRun := func(cmd string) (string, error) {
 				calls = append(calls, cmd)
 
 				o := verStr
@@ -891,7 +747,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 
 				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
 				callIdx++
-				return o, errors.Wrap(e, cmd.String())
+				return o, e
 			}
 
 			mockLookPath := func(string) (string, error) {

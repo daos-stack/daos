@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2023 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -388,11 +388,6 @@ class LogTest():
                         elif line.get_msg().endswith(': 12 (Cannot allocate memory)'):
                             # dfs and dfuse use system error numbers, rather
                             # than daos, so allow ENOMEM as well as
-                            # -DER_NOMEM
-                            show = False
-                        elif line.get_msg().endswith(': 5 (HG_NOMEM)'):
-                            # Mercury uses hg error numbers, rather
-                            # than daos, so allow HG_NOMEM as well as
                             # -DER_NOMEM
                             show = False
                     elif line.rpc:

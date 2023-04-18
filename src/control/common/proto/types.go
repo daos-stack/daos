@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -258,8 +258,8 @@ func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
 		return &common.AccessControlList{}
 	}
 	return &common.AccessControlList{
-		Entries:    pbACL.Acl.Entries,
-		Owner:      pbACL.Acl.OwnerUser,
-		OwnerGroup: pbACL.Acl.OwnerGroup,
+		Entries:    pbACL.ACL,
+		Owner:      pbACL.OwnerUser,
+		OwnerGroup: pbACL.OwnerGroup,
 	}
 }

@@ -1878,13 +1878,13 @@ exit:
 	return rc;
 }
 
-/* Force complete the rpc. Used for handling of unreachable rpcs */
+/* Execute handling for unreachable rpcs */
 void
-crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
+crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx;
 
-	RPC_TRACE(DB_TRACE, rpc_priv, "Force completing rpc\n");
+	RPC_TRACE(DB_TRACE, rpc_priv, "Handling unreachable rpc\n");
 
 	if (rpc_priv == NULL) {
 		D_ERROR("Invalid argument, rpc_priv == NULL\n");

@@ -134,19 +134,12 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
-	var acl []string
-	if pcr.ACL != nil {
-		acl = pcr.ACL.Entries
-	}
-
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
-		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
 		Properties: props,
-		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
 	})
 }
@@ -234,7 +227,7 @@ type (
 		poolRequest
 		User       string
 		UserGroup  string
-		ACL        *AccessControlList `json:"-"`
+		ACL        *AccessControlList
 		NumSvcReps uint32
 		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
@@ -1296,8 +1289,8 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
-	// Verify that the DAOS system is ready before attempting to query storage.
-	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
+	// Check if DAOS system is ready. If it's not, we should fail the Pool create.
+	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true}); err != nil {
 		return 0, 0, err
 	}
 

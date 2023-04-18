@@ -23,8 +23,6 @@ import (
 
 var netSubsystems = []string{"cxi", "infiniband", "net"}
 
-const cxiProvider = "ofi+cxi"
-
 func isNetwork(subsystem string) bool {
 	for _, netSubsystem := range netSubsystems {
 		if subsystem == netSubsystem {
@@ -304,21 +302,17 @@ func (s *Provider) getParentDevName(iface string) (string, error) {
 }
 
 // GetFabricInterfaces harvests fabric interfaces from sysfs.
-func (s *Provider) GetFabricInterfaces(ctx context.Context, provider string) (*hardware.FabricInterfaceSet, error) {
+func (s *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("sysfs provider is nil")
 	}
 
-	fiSet := hardware.NewFabricInterfaceSet()
-	if provider == "" || provider == cxiProvider {
-		cxiFIs, err := s.getCXIFabricInterfaces()
-		if err != nil {
-			return nil, err
-		}
-
-		fiSet = hardware.NewFabricInterfaceSet(cxiFIs...)
+	cxiFIs, err := s.getCXIFabricInterfaces()
+	if err != nil {
+		return nil, err
 	}
-	return fiSet, nil
+
+	return hardware.NewFabricInterfaceSet(cxiFIs...), nil
 }
 
 func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error) {

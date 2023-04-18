@@ -9,6 +9,7 @@ from avocado.core.exceptions import TestFail
 
 
 class RbldContainerCreate(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Rebuild with container creation test cases.
 
     Test Class Description:

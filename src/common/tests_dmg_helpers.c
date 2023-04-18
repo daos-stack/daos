@@ -936,12 +936,11 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	int			i, j;
 	int			rc;
 	char			*tmp_var;
-	char			*saved_ptr;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
 
-		tmp_var =  strtok_r(host, ":", &saved_ptr);
+		tmp_var =  strtok(host, ":");
 		if (tmp_var == NULL) {
 			D_ERROR("Hostname is empty\n");
 			return -DER_INVAL;

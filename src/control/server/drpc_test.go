@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,12 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -261,6 +264,74 @@ func TestDrpc_Errors(t *testing.T) {
 			_, err := makeDrpcCall(context.TODO(), log,
 				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestServer_DrpcRetryCancel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req          proto.Message
+		resp         proto.Message
+		method       drpc.Method
+		timeout      time.Duration
+		shouldCancel bool
+		expErr       error
+	}{
+		"retries exceed deadline": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []daos.Status{
+					daos.Busy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(daos.Busy),
+			},
+			method:  drpc.MethodPoolDestroy,
+			timeout: 10 * time.Microsecond,
+			expErr:  context.DeadlineExceeded,
+		},
+		"canceled request": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []daos.Status{
+					daos.Busy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(daos.Busy),
+			},
+			method:       drpc.MethodPoolDestroy,
+			timeout:      1 * time.Second,
+			shouldCancel: true,
+			expErr:       context.Canceled,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			body, err := proto.Marshal(tc.resp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := &mockDrpcClientConfig{
+				SendMsgResponse: &drpc.Response{
+					Body: body,
+				},
+			}
+			mc := newMockDrpcClient(cfg)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
+			defer cancel()
+			if tc.shouldCancel {
+				cancel()
+			}
+
+			_, err = makeDrpcCall(ctx, log, mc, tc.method, tc.req)
 			test.CmpErr(t, tc.expErr, err)
 		})
 	}

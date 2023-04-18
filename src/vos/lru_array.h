@@ -226,7 +226,7 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key,
  *
  * \param	array[in]	The lru array
  * \param	idx[in]		The index of the entry
- * \param	key[in]		Unique identifier
+ * \param	idx[in]		Unique identifier
  * \param	entryp[out]	Valid only if function returns true.
  *
  * \return true if the entry is in the array and set \p entryp accordingly

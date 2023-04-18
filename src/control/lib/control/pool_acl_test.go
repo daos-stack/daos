@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -57,11 +57,9 @@ func TestControl_PoolGetACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					Acl: &mgmtpb.AccessControlList{
-						OwnerUser:  MockACL.Owner,
-						OwnerGroup: MockACL.OwnerGroup,
-						Entries:    MockACL.Entries,
-					},
+					OwnerUser:  MockACL.Owner,
+					OwnerGroup: MockACL.OwnerGroup,
+					ACL:        MockACL.Entries,
 				}),
 			},
 			req: &PoolGetACLReq{
@@ -131,11 +129,9 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					Acl: &mgmtpb.AccessControlList{
-						OwnerUser:  MockACL.Owner,
-						OwnerGroup: MockACL.OwnerGroup,
-						Entries:    MockACL.Entries,
-					},
+					OwnerUser:  MockACL.Owner,
+					OwnerGroup: MockACL.OwnerGroup,
+					ACL:        MockACL.Entries,
 				}),
 			},
 			req: &PoolOverwriteACLReq{
@@ -206,11 +202,9 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					Acl: &mgmtpb.AccessControlList{
-						OwnerUser:  MockACL.Owner,
-						OwnerGroup: MockACL.OwnerGroup,
-						Entries:    MockACL.Entries,
-					},
+					OwnerUser:  MockACL.Owner,
+					OwnerGroup: MockACL.OwnerGroup,
+					ACL:        MockACL.Entries,
 				}),
 			},
 			req: &PoolUpdateACLReq{
@@ -283,10 +277,8 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					Acl: &mgmtpb.AccessControlList{
-						OwnerUser:  MockACL.Owner,
-						OwnerGroup: MockACL.OwnerGroup,
-					},
+					OwnerUser:  MockACL.Owner,
+					OwnerGroup: MockACL.OwnerGroup,
 				}),
 			},
 			req: &PoolDeleteACLReq{

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -310,11 +310,6 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
-
-#ifndef DF_HG_RC
-#define DF_HG_RC "%d (%s)"
-#define DP_HG_RC(rc) rc, HG_Error_to_string(rc)
-#endif /* DF_HG_RC */
 
 /** @}
  */

@@ -1094,9 +1094,6 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	if err := db.UpdatePoolService(lock.InContext(ctx), ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)
 	}
-
-	newRanks := ranklist.RankSetFromRanks(ps.Replicas)
-	db.log.Infof("pool %s: service ranks set to %s", ps.PoolLabel, newRanks)
 }
 
 // OnEvent handles events and updates system database accordingly.

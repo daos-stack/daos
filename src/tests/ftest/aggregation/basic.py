@@ -9,6 +9,7 @@ from ior_test_base import IorTestBase
 
 
 class DaosAggregationBasic(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description:
 
        Run IOR with same file option to verify the
