@@ -1366,8 +1366,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
-			    PO_COMP_ST_DRAIN, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1696,7 +1695,6 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
-	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 

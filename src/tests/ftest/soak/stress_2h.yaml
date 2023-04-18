@@ -20,8 +20,6 @@ server_config:
   engines:
     0:
       log_mask: ERR
-      fabric_iface: ib0
-      fabric_iface_port: 31416
       log_file: daos_io0.log
       storage: auto
   transport_config:

@@ -762,23 +762,20 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
-	    rst->rs_version > arg->rebuild_pre_pool_ver) {
-		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
-			      "obj="DF_U64", rec="DF_U64".\n",
-			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			       arg->rebuild_pre_pool_ver,
-			       rc, rst->rs_errno, rst->rs_obj_nr,
-			       rst->rs_rec_nr);
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) &&
+	    (rst->rs_version > arg->rebuild_pre_pool_ver ||
+	     pinfo.pi_map_ver > arg->rebuild_pre_pool_ver)) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u pi_ver = %u orig_ver=%u) is done %d/%d,"
+			      "obj="DF_U64", rec="DF_U64".\n", DP_UUID(arg->pool.pool_uuid),
+			      rst->rs_version, pinfo.pi_map_ver, arg->rebuild_pre_pool_ver,
+			      rc, rst->rs_errno, rst->rs_obj_nr, rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
-			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
-			      DF_U64", rec="DF_U64"\n",
-			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			      arg->rebuild_pre_pool_ver,
-			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
-			      rst->rs_rec_nr);
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u pi_ver=%u orig_ver=%u),"
+			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="DF_U64","
+			      "rec="DF_U64"\n", DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      pinfo.pi_map_ver, arg->rebuild_pre_pool_ver, rst->rs_toberb_obj_nr,
+			      rst->rs_obj_nr, rst->rs_rec_nr);
 	}
 
 	return done;
@@ -1022,6 +1019,21 @@ get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 }
 
 daos_prop_t *
+get_daos_prop_with_acl(struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	return prop;
+}
+
+daos_prop_t *
 get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 {
 	daos_prop_t	*prop;
@@ -1039,12 +1051,11 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	return prop;
 }
 
-daos_prop_t *
-get_daos_prop_with_user_acl_perms(uint64_t perms)
+struct daos_acl *
+get_daos_acl_with_user_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
-	struct daos_ace	*ace;
+	struct daos_ace	*ace = NULL;
 	char		*user = NULL;
 
 	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
@@ -1059,9 +1070,23 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 
 	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
-	/* Set effective user up as non-owner */
-	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
-						acl, DAOS_PROP_CO_ACL);
+	daos_ace_free(ace);
+	D_FREE(user);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace = NULL;
+	char		*user = NULL;
+
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_user_perms(perms);
+	prop = get_daos_prop_with_acl(acl, DAOS_PROP_CO_ACL);
 
 	daos_ace_free(ace);
 	daos_acl_free(acl);

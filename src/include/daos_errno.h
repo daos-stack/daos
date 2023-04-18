@@ -290,8 +290,10 @@ extern "C" {
 	       Unable to access one or more certificates)		\
 	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
 	       Invalid x509 certificate)				\
+	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45),	\
+	       VOS partial update error)				\
 	/** Division by zero. */					\
-	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 45),	\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 46),	\
 	       Division by zero)
 
 /** Defines the gurt error codes */

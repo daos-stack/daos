@@ -11,7 +11,7 @@ from dbench_utils import Dbench
 
 
 class DbenchTest(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
+    # pylint: disable=too-few-public-methods
     """Base Dbench test class.
 
     :avocado: recursive

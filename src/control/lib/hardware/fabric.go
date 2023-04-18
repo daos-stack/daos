@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -556,7 +556,7 @@ func (c NetDevClass) String() string {
 
 // FabricInterfaceProvider is an interface that returns a new set of fabric interfaces.
 type FabricInterfaceProvider interface {
-	GetFabricInterfaces(ctx context.Context) (*FabricInterfaceSet, error)
+	GetFabricInterfaces(ctx context.Context, provider string) (*FabricInterfaceSet, error)
 }
 
 // NetDevClassProvider is an interface that returns the NetDevClass associated with a device.
@@ -573,6 +573,7 @@ type FabricInterfaceSetBuilder interface {
 // FabricInterfaceBuilder is a builder that adds new FabricInterface objects to the FabricInterfaceSet.
 type FabricInterfaceBuilder struct {
 	log         logging.Logger
+	providers   []string
 	fiProviders []FabricInterfaceProvider
 }
 
@@ -590,21 +591,30 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 		return errors.New("FabricInterfaceBuilder is uninitialized")
 	}
 
+	// If no providers were requested, we should scan once for all providers. Empty string
+	// indicates all providers.
+	provs := f.providers
+	if len(f.providers) == 0 {
+		provs = []string{""}
+	}
+
 	fiSets := make([]*FabricInterfaceSet, 0)
 	for _, fiProv := range f.fiProviders {
-		set, err := fiProv.GetFabricInterfaces(ctx)
-		if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
-			// A runtime library wasn't installed. This is okay - we'll still detect
-			// what we can.
-			f.log.Debug(err.Error())
-			continue
-		}
+		for _, prov := range provs {
+			set, err := fiProv.GetFabricInterfaces(ctx, prov)
+			if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
+				// A runtime library wasn't installed. This is okay - we'll still detect
+				// what we can.
+				f.log.Debug(err.Error())
+				continue
+			}
 
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 
-		fiSets = append(fiSets, set)
+			fiSets = append(fiSets, set)
+		}
 	}
 
 	for _, set := range fiSets {
@@ -621,9 +631,10 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 	return nil
 }
 
-func newFabricInterfaceBuilder(log logging.Logger, fiProviders ...FabricInterfaceProvider) *FabricInterfaceBuilder {
+func newFabricInterfaceBuilder(log logging.Logger, providers []string, fiProviders ...FabricInterfaceProvider) *FabricInterfaceBuilder {
 	return &FabricInterfaceBuilder{
 		log:         log,
+		providers:   providers,
 		fiProviders: fiProviders,
 	}
 }
@@ -841,13 +852,14 @@ func newNetDevClassBuilder(log logging.Logger, provider NetDevClassProvider) *Ne
 // FabricInterfaceSetBuilderConfig contains the configuration used by FabricInterfaceSetBuilders.
 type FabricInterfaceSetBuilderConfig struct {
 	Topology                 *Topology
+	Providers                []string
 	FabricInterfaceProviders []FabricInterfaceProvider
 	NetDevClassProvider      NetDevClassProvider
 }
 
 func defaultFabricInterfaceSetBuilders(log logging.Logger, config *FabricInterfaceSetBuilderConfig) []FabricInterfaceSetBuilder {
 	return []FabricInterfaceSetBuilder{
-		newFabricInterfaceBuilder(log, config.FabricInterfaceProviders...),
+		newFabricInterfaceBuilder(log, config.Providers, config.FabricInterfaceProviders...),
 		newNetworkDeviceBuilder(log, config.Topology),
 		newNetDevClassBuilder(log, config.NetDevClassProvider),
 		newNUMAAffinityBuilder(log, config.Topology),
@@ -884,11 +896,12 @@ func (c *FabricScannerConfig) Validate() error {
 
 // FabricScanner is a type that scans the system for fabric interfaces.
 type FabricScanner struct {
-	log      logging.Logger
-	mutex    sync.Mutex
-	config   *FabricScannerConfig
-	builders []FabricInterfaceSetBuilder
-	topo     *Topology
+	log       logging.Logger
+	mutex     sync.Mutex
+	config    *FabricScannerConfig
+	providers common.StringSet
+	builders  []FabricInterfaceSetBuilder
+	topo      *Topology
 }
 
 // NewFabricScanner creates a new FabricScanner with the given configuration.
@@ -903,7 +916,7 @@ func NewFabricScanner(log logging.Logger, config *FabricScannerConfig) (*FabricS
 	}, nil
 }
 
-func (s *FabricScanner) init(ctx context.Context) error {
+func (s *FabricScanner) init(ctx context.Context, providers []string) error {
 	if err := s.config.Validate(); err != nil {
 		return errors.Wrap(err, "invalid FabricScannerConfig")
 	}
@@ -917,9 +930,11 @@ func (s *FabricScanner) init(ctx context.Context) error {
 		}
 	}
 
+	s.providers = common.NewStringSet(providers...)
 	s.builders = defaultFabricInterfaceSetBuilders(s.log,
 		&FabricInterfaceSetBuilderConfig{
 			Topology:                 topo,
+			Providers:                providers,
 			FabricInterfaceProviders: s.config.FabricInterfaceProviders,
 			NetDevClassProvider:      s.config.NetDevClassProvider,
 		})
@@ -927,7 +942,7 @@ func (s *FabricScanner) init(ctx context.Context) error {
 }
 
 // Scan discovers fabric interfaces in the system.
-func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
+func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("FabricScanner is nil")
 	}
@@ -935,8 +950,8 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if !s.isInitialized() {
-		if err := s.init(ctx); err != nil {
+	if !s.isInitialized(providers) {
+		if err := s.init(ctx, providers); err != nil {
 			return nil, err
 		}
 	}
@@ -951,11 +966,31 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 	s.log.Debugf("discovered %d fabric interfaces:\n%s",
 		result.NumFabricInterfaces(), result.String())
 
+	if result.NumFabricInterfaces() == 0 {
+		if len(providers) == 0 {
+			return nil, errors.New("no fabric interfaces found")
+		}
+		return nil, fmt.Errorf("no fabric interfaces found with providers: %s", strings.Join(providers, ", "))
+	}
 	return result, nil
 }
 
-func (s *FabricScanner) isInitialized() bool {
-	return len(s.builders) > 0
+func (s *FabricScanner) isInitialized(providers []string) bool {
+	if len(s.builders) == 0 {
+		return false
+	}
+
+	if len(s.providers) != len(providers) {
+		return false
+	}
+
+	for _, prov := range providers {
+		if !s.providers.Has(prov) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // CacheTopology caches a specific HW topology for use with the fabric scan.

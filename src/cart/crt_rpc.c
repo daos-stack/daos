@@ -1287,11 +1287,8 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	}
 	D_ASSERT(rpc_priv->crp_hg_hdl != NULL);
 
-	rc = crt_hg_req_send(rpc_priv);
-	if (rc != DER_SUCCESS) {
-		RPC_ERROR(rpc_priv,
-			  "crt_hg_req_send failed, rc: %d\n", rc);
-	}
+	/* Errors reported in the callback */
+	crt_hg_req_send(rpc_priv);
 out:
 	return rc;
 }
