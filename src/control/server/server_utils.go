@@ -503,26 +503,16 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 	msg := fmt.Sprintf("checking config ram-disk size (%s) against MemAvailable (%s)",
 		humanize.IBytes(confSizeBytes), humanize.IBytes(memAvailBytes))
 
-	// Pass zero hugepage size as hugemem reservation already factored in available memory.
-	// Calculate max feasible RAM-disk size factoring in current memory usage.
-	sizeMaxNow, err := srv.cfg.CalcRamdiskSize(srv.log, 0, mi.MemAvailableKiB)
-	if err != nil {
-		return err
-	}
-
-	// Fail if size calculated using available memory is less than the acceptable proportion
-	// (configurable value) of the RAM-disk size that has been set in the storage config.
-	sizeMinConf := (confSizeBytes / 100) * uint64(srv.cfg.RamCheckThreshold)
-	if sizeMaxNow < sizeMinConf {
+	// Fail if available memory is less than the combined size of engine RAM-disks set in the
+	// storage config.
+	combRamdiskBytes := confSizeBytes * uint64(len(srv.cfg.Engines))
+	if memAvailBytes < combRamdiskBytes {
 		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
 
-		memMin, err := srv.cfg.CalcMemForRamdiskSize(srv.log, 0, sizeMinConf)
-		if err != nil {
-			srv.log.Error(err.Error())
-		}
-
-		return storage.FaultRamdiskLowMem(confSizeBytes, memMin, memAvailBytes)
+		return storage.FaultRamdiskLowMem(confSizeBytes, combRamdiskBytes, memAvailBytes)
 	}
+
+	srv.log.Debugf("%s: check successful!", msg)
 
 	return nil
 }

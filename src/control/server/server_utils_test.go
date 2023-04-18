@@ -743,47 +743,28 @@ func TestServer_checkMemAvailable(t *testing.T) {
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 		},
-		"ram tier; perform check": {
+		"single engine; ram tier; perform check": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 			memAvailGiB: 16,
 		},
-		"ram tier; perform check; low mem": {
+		"dual engine; ram tier; perform check; low mem": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(ramEngine(0, 10)).
+				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			memAvailGiB: 15,
+			memAvailGiB: 19,
 			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
-				16*humanize.GiByte, 15*humanize.GiByte),
-		},
-		"ram tier; perform check; low mem; reduced sys reserved": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(ramEngine(0, 10)).
-					WithBdevExclude(test.MockPCIAddr(1)).
-					WithSystemRamReserved(5)
-			},
-			memAvailGiB: 15,
+				20*humanize.GiByte, 19*humanize.GiByte),
 		},
 		"dual engine; ram tier; perform check": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			// Mem required = (20gib ram-disks + 6gib sys + 2gib engines) - 10%
-			memAvailGiB: 26,
-		},
-		"dual engine; ram tier; perform check; low mem": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
-					WithBdevExclude(test.MockPCIAddr(1))
-			},
-			// Mem required = (20gib ram-disks + 6gib sys + 2gib engines) - 10%
-			memAvailGiB: 25,
-			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
-				26*humanize.GiByte, 25*humanize.GiByte),
+			memAvailGiB: 20,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
