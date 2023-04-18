@@ -1338,6 +1338,10 @@ end:
 	daos_iov_free(&csum_iov);
 	if (rc == 0)
 		rc = rc1;
+
+	if (rc)
+		D_ERROR(DF_UOID " migrate error: "DF_RC"\n", DP_UOID(mrone->mo_oid), DP_RC(rc));
+
 	return rc;
 }
 

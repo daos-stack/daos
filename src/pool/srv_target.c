@@ -1708,7 +1708,6 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
-	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 

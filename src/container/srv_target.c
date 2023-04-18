@@ -2430,7 +2430,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
 			    min_eph <= ec_eph->ce_last_eph) {
-				if (min_eph < ec_eph->ce_last_eph)
+				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
 						DP_UUID(ec_eph->ce_cont_uuid));
