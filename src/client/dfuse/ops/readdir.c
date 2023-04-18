@@ -343,7 +343,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			daos_obj_id_t               oid;
 			dfs_obj_t                  *obj;
 			size_t                      written;
-			char                        out[DUNS_MAX_XATTR_LEN];
+			static __thread char        out[DUNS_MAX_XATTR_LEN];
 			char                       *outp = &out[0];
 			daos_size_t                 attr_len;
 

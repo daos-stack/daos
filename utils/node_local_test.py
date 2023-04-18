@@ -462,7 +462,7 @@ class DaosPool():
             return []
 
         containers = []
-        for cont in data['test']:
+        for cont in data['response']:
             containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
@@ -3704,7 +3704,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        cont = create_cont(conf, pool, label=label, ctype="POSIX")
+        container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3716,7 +3716,7 @@ def run_in_fg(server, conf, args):
         cont_attrs['dfuse-direct-io-disable'] = False
 
         container.set_attrs(cont_attrs)
-        cont = container.id()
+        container = container.uuid
 
     dfuse = DFuse(server,
                   conf,

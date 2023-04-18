@@ -243,15 +243,14 @@ void
 dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie;
-	int				rc;
-	char				out[DUNS_MAX_XATTR_LEN];
-	char				*outp = &out[0];
-	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *ie;
+	int                           rc;
+	static __thread char          out[DUNS_MAX_XATTR_LEN];
+	char                         *outp     = &out[0];
+	daos_size_t                   attr_len = DUNS_MAX_XATTR_LEN;
 
-	DFUSE_TRA_DEBUG(parent,
-			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)

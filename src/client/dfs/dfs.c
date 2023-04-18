@@ -986,11 +986,12 @@ static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
 	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc)
 {
-	struct dfs_entry	entry = {0};
-	bool			exists;
-	daos_size_t		size;
-	int			rc;
+	static __thread struct dfs_entry entry;
+	bool                             exists;
+	daos_size_t                      size;
+	int                              rc;
 
+	memset(&entry, 0, sizeof(entry));
 	memset(stbuf, 0, sizeof(struct stat));
 
 	/*
@@ -3213,11 +3214,12 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 {
 	dfs_obj_t		new_dir;
 	daos_handle_t		th = DAOS_TX_NONE;
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	size_t			len;
 	struct timespec		now;
 	int			rc;
 
+	memset(&entry, 0, sizeof(entry));
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
@@ -3438,10 +3440,12 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	bool			exists;
 	bool			is_root = true;
 	int			daos_mode;
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	size_t			len;
 	int			rc;
 	bool			parent_fully_valid;
+
+	memset(&entry, 0, sizeof(entry));
 
 	/* Arbitrarily stop to avoid infinite recursion */
 	if (depth >= DFS_MAX_RECURSION)
@@ -3944,13 +3948,14 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		   dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf, int xnr,
 		   char *xnames[], void *xvals[], daos_size_t *xsizes)
 {
-	dfs_obj_t		*obj;
-	struct dfs_entry	entry = {0};
-	bool			exists;
-	int			daos_mode;
-	size_t			len;
-	int			rc = 0;
+	dfs_obj_t                       *obj;
+	static __thread struct dfs_entry entry;
+	bool                             exists;
+	int                              daos_mode;
+	size_t                           len;
+	int                              rc = 0;
 
+	memset(&entry, 0, sizeof(entry));
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (_obj == NULL)
@@ -4156,12 +4161,13 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	      const char *value, dfs_obj_t **_obj, struct stat *stbuf)
 {
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	dfs_obj_t		*obj;
 	size_t			len;
 	daos_size_t		file_size = 0;
 	int			rc;
 
+	memset(&entry, 0, sizeof(entry));
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -4884,11 +4890,12 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 {
 	daos_handle_t		oh;
 	bool			exists;
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	size_t			len;
 	dfs_obj_t		*sym;
 	int			rc;
 
+	memset(&entry, 0, sizeof(entry));
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (((mask & W_OK) == W_OK) && dfs->amode != O_RDWR)
@@ -4963,7 +4970,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iovs[3];
 	daos_iod_t		iod;
@@ -4975,6 +4982,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	const char		*entry_name;
 	struct timespec		now;
 	int			rc;
+
+	memset(&entry, 0, sizeof(entry));
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -5095,7 +5104,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
-	struct dfs_entry	entry = {0};
+	static __thread struct dfs_entry entry;
 	daos_key_t		dkey;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iovs[4];
@@ -5107,6 +5116,8 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	int			i;
 	struct timespec		now;
 	int			rc;
+
+	memset(&entry, 0, sizeof(entry));
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
