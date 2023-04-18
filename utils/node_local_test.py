@@ -3058,15 +3058,15 @@ class PosixTests():
         side_test_file = join(side_dfuse.dir, 'test-file')
 
         # Create a file.
-        with open(test_file, 'w') as fd:
+        with open(test_file, 'w', encoding='ascii', errors='ignore') as fd:
             fd.write('data')
 
         # Read it through both.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
-        with open(side_test_file, 'r') as fd:
+        with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3078,14 +3078,14 @@ class PosixTests():
 
         # Read it through the second channel.
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
             pass
 
         # Read it through first instance, this should work as the contents are cached.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3094,7 +3094,7 @@ class PosixTests():
         time.sleep(cache_time * 2)
 
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
@@ -3102,7 +3102,7 @@ class PosixTests():
 
         # Read it through the first dfuse, this should now fail as the cache has expired.
         try:
-            with open(test_file, 'r') as fd:
+            with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
