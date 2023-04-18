@@ -545,7 +545,7 @@ pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool, struct daos_obj_
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = pl_obj_place(map, 0, obj_md, 0, pool->dp_rebuild_version, NULL, layout);
+	rc = pl_obj_place(map, 0, obj_md, 0, NULL, layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, "Failed to generate object layout\n");
