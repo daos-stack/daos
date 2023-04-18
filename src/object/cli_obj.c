@@ -216,7 +216,6 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	struct dc_pool		*pool;
 	struct pl_map		*map;
 	uint32_t		old;
-	uint32_t		rebuild_ver;
 	int			i;
 	int			rc;
 
@@ -229,11 +228,10 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rebuild_ver = pool->dp_rebuild_version;
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
-			  rebuild_ver, NULL, &layout);
+			  NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
@@ -1623,8 +1621,10 @@ dc_obj_retry_delay(struct obj_auxi_args *obj_auxi, int err)
 {
 	uint32_t	delay = 0;
 
-	/* Randomly delay 5 - 36 us if it is not the first retry for -DER_INPROGRESS case. */
-	if (err == -DER_INPROGRESS) {
+	/* Randomly delay 5 - 36 us if it is not the first retry for
+	 * -DER_INPROGRESS && -DER_UPDATE_AGAIN case.
+	 **/
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		obj_auxi->inprogress_cnt++;
 		if (obj_auxi->inprogress_cnt > 1) {
 			delay = (d_rand() & ((1 << 5) - 1)) + 5;
