@@ -6,7 +6,6 @@ server_config:
   engines:
     0:
       storage: auto
-  system_ram_reserved: 0
 pool:
   control_method: dmg
 setup:

@@ -3,7 +3,7 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  system_ram_reserved: 2
+  system_ram_reserved: 1
   engines_per_host: 1
   engines:
     0:

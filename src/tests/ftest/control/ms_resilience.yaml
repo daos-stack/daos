@@ -6,7 +6,7 @@ timeout: 300
 daos_server:
   pattern_timeout: 60
 server_config:
-  system_ram_reserved: 2
+  system_ram_reserved: 1
   engines_per_host: 1
   engines:
     0:
