@@ -30,25 +30,28 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	tierID := 84
 	host, _ := os.Hostname()
 	disabledRoleBits := 0
-	enabledRoleBits := 7
 	namePostfix := func(i, r int) string {
 		return fmt.Sprintf("%s_%d_%d_%d", host, i, tierID, r)
 	}
-	nvmeName := func(i int) string {
-		return fmt.Sprintf("Nvme_%s", namePostfix(i, enabledRoleBits))
+	nvmeName := func(i, roleBits int) string {
+		return fmt.Sprintf("Nvme_%s", namePostfix(i, roleBits))
 	}
-	aioName := func(i int) string {
-		return fmt.Sprintf("AIO_%s", namePostfix(i, disabledRoleBits))
+	aioName := func(i, roleBits int) string {
+		return fmt.Sprintf("AIO_%s", namePostfix(i, roleBits))
 	}
 
-	multiCtrlrConfs := func() []*SpdkSubsystemConfig {
+	multiCtrlrConfs := func(roleBits ...int) []*SpdkSubsystemConfig {
+		rbs := disabledRoleBits
+		if len(roleBits) > 0 {
+			rbs = roleBits[0]
+		}
 		return append(defaultSpdkConfig().Subsystems[0].Configs,
 			[]*SpdkSubsystemConfig{
 				{
 					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       nvmeName(0),
+						DeviceName:       nvmeName(0, rbs),
 						TransportAddress: test.MockPCIAddr(1),
 					},
 				},
@@ -56,7 +59,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       nvmeName(1),
+						DeviceName:       nvmeName(1, rbs),
 						TransportAddress: test.MockPCIAddr(2),
 					},
 				},
@@ -92,17 +95,16 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			devList:        []string{"not a pci address"},
 			expValidateErr: errors.New("valid PCI addresses"),
 		},
-		"multiple controllers": {
+		"multiple controllers; roles enabled": {
 			class:       storage.ClassNvme,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			devRoles:    storage.BdevRoleAll,
-			expBdevCfgs: multiCtrlrConfs(),
+			expBdevCfgs: multiCtrlrConfs(storage.BdevRoleAll),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
 			enableVmd:   true,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:    storage.BdevRoleAll,
 			expBdevCfgs: multiCtrlrConfs(),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
@@ -119,7 +121,6 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"multiple controllers; hotplug enabled; bus-id range specified": {
 			class:         storage.ClassNvme,
 			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:      storage.BdevRoleAll,
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
 			expBdevCfgs:   hotplugConfs,
@@ -137,17 +138,18 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},
 			expValidateErr: errors.New("requires non-zero bdev_size"),
 		},
-		"AIO file class; multiple files; non-zero file size": {
+		"AIO file class; multiple files; non-zero file size; roles enabled": {
 			class:      storage.ClassFile,
 			fileSizeGB: 1,
 			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
+			devRoles:   storage.BdevRoleAll,
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
-							DeviceName: aioName(0),
+							DeviceName: aioName(0, storage.BdevRoleAll),
 							Filename:   "/path/to/myfile",
 						},
 					},
@@ -155,7 +157,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
-							DeviceName: aioName(1),
+							DeviceName: aioName(1, storage.BdevRoleAll),
 							Filename:   "/path/to/myotherfile",
 						},
 					},
@@ -170,14 +172,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
-							DeviceName: aioName(0),
+							DeviceName: aioName(0, disabledRoleBits),
 							Filename:   "/dev/sdb",
 						},
 					},
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
-							DeviceName: aioName(1),
+							DeviceName: aioName(1, disabledRoleBits),
 							Filename:   "/dev/sdc",
 						},
 					},

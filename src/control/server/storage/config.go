@@ -300,64 +300,120 @@ func (tcs TierConfigs) HaveBdevRoleMeta() bool {
 }
 
 func (tcs TierConfigs) Validate() error {
+	if len(tcs) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
+	scmCfgs := tcs.ScmConfigs()
+	if len(scmCfgs) == 0 {
+		return FaultScmConfigTierMissing
+	}
+
+	if tcs.HaveRealNVMe() && tcs.HaveEmulatedNVMe() {
+		return FaultBdevConfigTierTypeMismatch
+	}
+
 	for _, cfg := range tcs {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
 		}
 	}
 
-	return nil
+	return tcs.validateBdevRoles()
 }
 
-// Validation of bdev tier role assignments is based on the following assumptions and rules:
+// Validation of configuration options and intended behavior to use or not use
+// the MD-on-SSD code path are as follows:
 //
-//   - A role can only be assigned to one entire tier, i.e. tier 2 & 3 cannot both be assigned the
-//     Meta role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
-//     in the case where > 3 bdev tiers exist.
-//   - All roles (WAL, Meta and Data) need to be assigned in bdev tiers if scm class is ram.
-//   - If the (first) scm tier is of class dcpm, then only one bdev tier with Data role is supported,
-//     no third tier (for now).
-func (tcs TierConfigs) validateBdevTierRoles() error {
-	sc := tcs.ScmConfigs()[0]
+//   - Exactly one storage tier with class: dcpm exists, no storage tier with class:
+//     ram exists, and zero or one tier(s) with class: nvme exists. If an NVMe tier is
+//     present, no bdev_roles: attributes are allowed on it.  This is the traditional
+//     PMem-based configuration, obviously not using MD-on-SSD.
+//
+//   - No storage tier with class: dcpm exists, exactly one storage tier with class:
+//     ram exists, and zero or one tier(s) with class: nvme exists. If an NVMe
+//     tier is present, no bdev_roles: attributes are specified for the NVMe tier.
+//     This is the traditional DRAM-based (ephemeral) configuration, and it shall not
+//     use MD-on-SSD (to be compatible/consistent with earlier levels of DAOS software).
+//
+//   - No storage tier with class: dcpm exists, exactly one storage tier with class:
+//     ram exists, and one, two or three tiers with class: nvme exist, with mandatory
+//     bdev_roles: attributes on each of the NVMe tiers. Each of the three roles
+//     (wal,meta,data) must be assigned to exactly one NVMe tier (no default
+//     assignments of roles to tiers by the control plane software; all roles shall be
+//     explicitly specified). This setup shall use the MD-on-SSD code path.  In this
+//     scenario allow the use of a single NVMe tier co-locating all three roles, three
+//     separate NVMe tiers with each tier dedicated to exactly one role, or two
+//     separate NVMe tiers where two of the three roles are co-located on one of the
+//     two NVMe tiers. In the latter case, all combinations to co-locate two of the
+//     roles shall be allowed, although not all those combinations may be technically
+//     desirable in production environments.
+//
+func (tcs TierConfigs) validateBdevRoles() error {
+	scmConfs := tcs.ScmConfigs()
+	if len(scmConfs) != 1 || scmConfs[0].Tier != 0 {
+		return errors.New("first storage tier is not scm")
+	}
+
+	sc := scmConfs[0]
 	bcs := tcs.BdevConfigs()
 
-	nrWALTiers := 1
-	nrMetaTiers := 1
-	if sc.Class == ClassDcpm {
-		nrWALTiers = 0
-		nrMetaTiers = 0
-		if len(bcs) > 1 {
-			return FaultBdevConfigMultiTiersWithDCPM
-		}
+	var wal, meta, data int
+	hasRoles := func() bool {
+		return wal > 0 || meta > 0 || data > 0
 	}
 
-	var foundWALTiers, foundMetaTiers, foundDataTiers int
-	for _, bc := range bcs {
-		bits := bc.Bdev.DeviceRoles.OptionBits
+	for i, bc := range bcs {
+		roles := bc.Bdev.DeviceRoles
+		if roles.IsEmpty() {
+			if hasRoles() {
+				return FaultBdevConfigRolesMissing
+			}
+			continue
+		}
+		if i != 0 && !hasRoles() {
+			return FaultBdevConfigRolesMissing
+		}
+
+		bits := roles.OptionBits
 		if (bits & BdevRoleWAL) != 0 {
-			foundWALTiers++
+			wal++
 		}
 		if (bits & BdevRoleMeta) != 0 {
-			foundMetaTiers++
+			meta++
 		}
 		if (bits & BdevRoleData) != 0 {
-			foundDataTiers++
+			data++
 		}
 	}
 
-	// When bdev NVMe tiers exist, there should always be at least one Data tier.
-	if foundDataTiers == 0 {
-		return FaultBdevConfigBadNrRoles("Data", 0, 1)
+	if !hasRoles() {
+		if len(bcs) > 1 {
+			return FaultBdevConfigMultiTiersWithoutRoles
+		}
+		return nil // MD-on-SSD is not to be enabled
 	}
-	// Allow disabling of MD-on-SSD with explicit role assignment.
-	if foundWALTiers == 0 && foundMetaTiers == 0 {
-		return nil
+
+	if sc.Class == ClassDcpm {
+		return FaultBdevConfigRolesWithDCPM
+	} else if sc.Class != ClassRam {
+		return errors.Errorf("unexpected scm class %s", sc.Class)
 	}
-	if foundWALTiers != nrWALTiers {
-		return FaultBdevConfigBadNrRoles("WAL", foundWALTiers, nrWALTiers)
+
+	// MD-on-SSD configurations supports 1, 2 or 3 bdev tiers.
+	if len(bcs) > 3 {
+		return FaultBdevConfigBadNrTiersWithRoles
 	}
-	if foundMetaTiers != nrMetaTiers {
-		return FaultBdevConfigBadNrRoles("Meta", foundMetaTiers, nrMetaTiers)
+
+	// When roles have been assigned, each role should be seen exactly once.
+	if wal != 1 {
+		return FaultBdevConfigBadNrRoles("WAL", wal, 1)
+	}
+	if meta != 1 {
+		return FaultBdevConfigBadNrRoles("Meta", meta, 1)
+	}
+	if data != 1 {
+		return FaultBdevConfigBadNrRoles("Data", data, 1)
 	}
 
 	return nil
@@ -373,19 +429,23 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 //     second bdev tier and Data to all remaining bdev tiers.
 //   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
-func (tcs TierConfigs) assignBdevTierRoles() error {
+func (tcs TierConfigs) AssignBdevTierRoles() error {
 	scs := tcs.ScmConfigs()
-	bcs := tcs.BdevConfigs()
 
 	// Require tier-0 to be a SCM tier.
 	if len(scs) != 1 || scs[0].Tier != 0 {
 		return errors.New("first storage tier is not scm")
 	}
-
-	// Skip role assignment and validation no NVMe tiers exist.
+	// No roles should be assigned if scm tier is DCPM.
+	if scs[0].Class == ClassDcpm {
+		return nil
+	}
+	// Skip role assignment and validation if no real NVMe tiers exist.
 	if !tcs.HaveRealNVMe() {
 		return nil
 	}
+
+	bcs := tcs.BdevConfigs()
 
 	tiersWithoutRoles := make([]int, 0, len(bcs))
 	for _, bc := range bcs {
@@ -398,18 +458,12 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 	switch {
 	case l == 0:
 		// All bdev tiers have assigned roles, skip implicit assignment.
-		return tcs.validateBdevTierRoles()
+		return nil
 	case l == len(bcs):
 		// No assigned roles, fall-through to perform implicit assignment.
 	default:
-		return errors.Errorf("some bdev tiers are missing role assignments: %+v",
-			tiersWithoutRoles)
-	}
-
-	// First bdev tier should be data if scm tier is DCPM.
-	if scs[0].Class == ClassDcpm {
-		tcs[1].WithBdevDeviceRoles(BdevRoleData)
-		return tcs.validateBdevTierRoles()
+		// Some bdev tiers have assigned roles but not all, unsupported.
+		return FaultBdevConfigRolesMissing
 	}
 
 	// Apply role assignments.
@@ -427,7 +481,7 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 		}
 	}
 
-	return tcs.validateBdevTierRoles()
+	return nil
 }
 
 func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
@@ -1021,23 +1075,9 @@ func (c *Config) GetNVMeBdevs() *BdevDeviceList {
 
 func (c *Config) Validate() error {
 	if err := c.Tiers.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
-	var pruned TierConfigs
-	for _, tier := range c.Tiers {
-		if tier.IsBdev() && tier.Bdev.DeviceList.Len() == 0 {
-			continue // prune empty bdev tier
-		}
-		pruned = append(pruned, tier)
-	}
-	c.Tiers = pruned
-
-	if len(c.Tiers) == 0 {
-		return errors.New("no storage tiers configured")
-	}
-
-	scmCfgs := c.Tiers.ScmConfigs()
 	bdevCfgs := c.Tiers.BdevConfigs()
 
 	// set persistent location for engine bdev config file to be consumed by provider
@@ -1047,33 +1087,21 @@ func (c *Config) Validate() error {
 		return nil
 	}
 
+	// set vos environment variable based on class of first bdev config
+	switch bdevCfgs[0].Class {
+	case ClassNvme:
+		c.VosEnv = "NVME"
+	case ClassFile, ClassKdev:
+		c.VosEnv = "AIO"
+	}
+
 	var nvmeConfigRoot string
 	if c.ControlMetadata.HasPath() {
 		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
-	} else if len(scmCfgs) == 0 {
-		return errors.New("missing scm storage tier in config")
 	} else {
-		nvmeConfigRoot = scmCfgs[0].Scm.MountPoint
+		nvmeConfigRoot = c.Tiers.ScmConfigs()[0].Scm.MountPoint
 	}
 	c.ConfigOutputPath = filepath.Join(nvmeConfigRoot, BdevOutConfName)
 
-	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
-		return FaultBdevConfigTypeMismatch
-	}
-
-	fbc := bdevCfgs[0]
-
-	// set vos environment variable based on class of first bdev config
-	if fbc.Class == ClassFile || fbc.Class == ClassKdev {
-		c.VosEnv = "AIO"
-		return nil
-	}
-
-	if fbc.Class != ClassNvme {
-		return nil
-	}
-
-	c.VosEnv = "NVME"
-
-	return errors.Wrapf(c.Tiers.assignBdevTierRoles(), "invalid bdev tier roles requested")
+	return nil
 }
