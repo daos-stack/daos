@@ -218,7 +218,7 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, in->cei_opts,
-			       rpc->cr_ctx, &snap_eph);
+			       dss_get_module_info()->dmi_ctx, &snap_eph);
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:
