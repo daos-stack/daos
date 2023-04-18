@@ -416,7 +416,7 @@ pool_comp_name(struct pool_component *comp)
 }
 
 bool
-is_pool_map_adding(struct pool_map *map, uint32_t version);
+is_pool_map_adding(struct pool_map *map);
 void
 pool_map_init_in_fseq(struct pool_map *map);
 int

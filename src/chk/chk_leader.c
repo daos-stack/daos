@@ -196,35 +196,9 @@ chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 	/* Cleanup all pending records belong to this rank. */
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
 	d_list_for_each_entry_safe(cpr, tmp, &crr->crr_pending_list, cpr_rank_link) {
-		d_iov_set(&riov, NULL, 0);
-		d_iov_set(&kiov, &cpr->cpr_seq, sizeof(cpr->cpr_seq));
-		rc1 = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
-		if (rc1 != 0) {
-			D_ASSERT(rc1 != -DER_NONEXIST);
-
-			D_ERROR(DF_LEADER" failed to remove pending rec for rank %u, seq "
-				DF_X64": "DF_RC"\n",
-				DP_LEADER(ins), crr->crr_rank, cpr->cpr_seq, DP_RC(rc1));
-
-			if (rc == 0)
-				rc = rc1;
-		} else {
-			D_ASSERT(cpr == riov.iov_buf);
-
-			ABT_mutex_lock(cpr->cpr_mutex);
-			if (cpr->cpr_busy) {
-				/*
-				 * Notify the owner who is blocked on the pending record
-				 * and will release the pending record after using it.
-				 */
-				cpr->cpr_exiting = 1;
-				ABT_cond_broadcast(cpr->cpr_cond);
-				ABT_mutex_unlock(cpr->cpr_mutex);
-			} else {
-				ABT_mutex_unlock(cpr->cpr_mutex);
-				chk_pending_destroy(cpr);
-			}
-		}
+		rc1 = chk_pending_wakeup(ins, cpr);
+		if (rc1 != 0 && rc == 0)
+			rc = rc1;
 	}
 	ABT_rwlock_unlock(ins->ci_abt_lock);
 
@@ -2680,7 +2654,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
@@ -2863,7 +2836,10 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_pool_rec	*cpr;
+	struct chk_pool_rec	*tmp;
 	int			 rc = 0;
+	int			 i;
 
 	if (ins->ci_starting)
 		D_GOTO(out, rc = -DER_BUSY);
@@ -2908,6 +2884,22 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 	rc = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, pool_nr, pools, chk_leader_stop_cb, ins);
 	if (rc != 0)
 		goto out;
+
+	if (pool_nr == 0) {
+		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
+			chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_STOPPED,
+					  CHK_INVAL_PHASE, &rc);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+	} else {
+		for (i = 0; i < pool_nr; i++) {
+			chk_pool_stop_one(ins, pools[i], CHK__CHECK_POOL_STATUS__CPS_STOPPED,
+					  CHK_INVAL_PHASE, &rc);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+	}
 
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING &&
 	    d_list_empty(&ins->ci_rank_list))
@@ -3314,7 +3306,8 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 			crr = (struct chk_rank_rec *)riov.iov_buf;
 		}
 
-		rc = chk_pending_add(ins, crr != NULL ? &crr->crr_pending_list : NULL,
+		rc = chk_pending_add(ins, &pool->cpr_pending_list,
+				     crr != NULL ? &crr->crr_pending_list : NULL,
 				     *cru->cru_pool, *seq, cru->cru_rank, cru->cru_cla, &cpr);
 		if (rc != 0)
 			goto log;
@@ -3495,7 +3488,6 @@ chk_leader_pause(void)
 	struct chk_instance	*ins = chk_leader;
 
 	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 }
 

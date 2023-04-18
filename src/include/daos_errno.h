@@ -290,8 +290,10 @@ extern "C" {
 	       Unable to access one or more certificates)		\
 	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
 	       Invalid x509 certificate)				\
+	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45),	\
+	       VOS partial update error)				\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 45),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 46),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

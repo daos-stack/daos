@@ -187,6 +187,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 	}
 
 	if (ins_status != CHK__CHECK_INST_STATUS__CIS_PAUSED &&
+	    ins_status != CHK__CHECK_INST_STATUS__CIS_STOPPED &&
 	    ins_status != CHK__CHECK_INST_STATUS__CIS_IMPLICATED && ins->ci_iv_ns != NULL) {
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = cbk->cb_phase;
@@ -1822,12 +1823,12 @@ chk_engine_sched(void *args)
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
 
-	while (1) {
+	while (ins->ci_sched_running) {
+		dss_sleep(300);
+
 		/* Someone wants to stop the check. */
 		if (!ins->ci_sched_running)
 			D_GOTO(out, rc = 0);
-
-		dss_sleep(300);
 
 		phase = chk_pools_find_slowest(ins, &done, NULL);
 		if (done) {
@@ -2120,7 +2121,6 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
@@ -2949,8 +2949,8 @@ chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 		pool = (struct chk_pool_rec *)riov.iov_buf;
 		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
 
-		rc = chk_pending_add(ins, NULL, *cru->cru_pool, *seq, cru->cru_rank,
-				     cru->cru_cla, &cpr);
+		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, *cru->cru_pool, *seq,
+				     cru->cru_rank, cru->cru_cla, &cpr);
 	}
 
 log:
@@ -3089,7 +3089,6 @@ chk_engine_rejoin(void *args)
 	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	ins->ci_starting = 1;
 	ins->ci_started = 0;
@@ -3196,7 +3195,6 @@ chk_engine_pause(void)
 	struct chk_instance	*ins = chk_engine;
 
 	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 }
 
