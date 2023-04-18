@@ -11,7 +11,7 @@ This guide will also describe how to use dfuse in order to take advantage of DAO
 For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md) section.
 
 For more details, including the prerequisite steps before installing DAOS,
-reference the [DAOS administration guide](../admin/hardware/).
+reference the [DAOS administration guide](https://docs.daos.io/v2.4/admin/hardware/).
 
 
 ## Requirements
@@ -36,7 +36,7 @@ admin and client node.  All nodes must have:
   commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.4/admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -195,7 +195,7 @@ Server nodes require the following certificate files:
 - A copy of the Client certificate (client.crt) owned by the
   daos\_server user
 
-See [Certificate Configuration](../admin/deployment/#certificate-configuration)
+See [Certificate Configuration](https://docs.daos.io/v2.4/admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
@@ -286,7 +286,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 2.  Create a server configuration file by modifying the default
     `/etc/daos/daos_server.yml` file on the server nodes.
 
-	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml.
+	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
 		name: daos_server
 		access_points:
@@ -391,7 +391,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-		node-4: May 05 22:21:03 node-1.test.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
+		node-4: node-1.test.hpdd.intel.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
 
 		# format storage
 		dmg storage format -l $SERVER_NODES # can use --force if needed
