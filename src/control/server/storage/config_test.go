@@ -195,7 +195,7 @@ func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			list := &BdevDeviceList{}
-			err := yaml.Unmarshal([]byte(tc.input), list)
+			err := yaml.UnmarshalStrict([]byte(tc.input), list)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -319,10 +319,10 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	}
 }
 
-func TestStorage_BdevDeviceRoles_FromYAML(t *testing.T) {
+func TestStorage_TierConfigs_Validate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input           string
-		expCfgs         TierConfigs
+		expTierCfgs     TierConfigs
 		expUnmarshalErr error
 		expValidateErr  error
 	}{
@@ -330,7 +330,82 @@ func TestStorage_BdevDeviceRoles_FromYAML(t *testing.T) {
 			input:          ``,
 			expValidateErr: errors.New("no storage tiers"),
 		},
-		"unspecified roles; implicit role assignment; one bdev tier": {
+		"tier class missing": {
+			input: `
+storage:
+-
+  scm_size: 16
+  scm_mount: /mnt/daos`,
+			expValidateErr: FaultScmConfigTierMissing,
+		},
+		"scm tier missing": {
+			input: `
+storage:
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]`,
+			expValidateErr: FaultScmConfigTierMissing,
+		},
+		"mixed bdev tier types": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+-
+  class: file
+  bdev_list: [/tmp/daos0.aio]`,
+			expValidateErr: FaultBdevConfigTierTypeMismatch,
+		},
+		"tier 1 fails validation": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80a:00.0]`,
+			expValidateErr: errors.New("tier 1 failed validation"),
+		},
+		"roles specified; ram scm tier; second bdev tier with unassigned roles": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_roles: [wal]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]`,
+			expValidateErr: FaultBdevConfigRolesMissing,
+		},
+		"roles specified; ram scm tier; first bdev tier with unassigned roles": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [wal,meta,data]`,
+			expValidateErr: FaultBdevConfigRolesMissing,
+		},
+		"roles unspecified; ram scm tier; one bdev tier": {
 			input: `
 storage:
 -
@@ -340,7 +415,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]`,
-			expCfgs: TierConfigs{
+			expTierCfgs: TierConfigs{
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
@@ -348,11 +423,10 @@ storage:
 				NewTierConfig().
 					WithTier(1).
 					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleAll),
+					WithBdevDeviceList("0000:80:00.0"),
 			},
 		},
-		"unspecified roles; implicit role assignment; two bdev tiers": {
+		"roles unspecified; ram scm tier; two bdev tiers": {
 			input: `
 storage:
 -
@@ -365,29 +439,14 @@ storage:
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]`,
-			expCfgs: TierConfigs{
-				NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos"),
-				NewTierConfig().
-					WithTier(1).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleWAL),
-				NewTierConfig().
-					WithTier(2).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData),
-			},
+			expValidateErr: FaultBdevConfigMultiTiersWithoutRoles,
 		},
-		"unspecified roles; implicit role assignment; three bdev tiers": {
+		"roles unspecified; dcpm scm tier; three bdev tiers": {
 			input: `
 storage:
 -
-  class: ram
-  scm_size: 16
+  class: dcpm
+  scm_list: [/dev/pmem0]
   scm_mount: /mnt/daos
 -
   class: nvme
@@ -398,29 +457,32 @@ storage:
 -
   class: nvme
   bdev_list: [0000:83:00.0,0000:84:00.0]`,
-			expCfgs: TierConfigs{
-				NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos"),
-				NewTierConfig().
-					WithTier(1).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleWAL),
-				NewTierConfig().
-					WithTier(2).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleMeta),
-				NewTierConfig().
-					WithTier(3).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:83:00.0", "0000:84:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
-			},
+
+			expValidateErr: FaultBdevConfigMultiTiersWithoutRoles,
 		},
-		"unspecified roles; implicit role assignment; four bdev tiers": {
+		"roles specified; dcpm scm tier; three bdev tiers": {
+			input: `
+storage:
+-
+  class: dcpm
+  scm_list: [/dev/pmem0]
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_roles: [wal]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [meta]
+-
+  class: nvme
+  bdev_list: [0000:83:00.0,0000:84:00.0]
+  bdev_roles: [data]`,
+
+			expValidateErr: FaultBdevConfigRolesWithDCPM,
+		},
+		"roles specified; ram scm class; four bdev tiers": {
 			input: `
 storage:
 -
@@ -430,43 +492,22 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
+  bdev_roles: [wal]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [meta]
 -
   class: nvme
   bdev_list: [0000:83:00.0,0000:84:00.0]
+  bdev_roles: [data]
 -
   class: nvme
-  bdev_list: [0000:85:00.0,0000:86:00.0]`,
-			expCfgs: TierConfigs{
-				NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos"),
-				NewTierConfig().
-					WithTier(1).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleWAL),
-				NewTierConfig().
-					WithTier(2).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleMeta),
-				NewTierConfig().
-					WithTier(3).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:83:00.0", "0000:84:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
-				NewTierConfig().
-					WithTier(4).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:85:00.0", "0000:86:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
-			},
+  bdev_list: [0000:85:00.0,0000:86:00.0]
+  bdev_roles: [data]`,
+			expValidateErr: FaultBdevConfigBadNrTiersWithRoles,
 		},
-		"specified roles; explicit role assignment": {
+		"roles specified; ram scm class": {
 			input: `
 storage:
 -
@@ -481,7 +522,7 @@ storage:
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
   bdev_roles: [data]`,
-			expCfgs: TierConfigs{
+			expTierCfgs: TierConfigs{
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
@@ -498,7 +539,7 @@ storage:
 					WithBdevDeviceRoles(BdevRoleData),
 			},
 		},
-		"specified roles; alternative format": {
+		"roles specified; ram scm class; alternative yaml format": {
 			input: `
 storage:
 -
@@ -519,7 +560,7 @@ storage:
   - 0000:82:00.0
   bdev_roles:
   - data`,
-			expCfgs: TierConfigs{
+			expTierCfgs: TierConfigs{
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
@@ -536,7 +577,7 @@ storage:
 					WithBdevDeviceRoles(BdevRoleData),
 			},
 		},
-		"unrecognized role": {
+		"roles specified; ram scm class; unrecognized role": {
 			input: `
 storage:
 -
@@ -549,30 +590,7 @@ storage:
   bdev_roles: [foobar]`,
 			expUnmarshalErr: errors.New("unknown option flag"),
 		},
-		"dcpm class; multiple bdev tiers": {
-			input: `
-storage:
--
-  class: dcpm
-  scm_list: [/dev/pmem0]
-  scm_mount: /mnt/daos
--
-  class: nvme
-  bdev_list:
-  - 0000:80:00.0
-  bdev_roles:
-  - meta
-  - wal
--
-  class: nvme
-  bdev_list:
-  - 0000:81:00.0
-  - 0000:82:00.0
-  bdev_roles:
-  - data`,
-			expValidateErr: FaultBdevConfigMultiTiersWithDCPM,
-		},
-		"dcpm class; illegal roles": {
+		"roles specified; dcpm scm class; illegal roles": {
 			input: `
 storage:
 -
@@ -583,9 +601,9 @@ storage:
   class: nvme
   bdev_list: [0000:80:00.0]
   bdev_roles: [meta,wal,data]`,
-			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 1, 0),
+			expValidateErr: FaultBdevConfigRolesWithDCPM,
 		},
-		"ram class; duplicate wal roles": {
+		"roles specified; ram scm tier; duplicate wal roles": {
 			input: `
 storage:
 -
@@ -602,7 +620,7 @@ storage:
   bdev_roles: [wal,data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 2, 1),
 		},
-		"ram class; duplicate meta roles": {
+		"roles specified; ram scm tier; duplicate meta roles": {
 			input: `
 storage:
 -
@@ -619,7 +637,24 @@ storage:
   bdev_roles: [meta,data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Meta", 2, 1),
 		},
-		"ram class; missing data role": {
+		"roles specified; ram scm tier; duplicate data roles": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_roles: [data,wal]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [meta,data]`,
+			expValidateErr: FaultBdevConfigBadNrRoles("Data", 2, 1),
+		},
+		"roles specified; ram scm tier; missing data role": {
 			input: `
 storage:
 -
@@ -632,23 +667,7 @@ storage:
   bdev_roles: [meta,wal]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Data", 0, 1),
 		},
-		"ram class; tier with unassigned roles": {
-			input: `
-storage:
--
-  class: ram
-  scm_size: 16
-  scm_mount: /mnt/daos
--
-  class: nvme
-  bdev_list: [0000:80:00.0]
--
-  class: nvme
-  bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [wal]`,
-			expValidateErr: errors.New("tiers are missing role assignments: [1]"),
-		},
-		"explicit specification of data-only role": {
+		"roles specified; ram scm tier; only data role assigned": {
 			input: `
 storage:
 -
@@ -661,34 +680,24 @@ storage:
   - 0000:80:00.0
   bdev_roles:
   - data`,
-			expCfgs: TierConfigs{
-				NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos"),
-				NewTierConfig().
-					WithTier(1).
-					WithStorageClass("nvme").
-					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
-			},
+			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 0, 1),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := new(Config)
-			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			err := yaml.UnmarshalStrict([]byte(tc.input), cfg)
 			test.CmpErr(t, tc.expUnmarshalErr, err)
 			if err != nil {
 				return
 			}
 
-			err = cfg.Validate()
+			err = cfg.Tiers.Validate()
 			test.CmpErr(t, tc.expValidateErr, err)
 			if err != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expCfgs, cfg.Tiers, defConfigCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expTierCfgs, cfg.Tiers, defConfigCmpOpts()...); diff != "" {
 				t.Fatalf("bad roles (-want +got):\n%s", diff)
 			}
 		})
@@ -705,7 +714,7 @@ func TestStorage_BdevDeviceRoles_ToYAML(t *testing.T) {
 			cfg:    &Config{},
 			expOut: "storage: []\n",
 		},
-		"specified roles": {
+		"roles specified": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					NewTierConfig().
@@ -842,7 +851,7 @@ acceleration:
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := new(Config)
-			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			err := yaml.UnmarshalStrict([]byte(tc.input), cfg)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -1111,7 +1120,7 @@ storage:
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := new(Config)
-			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			err := yaml.UnmarshalStrict([]byte(tc.input), cfg)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

@@ -202,7 +202,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 					storage.NewTierConfig().
 						WithScmMountPoint("test"),
 				),
-			expErr: errors.New("no storage class"),
+			expErr: storage.FaultScmConfigTierMissing,
 		},
 		"missing scm_mount": {
 			cfg: baseValidConfig().
@@ -417,7 +417,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 						WithBdevFileSize(10).
 						WithBdevDeviceList("bdev1", "bdev2"),
 				),
-			expErr: errors.New("mix of emulated and non-emulated NVMe"),
+			expErr: storage.FaultBdevConfigTierTypeMismatch,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
