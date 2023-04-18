@@ -30,7 +30,6 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-@staticmethod
 def get_tier_roles(tier, total_tiers):
     """Get the roles for the specified bdev storage tier.
 
