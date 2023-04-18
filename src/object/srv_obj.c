@@ -142,6 +142,8 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		if (rc != 0) {
+			if (rc == -DER_VOS_PARTIAL_UPDATE)
+				rc = -DER_NO_PERM;
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				     rc == -DER_TX_RESTART || rc == -DER_EXIST ||
 				     rc == -DER_NONEXIST || rc == -DER_ALREADY ||

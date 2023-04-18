@@ -326,3 +326,46 @@ class ReplayTests(TestWithServers):
             self.fail('Errors detected with pool/container properties after engine restart')
 
         self.log_step('Test passed')
+
+    def test_replay_no_check_pointing(self):
+        """Verify data access after engine restart w/ WAL replay + w/o check pointing.
+
+        Steps:
+            0) Start 3 DAOS servers with 1 engine on each server
+            1) Create a single pool and container
+            2) Disable check pointing
+            3) Run ior w/ DFS to populate the container with small amount of data
+            4) After ior has completed, shutdown every engine cleanly (dmg system stop)
+            5) Restart each engine (dmg system start)
+            6) Verify the previously written data matches with an ior read
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server,replay
+        :avocado: tags=ReplayTests,test_replay_no_check_pointing
+        """
+        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
+        container = self.create_container()
+
+        self.log_step('Disabling check pointing on {}'.format(container.pool))
+        container.pool.set_prop(properties='checkpoint:disabled')
+        response = container.pool.get_prop(name='checkpoint')['response']
+        if response[0]['value'] != 'disabled':
+            self.fail('Pool check pointing not disabled before engine restart')
+
+        self.log_step('Write data to the container (ior)')
+        ior = self.write_data(container, ppn)
+
+        self.stop_engines()
+        self.restart_engines()
+
+        self.log_step(
+            'Verifying check pointing is disabled on {} after engine restart'.format(
+                container.pool))
+        response = container.pool.get_prop(name='checkpoint')['response']
+        if response[0]['value'] != 'disabled':
+            self.fail('Pool check pointing not disabled after engine restart')
+
+        self.log_step('Verifying data previously written to the container (ior)')
+        self.read_data(ior, container, ppn)
+        self.log_step('Test passed')
