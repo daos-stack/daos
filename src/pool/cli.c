@@ -369,11 +369,10 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 		D_GOTO(out, rc = 0);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": updating pool map: %u -> %u rebuild ver %u\n",
+	D_DEBUG(DB_MD, DF_UUID": updating pool map: %u -> %u\n",
 		DP_UUID(pool->dp_pool),
 		pool->dp_map == NULL ?
-		0 : pool_map_get_version(pool->dp_map), map_version,
-		pool->dp_rebuild_version);
+		0 : pool_map_get_version(pool->dp_map), map_version);
 
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {

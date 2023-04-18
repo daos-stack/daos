@@ -2946,28 +2946,22 @@ dc_tx_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int result)
 }
 
 static int
-dc_tx_check_update(tse_task_t *task, uint64_t flags)
+dc_tx_check_update(uint64_t flags, int result)
 {
-	int result = task->dt_result;
-
 	if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_DKEY_INSERT)) {
 		if (result == 0)
-			D_GOTO(out, result = -DER_EXIST);
+			return -DER_EXIST;
 
 		if (result != -DER_NONEXIST)
-			D_GOTO(out, result);
+			return result;
 
-		D_GOTO(out, result = 0);
+		return 0;
 	}
 
 	if (flags & (DAOS_COND_AKEY_UPDATE | DAOS_COND_DKEY_UPDATE) && result != 0)
-		D_GOTO(out, result);
+		return result;
 
-	result = 0;
-
-out:
-	task->dt_result = result;
-	return result;
+	return 0;
 }
 
 static int
@@ -2980,7 +2974,7 @@ dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
 	D_ASSERT(args->tmp_iods != NULL);
 	D_ASSERT(args->tmp_iod_nr == 1);
 
-	dc_tx_check_update(task, args->tmp_iods->iod_flags);
+	task->dt_result = dc_tx_check_update(args->tmp_iods->iod_flags, task->dt_result);
 
 	daos_iov_free(&args->tmp_iods->iod_name);
 	D_FREE(args->tmp_iods);
@@ -3030,7 +3024,7 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 
 	switch (args->opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		rc = dc_tx_check_update(task, args->flags);
+		rc = dc_tx_check_update(args->flags, task->dt_result);
 		if (rc != 0)
 			D_GOTO(out, rc);
 

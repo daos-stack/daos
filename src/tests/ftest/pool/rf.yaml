@@ -2,7 +2,7 @@ hosts:
   test_servers: 5
   test_clients: 1
 
-timeout: 300
+timeout: 90
 
 server_config:
   engines_per_host: 1

@@ -22,62 +22,59 @@ class ConfigGenerateOutput(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
-
-        self.def_provider = "ofi+tcp;ofi_rxm"
-
         # Data structure that store expected values.
-        self.numa_node_to_pci_addrs = defaultdict(set)
-        self.numa_node_to_blockdev = defaultdict(set)
-        self.numa_node_to_interfaces = defaultdict(set)
-        self.interface_to_providers = defaultdict(set)
+        self.nvme_socket_to_addrs = defaultdict(list)
+        self.scm_socket_to_namespaces = defaultdict(list)
+        self.pci_address_set = set()
+        self.scm_namespace_set = set()
+
+        self.interface_to_providers = defaultdict(list)
         self.interface_set = set()
+        self.def_provider = "ofi+tcp;ofi_rxm"
 
     def prepare_expected_data(self):
         """Prepare expected values.
 
-        Call dmg storage scan and network scan to collect expected values for NVMe, PMEM,
-        and networking and create the following 4 dictionaries and 1 set.
-
-        1. Create numa_node_to_pci_addrs. Key is socket_id from the output and value is a
-        set of pci_addr(s) from the output.
-        2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
-        set of blockdev(s) from the output. (In the current CI env, there's only one
-        blockdev per numa_node. However, dmg config generate output supports multiple
-        SCM devices per engine, so make this as a set to support multiple blockdev(s) per
-        numa_node.)
-        3. Create numa_node_to_interfaces. Key is NumaNode from the output and value is a
-        set of Device(s) from the output.
-        4. Create interface_to_providers. Key is Device from the output and value is a
-        set of Provider(s) from the output.
-        5. Create interface_set. Set of Device(s) from the output.
+        Call dmg storage scan and network scan to collect expected values.
         """
         dmg = self.get_dmg_command()
 
-        # Call dmg storage scan.
+        # Call dmg storage scan --json.
         storage_out = dmg.storage_scan()
 
-        # Get nvme_devices and scm_namespaces list that are buried. There's a uint64 hash
-        # of the struct under HostStorage.
+        # Check the status.
+        if storage_out["status"] != 0:
+            self.log.error(storage_out["error"])
+            self.fail("dmg storage scan failed!")
+
+        # Get nvme_devices and scm_namespaces list that are buried. There's a
+        # uint64 hash of the struct under HostStorage.
         temp_dict = storage_out["response"]["HostStorage"]
         struct_hash = list(temp_dict.keys())[0]
         nvme_devices = temp_dict[struct_hash]["storage"]["nvme_devices"]
         scm_namespaces = temp_dict[struct_hash]["storage"]["scm_namespaces"]
 
-        # 1. Create numa_node_to_pci_addrs. Key is socket_id from the output and value is
-        # a set of pci_addr(s) from the output.
+        # Fill in the dictionary and the set for NVMe.
         for nvme_device in nvme_devices:
             socket_id = nvme_device["socket_id"]
             pci_addr = nvme_device["pci_addr"]
-            self.numa_node_to_pci_addrs[socket_id].add(pci_addr)
+            self.nvme_socket_to_addrs[socket_id].append(pci_addr)
+            self.pci_address_set.add(pci_addr)
 
-        # 2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
-        # set of blockdev(s) from the output.
+        self.log.info("nvme_socket_to_addrs = %s", self.nvme_socket_to_addrs)
+        self.log.info("pci_address_set = %s", self.pci_address_set)
+
+        # Fill in the dictionary and the set for SCM.
         for scm_namespace in scm_namespaces:
             numa_node = scm_namespace["numa_node"]
             blockdev = scm_namespace["blockdev"]
-            self.numa_node_to_blockdev[numa_node].add(blockdev)
+            self.scm_socket_to_namespaces[numa_node].append(blockdev)
+            self.scm_namespace_set.add(blockdev)
 
-        # Call dmg network scan --provider=all --json for step 3, 4, and 5.
+        self.log.info("scm_socket_to_namespaces = %s", self.scm_socket_to_namespaces)
+        self.log.info("scm_namespace_set = %s", self.scm_namespace_set)
+
+        # Call dmg network scan --provider=all --json.
         network_out = dmg.network_scan(provider="all")
 
         # Check the status.
@@ -90,23 +87,13 @@ class ConfigGenerateOutput(TestWithServers):
         struct_hash = list(temp_dict.keys())[0]
         interfaces = temp_dict[struct_hash]["HostFabric"]["Interfaces"]
 
-        # Fill in the dictionary and the set of interfaces.
+        # Fill in the dictionary and the set for interface.
         for interface in interfaces:
-            numa_node = interface["NumaNode"]
-            device = interface["Device"]
             provider = interface["Provider"]
-            # 3. Create numa_node_to_interfaces. Key is NumaNode from the output and value
-            # is a set of Device(s) from the output.
-            self.numa_node_to_interfaces[numa_node].add(device)
-            # 4. Create interface_to_providers. Key is Device from the output and value is
-            # a set of Provider(s) from the output.
-            self.interface_to_providers[device].add(provider)
-            # 5. Create interface_set. Set of Device(s) from the output.
+            device = interface["Device"]
+            self.interface_to_providers[device].append(provider)
             self.interface_set.add(device)
 
-        self.log.info("numa_node_to_pci_addrs = %s", self.numa_node_to_pci_addrs)
-        self.log.info("numa_node_to_blockdev = %s", self.numa_node_to_blockdev)
-        self.log.info("numa_node_to_interfaces = %s", self.numa_node_to_interfaces)
         self.log.info("interface_to_providers = %s", self.interface_to_providers)
         self.log.info("interface_set = %s", self.interface_set)
 
@@ -178,11 +165,11 @@ class ConfigGenerateOutput(TestWithServers):
         Sanity check for the default arguments.
 
         1. Call dmg config generate (using default values)
-        2. Verify scm_list value is in the SCM Namespace set of the correct numa node.
-        e.g., /dev/pmem0 is in pinned_numa_node: 0 -> Verify that pmem0 is in the set of
-        numa node 0.
-        3. Verify bdev_list is in the NVMe PCI address set of correct socket ID.
-        4. Verify fabric_iface is in the interface set of the correct numa node.
+        2. Verify the last scm_list value is in the SCM Namespace set.
+        e.g., /dev/pmem0 -> Verify that pmem0 is in the set.
+        3. Iterate bdev_list address list and verify that it's in the NVMe PCI
+        address set.
+        4. Get fabric_iface and verify that it's in the interface set.
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
@@ -193,7 +180,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Get necessary storage and network info.
         self.prepare_expected_data()
 
-        # 1. Call dmg config generate.
+        # Call dmg config generate.
         result = self.get_dmg_command().config_generate(
             access_points="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)
@@ -205,33 +192,28 @@ class ConfigGenerateOutput(TestWithServers):
         for engine in engines:
             scm_found = False
             nvme_found = False
-            pinned_numa_node = engine["pinned_numa_node"]
 
             for storage in engine["storage"]:
                 if storage["class"] == "dcpm":
-                    # 2. Verify the scm_list value is in the SCM Namespace set of the
-                    # correct pinned numa node. e.g., If the value is /dev/pmem0 with
-                    # pinned_numa_node: 0, check pmem0 is in the set for numa node 0.
+                    # Verify the scm_list value is in the SCM Namespace set. e.g.,
+                    # if the value is /dev/pmem0, check pmem0 is in the set.
                     scm_list = storage["scm_list"]
                     for scm_dev in scm_list:
                         device_name = scm_dev.split("/")[-1]
-                        if device_name not in self.numa_node_to_blockdev[pinned_numa_node]:
-                            msg = ("Cannot find SCM device name {} "
-                                   "in expected list {}").format(
-                                device_name, self.numa_node_to_blockdev[pinned_numa_node])
-                            errors.append(msg)
+                        if device_name not in self.scm_namespace_set:
+                            errors.append(
+                                "Cannot find SCM device name {} in expected set {}".format(
+                                    device_name, self.scm_namespace_set))
                         scm_found = True
 
-                # 3. Verify the bdev_list values are in the NVMe PCI address set of the
-                # correct pinned numa node.
+                # Verify the bdev_list values are in the NVMe PCI address set.
                 if storage["class"] == "nvme":
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
-                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                            msg = ("Cannot find PCI address {} "
-                                   "in expected set {}").format(
-                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
-                            errors.append(msg)
+                        if pci_addr not in self.pci_address_set:
+                            errors.append(
+                                "Cannot find PCI address {} in expected set {}".format(
+                                    pci_addr, self.pci_address_set))
                         nvme_found = True
 
             if not scm_found:
@@ -239,12 +221,12 @@ class ConfigGenerateOutput(TestWithServers):
             if not nvme_found:
                 errors.append("No NVMe devices found")
 
-            # Verify fabric interface is in the interface set of the correct numa node.
+            # Verify fabric interface values are in the interface set.
             fabric_iface = engine["fabric_iface"]
-            if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
+            if fabric_iface not in self.interface_set:
                 errors.append(
                     "Cannot find fabric interface {} in expected set {}".format(
-                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
+                        fabric_iface, self.interface_set))
 
         self.check_errors(errors)
 
@@ -258,8 +240,7 @@ class ConfigGenerateOutput(TestWithServers):
         2. Verify class value is set to ram.
         3. Verify the scm_list value is not set.
         4. Verify the scm_size value is set.
-        5. Iterate bdev_list address list and verify that it's in the NVMe PCI address set
-        of the correct numa node.
+        5. Iterate bdev_list address list and verify that it's in the NVMe PCI address set.
         6. Get fabric_iface and verify that it's in the interface set.
         7. Repeat for all engines.
 
@@ -285,7 +266,6 @@ class ConfigGenerateOutput(TestWithServers):
         for engine in engines:
             scm_found = False
             nvme_found = False
-            pinned_numa_node = engine["pinned_numa_node"]
 
             for storage in engine["storage"]:
                 if storage["class"] == "ram":
@@ -300,16 +280,14 @@ class ConfigGenerateOutput(TestWithServers):
                     scm_found = True
                     errors.append("Unexpected storage tier class dcpm, want ram")
 
-                # Verify the bdev_list values are in the NVMe PCI address set of the
-                # correct numa node.
+                # Verify the bdev_list values are in the NVMe PCI address set.
                 if storage["class"] == "nvme":
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
-                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                            msg = ("Cannot find PCI address {} "
-                                   "in expected set {}").format(
-                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
-                            errors.append(msg)
+                        if pci_addr not in self.pci_address_set:
+                            errors.append(
+                                "Cannot find PCI address {} in expected set {}".format(
+                                    pci_addr, self.pci_address_set))
                         nvme_found = True
 
             if not scm_found:
@@ -317,13 +295,12 @@ class ConfigGenerateOutput(TestWithServers):
             if not nvme_found:
                 errors.append("No NVMe devices found")
 
-            # Verify fabric interface values are in the interface set of the correct numa
-            # node.
+            # Verify fabric interface values are in the interface set.
             fabric_iface = engine["fabric_iface"]
-            if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
+            if fabric_iface not in self.interface_set:
                 errors.append(
                     "Cannot find fabric interface {} in expected set {}".format(
-                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
+                        fabric_iface, self.interface_set))
 
         self.check_errors(errors)
 
@@ -421,7 +398,7 @@ class ConfigGenerateOutput(TestWithServers):
         # sockets in NVMe. However, I'm not sure if we need to have the same
         # number of interfaces. Go over this step if we have issue with the
         # max_engine assumption.
-        max_engine = len(list(self.numa_node_to_pci_addrs.keys()))
+        max_engine = len(list(self.nvme_socket_to_addrs.keys()))
         self.log.info("max_engine threshold = %s", max_engine)
 
         dmg = DmgCommand(self.bin)

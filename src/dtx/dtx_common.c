@@ -163,7 +163,6 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	}
 
 	D_FREE(dbca);
-	cont->sc_dtx_registered = 0;
 	ds_cont_child_put(cont);
 }
 
@@ -1730,7 +1729,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 out:
 	if (rc == 0) {
 		cont->sc_dtx_batched_gen = 1;
-		cont->sc_dtx_registered = 1;
 		dbca->dbca_reg_gen = cont->sc_dtx_batched_gen;
 	} else {
 		D_FREE(dbca);

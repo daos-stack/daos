@@ -376,8 +376,6 @@ rebuild_destroy_pool_cb(void *data)
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
-				      0, 0, NULL);
 		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
 				      NULL, true);
 		if (rc) {

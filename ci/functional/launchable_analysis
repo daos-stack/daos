@@ -3,14 +3,7 @@
 set -eux
 
 dir="$1/$STAGE_NAME/"
-if ! mkdir -p "$dir"; then
-    echo "Failed to create \"$dir\":"
-    ls -ld "$dir"
-    if [ -f "$dir" ]; then
-        cat "$dir"
-    fi
-    exit 1
-fi
+mkdir -p "$dir"
 
 notify=false
 
