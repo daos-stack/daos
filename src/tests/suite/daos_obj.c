@@ -4842,6 +4842,43 @@ oit_get_markdata_as1(daos_obj_id_t oid, d_iov_t *marker)
 }
 
 static void
+oit_eq_init(struct ioreq *req)
+{
+	int	rc;
+
+	if (req->arg->async) {
+		rc = daos_event_init(&req->ev, req->arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+}
+
+static void
+oit_eq_fini(struct ioreq *req)
+{
+	int	rc;
+	bool	ev_flag;
+
+	if (req->arg->async) {
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
+		rc = daos_event_fini(&req->ev);
+	}
+}
+
+static void
+oit_mark(daos_handle_t oh, daos_obj_id_t oid, d_iov_t *marker, struct ioreq *req)
+{
+	int rc;
+
+	oit_eq_init(req);
+	rc = daos_oit_mark(oh, oid, marker, req->arg->async ? &req->ev : NULL);
+	assert_rc_equal(rc, 0);
+	oit_eq_fini(req);
+}
+
+static void
 oit_list_filter(void **state)
 {
 	test_arg_t		*arg0 = *state;
@@ -4862,6 +4899,7 @@ oit_list_filter(void **state)
 	uint32_t		oids_nr;
 	int			total;
 	int			i, rc;
+	bool			ev_flag;
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
@@ -4897,18 +4935,26 @@ oit_list_filter(void **state)
 	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_snap_oit_create(arg->coh, snap_epoch, NULL, NULL);
+	arg->async = arg0->async;
+	req.arg = arg;
+	oit_eq_init(&req);
+	rc = daos_cont_snap_oit_create(arg->coh, snap_epoch, NULL, arg->async ? &req.ev : NULL);
 	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
 
-	rc = daos_oit_open(arg->coh, snap_epoch, &toh, NULL);
+	oit_eq_init(&req);
+	rc = daos_oit_open(arg->coh, snap_epoch, &toh, arg->async ? &req.ev : NULL);
 	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
 
 	print_message("list oit after updated %d objests\n", OIT_TEST_OID_NR);
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list(toh, oid_list, &oids_nr, &anchor, arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
+		oit_eq_fini(&req);
 		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
@@ -4924,26 +4970,36 @@ oit_list_filter(void **state)
 	print_message("mark a few oids in the OIT\n");
 	mark_data = 1;
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
-	rc = daos_oit_mark(toh, oid[0], &marker, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_oit_mark(toh, oid[1], &marker, NULL);
-	assert_rc_equal(rc, 0);
+	oit_mark(toh, oid[0], &marker, &req);
+	oit_mark(toh, oid[1], &marker, &req);
 	mark_data = 0;
-	rc = daos_oit_mark(toh, oid[7], &marker, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_oit_mark(toh, oid[15], &marker, NULL);
-	assert_rc_equal(rc, 0);
+	oit_mark(toh, oid[7], &marker, &req);
+	oit_mark(toh, oid[15], &marker, &req);
+
 	print_message("mark a non-existed oid should fail with -DER_NONEXIST\n");
 	oid_new = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_oit_mark(toh, oid_new, &marker, NULL);
-	assert_rc_equal(rc, -DER_NONEXIST);
+	oit_eq_init(&req);
+	rc = daos_oit_mark(toh, oid_new, &marker, arg->async ? &req.ev : NULL);
+	if (req.arg->async) {
+		assert_rc_equal(rc, 0);
+		rc = daos_event_test(&req.ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req.ev.ev_error, -DER_NONEXIST);
+		rc = daos_event_fini(&req.ev);
+	} else {
+		assert_rc_equal(rc, -DER_NONEXIST);
+	}
 
 	print_message("list un-marked oids in the OIT\n");
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor,
+					    arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
+		oit_eq_fini(&req);
 		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 4);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
@@ -4963,14 +5019,19 @@ oit_list_filter(void **state)
 	}
 
 	print_message("clear an oid's marker in the OIT\n");
-	rc = daos_oit_mark(toh, oid[15], NULL, NULL);
+	oit_eq_init(&req);
+	rc = daos_oit_mark(toh, oid[15], NULL, arg->async ? &req.ev : NULL);
 	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
 	print_message("list un-marked oids in the OIT\n");
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor,
+					    arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
+		oit_eq_fini(&req);
 		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 3);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
@@ -4993,9 +5054,11 @@ oit_list_filter(void **state)
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
+		oit_eq_init(&req);
 		rc = daos_oit_list_filter(toh, oid_list, &oids_nr, &anchor, oit_get_markdata_as1,
-					  NULL);
+					  arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
+		oit_eq_fini(&req);
 		assert_int_equal(oids_nr + total, 2);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
@@ -5012,14 +5075,27 @@ oit_list_filter(void **state)
 		}
 	}
 
-	rc = daos_cont_snap_oit_destroy(arg->coh, toh, NULL);
+	oit_eq_init(&req);
+	rc = daos_cont_snap_oit_destroy(arg->coh, toh, arg->async ? &req.ev : NULL);
 	D_ASSERT(rc == 0);
+	oit_eq_fini(&req);
 
-	rc = daos_oit_close(toh, NULL);
+	oit_eq_init(&req);
+	rc = daos_oit_close(toh, arg->async ? &req.ev : NULL);
 	D_ASSERT(rc == 0);
+	oit_eq_fini(&req);
 
-	rc = daos_oit_open(arg->coh, snap_epoch, &toh, NULL);
-	assert_rc_equal(rc, -DER_NONEXIST);
+	oit_eq_init(&req);
+	rc = daos_oit_open(arg->coh, snap_epoch, &toh, arg->async ? &req.ev : NULL);
+	if (req.arg->async) {
+		rc = daos_event_test(&req.ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req.ev.ev_error, -DER_NONEXIST);
+		rc = daos_event_fini(&req.ev);
+	} else {
+		assert_rc_equal(rc, -DER_NONEXIST);
+	}
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
@@ -5125,6 +5201,7 @@ static const struct CMUnitTest io_tests[] = {
 	  io_tx_convert, async_disable, test_case_teardown},
 	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 	{ "IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
+	{ "IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
 };
 
 int
