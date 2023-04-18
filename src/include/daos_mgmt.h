@@ -37,7 +37,7 @@ daos_mgmt_sys_info_alloc(struct daos_sys_info **info);
 
 /**
  * Free the system info structure.
- * 
+ *
  * \param[in]	info	Structure to be freed
  */
 void
