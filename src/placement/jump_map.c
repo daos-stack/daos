@@ -897,8 +897,7 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 	 * strictly by rebuild version to make sure both new and old shards being
 	 * updated.
 	 */
-	if (unlikely(is_extending || is_adding_new) && rebuild_version != 0 &&
-	    !(mode & DAOS_OO_RO)) {
+	if (unlikely(is_extending || is_adding_new) && !(mode & DAOS_OO_RO)) {
 		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
 			is_extending ? "yes" : "no");
