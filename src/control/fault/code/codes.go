@@ -79,6 +79,7 @@ const (
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
+	ScmConfigTierMissing
 )
 
 // Bdev fault codes
@@ -92,11 +93,14 @@ const (
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
 	BdevConfigOptFlagUnknown
-	BdevConfigTypeMismatch
+	BdevConfigTierTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU
-	BdevConfigMultiTiersWithDCPM
-	BdevConfigBadNrRoles
+	BdevConfigRolesWithDCPM
+	BdevConfigRolesBadNr
+	BdevConfigRolesMissing
+	BdevConfigMultiTierWithoutRoles
+	BdevConfigBadNrTiersWithRoles
 )
 
 // DAOS system fault codes

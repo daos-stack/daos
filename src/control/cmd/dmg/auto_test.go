@@ -148,9 +148,7 @@ func TestAuto_confGen(t *testing.T) {
 		Message: storRespHighMem,
 	}
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
-	e0.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
-	e1.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
 	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
 	tmpfsEngineCfgs := []*engine.Config{
@@ -247,7 +245,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm; low mem": {
+		"successful fetch of host storage and fabric; ram scm tier; md-on-ssd enabled; low mem": {
 			tmpfsSCM: true,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},

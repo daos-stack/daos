@@ -97,22 +97,59 @@ var (
 		code.ScmNoPMem,
 		"No PMem modules exist on storage server", "Install PMem modules and retry command")
 
-	// FaultBdevConfigMultiTiersWithDCPM creates a Fault when multiple bdev tiers are specified
-	// with DCPM SCM class, which is unsupported.
-	FaultBdevConfigMultiTiersWithDCPM = storageFault(
-		code.BdevConfigMultiTiersWithDCPM,
-		"Multiple bdev tiers in config with scm class set to dcpm",
-		"Only a single bdev tier is supported if scm tier is of class dcpm, reduce the "+
-			"number of bdev tiers in config")
+	// FaultScmConfigTierMissing creates a Fault when no scm tier is present in engine storage config.
+	FaultScmConfigTierMissing = storageFault(
+		code.ScmConfigTierMissing,
+		"missing scm storage tier in engine storage config",
+		"add a scm tier at index-0 in engine storage tiers list in server config file and restart daos_server")
 
-	// FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
+	// FaultBdevConfigTierTypeMismatch represents an error where an incompatible mix of emulated and
 	// non-emulated NVMe devices are present in the storage config.
-	FaultBdevConfigTypeMismatch = storageFault(
-		code.BdevConfigTypeMismatch,
-		"A mix of emulated and non-emulated NVMe devices are specified in config",
-		"Change config tiers to specify either emulated or non-emulated NVMe devices, but "+
-			"not a mix of both")
+	FaultBdevConfigTierTypeMismatch = storageFault(
+		code.BdevConfigTierTypeMismatch,
+		"bdev tiers found with both emulated and non-emulated NVMe types specified in config",
+		"change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
+
+	// FaultBdevConfigRolesWithDCPM creates a Fault when bdev roles are specified with DCPM SCM class.
+	FaultBdevConfigRolesWithDCPM = storageFault(
+		code.BdevConfigRolesWithDCPM,
+		"bdev tier roles specified in config with scm class set to dcpm",
+		"MD-on-SSD roles are only supported if the scm tier is of class ram, change dcpm tier to ram or "+
+			"remove role assignments from bdev tiers then restart daos_server after updating server "+
+			"config file")
+
+	// FaultBdevConfigRolesMissing creates a Fault when bdev roles are specified on some but not all
+	// bdev tiers.
+	FaultBdevConfigRolesMissing = storageFault(
+		code.BdevConfigRolesMissing,
+		"bdev tier roles have been specified on some but not all bdev tiers in config",
+		"set MD-on-SSD roles on all bdev tiers in server config file and restart daos_server")
+
+	// FaultBdevConfigMultiTiersWithoutRoles creates a Fault when multiple bdev tiers exist but no roles
+	// are specified.
+	FaultBdevConfigMultiTiersWithoutRoles = storageFault(
+		code.BdevConfigMultiTierWithoutRoles,
+		"multiple bdev tiers but roles have not been specified",
+		"set MD-on-SSD roles on all bdev tiers or use only a single bdev tier, restart daos_server "+
+			"after updating server config file")
+
+	// FaultBdevConfigBadNrTiersWithRoles creates a Fault when an invalid number of bdev tiers exist when
+	// roles are specified.
+	FaultBdevConfigBadNrTiersWithRoles = storageFault(
+		code.BdevConfigBadNrTiersWithRoles,
+		"only 1, 2 or 3 bdev tiers are supported when MD-on-SSD roles are specified",
+		"reduce the number of bdev tiers to 3 or less in server config file and restart daos_server")
 )
+
+// FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
+// to bdev tiers.
+func FaultBdevConfigBadNrRoles(role string, gotNr, wantNr int) *fault.Fault {
+	return storageFault(
+		code.BdevConfigRolesBadNr,
+		fmt.Sprintf("found %d %s tiers, wanted %d", gotNr, role, wantNr),
+		fmt.Sprintf("assign %s role to %d tiers in server config file and restart daos_server",
+			role, wantNr))
+}
 
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
@@ -143,15 +180,6 @@ func FaultBdevConfigOptFlagUnknown(input string, options ...string) *fault.Fault
 		fmt.Sprintf("unknown option flag given: %q", input),
 		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
 			options))
-}
-
-// FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
-// to bdev tiers.
-func FaultBdevConfigBadNrRoles(tierType string, gotNr, wantNr int) *fault.Fault {
-	return storageFault(
-		code.BdevConfigBadNrRoles,
-		fmt.Sprintf("found %d %s tiers, wanted %d", gotNr, tierType, wantNr),
-		"Adjust the bdev tier role assignments in config to fulfill the requirement")
 }
 
 var (

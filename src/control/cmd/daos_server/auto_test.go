@@ -143,9 +143,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
 	e0 := control.MockEngineCfg(0, 2, 4).WithTargetCount(18).WithHelperStreamCount(4)
-	e0.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	e1 := control.MockEngineCfg(1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4)
-	e1.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
 
 	for name, tc := range map[string]struct {

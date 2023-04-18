@@ -1124,6 +1124,15 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
 
+	// TODO: Add capability to create an ephemeral RAM-disk based configuration as currently
+	//       MD-on-SSD enabled conf will be generated whenever scm tier is tmpfs.
+	for idx := range cfg.Engines {
+		if err := cfg.Engines[idx].Storage.Tiers.AssignBdevTierRoles(); err != nil {
+			return nil, errors.Wrapf(err, "assigning engine %d storage bdev tier roles",
+				idx)
+		}
+	}
+
 	if err := cfg.Validate(log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
 	}
