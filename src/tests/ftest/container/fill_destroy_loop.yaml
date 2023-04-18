@@ -5,9 +5,12 @@ server_config:
   engines_per_host: 1
   engines:
     0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 2
 timeout: 900
-      storage: auto
-  system_ram_reserved: 1
 pool:
   control_method: dmg
   size: 300M

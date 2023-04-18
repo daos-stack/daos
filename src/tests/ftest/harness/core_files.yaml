@@ -2,11 +2,14 @@ hosts:
   test_servers: 2
 timeout: 120
 server_config:
-  system_ram_reserved: 2
   engines_per_host: 1
   engines:
     0:
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 2
 pool:
   size: 2G
   control_method: dmg

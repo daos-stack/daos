@@ -8,8 +8,10 @@ server_config:
   engines:
     0:
       targets: 1
-      storage: auto
-  system_ram_reserved: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
 pool:
   scm_size: 20G
 container:

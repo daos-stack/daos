@@ -12,7 +12,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos0
-          scm_size: 16
+  system_ram_reserved: 2
 
 pool:
   name: daos_server

@@ -6,5 +6,8 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage: auto
-  system_ram_reserved: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 2

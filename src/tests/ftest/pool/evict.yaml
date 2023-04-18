@@ -3,13 +3,16 @@ hosts:
 
 server_config:
   name: daos_server
-  system_ram_reserved: 1
   engines_per_host: 1
   engines:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 
 timeout: 170
 
