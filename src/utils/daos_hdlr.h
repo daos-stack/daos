@@ -192,8 +192,6 @@ int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
-int cont_create_hdlr(struct cmd_args_s *ap);
-int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
 
