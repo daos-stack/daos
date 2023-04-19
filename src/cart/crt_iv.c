@@ -22,7 +22,7 @@
 #include "cart/iv.h"
 
 #define IV_DBG(key, msg, ...) \
-	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
+	D_ERROR("[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
 
 static D_LIST_HEAD(ns_list);
 
@@ -1215,7 +1215,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	if (local_grp_ver == grp_ver) {
 		input->ifi_grp_ver = grp_ver;
 	} else {
-		D_DEBUG(DB_ALL, "Group Version Changed: From %d: To %d\n",
+		D_ERROR("Group Version Changed: From %d: To %d\n",
 			grp_ver, local_grp_ver);
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}
@@ -1289,7 +1289,7 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 	d_rank_t self = ivns_internal->cii_grp_priv->gp_self;
 
 	if (self == CRT_NO_RANK) {
-		D_DEBUG(DB_ALL, "%s: self rank not known yet\n",
+		D_ERROR("%s: self rank not known yet\n",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
 		return -DER_GRPVER;
 	}
@@ -1345,7 +1345,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver_entry != input->ifi_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
 			input->ifi_grp_ver);
@@ -1425,7 +1425,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 		/* Check here for change in group */
 		if (grp_ver_entry != grp_ver_current) {
-			D_DEBUG(DB_ALL, "Group (%s) version changed. "
+			D_ERROR("Group (%s) version changed. "
 				"On Entry: %d:: Changed To :%d\n",
 				ivns_id.ii_group_name,
 				grp_ver_entry, grp_ver_current);
@@ -1527,7 +1527,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 
 	if (grp_ver != input->ifi_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver,
 			input->ifi_grp_ver);
@@ -1838,7 +1838,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != input->ivs_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver,
 			input->ivs_grp_ver);
@@ -1980,7 +1980,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != input->ivs_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver,
 			input->ivs_grp_ver);
@@ -2664,7 +2664,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	local_grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != local_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. "
 			"On entry: %d: Changed to :%d\n",
 			ivns_internal->cii_gns.gn_ivns_id.ii_group_name,
@@ -3057,7 +3057,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver_entry != input->ivu_grp_ver) {
-		D_DEBUG(DB_ALL,
+		D_ERROR(
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
 			input->ivu_grp_ver);
@@ -3101,7 +3101,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->
 					gp_rwlock);
 			if (grp_ver_entry != grp_ver_current) {
-				D_DEBUG(DB_ALL,
+				D_ERROR(
 					"Group (%s) version mismatch. "
 					"On Entry: %d:: Changed to:%d\n",
 					ivns_id.ii_group_name,
@@ -3344,7 +3344,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 			D_GOTO(put, rc);
 
 		if (grp_ver != grp_ver2) {
-			D_DEBUG(DB_ALL,
+			D_ERROR(
 				"Group (%s) version mismatch. "
 				"On Entry: %d:: Changed to:%d\n",
 				ivns_internal->cii_gns.gn_ivns_id.ii_group_name,
@@ -3465,7 +3465,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	self_rank = ivns_internal->cii_grp_priv->gp_self;
 	if (self_rank == CRT_NO_RANK) {
-		D_DEBUG(DB_ALL, "%s: self rank not known yet\n",
+		D_ERROR("%s: self rank not known yet\n",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}

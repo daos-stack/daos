@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -406,6 +406,7 @@ check_object:
 		vos_obj_release(occ, obj, false);
 		/* Update request will retry with this error */
 		rc = -DER_UPDATE_AGAIN;
+		D_ERROR("obj in discard, create %d, "DF_RC"\n", create, DP_RC(rc));
 		goto failed_2;
 	}
 
