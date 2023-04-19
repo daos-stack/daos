@@ -17,7 +17,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos0
-  system_ram_reserved: 2
     1:
       pinned_numa_node: 1
       targets: 4
