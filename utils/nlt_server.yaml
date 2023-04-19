@@ -21,4 +21,5 @@ engines:
       -
         class: ram
         scm_mount: /mnt/daos
+        scm_size: 0
 system_ram_reserved: 1
