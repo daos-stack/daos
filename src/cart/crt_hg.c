@@ -10,6 +10,8 @@
 
 #include "crt_internal.h"
 
+#include <dlfcn.h>
+
 /*
  * na_dict table should be in the same order of enum crt_provider_t, the last one
  * is terminator with NULL nad_str.
@@ -1720,9 +1722,15 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_bulk_cbinfo.bci_bulk_desc = bulk_desc;
 
 	rc = bulk_cbinfo->bci_cb(&crt_bulk_cbinfo);
-	if (rc != 0)
-		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
+	if (rc != 0) {
+		int rc2;
+		Dl_info dlinfo;
 
+		rc2 = dladdr(bulk_cbinfo->bci_cb, &dlinfo);
+		D_ERROR("bulk_cbinfo->bci_cb (%s()) failed, rc: %d.\n",
+			rc2 && dlinfo.dli_saddr == bulk_cbinfo->bci_cb ? dlinfo.dli_sname :
+									 "<unresolved>", rc);
+	}
 out:
 	D_FREE(bulk_cbinfo);
 	D_FREE(bulk_desc);

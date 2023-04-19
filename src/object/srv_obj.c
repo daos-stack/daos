@@ -144,8 +144,8 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
-				 DLOG_DBG, DLOG_ERR,
+				 rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				 rc == -DER_CANCELED, DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: "DF_RC"\n",
 				 DP_UOID(orwi->orw_oid),
 				 update ? "Update" : "Fetch", DP_RC(rc));
@@ -242,7 +242,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	crt_rpc_t		*rpc;
 
 	if (cb_info->bci_rc != 0)
-		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
+		D_DEBUG(DB_IO, "bulk transfer failed: %d\n", cb_info->bci_rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	rpc = bulk_desc->bd_rpc;
@@ -1588,7 +1588,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
 
-		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+		D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_CANCELED, DLOG_DBG, DLOG_ERR,
 			 DF_UOID" data transfer failed, dma %d rc "DF_RC"",
 			 DP_UOID(orw->orw_oid), rma, DP_RC(rc));
 		D_GOTO(post, rc);
@@ -2706,6 +2706,17 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
 			rc = obj_local_rw(rpc, &ioc, dth);
+			if (rc != 0)
+				D_CDEBUG(
+					rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+					     (rc == -DER_EXIST &&
+					      (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT |
+								     DAOS_COND_AKEY_INSERT))) ||
+					     (rc == -DER_NONEXIST &&
+					      (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE |
+								     DAOS_COND_AKEY_UPDATE))),
+					     DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n",
+					     DP_UOID(orw->orw_oid), DP_RC(rc));
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
 
