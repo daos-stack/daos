@@ -86,9 +86,9 @@ struct chk_pool_mbs {
 
 #define DAOS_OSEQ_CHK_START							\
 	((int32_t)		(cso_status)		CRT_VAR)		\
-	((int32_t)		(cso_child_status)	CRT_VAR)		\
 	((uint32_t)		(cso_rank_cap)		CRT_VAR)		\
 	((uint32_t)		(cso_clue_cap)		CRT_VAR)		\
+	((int32_t)		(cso_padding)		CRT_VAR)		\
 	((d_rank_t)		(cso_cmp_ranks)		CRT_ARRAY)		\
 	((struct ds_pool_clue)	(cso_clues)		CRT_ARRAY)
 
@@ -104,9 +104,7 @@ CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
 
 #define DAOS_OSEQ_CHK_STOP							\
 	((int32_t)		(cso_status)		CRT_VAR)		\
-	((int32_t)		(cso_child_status)	CRT_VAR)		\
 	((uint32_t)		(cso_cap)		CRT_VAR)		\
-	((uint32_t)		(cso_padding)		CRT_VAR)		\
 	((d_rank_t)		(cso_ranks)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
@@ -121,9 +119,7 @@ CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
 
 #define DAOS_OSEQ_CHK_QUERY							\
 	((int32_t)			(cqo_status)		CRT_VAR)	\
-	((int32_t)			(cqo_child_status)	CRT_VAR)	\
 	((uint32_t)			(cqo_cap)		CRT_VAR)	\
-	((uint32_t)			(cqo_pending)		CRT_VAR)	\
 	((struct chk_query_pool_shard)	(cqo_shards)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
@@ -177,9 +173,7 @@ CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
 
 #define DAOS_OSEQ_CHK_CONT_LIST							\
 	((int32_t)		(cclo_status)		CRT_VAR)		\
-	((int32_t)		(cclo_child_status)	CRT_VAR)		\
 	((uint32_t)		(cclo_cap)		CRT_VAR)		\
-	((d_rank_t)		(cclo_padding)		CRT_VAR)		\
 	((uuid_t)		(cclo_conts)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST);

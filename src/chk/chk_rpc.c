@@ -47,13 +47,12 @@ chk_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	uint32_t		 nr;
 	int			 i;
 
-	if (out_source->cso_status < 0 || out_source->cso_child_status < 0) {
-		D_ERROR("Failed to check start with gen "DF_X64": %d/%d\n", in_source->csi_gen,
-			out_source->cso_status, out_source->cso_child_status);
+	if (out_source->cso_status < 0) {
+		D_ERROR("Failed to check start with gen "DF_X64": %d\n",
+			in_source->csi_gen, out_source->cso_status);
 
-		if (out_result->cso_child_status == 0)
-			out_result->cso_child_status = out_source->cso_status < 0 ?
-				out_source->cso_status : out_source->cso_child_status;
+		if (out_result->cso_status == 0)
+			out_result->cso_status = out_source->cso_status;
 
 		return 0;
 	}
@@ -75,6 +74,9 @@ clue_again:
 				cap = nr;
 				goto clue_again;
 			}
+
+			if (out_result->cso_status == 0)
+				out_result->cso_status = -DER_NOMEM;
 
 			return -DER_NOMEM;
 		}
@@ -120,6 +122,9 @@ rank_again:
 				goto rank_again;
 			}
 
+			if (out_result->cso_status == 0)
+				out_result->cso_status = -DER_NOMEM;
+
 			return -DER_NOMEM;
 		}
 
@@ -141,10 +146,12 @@ chk_start_post_reply(crt_rpc_t *rpc, void *arg)
 	struct chk_start_out	*cso = crt_reply_get(rpc);
 	struct ds_pool_clues	 clues = { 0 };
 
-	D_FREE(cso->cso_cmp_ranks.ca_arrays);
-	clues.pcs_len = cso->cso_clues.ca_count;
-	clues.pcs_array = cso->cso_clues.ca_arrays;
-	ds_pool_clues_fini(&clues);
+	if (cso != NULL) {
+		D_FREE(cso->cso_cmp_ranks.ca_arrays);
+		clues.pcs_len = cso->cso_clues.ca_count;
+		clues.pcs_array = cso->cso_clues.ca_arrays;
+		ds_pool_clues_fini(&clues);
+	}
 
 	return 0;
 }
@@ -159,13 +166,12 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	uint32_t		 cap;
 	uint32_t		 nr;
 
-	if (out_source->cso_status < 0 || out_source->cso_child_status < 0) {
-		D_ERROR("Failed to check stop with gen "DF_X64": %d/%d\n", in_source->csi_gen,
-			out_source->cso_status, out_source->cso_child_status);
+	if (out_source->cso_status < 0) {
+		D_ERROR("Failed to check stop with gen "DF_X64": %d\n",
+			in_source->csi_gen, out_source->cso_status);
 
-		if (out_result->cso_child_status == 0)
-			out_result->cso_child_status = out_source->cso_status < 0 ?
-				out_source->cso_status : out_source->cso_child_status;
+		if (out_result->cso_status == 0)
+			out_result->cso_status = out_source->cso_status;
 
 		return 0;
 	}
@@ -187,6 +193,9 @@ again:
 				goto again;
 			}
 
+			if (out_result->cso_status == 0)
+				out_result->cso_status = -DER_NOMEM;
+
 			return -DER_NOMEM;
 		}
 
@@ -206,7 +215,8 @@ chk_stop_post_reply(crt_rpc_t *rpc, void *arg)
 {
 	struct chk_stop_out	*cso = crt_reply_get(rpc);
 
-	D_FREE(cso->cso_ranks.ca_arrays);
+	if (cso != NULL)
+		D_FREE(cso->cso_ranks.ca_arrays);
 
 	return 0;
 }
@@ -222,13 +232,12 @@ chk_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	uint32_t			 nr;
 	int				 i;
 
-	if (out_source->cqo_status != 0 || out_source->cqo_child_status != 0) {
-		D_ERROR("Failed to check query with gen "DF_X64": %d/%d\n", in_source->cqi_gen,
-			out_source->cqo_status, out_source->cqo_child_status);
+	if (out_source->cqo_status != 0) {
+		D_ERROR("Failed to check query with gen "DF_X64": %d\n",
+			in_source->cqi_gen, out_source->cqo_status);
 
-		if (out_result->cqo_child_status == 0)
-			out_result->cqo_child_status = out_source->cqo_status != 0 ?
-				out_source->cqo_status : out_source->cqo_child_status;
+		if (out_result->cqo_status == 0)
+			out_result->cqo_status = out_source->cqo_status;
 
 		return 0;
 	}
@@ -249,6 +258,9 @@ again:
 				cap = nr;
 				goto again;
 			}
+
+			if (out_result->cqo_status == 0)
+				out_result->cqo_status = -DER_NOMEM;
 
 			return -DER_NOMEM;
 		}
@@ -280,7 +292,8 @@ chk_query_post_reply(crt_rpc_t *rpc, void *arg)
 {
 	struct chk_query_out	*cqo = crt_reply_get(rpc);
 
-	chk_query_free(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
+	if (cqo != NULL)
+		chk_query_free(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
 
 	return 0;
 }
@@ -331,13 +344,12 @@ chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	uint32_t			 cap;
 	uint32_t			 nr;
 
-	if (out_source->cclo_status < 0 || out_source->cclo_child_status < 0) {
-		D_ERROR("Failed to check cont list with gen "DF_X64": %d/%d\n", in_source->ccli_gen,
-			out_source->cclo_status, out_source->cclo_child_status);
+	if (out_source->cclo_status < 0) {
+		D_ERROR("Failed to check cont list with gen "DF_X64": %d\n",
+			in_source->ccli_gen, out_source->cclo_status);
 
-		if (out_result->cclo_child_status == 0)
-			out_result->cclo_child_status = out_source->cclo_status < 0 ?
-				out_source->cclo_status : out_source->cclo_child_status;
+		if (out_result->cclo_status == 0)
+			out_result->cclo_status = out_source->cclo_status;
 
 		return 0;
 	}
@@ -359,6 +371,9 @@ again:
 				goto again;
 			}
 
+			if (out_result->cclo_status == 0)
+				out_result->cclo_status = -DER_NOMEM;
+
 			return -DER_NOMEM;
 		}
 
@@ -378,7 +393,8 @@ chk_cont_list_post_reply(crt_rpc_t *rpc, void *arg)
 {
 	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
 
-	D_FREE(cclo->cclo_conts.ca_arrays);
+	if (cclo != NULL)
+		D_FREE(cclo->cclo_conts.ca_arrays);
 
 	return 0;
 }
@@ -498,9 +514,6 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		goto out;
 
 	cso = crt_reply_get(req);
-	if (cso->cso_child_status < 0)
-		D_GOTO(out, rc = cso->cso_child_status);
-
 	if (cso->cso_status < 0)
 		D_GOTO(out, rc = cso->cso_status);
 
@@ -522,14 +535,10 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 out:
 	if (req != NULL) {
 		/*
-		 * If the check engine and the leader are on the same rank, we will not go through
-		 * CaRT proc function that will copy the clues into related RPC reply buffer. Then
-		 * we have to keep related buffer that is allocated inside ds_chk_start_hdlr() for
-		 * a while until the check leader completed aggregating. And then the check leader
-		 * needs to release it explicitly.
+		 * co_post_reply will not be automatically called on the root node of the corpc.
+		 * Let's trigger it explicitly to release related buffer.
 		 */
-		if (cso != NULL && cso->cso_status >= 0)
-			chk_start_post_reply(req, NULL);
+		chk_start_post_reply(req, NULL);
 
 		if (rc < 0 && rc != -DER_ALREADY) {
 			rc1 = chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
@@ -573,9 +582,6 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		goto out;
 
 	cso = crt_reply_get(req);
-	if (cso->cso_child_status < 0)
-		D_GOTO(out, rc = cso->cso_child_status);
-
 	if (cso->cso_status < 0)
 		D_GOTO(out, rc = cso->cso_status);
 
@@ -594,15 +600,10 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 out:
 	if (req != NULL) {
 		/*
-		 * If the check engine and the leader are on the same rank, we will not go through
-		 * CaRT proc function that will copy the ranks into related RPC reply buffer. Then
-		 * we have to keep related buffer that is allocated inside ds_chk_stop_hdlr() for
-		 * a while until the check leader completed aggregating. And then the check leader
-		 * needs to release it explicitly.
+		 * co_post_reply will not be automatically called on the root node of the corpc.
+		 * Let's trigger it explicitly to release related buffer.
 		 */
-		if (cso != NULL)
-			D_FREE(cso->cso_ranks.ca_arrays);
-
+		chk_stop_post_reply(req, NULL);
 		crt_req_decref(req);
 	}
 
@@ -636,9 +637,6 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		goto out;
 
 	cqo = crt_reply_get(req);
-	if (cqo->cqo_child_status < 0)
-		D_GOTO(out, rc = cqo->cqo_child_status);
-
 	if (cqo->cqo_status < 0)
 		D_GOTO(out, rc = cqo->cqo_status);
 
@@ -648,15 +646,10 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 out:
 	if (req != NULL) {
 		/*
-		 * If the check engine and the PS leader are on the same rank, we will not go
-		 * through CaRT proc function that will copy shards into the RPC reply buffer.
-		 * So we have to keep related buffer that is allocated in ds_chk_query_hdlr()
-		 * for a while until the PS leader completed aggregating of the results. And
-		 * then the PS leader needs to release the buffer explicitly.
+		 * co_post_reply will not be automatically called on the root node of the corpc.
+		 * Let's trigger it explicitly to release related buffer.
 		 */
-		if (cqo != NULL && cqo->cqo_status >= 0)
-			chk_query_free(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
-
+		chk_query_post_reply(req, NULL);
 		crt_req_decref(req);
 	}
 
@@ -770,9 +763,6 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		goto out;
 
 	cclo = crt_reply_get(req);
-	if (cclo->cclo_child_status < 0)
-		D_GOTO(out, rc = cclo->cclo_child_status);
-
 	if (cclo->cclo_status < 0)
 		D_GOTO(out, rc = cclo->cclo_status);
 
@@ -782,15 +772,10 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 out:
 	if (req != NULL) {
 		/*
-		 * If the check engine and the PS leader are on the same rank, we will not go
-		 * through CaRT proc function that will copy the containers' uuids into the RPC
-		 * reply buffer. So we have to keep related buffer that is allocated in the
-		 * ds_chk_cont_list_hdlr() for a while until the PS leader completed aggregating
-		 * of the results. And then the PS leader needs to release the buffer explicitly.
+		 * co_post_reply will not be automatically called on the root node of the corpc.
+		 * Let's trigger it explicitly to release related buffer.
 		 */
-		if (cclo != NULL && cclo->cclo_status >= 0)
-			D_FREE(cclo->cclo_conts.ca_arrays);
-
+		chk_cont_list_post_reply(req, NULL);
 		crt_req_decref(req);
 	}
 
