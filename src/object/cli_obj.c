@@ -611,7 +611,8 @@ unlock:
 }
 
 static int
-obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned int map_ver)
+obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, uint64_t dkey_hash,
+			  unsigned int map_ver)
 {
 	struct pl_obj_shard	*shard;
 	struct daos_oclass_attr	*oca;
@@ -656,7 +657,7 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * obj_get_grp_size(obj);
-	replica_idx = (obj->cob_md.omd_id.lo + grp_idx) % grp_size;
+	replica_idx = (dkey_hash + grp_idx) % grp_size;
 	for (i = 0, pos = -1; i < grp_size;
 	     i++, replica_idx = (replica_idx + 1) % obj_get_grp_size(obj)) {
 		int off = start + replica_idx;
@@ -700,7 +701,7 @@ obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		return obj_ec_leader_select(obj, grp_idx, cond_modify, map_ver, dkey_hash,
 					    bit_map);
 
-	return obj_replica_leader_select(obj, grp_idx, map_ver);
+	return obj_replica_leader_select(obj, grp_idx, dkey_hash, map_ver);
 }
 
 /* If the client has been asked to fetch (list/query) from leader replica,
@@ -5297,7 +5298,7 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		rc = obj->cob_shards_nr - 1;
 	else if (to_leader)
-		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+		rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 	else
 		rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 							   obj_auxi->failed_tgt_list);
@@ -6273,7 +6274,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		*bitmaps = NULL;
 		*shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6492,7 +6493,7 @@ dc_obj_key2anchor(tse_task_t *task)
 	} else {
 		shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6893,7 +6894,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
 			int leader;
 
-			leader = obj_grp_leader_get(obj, i, obj_auxi->dkey_hash,
+			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
 						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
 				if (obj_is_ec(obj) &&
