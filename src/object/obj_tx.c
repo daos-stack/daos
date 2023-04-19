@@ -3556,6 +3556,7 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	daos_tx_commit_t		*cmt_args;
 	tse_task_t			*cmt_task = NULL;
 	int				 rc = 0;
+	bool				 tx_need_close = true;
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
@@ -3580,6 +3581,8 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	rc = dc_task_depend(task, 1, &cmt_task);
 	if (rc != 0) {
 		D_ERROR("Fail to add dep for TX convert task on commit: "DF_RC"\n", DP_RC(rc));
+		/* dc_tx_convert will close tx */
+		tx_need_close = false;
 		goto out;
 	}
 
@@ -3592,7 +3595,8 @@ out:
 
 	/* Explicitly complete the original task. */
 	tse_task_complete(task, rc);
-	dc_tx_close_internal(tx);
+	if (tx_need_close)
+		dc_tx_close_internal(tx);
 
 	return rc;
 }

@@ -833,7 +833,7 @@ oit_filter_if_needed(tse_task_t *task, void *args)
 
 	rc = tse_task_register_comp_cb(ltask, oit_filter_list_cb, &oa, sizeof(oa));
 	if (rc) {
-		tse_task_complete(task, rc);
+		tse_task_complete(ltask, rc);
 		D_GOTO(arg_free, rc);
 	}
 
