@@ -4012,8 +4012,9 @@ def test_pydaos_kv_obj_class(server, conf):
         failed = True
         print(f'Expected length of kv object is 1 but got {len(kv1)}')
 
-    # Write kv2 dictionary with OC_SX object type
-    kv2 = container.dict('object2', {"Monday": "1", "Tuesday": "2"}, "OC_SX")
+    # Write kv2 dictionary without any object type,
+    # so in this case we have 4 targets so default object type should be S4
+    kv2 = container.dict('object2', {"Monday": "1", "Tuesday": "2"})
     if len(kv2) != 2:
         failed = True
         print(f'Expected length of kv object is 2 but got {len(kv2)}')
