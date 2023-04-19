@@ -18,12 +18,12 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 1
           scm_hugepages_cfg: !mux
             enabled:
               scm_hugepages_disabled: false
             disabled:
               scm_hugepages_disabled: true
+  system_ram_reserved: 1
 pool:
   control_method: dmg
 test_recycle_pools:
