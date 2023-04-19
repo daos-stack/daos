@@ -22,6 +22,7 @@ ObjClassID = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
+
 def _get_object_id(cid):
     """ Get the existing DAOS object class ID based on name.  """
 
@@ -29,6 +30,7 @@ def _get_object_id(cid):
     if cid == "0":
         return 0
     return ObjClassID[cid].value
+
 
 class DObjNotFound(Exception):
     """Raised by get if name associated with DAOS object not found """
