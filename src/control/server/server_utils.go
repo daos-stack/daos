@@ -509,7 +509,9 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 	if memAvailBytes < combRamdiskBytes {
 		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
 
-		return storage.FaultRamdiskLowMem(confSizeBytes, combRamdiskBytes, memAvailBytes)
+		return &ErrServerExit{
+			ErrInner: storage.FaultRamdiskLowMem(confSizeBytes, combRamdiskBytes, memAvailBytes),
+		}
 	}
 
 	srv.log.Debugf("%s: check successful!", msg)

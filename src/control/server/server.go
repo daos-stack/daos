@@ -438,7 +438,7 @@ func (srv *server) registerEvents() {
 	})
 }
 
-func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
+func (srv *server) start(ctx context.Context) error {
 	defer srv.logDuration(track("time server was listening"))
 
 	go func() {
@@ -451,15 +451,6 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
-
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		srv.log.Debugf("Caught signal: %s", sig)
-
-		shutdown()
-	}()
 
 	drpcSetupReq := &drpcServerSetupReq{
 		log:     srv.log,
@@ -599,5 +590,13 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	srv.registerEvents()
 
-	return srv.start(ctx, shutdown)
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		srv.log.Debugf("Caught signal: %s", sig)
+		shutdown()
+	}()
+
+	return srv.start(ctx)
 }

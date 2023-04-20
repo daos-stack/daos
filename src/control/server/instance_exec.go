@@ -126,6 +126,22 @@ func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname stri
 	}
 }
 
+// ErrServerExit indicates that the error should result in server exit.
+type ErrServerExit struct {
+	ErrInner error
+}
+
+func (err *ErrServerExit) Error() string {
+	return fmt.Sprintf("%s: server should exit", err.ErrInner)
+}
+
+// IsServerExit returns a boolean indicating whether or not the supplied error is an instance of
+// ErrServerExit.
+func IsServerExit(err error) bool {
+	_, ok := errors.Cause(err).(*ErrServerExit)
+	return ok
+}
+
 func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr error) {
 	engineIdx := ei.Index()
 	rank, err := ei.GetRank()
@@ -198,7 +214,7 @@ func (ei *EngineInstance) requestStart(ctx context.Context) {
 
 // Run starts the control loop for an EngineInstance. Engine starts are triggered by
 // calling requestStart() on the instance.
-func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
+func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool, fatalErrChan chan error) {
 	// Start the instance control loop.
 	go func() {
 		var runnerExitCh engine.RunnerExitChan
@@ -222,6 +238,10 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 				if err != nil {
 					ei.log.Errorf("runner exited without starting process: %s", err)
 					ei.handleExit(ctx, 0, err)
+					if IsServerExit(err) {
+						fatalErrChan <- err
+						return
+					}
 					continue
 				}
 			case runnerExit := <-runnerExitCh:
