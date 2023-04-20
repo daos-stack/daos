@@ -828,7 +828,7 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt)
 	 * Init xstream will finialize bdev subsystem later, so we need
 	 * to wait for the inflight health collecting request done.
 	 */
-	D_ASSERT(bdh->bdh_inflights == 0 || bdh->bdh_inflights == 1);
+        D_ASSERT(bdh->bdh_inflights < 2);
 	if (bdh->bdh_inflights == 1) {
 		ctxt->bxc_blobstore = NULL;
 
