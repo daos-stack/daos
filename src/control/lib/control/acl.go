@@ -214,6 +214,13 @@ func getVerbosePermissions(field string) string {
 	perms := map[string]string{
 		"r": "Read",
 		"w": "Write",
+		"c": "Create-Cont",
+		"d": "Destroy-Cont",
+		"t": "Get-Prop",
+		"T": "Set-Prop",
+		"a": "Get-ACL",
+		"A": "Set-ACL",
+		"o": "Set-Owner",
 	}
 
 	return getVerboseField(field, perms)
