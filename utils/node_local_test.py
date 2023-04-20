@@ -3991,20 +3991,20 @@ def test_pydaos_kv(server, conf):
 
 def test_pydaos_kv_obj_class(server, conf):
     """Test the predefined object class works with KV"""
-    # pylint: disable=consider-using-with
 
-    pydaos_log_file = tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
-                                                  suffix='.log',
-                                                  delete=False)
+    with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
+                                     suffix='.log',
+                                     delete=False) as tmp_file:
+        log_name = tmp_file.name
+        os.environ['D_LOG_FILE'] = log_name
 
-    os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
     pool = server.get_test_pool_obj()
 
-    cont = create_cont(conf, pool, ctype="PYTHON")
+    cont = create_cont(conf, pool, ctype="PYTHON", label='pydaos_cont')
 
-    container = daos.DCont(pool.uuid, cont.uuid)
+    container = daos.DCont(pool.label, cont.label)
     failed = False
     # Write kv1 dictionary with OC_S2 object type
     kv1 = container.dict('object1', {"Monday": "1"}, "OC_S2")
@@ -4020,7 +4020,7 @@ def test_pydaos_kv_obj_class(server, conf):
         print(f'Expected length of kv object is 2 but got {len(kv2)}')
 
     # Run a command to list the objects
-    cmd = ['cont', 'list-objects', pool.uuid, cont.uuid]
+    cmd = ['cont', 'list-objects', pool.label, cont.label]
     print('list the objects from container')
     rc = run_daos_cmd(conf, cmd, use_json=True)
 
@@ -4033,7 +4033,7 @@ def test_pydaos_kv_obj_class(server, conf):
     print('query the object layout')
     actual_obj_layout = []
     for obj in data['response']:
-        cmd = ['object', 'query', pool.uuid, cont.uuid, obj]
+        cmd = ['object', 'query', pool.label, cont.label, obj]
         rc = run_daos_cmd(conf, cmd, use_json=True)
 
         query_data = rc.json
@@ -4050,14 +4050,16 @@ def test_pydaos_kv_obj_class(server, conf):
             print(f'Expected obj {obj} not found in all {actual_obj_layout}')
 
     if failed:
-        print("Test step failed in test_pydaos_kv_obj_class()")
+        conf.wf.add_test_case('pydaos kv object test', failure='test failed')
+    else:
+        conf.wf.add_test_case('pydaos kv object test')
 
     # pylint: disable=protected-access
     del kv1
     del kv2
     del container
     daos._cleanup()
-    log_test(conf, pydaos_log_file.name)
+    log_test(conf, log_name)
 
 # Fault injection testing.
 #

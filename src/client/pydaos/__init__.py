@@ -11,7 +11,7 @@ import atexit
 from . import pydaos_shim
 # pylint: enable=relative-beyond-top-level
 
-DAOS_MAGIC = 0x7A89
+DAOS_MAGIC = 0x7A8A
 
 
 # Define the PyDError class here before doing the pydaos_core import so that

@@ -24,7 +24,7 @@
 #include <daos_kv.h>
 #include <daos_uns.h>
 
-#define PY_SHIM_MAGIC_NUMBER 0x7A89
+#define PY_SHIM_MAGIC_NUMBER 0x7A8A
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /** Durable format of entries in the root kv */
