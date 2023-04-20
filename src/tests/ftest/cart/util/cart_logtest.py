@@ -19,8 +19,6 @@ try:
 except ImportError:
     HAVE_TABULATE = False
 
-# pylint: disable=too-few-public-methods
-
 
 class LogCheckError(Exception):
     """Error in the log parsing code"""
@@ -205,8 +203,148 @@ class HwmCounter():
         self.__val -= val
 
 
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-locals
+class DirHandle():
+    """Directory handle"""
+
+    def __init__(self, line):
+        self.desc = line.descriptor
+        self.parent = line.parent
+        self.readdir_count = 0
+        self.plus_count = 0
+        self.entries = 0
+
+    def __str__(self):
+        txt = 'Directory handle, id {} parent {} calls {} with {} entries,'.format(
+            self.desc, self.parent, self.readdir_count, self.entries)
+        if self.readdir_count == 1 and self.plus_count == 1:
+            txt += ' Only one readdir call'
+        elif self.plus_count == 1:
+            txt += ' Adaptive readdirplus'
+        elif self.plus_count == self.readdir_count:
+            txt += ' Readdirplus used'
+        return txt
+
+    def add_line(self, line):
+        """Record a line for the handle"""
+        if line.get_field(2) == 'plus':
+            self.readdir_count += 1
+            if line.get_field(3) == '1':
+                self.plus_count += 1
+        elif line.get_field(2) == 'Checking':
+            pass
+        elif line.get_field(2) == 'Replying':
+            self.entries += int(line.get_field(4))
+
+
+class ReaddirHandle():
+    """Readdir handle"""
+
+    def __init__(self, line):
+        self.line = line
+        self.parent = line.parent
+        self.max_ref = 1
+
+    def __str__(self):
+        return 'Readdir handle,   id {} max_ref {}'.format(self.line.descriptor, self.max_ref)
+
+    def add_line(self, line):
+        """Record a line for the handle"""
+        if line.get_field(2) in ('Appending', 'Adding', 'Added', 'Fetching'):
+            return
+        if line.get_field(2) == 'Ref':
+            ref = int(line.get_field(4).strip(','))
+            if ref > self.max_ref:
+                self.max_ref = ref
+            return
+
+
+class InodeHandle():
+    """Inode handle"""
+
+    def __init__(self, line):
+        self.line = line
+        self.dentry = None
+
+    def __str__(self):
+        if self.dentry is None:
+            return ''
+        return "inode: {} name '{}'".format(self.line.descriptor, self.dentry)
+
+    def add_line(self, line):
+        """Record a line for the handle"""
+        if self.dentry is not None:
+            return
+
+        if line.get_field(2) == 'file':
+            self.dentry = line.get_field(3)[1:-1]
+
+
+class NullHandle():
+    """Handle that doesn't do anything"""
+
+    def add_line(self, _line):
+        """Record a line for the handle"""
+
+    def ___str__(self):
+        return ''
+
+
+class ReaddirTracer():
+    """Parse readdir logs"""
+
+    def __init__(self):
+        self.all_handles = {}
+        self._nl = NullHandle()
+
+        self._reports = []
+
+    def report(self):
+        """Print some data"""
+        print('Readdir report is')
+        print('\n'.join(self._reports))
+
+    def add_line(self, line):
+        """Parse a new line"""
+        if not line.trace:
+            if line.is_free():
+                addr = line.get_field(5).rstrip('.')
+                if addr in self.all_handles:
+                    handle = self.all_handles[addr]
+                    if not isinstance(handle, (InodeHandle, NullHandle)):
+                        parent = self.all_handles[handle.parent]
+                        self._reports.append(str(parent))
+                        self._reports.append(str(handle))
+                    del self.all_handles[addr]
+            return
+
+        if line.descriptor in self.all_handles:
+            self.all_handles[line.descriptor].add_line(line)
+
+        else:
+            if line.get_field(2) == 'Registered':
+                dtype = line.get_field(4)
+                if not dtype.endswith("'"):
+                    dtype += ' ' + line.get_field(5)
+                dtype = dtype.strip("'")
+
+                if dtype == 'inode':
+                    self.all_handles[line.descriptor] = InodeHandle(line)
+                    return
+                if dtype == 'readdir':
+                    new_handle = ReaddirHandle(line)
+                    self.all_handles[line.descriptor] = new_handle
+                    return
+                if dtype == 'open handle':
+                    if line.filename.endswith('opendir.c'):
+                        new_handle = DirHandle(line)
+                        self.all_handles[line.descriptor] = new_handle
+                    else:
+                        self.all_handles[line.descriptor] = self._nl
+                    return
+            else:
+                self.all_handles[line.descriptor] = self._nl
+
+
 class LogTest():
     """Log testing"""
 
@@ -226,7 +364,7 @@ class LogTest():
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
-            self.show_common_logs()
+            self._show_common_logs()
 
     def save_log_line(self, line):
         """Record a single line of logging"""
@@ -241,7 +379,7 @@ class LogTest():
         self.log_fac[line.fac] += 1
         self.log_levels[line.level] += 1
 
-    def show_common_logs(self):
+    def _show_common_logs(self):
         """Report to stdout the most common logging locations"""
         if self.log_count == 0:
             return
@@ -278,7 +416,7 @@ class LogTest():
             except LogCheckError as error:
                 if to_raise is None:
                     to_raise = error
-        self.show_common_logs()
+        self._show_common_logs()
         if to_raise:
             raise to_raise
 
@@ -309,9 +447,9 @@ class LogTest():
             for cpid in client_pids:
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
-    # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
         """Check a pid from a single log file for consistency"""
+        # pylint: disable=too-many-nested-blocks,too-many-locals,too-many-branches
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -335,15 +473,16 @@ class LogTest():
 
         trace_lines = 0
         non_trace_lines = 0
+        cb_list = []
 
-        if self.quiet:
-            rpc_r = None
-        else:
-            rpc_r = RpcReporting()
+        if not self.quiet:
+            cb_list.append((RpcReporting(), ('hg', 'rpc')))
+            cb_list.append((ReaddirTracer(), ('dfuse')))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            if rpc_r:
-                rpc_r.add_line(line)
+            for (cbe, facs) in cb_list:
+                if line.fac in facs:
+                    cbe.add_line(line)
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
@@ -528,8 +667,8 @@ class LogTest():
                             err_count += 1
 
         del active_desc['root']
-        if rpc_r:
-            rpc_r.report()
+        for (cbe, _) in cb_list:
+            cbe.report()
 
         # This isn't currently used anyway.
         # if not have_debug:
@@ -545,10 +684,6 @@ class LogTest():
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
 
-        # Special case the fuse arg values as these are allocated by IOF
-        # but freed by fuse itself.
-        # Skip over CaRT issues for now to get this landed, we can enable them
-        # once this is stable.
         lost_memory = False
         if show_memleaks:
             for (_, line) in list(regions.items()):
@@ -576,7 +711,6 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-# pylint: enable=too-many-branches,too-many-nested-blocks
 
 
 class RpcReporting():

@@ -41,7 +41,6 @@ for (name, value) in LOG_LEVELS.items():
     LOG_NAMES[value] = name
 
 
-# pylint: disable=too-few-public-methods
 class LogRaw():
     """Class for raw (non cart log lines) in cart log files.
 
@@ -49,6 +48,7 @@ class LogRaw():
     for example mercury logs being sent to the same file.
     """
 
+    # pylint: disable=too-few-public-methods
     def __init__(self, line):
         self.line = line.rstrip('\n')
         self.trace = False
@@ -58,7 +58,6 @@ class LogRaw():
         return self.line
 
 
-# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class LogLine():
     """Class for parsing CaRT log lines
 
@@ -68,6 +67,8 @@ class LogLine():
     It allows for queries such as 'string in line' which will match against
     the message only, and != which will match the entire line.
     """
+
+    # pylint: disable=too-many-public-methods
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -180,6 +181,7 @@ class LogLine():
         # without creating too much output.
 
         # pylint: disable=invalid-name
+
         fields = []
         for entry in self._fields[2:]:
             field = None
@@ -365,7 +367,6 @@ class LogLine():
         return self.get_field(-1).rstrip('.')
 
 
-# pylint: disable=too-many-branches
 class StateIter():
     """Helper class for LogIter to add a state-full iterator.
 
@@ -436,10 +437,7 @@ class StateIter():
 
         return line
 
-# pylint: disable=too-many-branches
 
-
-# pylint: disable=too-few-public-methods
 class LogIter():
     """Class for parsing CaRT log files
 
@@ -458,7 +456,6 @@ class LogIter():
         # find and report the error, then continue with the file open as
         # latin-1
 
-        # pylint: disable=consider-using-with
         self._fd = None
 
         self.file_corrupt = False
@@ -494,6 +491,7 @@ class LogIter():
                     # latin-1 rather than unicode.
                 self._fd.seek(0)
             else:
+                # pylint: disable-next=consider-using-with
                 self._fd = open(fname, 'r', encoding='utf-8')
 
         self.fname = fname
@@ -661,4 +659,3 @@ class LogIter():
     def get_pids(self):
         """Return an array of pids appearing in the file"""
         return list(self._pids.keys())
-# pylint: enable=too-many-instance-attributes
