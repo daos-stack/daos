@@ -3118,7 +3118,7 @@ def main():
         type=str,
         help="the scm_mount base path to use in each server engine tier 0 storage config when "
              "generating an automatic storage config (test yaml includes 'storage: auto'). The "
-             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.)
+             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.")
     parser.add_argument(
         "-ss", "--slurm_setup",
         action="store_true",
