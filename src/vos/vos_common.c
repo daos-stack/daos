@@ -393,7 +393,7 @@ cancel:
  */
 
 static void
-vos_tls_fini(void *data)
+vos_tls_fini(int tags, void *data)
 {
 	struct vos_tls *tls = data;
 
@@ -428,10 +428,12 @@ vos_tls_fini(void *data)
 }
 
 static void *
-vos_tls_init(int xs_id, int tgt_id)
+vos_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct vos_tls *tls;
 	int		rc;
+
+	D_ASSERT((tags & DAOS_SERVER_TAG) & (DAOS_TGT_TAG | DAOS_RDB_TAG));
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
@@ -466,10 +468,12 @@ vos_tls_init(int xs_id, int tgt_id)
 		goto failed;
 	}
 
-	rc = vos_ts_table_alloc(&tls->vtl_ts_table);
-	if (rc) {
-		D_ERROR("Error in creating timestamp table: %d\n", rc);
-		goto failed;
+	if (tags & DAOS_TGT_TAG) {
+		rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+		if (rc) {
+			D_ERROR("Error in creating timestamp table: %d\n", rc);
+			goto failed;
+		}
 	}
 
 	if (tgt_id < 0)
@@ -486,15 +490,15 @@ vos_tls_init(int xs_id, int tgt_id)
 
 	return tls;
 failed:
-	vos_tls_fini(tls);
+	vos_tls_fini(tags, tls);
 	return NULL;
 }
 
 struct dss_module_key vos_module_key = {
-	.dmk_tags = DAOS_SERVER_TAG,
-	.dmk_index = -1,
-	.dmk_init = vos_tls_init,
-	.dmk_fini = vos_tls_fini,
+    .dmk_tags  = DAOS_RDB_TAG | DAOS_TGT_TAG,
+    .dmk_index = -1,
+    .dmk_init  = vos_tls_init,
+    .dmk_fini  = vos_tls_fini,
 };
 
 daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
@@ -811,7 +815,7 @@ vos_self_fini_locked(void)
 	vos_self_nvme_fini();
 
 	if (self_mode.self_tls) {
-		vos_tls_fini(self_mode.self_tls);
+		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
 	ABT_finalize();
@@ -857,7 +861,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
-	self_mode.self_tls = vos_tls_init(0, -1);
+	self_mode.self_tls = vos_tls_init(DAOS_TGT_TAG, 0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
 		goto out;
