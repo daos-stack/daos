@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
@@ -128,11 +129,11 @@ func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname stri
 
 // ErrServerExit indicates that the error should result in server exit.
 type ErrServerExit struct {
-	ErrInner error
+	ErrInner *fault.Fault
 }
 
 func (err *ErrServerExit) Error() string {
-	return fmt.Sprintf("%s: server should exit", err.ErrInner)
+	return err.ErrInner.Error()
 }
 
 // IsServerExit returns a boolean indicating whether or not the supplied error is an instance of
