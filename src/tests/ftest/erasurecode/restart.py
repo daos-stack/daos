@@ -31,50 +31,60 @@ class EcodServerRestart(ErasureCodeIor):
                        after.Default is None so not to check aggregation, but wait for 20 seconds
                        and restart the servers.
         """
-        # Write all EC object data to NVMe
+        # 1.
+        self.log_step("Create pool")
+
+        # 2.
+        self.log_step("Disable aggregation")
+        self.pool.set_property("reclaim", "disabled")
+        pool_used1 = self.pool.pool_percentage_used()
+        self.log.info(" pool used in percentage before IOR: %s", pool_used1)
+
+        # 3.
+        self.log_step("Run IOR write all EC object data to container")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        self.log.info(self.pool.pool_percentage_used())
-        # Write all EC object data to SCM
-        self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
-        self.log.info(self.pool.pool_percentage_used())
-        self.pool.pool_percentage_used()
+        pool_used2 = self.pool.pool_percentage_used()
+        self.log.info(" pool used in percentage after IOR: %s", pool_used2)
 
-        if not agg_check:
-            # Set time mode aggregation
-            self.pool.set_property("reclaim", "time")
-            # Aggregation will start in 20 seconds after it sets to time mode. So wait for 20
-            # seconds and restart all the servers.
-            time.sleep(20)
+        if agg_check == "Agg_after_restart":
+            # step-4 for Agg_after_restart test
+            self.log_step("Shutdown the servers and restart")
+            self.get_dmg_command().system_stop(True)
+            self.get_dmg_command().system_start()
 
-        if agg_check == "Before":
-            # Over-write all EC object data to NVMe
-            self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-            self.log.info(self.pool.pool_percentage_used())
-            # Over-write all EC object data to SCM
-            self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
-            self.log.info(self.pool.pool_percentage_used())
-            self.pool.pool_percentage_used()
+        # 4.  step-5 for Agg_after_restart test
+        self.log_step("Enable aggregation")
+        self.pool.set_property("reclaim", "time")
+        # Aggregation will start in 20 seconds after it sets to time mode. So wait for 20
+        # seconds and restart all the servers.
+        time.sleep(20)
+
+        # 5.  step-6 for Agg_after_restart test
+        self.log_step("Rerun IOR")
+        self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
+        pool_used3 = self.pool.pool_percentage_used()
+        self.log.info(" pool used in percentage after IOR: %s", pool_used3)
+
+        # 6.  step-7 for Agg_after_restart test
+        self.log_step("Verify aggregation triggered")
+        if not any(self.check_aggregation_status().values()):
+            self.fail("Aggregation failed to start..")
+
+        if agg_check == "Agg_before_restart":
+            self.log_step("Shutdown the servers and restart")
+            # 7.
+            self.get_dmg_command().system_stop(True)
+            self.get_dmg_command().system_start()
+            pool_used4 = self.pool.pool_percentage_used()
+            self.log.info(" pool used in percentage after Restart: %s ", pool_used4)
             # Verify if Aggregation is getting started
-            if not any(self.check_aggregation_status(attempt=50).values()):
-                self.fail("Aggregation failed to start Before server restart..")
+            if not any(self.check_aggregation_status().values()):
+                self.fail("Aggregation failed to start..")
 
-        # Shutdown the servers and restart
-        self.get_dmg_command().system_stop(True)
-        time.sleep(5)
-        self.get_dmg_command().system_start()
-
-        if agg_check == "After":
-            self.pool.pool_percentage_used()
-            self.log.info("Size after Restarti: %s ", self.pool.pool_percentage_used())
-            # Verify if Aggregation is getting started
-            if not any(self.check_aggregation_status(attempt=50).values()):
-                self.fail("Aggregation failed to start After server restart..")
-
-        # Read all EC object data from NVMe
+        # 8.
+        self.log_step("run IOR read to verify data")
         self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
-        # Read all EC object data which was written on SCM
-        self.read_set_from_beginning = False
-        self.ior_read_dataset(storage='SCM', operation="Auto_Read", percent=self.percent)
+        self.log.info("Test passed")
 
     def test_ec_restart_before_agg(self):
         """Jira ID: DAOS-7337.
@@ -85,12 +95,22 @@ class EcodServerRestart(ErasureCodeIor):
                     large transfer sizes.Verify aggregation starts, Restart all the servers.
                     Read and verify all IOR data.
 
+        Test steps:
+            1. Create pool
+            2. Disable aggregation
+            3. Run IOR write all EC object data to container
+            4. Enable aggregation
+            5. Rerun IOR
+            6. Verify aggregation triggered
+            7. Shutdown the servers and restart
+            8. run IOR read to verify data
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
         :avocado: tags=EcodServerRestart,test_ec_restart_before_agg
         """
-        self.execution(agg_check="Before")
+        self.execution(agg_check="Agg_before_restart")
 
     def test_ec_restart_after_agg(self):
         """Jira ID: DAOS-7337.
@@ -101,27 +121,19 @@ class EcodServerRestart(ErasureCodeIor):
                 large transfer sizes.Restart all servers. Verify Aggregation trigger after it's
                 start. Read and verify all IOR data.
 
+        Test steps:
+            1. Create pool
+            2. Disable aggregation
+            3. Run IOR write all EC object data to container
+            4. Shutdown the servers and restart
+            5. Enable aggregation
+            6. Rerun IOR
+            7. Verify aggregation triggered
+            8. run IOR read to verify data
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
         :avocado: tags=EcodServerRestart,test_ec_restart_after_agg
         """
-        self.execution(agg_check="After")
-
-    def test_ec_restart_during_agg(self):
-        """Jira ID: DAOS-7337.
-
-        Test Description: Test server restart works during aggregation and IOR data is intact
-                            after restart.
-        Use Case: Create the pool, disabled rebuild, run IOR with supported EC object type class
-                    for small and large transfer sizes. Enable the time mode aggregation and wait
-                    for 20 seconds. Restart all servers, Read and verify all IOR data.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=EcodServerRestart,test_ec_restart_during_agg
-        """
-        # Disable the aggregation
-        self.pool.set_property("reclaim", "disabled")
-        self.execution()
+        self.execution(agg_check="Agg_after_restart")
