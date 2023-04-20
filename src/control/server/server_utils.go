@@ -37,9 +37,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-// extraHugepages is the number of extra hugepages to request beyond the minimum required, often
-// one or two are not reported as available.
-const extraHugepages = 2
+const (
+	// extraHugepages is the number of extra hugepages to request beyond the minimum required,
+	// often one or two are not reported as available.
+	extraHugepages = 2
+
+	// memCheckThreshold is the percentage of configured RAM-disk size that needs to be met by
+	// available memory in order to start the engines.
+	memCheckThreshold = 90
+
+	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
+	// SPDK memory requirements when performing a NVMe device scan.
+	scanMinHugepageCount = 128
+)
 
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
@@ -87,8 +97,6 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
-
-const scanMinHugepageCount = 128
 
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	var bdevCfgs storage.TierConfigs
@@ -484,9 +492,13 @@ func cleanEngineHugepages(srv *server) error {
 	return nil
 }
 
-// Check to be performed after hugepages have been allocated, as such the available memory MemInfo
-// value will show that Hugetlb has already been allocated (and therefore no longer available) so
-// don't need to take into account hugepage allowances during calculation.
+// Provide some confidence that engines will have enough memory to run without OOM failures by
+// ensuring reported available memory (of type RAM) is enough to cover at least 90% of the
+// combined total memory of all engine RAM-disk sizes set in the storage config.
+//
+// Note that check is to be performed after hugepages have been allocated, as such the available
+// memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
+// available) so don't need to take into account hugepage allowances during calculation.
 func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
 	sc, err := ei.storage.GetScmConfig()
 	if err != nil {
@@ -494,23 +506,25 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 	}
 
 	if sc.Class != storage.ClassRam {
-		return nil // no ramdisk to size
+		return nil // no ramdisk to check
 	}
 
-	confSizeBytes := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	memAvailBytes := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	confSizeBytes := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
+	nrEngines := uint64(len(srv.cfg.Engines))
+	memRequired := ((confSizeBytes * nrEngines) / 100) * uint64(memCheckThreshold)
 
-	msg := fmt.Sprintf("checking config ram-disk size (%s) against MemAvailable (%s)",
-		humanize.IBytes(confSizeBytes), humanize.IBytes(memAvailBytes))
+	msg := fmt.Sprintf("checking MemAvailable (%s) covers at least %d%% of total configured "+
+		"ram-disk memory (%s required to cover %d engines with size %s)",
+		humanize.IBytes(memAvailBytes), memCheckThreshold, humanize.IBytes(memRequired),
+		nrEngines, humanize.IBytes(confSizeBytes))
 
-	// Fail if available memory is less than the combined size of engine RAM-disks set in the
-	// storage config.
-	combRamdiskBytes := confSizeBytes * uint64(len(srv.cfg.Engines))
-	if memAvailBytes < combRamdiskBytes {
+	if memAvailBytes < memRequired {
 		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
 
 		return &ErrServerExit{
-			ErrInner: storage.FaultRamdiskLowMem(confSizeBytes, combRamdiskBytes, memAvailBytes),
+			ErrInner: storage.FaultRamdiskLowMem(confSizeBytes, memRequired,
+				memAvailBytes),
 		}
 	}
 

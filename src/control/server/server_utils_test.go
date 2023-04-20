@@ -755,16 +755,17 @@ func TestServer_checkMemAvailable(t *testing.T) {
 				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			memAvailGiB: 19,
+			// 20gib for ram-disks, 90% is 18gib
+			memAvailGiB: 17,
 			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
-				20*humanize.GiByte, 19*humanize.GiByte),
+				18*humanize.GiByte, 17*humanize.GiByte),
 		},
 		"dual engine; ram tier; perform check": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			memAvailGiB: 20,
+			memAvailGiB: 18,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
