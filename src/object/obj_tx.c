@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3635,11 +3635,13 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 		rc = dc_tx_convert_post(tx, task, opc, rc);
 
 out:
-	if (tx != NULL)
+	if (tx != NULL) {
 		/* -1 for above dc_tx_addref(). */
 		dc_tx_decref(tx);
-	else
+	} else {
 		tse_task_complete(task, rc);
+		obj_decref(obj);
+	}
 
 	return rc;
 }
