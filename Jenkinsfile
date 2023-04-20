@@ -907,11 +907,10 @@ pipeline {
                     }
                     post {
                         always {
-                            //Use old pipine-lib function for NLT for now
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            unitTestPostEx artifacts: ['nlt_logs/'],
+                                           testResults: 'nlt-junit.xml',
+                                           always_script: 'ci/unit/test_nlt_post.sh',
+                                           valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
