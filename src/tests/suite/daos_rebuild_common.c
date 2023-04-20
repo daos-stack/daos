@@ -35,6 +35,10 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	int i;
 	int rc = 0;
 
+	/* Increase pre_pool_ver to make sure the rebuild caused by this
+	 * exclude/kill to be waited in the following rebuild_pool_wait().
+	 */
+	args[0]->rebuild_pre_pool_ver++;
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, args[0]->pool.alive_svc,
