@@ -11,7 +11,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 2
 pool:
   scm_size: 2G
   control_method: dmg

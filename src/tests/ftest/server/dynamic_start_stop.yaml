@@ -10,7 +10,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 2
 extra_servers:
   test_servers: server-[3-5]
 pool:
