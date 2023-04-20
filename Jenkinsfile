@@ -105,24 +105,24 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-tcp-provider_TEST',
+                     description: 'Run the Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-verbs-provider_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
+                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium-ucx-provider_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
+                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large test stage')
+                     description: 'Run the Functional Hardware Large test stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
@@ -186,14 +186,14 @@ pipeline {
                         }
                     }
                 } // stage('Functional Hardware Medium')
-                stage('Functional Hardware Medium TCP Provider') {
+                stage('Functional Hardware Medium Verbs Provider') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -209,7 +209,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Medium TCP Provider')
+                } // stage('Functional Hardware Medium Verbs Provider')
                 stage('Functional Hardware Medium UCX Provider') {
                     when {
                         beforeAgent true
