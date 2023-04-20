@@ -38,8 +38,7 @@ class DaosServerDumpTest(TestWithServers):
         # DAOS-1452 may need to check for one file per engine...
         result = run_remote(self.log, self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         if not result.passed:
-            self.log.info(
-                "no ULT stacks dump found on following hosts: {}".format(result.failed_hosts))
+            self.log.info("no ULT stacks dump found on following hosts: %s", result.failed_hosts)
             self._Test__status = 'FAIL'
 
     def test_daos_server_dump_basic(self):
@@ -58,7 +57,7 @@ class DaosServerDumpTest(TestWithServers):
         # at this time there is no way to know when Argobots ULTs stacks
         # has completed, see DAOS-1452/DAOS-9942.
         if 1 in ret_codes:
-            self.log.info("Dumped daos_engine stacks on {}".format(str(ret_codes[1])))
+            self.log.info("Dumped daos_engine stacks on %s", str(ret_codes[1]))
         if 0 in ret_codes:
             self.fail("No daos_engine processes found on {}".format(str(ret_codes[0])))
 
