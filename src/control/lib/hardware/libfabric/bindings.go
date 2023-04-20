@@ -89,6 +89,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/dlopen"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Load dynamically loads the libfabric library and provides a method to unload it.
@@ -143,7 +144,7 @@ func (f *fiInfo) hfiUnit() (uint, error) {
 
 // fiGetInfo fetches the list of fi_info structs with the desired provider (if non-empty), or all of
 // them otherwise. It also returns the cleanup function to free the fi_info.
-func fiGetInfo(hdl *dlopen.LibHandle, prov string) ([]*fiInfo, func() error, error) {
+func fiGetInfo(log logging.Logger, hdl *dlopen.LibHandle, prov string) ([]*fiInfo, func() error, error) {
 	getInfoPtr, err := getLibFuncPtr(hdl, "fi_getinfo")
 	if err != nil {
 		return nil, nil, err
@@ -151,20 +152,18 @@ func fiGetInfo(hdl *dlopen.LibHandle, prov string) ([]*fiInfo, func() error, err
 
 	var hint *C.struct_fi_info
 	if len(prov) != 0 {
-		hint = (*C.struct_fi_info)(C.calloc(C.ulong(unsafe.Sizeof(C.struct_fi_info{})), 1))
-		if hint == nil {
-			return nil, nil, errors.New("unable to allocate hint")
+		var cleanupHint func() error
+		hint, cleanupHint, err = fiAllocInfo(hdl)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "allocating fi_info hint")
 		}
-		defer C.free(unsafe.Pointer(hint))
-
-		hint.fabric_attr = (*C.struct_fi_fabric_attr)(C.calloc(C.ulong(unsafe.Sizeof(C.struct_fi_fabric_attr{})), 1))
-		if hint.fabric_attr == nil {
-			return nil, nil, errors.New("unable to allocate fabric attributes for hint")
-		}
-		defer C.free(unsafe.Pointer(hint.fabric_attr))
+		defer func() {
+			if cleanupErr := cleanupHint(); cleanupErr != nil && err != nil {
+				log.Errorf("failed to clean up fi_info hint: %s", err.Error())
+			}
+		}()
 
 		hint.fabric_attr.prov_name = C.CString(prov)
-		defer C.free(unsafe.Pointer(hint.fabric_attr.prov_name))
 	}
 
 	var fi *C.struct_fi_info

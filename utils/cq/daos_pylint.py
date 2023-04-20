@@ -17,8 +17,21 @@ try:
     from pylint.reporters.collecting_reporter import CollectingReporter
     from pylint.constants import full_version
 except ImportError:
-    print('install pylint to enable this check')
-    sys.exit(0)
+
+    if os.path.exists('venv'):
+        sys.path.append(os.path.join('venv', 'lib',
+                                     f'python{sys.version_info.major}.{sys.version_info.minor}',
+                                     'site-packages'))
+        try:
+            from pylint.lint import Run
+            from pylint.reporters.collecting_reporter import CollectingReporter
+            from pylint.constants import full_version
+        except ImportError:
+            print('detected venv unusable, install pylint to enable this check')
+            sys.exit(0)
+    else:
+        print('install pylint to enable this check')
+        sys.exit(0)
 
 try:
     from pylint.lint import pylinter
@@ -593,6 +606,7 @@ def main():
 
     # Args that VS Code uses.
     parser.add_argument('--import')
+    parser.add_argument('--clear-cache-post-run', choices=['y', 'n'], default='y')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
@@ -614,7 +628,8 @@ def main():
 
     # If spellings are likely supported and using the default configuration file then enable using
     # a temporary file.
-    if spellings and args.rcfile == rcfile:
+    words_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'words.dict')
+    if spellings and args.rcfile == rcfile and os.path.exists(words_file):
         # pylint: disable-next=consider-using-with
         rc_tmp = tempfile.NamedTemporaryFile(mode='w+', prefix='pylintrc')
         with open(rcfile) as src_file:
@@ -622,7 +637,7 @@ def main():
         rc_tmp.flush()
         rc_tmp.write('[SPELLING]\n')
         rc_tmp.write('spelling-dict=en_US\n')
-        rc_tmp.write('spelling-private-dict-file=utils/cq/words.dict\n')
+        rc_tmp.write(f'spelling-private-dict-file={words_file}\n')
         rc_tmp.flush()
         args.rcfile = rc_tmp.name
 
@@ -699,6 +714,9 @@ def main():
         sys.exit(1)
     else:
         all_files.run(args)
+
+    if args.clear_cache_post_run == 'y':
+        pylinter.MANAGER.clear_cache()
 
 
 if __name__ == "__main__":
