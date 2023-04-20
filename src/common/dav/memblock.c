@@ -195,6 +195,16 @@ memblock_header_compact_write(const struct memory_block *m,
 		uint8_t padding[CACHELINE_SIZE - ALLOC_HDR_COMPACT_SIZE];
 	} padded;
 
+	/*
+	 * REVISIT:
+	 * Below memset is added to prevent valgrind propagating the
+	 * cleared V-Bits of the padding field all the way till DMA buffer
+	 * as part of logging by WAL.
+	 * This code needs to be revisited when valgrind macros are
+	 * enabled within DAV.
+	 */
+	if (DAOS_ON_VALGRIND)
+		memset(&padded, 0, sizeof(padded));
 	padded.hdr.size = size | ((uint64_t)flags << ALLOC_HDR_SIZE_SHIFT);
 	padded.hdr.extra = extra;
 
