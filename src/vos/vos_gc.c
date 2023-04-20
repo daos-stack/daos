@@ -69,9 +69,6 @@ struct vos_gc {
 					   umem_off_t addr);
 };
 
-static int gc_reclaim_pool(struct vos_pool *pool, int *credits,
-			   bool *empty_ret);
-
 /**
  * drain items stored in btree, this function returns when the btree is empty,
  * or all credits are consumed (releasing a leaf record consumes one credit)
@@ -562,6 +559,8 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 		D_ASSERT(bag->bag_item_nr == 1);
 		rc = gc_bin_free_bag(&pool->vp_umm, cont, bin,
 				     bin->bin_bag_first);
+		if (rc)
+			goto failed;
 	} else {
 		rc = umem_tx_add_ptr(&pool->vp_umm, bag, sizeof(*bag));
 		if (rc)
@@ -612,9 +611,10 @@ int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
 {
-	struct vos_container *cont = vos_hdl2cont(coh);
-	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, type);
-	struct vos_gc_item    item;
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, type);
+	struct vos_gc_item	 item;
+	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -624,53 +624,21 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 
 	item.it_addr = item_off;
 	item.it_args = args;
-	while (1) {
-		int	  creds = GC_CREDS_TIGHT;
-		int	  rc;
-		bool	  empty;
-
-		rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
-		if (rc == 0) {
-			if (!gc_have_pool(pool))
-				gc_add_pool(pool);
-			if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
-				/** New item to remove from the container */
-				d_list_add_tail(&cont->vc_gc_link,
-						&pool->vp_gc_cont);
-			}
-			return 0;
-		}
-
-		/* this is unlikely, but if we cannot even queue more items
-		 * for GC, it means we should reclaim space for this pool
-		 * immediately.
-		 */
-		if (rc != -DER_NOSPACE) {
-			D_CRIT("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
-			       DP_UUID(pool->vp_id), DP_RC(rc));
-			return rc;
-		}
-
-		if (d_list_empty(&pool->vp_gc_link) &&
-		    d_list_empty(&pool->vp_gc_cont)) {
-			D_CRIT("Pool="DF_UUID" is full but nothing for GC\n",
-			       DP_UUID(pool->vp_id));
-			return rc;
-		}
-
-		rc = gc_reclaim_pool(pool, &creds, &empty);
-		if (rc) {
-			D_CRIT("Cannot run RC for pool=" DF_UUID ", rc=" DF_RC "\n",
-			       DP_UUID(pool->vp_id), DP_RC(rc));
-			return rc;
-		}
-
-		if (creds == GC_CREDS_TIGHT) { /* recliamed nothing? */
-			D_CRIT("Failed to recliam space for pool=" DF_UUID "\n",
-			       DP_UUID(pool->vp_id));
-			return -DER_NOSPACE;
-		}
+	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
+	if (rc) {
+		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+		return rc;
 	}
+
+	if (!gc_have_pool(pool))
+		gc_add_pool(pool);
+
+	/** New item to remove from the container */
+	if (cont != NULL && d_list_empty(&cont->vc_gc_link))
+		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
+
+	return rc;
 }
 
 struct vos_container *
@@ -764,7 +732,11 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 		if (empty && creds) {
 			/* item can be released and removed from bin */
-			gc_free_item(gc, pool, cont, item);
+			rc = gc_free_item(gc, pool, cont, item);
+			if (rc) {
+				D_ERROR("GC=%s free item error: "DF_RC"\n", gc->gc_name, DP_RC(rc));
+				break;
+			}
 			creds--;
 		}
 
