@@ -65,9 +65,9 @@ if [ -b "/dev/vdb" ]; then
 fi
 SUDO_ARG="--sudo=no"
 test_log_dir="${log_prefix}_logs"
-if [ "$SUDO_ONLY" = "true" ]; then
+if [ "$BDEV_TEST" = "true" ]; then
     SUDO_ARG="--sudo=only"
-    test_log_dir="${log_prefix}_sudo_logs"
+    test_log_dir="${log_prefix}_bdev_logs"
 fi
 
 rm -rf "$test_log_dir"

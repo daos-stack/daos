@@ -8,6 +8,7 @@ set -uex
 
 rm -rf unit_test_memcheck_logs unit-test*.memcheck.xml
 rm -rf unit_test_memcheck_logs.tar.gz
+rm -rf unit_test_memcheck_bdev_logs.tar.gz
 rm -rf unit_test_logs
 rm -rf test_results
 mkdir test_results
@@ -15,13 +16,13 @@ chmod 777 test_results
 
 # Check if this is a Bulleye stage
 USE_BULLSEYE=false
-SUDO_ONLY=false
+BDEV_TEST=false
 case $STAGE_NAME in
   *Bullseye**)
   USE_BULLSEYE=true
   ;;
-  *sudo**)
-  SUDO_ONLY=true
+  *bdev**)
+  BDEV_TEST=true
   ;;
 esac
 
@@ -43,5 +44,5 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
-                                         SUDO_ONLY=$SUDO_ONLY       \
+                                         BDEV_TEST=$BDEV_TEST       \
                                          ./build/ci/unit/test_main_node.sh"
