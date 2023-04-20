@@ -72,4 +72,5 @@ fi
 
 rm -rf "$test_log_dir"
 
-utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
+                   $SUDO_ARG
