@@ -638,7 +638,6 @@ class TestWithServers(TestWithoutServers):
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
-
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -1731,33 +1730,32 @@ class TestWithServers(TestWithoutServers):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
     @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, **kwargs):
+    def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):
         """Create a TestContainer object.
-
         Args:
             pool (TestPool): pool in which to create the container.
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults to True.
+            daos_command (DaosCommand, optional): daos command object.
+                Defaults to self.get_daos_command()
             kwargs (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
-
         Returns:
             TestContainer: the created container.
-
         Raises:
             AttributeError: if an attribute does not exist or does not have an update() method.
-
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=self.get_daos_command())
+        container = TestContainer(
+            pool, daos_command=(daos_command or self.get_daos_command()),
+            label_generator=self.label_generator)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
 
         # Set passed params
-        for name, value in kwargs.items():
-            getattr(container, name).update(value, name=name)
+        container.update_params(**kwargs)
 
         if create:
             container.create()
