@@ -31,7 +31,7 @@ def scons():
         testprog = test_env.d_test_program(target=testname,
                                            source=[testobj, cart_targets, swim_targets,
                                                    gurt_targets],
-                                           LIBS=test_env["LIBS"] + ['yaml'] + ['dl'],
+                                           LIBS=test_env["LIBS"] + ['yaml'],
                                            LINKFLAGS=flags)
         Default(testprog)
 
