@@ -512,7 +512,7 @@ class Suite():
             if args.sudo == 'no':
                 print(f"Skipped  suite {self.name}, requires sudo")
                 return True
-        else if args.sudo == 'only':
+        elif args.sudo == 'only':
             print(f"Skipped  suite {self.name}, doesn't require sudo")
             return True
 
