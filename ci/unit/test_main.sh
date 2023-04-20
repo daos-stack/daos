@@ -15,9 +15,13 @@ chmod 777 test_results
 
 # Check if this is a Bulleye stage
 USE_BULLSEYE=false
+SUDO_ONLY=false
 case $STAGE_NAME in
   *Bullseye**)
   USE_BULLSEYE=true
+  ;;
+  *sudo**)
+  SUDO_ONLY=true
   ;;
 esac
 
@@ -39,4 +43,5 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
+                                         SUDO_ONLY=$SUDO_ONLY       \
                                          ./build/ci/unit/test_main_node.sh"

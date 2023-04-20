@@ -508,8 +508,12 @@ class Suite():
             print(f"Filtered suite {self.name}")
             return True
 
-        if args.no_sudo and self.sudo:
-            print(f"Skipped  suite {self.name}, requires sudo")
+        if self.sudo:
+            if args.sudo == 'no':
+                print(f"Skipped  suite {self.name}, requires sudo")
+                return True
+        else if args.sudo == 'only':
+            print(f"Skipped  suite {self.name}, doesn't require sudo")
             return True
 
         if args.memcheck and not self.memcheck:
@@ -599,7 +603,8 @@ def get_args():
                         help='Regular expression to select suites to run')
     parser.add_argument('--no-fail-on-error', action='store_true',
                         help='Disable non-zero return code on failure')
-    parser.add_argument('--no_sudo', action='store_true', help='Disable tests requiring sudo')
+    parser.add_argument('--sudo', choices=['yes', 'only', 'no'], default='yes',
+                        help='How to handle tests requiring sudo')
     parser.add_argument('--bdev', default=None,
                         help="Device to use for AIO, will create file by default")
     parser.add_argument('--log_dir', default="/tmp/daos_utest",
@@ -637,7 +642,7 @@ def main():
 
     aio = None
 
-    if not args.no_sudo:
+    if args.sudo in ['yes', 'only']:
         aio = AIO(path_info["MOUNT_DIR"], args.bdev)
 
     suites = []

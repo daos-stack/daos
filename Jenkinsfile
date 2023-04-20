@@ -734,7 +734,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         job_step_update(
@@ -746,6 +746,28 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Unit Test sudo on EL 8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_sudo_logs/']
                             job_status_update()
                         }
                     }
@@ -825,7 +847,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 90,
+                            unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -840,6 +862,31 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with memcheck on EL 8')
+                stage('Unit Test sudo with memcheck on EL 8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_sudo_logs.tar.gz',
+                                                     'unit_test_memcheck_sudo_logs/**/*.log'],
+                                         valgrind_stash: 'el8-gcc-unit-memcheck-sudo'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test sudo with memcheck on EL 8')
             }
         }
         stage('Test') {
