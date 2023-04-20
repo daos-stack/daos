@@ -491,6 +491,12 @@ do_init:
 			       prov, set_sep, max_num_ctx,
 			       max_expect_size, max_unexpect_size);
 
+		/*
+		 * Ensure multi-recv is disabled and tag msgs are used for all
+		 * providers to preserve backward compatibility
+		 */
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
+
 		/* Enable mrc by default for CXI */
 		if (prov == CRT_NA_OFI_CXI)
 			mrc_enable = 1;
