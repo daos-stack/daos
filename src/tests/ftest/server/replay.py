@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+import time
 
 from apricot import TestWithServers
 
@@ -365,6 +366,56 @@ class ReplayTests(TestWithServers):
         response = container.pool.get_prop(name='checkpoint')['response']
         if response[0]['value'] != 'disabled':
             self.fail('Pool check pointing not disabled after engine restart')
+
+        self.log_step('Verifying data previously written to the container (ior)')
+        self.read_data(ior, container, ppn)
+        self.log_step('Test passed')
+
+    def test_replay_check_pointing(self):
+        """Verify data access after engine restart w/ WAL replay + w/ check pointing.
+
+        Steps:
+            0) Start 3 DAOS servers with 1 engine on each server
+            1) Create a single pool and container
+            2) Determine the check pointing interval
+            3) Run ior w/ DFS to populate the container with small amount of data
+            4) After ior has completed, wait for the check pointing to complete
+            5) Shutdown every engine cleanly (dmg system stop)
+            6) Restart each engine (dmg system start)
+            7) Verify the previously written data matches with an ior read
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server,replay
+        :avocado: tags=ReplayTests,test_replay_check_pointing
+        """
+        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
+        container = self.create_container()
+
+        frequency = 0
+        self.log_step(
+            'Obtaining the {} check pointing properties (dmg pool get-prop)'.format(container.pool))
+        response = container.pool.get_prop(name='checkpoint,checkpoint_freq')
+        for entry in response['response']:
+            if entry['name'] == 'checkpoint' and entry['value'] != 'timed':
+                self.log_step(
+                    'Setting the {} check pointing to timed (dmg pool set-prop)'.format(
+                        container.pool))
+                container.pool.set_prop(properties='checkpoint:timed')
+            elif entry['name'] == 'checkpoint_freq':
+                frequency = entry['value']
+        self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
+        if frequency == 0:
+            self.fail('Error obtaining the pool check point frequency')
+
+        self.log_step('Write data to the container (ior)')
+        ior = self.write_data(container, ppn)
+
+        self.log_step('Waiting for check pointing to complete (sleep {})'.format(frequency))
+        time.sleep(frequency)
+
+        self.stop_engines()
+        self.restart_engines()
 
         self.log_step('Verifying data previously written to the container (ior)')
         self.read_data(ior, container, ppn)
