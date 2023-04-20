@@ -1519,7 +1519,8 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, args.tmpfs, max_nvme_tiers)
+        self._add_auto_storage_yaml(
+            storage_info, yaml_dir, tier_0_type, args.scm_size, max_nvme_tiers)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -3119,11 +3120,13 @@ def main():
         action="store_true",
         help="setup any slurm partitions required by the tests")
     parser.add_argument(
-        "-t", "--tmpfs",
+        "--scm_size",
         action="store",
         default="0",
-        help="set tmpfs size, in GB, for DAOS servers. e.g. '-t 1'"
-             "or '0' to automatically determine the optimal ramdisk size")
+        type=int,
+        help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
+             "config when generating an automatic storage config (test yaml includes 'storage: "
+             "auto'). Set value to '0' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",
