@@ -28,7 +28,8 @@ if [ -n "$BULLSEYE" ]; then
     set -x
     popd
     rm -rf bullseye
-    export COVFILE="${SL_SRC_DIR}/test.cov"
+    rm -rf /tmp/test.cov
+    export COVFILE="/tmp/test.cov"
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
     test_log_dir="covc_test_logs"
 fi

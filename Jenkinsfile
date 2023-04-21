@@ -798,7 +798,7 @@ pipeline {
                             // test results, and while code coverage is being
                             // added.
                             unitTestPost ignore_failure: true,
-                                         artifacts: ['covc_test_logs/*',
+                                         artifacts: ['covc_test_logs/',
                                                      'covc_vm_test/**']
                             job_status_update()
                         }
