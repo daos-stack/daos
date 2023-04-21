@@ -68,11 +68,11 @@ func FaultScmInvalidPMem(msg string) *fault.Fault {
 }
 
 // FaultRamdiskLowMem indicates that total RAM is insufficient to support given configuration.
-func FaultRamdiskLowMem(confRamdiskSize, memNeed, memHave uint64) *fault.Fault {
+func FaultRamdiskLowMem(memType string, confRamdiskSize, memNeed, memHave uint64) *fault.Fault {
 	return storageFault(
 		code.RamdiskLowMem,
-		fmt.Sprintf("Total system memory (RAM) insufficient for configured %s ram-disk "+
-			"size, want %s RAM but only have %s",
+		fmt.Sprintf("%s system memory (RAM) insufficient for configured %s ram-disk "+
+			"size, want %s RAM but only have %s", memType,
 			humanize.IBytes(confRamdiskSize), humanize.IBytes(memNeed),
 			humanize.IBytes(memHave)),
 		"Reduce engine targets or the system_ram_reserved values in server config "+

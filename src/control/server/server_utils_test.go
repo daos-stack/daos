@@ -757,7 +757,7 @@ func TestServer_checkMemAvailable(t *testing.T) {
 			},
 			// 20gib for ram-disks, 90% is 18gib
 			memAvailGiB: 17,
-			expErr: storage.FaultRamdiskLowMem(10*humanize.GiByte,
+			expErr: storage.FaultRamdiskLowMem("Available", 10*humanize.GiByte,
 				18*humanize.GiByte, 17*humanize.GiByte),
 		},
 		"dual engine; ram tier; perform check": {

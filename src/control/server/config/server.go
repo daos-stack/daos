@@ -558,7 +558,8 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 			log.Error(err.Error())
 		}
 
-		return storage.FaultRamdiskLowMem(storage.MinRamdiskMem, minMem, memTotBytes)
+		return storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem, minMem,
+			memTotBytes)
 	}
 
 	for _, ec := range cfg.Engines {
