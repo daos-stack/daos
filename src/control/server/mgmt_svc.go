@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,9 @@
 package server
 
 import (
+	"context"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -23,6 +25,39 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
+type (
+	batchRequest struct {
+		msg    proto.Message
+		ctx    context.Context
+		respCh batchRespChan
+	}
+
+	batchResponse struct {
+		msg proto.Message
+		err error
+	}
+
+	batchRespChan chan *batchResponse
+	batchReqChan  chan *batchRequest
+
+	batchProcessResp struct {
+		msgName       string
+		retryableReqs []*batchRequest
+	}
+
+	batchProcessRespChan chan *batchProcessResp
+)
+
+func (br *batchRequest) sendResponse(parent context.Context, msg proto.Message, err error) {
+	select {
+	case <-parent.Done():
+		return
+	case <-br.ctx.Done():
+		return
+	case br.respCh <- &batchResponse{msg: msg, err: err}:
+	}
+}
+
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
@@ -36,6 +71,7 @@ type mgmtSvc struct {
 	systemProps       daos.SystemPropertyMap
 	clientNetworkHint *mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
+	batchReqs         batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
 }
@@ -51,6 +87,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		systemProps:       daos.SystemProperties(),
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
 		joinReqs:          make(joinReqChan),
+		batchReqs:         make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
 	}
 }
@@ -95,4 +132,137 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 		return err
 	}
 	return svc.checkSystemRequest(req)
+}
+
+// startBatchLoops kicks off the asynchronous batch processing loops.
+func (svc *mgmtSvc) startBatchLoops(ctx context.Context) {
+	go svc.joinLoop(ctx)
+	go svc.batchLoop(ctx)
+}
+
+// submitBatchRequest submits a message for batch processing and waits for a response.
+func (svc *mgmtSvc) submitBatchRequest(ctx context.Context, msg proto.Message) (proto.Message, error) {
+	respCh := make(batchRespChan, 1)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case svc.batchReqs <- &batchRequest{msg: msg, ctx: ctx, respCh: respCh}:
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case resp := <-respCh:
+		return resp.msg, resp.err
+	}
+}
+
+// processBatchPoolEvictions processes a batch of PoolEvictReq messages,
+// consolidating them by pool ID in order to minimize the number of
+// dRPC calls to the engine.
+func (svc *mgmtSvc) processBatchPoolEvictions(ctx context.Context, bprChan batchProcessRespChan, reqs []*batchRequest) []*batchRequest {
+	poolReqs := make(map[string][]*batchRequest)
+
+	for _, req := range reqs {
+		msg, ok := req.msg.(*mgmtpb.PoolEvictReq)
+		if !ok {
+			svc.log.Errorf("unexpected message type %T", req.msg)
+			continue
+		}
+		poolReqs[msg.Id] = append(poolReqs[msg.Id], req)
+	}
+
+	for poolID, reqs := range poolReqs {
+		if len(reqs) == 0 {
+			continue
+		}
+
+		batchReq := &mgmtpb.PoolEvictReq{Id: poolID, Sys: reqs[0].msg.(*mgmtpb.PoolEvictReq).Sys}
+		for _, req := range reqs {
+			batchReq.Handles = append(batchReq.Handles, req.msg.(*mgmtpb.PoolEvictReq).Handles...)
+		}
+
+		resp, err := svc.evictPoolConnections(ctx, batchReq)
+		if err != nil {
+			svc.log.Errorf("failed to evict pool connections for pool %s: %s", poolID, err)
+			for _, req := range reqs {
+				req.sendResponse(ctx, nil, err)
+			}
+			continue
+		}
+		for _, req := range reqs {
+			req.sendResponse(ctx, resp, nil)
+		}
+	}
+
+	return nil
+}
+
+// processBatchedMsgRequests processes a batch of requests for a given message type.
+func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batchProcessRespChan, msgName string, reqs []*batchRequest) {
+	bpr := &batchProcessResp{msgName: msgName}
+	if len(reqs) == 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case bprChan <- bpr:
+		}
+		return
+	}
+
+	switch msgName {
+	case string(proto.MessageName(new(mgmtpb.PoolEvictReq))):
+		bpr.retryableReqs = svc.processBatchPoolEvictions(ctx, bprChan, reqs)
+	default:
+		svc.log.Errorf("no batch handler for message type %s", msgName)
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case bprChan <- bpr:
+	}
+}
+
+// batchLoop is the main loop for processing batched requests.
+func (svc *mgmtSvc) batchLoop(parent context.Context) {
+	batchedMsgReqs := make(map[string][]*batchRequest)
+
+	batchTimer := time.NewTicker(batchLoopInterval)
+	defer batchTimer.Stop()
+
+	svc.log.Debug("starting batchLoop")
+	for {
+		select {
+		case <-parent.Done():
+			svc.log.Debug("stopped batchLoop")
+			return
+		case req := <-svc.batchReqs:
+			msgName := string(proto.MessageName(req.msg))
+			if _, ok := batchedMsgReqs[msgName]; !ok {
+				batchedMsgReqs[msgName] = []*batchRequest{}
+			}
+			batchedMsgReqs[msgName] = append(batchedMsgReqs[msgName], req)
+		case <-batchTimer.C:
+			batchedMsgNr := len(batchedMsgReqs)
+			if batchedMsgNr == 0 {
+				continue
+			}
+
+			bprChan := make(batchProcessRespChan, batchedMsgNr)
+			for msgName, reqs := range batchedMsgReqs {
+				svc.log.Debugf("processing %d %s requests", len(reqs), msgName)
+				go svc.processBatchedMsgRequests(parent, bprChan, msgName, reqs)
+			}
+
+			for i := 0; i < batchedMsgNr; i++ {
+				bpr := <-bprChan
+				if len(bpr.retryableReqs) > 0 {
+					batchedMsgReqs[bpr.msgName] = bpr.retryableReqs
+				} else {
+					delete(batchedMsgReqs, bpr.msgName)
+				}
+			}
+		}
+	}
 }

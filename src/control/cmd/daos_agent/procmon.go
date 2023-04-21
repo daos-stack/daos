@@ -58,6 +58,7 @@ func (phm poolHandleMap) add(poolUUID, handleUUID string) {
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
+	name      string
 	cancelCtx func()
 	response  chan *procMonResponse
 	handles   poolHandleMap
@@ -85,7 +86,8 @@ const MonWaitTime = 3 * time.Second
 // monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
 func (p *procInfo) monitorProcess(ctx context.Context) {
-	err := checkProcPidExists(p.pid)
+	var err error
+	p.name, err = common.GetProcName(int(p.pid))
 	if err != nil {
 		p.sendResponse(ctx, p.pid, err)
 		return
@@ -97,10 +99,9 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(MonWaitTime):
-			err = checkProcPidExists(p.pid)
-			if err != nil {
+			if err := checkProcPidExists(p.pid); err != nil {
 				if os.IsNotExist(err) {
-					p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
+					p.sendResponse(ctx, p.pid, fmt.Errorf("%s terminated unexpectedly", p))
 				} else {
 					p.sendResponse(ctx, p.pid, err)
 				}
@@ -108,6 +109,14 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (p *procInfo) String() string {
+	var name string
+	if p.name != "" {
+		name = fmt.Sprintf(" (%s)", p.name)
+	}
+	return fmt.Sprintf("pid:%d%s", p.pid, name)
 }
 
 // procMon is the top level process monitoring struct which accepts requests to
@@ -242,7 +251,11 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 	}
 
 	for poolUUID, element := range info.handles {
-		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
+		var fromPid string
+		if info.pid != 0 {
+			fromPid = fmt.Sprintf(" from %s", info)
+		}
+		p.log.Infof("pool %s: cleaning up %d leaked handles%s", poolUUID, len(element), fromPid)
 
 		handles := info.handles[poolUUID].ToSlice()
 		req := &control.PoolEvictReq{ID: poolUUID, Handles: handles}

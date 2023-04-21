@@ -5,8 +5,9 @@
 """
 import time
 
-from dmg_utils import get_storage_query_device_uuids, get_dmg_response
+from dmg_utils import get_storage_query_device_uuids
 from exception_utils import CommandFailure
+from nvme_utils import set_device_faulty
 from osa_utils import OSAUtils
 
 
@@ -70,20 +71,6 @@ class VmdLedStatus(OSAUtils):
                 self.fail("dmg command failed: {}".format(result['response']['host_errors']))
         return result
 
-    def set_device_faulty(self, device_id=None):
-        """Get a device to faulty state.
-
-        Args:
-            device_id (str, optional): Device UUID. Defaults to None.
-        Returns:
-            dict: dmg device faulty information.
-        """
-        if device_id is None:
-            self.fail("No device id provided")
-
-        return get_dmg_response(
-            self, self.dmg_command.storage_set_faulty, uuid=device_id)
-
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
@@ -115,7 +102,7 @@ class VmdLedStatus(OSAUtils):
         for hosts, uuid_list in host_uuids.items():
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
-                resp = self.set_device_faulty(uuid)
+                resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid)
                 self.log.info("Sleeping for 15 seconds ...")
                 time.sleep(15)
                 self.log.info(resp)
@@ -132,7 +119,7 @@ class VmdLedStatus(OSAUtils):
         for hosts, uuid_list in host_uuids.items():
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
-            resp = self.set_device_faulty(uuid_list[0])
+            resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid_list[0])
             self.log.info("Sleeping for 15 seconds ...")
             time.sleep(15)
             self.log.info(resp)
