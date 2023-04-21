@@ -1674,7 +1674,9 @@ class TestWithServers(TestWithoutServers):
             DaosCommand: a new DaosCommand object
 
         """
-        return DaosCommand(self.bin)
+        daos_command = DaosCommand(self.bin)
+        daos_command.get_params(self)
+        return daos_command
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
