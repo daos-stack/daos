@@ -118,20 +118,20 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                                    "Pool Version Error:  After drain")
                 if self.test_during_aggregation is False:
                     self.assertGreater(initial_total_space, total_space_after_drain,
-                                       "Expected total space after drain is more than initial")
+                                       "Expected space after drain is more than initial")
                 if num_pool > 1:
                     output = self.pool.reintegrate(rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
                     total_space_after_reintegration = self.pool.get_total_space(refresh=True)
                     self.assertGreater(total_space_after_reintegration, total_space_after_drain,
-                            "Expected total space after reintegration is less than drain")
+                                       "Expected space after reintegration is less than drain")
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
                     output = self.pool.reintegrate("3")
                     self.print_and_assert_on_rebuild_failure(output)
                     total_space_after_reintegration = self.pool.get_total_space(refresh=True)
                     self.assertGreater(total_space_after_reintegration, total_space_after_drain,
-                            "Expected total space after reintegration is less than drain")
+                                       "Expected space after reintegration is less than drain")
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
