@@ -50,8 +50,8 @@ markdown_extensions:
   - footnotes
   - tables
   - toc:
-    permalink: true
-    toc_depth: 4
+        permalink: true
+        toc_depth: 4
 
 # Page tree
 nav:
