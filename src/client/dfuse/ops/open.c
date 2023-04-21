@@ -120,24 +120,32 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * after write dfuse may continue to tell the kernel incorrect file sizes.  To avoid this
 	 * evict the metadata cache so the size is refreshed on next access.
 	 */
+	il_calls = atomic_load_relaxed(&oh->doh_il_calls);
+
 	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
 		if (oh->doh_caching) {
-			DFUSE_TRA_DEBUG(oh, "Evicting cache");
-			dfuse_mcache_evict(oh->doh_ie);
+			if (il_calls == 0) {
+				DFUSE_TRA_DEBUG(oh, "Evicting metadata cache");
+				dfuse_mcache_evict(oh->doh_ie);
+			} else {
+				DFUSE_TRA_DEBUG(oh, "Evicting cache");
+				dfuse_cache_evict(oh->doh_ie);
+			}
 		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	} else {
 		if (oh->doh_caching) {
-			dfuse_dcache_set_time(oh->doh_ie);
+			if (il_calls == 0) {
+				DFUSE_TRA_DEBUG(oh, "Saving data cache");
+				dfuse_dcache_set_time(oh->doh_ie);
+			} else {
+				DFUSE_TRA_DEBUG(oh, "Evicting cache");
+				dfuse_cache_evict(oh->doh_ie);
+			}
 		}
 	}
-	il_calls = atomic_load_relaxed(&oh->doh_il_calls);
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
 	if (il_calls != 0) {
-		if (oh->doh_caching) {
-			DFUSE_TRA_DEBUG(oh, "Evicting cache");
-			dfuse_cache_evict(oh->doh_ie);
-		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
