@@ -92,16 +92,17 @@ func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault 
 }
 
 var (
-	// FaultScmNoModules represents an error where no PMem modules exist.
-	FaultScmNoModules = storageFault(
-		code.ScmNoModules,
+	// FaultScmNoPMem represents an error where no PMem modules exist.
+	FaultScmNoPMem = storageFault(
+		code.ScmNoPMem,
 		"No PMem modules exist on storage server", "Install PMem modules and retry command")
 
 	// FaultScmConfigTierMissing creates a Fault when no scm tier is present in engine storage config.
 	FaultScmConfigTierMissing = storageFault(
 		code.ScmConfigTierMissing,
 		"missing scm storage tier in engine storage config",
-		"add a scm tier at index-0 in engine storage tiers list in server config file and restart daos_server")
+		"add a scm tier in the first position of the engine storage tiers list in server config file and "+
+			"restart daos_server")
 
 	// FaultBdevConfigTierTypeMismatch represents an error where an incompatible mix of emulated and
 	// non-emulated NVMe devices are present in the storage config.
