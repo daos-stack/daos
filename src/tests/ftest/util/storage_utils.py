@@ -613,7 +613,8 @@ class StorageInfo():
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
                     if not pmem_list:
-                        lines.append(f'          roles: [{", ".join(get_tier_roles(tier, tiers))}]')
+                        lines.append(
+                            f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
         self._log.debug('  Creating %s', yaml_file)
         for line in lines:
