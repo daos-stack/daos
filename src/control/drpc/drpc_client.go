@@ -77,7 +77,10 @@ func (c *ClientConnection) Connect() error {
 func (c *ClientConnection) Close() error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
+	return c.close()
+}
 
+func (c *ClientConnection) close() error {
 	if !c.isConnected() {
 		// Nothing to do
 		return nil
@@ -94,10 +97,8 @@ func (c *ClientConnection) Close() error {
 
 func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 	// increment sequence every call, always nonzero
-	c.connMu.Lock()
 	c.sequence++
 	msg.Sequence = c.sequence
-	c.connMu.Unlock()
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
@@ -106,15 +107,19 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 
 	callWrite := make(chan struct{})
 	defer close(callWrite)
-	go func() {
+	go func(closeConn func() error) {
 		select {
 		case <-ctx.Done():
-			c.Close()
+			closeConn()
 		case <-callWrite:
 		}
-	}()
+	}(c.conn.Close)
 
 	if _, err := c.conn.Write(callBytes); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			c.close()
+		}
 		return errors.Wrap(err, "dRPC send")
 	}
 
@@ -124,17 +129,21 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) {
 	respRead := make(chan struct{})
 	defer close(respRead)
-	go func() {
+	go func(closeConn func() error) {
 		select {
 		case <-ctx.Done():
-			c.Close()
+			closeConn()
 		case <-respRead:
 		}
-	}()
+	}(c.conn.Close)
 
 	respBytes := make([]byte, MaxMsgSize)
 	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			c.close()
+		}
 		return nil, errors.Wrap(err, "dRPC recv")
 	}
 
@@ -150,7 +159,9 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 // SendMsg sends a message to the connected dRPC server, and returns the
 // response to the caller.
 func (c *ClientConnection) SendMsg(ctx context.Context, msg *Call) (*Response, error) {
-	if !c.IsConnected() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+	if !c.isConnected() {
 		return nil, errors.Errorf("dRPC not connected")
 	}
 

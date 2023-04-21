@@ -495,7 +495,8 @@ class StorageInfo():
 
         return controllers
 
-    def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=100, max_nvme_tiers=1):
+    def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=100,
+                           scm_mount='/mnt/daos', max_nvme_tiers=1):
         """Generate a storage test yaml sub-section.
 
         Args:
@@ -503,6 +504,7 @@ class StorageInfo():
             engines (int): number of engines
             tier_0_type (str): storage tier 0 type: 'pmem' or 'ram'
             scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 100.
+            scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of nvme storage tiers. Defaults to 1.
 
         Raises:
@@ -572,10 +574,10 @@ class StorageInfo():
                 if tier == 0 and pmem_list:
                     lines.append('          class: dcpm')
                     lines.append(f'          scm_list: ["{pmem_list[engine]}"]')
-                    lines.append(f'          scm_mount: /mnt/daos{engine}')
+                    lines.append(f'          scm_mount: {scm_mount}{engine}')
                 elif tier == 0:
                     lines.append('          class: ram')
-                    lines.append(f'          scm_mount: /mnt/daos{engine}')
+                    lines.append(f'          scm_mount: {scm_mount}{engine}')
                     lines.append(f'          scm_size: {scm_size}')
                 else:
                     lines.append('          class: nvme')

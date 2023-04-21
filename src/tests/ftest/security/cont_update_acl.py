@@ -70,7 +70,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
                 self.container.uuid,
                 acl_file=acl_file)
             test_errs.extend(self.error_handling(
-                self.daos_cmd.result, "No such file or directory"))
+                self.daos_cmd.result, "no such file or directory"))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -100,13 +100,16 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
+            exp_err = "-1003"
+            if content == []:
+                exp_err = "no entries"
 
             # Run update command
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
                 self.container.uuid,
-                path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+                acl_file=path_to_file)
+            test_errs.extend(self.error_handling(self.daos_cmd.result, exp_err))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -203,7 +206,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
                 self.container.uuid,
-                path_to_file)
+                acl_file=path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
 
             # Check that the acl file was unchanged
