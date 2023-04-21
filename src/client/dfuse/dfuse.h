@@ -92,12 +92,49 @@ struct dfuse_readdir_entry {
 	off_t dre_next_offset;
 };
 
+/* Preread.
+ *
+ * If a file is opened when caching is on but the file is not cached and the size small enough
+ * to fit in a single buffer then start a pre-read of the file on open, then when reads do occur
+ * they can happen directly from the buffer.  For 'linear reads' of a file this means that the
+ * read can be triggered sooner and performed as one dfs request.  Make use of the pre-read
+ * code to only use this for trivial reads, if a file is not read linearly or it's written to
+ * then back off to the regular behavior, which will likely use the kernel cache.
+ *
+ * This works by creating a new descriptor which is pointed to by the open handle, on open dfuse
+ * decides if it will use pre-read and if so allocate a new descriptor, add it to the open handle
+ * and then once it's replied to the open immediately issue a read.  The new descriptor includes
+ * a lock which is locked by open before it replies to the kernel request and unlocked by the dfs
+ * read callback.  Read requests then take the lock to ensure the dfs read is complete and reply
+ * directly with the data in the buffer.
+ *
+ * This works up to the buffer size minus one, the pre-read tries to read the expected file size
+ * plus one so if the file size has changed then dfuse will detect this and back off to regular
+ * read.
+ *
+ * A dfuse_event is hung off this new descriptor and these come from the same pool as regular reads,
+ * this buffer is kept as long as it's needed but released as soon as possible, either on error or
+ * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
+ *
+ * TODO: The current issue with pread is that DFuse keeps a single cache time per inode and this
+ * is used for both data and metadata.  For this feature to work the inode cache needs to be valid
+ * and the data cache needs to be empty.
+ */
+struct dfuse_read_ahead {
+	pthread_mutex_t     dra_lock;
+	struct dfuse_event *dra_ev;
+	int                 dra_rc;
+};
+
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
 	dfs_t                    *doh_dfs;
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
+
+	struct dfuse_read_ahead  *doh_readahead;
+
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
 
@@ -213,7 +250,10 @@ struct dfuse_event {
 	struct dfuse_eq              *de_eqt;
 	struct dfuse_obj_hdl         *de_oh;
 	off_t                         de_req_position; /**< The file position requested by fuse */
-	size_t                        de_req_len;
+	union {
+		size_t de_req_len;
+		size_t de_readahead_len;
+	};
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
@@ -543,7 +583,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if (entry.attr_timeout > 0) {                                                      \
 			(inode)->ie_stat = entry.attr;                                             \
@@ -694,6 +734,9 @@ dfuse_cache_evict(struct dfuse_inode_entry *ie);
 /* Check the cache setting against a given timeout, and return time left */
 bool
 dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+void
+dfuse_pre_read(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,

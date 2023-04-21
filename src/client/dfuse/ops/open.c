@@ -16,6 +16,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_obj_hdl         *oh     = NULL;
 	struct fuse_file_info         fi_out = {0};
 	int                           rc;
+	bool                          prefetch = false;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -58,6 +59,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			fi_out.keep_cache = 1;
 		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
 			fi_out.keep_cache = 1;
+			prefetch          = true;
 		}
 
 		if (fi_out.keep_cache)
@@ -89,8 +91,20 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
+	if (prefetch && ie->ie_stat.st_size < (1024 * 1024)) {
+		D_ALLOC_PTR(oh->doh_readahead);
+		if (oh->doh_readahead) {
+			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
+			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+		}
+	}
+
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+
+	if (oh->doh_readahead) {
+		dfuse_pre_read(fs_handle, oh);
+	}
 
 	return;
 err:
@@ -111,6 +125,21 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 */
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
+
+	if (oh->doh_readahead) {
+		struct dfuse_event *ev = oh->doh_readahead->dra_ev;
+
+		/* Grab this lock first to ensure that the read cb has been completed */
+		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+
+		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
+		if (ev) {
+			daos_event_fini(&ev->de_ev);
+			d_slab_release(ev->de_eqt->de_read_slab, ev);
+		}
+		D_FREE(oh->doh_readahead);
+	}
 
 	/* If the file was read from then set the cache time for future use, however if the
 	 * file was written to then evict the cache.

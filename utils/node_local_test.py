@@ -1853,6 +1853,46 @@ class PosixTests():
         print(data)
         assert data == 'test'
 
+    def test_pre_read(self):
+        """Test the pre-read code.
+
+        Test reading a file which is previously unknown to fuse with caching on.  This should go
+        into the pre_read code and load the file contents automatically after the open call.
+        """
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_0')
+
+        with open(join(dfuse.dir, 'file0'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file1'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file2'), 'w') as fd:
+            fd.write('testing')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, caching=True, container=self.container)
+        dfuse.start(v_hint='pre_read_1')
+
+        with open(join(dfuse.dir, 'file0'), 'r') as fd:
+            data0 = fd.read()
+
+        with open(join(dfuse.dir, 'file1'), 'r') as fd:
+            data1 = fd.read(16)
+
+        with open(join(dfuse.dir, 'file2'), 'r') as fd:
+            data2 = fd.read(2)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+        print(data0)
+        assert data0 == 'test'
+        assert data1 == 'test'
+        assert data2 == 'te'
+
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
         dfuse0 = DFuse(self.server,
