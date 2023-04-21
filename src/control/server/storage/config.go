@@ -47,6 +47,10 @@ const (
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
 
+	maxNrBdevTiersWithoutRoles = 1
+	maxNrBdevTiersWithRoles    = 3
+
+	// ControlMetadataSubdir defines the name of the subdirectory to hold control metadata
 	ControlMetadataSubdir = "daos_control"
 )
 
@@ -388,7 +392,7 @@ func (tcs TierConfigs) validateBdevRoles() error {
 	}
 
 	if !hasRoles() {
-		if len(bcs) > 1 {
+		if len(bcs) > maxNrBdevTiersWithoutRoles {
 			return FaultBdevConfigMultiTiersWithoutRoles
 		}
 		return nil // MD-on-SSD is not to be enabled
@@ -401,7 +405,7 @@ func (tcs TierConfigs) validateBdevRoles() error {
 	}
 
 	// MD-on-SSD configurations supports 1, 2 or 3 bdev tiers.
-	if len(bcs) > 3 {
+	if len(bcs) > maxNrBdevTiersWithRoles {
 		return FaultBdevConfigBadNrTiersWithRoles
 	}
 
