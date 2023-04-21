@@ -583,6 +583,7 @@ def move_codecov(base):
             os.unlink(target)
         src = os.path.join(base, "test.cov")
         if os.path.isfile(src):
+            print(f"Moving {src} to {target}")
             shutil.move(src, target)
     except Exception:
         print("Exception trying to copy test.cov")
