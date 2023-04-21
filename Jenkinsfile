@@ -89,13 +89,14 @@ def unitTestPostEx(Map config = [:], List artifacts) {
                      allowEmptyArchive: ignore_failure
   }
 
-  def target_stash = "${stage_info['target']}-${stage_info['compiler']}"
+  String target_stash = "${stage_info['target']}-${stage_info['compiler']}"
   if (stage_info['build_type']) {
     target_stash += '-' + stage_info['build_type']
   }
 
   // Coverage instrumented tests and Vagrind are probably mutually exclusive
   if (stage_info['compiler'] == 'covc') {
+    job_status_update()
     return
   }
 
@@ -128,7 +129,7 @@ def unitTestPostEx(Map config = [:], List artifacts) {
       println "The recordIssues step changed result to ${currentBuild.result}."
     }
   }
-
+  job_status_update()
 }
 
 void job_status_write() {
@@ -857,7 +858,6 @@ pipeline {
                     post {
                         always {
                             unitTestPostEx(['unit_test_logs/'])
-                            job_status_update()
                         }
                     }
                 }
@@ -879,7 +879,6 @@ pipeline {
                     post {
                         always {
                             unitTestPostEx(['unit_test_bdev_logs/'])
-                            job_status_update()
                         }
                     }
                 }
@@ -943,7 +942,6 @@ pipeline {
                             // added.
                             unitTestPostEx(ignore_failure: true,
                                            ['covc_test_logs/', 'covc_vm_test/**'])
-                            job_status_update()
                         }
                     }
                 } // stage('Unit test Bullseye on EL 8')
