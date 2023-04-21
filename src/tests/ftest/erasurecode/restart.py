@@ -32,6 +32,7 @@ class EcodServerRestart(ErasureCodeIor):
                        and restart the servers.
         """
         # 1.
+        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=2000)
         self.log_step("Create pool")
 
         # 2.
@@ -39,13 +40,13 @@ class EcodServerRestart(ErasureCodeIor):
         self.pool.set_property("reclaim", "disabled")
         # Get initial total free space (scm+nvme)
         initial_free_space = self.pool.get_total_free_space(refresh=True)
-        self.log.info(" initial pool free space: %s", initial_free_space)
+        self.log.info("initial pool free space: %s", initial_free_space)
 
         # 3.
         self.log_step("Run IOR write all EC object data to container")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
         free_space_after_ior = self.pool.get_total_free_space(refresh=True)
-        self.log.info(" pool free space after IOR write: %s", free_space_after_ior)
+        self.log.info("pool free space after IOR write: %s", free_space_after_ior)
 
         if agg_check == "Restart_before_agg":
             # step-4 for Restart_before_agg test
@@ -63,17 +64,31 @@ class EcodServerRestart(ErasureCodeIor):
         # 5.  step-6 for Restart_before_agg test
         self.log_step("Rerun IOR")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        free_space_after_agg = self.pool.get_total_free_space(refresh=True)
-        self.log.info(" pool free space after aggregation started: %s", free_space_after_agg)
+        init_free_space = self.pool.get_total_free_space(refresh=True)
+        self.log.info("pool free space after aggregation started: %s", init_free_space)
 
         # 6.  step-7 for Restart_before_agg test
         self.log_step("Verify aggregation triggered")
-        self.assertGreater(
-            free_space_after_agg, free_space_after_ior, "Aggregation failed to start..")
+        aggregation_detected = False
+        timed_out = False
+        start_time = time.time()
+        while not aggregation_detected and not timed_out:
+            current_free_space = self.pool.get_total_free_space(refresh=True)
+            self.log.info("pool free space during Aggregation = %s", current_free_space)
+            if current_free_space > init_free_space + aggr_threshold:
+                self.log.info("Aggregation Detectted .....")
+                aggregation_detected = True
+            else:
+                init_free_space = current_free_space
+                time.sleep(5)
+                if time.time() - start_time > 180:
+                    timed_out = True
+        if not aggregation_detected:
+            self.fail("#Aggregation failed to start..")
 
         if agg_check == "Restart_after_agg":
-            self.log_step("Shutdown the servers and restart")
             # 7.
+            self.log_step("Shutdown the servers and restart")
             self.get_dmg_command().system_stop(True)
             self.get_dmg_command().system_start()
 
