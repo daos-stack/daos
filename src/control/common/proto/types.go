@@ -10,10 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -249,17 +247,4 @@ func (smr ScmMountResults) HasErrors() bool {
 		}
 	}
 	return false
-}
-
-// AccessControlListFromPB converts from the protobuf ACLResp structure to an
-// AccessControlList structure.
-func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
-	if pbACL == nil {
-		return &common.AccessControlList{}
-	}
-	return &common.AccessControlList{
-		Entries:    pbACL.Acl.Entries,
-		Owner:      pbACL.Acl.OwnerUser,
-		OwnerGroup: pbACL.Acl.OwnerGroup,
-	}
 }
