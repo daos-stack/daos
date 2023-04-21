@@ -127,8 +127,10 @@ func TestClient_Close_Success(t *testing.T) {
 	err := client.Close()
 
 	test.AssertTrue(t, err == nil, "Expected no error")
-	test.AssertEqual(t, conn.CloseCallCount, 1,
-		"Expected conn.Close() to be called")
+	conn.WithLock(func(conn *mockConn) {
+		test.AssertEqual(t, conn.CloseCallCount, 1,
+			"Expected conn.Close() to be called")
+	})
 	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
 }
 
@@ -139,9 +141,11 @@ func TestClient_Close_Error(t *testing.T) {
 
 	err := client.Close()
 
-	test.CmpErr(t, conn.CloseOutputError, err)
-	test.AssertEqual(t, conn.CloseCallCount, 1,
-		"Expected conn.Close() to be called")
+	conn.WithLock(func(conn *mockConn) {
+		test.CmpErr(t, conn.CloseOutputError, err)
+		test.AssertEqual(t, conn.CloseCallCount, 1,
+			"Expected conn.Close() to be called")
+	})
 	test.AssertTrue(t, client.IsConnected(),
 		"Should have left the connection alone")
 }
@@ -220,12 +224,14 @@ func TestClient_SendMsg_Success(t *testing.T) {
 		"Response should match expected")
 	test.AssertEqual(t, response.Body, expectedResp.Body,
 		"Response should match expected")
-	test.AssertEqual(t, conn.WriteInputBytes, callBytes,
-		"Expected call to be marshalled and passed to write")
-	test.AssertTrue(t, conn.ReadInputBytes != nil,
-		"Expected read called with buffer")
-	test.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
-		"Marshalled response should be copied into the buffer")
+	conn.WithLock(func(conn *mockConn) {
+		test.AssertEqual(t, conn.WriteInputBytes, callBytes,
+			"Expected call to be marshalled and passed to write")
+		test.AssertTrue(t, conn.ReadInputBytes != nil,
+			"Expected read called with buffer")
+		test.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
+			"Marshalled response should be copied into the buffer")
+	})
 }
 
 func TestClient_SendMsg_NotConnected(t *testing.T) {
@@ -248,7 +254,24 @@ func TestClient_SendMsg_WriteError(t *testing.T) {
 	response, err := client.SendMsg(context.TODO(), call)
 
 	test.AssertTrue(t, response == nil, "Expected no response")
-	test.CmpErr(t, conn.WriteOutputError, err)
+	conn.WithLock(func(conn *mockConn) {
+		test.CmpErr(t, conn.WriteOutputError, err)
+	})
+}
+
+func TestClient_SendMsg_WriteErrorOnContextCancel(t *testing.T) {
+	conn := newMockConn()
+	client := newTestClientConnection(newMockDialer(), conn)
+
+	call := newTestCall()
+	conn.WriteOutputError = errors.New("mock write failure")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	response, err := client.SendMsg(ctx, call)
+
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.CmpErr(t, context.Canceled, err)
 }
 
 func TestClient_SendMsg_ReadError(t *testing.T) {
@@ -264,7 +287,27 @@ func TestClient_SendMsg_ReadError(t *testing.T) {
 	response, err := client.SendMsg(context.TODO(), call)
 
 	test.AssertTrue(t, response == nil, "Expected no response")
-	test.CmpErr(t, conn.ReadOutputError, err)
+	conn.WithLock(func(conn *mockConn) {
+		test.CmpErr(t, conn.ReadOutputError, err)
+	})
+}
+
+func TestClient_SendMsg_ReadErrorOnContextCancel(t *testing.T) {
+	conn := newMockConn()
+	client := newTestClientConnection(newMockDialer(), conn)
+
+	call := newTestCall()
+	conn.SetWriteOutputBytesForCall(t, call)
+
+	conn.ReadOutputNumBytes = 0
+	conn.ReadOutputError = errors.New("mock read failure")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	response, err := client.SendMsg(ctx, call)
+
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.CmpErr(t, context.Canceled, err)
 }
 
 func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
