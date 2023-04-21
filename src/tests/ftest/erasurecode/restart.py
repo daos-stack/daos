@@ -37,49 +37,45 @@ class EcodServerRestart(ErasureCodeIor):
         # 2.
         self.log_step("Disable aggregation")
         self.pool.set_property("reclaim", "disabled")
-        pool_used1 = self.pool.pool_percentage_used()
-        self.log.info(" pool used in percentage before IOR: %s", pool_used1)
+        # Get initial total free space (scm+nvme)
+        initial_free_space = self.pool.get_total_free_space(refresh=True)
+        self.log.info(" initial pool free space: %s", initial_free_space)
 
         # 3.
         self.log_step("Run IOR write all EC object data to container")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        pool_used2 = self.pool.pool_percentage_used()
-        self.log.info(" pool used in percentage after IOR: %s", pool_used2)
+        free_space_after_ior = self.pool.get_total_free_space(refresh=True)
+        self.log.info(" pool free space after IOR write: %s", free_space_after_ior)
 
-        if agg_check == "Agg_after_restart":
-            # step-4 for Agg_after_restart test
+        if agg_check == "Restart_before_agg":
+            # step-4 for Restart_before_agg test
             self.log_step("Shutdown the servers and restart")
             self.get_dmg_command().system_stop(True)
             self.get_dmg_command().system_start()
 
-        # 4.  step-5 for Agg_after_restart test
+        # 4.  step-5 for Restart_before_agg test
         self.log_step("Enable aggregation")
         self.pool.set_property("reclaim", "time")
         # Aggregation will start in 20 seconds after it sets to time mode. So wait for 20
         # seconds and restart all the servers.
         time.sleep(20)
 
-        # 5.  step-6 for Agg_after_restart test
+        # 5.  step-6 for Restart_before_agg test
         self.log_step("Rerun IOR")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        pool_used3 = self.pool.pool_percentage_used()
-        self.log.info(" pool used in percentage after IOR: %s", pool_used3)
+        free_space_after_agg = self.pool.get_total_free_space(refresh=True)
+        self.log.info(" pool free space after aggregation started: %s", free_space_after_agg)
 
-        # 6.  step-7 for Agg_after_restart test
+        # 6.  step-7 for Restart_before_agg test
         self.log_step("Verify aggregation triggered")
-        if not any(self.check_aggregation_status().values()):
-            self.fail("Aggregation failed to start..")
+        self.assertGreater(
+            free_space_after_agg, free_space_after_ior, "Aggregation failed to start..")
 
-        if agg_check == "Agg_before_restart":
+        if agg_check == "Restart_after_agg":
             self.log_step("Shutdown the servers and restart")
             # 7.
             self.get_dmg_command().system_stop(True)
             self.get_dmg_command().system_start()
-            pool_used4 = self.pool.pool_percentage_used()
-            self.log.info(" pool used in percentage after Restart: %s ", pool_used4)
-            # Verify if Aggregation is getting started
-            if not any(self.check_aggregation_status().values()):
-                self.fail("Aggregation failed to start..")
 
         # 8.
         self.log_step("run IOR read to verify data")
@@ -99,10 +95,10 @@ class EcodServerRestart(ErasureCodeIor):
             1. Create pool
             2. Disable aggregation
             3. Run IOR write all EC object data to container
-            4. Enable aggregation
-            5. Rerun IOR
-            6. Verify aggregation triggered
-            7. Shutdown the servers and restart
+            4. Shutdown the servers and restart
+            5. Enable aggregation
+            6. Rerun IOR write
+            7. Verify aggregation triggered
             8. run IOR read to verify data
 
         :avocado: tags=all,full_regression
@@ -110,7 +106,7 @@ class EcodServerRestart(ErasureCodeIor):
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
         :avocado: tags=EcodServerRestart,test_ec_restart_before_agg
         """
-        self.execution(agg_check="Agg_before_restart")
+        self.execution(agg_check="Restart_before_agg")
 
     def test_ec_restart_after_agg(self):
         """Jira ID: DAOS-7337.
@@ -125,10 +121,10 @@ class EcodServerRestart(ErasureCodeIor):
             1. Create pool
             2. Disable aggregation
             3. Run IOR write all EC object data to container
-            4. Shutdown the servers and restart
-            5. Enable aggregation
-            6. Rerun IOR
-            7. Verify aggregation triggered
+            4. Enable aggregation
+            5. Rerun IOR write
+            6. Verify aggregation triggered
+            7. Shutdown the servers and restart
             8. run IOR read to verify data
 
         :avocado: tags=all,full_regression
@@ -136,4 +132,4 @@ class EcodServerRestart(ErasureCodeIor):
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
         :avocado: tags=EcodServerRestart,test_ec_restart_after_agg
         """
-        self.execution(agg_check="Agg_after_restart")
+        self.execution(agg_check="Restart_after_agg")
