@@ -544,28 +544,28 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 }
 
 // CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
-// (allowed mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
+// (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
-func CalcRamdiskSize(log logging.Logger, memAllow, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
-	if memAllow == 0 {
-		return 0, errors.New("requires nonzero allowed mem")
+func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
+	if memTotal == 0 {
+		return 0, errors.New("requires nonzero total mem")
 	}
 	if engCount == 0 {
 		return 0, errors.New("requires nonzero nr engines")
 	}
 
-	msgStats := fmt.Sprintf("mem allowed: %s (%d), mem hugepage: %s, nr engines: %d, "+
-		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(memAllow), memAllow,
-		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
-		humanize.IBytes(memEng))
+	msgStats := fmt.Sprintf("mem stats: total %s (%d) - (hugepages %s + sys rsvd %s + "+
+		"(engine rsvd %s * nr engines %d))", humanize.IBytes(memTotal), memTotal,
+		humanize.IBytes(memHuge), humanize.IBytes(memSys), humanize.IBytes(memEng),
+		engCount)
 
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
-	if memAllow < memRsvd {
+	if memTotal < memRsvd {
 		return 0, errors.Errorf("insufficient ram to meet minimum requirements (%s)",
 			msgStats)
 	}
 
-	ramdiskSize := (memAllow - memRsvd) / uint64(engCount)
+	ramdiskSize := (memTotal - memRsvd) / uint64(engCount)
 
 	log.Debugf("ram-disk size %s calculated using %s", humanize.IBytes(ramdiskSize), msgStats)
 

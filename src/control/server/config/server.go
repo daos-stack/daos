@@ -496,11 +496,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	return nil
 }
 
-// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and an
-// input amount of memory.
+// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
 func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
 	// Convert memory from kib to bytes.
-	memAvail := uint64(memKiB * humanize.KiByte)
+	memTotal := uint64(memKiB * humanize.KiByte)
 
 	// Calculate assigned hugepage memory in bytes.
 	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
@@ -508,7 +507,7 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
-	return storage.CalcRamdiskSize(log, memAvail, memHuge, memSys,
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
 		storage.DefaultEngineMemRsvd, len(cfg.Engines))
 }
 

@@ -1535,7 +1535,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
 			},
 			hpSize: defHpSizeKb,
-			expErr: errors.New("requires nonzero allowed mem"),
+			expErr: errors.New("requires nonzero total mem"),
 		},
 		"dual engine tmpfs; low mem": {
 			threadCounts: &threadCounts{16, 0},

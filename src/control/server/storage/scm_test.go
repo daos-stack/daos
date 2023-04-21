@@ -27,7 +27,7 @@ func Test_CalcRamdiskSize(t *testing.T) {
 		expErr   error
 	}{
 		"no mem": {
-			expErr: errors.New("requires nonzero allowed mem"),
+			expErr: errors.New("requires nonzero total mem"),
 		},
 		"no engines": {
 			memTotal: humanize.GiByte,
