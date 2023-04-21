@@ -79,7 +79,6 @@ class EcodServerRestart(ErasureCodeIor):
                 self.log.info("Aggregation Detectted .....")
                 aggregation_detected = True
             else:
-                init_free_space = current_free_space
                 time.sleep(5)
                 if time.time() - start_time > 180:
                     timed_out = True
