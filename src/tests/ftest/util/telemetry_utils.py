@@ -6,6 +6,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from logging import getLogger
 import re
 from ClusterShell.NodeSet import NodeSet
+from dmg_utils import get_dmg_response
 
 
 class TelemetryUtils():
@@ -632,7 +633,8 @@ class TelemetryUtils():
         info = {}
         self.log.info("Querying telemetry metric %s from %s", name, self.hosts)
         for host in self.hosts:
-            data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
+            data = get_dmg_response(self, self.dmg.telemetry_metrics_query,
+                                    host=host, metrics=name)
             info[host] = {}
             if "response" in data:
                 if "metric_sets" in data["response"]:

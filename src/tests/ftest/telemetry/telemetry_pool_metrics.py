@@ -6,7 +6,6 @@
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
-from dmg_utils import get_dmg_response
 
 
 class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
@@ -205,7 +204,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         # Create a Pool
         self.add_pool(connect=False)
         # Get all the default Pool Metrics and check for any errors.
-        # If errors are noticed, get_dmg_response will report them and
+        # If errors are noticed, get_pool_metrics will report them and
         # fail the test.
-        get_dmg_response(self, self.telemetry.get_pool_metrics)
+        self.telemetry.get_pool_metrics()
         self.log.info("Test Passed")

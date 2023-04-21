@@ -1357,9 +1357,9 @@ def get_json_response(test, data, key, description):
     """
     response = {}
     try:
-        if data['error']:
+        if 'error' in data['error'] and data['error']:
             test.fail("{} failed: {}".format(description, data['error']))
-        if len(data['response']['host_errors']) > 0:
+        if 'host_errors' in data['response'] and len(data['response']['host_errors']) > 0:
             test.fail("{} failed: {}".format(description, data['response']['host_errors']))
         response = data['response'][key] if key else data['response']
     except KeyError as error:
