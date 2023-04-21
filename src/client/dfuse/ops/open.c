@@ -56,7 +56,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0) {
 			fi_out.keep_cache = 1;
-		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+		} else if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
 			fi_out.keep_cache = 1;
 		}
 
@@ -84,7 +84,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
 			D_GOTO(err, rc);
-		dfuse_cache_evict(oh->doh_ie);
+		dfuse_dcache_evict(oh->doh_ie);
 	}
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
@@ -112,23 +112,24 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
 
-	/* If the file was read from then set the cache time for future use, however if the
-	 * file was written to then evict the cache.
+	/* If the file was read from then set the data cache time for future use, however if the
+	 * file was written to then evict the metadata cache.
 	 * The problem here is that if the file was written to then the contents will be in the
 	 * kernel cache however dfuse has no visibility over file size and before replying with
 	 * data from the cache the kernel will call stat() to get an up-to-date file size, so
-	 * after write dfuse may continue to tell the kernel incorrect file sizes.  The fix
-	 * would be to store metadata but not cache data.
-	 *
-	 * Additionally, with caching enabled then dfuse may see create(), release(), open() calls
-	 * and neither release nor open update the cache, so do not set it valid on read.
+	 * after write dfuse may continue to tell the kernel incorrect file sizes.  To avoid this
+	 * evict the metadata cache so the size is refreshed on next access.
 	 */
 	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
 		if (oh->doh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Evicting cache");
-			dfuse_cache_evict(oh->doh_ie);
+			dfuse_mcache_evict(oh->doh_ie);
 		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
+	} else {
+		if (oh->doh_caching) {
+			dfuse_dcache_set_time(oh->doh_ie);
+		}
 	}
 	il_calls = atomic_load_relaxed(&oh->doh_il_calls);
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);

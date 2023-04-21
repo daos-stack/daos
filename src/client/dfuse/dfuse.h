@@ -128,6 +128,7 @@ struct dfuse_obj_hdl {
 	/* True if the kernel may have been told to keep the cache for this open.  This is used
 	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
 	 * here and this flag may be set on create even if the kernel flag isn't provided.
+	 * TODO: Remove this?
 	 */
 	bool                      doh_keep_cache;
 
@@ -459,7 +460,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 				(attr)->st_mode, (attr)->st_size);                                 \
 		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
-			dfuse_cache_set_time(ie);                                                  \
+			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
@@ -547,7 +548,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if (entry.attr_timeout > 0) {                                                      \
 			(inode)->ie_stat = entry.attr;                                             \
-			dfuse_cache_set_time(inode);                                               \
+			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
 		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
@@ -625,7 +626,9 @@ struct dfuse_inode_entry {
 
 	/* Time of last kernel cache update.
 	 */
-	struct timespec          ie_cache_last_update;
+	struct timespec          ie_mcache_last_update;
+
+	struct timespec          ie_dcache_last_update;
 
 	/** written region for truncated files (i.e. ie_truncated set) */
 	size_t                   ie_start_off;
@@ -683,17 +686,37 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
 
+/* Metadata caching functions. */
+
 /* Mark the cache as up-to-date from now */
 void
-dfuse_cache_set_time(struct dfuse_inode_entry *ie);
+dfuse_mcache_set_time(struct dfuse_inode_entry *ie);
 
 /* Set the cache as invalid */
 void
-dfuse_cache_evict(struct dfuse_inode_entry *ie);
+dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 
 /* Check the cache setting against a given timeout, and return time left */
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* Data caching functions */
+
+/* Mark the cache as up-to-date from now */
+void
+dfuse_dcache_set_time(struct dfuse_inode_entry *ie);
+
+/* Set the cache as invalid */
+void
+dfuse_dcache_evict(struct dfuse_inode_entry *ie);
+
+/* Set both caches invalid */
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie);
+
+/* Check the cache setting against a given timeout */
+bool
+dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
