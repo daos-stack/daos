@@ -24,14 +24,18 @@ class ReplayTests(TestWithServers):
     :avocado: recursive
     """
 
-    def create_container(self, details=None):
+    def create_container(self, details=None, **pool_params):
         """Create a pool and container.
+
+        Args:
+            details (str, optional): additional log_step messaging
+            pool_params (dict, optional): named arguments to add_pool()
 
         Returns:
             TestContainer: the created container with a reference to the created pool
         """
         self.log_step(join(' ', 'Creating a pool (dmg pool create)', '-', details))
-        pool = add_pool(self)
+        pool = add_pool(self, **pool_params)
         self.log_step(join(' ', 'Creating a container (daos container create)', '-', details))
         return self.get_container(pool)
 
@@ -329,7 +333,7 @@ class ReplayTests(TestWithServers):
         self.log_step('Test passed')
 
     def test_replay_no_check_pointing(self):
-        """Verify data access after engine restart w/ WAL replay + w/o check pointing.
+        """Verify data access after engine restart w/ WAL replay + w/o check pointing (DAOS-13013).
 
         Steps:
             0) Start 3 DAOS servers with 1 engine on each server
@@ -372,7 +376,7 @@ class ReplayTests(TestWithServers):
         self.log_step('Test passed')
 
     def test_replay_check_pointing(self):
-        """Verify data access after engine restart w/ WAL replay + w/ check pointing.
+        """Verify data access after engine restart w/ WAL replay + w/ check pointing (DAOS-13012).
 
         Steps:
             0) Start 3 DAOS servers with 1 engine on each server
@@ -390,23 +394,10 @@ class ReplayTests(TestWithServers):
         :avocado: tags=ReplayTests,test_replay_check_pointing
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
-        container = self.create_container()
-
-        frequency = 0
-        self.log_step(
-            'Obtaining the {} check pointing properties (dmg pool get-prop)'.format(container.pool))
-        response = container.pool.get_prop(name='checkpoint,checkpoint_freq')
-        for entry in response['response']:
-            if entry['name'] == 'checkpoint' and entry['value'] != 'timed':
-                self.log_step(
-                    'Setting the {} check pointing to timed (dmg pool set-prop)'.format(
-                        container.pool))
-                container.pool.set_prop(properties='checkpoint:timed')
-            elif entry['name'] == 'checkpoint_freq':
-                frequency = entry['value']
+        frequency = 5
+        container = self.create_container(
+            properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
-        if frequency == 0:
-            self.fail('Error obtaining the pool check point frequency')
 
         self.log_step('Write data to the container (ior)')
         ior = self.write_data(container, ppn)
