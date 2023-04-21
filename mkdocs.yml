@@ -43,7 +43,7 @@ extra:
 plugins:
   - search
   - mike:
-    version_selector: true
+        version_selector: true
 
 markdown_extensions:
   - admonition
