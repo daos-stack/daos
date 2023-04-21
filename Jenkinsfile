@@ -20,52 +20,29 @@
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-/**
-* unitTestPostEx step method
-*
-* @param config Map of parameters passed
-*
-* config['always_script']       Script to run after any test.
-*                               Default 'ci/unit/test_post_always.sh'.
-*
-* TODO: Always provided, should make required
-* config['artifacts']           Artifacts to archive.
-*                               Default ['run_test.sh/*']
-*
-* config['ignore_failure']      Ignore test failures.  Default false.
-*
-* config['referenceJobName']    Reference job name.
-*                               Defaults to 'daos-stack/daos/master'
-*
-* config['testResults']         Junit test result files.
-*                               Default 'test_results/*.xml'
-*
-* config['valgrind_pattern']    Pattern for Valgind files.
-*                               Default: '*.memcheck.xml'
-*
-* config['valgrind_stash']      Name to stash valgrind artifacts
-*                               Required if more than one stage is
-*                               creating valgrind reports.
-*
-*/
+def unitTestPostEx(Map config = [:],
+                   always_script='ci/unit/test_post_always.sh',
+                   artifacts=['unit_test_logs/*'],
+                   ignore_failure=false,
+                   referenceJobName='daos-stack/daos/master',
+                   testResults='test_results/*.xml',
+                   valgrind_pattern='*.memcheck.xml',
+                   valgrind_stash=null,
+                   tgz_file='unit_test_memcheck_logs.tar.gz') {
 
-def unitTestPostEx(Map config = [:]) {
-
-  String always_script = config.get('always_script',
-                                    'ci/unit/test_post_always.sh')
   sh label: 'Job Cleanup',
      script: always_script
 
   Map stage_info = parseStageInfo(config)
 
-  if (config['testResults'] != 'None' ) {
+  if (testResults != 'None' ) {
     double health_scale = 1.0
-    if (config['ignore_failure']) {
+    if (ignore_failure) {
       health_scale = 0.0
     }
 
     def cb_result = currentBuild.result
-    junit testResults: config.get('testResults', 'test_results/*.xml'),
+    junit testResults: testResults,
           healthScaleFactor: health_scale
 
     if (cb_result != currentBuild.result) {
@@ -73,11 +50,9 @@ def unitTestPostEx(Map config = [:]) {
     }
   }
 
-  def artifact_list = config.get('artifacts', ['run_test.sh/*'])
 
   if(stage_info['with_valgrind']) {
-    String tgz_file = artifact_list[0]
-    String target_dir = tgz_file.minus(".tar.gz")
+    String target_dir = 'unit_test_memcheck_logs'
     String src_files = "unit-test-*.memcheck.xml"
     fileOperations([fileCopyOperation(excludes: '',
                                       flattenFiles: false,
@@ -86,8 +61,7 @@ def unitTestPostEx(Map config = [:]) {
     sh "tar -czf ${tgz_file} ${target_dir}"
   }
 
-  def ignore_failure = config.get('ignore_failure', false)
-  artifact_list.each {
+  artifacts.each {
     archiveArtifacts artifacts: it,
                      allowEmptyArchive: ignore_failure
   }
@@ -102,15 +76,13 @@ def unitTestPostEx(Map config = [:]) {
     return
   }
 
-  if (config['valgrind_stash']) {
-    def valgrind_pattern = config.get('valgrind_pattern', '*.memcheck.xml')
-    stash name: config['valgrind_stash'], includes: valgrind_pattern
+  if (valgrind_stash) {
+    stash name: valgrind_stash, includes: valgrind_pattern
   }
 
   if (stage_info['NLT']) {
     def cb_result = currentBuild.result
-    discoverGitReferenceBuild referenceJob: config.get('referenceJobName',
-                                              'daos-stack/daos/master'),
+    discoverGitReferenceBuild referenceJob: referenceJobName,
                               scm: 'daos-stack/daos'
     recordIssues enabledForFailure: true,
                  failOnError: !ignore_failure,
@@ -861,7 +833,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPostEx artifacts: ['unit_test_logs/']
+                            unitTestPostEx(artifacts: ['unit_test_logs/'])
                             job_status_update()
                         }
                     }
@@ -883,7 +855,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPostEx artifacts: ['unit_test_bdev_logs/']
+                            unitTestPostEx(artifacts: ['unit_test_bdev_logs/'])
                             job_status_update()
                         }
                     }
@@ -907,10 +879,10 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPostEx artifacts: ['nlt_logs/'],
+                            unitTestPostEx(artifacts: ['nlt_logs/'],
                                            testResults: 'nlt-junit.xml',
                                            always_script: 'ci/unit/test_nlt_post.sh',
-                                           valgrind_stash: 'el8-gcc-nlt-memcheck'
+                                           valgrind_stash: 'el8-gcc-nlt-memcheck')
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
@@ -946,9 +918,9 @@ pipeline {
                             // caused by code coverage instrumentation affecting
                             // test results, and while code coverage is being
                             // added.
-                            unitTestPostEx ignore_failure: true,
+                            unitTestPostEx(ignore_failure: true,
                                            artifacts: ['covc_test_logs/',
-                                                       'covc_vm_test/**']
+                                                       'covc_vm_test/**'])
                             job_status_update()
                         }
                     }
@@ -971,9 +943,9 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPostEx artifacts: ['unit_test_memcheck_logs.tar.gz',
+                            unitTestPostEx(artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                        'unit_test_memcheck_logs/**/*.log'],
-                                           valgrind_stash: 'el8-gcc-unit-memcheck'
+                                           valgrind_stash: 'el8-gcc-unit-memcheck')
                             job_status_update()
                         }
                     }
@@ -996,9 +968,10 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPostEx artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+                            unitTestPostEx(artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                        'unit_test_memcheck_bdev_logs/**/*.log'],
-                                           valgrind_stash: 'el8-gcc-unit-memcheck-bdev',
+                                           tgz_file: 'unit_test_memcheck_bdev.tar.gz',
+                                           valgrind_stash: 'el8-gcc-unit-memcheck-bdev')
                             job_status_update()
                         }
                     }
