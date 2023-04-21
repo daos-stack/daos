@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,21 +23,35 @@
 #include "cli_internal.h"
 #include "rpc.h"
 
+int	dc_cont_proto_version;
+
 /**
  * Initialize container interface
  */
 int
 dc_cont_init(void)
 {
-	int rc;
+	int		rc;
+	uint32_t	ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 
-	/* TODO: issue a cart protocol query to an engine, then register either the
-	 * latest, or latest-1 version of the container RPC protocol. See dc_pool_init().
-	 */
-	rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
-				NULL, DAOS_CONT_MODULE);
+	dc_cont_proto_version = 0;
+	rc = daos_rpc_proto_query(cont_proto_fmt_v6.cpf_base, ver_array,
+				  2, &dc_cont_proto_version);
+	if (rc)
+		return rc;
+
+	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1) {
+		rc = daos_rpc_register(&cont_proto_fmt_v6, CONT_PROTO_CLI_COUNT,
+				       NULL, DAOS_CONT_MODULE);
+	} else if (dc_cont_proto_version == DAOS_CONT_VERSION) {
+		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
+				       NULL, DAOS_CONT_MODULE);
+	} else {
+		D_ASSERT(0);
+	}
 	if (rc != 0)
-		D_ERROR("failed to register cont RPCs: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to register %d version cont RPCs: "DF_RC"\n",
+			dc_cont_proto_version, DP_RC(rc));
 
 	return rc;
 }
@@ -50,9 +64,13 @@ dc_cont_fini(void)
 {
 	int rc;
 
-	rc = daos_rpc_unregister(&cont_proto_fmt_v7);
+	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1)
+		rc = daos_rpc_unregister(&cont_proto_fmt_v6);
+	else
+		rc = daos_rpc_unregister(&cont_proto_fmt_v7);
 	if (rc != 0)
-		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to unregister %d version cont RPCs: "DF_RC"\n",
+			dc_cont_proto_version, DP_RC(rc));
 }
 
 /*
