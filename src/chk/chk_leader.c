@@ -1855,8 +1855,14 @@ chk_leader_need_stop(struct chk_instance *ins)
 			}
 		}
 
-		if (!dangling)
+		if (!dangling) {
+			if (ins->ci_pool_stopped) {
+				D_ASSERT(ins->ci_stopping);
+				return 0;
+			}
+
 			return 1;
+		}
 	}
 
 	if (!ins->ci_sched_running)
@@ -2015,9 +2021,9 @@ chk_leader_sched(void *args)
 	uint32_t		 phase;
 	uint32_t		 ins_status;
 	uint32_t		 pool_status;
+	int			 done = 0;
 	int			 rc = 0;
 	bool			 bcast = false;
-	bool			 done = false;
 	bool			 dangling = false;
 
 	D_INFO(DF_LEADER" scheduler enter at phase %u\n", DP_LEADER(ins), cbk->cb_phase);
@@ -2072,9 +2078,16 @@ handle:
 				D_GOTO(out, bcast = true);
 		}
 
-		if (done) {
-			D_INFO(DF_LEADER" has done (1)\n", DP_LEADER(ins));
-			D_GOTO(out, rc = 1);
+		if (done != 0) {
+			if (done > 0) {
+				D_INFO(DF_LEADER" has done (1)\n", DP_LEADER(ins));
+				rc = 1;
+			} else {
+				D_INFO(DF_LEADER" is stopped\n", DP_LEADER(ins));
+				rc = 0;
+			}
+
+			D_GOTO(out, rc);
 		}
 
 		if (dangling)
@@ -2646,6 +2659,8 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	ins->ci_started = 0;
 	ins->ci_start_flags = 0;
 	ins->ci_for_orphan = 0;
+	ins->ci_implicated = 0;
+	ins->ci_pool_stopped = 0;
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_rank_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
@@ -2818,9 +2833,13 @@ static int
 chk_leader_stop_cb(void *args, uint32_t rank, int result, void *data, uint32_t nr)
 {
 	struct chk_instance	*ins = args;
+	uint32_t		*flags = data;
 	int			 rc;
 
 	D_ASSERTF(result > 0, "Unexpected result for stop CB %d\n", result);
+
+	if (*flags & CSF_POOL_STOPPED)
+		ins->ci_pool_stopped = 1;
 
 	/* The engine has stop on the rank, remove it from the rank list. */
 	rc = chk_rank_del(ins, rank);
@@ -2901,11 +2920,11 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 		}
 	}
 
-	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING &&
-	    d_list_empty(&ins->ci_rank_list))
+	if (d_list_empty(&ins->ci_rank_list))
 		chk_stop_sched(ins);
 
 out:
+	ins->ci_pool_stopped = 0;
 	ins->ci_stopping = 0;
 
 	if (rc >= 0) {

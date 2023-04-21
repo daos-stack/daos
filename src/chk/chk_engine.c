@@ -1817,8 +1817,8 @@ chk_engine_sched(void *args)
 	uint32_t		 ins_status;
 	uint32_t		 pool_status;
 	d_rank_t		 myrank = dss_self_rank();
+	int			 done = 0;
 	int			 rc = 0;
-	bool			 done = false;
 
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
@@ -1831,9 +1831,16 @@ chk_engine_sched(void *args)
 			D_GOTO(out, rc = 0);
 
 		phase = chk_pools_find_slowest(ins, &done, NULL);
-		if (done) {
-			D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
-			D_GOTO(out, rc = 1);
+		if (done != 0) {
+			if (done > 0) {
+				D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
+				rc = 1;
+			} else {
+				D_INFO(DF_ENGINE" on rank %u is stopped\n", DP_ENGINE(ins), myrank);
+				rc = 0;
+			}
+
+			D_GOTO(out, rc);
 		}
 
 		if (phase > cbk->cb_phase) {
@@ -2116,6 +2123,9 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	ins->ci_starting = 1;
 	ins->ci_started = 0;
 	ins->ci_start_flags = 0;
+	ins->ci_for_orphan = 0;
+	ins->ci_implicated = 0;
+	ins->ci_pool_stopped = 0;
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
@@ -2230,7 +2240,7 @@ out_log:
 }
 
 int
-chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
+chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
@@ -2277,6 +2287,9 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 		}
 	}
 
+	if (ins->ci_pool_stopped)
+		*flags = CSF_POOL_STOPPED;
+
 	if (d_list_empty(&ins->ci_pool_list)) {
 		chk_stop_sched(ins);
 		/* To indicate that there is no active pool(s) on this rank. */
@@ -2284,6 +2297,7 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 	}
 
 out:
+	ins->ci_pool_stopped = 0;
 	ins->ci_stopping = 0;
 
 	if (rc >= 0 || rc == -DER_ALREADY) {

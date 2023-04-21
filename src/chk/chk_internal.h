@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,7 +104,9 @@ CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
 
 #define DAOS_OSEQ_CHK_STOP							\
 	((int32_t)		(cso_status)		CRT_VAR)		\
+	((uint32_t)		(cso_flags)		CRT_VAR)		\
 	((uint32_t)		(cso_cap)		CRT_VAR)		\
+	((int32_t)		(cso_padding)		CRT_VAR)		\
 	((d_rank_t)		(cso_ranks)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
@@ -310,6 +312,11 @@ enum chk_start_flags {
 	CSF_ORPHAN_POOL		= 4,
 };
 
+enum chk_stop_flags {
+	/* The check on some pools have been stopped. */
+	CSF_POOL_STOPPED	= 1,
+};
+
 enum chk_act_flags {
 	/* The action is applicable to the same kind of inconssitency. */
 	CAF_FOR_ALL		= 1,
@@ -495,6 +502,7 @@ struct chk_instance {
 	uint32_t		 ci_is_leader:1,
 				 ci_sched_running:1,
 				 ci_for_orphan:1,
+				 ci_pool_stopped:1, /* check on some pools have been stopped. */
 				 ci_starting:1,
 				 ci_stopping:1,
 				 ci_started:1,
@@ -675,7 +683,7 @@ int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		     uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader,
 		     uint32_t flags, struct ds_pool_clues *clues);
 
-int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[]);
+int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags);
 
 int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[],
 		     uint32_t *shard_nr, struct chk_query_pool_shard **shards);
@@ -1021,12 +1029,16 @@ chk_pools_add_from_dir(uuid_t uuid, void *args)
 }
 
 static inline uint32_t
-chk_pools_find_slowest(struct chk_instance *ins, bool *done, bool *dangling)
+chk_pools_find_slowest(struct chk_instance *ins, int *done, bool *dangling)
 {
 	struct chk_pool_rec	*cpr;
 	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 
-	*done = true;
+	if (ins->ci_pool_stopped)
+		*done = -1;
+	else
+		*done = 1;
+
 	if (dangling != NULL)
 		*dangling = false;
 
@@ -1034,7 +1046,7 @@ chk_pools_find_slowest(struct chk_instance *ins, bool *done, bool *dangling)
 		if (cpr->cpr_skip || cpr->cpr_done)
 			continue;
 
-		*done = false;
+		*done = 0;
 		if (cpr->cpr_dangling && dangling != NULL)
 			*dangling = true;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -175,6 +175,8 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 		return 0;
 	}
+
+	out_result->cso_flags |= out_source->cso_flags;
 
 	if (out_source->cso_ranks.ca_count == 0)
 		return 0;
@@ -592,7 +594,7 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		D_GOTO(out, rc = 0);
 
 	for (i = 0, rank = cso->cso_ranks.ca_arrays; i < cso->cso_ranks.ca_count; i++, rank++) {
-		rc = stop_cb(args, *rank, 1, NULL /* unused data */, 0 /* unused nr */);
+		rc = stop_cb(args, *rank, 1, &cso->cso_flags, 0 /* unused nr */);
 		if (rc != 0)
 			goto out;
 	}
