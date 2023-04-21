@@ -13,13 +13,6 @@ class SoakStress(SoakTestBase):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a SoakStress object."""
-        super().__init__(*args, **kwargs)
-        soak_timeout = self.params.get(self.test_id, '/run/soak_stress/test_timeout/*')
-        self.timeout = (soak_timeout * 3600) + 1800
-        self.log.info("self.timeout: %s", self.timeout)
-
     def test_soak_stress_48h(self):
         """Run soak test for 48hours on performance cluster.
 
