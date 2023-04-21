@@ -146,7 +146,6 @@ crt_hgret_2_der(int hg_ret)
 		return 0;
 	case HG_TIMEOUT:
 		return -DER_TIMEDOUT;
-	case HG_FAULT:
 	case HG_INVALID_ARG:
 		return -DER_INVAL;
 	case HG_MSGSIZE:
@@ -158,8 +157,9 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_CANCELED;
 	case HG_BUSY:
 		return -DER_BUSY;
+	case HG_FAULT:
 	case HG_PROTOCOL_ERROR:
-		return -DER_PROTO;
+		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;
