@@ -32,7 +32,7 @@ class EcodServerRestart(ErasureCodeIor):
                        and restart the servers.
         """
         # 1.
-        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=2000)
+        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=800)
         self.log_step("Create pool")
 
         # 2.
@@ -74,12 +74,16 @@ class EcodServerRestart(ErasureCodeIor):
         start_time = time.time()
         while not aggregation_detected and not timed_out:
             current_free_space = self.pool.get_total_free_space(refresh=True)
-            self.log.info("pool free space during Aggregation = %s", current_free_space)
-            if current_free_space > init_free_space + aggr_threshold:
+            diff_free_space = current_free_space - init_free_space
+            self.log.info(
+                "pool free space during Aggregation = %s, diff_free_space = %s",
+                current_free_space, diff_free_space)
+            if diff_free_space > aggr_threshold:
                 self.log.info("Aggregation Detectted .....")
                 aggregation_detected = True
             else:
                 time.sleep(5)
+                init_free_space = current_free_space
                 if time.time() - start_time > 180:
                     timed_out = True
         if not aggregation_detected:

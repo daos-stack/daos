@@ -56,4 +56,4 @@ ior:
       - ["EC_8P2GX", 10]
   data_percentage:
     size: 1
-  aggregation_threshold: 2000
+  aggregation_threshold: 800
