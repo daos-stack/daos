@@ -32,7 +32,7 @@ class EcodServerRestart(ErasureCodeIor):
                        and restart the servers.
         """
         # 1.
-        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=800)
+        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=300)
         self.log_step("Create pool")
 
         # 2.
