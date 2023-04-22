@@ -47,6 +47,7 @@ class EcodServerRestart(ErasureCodeIor):
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
         free_space_after_ior = self.pool.get_total_free_space(refresh=True)
         self.log.info("pool free space after IOR write: %s", free_space_after_ior)
+        self.assertTrue(free_space_after_ior < initial_free_space, "IOR run was not successful.")
 
         if agg_check == "Restart_before_agg":
             # step-4 for Restart_before_agg test
@@ -57,30 +58,40 @@ class EcodServerRestart(ErasureCodeIor):
         # 4.  step-5 for Restart_before_agg test
         self.log_step("Enable aggregation")
         self.pool.set_property("reclaim", "time")
+        time.sleep(20)
 
         # 5.  step-6 for Restart_before_agg test
         self.log_step("Rerun IOR")
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        init_free_space = self.pool.get_total_free_space(refresh=True)
-        self.log.info("pool free space after aggregation started: %s", init_free_space)
+        init_total_free_space = self.pool.get_total_free_space(refresh=True)
+        pool_info = self.pool.get_pool_daos_space()
+        current_scm_free_space = pool_info["s_free"][0]
+        current_nvme_free_space = pool_info["s_free"][1]
+        self.log.info("After aggregation started: total_free: %s, scm_free: %s, nvme_free: %s",
+                      init_total_free_space, init_scm_free_space, init_nvme_free_space)
 
         # 6.  step-7 for Restart_before_agg test
-        self.log_step("Verify aggregation triggered")
+        self.log_step("Verify aggregation triggered, scm free space move to nvme")
         aggregation_detected = False
         timed_out = False
         start_time = time.time()
         while not aggregation_detected and not timed_out:
-            current_free_space = self.pool.get_total_free_space(refresh=True)
-            diff_free_space = current_free_space - init_free_space
+            pool_info = self.pool.get_pool_daos_space()
+            current_scm_free_space = pool_info["s_free"][0]
+            current_nvme_free_space = pool_info["s_free"][1]
+            diff_scm_free_space = current_scm_free_space - init_scm_free_space
+            diff_nvme_free_space = init_nvme_free_space - current_nvme_free_space
             self.log.info(
-                "pool free space during Aggregation = %s, diff_free_space = %s",
-                current_free_space, diff_free_space)
-            if diff_free_space > aggr_threshold:
+                "pool scm free space during Aggregation = %s, diff_scm_free_space = %s",
+                current_scm_free_space, diff_scm_free_space)
+            self.log.info(
+                "pool nvme free space during Aggregation = %s, diff_nvme_free_space = %s",
+                current_nvme_free_space, diff_nvme_free_space)
+            if diff_scm_free_space > aggr_threshold and diff_nvme_free_space > aggr_threshold:
                 self.log.info("Aggregation Detectted .....")
                 aggregation_detected = True
             else:
                 time.sleep(5)
-                init_free_space = current_free_space
                 if time.time() - start_time > 180:
                     timed_out = True
         if not aggregation_detected:
@@ -113,7 +124,7 @@ class EcodServerRestart(ErasureCodeIor):
             4. Shutdown the servers and restart
             5. Enable aggregation
             6. Rerun IOR write
-            7. Verify aggregation triggered
+            7. Verify aggregation triggered, scm free space move to nvme
             8. run IOR read to verify data
 
         :avocado: tags=all,full_regression
@@ -138,7 +149,7 @@ class EcodServerRestart(ErasureCodeIor):
             3. Run IOR write all EC object data to container
             4. Enable aggregation
             5. Rerun IOR write
-            6. Verify aggregation triggered
+            6. Verify aggregation triggered, scm free space move to nvme
             7. Shutdown the servers and restart
             8. run IOR read to verify data
 
