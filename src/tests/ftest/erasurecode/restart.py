@@ -65,8 +65,8 @@ class EcodServerRestart(ErasureCodeIor):
         self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
         init_total_free_space = self.pool.get_total_free_space(refresh=True)
         pool_info = self.pool.get_pool_daos_space()
-        current_scm_free_space = pool_info["s_free"][0]
-        current_nvme_free_space = pool_info["s_free"][1]
+        init_scm_free_space = pool_info["s_free"][0]
+        init_nvme_free_space = pool_info["s_free"][1]
         self.log.info("After aggregation started: total_free: %s, scm_free: %s, nvme_free: %s",
                       init_total_free_space, init_scm_free_space, init_nvme_free_space)
 
