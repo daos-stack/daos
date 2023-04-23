@@ -101,6 +101,7 @@ const (
 	BdevConfigRolesMissing
 	BdevConfigMultiTierWithoutRoles
 	BdevConfigBadNrTiersWithRoles
+	BdevConfigControlMetadataNoRoles
 )
 
 // DAOS system fault codes

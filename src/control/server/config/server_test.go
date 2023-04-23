@@ -305,7 +305,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-					WithBdevFileSize(16),
+					WithBdevFileSize(16).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
@@ -544,7 +545,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 						defaultEngineCfg().
 							WithFabricInterfacePort(5678).
@@ -556,7 +558,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
-									WithBdevBusidRange("0x90-0x9f"),
+									WithBdevBusidRange("0x90-0x9f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 					)
 			},
@@ -577,7 +580,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-								WithBdevBusidRange("0x80-0x8f"),
+								WithBdevBusidRange("0x80-0x8f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
 						).
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
@@ -599,7 +603,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
-								WithBdevBusidRange("0x90-0x9f"),
+								WithBdevBusidRange("0x90-0x9f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
 						).
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
@@ -679,7 +684,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 					)
 			},
@@ -697,7 +703,8 @@ func TestServerConfig_Validation(t *testing.T) {
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
 							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-							WithBdevBusidRange("0x80-0x8f"),
+							WithBdevBusidRange("0x80-0x8f").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
 					).
 					WithStorageVosEnv("NVME").
 					WithStorageControlMetadataPath(testMetadataDir).
@@ -723,6 +730,27 @@ func TestServerConfig_Validation(t *testing.T) {
 						))
 			},
 			expErr: FaultConfigControlMetadataNoPath,
+		},
+		"control metadata with no roles specified": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0"),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
