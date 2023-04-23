@@ -454,7 +454,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		// Calculate overall target count if NVMe is enabled.
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgTargetCount += ec.TargetCount
-			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+			if ec.Storage.Tiers.HasBdevRoleMeta() {
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++

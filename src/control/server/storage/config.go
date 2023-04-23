@@ -292,7 +292,7 @@ func (tcs TierConfigs) HaveEmulatedNVMe() bool {
 	return tcs.checkBdevs(false, true)
 }
 
-func (tcs TierConfigs) HaveBdevRoleMeta() bool {
+func (tcs TierConfigs) HasBdevRoleMeta() bool {
 	for _, bc := range tcs.BdevConfigs() {
 		bits := bc.Bdev.DeviceRoles.OptionBits
 		if (bits & BdevRoleMeta) != 0 {
@@ -1101,6 +1101,9 @@ func (c *Config) Validate() error {
 
 	var nvmeConfigRoot string
 	if c.ControlMetadata.HasPath() {
+		if !c.Tiers.HasBdevRoleMeta() {
+			return FaultBdevConfigControlMetadataNoRoles
+		}
 		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
 	} else {
 		nvmeConfigRoot = c.Tiers.ScmConfigs()[0].Scm.MountPoint

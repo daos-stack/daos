@@ -97,7 +97,7 @@ var (
 		code.ScmNoPMem,
 		"No PMem modules exist on storage server", "Install PMem modules and retry command")
 
-	// FaultScmConfigTierMissing creates a Fault when no scm tier is present in engine storage config.
+	// FaultScmConfigTierMissing indicates a Fault when no scm tier is present in engine storage config.
 	FaultScmConfigTierMissing = storageFault(
 		code.ScmConfigTierMissing,
 		"missing scm storage tier in engine storage config",
@@ -111,7 +111,7 @@ var (
 		"bdev tiers found with both emulated and non-emulated NVMe types specified in config",
 		"change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
 
-	// FaultBdevConfigRolesWithDCPM creates a Fault when bdev roles are specified with DCPM SCM class.
+	// FaultBdevConfigRolesWithDCPM indicates a Fault when bdev roles are specified with DCPM SCM class.
 	FaultBdevConfigRolesWithDCPM = storageFault(
 		code.BdevConfigRolesWithDCPM,
 		"bdev tier roles specified in config with scm class set to dcpm",
@@ -119,14 +119,14 @@ var (
 			"remove role assignments from bdev tiers then restart daos_server after updating server "+
 			"config file")
 
-	// FaultBdevConfigRolesMissing creates a Fault when bdev roles are specified on some but not all
+	// FaultBdevConfigRolesMissing indicates a Fault when bdev roles are specified on some but not all
 	// bdev tiers.
 	FaultBdevConfigRolesMissing = storageFault(
 		code.BdevConfigRolesMissing,
 		"bdev tier roles have been specified on some but not all bdev tiers in config",
 		"set MD-on-SSD roles on all bdev tiers in server config file and restart daos_server")
 
-	// FaultBdevConfigMultiTiersWithoutRoles creates a Fault when multiple bdev tiers exist but no roles
+	// FaultBdevConfigMultiTiersWithoutRoles indicates a Fault when multiple bdev tiers exist but no roles
 	// are specified.
 	FaultBdevConfigMultiTiersWithoutRoles = storageFault(
 		code.BdevConfigMultiTierWithoutRoles,
@@ -134,12 +134,19 @@ var (
 		"set MD-on-SSD roles on all bdev tiers or use only a single bdev tier, restart daos_server "+
 			"after updating server config file")
 
-	// FaultBdevConfigBadNrTiersWithRoles creates a Fault when an invalid number of bdev tiers exist when
+	// FaultBdevConfigBadNrTiersWithRoles indicates a Fault when an invalid number of bdev tiers exist when
 	// roles are specified.
 	FaultBdevConfigBadNrTiersWithRoles = storageFault(
 		code.BdevConfigBadNrTiersWithRoles,
 		"only 1, 2 or 3 bdev tiers are supported when MD-on-SSD roles are specified",
 		"reduce the number of bdev tiers to 3 or less in server config file and restart daos_server")
+
+	// FaultBdevConfigControlMetadataNoRoles indicates a fault when control_metadata path
+	// has been specified in server config file but MD-on-SSD has not been enabled.
+	FaultBdevConfigControlMetadataNoRoles = storageFault(
+		code.BdevConfigControlMetadataNoRoles,
+		"using a control_metadata path requires md-on-ssd bdev tier roles",
+		"assign 'bdev_roles' to bdev tiers in the engine storage section of the config")
 )
 
 // FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
