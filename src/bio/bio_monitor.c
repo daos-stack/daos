@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -828,8 +828,8 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt)
 	 * Init xstream will finialize bdev subsystem later, so we need
 	 * to wait for the inflight health collecting request done.
 	 */
-        D_ASSERT(bdh->bdh_inflights < 2);
-	if (bdh->bdh_inflights == 1) {
+	D_ASSERT(bdh->bdh_inflights < 2);
+	if (bdh->bdh_inflights > 0) {
 		ctxt->bxc_blobstore = NULL;
 
 		D_INFO("Wait for health collecting done...\n");
