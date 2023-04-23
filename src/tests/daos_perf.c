@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,11 +178,13 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 	if (ts_mode != TS_MODE_DAOS)
 		return 0; /* cannot support */
 
-	rc = daos_cont_create_snap_opt(ts_ctx.tsc_coh, &epoch, NULL,
-				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
-				       NULL);
+	rc = daos_cont_create_snap(ts_ctx.tsc_coh, &epoch, NULL, NULL);
 	if (rc)
 		fprintf(stderr, "failed to create snapshot\n");
+
+	rc = daos_cont_snap_oit_create(ts_ctx.tsc_coh, epoch, NULL, NULL);
+	if (rc)
+		fprintf(stderr, "failed to dump oit\n");
 
 	rc = daos_oit_open(ts_ctx.tsc_coh, epoch, &toh, NULL);
 	D_ASSERT(rc == 0);
