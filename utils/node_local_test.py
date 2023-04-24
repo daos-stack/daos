@@ -1977,8 +1977,11 @@ class PosixTests():
         test_dir = join(self.dfuse.dir, 'test_dir')
         os.mkdir(test_dir)
         count = 140
+        src_files = set()
         for idx in range(count):
-            with open(join(test_dir, f'file_{idx}'), 'w'):
+            fname = f'file_{idx}'
+            src_files.add(fname)
+            with open(join(test_dir, fname), 'w'):
                 pass
 
         files = []
@@ -1996,8 +1999,9 @@ class PosixTests():
         print('Reads are from list 2, 1, 1, 2.')
         print(files)
         print(files2)
-        assert files == files2
-        assert len(files) == count
+        assert files == files2, 'inconsistent file names'
+        assert len(files) == count, 'incoorect file count'
+        assert set(files) == src_files, 'incorrect file names'
 
     @needs_dfuse
     def test_readdir_cache_short(self):

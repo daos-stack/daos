@@ -280,6 +280,46 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 #define FADP fuse_add_direntry_plus
 #define FAD  fuse_add_direntry
 
+/* Fetch a readdir handle for this operation, this might be shared with other directory
+ * handles for the same inode.  Only one readdir will happen concurrently for each inode
+ * however readdir does get called concurrently with releasedir for the same inode so
+ * protect this section with a spinlock.
+ */
+static int
+ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+{
+	if (oh->doh_rd != NULL)
+		return 0;
+
+	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+
+	if (oh->doh_ie->ie_rd_hdl &&
+	    dfuse_cache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout, NULL)) {
+		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
+		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
+		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
+	} else {
+		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+		if (oh->doh_rd == NULL) {
+			D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+			return ENOMEM;
+		}
+
+		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+
+		if (oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
+			oh->doh_rd->dre_caching = true;
+			dfuse_cache_set_time(oh->doh_ie);
+			oh->doh_ie->ie_rd_hdl = oh->doh_rd;
+		}
+	}
+	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	return 0;
+}
+
+#define FADP fuse_add_direntry_plus
+#define FAD  fuse_add_direntry
+
 int
 dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
@@ -292,38 +332,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	struct dfuse_readdir_hdl *hdl;
 	size_t                    size = *out_size;
 
-	/* Fetch a readdir handle for this operation, this might be shared with other directory
-	 * handles for the same inode.  Only one readdir will happen concurrently for each inode
-	 * however readdir does get called concurrently with releasedir for the same inode so
-	 * protect this section with a spinlock.
-	 */
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
-
-	if (oh->doh_rd == NULL) {
-		if (oh->doh_ie->ie_rd_hdl &&
-		    dfuse_cache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout,
-					  NULL)) {
-			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
-			atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
-			DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
-		} else {
-			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
-			if (oh->doh_rd == NULL) {
-				D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
-				return ENOMEM;
-			}
-
-			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
-
-			if (oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
-				oh->doh_rd->dre_caching = true;
-				dfuse_cache_set_time(oh->doh_ie);
-				oh->doh_ie->ie_rd_hdl = oh->doh_rd;
-			}
-		}
-	}
-
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	rc = ensure_rd_handle(fs_handle, oh);
+	if (rc != 0)
+		return rc;
 
 	hdl = oh->doh_rd;
 
