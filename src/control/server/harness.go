@@ -160,6 +160,10 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		if err == nil {
 			return
 		}
+		// If the context was canceled, don't trigger callbacks.
+		if errors.Cause(err) == context.Canceled {
+			return
+		}
 		// Don't trigger callbacks for these errors which can happen when
 		// things are still starting up.
 		if err == FaultHarnessNotStarted || err == errInstanceNotReady {
