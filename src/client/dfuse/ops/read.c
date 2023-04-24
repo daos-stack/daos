@@ -278,6 +278,7 @@ err:
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(eqt->de_read_slab, ev);
+		oh->doh_readahead->dra_ev = NULL;
 	}
 	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 }
