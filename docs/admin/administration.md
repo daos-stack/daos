@@ -237,7 +237,6 @@ Available commands:
   device-health  Query the device health
   list-devices   List storage devices on the server
   list-pools     List pools on the server
-  target-health  Query the target health
   usage          Show SCM & NVMe storage space utilization per storage server
 ```
 
@@ -401,17 +400,6 @@ Usage:
       -u, --uuid=     Device UUID
 ```
 ```bash
-$ dmg storage query target-health --help
-Usage:
-  dmg [OPTIONS] storage query target-health [target-health-OPTIONS]
-
-...
-
-[target-health command options]
-      -r, --rank=     Server rank hosting target
-      -t, --tgtid=    VOS target ID to query
-```
-```bash
 $ dmg storage scan --nvme-health --help
 Usage:
   dmg [OPTIONS] storage scan [scan-OPTIONS]
@@ -424,19 +412,16 @@ Usage:
       -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
-The NVMe storage query device-health and target-health commands query the device
-health data, including NVMe SSD health stats and in-memory I/O error and checksum
-error counters. The server rank and device state are also listed. The device health
-data can either be queried by device UUID (device-health command) or by VOS target ID
-along with the server rank (target-health command). The same device health information
-is displayed with both command options. Additionally, vendor-specific SMART stats are
-displayed, currently for Intel devices only. Note: A reasonable timed workload > 60 min
-must be ran for the SMART stats to register (Raw values are 65535). Media wear percentage
-can be calculated by dividing by 1024 to find the percentage of the maximum rated cycles.
+The NVMe storage query device-health command queries the device health data, including
+NVMe SSD health stats and in-memory I/O error and checksum error counters.
+The server rank and device state are also listed.
+Additionally, vendor-specific SMART stats are displayed, currently for Intel devices only.
+Note: A reasonable timed workload > 60 min must be ran for the SMART stats to register
+(Raw values are 65535).
+Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
+maximum rated cycles.
 ```bash
 $ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
-or
-$ dmg -l boro-11 storage query target-health --rank=0 --tgtid=0
 -------
 boro-11
 -------

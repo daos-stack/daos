@@ -340,14 +340,10 @@ struct  _Ctl__SmdQueryReq
    * Restrict response to only include info about this rank
    */
   uint32_t rank;
-  /*
-   * Restrict response to only include info about this VOS target
-   */
-  char *target;
 };
 #define CTL__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_req__descriptor) \
-    , 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth

@@ -126,7 +126,6 @@ message SmdQueryReq {
 	bool include_bio_health = 3;	// Indicate query should include BIO health for devices
 	string uuid = 4;		// Constrain query to this UUID (pool or device)
 	uint32 rank = 5;		// Restrict response to only include info about this rank
-	string target = 6;		// Restrict response to only include info about this VOS target
 }
 
 message SmdQueryResp {
