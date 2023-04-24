@@ -68,7 +68,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 
 	if (oh->doh_linear_read_pos != position) {
 		DFUSE_TRA_DEBUG(oh, "disabling readahead");
-		daos_event_fini(&oh->doh_readahead->dra_ev);
+		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
 		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_read_slab,
 			       oh->doh_readahead->dra_ev);
 		oh->doh_readahead->dra_ev = NULL;
