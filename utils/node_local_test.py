@@ -1902,6 +1902,10 @@ class PosixTests():
             data4 = fd.read()
             data5 = fd.read()
 
+        # This should not use the pre-read feature, to be validated via the logs.
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data6 = fd.read()
+
         if dfuse.stop():
             self.fatal_errors = True
         print(data0)
@@ -1911,6 +1915,7 @@ class PosixTests():
         assert raw_data0 == data3
         assert raw_data1 == data4
         assert len(data5) == 0
+        assert raw_data1 == data6
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""

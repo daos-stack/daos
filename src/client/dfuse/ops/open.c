@@ -96,7 +96,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * unused byte at the end of the buffer will be used to detect if the file has grown
 	 * since dfuse last observed the size.
 	 */
-	if (prefetch && ie->ie_stat.st_size < DFUSE_MAX_READ) {
+	if (prefetch && ie->ie_stat.st_size > 0 && ie->ie_stat.st_size < DFUSE_MAX_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
