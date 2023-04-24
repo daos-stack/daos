@@ -3258,7 +3258,7 @@ fetch_replica_unavail(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** Lookup */
-	buf = calloc(size, 1);
+	buf = calloc(size, 2);
 	assert_non_null(buf);
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
