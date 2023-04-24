@@ -730,6 +730,10 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to open OIT for container %s", cmd.ContainerID())
 	}
 	defer func() {
+		rc = C.daos_cont_snap_oit_destroy(ap.cont, oit, nil)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to destroy OIT in cleanup: %v", err)
+		}
 		rc = C.daos_oit_close(oit, nil)
 		if err := daosError(rc); err != nil {
 			cmd.Errorf("failed to close OIT in cleanup: %v", err)
@@ -1280,6 +1284,7 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
 			return err
 		}
+		defer cmd.Args.Props.Cleanup()
 	}
 	if len(cmd.PropsFlag.ParsedProps) > 0 {
 		if len(cmd.Args.Props.ParsedProps) > 0 {
@@ -1297,19 +1302,19 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	ap.props = cmd.Args.Props.props
-
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rc := C.cont_set_prop_hdlr(ap)
+	rc := C.daos_cont_set_prop(ap.cont, cmd.Args.Props.props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Errorf("failed to set properties on container %s",
+		return errors.Wrapf(err, "failed to set properties on container %s",
 			cmd.ContainerID())
 	}
+
+	cmd.Info("Properties were successfully set")
 
 	return nil
 }
