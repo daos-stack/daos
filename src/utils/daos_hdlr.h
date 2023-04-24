@@ -200,11 +200,6 @@ int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
-int cont_update_acl_hdlr(struct cmd_args_s *ap);
-int cont_delete_acl_hdlr(struct cmd_args_s *ap);
-int cont_set_owner_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
