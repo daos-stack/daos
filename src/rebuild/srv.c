@@ -110,7 +110,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 }
 
 static void *
-rebuild_tls_init(int xs_id, int tgt_id)
+rebuild_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
@@ -325,7 +325,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 }
 
 static void
-rebuild_tls_fini(void *data)
+rebuild_tls_fini(int tags, void *data)
 {
 	struct rebuild_tls *tls = data;
 	struct rebuild_pool_tls *pool_tls;
