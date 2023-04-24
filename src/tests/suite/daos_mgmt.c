@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -401,21 +401,22 @@ static void
 get_sys_info_test(void **state)
 {
 	struct daos_sys_info	*info = NULL;
+	struct daos_sys_info	*cached_info = NULL;
 	char			*old_agent_path;
 	uint32_t		i;
 	int			rc;
 
-	print_message("SUBTEST: alloc with NULL input\n");
-	rc = daos_mgmt_sys_info_alloc(NULL);
+	print_message("SUBTEST: alloc with NULL output\n");
+	rc = daos_mgmt_get_sys_info("something", false, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	print_message("SUBTEST: free with NULL input\n");
-	daos_mgmt_sys_info_free(NULL); /* ensure it doesn't crash */
+	daos_mgmt_put_sys_info(NULL); /* ensure it doesn't crash */
 
 	print_message("SUBTEST: bad agent socket\n");
 	old_agent_path = dc_agent_sockpath;
 	dc_agent_sockpath = "/fake/path/not/real";
-	rc = daos_mgmt_sys_info_alloc(&info);
+	rc = daos_mgmt_get_sys_info(NULL, true, &info);
 
 	/* restore the global variable before checking rc */
 	dc_agent_sockpath = old_agent_path;
@@ -423,21 +424,32 @@ get_sys_info_test(void **state)
 	assert_null(info);
 
 	print_message("SUBTEST: success\n");
-	rc = daos_mgmt_sys_info_alloc(&info);
+	rc = daos_mgmt_get_sys_info(NULL, true, &info);
 	assert_rc_equal(rc, 0);
 	assert_non_null(info);
 
 	assert_int_not_equal(strnlen(info->dsi_system_name, DAOS_SYS_INFO_STRING_MAX), 0);
 	print_message("system name: %s\n", info->dsi_system_name);
-	assert_int_not_equal(strnlen(info->dsi_provider, DAOS_SYS_INFO_STRING_MAX), 0);
-	print_message("provider: %s\n", info->dsi_provider);
-	assert_non_null(info->dsi_ms_ranks);
-	print_message("number of ranks: %d\n", info->dsi_nr_ms_ranks);
-	for (i = 0; i < info->dsi_nr_ms_ranks; i++)
-		print_message("rank %u, uri: %s\n", info->dsi_ms_ranks[i].dru_rank,
-			      info->dsi_ms_ranks[i].dru_uri);
+	assert_int_not_equal(strnlen(info->dsi_fabric_provider, DAOS_SYS_INFO_STRING_MAX), 0);
+	print_message("provider: %s\n", info->dsi_fabric_provider);
+	assert_non_null(info->dsi_ranks);
+	print_message("number of ranks: %d\n", info->dsi_nr_ranks);
+	for (i = 0; i < info->dsi_nr_ranks; i++)
+		print_message("rank %u, uri: %s\n", info->dsi_ranks[i].dru_rank,
+			      info->dsi_ranks[i].dru_uri);
 
-	daos_mgmt_sys_info_free(info);
+
+	print_message("SUBTEST: cached\n");
+	rc = daos_mgmt_get_sys_info(NULL, false, &cached_info);
+	assert_rc_equal(rc, 0);
+	assert_non_null(cached_info);
+
+	assert_string_equal(info->dsi_system_name, cached_info->dsi_system_name);
+	assert_string_equal(info->dsi_fabric_provider, cached_info->dsi_fabric_provider);
+	assert_int_equal(info->dsi_nr_ranks, cached_info->dsi_nr_ranks);
+
+	daos_mgmt_put_sys_info(info);
+	daos_mgmt_put_sys_info(cached_info);
 }
 
 static const struct CMUnitTest tests[] = {

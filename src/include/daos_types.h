@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -235,13 +235,15 @@ struct daos_rank_uri {
 };
 
 /**
- * DAOS general system information
+ * DAOS general system information for clients
  */
 struct daos_sys_info {
-	char			dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
-	char			dsi_provider[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint32_t		dsi_nr_ms_ranks;
-	struct daos_rank_uri	*dsi_ms_ranks;
+	/** name of DAOS system */
+	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** fabric provider in use by this system */
+	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	uint32_t		 dsi_nr_ranks; /** length of ranks array */
+	struct daos_rank_uri	*dsi_ranks; /** ranks and their client-accessible URIs */
 };
 
 /** max pool/cont attr size */

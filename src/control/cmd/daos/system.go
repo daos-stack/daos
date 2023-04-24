@@ -8,16 +8,12 @@ package main
 
 /*
 #include "util.h"
-
-struct daos_rank_uri *
-get_rank_uri_at_idx(struct daos_rank_uri *uris, uint32_t i)
-{
-	return &uris[i];
-}
 */
 import "C"
 
 import (
+	"unsafe"
+
 	"github.com/pkg/errors"
 )
 
@@ -38,26 +34,26 @@ type systemCmd struct {
 
 type systemQueryCmd struct {
 	daosCmd
+	Refresh bool `long:"refresh" short:"r" description:"try to refresh the agent cache"`
 }
 
 func (cmd *systemQueryCmd) Execute(_ []string) error {
 	var cSysInfo *C.struct_daos_sys_info
-	rc := C.daos_mgmt_sys_info_alloc(&cSysInfo)
+	rc := C.daos_mgmt_get_sys_info(nil, C.bool(cmd.Refresh), &cSysInfo)
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "querying DAOS system information")
 	}
-	defer C.daos_mgmt_sys_info_free(cSysInfo)
+	defer C.daos_mgmt_put_sys_info(cSysInfo)
 
 	sysInfo := &systemInfo{
 		Name:     C.GoString(&cSysInfo.dsi_system_name[0]),
-		Provider: C.GoString(&cSysInfo.dsi_provider[0]),
+		Provider: C.GoString(&cSysInfo.dsi_fabric_provider[0]),
 	}
 
-	for i := C.uint32_t(0); i < cSysInfo.dsi_nr_ms_ranks; i++ {
-		cRankURI := C.get_rank_uri_at_idx(cSysInfo.dsi_ms_ranks, i)
+	for _, cRank := range unsafe.Slice(cSysInfo.dsi_ranks, int(cSysInfo.dsi_nr_ranks)) {
 		sysInfo.RankURIs = append(sysInfo.RankURIs, &rankURI{
-			Rank: int(cRankURI.dru_rank),
-			URI:  C.GoString(cRankURI.dru_uri),
+			Rank: int(cRank.dru_rank),
+			URI:  C.GoString(cRank.dru_uri),
 		})
 	}
 

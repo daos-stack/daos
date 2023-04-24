@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,13 +69,13 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 }
 
 int
-daos_mgmt_sys_info_alloc(struct daos_sys_info **info)
+daos_mgmt_get_sys_info(const char *sys, bool refresh, struct daos_sys_info **info)
 {
-	return dc_mgmt_sys_info_alloc(info);
+	return dc_mgmt_get_sys_info(sys, refresh, info);
 }
 
 void
-daos_mgmt_sys_info_free(struct daos_sys_info *info)
+daos_mgmt_put_sys_info(struct daos_sys_info *info)
 {
-	dc_mgmt_sys_info_free(info);
+	dc_mgmt_put_sys_info(info);
 }

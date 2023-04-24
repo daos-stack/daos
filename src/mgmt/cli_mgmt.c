@@ -227,7 +227,7 @@ dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
  * responsible for finalizing info and respp using put_attach_info.
  */
 static int
-get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
+get_attach_info(const char *name, bool all_ranks, bool refresh, struct dc_mgmt_sys_info *info,
 		Mgmt__GetAttachInfoResp **respp)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -256,6 +256,7 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
 	req.all_ranks = all_ranks;
+	req.refresh = refresh;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -320,10 +321,10 @@ out:
 }
 
 int
-dc_get_attach_info(const char *name, bool all_ranks,
+dc_get_attach_info(const char *name, bool all_ranks, bool refresh,
 		   struct dc_mgmt_sys_info *info,
 		   Mgmt__GetAttachInfoResp **respp) {
-	return get_attach_info(name, all_ranks, info, respp);
+	return get_attach_info(name, all_ranks, refresh, info, respp);
 }
 
 static void
@@ -361,7 +362,7 @@ alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
 }
 
 int
-dc_mgmt_sys_info_alloc(struct daos_sys_info **out)
+dc_mgmt_get_sys_info(const char *sys, bool refresh, struct daos_sys_info **out)
 {
 	struct daos_sys_info	*info;
 	struct dc_mgmt_sys_info	internal = {0};
@@ -374,7 +375,7 @@ dc_mgmt_sys_info_alloc(struct daos_sys_info **out)
 		return -DER_INVAL;
 	}
 
-	rc = dc_get_attach_info("", true, &internal, &resp);
+	rc = dc_get_attach_info(sys, true, refresh, &internal, &resp);
 	if (rc != 0) {
 		D_ERROR("dc_get_attach_info failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
@@ -390,10 +391,10 @@ dc_mgmt_sys_info_alloc(struct daos_sys_info **out)
 		D_GOTO(err_info, rc);
 	}
 
-	info->dsi_nr_ms_ranks = resp->n_ms_ranks;
-	info->dsi_ms_ranks = ranks;
+	info->dsi_nr_ranks = resp->n_ms_ranks;
+	info->dsi_ranks = ranks;
 	copy_str(info->dsi_system_name, internal.system_name);
-	copy_str(info->dsi_provider, internal.provider);
+	copy_str(info->dsi_fabric_provider, internal.provider);
 
 	*out = info;
 
@@ -408,11 +409,11 @@ out:
 }
 
 void
-dc_mgmt_sys_info_free(struct daos_sys_info *info)
+dc_mgmt_put_sys_info(struct daos_sys_info *info)
 {
 	if (info == NULL)
 		return;
-	free_rank_uris(info->dsi_ms_ranks, info->dsi_nr_ms_ranks);
+	free_rank_uris(info->dsi_ranks, info->dsi_nr_ranks);
 	D_FREE(info);
 }
 
@@ -460,7 +461,7 @@ int dc_mgmt_net_cfg(const char *name)
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	rc = get_attach_info(name, true /* all_ranks */, false /* refresh */, &info, &resp);
 	if (rc != 0)
 		return rc;
 
@@ -580,7 +581,7 @@ int dc_mgmt_net_cfg_check(const char *name)
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	rc = get_attach_info(name, true /* all_ranks */, false /* refresh */, &info, &resp);
 	if (rc != 0)
 		return rc;
 
@@ -818,7 +819,7 @@ attach(const char *name, struct dc_mgmt_sys **sysp)
 		goto out;
 	}
 
-	rc = get_attach_info(name, true /* all_ranks */, &sys->sy_info, &resp);
+	rc = get_attach_info(name, true /* all_ranks */, false /* refresh */, &sys->sy_info, &resp);
 	if (rc != 0)
 		goto err_sys;
 

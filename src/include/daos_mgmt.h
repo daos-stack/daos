@@ -23,6 +23,8 @@ extern "C" {
 /**
  * Get the DAOS system information in a newly allocated structure.
  *
+ * \param[in]	sys	System name, or NULL for default system
+ * \param[in]	refresh	Refresh caches. If false, returns current cached values.
  * \param[out]	info	Newly allocated system information
  *
  * \return	0		Success
@@ -33,7 +35,7 @@ extern "C" {
  *		-DER_MISC	Unexpected error
  */
 int
-daos_mgmt_sys_info_alloc(struct daos_sys_info **info);
+daos_mgmt_get_sys_info(const char *sys, bool refresh, struct daos_sys_info **info);
 
 /**
  * Free the system info structure.
@@ -41,7 +43,7 @@ daos_mgmt_sys_info_alloc(struct daos_sys_info **info);
  * \param[in]	info	Structure to be freed
  */
 void
-daos_mgmt_sys_info_free(struct daos_sys_info *info);
+daos_mgmt_put_sys_info(struct daos_sys_info *info);
 
 /*
  * DAOS management pool information

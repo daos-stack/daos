@@ -131,7 +131,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
-	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
+	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys, pbReq.Refresh)
 	switch {
 	case fault.IsFaultCode(err, code.ServerWrongSystem):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
@@ -165,8 +165,8 @@ func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error)
 	return numaNode, nil
 }
 
-func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
+func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string, refresh bool) (*mgmtpb.GetAttachInfoResp, error) {
+	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys, refresh)
 	if err != nil {
 		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
 		return nil, err
@@ -190,8 +190,8 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 	return resp, nil
 }
 
-func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
+func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string, refresh bool) (*mgmtpb.GetAttachInfoResp, error) {
+	return mod.attachInfo.Get(ctx, numaNode, sys, refresh, mod.getAttachInfoRemote)
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,10 +68,10 @@ int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
 int dc_mgmt_net_get_num_srv_ranks(void);
 
-int dc_mgmt_sys_info_alloc(struct daos_sys_info **info);
-void dc_mgmt_sys_info_free(struct daos_sys_info *info);
+int dc_mgmt_get_sys_info(const char *sys, bool refresh, struct daos_sys_info **info);
+void dc_mgmt_put_sys_info(struct daos_sys_info *info);
 
-int dc_get_attach_info(const char *name, bool all_ranks,
+int dc_get_attach_info(const char *name, bool all_ranks, bool refresh,
 		       struct dc_mgmt_sys_info *info,
 		       Mgmt__GetAttachInfoResp **respp);
 
