@@ -410,7 +410,6 @@ sys.path.append('site_scons')"""
         symbols = Counter()
 
         for msg in results.linter.reporter.messages:
-            promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
             # in comments.  Be strict for everything but ftest code currently.
             if not scons and msg.msg_id in ('C0401', 'C0402'):
@@ -425,26 +424,13 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-                # Finally, promote any spelling mistakes not silenced above or in ftest to error.
-                if not ftest:
-                    promote_to_error = True
-
             # Inserting code can cause wrong-module-order.
             if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
 
+            failed = True
+
             vals = parse_msg(msg)
-
-            # Flag some serious warnings as errors
-            if msg.symbol in ('condition-evals-to-constant'):
-                promote_to_error = True
-
-            # All non-scons code should be clean now.
-            if scons:
-                promote_to_error = True
-
-            if promote_to_error:
-                vals['category'] = 'error'
 
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
@@ -477,16 +463,11 @@ sys.path.append('site_scons')"""
                 if args.promote_to_error:
                     report['type'] = 'error'
                 self._reports.append(report)
+            elif args.output_format == 'github':
+                print(args.msg_template.format(**vals))
+                msg_to_github(vals)
             else:
                 print(args.msg_template.format(**vals))
-
-            if args.format == 'github':
-                if vals['category'] in ('convention', 'refactor'):
-                    continue
-                if vals['category'] == 'warning':
-                    continue
-                failed = True
-                msg_to_github(vals)
 
         if not types or args.reports == 'n':
             return failed
@@ -538,7 +519,7 @@ def main():
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
+    parser.add_argument('--output-format', choices=['text', 'json', 'github'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--files-from-stdin', action='store_true')
     parser.add_argument('--version', action='store_true')
@@ -550,10 +531,6 @@ def main():
     # Args that VS Code uses.
     parser.add_argument('--import')
     parser.add_argument('--clear-cache-post-run', choices=['y', 'n'], default='y')
-
-    # pylint: disable-next=wrong-spelling-in-comment
-    # A --format github option as yamllint uses.
-    parser.add_argument('--format', choices=['text', 'github'], default='text')
 
     # File list, zero or more.
     parser.add_argument('files', nargs='*')
