@@ -1529,7 +1529,7 @@ class Launch():
 
         # Generate storage configuration extra yaml files if requested
         self._add_auto_storage_yaml(
-            storage_info, yaml_dir, tier_0_type, args.scm_size, max_nvme_tiers)
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1550,7 +1550,8 @@ class Launch():
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
+                               max_nvme_tiers):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1558,6 +1559,7 @@ class Launch():
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
             scm_size (int): scm_size to use with ram storage tiers
+            scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
 
         Raises:
@@ -1583,12 +1585,13 @@ class Launch():
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
                     engine_storage_yaml[engines], str(test))
-                test.extra_yaml.append(engine_storage_yaml[engines])
+                # Allow extra yaml files to be to override the generated storage yaml
+                test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -3120,6 +3123,14 @@ def main():
         type=str,
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
+    parser.add_argument(
+        "--scm_mount",
+        action="store",
+        default="/mnt/daos",
+        type=str,
+        help="the scm_mount base path to use in each server engine tier 0 storage config when "
+             "generating an automatic storage config (test yaml includes 'storage: auto'). The "
+             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.")
     parser.add_argument(
         "-ss", "--slurm_setup",
         action="store_true",
