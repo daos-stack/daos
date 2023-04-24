@@ -7,12 +7,14 @@
 package checker
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
 func IsIncorrectMemberStates(err error) bool {
-	return FaultIncorrectMemberStates("", "").Equals(err)
+	return fault.IsFaultCode(err, code.SystemCheckerInvalidMemberStates)
 }
 
 var (
@@ -28,11 +30,15 @@ var (
 	)
 )
 
-func FaultIncorrectMemberStates(members, expectedStates string) *fault.Fault {
+func FaultIncorrectMemberStates(stopRequired bool, members, expectedStates string) *fault.Fault {
+	remedy := "enable checker mode"
+	if stopRequired {
+		remedy = "stop system before enabling checker mode"
+	}
 	return checkerFault(
 		code.SystemCheckerInvalidMemberStates,
 		"members not in expected states ("+expectedStates+"): "+members,
-		"restart system after enabling checker mode or administratively exclude members as appropriate",
+		fmt.Sprintf("%s and/or administratively exclude members as appropriate", remedy),
 	)
 }
 

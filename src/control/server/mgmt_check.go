@@ -132,19 +132,7 @@ func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method,
 	return svc.makeCheckerCall(ctx, method, req)
 }
 
-func (svc *mgmtSvc) restartSystemRanks(ctx context.Context, sys string) error {
-	// Forcibly stop all of the ranks in the system.
-	// NB: If a clean shutdown is desired, then the normal
-	// system stop flow should be used first. This is a final
-	// hammer to make sure that everything's stopped.
-	stopReq := &mgmtpb.SystemStopReq{
-		Sys:   sys,
-		Force: true,
-	}
-	if _, err := svc.SystemStop(ctx, stopReq); err != nil {
-		return errors.Wrap(err, "failed to stop all ranks")
-	}
-
+func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
 	// Use the group membership to determine the set of ranks
 	// that are available to be started.
 	gm, err := svc.sysdb.GroupMap()
@@ -179,11 +167,18 @@ func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnab
 		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
 	}
 
+	if err := svc.checkMemberStates(
+		system.MemberStateAdminExcluded,
+		system.MemberStateStopped,
+	); err != nil {
+		return nil, err
+	}
+
 	if err := svc.enableChecker(); err != nil {
 		return nil, err
 	}
 
-	if err := svc.restartSystemRanks(ctx, req.Sys); err != nil {
+	if err := svc.startSystemRanks(ctx, req.Sys); err != nil {
 		return nil, err
 	}
 
@@ -203,8 +198,18 @@ func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDis
 		return nil, err
 	}
 
-	if err := svc.restartSystemRanks(ctx, req.Sys); err != nil {
+	// Stop all of the ranks that are currently running in checker mode.
+	checkRanks, err := svc.sysdb.MemberRanks(system.MemberStateCheckerStarted)
+	if err != nil {
 		return nil, err
+	}
+	stopReq := &mgmtpb.SystemStopReq{
+		Sys:   req.Sys,
+		Force: true,
+		Ranks: ranklist.RankSetFromRanks(checkRanks).String(),
+	}
+	if _, err := svc.SystemStop(ctx, stopReq); err != nil {
+		return nil, errors.Wrap(err, "failed to stop all checker ranks")
 	}
 
 	return &mgmtpb.DaosResp{}, nil
