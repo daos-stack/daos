@@ -91,7 +91,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	if (prefetch && ie->ie_stat.st_size < (1024 * 1024)) {
+	/* Enable this for smaller files, up to but not including the max read size.  This means
+	 * that files of 1MiB or larger will not be pre-read but smaller files will.  One extra
+	 * unused byte at the end of the buffer will be used to detect if the file has grown
+	 * since dfuse last observed the size.
+	 */
+	if (prefetch && ie->ie_stat.st_size < DFUSE_MAX_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
@@ -102,9 +107,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
-	if (oh->doh_readahead) {
+	if (oh->doh_readahead)
 		dfuse_pre_read(fs_handle, oh);
-	}
 
 	return;
 err:
@@ -127,11 +131,16 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
 
 	if (oh->doh_readahead) {
-		struct dfuse_event *ev = oh->doh_readahead->dra_ev;
+		struct dfuse_event *ev;
 
-		/* Grab this lock first to ensure that the read cb has been completed */
+		/* Grab this lock first to ensure that the read cb has been completed.  The
+		 * callback might register an error and release ev so do not read it's value
+		 * until after this has completed.
+		 */
 		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
 		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+
+		ev = oh->doh_readahead->dra_ev;
 
 		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
 		if (ev) {
