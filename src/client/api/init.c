@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -126,6 +126,8 @@ const struct daos_task_api dc_funcs[] = {
 
 	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
 	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
+	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
+	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
 };
 
 /**
