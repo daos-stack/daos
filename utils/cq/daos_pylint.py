@@ -210,10 +210,6 @@ class FileTypeList():
         self._regions = {}
         self._reports = []
 
-    def add_regions(self, file, regions):
-        """Mark that only some regions for file should be reported"""
-        self._regions[file] = regions
-
     def file_count(self):
         """Return the number of files to be checked"""
         return len(self.ftest_files) + len(self.scons_files) \
@@ -413,9 +409,6 @@ sys.path.append('site_scons')"""
         types = Counter()
         symbols = Counter()
 
-        # List of errors that are in modified files but not modified code.
-        file_warnings = []
-
         for msg in results.linter.reporter.messages:
             promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
@@ -456,15 +449,6 @@ sys.path.append('site_scons')"""
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
 
-            if vals['path'] in self._regions:
-                line_changed = self._regions[vals['path']].in_region(vals['line'])
-                if line_changed:
-                    print('Warning is in modified code:')
-                    vals['category'] = 'error'
-                elif vals['category'] != 'error':
-                    file_warnings.append(msg)
-                    continue
-
             if args.output_format == 'json':
                 report = {'type': vals['category'],
                           'path': msg.path,
@@ -504,31 +488,6 @@ sys.path.append('site_scons')"""
                 failed = True
                 msg_to_github(vals)
 
-        if file_warnings:
-            print('Warnings from modified files:')
-
-            # Low priority warnings, these are reported but are reported last.  As GitHub only
-            # displays 10 annotations at a given severity level this means they will only be shown
-            # to the user if there are no other warnings in modified files.
-            lp_warnings_i = []
-            lp_warnings_f = []
-            for msg in file_warnings:
-                vals = parse_msg(msg)
-                print(args.msg_template.format(**vals))
-                if args.format == 'github':
-                    if msg.symbol == 'invalid-name':
-                        lp_warnings_i.append(msg)
-                    elif msg.symbol == 'consider-using-f-string':
-                        lp_warnings_f.append(msg)
-                    else:
-                        # Report all messages in modified files, but do it at the notice level.
-                        vals['category'] = 'notice'
-                        msg_to_github(vals)
-            for msg in lp_warnings_i + lp_warnings_f:
-                vals = parse_msg(msg)
-                vals['category'] = 'notice'
-                msg_to_github(vals)
-
         if not types or args.reports == 'n':
             return failed
         for (mtype, count) in types.most_common():
@@ -554,24 +513,6 @@ def get_git_files(directory=None):
     return all_files
 
 
-class OutPutRegion:
-    """Class for managing file regions"""
-
-    def __init__(self):
-        self.regions = []
-
-    def add_region(self, base, length):
-        """Add regions to file"""
-        self.regions.append((base, base + length))
-
-    def in_region(self, line):
-        """Check if line is in region"""
-        for region in self.regions:
-            if region[0] < line < region[1]:
-                return True
-        return False
-
-
 def main():
     """Main program"""
     # pylint: disable=too-many-branches
@@ -594,15 +535,17 @@ def main():
 
     rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
-    # Args that atom uses.
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
     parser.add_argument('--output-format', choices=['text', 'json'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
-    parser.add_argument('--diff', action='store_true')
+    parser.add_argument('--files-from-stdin', action='store_true')
     parser.add_argument('--version', action='store_true')
     parser.add_argument('--promote-to-error', action='store_true')
+
+    # Legacy, option kept only to return appropriate error.
+    parser.add_argument('--diff', action='store_true')
 
     # Args that VS Code uses.
     parser.add_argument('--import')
@@ -624,6 +567,10 @@ def main():
         print(full_version)
         sys.exit(0)
 
+    if args.diff:
+        print('This option is no longer used')
+        sys.exit(1)
+
     rc_tmp = None
 
     # If spellings are likely supported and using the default configuration file then enable using
@@ -641,46 +588,16 @@ def main():
         rc_tmp.flush()
         args.rcfile = rc_tmp.name
 
-    if args.diff:
-        # There are to be two different ways of driving this, for a commit-hook where we only
-        # check files changed and in GitHub actions where we check the entire tree and are more
-        # strict for files which have changed.
-        if args.git:
-            all_files = get_git_files()
-        else:
-            all_files = FileTypeList()
-        regions = None
-        file = None
-        lineno = 0
+    if args.files_from_stdin:
+        assert not args.git, 'No longer supported'
+        all_files = FileTypeList()
         for line in sys.stdin.readlines():
-            lineno += 1
-            if line.startswith('diff --git a/'):
-                parts = line.split(' ')
-                file = parts[3][2:-1]
-                regions = OutPutRegion()
-                all_files.add_regions(file, regions)
-                if not args.git:
-                    if os.path.exists(file):
-                        all_files.add(file)
-                    else:
-                        print(f'Skipping {file} as it does not exist')
-                continue
-            if line.startswith('@@ '):
-                parts = line.split(' ')
-                if parts[2] == '+1':
-                    # Handle new, one line files.
-                    post_start = 0
-                    post_len = 1
-                else:
-                    (post_start, post_len) = parts[2][1:].split(',')
-                regions.add_region(int(post_start), int(post_len))
-                continue
-        if file and regions:
-            all_files.add_regions(file, regions)
-        failed = all_files.run(args)
-        if failed:
+            if os.path.exists(line):
+                all_files.add(line)
+        if all_files.run(args):
             sys.exit(1)
         return
+
     if args.git:
         all_files = get_git_files()
         if all_files.run(args):
