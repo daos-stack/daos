@@ -30,6 +30,38 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
+def get_tier_roles(tier, total_tiers):
+    """Get the roles for the specified bdev storage tier.
+
+    Args:
+        tier (int): the storage bdev tier number
+        total_tiers (int): total number of storage tiers
+
+    Raises:
+        ValueError: if the specified tier is not a bdev tier
+
+    Returns:
+        list: the roles for specified bdev tier
+
+    """
+    if tier == 0:
+        raise ValueError(f'Inappropriate bdev tier number: {tier}')
+    if tier == 1 and total_tiers == 2:
+        # A single bdev tier is assigned all roles
+        return ['wal', 'data', 'meta']
+    if tier == 1:
+        # The first of multiple bdev tiers in is assigned the wal role
+        return ['wal']
+    if tier == 2 and total_tiers == 3:
+        # The second of two bdev tiers in is assigned the data and meta role
+        return ['data', 'meta']
+    if tier == 2:
+        # The second of three or more bdev tiers in is assigned the meta
+        return ['meta']
+    # Any additional bdev tiers are assigned the data role
+    return ['data']
+
+
 class StorageException(Exception):
     """Exception for the StorageInfo class."""
 
@@ -582,6 +614,9 @@ class StorageInfo():
                 else:
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
+                    if not pmem_list:
+                        lines.append(
+                            f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
         self._log.debug('  Creating %s', yaml_file)
         for line in lines:
