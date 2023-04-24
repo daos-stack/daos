@@ -730,6 +730,10 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to open OIT for container %s", cmd.ContainerID())
 	}
 	defer func() {
+		rc = C.daos_cont_snap_oit_destroy(ap.cont, oit, nil)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to destroy OIT in cleanup: %v", err)
+		}
 		rc = C.daos_oit_close(oit, nil)
 		if err := daosError(rc); err != nil {
 			cmd.Errorf("failed to close OIT in cleanup: %v", err)

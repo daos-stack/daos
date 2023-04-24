@@ -1213,6 +1213,18 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 	}
 
+	/* Create the oit oids index KVS. */
+	attr.dsa_class = RDB_KVS_GENERIC;
+	attr.dsa_order = 16;
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
+
 out_kvs:
 	rdb_path_fini(&kvs);
 out:
@@ -1537,6 +1549,11 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out_prop;
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+
+	/* Destroy oit oids index KVS. */
+	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
+	if (rc != 0)
+		goto out_prop;
 
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
@@ -1965,9 +1982,19 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, st
 	if (rc != 0)
 		D_GOTO(err_hdls, rc);
 
+	/* c_oit_oids */
+	rc = rdb_path_clone(&p->c_prop, &p->c_oit_oids);
+	if (rc != 0)
+		D_GOTO(err_hdls, rc);
+	rc = rdb_path_push(&p->c_oit_oids, &ds_cont_prop_oit_oids);
+	if (rc != 0)
+		D_GOTO(err_oit_oids, rc);
+
 	*cont = p;
 	return 0;
 
+err_oit_oids:
+	rdb_path_fini(&p->c_oit_oids);
 err_hdls:
 	rdb_path_fini(&p->c_hdls);
 err_user:
@@ -2019,6 +2046,7 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 void
 cont_put(struct cont *cont)
 {
+	rdb_path_fini(&cont->c_oit_oids);
 	rdb_path_fini(&cont->c_hdls);
 	rdb_path_fini(&cont->c_user);
 	rdb_path_fini(&cont->c_snaps);
@@ -4511,6 +4539,21 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	}
 
+	if (from_global_ver < 2) {
+		struct rdb_kvs_attr	attr;
+
+		/* Create the oit oids index KVS. */
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+				""DF_RC"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+			goto out;
+		}
+	}
+
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
@@ -4905,6 +4948,14 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *c
 	case CONT_ACL_DELETE:
 		*update_mtime = true;
 		return ds_cont_acl_delete(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_OID_GET:
+		return ds_cont_snap_oit_oid_get(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_CREATE:
+		*update_mtime = true;
+		return ds_cont_snap_oit_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_DESTROY:
+		*update_mtime = true;
+		return ds_cont_snap_oit_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}
@@ -5152,6 +5203,9 @@ cont_cli_opc_name(crt_opcode_t opc)
 	case CONT_ACL_DELETE:		return "ACL_DELETE";
 	case CONT_OPEN_BYLABEL:		return "OPEN_BYLABEL";
 	case CONT_DESTROY_BYLABEL:	return "DESTROY_BYLABEL";
+	case CONT_SNAP_OIT_OID_GET:	return "SNAP_OIT_OID_GET";
+	case CONT_SNAP_OIT_CREATE:	return "SNAP_OIT_CREATE";
+	case CONT_SNAP_OIT_DESTROY:	return "SNAP_OIT_DESTROY";
 	default:			return "?";
 	}
 }
