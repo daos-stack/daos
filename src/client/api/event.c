@@ -13,6 +13,9 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
+#include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
+
 #include "client_internal.h"
 #include <daos/rpc.h>
 
@@ -1140,6 +1143,10 @@ out:
 out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
+
+	memset(ev, 0xc, sizeof(*ev));
+	ev->ev_error = -DER_UNKNOWN;
+	VALGRIND_MAKE_MEM_UNDEFINED(ev, sizeof(*ev));
 	return rc;
 }
 
