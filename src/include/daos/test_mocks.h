@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -26,6 +27,11 @@ extern int socket_return; /* value to be returned by socket() */
 extern int socket_family; /* saved input */
 extern int socket_type; /* saved input */
 extern int socket_protocol; /* saved input */
+
+void mock_fchmod_setup(void);
+extern int fchmod_return; /* value to be returned by fchmod() */
+extern int fchmod_fd; /* saved input */
+extern mode_t fchmod_mode; /* saved input */
 
 void mock_connect_setup(void);
 extern int connect_return; /* value to be returned by connect() */

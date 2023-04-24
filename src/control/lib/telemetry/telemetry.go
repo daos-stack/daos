@@ -3,8 +3,9 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux && (amd64 || arm64)
+// +build linux
+// +build amd64 arm64
 
 //
 
@@ -23,6 +24,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +51,7 @@ const (
 	BadIntVal   = int64(BadUintVal >> 1)
 	BadDuration = time.Duration(BadIntVal)
 
-	pathSep = '/'
+	PathSep = filepath.Separator
 )
 
 type (
@@ -171,7 +173,7 @@ func (mb *metricBase) FullPath() string {
 		return "<nil>"
 	}
 
-	return mb.Path() + string(pathSep) + mb.Name()
+	return mb.Path() + string(PathSep) + mb.Name()
 }
 
 func (mb *metricBase) fillMetadata() {
@@ -351,13 +353,13 @@ func (s *Schema) Prune() {
 
 func splitId(id string) (string, string) {
 	i := len(id) - 1
-	for i >= 0 && id[i] != pathSep {
+	for i >= 0 && id[i] != PathSep {
 		i--
 	}
 
 	name := id[i+1:]
 	// Trim trailing separator.
-	if id[i] == pathSep {
+	if id[i] == PathSep {
 		i--
 	}
 
@@ -406,24 +408,26 @@ func NewSchema() *Schema {
 
 }
 
-func visit(hdl *handle, s *Schema, node *C.struct_d_tm_node_t, pathComps []string, out chan<- Metric) {
+func visit(hdl *handle, s *Schema, node *C.struct_d_tm_node_t, pathComps string, out chan<- Metric) {
 	var next *C.struct_d_tm_node_t
 
 	if node == nil {
 		return
 	}
 	name := C.GoString(C.d_tm_get_name(hdl.ctx, node))
-	id := strings.Join(append(pathComps, name), string(pathSep))
+	id := pathComps + string(PathSep) + name
+	if len(pathComps) == 0 {
+		id = name
+	}
 
 	cType := node.dtn_type
-
-	switch {
-	case cType == C.D_TM_DIRECTORY:
+	switch cType {
+	case C.D_TM_DIRECTORY:
 		next = C.d_tm_get_child(hdl.ctx, node)
 		if next != nil {
-			visit(hdl, s, next, append(pathComps, name), out)
+			visit(hdl, s, next, id, out)
 		}
-	case cType == C.D_TM_LINK:
+	case C.D_TM_LINK:
 		next = C.d_tm_follow_link(hdl.ctx, node)
 		if next != nil {
 			// link leads to a directory with the same name
@@ -457,8 +461,7 @@ func CollectMetrics(ctx context.Context, s *Schema, out chan<- Metric) error {
 	}
 
 	node := hdl.root
-	var pathComps []string
-	visit(hdl, s, node, pathComps, out)
+	visit(hdl, s, node, "", out)
 
 	return nil
 }

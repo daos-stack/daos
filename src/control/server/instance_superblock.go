@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 const (
@@ -30,7 +30,7 @@ type Superblock struct {
 	Version         uint8
 	UUID            string
 	System          string
-	Rank            *system.Rank
+	Rank            *ranklist.Rank
 	URI             string
 	ValidRank       bool
 	HostFaultDomain string
@@ -154,12 +154,6 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		superblock.HostFaultDomain = ei.hostFaultDomain.String()
 	}
 
-	if cfg.Rank != nil {
-		superblock.Rank = new(system.Rank)
-		if cfg.Rank != nil {
-			*superblock.Rank = *cfg.Rank
-		}
-	}
 	ei.setSuperblock(superblock)
 	ei.log.Debugf("index %d: creating %s: (rank: %s, uuid: %s)",
 		ei.Index(), ei.superblockPath(), superblock.Rank, superblock.UUID)

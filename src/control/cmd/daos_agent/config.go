@@ -26,16 +26,17 @@ const (
 
 // Config defines the agent configuration.
 type Config struct {
-	SystemName       string                    `yaml:"name"`
-	AccessPoints     []string                  `yaml:"access_points"`
-	ControlPort      int                       `yaml:"port"`
-	RuntimeDir       string                    `yaml:"runtime_dir"`
-	LogFile          string                    `yaml:"log_file"`
-	LogLevel         common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
-	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
-	DisableCache     bool                      `yaml:"disable_caching,omitempty"`
-	DisableAutoEvict bool                      `yaml:"disable_auto_evict,omitempty"`
-	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	SystemName          string                    `yaml:"name"`
+	AccessPoints        []string                  `yaml:"access_points"`
+	ControlPort         int                       `yaml:"port"`
+	RuntimeDir          string                    `yaml:"runtime_dir"`
+	LogFile             string                    `yaml:"log_file"`
+	LogLevel            common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
+	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
+	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
+	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

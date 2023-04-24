@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,21 +29,28 @@ var (
 // provided pairs into a single string before calling
 // our logger.
 type hcLogger struct {
-	log logging.Logger
+	name        string
+	impliedArgs []interface{}
+	log         logging.Logger
 }
 
 func newHcLogger(l logging.Logger) *hcLogger {
-	return &hcLogger{log: l}
+	return &hcLogger{
+		name: "DAOS hcLogger interface",
+		log:  l,
+	}
 }
 
 func (hcl *hcLogger) argString(args ...interface{}) string {
+	allArgs := append(hcl.impliedArgs, args...)
+
 	var argPairs []string
-	for i := 0; i < len(args); i += 2 {
-		keyStr, ok := args[i].(string)
+	for i := 0; i < len(allArgs); i += 2 {
+		keyStr, ok := allArgs[i].(string)
 		if !ok {
 			continue
 		}
-		argPairs = append(argPairs, fmt.Sprintf("%s=%+v", keyStr, args[i+1]))
+		argPairs = append(argPairs, fmt.Sprintf("%s=%+v", keyStr, allArgs[i+1]))
 	}
 	return strings.Join(argPairs, " ")
 }
@@ -96,22 +103,41 @@ func (hcl *hcLogger) IsWarn() bool { return true }
 
 func (hcl *hcLogger) IsError() bool { return true }
 
-func (hcl *hcLogger) Name() string { return "DAOS hcLogger interface" }
+func (hcl *hcLogger) Name() string { return hcl.name }
 
-func (hcl *hcLogger) ImpliedArgs() []interface{} { panic("not supported") }
+func (hcl *hcLogger) ImpliedArgs() []interface{} { return hcl.impliedArgs }
 
-func (hcl *hcLogger) With(args ...interface{}) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) With(args ...interface{}) hclog.Logger {
+	out := newHcLogger(hcl.log)
+	out.impliedArgs = args
+	return out
+}
 
-func (hcl *hcLogger) Named(name string) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) Named(name string) hclog.Logger {
+	out := newHcLogger(hcl.log)
+	out.name = name
+	return out
+}
 
-func (hcl *hcLogger) ResetNamed(name string) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) ResetNamed(name string) hclog.Logger {
+	return hcl.Named(name)
+}
 
-func (hcl *hcLogger) SetLevel(level hclog.Level) { panic("not supported") }
+func (hcl *hcLogger) SetLevel(level hclog.Level) {}
 
 func (hcl *hcLogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
-	panic("not supported")
+	return log.New(hcl.StandardWriter(opts), "", 0)
+}
+
+type writerFunc func(p []byte) (int, error)
+
+func (w writerFunc) Write(p []byte) (int, error) {
+	return w(p)
 }
 
 func (hcl *hcLogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
-	panic("not supported")
+	return writerFunc(func(p []byte) (int, error) {
+		hcl.log.Errorf("%s", string(p))
+		return len(p), nil
+	})
 }

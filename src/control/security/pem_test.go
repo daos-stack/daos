@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,26 +62,26 @@ func TestLoadPrivateKey(t *testing.T) {
 	malformed := "testdata/certs/bad.key"
 	toomany := "testdata/certs/toomanypem.key"
 	notkey := "testdata/certs/notkey.crt"
-	badKeyPermError := &badPermsError{badKeyPerm, MaxCertPerm, MaxKeyPerm}
+	badKeyPermError := &badPermsError{badKeyPerm, MaxCertPerm, MaxUserOnlyKeyPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one key allowed per file"
 	notkeyError := "PEM Block is not a Private Key"
 
 	// Setup permissions for tests below.
-	if err := os.Chmod(goodKeyPath, MaxKeyPerm); err != nil {
+	if err := os.Chmod(goodKeyPath, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 	// Intentionallly safe cert perm as it should be incorrect
 	if err := os.Chmod(badKeyPerm, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(malformed, MaxKeyPerm); err != nil {
+	if err := os.Chmod(malformed, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(toomany, MaxKeyPerm); err != nil {
+	if err := os.Chmod(toomany, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(notkey, MaxKeyPerm); err != nil {
+	if err := os.Chmod(notkey, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,7 +115,7 @@ func TestLoadCertificate(t *testing.T) {
 	badPerm := "testdata/certs/badperms.crt"
 	malformed := "testdata/certs/bad.crt"
 	toomany := "testdata/certs/toomanypem.crt"
-	badError := &badPermsError{badPerm, MaxKeyPerm, MaxCertPerm}
+	badError := &badPermsError{badPerm, 0700, MaxCertPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one cert allowed per file"
 
@@ -124,7 +124,7 @@ func TestLoadCertificate(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Intentionally safe cert perm as it should be incorrect
-	if err := os.Chmod(badPerm, MaxKeyPerm); err != nil {
+	if err := os.Chmod(badPerm, 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(malformed, MaxCertPerm); err != nil {

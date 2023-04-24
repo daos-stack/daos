@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +33,7 @@ profile_chunk_destroy(struct daos_profile_chunk *chunk)
 {
 	d_list_del(&chunk->dpc_chunk_list);
 	D_FREE(chunk->dpc_chunks);
-	D_FREE_PTR(chunk);
+	D_FREE(chunk);
 }
 
 static struct daos_profile_chunk *
@@ -67,7 +67,7 @@ profile_alloc(int op_cnt)
 
 	D_ALLOC_ARRAY(dp->dp_ops, op_cnt);
 	if (dp->dp_ops == NULL) {
-		D_FREE_PTR(dp);
+		D_FREE(dp);
 		return NULL;
 	}
 	dp->dp_ops_cnt = op_cnt;
@@ -96,10 +96,9 @@ daos_profile_destroy(struct daos_profile *dp)
 			profile_chunk_destroy(dpc);
 	}
 
-	if (dp->dp_dir_path)
-		D_FREE(dp->dp_dir_path);
+	D_FREE(dp->dp_dir_path);
 
-	D_FREE_PTR(dp);
+	D_FREE(dp);
 }
 
 static int
@@ -211,11 +210,9 @@ daos_profile_dump(struct daos_profile *dp)
 	int	i;
 
 	if (dp->dp_dir_path) {
+		/* TODO: Use D_STRNDUP */
 		D_ALLOC(path, strlen(dp->dp_dir_path) + PF_MAX_NAME_SIZE);
 		if (path == NULL) {
-			rc = -DER_NOMEM;
-			D_ERROR("start dump ult failed: rc "DF_RC"\n",
-				DP_RC(rc));
 			return;
 		}
 

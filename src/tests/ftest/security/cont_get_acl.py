@@ -1,26 +1,25 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
+
+from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import read_acl_file
 from exception_utils import CommandFailure
-from avocado import fail_on
 
 
 class GetContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify container ACL get command..
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -37,8 +36,10 @@ class GetContainerACLTest(ContSecurityTestBase):
             expected with valid inputs and verify that we can't overwrite
             an already existing file when using the --outfile argument.
 
-        :avocado: tags=all,pr,daily_regression,security,container_acl
-        :avocado: tags=cont_get_acl_inputs
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=GetContainerACLTest,test_get_acl_valid
         """
         test_errs = []
         for verbose in [True, False]:
@@ -81,8 +82,10 @@ class GetContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container get-acl command doesn't
             get ACL information without permission.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_get_acl_noperms
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=GetContainerACLTest,test_no_user_permissions
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

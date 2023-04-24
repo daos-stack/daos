@@ -1,13 +1,8 @@
 """Build DFuse"""
 import os
-import daos_build
-import compiler_setup
 
-HEADERS = ['ioil_io.h', 'ioil_defines.h',
-           'ioil_api.h', 'ioil_preload.h',
-           'ioil.h']
-COMMON_SRC = ['dfuse_obj_da.c',
-              'dfuse_vector.c']
+HEADERS = ['ioil_io.h', 'ioil_defines.h', 'ioil_api.h', 'ioil.h']
+COMMON_SRC = ['dfuse_obj_da.c', 'dfuse_vector.c']
 DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
@@ -38,6 +33,7 @@ OPS_SRC = ['create',
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
+
 def build_common(env, files, is_shared):
     """Build the common objects as shared or static"""
     common = []
@@ -49,6 +45,7 @@ def build_common(env, files, is_shared):
             common += env.Object(src_file)
 
     return common
+
 
 def build_client_libs_shared(env, prereqs):
     """build the shared interception library"""
@@ -68,11 +65,11 @@ def build_client_libs_shared(env, prereqs):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
+    il_lib = ilenv.d_library('il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
-    dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
+    dfuse_lib = ilenv.d_library('dfuse', common)
 
-    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
+    gen_script = ilenv.d_program('il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
         script = ilenv.Command('il/check_ioil_syms', gen_script,
                                "$SOURCE -s $TARGET")
@@ -82,49 +79,47 @@ def build_client_libs_shared(env, prereqs):
     env.Install('$PREFIX/share/daos', script)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), dfuse_lib)
 
-    return dfuse_lib + il_lib
+    Default(dfuse_lib, il_lib)
+
 
 def build_client_libs_static(env, common):
     """build the static interception library"""
 
     ilenv = env.Clone()
 
-
     il_obj = []
     for src in IOIL_SRC:
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
-    il_lib_src = ilenv.Library('il/libioil_source', il_obj + common)
-    il_lib = ilenv.Command('il/libioil.a', il_lib_src,
-                           'objcopy --localize-hidden $SOURCE $TARGET')
-
+    il_lib = ilenv.d_static_library(target='il/libioil.a', source=il_obj + common, hide_syms=True)
     env.Install('$PREFIX/lib64', il_lib)
 
-    # Now build the interception library
-    dfuse_lib_src = ilenv.Library('common/libdfuse_source', common)
-    dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
-                              'objcopy --localize-hidden $SOURCE $TARGET')
+    # Now build the dfuse library
+    dfuse_lib = ilenv.d_static_library(target='libdfuse.a', source=common, hide_syms=True)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
-    return il_lib + dfuse_lib
+    Default(il_lib, dfuse_lib)
+
 
 def check_struct_member(context, text, struct, member):
     """scons check for a struct member existing"""
 
-    context.Message('Checking for {} in {} '.format(member, struct))
+    context.Message(f'Checking for {member} in {struct} ')
 
-    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
-                                                                 member)
+    # pylint: disable-next=consider-using-f-string
+    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct, member)
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
     return rc
 
+
 def check_ioctl_def(context, ctype):
     """scons check for a struct member existing"""
 
-    context.Message('Checking if fuse ioctl is type {} '.format(ctype))
+    context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
+    # pylint: disable-next=consider-using-f-string
     src = """#include <fuse3/fuse_lowlevel.h>
 
 extern void
@@ -140,6 +135,7 @@ struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
     context.Result(rc)
     return rc
 
+
 def configure_fuse(cenv):
     """Configure for specific version of fuse"""
     if GetOption('help') or GetOption('clean'):
@@ -152,17 +148,18 @@ def configure_fuse(cenv):
     if check.CheckStructMember('#include <fuse3/fuse.h>',
                                'struct fuse_file_info',
                                'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR':'1'})
+        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR': '1'})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
     elif check.CheckFuseIoctl('int'):
-        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT':'1'})
+        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT': '1'})
     else:
         print('Could not determine type of fuse ioctl type')
         Exit(2)
 
     check.Finish()
+
 
 def scons():
     """Scons function"""
@@ -176,7 +173,7 @@ def scons():
         il_env = base_env.Clone()
         il_env['CC'] = 'gcc'
         il_env['CXX'] = None
-        compiler_setup.base_setup(il_env)
+        il_env.compiler_setup()
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
@@ -189,13 +186,13 @@ def scons():
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
-    libs = build_client_libs_shared(gcc_env, prereqs)
+    build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
 
     # Build a static library of the common parts.
     common = build_common(dfuse_env, COMMON_SRC, False)
-    libs += build_client_libs_static(static_env, common)
+    build_client_libs_static(static_env, common)
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
@@ -211,22 +208,14 @@ def scons():
     for src in DFUSE_SRC:
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
-        dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+        dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
     cenv.AppendUnique(LIBS=['gurt'])
-    progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
+    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
-    Default(progs + libs)
+    Default(dfuse_bin)
 
-    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
+    cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
 
-    # Do not install headers currently.
-    # for header in HEADERS:
-    #  dfuse_env.Install(os.path.join("$PREFIX", 'include'), 'il/%s' % header)
-
-    Export('dfuse_env')
-
-    if prereqs.test_requested():
-        SConscript('test/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

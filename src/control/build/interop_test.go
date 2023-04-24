@@ -88,6 +88,29 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 			b:      testComponent(t, "", "1.2.0"),
 			expErr: errors.New("incompatible components"),
 		},
+		"2.4 server compatible with 2.2 agent": {
+			a: testComponent(t, "server", "2.4.0"),
+			b: testComponent(t, "agent", "2.2.0"),
+		},
+		"2.4 agent compatible with 2.2 server": {
+			a: testComponent(t, "server", "2.2.0"),
+			b: testComponent(t, "agent", "2.3.100"),
+		},
+		"2.6 server not compatible with 2.2 agent": {
+			a:      testComponent(t, "server", "2.6.0"),
+			b:      testComponent(t, "agent", "2.2.0"),
+			expErr: errors.New("incompatible components"),
+		},
+		"2.6 agent not compatible with 2.2 server": {
+			a:      testComponent(t, "server", "2.2.0"),
+			b:      testComponent(t, "agent", "2.6.0"),
+			expErr: errors.New("incompatible components"),
+		},
+		"3.4 server not compatible with 2.2 agent": {
+			a:      testComponent(t, "server", "3.4.0"),
+			b:      testComponent(t, "agent", "2.2.0"),
+			expErr: errors.New("incompatible components"),
+		},
 		// --- Unit testing ---
 		"nil a": {
 			a:      nil,
@@ -106,7 +129,7 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 		},
 		"general: server/agent minor delta too large": {
 			a:      testComponent(t, "server", "1.0.0"),
-			b:      testComponent(t, "agent", "1.1.0"),
+			b:      testComponent(t, "agent", "1.3.0"),
 			expErr: errors.New("incompatible components"),
 		},
 		"custom: specific version not backwards compatible": {
@@ -137,11 +160,34 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 				},
 			},
 		},
+		"custom matcher: narrowly-scoped rule (non-match)": {
+			a: testComponent(t, "server", "2.0.0"),
+			b: testComponent(t, "agent", "2.0.0"),
+			customRule: &build.InteropRule{
+				Self:        build.ComponentServer,
+				Other:       build.ComponentAgent,
+				Description: "custom matcher",
+				Match:       func(self, other *build.VersionedComponent) bool { return false },
+				Check:       func(self, other *build.VersionedComponent) bool { return false },
+			},
+		},
+		"custom matcher: narrowly-scoped rule (match)": {
+			a: testComponent(t, "server", "2.0.0"),
+			b: testComponent(t, "agent", "2.0.1"),
+			customRule: &build.InteropRule{
+				Self:        build.ComponentServer,
+				Other:       build.ComponentAgent,
+				Description: "custom matcher",
+				Match:       func(self, other *build.VersionedComponent) bool { return true },
+				Check:       func(self, other *build.VersionedComponent) bool { return false },
+			},
+			expErr: errors.New("custom matcher"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var gotErr error
 			if tc.customRule != nil {
-				gotErr = build.CheckCompatibility(tc.a, tc.b, *tc.customRule)
+				gotErr = build.CheckCompatibility(tc.a, tc.b, tc.customRule)
 			} else {
 				gotErr = build.CheckCompatibility(tc.a, tc.b)
 			}

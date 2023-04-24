@@ -1,9 +1,13 @@
 """Build ftest"""
 import os
 
+
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
+
+    if not prereqs.test_requested():
+        return
 
     ftest_install_dir = '$PREFIX/lib/daos/TESTING/ftest'
 
@@ -17,15 +21,14 @@ def scons():
             'object', 'osa', 'pool', 'rebuild', 'security',
             'server', 'soak', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness',
-            'telemetry', 'deployment', 'performance']
+            'telemetry', 'deployment', 'performance',
+            'scrubber', 'vmd']
 
     for sub_dir in dirs:
-        env.Install(os.path.join(ftest_install_dir, sub_dir),
-                    Glob("%s/*.*" % sub_dir))
+        env.Install(os.path.join(ftest_install_dir, sub_dir), Glob(f'{sub_dir}/*.*'))
 
     # Glob doesn't recurse, and CaRT test dir nests deeper than the others
-    env.Install(os.path.join(ftest_install_dir, 'cart'),
-                Glob("%s/*/*.*" % 'cart'))
+    env.Install(os.path.join(ftest_install_dir, 'cart'), Glob('cart/*/*.*'))
 
     # Builders
     SConscript('cart/SConscript')
@@ -33,6 +36,7 @@ def scons():
 
     # util
     SConscript('util/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

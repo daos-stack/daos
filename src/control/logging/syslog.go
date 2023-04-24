@@ -29,6 +29,9 @@ type (
 	syslogInfo interface {
 		WithSyslogOutput() InfoLogger
 	}
+	syslogNotice interface {
+		WithSyslogOutput() NoticeLogger
+	}
 	syslogError interface {
 		WithSyslogOutput() ErrorLogger
 	}
@@ -42,6 +45,7 @@ func (ll *LeveledLogger) WithSyslogOutput() *LeveledLogger {
 
 	var debugLoggers []DebugLogger
 	var infoLoggers []InfoLogger
+	var noticeLoggers []NoticeLogger
 	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
@@ -61,6 +65,15 @@ func (ll *LeveledLogger) WithSyslogOutput() *LeveledLogger {
 		}
 	}
 	ll.infoLoggers = infoLoggers
+
+	for _, l := range ll.noticeLoggers {
+		if syslogger, ok := l.(syslogNotice); ok {
+			if nl, ok := syslogger.WithSyslogOutput().(NoticeLogger); ok {
+				noticeLoggers = append(noticeLoggers, nl)
+			}
+		}
+	}
+	ll.noticeLoggers = noticeLoggers
 
 	for _, l := range ll.errorLoggers {
 		if syslogger, ok := l.(syslogError); ok {
@@ -82,6 +95,19 @@ func (l *DefaultErrorLogger) WithSyslogOutput() ErrorLogger {
 	return &DefaultErrorLogger{
 		baseLogger{
 			log: MustCreateSyslogger(syslog.LOG_ERR, flags),
+		},
+	}
+}
+
+// WithSyslogOutput switches the logger's output to emit messages
+// via the system logging service.
+func (l *DefaultNoticeLogger) WithSyslogOutput() NoticeLogger {
+	// Disable timestamps -- they're supplied by syslog
+	flags := noticeLogFlags ^ log.LstdFlags
+	return &DefaultNoticeLogger{
+		baseLogger{
+			// Notices are condensed into the info level in syslog
+			log: MustCreateSyslogger(syslog.LOG_INFO, flags),
 		},
 	}
 }

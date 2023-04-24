@@ -8,7 +8,7 @@ if [ -n "$repo_server_pragma" ]; then
 else
     # default is artifactory
     # shellcheck disable=SC2034
-    repo_servers=('artifactory' 'nexus')
+    repo_servers=('artifactory')
 fi
 
 # Use a daos-do/repo-files PR if specified
@@ -39,7 +39,7 @@ case "$id" in
             EXCLUDE_UPGRADE+=,fuse
         else
             DISTRO_NAME=el${release%%.*}
-            EXCLUDE_UPGRADE+=,dpdk
+            EXCLUDE_UPGRADE+=,dpdk\*
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el
@@ -56,3 +56,6 @@ case "$id" in
         EXCLUDE_UPGRADE+=,fuse,fuse-libs,fuse-devel
         ;;
 esac
+
+# shellcheck disable=SC2034
+MLNX_VER_NUM=5.8-1.1.2.1

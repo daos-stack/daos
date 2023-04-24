@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -30,7 +31,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
+	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -177,13 +178,13 @@ func (ei *EngineInstance) removeSocket() error {
 	return nil
 }
 
-func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
+func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, error) {
 	superblock := ei.getSuperblock()
 	if superblock == nil {
-		return system.NilRank, false, errors.New("nil superblock while determining rank")
+		return ranklist.NilRank, false, errors.New("nil superblock while determining rank")
 	}
 
-	r := system.NilRank
+	r := ranklist.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
 	}
@@ -199,23 +200,25 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	})
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
-		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateExcluded {
-		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+		return ranklist.NilRank, false, err
 	}
-	r = system.Rank(resp.Rank)
+	switch resp.State {
+	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
+		return ranklist.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+	}
+	r = ranklist.Rank(resp.Rank)
 
 	// TODO: Check to see if ready.Uri != superblock.URI, which might
 	// need to trigger some kind of update?
 
 	if !superblock.ValidRank {
-		superblock.Rank = new(system.Rank)
+		superblock.Rank = new(ranklist.Rank)
 		*superblock.Rank = r
 		superblock.ValidRank = true
 		superblock.URI = ready.GetUri()
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
-			return system.NilRank, resp.LocalJoin, err
+			return ranklist.NilRank, resp.LocalJoin, err
 		}
 	}
 
@@ -270,7 +273,7 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 	return ei.SetupRank(ctx, r)
 }
 
-func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error {
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank) error {
 	if err := ei.callSetRank(ctx, rank); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
@@ -283,7 +286,7 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error
 	return nil
 }
 
-func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank) error {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
@@ -301,7 +304,7 @@ func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) err
 }
 
 // GetRank returns a valid instance rank or error.
-func (ei *EngineInstance) GetRank() (system.Rank, error) {
+func (ei *EngineInstance) GetRank() (ranklist.Rank, error) {
 	var err error
 	sb := ei.getSuperblock()
 
@@ -313,7 +316,7 @@ func (ei *EngineInstance) GetRank() (system.Rank, error) {
 	}
 
 	if err != nil {
-		return system.NilRank, err
+		return ranklist.NilRank, err
 	}
 
 	return *sb.Rank, nil

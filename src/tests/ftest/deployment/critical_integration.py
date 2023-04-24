@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -17,8 +16,7 @@ from apricot import TestWithServers
 from apricot import TestWithoutServers
 
 
-#TO-DO
-#Provision all daos nodes using provisioning tool provided by HPCM
+# TODO Provision all daos nodes using provisioning tool provided by HPCM
 
 
 class CriticalIntegrationWithoutServers(TestWithoutServers):
@@ -45,14 +43,15 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
         """
-        Test Description: Verify passwordless ssh amongst the server
+        Test Description: Verify password-less ssh amongst the server
                           server nodes available and verify all server
                           and client nodes have same daos versions.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,passwdlessssh_versioncheck
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithoutServers,test_passwdlessssh_versioncheck
+        """
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         libfabric_path = self.params.get("libfabric_path", "/run/*")
         daos_server_version_list = []
@@ -100,7 +99,10 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
             all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
-        same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
+        if len(all_nodes) == 1:
+            same_libfab_nodes = 1
+        else:
+            same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
         libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
 
         result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
@@ -134,15 +136,16 @@ class CriticalIntegrationWithServers(TestWithServers):
         """
         Test Description: Verify RAS event on all server nodes from testrunner.
                           Verify network scan and storage scan for server nodes.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,ras
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithServers,test_ras
+        """
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
-        half_num_ranks = len(rank_list)//2
+        half_num_ranks = len(rank_list) // 2
         # divide total ranks list into two halves to save time during system stop
         sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
         self.log.info("sub_rank_list: %s", sub_rank_list)
@@ -154,15 +157,18 @@ class CriticalIntegrationWithServers(TestWithServers):
             self.log.info("Ranks to stop: %s", ranks_to_stop)
             # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
-            for rank in sub_list:
-                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
-                        self.server_managers[0].check_rank_state(rank, "excluded", 5))):
-                    self.fail("Rank {} failed to stop".format(rank))
+            check_stopped_ranks = self.server_managers[0].check_rank_state(sub_list,
+                                                                           ["stopped", "excluded"],
+                                                                           5)
+            if check_stopped_ranks:
+                self.log.info("Ranks %s failed to stop", check_stopped_ranks)
+                self.fail("Failed to stop ranks cleanly")
+
             # restart stopped ranks and verify if they are joined
             dmg.system_start(ranks=ranks_to_stop)
-            for rank in sub_list:
-                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
-                    self.fail("Rank {} failed to restart".format(rank))
+            check_started_ranks = self.server_managers[0].check_rank_state(sub_list, ["joined"], 5)
+            if check_started_ranks:
+                self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
 
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

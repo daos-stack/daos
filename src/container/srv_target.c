@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,6 +55,12 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
+	/* If the container is discarding the object mostly due to rebuild failure
+	 * reclaim, let's abort the aggregation to let discard proceed.
+	 */
+	if (cont->sc_discarding)
+		return -1;
+
 	/* System is idle, let aggregation run in tight mode */
 	if (!dss_xstream_is_busy()) {
 		sched_req_yield(req);
@@ -90,7 +96,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(13);
+	props = daos_prop_alloc(16);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -107,6 +113,9 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_STATUS;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -277,7 +286,7 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 		return;
 
 	/* Cap VOS aggregation upper bound to EC aggregation HAE */
-	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundry);
+	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundary);
 }
 
 #define MAX_SNAPSHOT_LOCAL	16
@@ -288,7 +297,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	daos_epoch_t		epoch_max, epoch_min;
 	daos_epoch_range_t	epoch_range;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
-	uint64_t		hlc = crt_hlc_get();
+	uint64_t		hlc = d_hlc_get();
 	uint64_t		change_hlc;
 	uint64_t		interval;
 	uint64_t		snapshots_local[MAX_SNAPSHOT_LOCAL] = { 0 };
@@ -317,7 +326,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
-		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+		interval = d_sec2hlc(DAOS_AGG_THRESHOLD);
 
 	D_ASSERT(hlc > (interval * 2));
 	/*
@@ -339,7 +348,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
 	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
 	}
 
@@ -618,6 +627,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_mutex;
 	}
+	rc = ABT_cond_create(&cont->sc_scrub_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_mutex;
+	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
@@ -674,6 +688,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
+	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -803,6 +818,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		d_list_del_init(&cont_child->sc_link);
 
 		dtx_cont_deregister(cont_child);
+		D_ASSERT(cont_child->sc_dtx_registered == 0);
 
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
@@ -830,7 +846,7 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 
 static int
 cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
-		 struct ds_cont_child **cont_out)
+		 bool *started, struct ds_cont_child **cont_out)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child	*cont_child;
@@ -873,6 +889,8 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
 		ds_cont_child_get(cont_child);
+		if (started)
+			*started = true;
 	}
 
 	if (!rc && cont_out != NULL) {
@@ -893,7 +911,7 @@ cont_child_start_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct ds_pool_child	*pool_child = data;
 
-	return cont_child_start(pool_child, entry->ie_couuid, NULL);
+	return cont_child_start(pool_child, entry->ie_couuid, NULL, NULL);
 }
 
 int
@@ -1141,12 +1159,16 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc);
 
 		if (cont->sc_open > 0) {
-			D_ERROR(DF_CONT": Container is still in open(%d)\n",
-				DP_CONT(cont->sc_pool->spc_uuid,
-					cont->sc_uuid), cont->sc_open);
+			if (retry_cnt > 0)
+				D_ERROR(DF_CONT": Container is re-opened (%d) by race\n",
+					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+					cont->sc_open);
+			else
+				D_ERROR(DF_CONT": Container is still in open(%d)\n",
+					DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+					cont->sc_open);
 			cont_child_put(tls->dt_cont_cache, cont);
-			rc = -DER_BUSY;
-			goto out_pool;
+			D_GOTO(out_pool, rc = -DER_BUSY);
 		}
 
 		cont_child_stop(cont);
@@ -1155,17 +1177,30 @@ cont_child_destroy_one(void *vin)
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
-		/*
-		 * If this is the last user, ds_cont_child will be removed from
-		 * hash & freed on put.
-		 */
-		cont_child_put(tls->dt_cont_cache, cont);
+
+		/* Give chance to DTX reindex ULT for exit. */
+		if (unlikely(cont->sc_dtx_reindex))
+			ABT_thread_yield();
+
+		/* Make sure checksum scrubbing has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_scrubbing) {
+			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		}
+		ABT_mutex_unlock(cont->sc_mutex);
 
 		retry_cnt++;
 		if (retry_cnt > 1) {
-			D_ERROR("container is still in-use\n");
+			D_ERROR("container is still in-use: open %u, resync %s, reindex %s\n",
+				cont->sc_open, cont->sc_dtx_resyncing ? "yes" : "no",
+				cont->sc_dtx_reindex ? "yes" : "no");
+			cont_child_put(tls->dt_cont_cache, cont);
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
+
+		/* If it is the last user, ds_cont_child will be removed from hash & freed. */
+		cont_child_put(tls->dt_cont_cache, cont);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
@@ -1199,9 +1234,12 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_tgt_destroy_in in;
 	int rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return -DER_NO_HDL;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
@@ -1228,9 +1266,8 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 
 	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
-		DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
+		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1263,7 +1300,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
  **/
 static int
 cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
-			struct ds_cont_child **cont_out)
+			bool *started, struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child	*pool_child;
 	int rc;
@@ -1275,7 +1312,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 		return -DER_NO_HDL;
 	}
 
-	rc = cont_child_start(pool_child, cont_uuid, cont_out);
+	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0) {
 			D_ASSERT(*cont_out != NULL);
@@ -1290,7 +1327,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
-		rc = cont_child_start(pool_child, cont_uuid, cont_out);
+		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
 			(*cont_out)->sc_status_pm_ver = pm_ver;
 		} else {
@@ -1350,14 +1387,12 @@ ds_dtx_resync(void *arg)
 	int				 rc;
 
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version,
-			false, true);
+			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
-		D_WARN("Fail to resync some DTX(s) for the pool/cont "
-		       DF_UUID"/"DF_UUID" that may affect subsequent "
-		       "operations: rc = "DF_RC".\n",
-		       DP_UUID(ddra->pool->spc_uuid),
-		       DP_UUID(ddra->co_uuid), DP_RC(rc));
+		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
+		       " that may affect subsequent "
+		       "operations: rc = " DF_RC "\n",
+		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
 
 	ds_pool_child_put(ddra->pool);
 	D_FREE(ddra);
@@ -1370,7 +1405,7 @@ ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 	int rc;
 
 	/* status_pm_ver has no sense for rebuild container */
-	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, cont);
+	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, NULL, cont);
 	if (rc == 1)
 		rc = 0;
 
@@ -1380,7 +1415,7 @@ ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 static int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t flags, uint64_t sec_capas, uint32_t status_pm_ver,
-		   struct ds_cont_hdl **cont_hdl)
+		   bool *started, struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child	*cont = NULL;
@@ -1424,7 +1459,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	/* cont_uuid is NULL when open rebuild global cont handle */
 	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		rc = cont_child_create_start(pool_uuid, cont_uuid,
-					     status_pm_ver, &cont);
+					     status_pm_ver, started, &cont);
 		if (rc < 0)
 			D_GOTO(err_hdl, rc);
 
@@ -1564,6 +1599,7 @@ struct cont_tgt_open_arg {
 	uuid_t		pool_uuid;
 	uuid_t		cont_uuid;
 	uuid_t		cont_hdl_uuid;
+	bool		cont_started;
 	uint64_t	flags;
 	uint64_t	sec_capas;
 	uint32_t	status_pm_ver;
@@ -1580,7 +1616,7 @@ cont_open_one(void *vin)
 
 	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
 				  arg->cont_uuid, arg->flags, arg->sec_capas,
-				  arg->status_pm_ver, NULL);
+				  arg->status_pm_ver, &arg->cont_started, NULL);
 }
 
 int
@@ -1658,14 +1694,17 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
 		D_DEBUG(DB_MD, DF_CONT": closing (%d): hdl="DF_UUID"\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid,
-				cont_child->sc_uuid),
+			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
 			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
 			dtx_cont_close(cont_child);
+
+		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
+			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
+			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
@@ -1818,8 +1857,8 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(NULL, NULL), rpc, out->tqo_rc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n", DP_CONT(NULL, NULL), rpc,
+		out->tqo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1841,6 +1880,7 @@ struct cont_snap_args {
 	uint64_t	 snap_epoch;
 	uint64_t	 snap_opts;
 	int		 snap_count;
+	daos_obj_id_t	 oit_oid;
 	uint64_t	*snapshots;
 };
 
@@ -1875,7 +1915,7 @@ cont_snap_update_one(void *vin)
 
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
-		cont->sc_snapshot_delete_hlc = crt_hlc_get();
+		cont->sc_snapshot_delete_hlc = d_hlc_get();
 		D_DEBUG(DB_EPC, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
@@ -1908,8 +1948,10 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
-	pool = ds_pool_lookup(args->pool_uuid);
-	if (pool == NULL) {
+	rc = ds_pool_lookup(args->pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(args->pool_uuid), DP_RC(rc));
 		rc = -DER_NO_HDL;
 		goto out;
 	}
@@ -1954,12 +1996,13 @@ cont_snap_notify_one(void *vin)
 
 	if (args->snap_opts & DAOS_SNAP_OPT_OIT) {
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
-					    args->snap_epoch);
+					    args->snap_epoch, args->oit_oid);
 		if (rc)
 			goto out_cont;
 	}
 
-	cont->sc_aggregation_max = crt_hlc_get();
+	if (args->snap_opts & DAOS_SNAP_OPT_CR)
+		cont->sc_aggregation_max = d_hlc_get();
 out_cont:
 	ds_cont_child_put(cont);
 	return rc;
@@ -1980,6 +2023,7 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	uuid_copy(args.coh_uuid, in->tsi_coh_uuid);
 	args.snap_epoch = in->tsi_epoch;
 	args.snap_opts = in->tsi_opts;
+	args.oit_oid = in->tsi_oit_oid;
 
 	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
 	if (out->tso_rc != 0)
@@ -2015,14 +2059,13 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
 	int					 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
+	D_DEBUG(DB_MD, DF_CONT ": handling rpc: %p epr (%p) [#" DF_U64 "]\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, in->tai_epr_list.ca_arrays,
+		in->tai_epr_list.ca_count);
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		DP_RC(out->tao_rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, DP_RC(out->tao_rc));
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;
@@ -2166,7 +2209,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
@@ -2185,18 +2228,16 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
 
 	D_ASSERT(opc == CONT_OID_ALLOC);
 
 	rc = cont_oid_alloc(pool_hdl, rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: hdl="DF_UUID
-		" opc=%u rc="DF_RC"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p hdl=" DF_UUID " opc=%u rc=" DF_RC "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc,
+		DP_RC(rc));
 
 	ds_pool_hdl_put(pool_hdl);
 out:
@@ -2371,7 +2412,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
 			    min_eph <= ec_eph->ce_last_eph) {
-				if (min_eph < ec_eph->ce_last_eph)
+				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
 						DP_UUID(ec_eph->ce_cont_uuid));
@@ -2408,238 +2449,76 @@ out:
 		cont_ec_eph_destroy(ec_eph);
 }
 
-struct cont_rf_check_arg {
-	uuid_t			 crc_pool_uuid;
-	ABT_eventual		 crc_eventual;
-};
-
-struct cont_set_arg {
-	uuid_t			csa_pool_uuid;
-	uuid_t			csa_cont_uuid;
-	uint32_t		csa_status_pm_ver;
-	bool			csa_rw_disable;
+struct cont_prop_set_arg {
+	uuid_t	cpa_cont_uuid;
+	uuid_t	cpa_pool_uuid;
+	daos_prop_t *cpa_prop;
 };
 
 static int
-cont_rw_capa_set(void *data)
+cont_child_prop_update(void *data)
 {
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct cont_set_arg	*arg = data;
-	struct ds_cont_child	*cont_child;
-	int			 rc = 0;
+	struct dsm_tls		 *tls = dsm_tls_get();
+	struct cont_prop_set_arg *arg = data;
+	struct daos_prop_entry	 *iv_entry;
+	struct ds_cont_child	 *child;
+	int			 rc;
 
-	rc = cont_child_lookup(tls->dt_cont_cache, arg->csa_cont_uuid,
-			       arg->csa_pool_uuid, false /* create */,
-			       &cont_child);
+	rc = cont_child_lookup(tls->dt_cont_cache, arg->cpa_cont_uuid,
+			       arg->cpa_pool_uuid, false /* create */,
+			       &child);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
 			D_ERROR(DF_CONT" cont_child_lookup failed, "DF_RC"\n",
-				DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
 				DP_RC(rc));
 		return rc;
 	}
-	D_ASSERT(cont_child != NULL);
+	D_ASSERT(child != NULL);
+	daos_props_2cont_props(arg->cpa_prop, &child->sc_props);
 
-	cont_child->sc_rw_disabled = arg->csa_rw_disable;
-	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_DEBUG(DB_IO, DF_CONT" read/write permission %s.\n",
-			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-			cont_child->sc_rw_disabled ? "disabled" : "enabled");
+	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
+	if (iv_entry != NULL) {
+		struct daos_co_status co_stat = { 0 };
 
-	ds_cont_child_put(cont_child);
-	return rc;
-}
-
-static int
-cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
-{
-	struct cont_set_arg		rw_arg;
-	int				rc = 0;
-
-	rc = ds_pool_rf_verify(ds_pool, cont_child->sc_status_pm_ver,
-			       cont_child->sc_props.dcp_redun_fac);
-	if (rc != 0 && rc != -DER_RF)
-		goto out;
-
-	rw_arg.csa_rw_disable = (rc == -DER_RF);
-	if (rw_arg.csa_rw_disable == cont_child->sc_rw_disabled)
-		D_GOTO(out, rc = 0);
-
-	uuid_copy(rw_arg.csa_cont_uuid, cont_child->sc_uuid);
-	uuid_copy(rw_arg.csa_pool_uuid, ds_pool->sp_uuid);
-	rc = dss_task_collective(cont_rw_capa_set, &rw_arg, 0);
-	if (rc)
-		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
-			DP_RC(rc));
-
-out:
-	return rc;
-}
-
-static void
-cont_rf_check_ult(void *data)
-{
-	struct cont_rf_check_arg	*arg = data;
-	struct ds_pool			*ds_pool;
-	struct ds_pool_child		*pool_child;
-	struct ds_cont_child		*cont_child;
-	int				 rc = 0;
-
-	pool_child = ds_pool_child_lookup(arg->crc_pool_uuid);
-	D_ASSERTF(pool_child != NULL, DF_UUID" : failed to find pool child\n",
-		 DP_UUID(arg->crc_pool_uuid));
-
-	ds_pool = pool_child->spc_pool;
-	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link) {
-		if (cont_child->sc_stopping)
-			continue;
-		rc = cont_rf_check(ds_pool, cont_child);
-		if (rc) {
-			D_DEBUG(DB_TRACE, DF_CONT" cont_rf_check failed, "
-				DF_RC"\n",
-				DP_CONT(ds_pool->sp_uuid, cont_child->sc_uuid),
-				DP_RC(rc));
-			break;
-		}
-	}
-
-	ds_pool_child_put(pool_child);
-	ABT_eventual_set(arg->crc_eventual, (void *)&rc, sizeof(rc));
-}
-
-static int
-cont_rf_check_get_tgt(uuid_t pool_uuid)
-{
-	int		*failed_tgts = NULL;
-	unsigned int	 failed_tgts_cnt;
-	bool		 alive;
-	int		 rc, i, j;
-
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &failed_tgts,
-					&failed_tgts_cnt);
-	if (rc) {
-		D_ERROR(DF_UUID "failed to get tgt_idx, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
-	}
-
-	D_ASSERTF(failed_tgts_cnt <= dss_tgt_nr,
-		  "BAD failed_tgts_cnt %d, dss_tgt_nr %d\n",
-		  failed_tgts_cnt, dss_tgt_nr);
-	if (failed_tgts_cnt == dss_tgt_nr) {
-		D_GOTO(out, rc = -DER_NONEXIST);
-	} else if (failed_tgts_cnt == 0) {
-		/* if all alive, select one random tgt */
-		rc = rand() % dss_tgt_nr;
-		goto out;
-	} else {
-		/* if partial failed, select first alive tgt */
-		for (i = 0; i < dss_tgt_nr; i++) {
-			alive = true;
-			for (j = 0; j < failed_tgts_cnt; j++) {
-				if (i == failed_tgts[j]) {
-					alive = false;
-					break;
-				}
-			}
-			if (alive) {
-				rc = i;
-				goto out;
-			}
-		}
+		daos_prop_val_2_co_status(iv_entry->dpe_val, &co_stat);
+		if (co_stat.dcs_pm_ver < child->sc_status_pm_ver)
+			goto out;
+		if (dss_get_module_info()->dmi_tgt_id == 0)
+			D_DEBUG(DB_MD, DF_CONT" statu_pm_ver %d -> %d status %u\n",
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+				child->sc_status_pm_ver, co_stat.dcs_pm_ver,
+				co_stat.dcs_status);
+		child->sc_status_pm_ver = co_stat.dcs_pm_ver;
+		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+			child->sc_rw_disabled = 1;
+		else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+			child->sc_rw_disabled = 0;
 	}
 
 out:
-	if (failed_tgts != NULL)
-		D_FREE(failed_tgts);
-	return rc;
-}
-
-/** Check active container, if its RF value match with new pool map */
-int
-ds_cont_rf_check(uuid_t pool_uuid)
-{
-	struct cont_rf_check_arg	 check_arg;
-	int				*status;
-	int				 tgt_idx;
-	int				 rc = 0;
-
-	uuid_copy(check_arg.crc_pool_uuid, pool_uuid);
-	rc = ABT_eventual_create(sizeof(*status), &check_arg.crc_eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	/* check RF on one alive tgt's VOS main XS */
-	rc = cont_rf_check_get_tgt(pool_uuid);
-	if (rc < 0) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		goto out;
-	}
-	tgt_idx = rc;
-	rc = dss_ult_create(cont_rf_check_ult, &check_arg, DSS_XS_VOS, tgt_idx,
-			    0, NULL);
-	if (rc)
-		D_GOTO(out, rc);
-
-	rc = ABT_eventual_wait(check_arg.crc_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-	rc = *status;
-
-out:
-	ABT_eventual_free(&check_arg.crc_eventual);
-	return rc;
-}
-
-static int
-cont_status_pm_ver_set(void *data)
-{
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct cont_set_arg	*arg = data;
-	struct ds_cont_child	*cont_child;
-	int			 rc = 0;
-
-	rc = cont_child_lookup(tls->dt_cont_cache, arg->csa_cont_uuid,
-			       arg->csa_pool_uuid, false /* create */,
-			       &cont_child);
-	if (rc) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		else
-			D_ERROR(DF_CONT" cont_child_lookup failed, "DF_RC"\n",
-				DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-				DP_RC(rc));
-		return rc;
-	}
-	D_ASSERT(cont_child != NULL);
-
-	if (arg->csa_status_pm_ver <= cont_child->sc_status_pm_ver)
-		goto out;
-	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_DEBUG(DB_TRACE, DF_CONT" statu_pm_ver set from %d to %d.\n",
-			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-			cont_child->sc_status_pm_ver, arg->csa_status_pm_ver);
-	cont_child->sc_status_pm_ver = arg->csa_status_pm_ver;
-
-out:
-	ds_cont_child_put(cont_child);
+	ds_cont_child_put(child);
 	return rc;
 }
 
 int
-ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
-			     uint32_t pm_ver)
+ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 {
-	struct cont_set_arg	arg;
-	int			rc = 0;
+	struct cont_prop_set_arg arg;
+	int			 rc;
 
-	uuid_copy(arg.csa_cont_uuid, cont_uuid);
-	uuid_copy(arg.csa_pool_uuid, pool_uuid);
-	arg.csa_status_pm_ver = pm_ver;
-	rc = dss_task_collective(cont_status_pm_ver_set, &arg, 0);
+	/* XXX only need update status and obj_version now? */
+	if (daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) == NULL &&
+	    daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) == NULL)
+		return 0;
+
+	D_DEBUG(DB_MD, DF_CONT" property update.\n", DP_CONT(pool_uuid, cont_uuid));
+	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
+	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
+	arg.cpa_prop = prop;
+	rc = dss_task_collective(cont_child_prop_update, &arg, 0);
 	if (rc)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));
@@ -2650,6 +2529,5 @@ ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 void
 ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
 {
-	cont->sc_ec_update_timestamp = crt_hlc_get();
+	cont->sc_ec_update_timestamp = d_hlc_get();
 }
-

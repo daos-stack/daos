@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +18,7 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos_types.h>
-#include <vos_obj.h>
+#include "vos_obj.h"
 #include <daos/checksum.h>
 
 #include "vos_internal.h"
@@ -358,7 +358,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	D_ALLOC_PTR(cont);
 	if (!cont) {
-		D_ERROR("Error in allocating container handle\n");
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 
@@ -372,8 +371,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		cont->vc_cmt_dtx_indexed = 1;
 	else
 		cont->vc_cmt_dtx_indexed = 0;
+	cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
+	cont->vc_solo_dtx_epoch = d_hlc_get();
 	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */
@@ -768,7 +769,7 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags
 }
 
 static int
-cont_iter_delete(struct vos_iterator *iter, void *args)
+cont_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
@@ -781,5 +782,5 @@ struct vos_iter_ops vos_cont_iter_ops = {
 	.iop_probe   = cont_iter_probe,
 	.iop_next    = cont_iter_next,
 	.iop_fetch   = cont_iter_fetch,
-	.iop_delete  = cont_iter_delete,
+	.iop_process  = cont_iter_process,
 };

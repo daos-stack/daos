@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // PrintTopology prints the topology to the given writer.
@@ -24,9 +24,9 @@ func PrintTopology(t *Topology, output io.Writer) error {
 	}
 
 	for _, numaNode := range t.NUMANodes.AsSlice() {
-		coreSet := &system.RankSet{}
+		coreSet := &ranklist.RankSet{}
 		for _, core := range numaNode.Cores {
-			coreSet.Add(system.Rank(core.ID))
+			coreSet.Add(ranklist.Rank(core.ID))
 		}
 
 		fmt.Fprintf(ew, "NUMA Node %d\n", numaNode.ID)
@@ -46,6 +46,20 @@ func PrintTopology(t *Topology, output io.Writer) error {
 			}
 		}
 
+		if len(numaNode.BlockDevices) > 0 {
+			var sectionPrinted bool
+			for _, blockDev := range numaNode.BlockDevices {
+				// Skip PCI-backed devices; they were already printed.
+				if blockDev.BackingDevice != nil {
+					continue
+				}
+				if !sectionPrinted {
+					fmt.Fprintln(ew, "  Non-PCI block devices:")
+					sectionPrinted = true
+				}
+				fmt.Fprintf(ew, "    %s\n", blockDev)
+			}
+		}
 	}
 
 	if len(t.VirtualDevices) > 0 {

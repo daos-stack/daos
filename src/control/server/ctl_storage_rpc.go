@@ -168,17 +168,17 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 // Adjust the NVME available size to its real usable size.
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	type deviceSizeStat struct {
-		size    uint64
-		devices []*ctl.NvmeController_SmdDevice
+		clusterCount uint64 // Number of SPDK cluster for each target
+		devices      []*ctl.SmdDevice
 	}
 
 	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
 		for _, dev := range ctlr.GetSmdDevices() {
-			if dev.GetDevState() != "NORMAL" {
+			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
-					"(ctlr %s) to O Bytes: device state %q",
-					dev.GetUuid(), ctlr.GetPciAddr(), dev.GetDevState())
+					"(ctlr %s) to O Bytes: device state %q", dev.GetUuid(),
+					ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
 				dev.AvailBytes = 0
 				continue
 			}
@@ -192,14 +192,13 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			rank := dev.GetRank()
 			if devicesToAdjust[rank] == nil {
 				devicesToAdjust[rank] = &deviceSizeStat{
-					size: math.MaxUint64,
+					clusterCount: math.MaxUint64,
 				}
 			}
 			targetCount := uint64(len(dev.GetTgtIds()))
-			unalignedBytes := dev.GetAvailBytes() % (targetCount * dev.GetClusterSize())
-			availBytes := dev.AvailBytes - unalignedBytes
-			if availBytes < devicesToAdjust[rank].size {
-				devicesToAdjust[rank].size = availBytes
+			clusterCount := dev.GetAvailBytes() / (targetCount * dev.GetClusterSize())
+			if clusterCount < devicesToAdjust[rank].clusterCount {
+				devicesToAdjust[rank].clusterCount = clusterCount
 			}
 			devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
 		}
@@ -207,12 +206,16 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 	for rank, item := range devicesToAdjust {
 		for _, dev := range item.devices {
-			unusedBytes := dev.AvailBytes - item.size
-			c.log.Debugf("Adjusting available size of SMD device %s from rank %d: "+
-				"excluding %s (%d Bytes) of unusable storage",
-				dev.GetUuid(), rank,
-				humanize.Bytes(unusedBytes), unusedBytes)
-			dev.AvailBytes = item.size
+			targetCount := uint64(len(dev.GetTgtIds()))
+			availBytes := targetCount * item.clusterCount * dev.GetClusterSize()
+			if availBytes != dev.GetAvailBytes() {
+				c.log.Debugf("Adjusting available size of SMD device %s from rank %d "+
+					"(targets: %d): from %s (%d Bytes) to %s (%d bytes)",
+					dev.GetUuid(), rank, dev.GetTgtIds(),
+					humanize.Bytes(dev.GetAvailBytes()), dev.GetAvailBytes(),
+					humanize.Bytes(availBytes), availBytes)
+				dev.AvailBytes = availBytes
+			}
 		}
 	}
 }
@@ -277,7 +280,7 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 				scmNamespace.Mount.GetPath(), humanize.Bytes(mdBytes), mdBytes)
 			scmNamespace.Mount.AvailBytes -= mdBytes
 		} else {
-			c.log.Infof("WARNING: Adjusting available size to 0 Bytes of SCM device %q: "+
+			c.log.Noticef("Adjusting available size to 0 Bytes of SCM device %q: "+
 				"old available size %s (%d Bytes), metadata size %s (%d Bytes)",
 				scmNamespace.Mount.GetPath(),
 				humanize.Bytes(availBytes), availBytes,
@@ -289,8 +292,6 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-	c.log.Debugf("received StorageScan RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -314,15 +315,13 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
-	hpi, err := c.getHugePageInfo()
+	mi, err := c.getMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(hpi, &resp.HugePageInfo); err != nil {
+	if err := convert.Types(mi, &resp.MemInfo); err != nil {
 		return nil, err
 	}
-
-	c.log.Debug("responding to StorageScan RPC")
 
 	return resp, nil
 }
@@ -341,8 +340,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
-
-	c.log.Debugf("received StorageFormat RPC %v", req)
 
 	// TODO: enable per-instance formatting
 	formatting := 0
@@ -412,8 +409,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 // StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
-	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -444,18 +439,13 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 		return resp, nil // report prepare call result in response
 	}
 
-	c.log.Debug("responding to StorageNvmeRebind RPC")
-
 	return resp, nil
 }
 
 // StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
 //
-//
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
-	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -506,8 +496,6 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
 		}
 	}
-
-	c.log.Debug("responding to StorageNvmeAddDevice RPC")
 
 	return resp, nil
 }

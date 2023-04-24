@@ -14,14 +14,14 @@ import java.io.IOException;
 
 public class DaosFileSourceSync extends DaosFileSource {
 
-  public DaosFileSourceSync(DaosFile daosFile, int bufCapacity, long fileLen,
+  public DaosFileSourceSync(DaosFile daosFile, int bufCapacity, long fileLen, boolean append,
                             FileSystem.Statistics stats) {
-    super(daosFile, bufCapacity, fileLen, stats);
+    super(daosFile, bufCapacity, fileLen, append, stats);
   }
 
-  public DaosFileSourceSync(DaosFile daosFile, ByteBuf buffer, long fileLen,
+  public DaosFileSourceSync(DaosFile daosFile, ByteBuf buffer, long fileLen, boolean append,
                             FileSystem.Statistics stats) {
-    super(daosFile, buffer, fileLen, stats);
+    super(daosFile, buffer, fileLen, append, stats);
   }
 
   @Override

@@ -8,7 +8,9 @@ package hardware
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
 )
 
@@ -87,6 +89,17 @@ func (n *NUMANode) WithCPUCores(cores []CPUCore) *NUMANode {
 	return n
 }
 
+// WithBlockDevices is a convenience function to add a set of block devices to a node.
+// NB: If AddBlockDevice fails, a panic will ensue.
+func (n *NUMANode) WithBlockDevices(devices []*BlockDevice) *NUMANode {
+	for _, dev := range devices {
+		if err := n.AddBlockDevice(dev); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{
@@ -114,8 +127,41 @@ type MockFabricInterfaceProvider struct {
 	GetFabricErr    error
 }
 
-func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context) (*FabricInterfaceSet, error) {
+func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context, _ string) (*FabricInterfaceSet, error) {
 	return m.GetFabricReturn, m.GetFabricErr
+}
+
+type multiCallFabricInterfaceProvider struct {
+	called int
+	prefix string
+}
+
+func testFabricDevName(prefix string, i int) string {
+	return fmt.Sprintf("%s%02d", prefix, i)
+}
+
+func (p *multiCallFabricInterfaceProvider) GetFabricInterfaces(_ context.Context, provider string) (*FabricInterfaceSet, error) {
+	p.called++
+	name := testFabricDevName(p.prefix, p.called)
+	return NewFabricInterfaceSet(&FabricInterface{
+		Name:          name,
+		NetInterfaces: common.NewStringSet(name),
+		Providers:     NewFabricProviderSet(&FabricProvider{Name: provider}),
+	}), nil
+}
+
+func expectedMultiCallFIProviderResult(prefix string, ndc NetDevClass, providers ...string) *FabricInterfaceSet {
+	set := NewFabricInterfaceSet()
+	for i, p := range providers {
+		name := testFabricDevName(prefix, i+1)
+		set.Update(&FabricInterface{
+			Name:          name,
+			NetInterfaces: common.NewStringSet(name),
+			Providers:     NewFabricProviderSet(&FabricProvider{Name: p}),
+			DeviceClass:   ndc,
+		})
+	}
+	return set
 }
 
 // MockGetNetDevClassResult is used to set up a MockNetDevClassProvider's results for GetNetDevClass.

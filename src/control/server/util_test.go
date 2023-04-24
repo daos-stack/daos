@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -107,7 +108,7 @@ func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
 	return
 }
 
-func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
+func (c *mockDrpcClient) SendMsg(_ context.Context, call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
 	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
 	if err != nil {
@@ -175,7 +176,7 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 
 	srv := NewEngineInstance(log, provider, nil, r)
 	srv.setSuperblock(&Superblock{
-		Rank: system.NewRankPtr(0),
+		Rank: ranklist.NewRankPtr(0),
 	})
 	srv.ready.SetTrue()
 	srv.OnReady()
@@ -219,7 +220,7 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 
 	for i := 0; i < count; i++ {
 		srv := newTestEngine(log, i == 0 && isAP, provider)
-		srv._superblock.Rank = system.NewRankPtr(uint32(i))
+		srv._superblock.Rank = ranklist.NewRankPtr(uint32(i))
 
 		if err := harness.AddInstance(srv); err != nil {
 			t.Fatal(err)

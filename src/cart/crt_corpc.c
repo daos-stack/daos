@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -379,12 +379,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_init(opc: %#x) failed: "DF_RC"\n", opc,
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
@@ -544,7 +539,8 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	myrank = co_info->co_grp_priv->gp_self;
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
-		crt_rpc_complete(rpc_priv, co_info->co_rc);
+		crt_rpc_lock(rpc_priv);
+		crt_rpc_complete_and_unlock(rpc_priv, co_info->co_rc);
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);

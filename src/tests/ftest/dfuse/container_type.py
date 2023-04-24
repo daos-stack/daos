@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +9,6 @@ from dfuse_test_base import DfuseTestBase
 
 
 class DfuseContainerCheck(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
@@ -29,9 +27,9 @@ class DfuseContainerCheck(DfuseTestBase):
             Create container of type POSIX.
             Try to mount to dfuse and check the behavior.
         :avocado: tags=all,full_regression
-        :avocado: tags=small
+        :avocado: tags=vm
         :avocado: tags=dfuse
-        :avocado: tags=dfusecontainercheck
+        :avocado: tags=dfusecontainercheck,test_dfuse_container_check
         """
         # get test params for cont and pool count
         cont_types = self.params.get("cont_types", '/run/container/*')

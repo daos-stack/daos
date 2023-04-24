@@ -35,57 +35,6 @@ var defConfigCmpOpts = []cmp.Option{
 	}),
 }
 
-func TestConfig_MergeEnvVars(t *testing.T) {
-	for name, tc := range map[string]struct {
-		baseVars  []string
-		mergeVars []string
-		wantVars  []string
-	}{
-		"no dupes without merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{},
-			wantVars:  []string{"FOO=BAR"},
-		},
-		"no dupes after merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{"FOO=QUX"},
-			wantVars:  []string{"FOO=QUX"},
-		},
-		"no dupes in merge": {
-			baseVars:  []string{"FOO=BAR"},
-			mergeVars: []string{"FOO=BAZ", "FOO=QUX"},
-			wantVars:  []string{"FOO=BAZ"},
-		},
-		"basic test": {
-			baseVars:  []string{"A=B"},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"A=B", "C=D"},
-		},
-		"complex value": {
-			baseVars:  []string{"SIMPLE=OK"},
-			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
-			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
-		},
-		"append no base": {
-			baseVars:  []string{},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"C=D"},
-		},
-		"skip malformed": {
-			baseVars:  []string{"GOOD_BASE=OK", "BAD_BASE="},
-			mergeVars: []string{"GOOD_MERGE=OK", "BAD_MERGE"},
-			wantVars:  []string{"GOOD_BASE=OK", "GOOD_MERGE=OK"},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(tc.wantVars, gotVars, defConfigCmpOpts...); diff != "" {
-				t.Fatalf("(-want, +got):\n%s", diff)
-			}
-		})
-	}
-}
-
 func TestConfig_HasEnvVar(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startVars []string
@@ -181,7 +130,6 @@ func TestConfig_Constructed(t *testing.T) {
 
 	// just set all values regardless of validity
 	constructed := MockConfig().
-		WithRank(37).
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42"). // qib42 recognized by mock validator
 		WithFabricInterfacePort(100).
@@ -466,6 +414,19 @@ func TestConfig_BdevValidation(t *testing.T) {
 				),
 			expCls: storage.ClassFile,
 		},
+		"mix of emulated and non-emulated device classes": {
+			cfg: baseValidConfig().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1)),
+					storage.NewTierConfig().
+						WithStorageClass("file").
+						WithBdevFileSize(10).
+						WithBdevDeviceList("bdev1", "bdev2"),
+				),
+			expErr: errors.New("mix of emulated and non-emulated NVMe"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
@@ -614,7 +575,8 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
-		WithHugePageSize(hugepageSz)
+		WithHugePageSize(hugepageSz).
+		WithSrxDisabled(true)
 
 	cfg.Index = uint32(index)
 
@@ -642,7 +604,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
-		"FI_OFI_RXM_USE_SRX=1",
+		"FI_OFI_RXM_USE_SRX=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
@@ -659,5 +621,88 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestFabricConfig_Update(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fc        *FabricConfig
+		new       FabricConfig
+		expResult *FabricConfig
+	}{
+		"nil": {},
+		"nothing set": {
+			fc:        &FabricConfig{},
+			new:       FabricConfig{},
+			expResult: &FabricConfig{},
+		},
+		"update": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
+			},
+			expResult: &FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
+			},
+		},
+		"don't unset fields": {
+			fc: &FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
+			},
+			new: FabricConfig{},
+			expResult: &FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
+			},
+		},
+		"update mixed": {
+			fc: &FabricConfig{
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+			},
+			new: FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 15,
+				CrtTimeout:      120,
+				DisableSRX:      true,
+			},
+			expResult: &FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   9999,
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.fc.Update(tc.new)
+
+			if diff := cmp.Diff(tc.expResult, tc.fc); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
 	}
 }

@@ -74,3 +74,43 @@ func BoolAsInt(b bool) int {
 	}
 	return 0
 }
+
+// MergeEnvVars merges and deduplicates two slices of environment
+// variables. Conflicts are resolved by taking the value from the
+// second list.
+func MergeEnvVars(curVars []string, newVars []string) (merged []string) {
+	mergeMap := make(map[string]string)
+	for _, pair := range curVars {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			continue
+		}
+		// strip duplicates in curVars; shouldn't be any
+		// but this will ensure it.
+		if _, found := mergeMap[kv[0]]; found {
+			continue
+		}
+		mergeMap[kv[0]] = kv[1]
+	}
+
+	mergedKeys := make(map[string]struct{})
+	for _, pair := range newVars {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			continue
+		}
+		// strip duplicates in newVars
+		if _, found := mergedKeys[kv[0]]; found {
+			continue
+		}
+		mergedKeys[kv[0]] = struct{}{}
+		mergeMap[kv[0]] = kv[1]
+	}
+
+	merged = make([]string, 0, len(mergeMap))
+	for key, val := range mergeMap {
+		merged = append(merged, strings.Join([]string{key, val}, "="))
+	}
+
+	return
+}

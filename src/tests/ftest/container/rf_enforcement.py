@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +7,6 @@ from container_rf_test_base import ContRedundancyFactor
 
 
 class ContRfEnforce(ContRedundancyFactor):
-    # pylint: disable=too-many-ancestors
     """Test Container redundancy factor enforcement with oclass traffic
        and rebuild.
 
@@ -41,9 +39,10 @@ class ContRfEnforce(ContRedundancyFactor):
             write io verification.
 
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=container_rf
-        :avocado: tags=cont_rf_oclass_enforcement
+        :avocado: tags=container_rf,cont_rf_oclass_enforcement
+        :avocado: tags=test_container_redundancy_factor_oclass_enforcement
         """
         self.mode = "cont_rf_enforcement"
         self.execute_cont_rf_test()

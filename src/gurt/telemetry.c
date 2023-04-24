@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,8 +189,7 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 
 	shmid = shmget(key, size, flags);
 	if (shmid < 0) {
-		D_ERROR("can't get shmid for key 0x%x, %s\n", key,
-			strerror(errno));
+		D_INFO("can't get shmid for key 0x%x, %s\n", key, strerror(errno));
 		return -DER_NO_SHMEM;
 	}
 
@@ -207,9 +206,16 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 static int
 new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
 {
+	int rc;
+
 	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
 	       key, size);
-	return attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	if (rc < 0)
+		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
+			DP_RC(rc));
+
+	return rc;
 }
 
 static int
@@ -704,6 +710,44 @@ create_shmem(const char *root_path, key_t key, size_t size_bytes,
 	return 0;
 }
 
+int
+destroy_shmem_with_key(key_t key)
+{
+	struct d_tm_shmem_hdr		*header;
+	struct shmem_region_list	*entry;
+	d_list_t			*cur;
+	d_list_t			*head;
+	int				rc;
+	int				shmid;
+
+	rc = open_shmem(key, &header);
+	if (rc == -DER_NO_SHMEM) /* if it doesn't exist, nothing to do */
+		return 0;
+	if (rc < 0) {
+		D_ERROR("Unable to open shmem region 0x%x for cleanup. An admin must clean up "
+			"manually using ipcrm.\n", key);
+		return rc;
+	}
+	shmid = rc;
+
+	header->sh_deleted = 1;
+	head = &header->sh_subregions;
+	for (cur = conv_ptr(header, head->next); cur != head; cur = conv_ptr(header, cur->next)) {
+		if (cur == NULL)
+			break;
+		entry = d_list_entry(cur, __typeof__(*entry), rl_link);
+		rc = destroy_shmem_with_key(entry->rl_key);
+		if (rc != 0)
+			D_ERROR("Unable to destroy shmem region 0x%x: "DF_RC"\n", entry->rl_key,
+				DP_RC(rc));
+	}
+
+	D_INFO("destroying shmem with key: 0x%x\n", key);
+	destroy_shmem(shmid);
+	close_shmem(header);
+	return 0;
+}
+
 /**
  * Initialize an instance of the telemetry and metrics API for the producer
  * process.
@@ -754,6 +798,9 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	tm_shmem.id = id;
 	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	key = d_tm_get_srv_key(id);
+	rc = destroy_shmem_with_key(key);
+	if (rc != 0)
+		goto failure;
 	rc = create_shmem(tmp, key, mem_size, &shmid, &new_shmem);
 	if (rc != 0)
 		goto failure;
@@ -1123,20 +1170,20 @@ void
 d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		char *path, int format, int opt_fields, FILE *stream)
 {
-	struct d_tm_stats_t	stats = {0};
-	struct timespec		tms;
-	uint64_t		val;
-	time_t			clk;
-	char			time_buff[D_TM_TIME_BUFF_LEN];
-	char			*timestamp;
-	char			*name = NULL;
-	char			*desc = NULL;
-	char			*units = NULL;
-	bool			stats_printed = false;
-	bool			show_timestamp = false;
-	bool			show_meta = false;
-	int			i = 0;
-	int			rc;
+	struct d_tm_stats_t stats = {0};
+	struct timespec     tms;
+	uint64_t            val;
+	time_t              clk;
+	char                time_buff[D_TM_TIME_BUFF_LEN];
+	char               *timestamp      = NULL;
+	char               *name           = NULL;
+	char               *desc           = NULL;
+	char               *units          = NULL;
+	bool                stats_printed  = false;
+	bool                show_timestamp = false;
+	bool                show_meta      = false;
+	int                 i              = 0;
+	int                 rc;
 
 	if (node == NULL)
 		return;
@@ -1258,11 +1305,45 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 
 		d_tm_print_metadata(desc, units, format, stream);
 	}
-	D_FREE_PTR(desc);
-	D_FREE_PTR(units);
+	D_FREE(desc);
+	D_FREE(units);
 
 	if (node->dtn_type != D_TM_DIRECTORY)
 		fprintf(stream, "\n");
+}
+
+static int
+validate_node_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
+		  struct d_tm_shmem_hdr **node_shmem)
+{
+	struct d_tm_shmem_hdr	*shmem;
+
+	D_ASSERT(node != NULL);
+	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
+	if (shmem == NULL) {
+		D_ERROR("node shmem key %d not valid\n", node->dtn_shmem_key);
+		return -DER_INVAL;
+	}
+
+	if (!validate_shmem_ptr(shmem, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (node_shmem != NULL)
+		*node_shmem = shmem;
+
+	return 0;
+}
+
+static void
+d_tm_node_lock(struct d_tm_node_t *node) {
+	if (unlikely(node->dtn_protect))
+		D_MUTEX_LOCK(&node->dtn_lock);
+}
+
+static void
+d_tm_node_unlock(struct d_tm_node_t *node) {
+	if (unlikely(node->dtn_protect))
+		D_MUTEX_UNLOCK(&node->dtn_lock);
 }
 
 /**
@@ -1295,6 +1376,88 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 	fprintf(stream, ", samples: %lu]", stats->sample_size);
 }
 
+static int
+_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_stats_t	*dtm_stats = NULL;
+	struct d_tm_histogram_t *dtm_histogram = NULL;
+	struct d_tm_shmem_hdr	*shmem = NULL;
+	int			 rc;
+
+	if (ctx == NULL || node == NULL)
+		return -DER_INVAL;
+
+	rc = validate_node_ptr(ctx, node, &shmem);
+	if (rc != 0)
+		return rc;
+
+	metric_data = conv_ptr(shmem, node->dtn_metric);
+	if (metric_data == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
+	dtm_histogram = conv_ptr(shmem, metric_data->dtm_histogram);
+	d_tm_node_lock(node);
+	memset(&metric_data->dtm_data, 0, sizeof(metric_data->dtm_data));
+	if (dtm_stats != NULL)
+		memset(dtm_stats, 0, sizeof(*dtm_stats));
+
+	if (dtm_histogram != NULL) {
+		int i;
+
+		for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
+			struct d_tm_node_t	*bucket;
+
+			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
+			_reset_node(ctx, bucket);
+		}
+	}
+
+	d_tm_node_unlock(node);
+	return DER_SUCCESS;
+}
+
+static void
+reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
+	   char *path, int format, int opt_fields, FILE *stream)
+{
+	char	*name = NULL;
+
+	if (node == NULL)
+		return;
+
+	name = d_tm_get_name(ctx, node);
+	if (name == NULL)
+		name = "(null)";
+
+	switch (node->dtn_type) {
+	case D_TM_LINK:
+		node = d_tm_follow_link(ctx, node);
+		reset_node(ctx, node, level, path, format, opt_fields, stream);
+		break;
+	case D_TM_DIRECTORY:
+	case D_TM_COUNTER:
+	case D_TM_TIMESTAMP:
+	case D_TM_TIMER_SNAPSHOT:
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
+	case D_TM_DURATION:
+	case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
+	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
+	case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
+	case D_TM_GAUGE:
+	case D_TM_STATS_GAUGE:
+		_reset_node(ctx, node);
+		break;
+	default:
+		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
+			node->dtn_type);
+		break;
+	}
+}
+
 /**
  * Recursively prints all nodes underneath the given \a node.
  * Used as a convenience function to demonstrate usage for the client
@@ -1316,9 +1479,9 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
-d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
-		       int level, int filter, char *path, int format,
-		       int opt_fields, FILE *stream)
+d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node,
+	     int level, int filter, char *path, int format,
+	     int opt_fields, uint32_t ops, FILE *stream)
 {
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	char			*fullpath = NULL;
@@ -1337,9 +1500,15 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 	if (shmem == NULL)
 		return;
 
-	if (node->dtn_type & filter)
-		d_tm_print_node(ctx, node, level, path, format,
-				opt_fields, stream);
+	if (node->dtn_type & filter) {
+		if (ops & D_TM_ITER_READ)
+			d_tm_print_node(ctx, node, level, path, format,
+					opt_fields, stream);
+		if (ops & D_TM_ITER_RESET)
+			reset_node(ctx, node, level, path, format,
+				   opt_fields, stream);
+	}
+
 	parent_name = conv_ptr(shmem, node->dtn_name);
 	node = node->dtn_child;
 	node = conv_ptr(shmem, node);
@@ -1353,9 +1522,9 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		else
 			D_ASPRINTF(fullpath, "%s/%s", path, parent_name);
 
-		d_tm_print_my_children(ctx, node, level + 1, filter,
-				       fullpath, format, opt_fields, stream);
-		D_FREE_PTR(fullpath);
+		d_tm_iterate(ctx, node, level + 1, filter, fullpath, format,
+			     opt_fields, ops, stream);
+		D_FREE(fullpath);
 		node = node->dtn_sibling;
 		node = conv_ptr(shmem, node);
 	}
@@ -1507,18 +1676,6 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 	}
 }
 
-static void
-d_tm_node_lock(struct d_tm_node_t *node) {
-	if (unlikely(node->dtn_protect))
-		D_MUTEX_LOCK(&node->dtn_lock);
-}
-
-static void
-d_tm_node_unlock(struct d_tm_node_t *node) {
-	if (unlikely(node->dtn_protect))
-		D_MUTEX_UNLOCK(&node->dtn_lock);
-}
-
 /**
  * Set the given counter to the specified \a value
  *
@@ -1551,7 +1708,6 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 void
 d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
 {
-
 	if (unlikely(metric == NULL))
 		return;
 
@@ -1633,6 +1789,8 @@ d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id)
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
 		return;
 	}
+
+	metric->dtn_type = D_TM_DURATION | clk_id;
 
 	d_tm_node_lock(metric);
 	clock_gettime(d_tm_clock_id(metric->dtn_type & ~D_TM_DURATION),
@@ -2612,28 +2770,6 @@ failure:
 	return rc;
 }
 
-static int
-validate_node_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
-		  struct d_tm_shmem_hdr **node_shmem)
-{
-	struct d_tm_shmem_hdr	*shmem;
-
-	D_ASSERT(node != NULL);
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL) {
-		D_ERROR("node shmem key %d not valid\n", node->dtn_shmem_key);
-		return -DER_INVAL;
-	}
-
-	if (!validate_shmem_ptr(shmem, (void *)node))
-		return -DER_METRIC_NOT_FOUND;
-
-	if (node_shmem != NULL)
-		*node_shmem = shmem;
-
-	return 0;
-}
-
 /**
  * Retrieves the histogram creation data for the given node, which includes
  * the number of buckets, initial width and multiplier used to create the
@@ -3144,7 +3280,6 @@ list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 
 out:
 	return rc;
-
 }
 
 /**
@@ -3174,7 +3309,7 @@ d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	struct d_tm_nodeList_t	*cur = NULL;
 
 	/** add +1 to max_depth to account for the root node */
-	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
+	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth + 1, 1);
 	if (rc != DER_SUCCESS)
 		return rc;
 
@@ -3233,7 +3368,7 @@ d_tm_list_free(struct d_tm_nodeList_t *nodeList)
 
 	while (nodeList) {
 		head = nodeList->dtnl_next;
-		D_FREE_PTR(nodeList);
+		D_FREE(nodeList);
 		nodeList = head;
 	}
 }

@@ -20,19 +20,11 @@ import java.io.UnsupportedEncodingException;
 /**
  * IO Description for asynchronously update only one entry, dkey/akey.
  */
-public class IODescUpdAsync implements DaosEventQueue.Attachment {
+public class IODescUpdAsync extends IODescUpdBase implements DaosEventQueue.Attachment {
 
   private final short maxKeyLen;
 
   private final long nativeHdl;
-
-  private ByteBuf descBuffer;
-
-  private long offset;
-
-  private ByteBuf dataBuffer;
-
-  private int requestLen;
 
   private DaosEventQueue.Event event;
 
@@ -41,8 +33,6 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
   private boolean discarded;
 
   private int retCode = Integer.MAX_VALUE;
-
-  public static final int RET_CODE_SUCCEEDED = Constants.RET_CODE_SUCCEEDED;
 
   private static final Logger log = LoggerFactory.getLogger(IODescUpdAsync.class);
 
@@ -55,21 +45,9 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
    * @param dataBuffer
    */
   public IODescUpdAsync(String dkey, String akey, long offset, ByteBuf dataBuffer) {
+    super(dkey, akey, offset, dataBuffer, true);
     this.maxKeyLen = 0;
     this.nativeHdl = 0L;
-    this.offset = offset;
-    this.dataBuffer = dataBuffer;
-    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
-    byte[] akeyBytes = DaosUtils.keyToBytes(akey);
-    // 8 for null native handle, 4 = 2 + 2 for lens,
-    requestLen = 8 + dkeyBytes.length + akeyBytes.length + 4;
-    // 4 for return code
-    descBuffer = BufferAllocator.objBufWithNativeOrder(requestLen + 4);
-    descBuffer.writeLong(0L);
-    descBuffer.writeShort(dkeyBytes.length);
-    descBuffer.writeBytes(dkeyBytes);
-    descBuffer.writeShort(akeyBytes.length);
-    descBuffer.writeBytes(akeyBytes);
   }
 
   /**
@@ -78,6 +56,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
    * @param maxKeyLen
    */
   public IODescUpdAsync(int maxKeyLen) {
+    super();
     if (maxKeyLen <= 0 || maxKeyLen > Short.MAX_VALUE) {
       throw new IllegalArgumentException("max key length should be bigger than 0 and less than " + Short.MAX_VALUE
           + ", value is " + maxKeyLen);
@@ -145,14 +124,6 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     return retCode == RET_CODE_SUCCEEDED;
   }
 
-  public ByteBuf getDescBuffer() {
-    return descBuffer;
-  }
-
-  public ByteBuf getDataBuffer() {
-    return dataBuffer;
-  }
-
   public DaosEventQueue.Event getEvent() {
     return event;
   }
@@ -170,16 +141,14 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     resultParsed = false;
     retCode = -1;
     event = null;
-    if (dataBuffer != null) {
-      dataBuffer.release();
-      dataBuffer = null;
-    }
+    releaseDataBuffer();
   }
 
   @Override
   public void ready() {
     descBuffer.writerIndex(descBuffer.capacity());
     descBuffer.readerIndex(requestLen);
+    resultParsed = true;
     retCode = descBuffer.readInt();
   }
 
@@ -202,19 +171,23 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     return retCode;
   }
 
+  public void releaseDataBuffer() {
+    if (dataBuffer != null) {
+      dataBuffer.release();
+      dataBuffer = null;
+    }
+  }
+
   @Override
   public void release() {
     if (descBuffer != null) {
-      if (isReusable() & nativeHdl > 0) {
+      if (isReusable() & nativeHdl > 0) { // non reusable native desc released in callback function
         DaosObjClient.releaseDescUpdAsync(nativeHdl);
       }
       descBuffer.release();
       descBuffer = null;
     }
-    if (dataBuffer != null) {
-      dataBuffer.release();
-      dataBuffer = null;
-    }
+    releaseDataBuffer();
     if ((!resultParsed) && event != null) {
       try {
         event.abort();
@@ -237,22 +210,6 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
       throw new IllegalStateException("event is not set");
     }
     return event.getId();
-  }
-
-  public long getDestOffset() {
-    return offset;
-  }
-
-  public int readableBytes() {
-    return dataBuffer.readableBytes();
-  }
-
-  public long dataMemoryAddress() {
-    return dataBuffer.memoryAddress();
-  }
-
-  public long descMemoryAddress() {
-    return descBuffer.memoryAddress();
   }
 
   private String readKey(ByteBuf buf, int len) {

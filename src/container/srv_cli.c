@@ -99,11 +99,8 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = dsc_cont_init_props(cont, pool->dp_pool, cont_uuid);
-	if (rc != 0) {
-		dc_cont_free(cont);
-		cont = NULL;
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	uuid_copy(cont->dc_cont_hdl, coh_uuid);
 	cont->dc_capas = flags;

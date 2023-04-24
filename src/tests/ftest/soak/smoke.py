@@ -1,15 +1,13 @@
-#!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from test_base import SoakTestBase
+from soak_test_base import SoakTestBase
 
 
 class SoakSmoke(SoakTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs soak smoke.
 
     :avocado: recursive
@@ -24,9 +22,10 @@ class SoakSmoke(SoakTestBase):
         various jobs defined in the soak yaml.  It will run for no more than
         20 min
 
-        :avocado: tags=hw,large
-        :avocado: tags=soak
-        :avocado: tags=soak_smoke
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,24
+        :avocado: tags=soak,soak_smoke
+        :avocado: tags=test_soak_smoke
         """
         test_param = "/run/smoke/"
         self.run_soak(test_param)

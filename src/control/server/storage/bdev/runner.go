@@ -15,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -32,20 +33,6 @@ const (
 )
 
 type runCmdFn func(logging.Logger, []string, string, ...string) (string, error)
-
-type runCmdError struct {
-	wrapped error
-	stdout  string
-}
-
-func (rce *runCmdError) Error() string {
-	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
-		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
-			rce.stdout, ee.Stderr)
-	}
-
-	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
-}
 
 func run(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
 	if os.Geteuid() != 0 {
@@ -69,9 +56,9 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Errorf("run script %q failed, env: %v", cmdPath, env)
-		return "", &runCmdError{
-			wrapped: err,
-			stdout:  string(out),
+		return "", &system.RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
 		}
 	}
 	log.Debugf("run script %q, env: %v, out:\n%s\n", cmdPath, env, out)

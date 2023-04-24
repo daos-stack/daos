@@ -125,7 +125,7 @@ type RASEvent struct {
 	Rank         uint32          `json:"rank"`
 	Incarnation  uint64          `json:"incarnation"`
 	HWID         string          `json:"hw_id"`
-	ProcID       uint64          `json:"proc_id"`
+	ProcID       int             `json:"proc_id"`
 	ThreadID     uint64          `json:"thread_id"`
 	JobID        string          `json:"job_id"`
 	PoolUUID     string          `json:"pool_uuid"`
@@ -195,7 +195,7 @@ func fill(evt *RASEvent) *RASEvent {
 		evt.Hostname = getHostName()
 	}
 	if evt.ProcID == 0 {
-		evt.ProcID = uint64(os.Getpid())
+		evt.ProcID = os.Getpid()
 	}
 	if evt.Severity == RASSeverityUnknown {
 		evt.Severity = RASSeverityNotice
@@ -277,7 +277,7 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		Rank:        pbEvt.Rank,
 		Incarnation: pbEvt.Incarnation,
 		HWID:        pbEvt.HwId,
-		ProcID:      pbEvt.ProcId,
+		ProcID:      int(pbEvt.ProcId),
 		ThreadID:    pbEvt.ThreadId,
 		JobID:       pbEvt.JobId,
 		PoolUUID:    pbEvt.PoolUuid,

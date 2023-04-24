@@ -14,8 +14,8 @@
 #define __VOS_TS__
 
 #include <daos/dtx.h>
-#include <lru_array.h>
-#include <vos_tls.h>
+#include "lru_array.h"
+#include "vos_tls.h"
 
 struct vos_ts_table;
 struct vos_ts_entry;
@@ -146,9 +146,9 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rh;
 	/** Global write timestamps */
 	struct vos_wts_cache	tt_w_cache;
-	/** Transaciton id associated with global read low timestamp */
+	/** Transaction id associated with global read low timestamp */
 	struct dtx_id		tt_tx_rl;
-	/** Transaciton id associated with global read high timestamp */
+	/** Transaction id associated with global read high timestamp */
 	struct dtx_id		tt_tx_rh;
 	/** Negative entry cache */
 	struct vos_ts_entry	*tt_misses;
@@ -595,6 +595,9 @@ vos_ts_evict(uint32_t *idx, uint32_t type)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
 
+	if (ts_table == NULL)
+		return;
+
 	lrua_evict(ts_table->tt_type_info[type].ti_array, idx);
 }
 
@@ -602,7 +605,12 @@ static inline bool
 vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
+	struct vos_ts_info      *info;
+
+	if (ts_table == NULL)
+		return false;
+
+	info = &ts_table->tt_type_info[type];
 
 	return lrua_peek(info->ti_array, idx, entryp);
 }
@@ -650,13 +658,12 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 
 /** Free an allocated timestamp set
  *
+ * Implemented as a macro to improve logging.
+ *
  * \param[in]	ts_set	Set to free
  */
-static inline void
-vos_ts_set_free(struct vos_ts_set *ts_set)
-{
-	D_FREE(ts_set);
-}
+
+#define vos_ts_set_free(ts_set) D_FREE(ts_set)
 
 /** Internal API to copy timestamp */
 static inline void

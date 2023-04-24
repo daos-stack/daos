@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,10 +33,11 @@ do {								\
 	else							\
 		print_message("-------- FAILED\n");		\
 	sleep(1);						\
+	assert_int_equal(rc, 0);				\
 } while (0)
 
-static int
-sched_test_1()
+static void
+sched_test_1(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -115,7 +116,6 @@ sched_test_1()
 
 out:
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 int
@@ -223,8 +223,8 @@ comp2_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
-static int
-sched_test_2()
+static void
+sched_test_2(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -319,7 +319,6 @@ out:
 	if (verify_cnt)
 		D_FREE(verify_cnt);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 #define REINITS (D_ON_VALGRIND ? 3000 : 3000000)
@@ -361,8 +360,8 @@ incr_count_func(tse_task_t *task)
 }
 
 
-static int
-sched_test_3()
+static void
+sched_test_3(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -411,7 +410,6 @@ out:
 	if (counter)
 		D_FREE(counter);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 #define NUM_REINITS 128
@@ -480,8 +478,8 @@ comp_reinit_cb2(tse_task_t *task, void *data)
 	return 0;
 }
 
-static int
-sched_test_4()
+static void
+sched_test_4(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -551,7 +549,6 @@ out:
 	if (counter)
 		D_FREE(counter);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 static int
@@ -561,8 +558,8 @@ empty_task_body_fn(tse_task_t *task)
 	return 0;
 }
 
-static int
-sched_test_5()
+static void
+sched_test_5(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -625,7 +622,6 @@ reinited:
 
 out:
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 #define NUM_DEPS 128
@@ -666,8 +662,8 @@ check_func_1(tse_task_t *task)
 	return 0;
 }
 
-static int
-sched_test_6()
+static void
+sched_test_6(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task = NULL;
@@ -800,7 +796,6 @@ out:
 	if (counter)
 		D_FREE(counter);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 int
@@ -830,8 +825,8 @@ inc_func3(tse_task_t *task)
 	return 0;
 }
 
-static int
-sched_test_7()
+static void
+sched_test_7(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task = NULL;
@@ -916,7 +911,6 @@ out:
 	if (counter)
 		D_FREE(counter);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 static int
@@ -927,8 +921,8 @@ just_complete_body_fn(tse_task_t *task)
 	return 0;
 }
 
-static int
-sched_test_8()
+static void
+sched_test_8(void **state)
 {
 	tse_sched_t	sched;
 	tse_task_t	*task;
@@ -994,7 +988,6 @@ sched_test_8()
 
 out:
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
 static int
@@ -1118,8 +1111,8 @@ out:
 	pthread_exit(NULL);
 }
 
-static int
-sched_test_9()
+static void
+sched_test_9(void **state)
 {
 	pthread_t			th;
 	pthread_t			*c_th = NULL;
@@ -1217,78 +1210,165 @@ out:
 	D_FREE(c_th);
 	D_FREE(args);
 	TSE_TEST_EXIT(rc);
-	return rc;
 }
 
-int
-main(int argc, char **argv)
+static int
+test_10_task_body(tse_task_t *task)
 {
-	int		test_fail = 0;
-	int		rc;
+	tse_task_complete(task, 0);
+	return 0;
+}
 
-	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
+static void
+sched_test_10(void **state)
+{
+	pthread_t	th_1, th_2;
+	tse_sched_t	sched_1, sched_2;
+	tse_task_t	**tasks = NULL;
+	bool		flag;
+	int		ntask = 100;
+	int		i, rc;
 
-	rc = sched_test_1();
+	TSE_TEST_ENTRY("10", "cross scheduler task dependency test");
+
+	D_ALLOC_ARRAY(tasks, ntask * 2);
+	if (tasks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	stop_progress = 0;
+	print_message("Init Scheduler\n");
+	rc = tse_sched_init(&sched_1, NULL, 0);
 	if (rc != 0) {
-		print_error("SCHED TEST 1 failed: %d\n", rc);
-		test_fail++;
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = tse_sched_init(&sched_2, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = sched_test_2();
+	print_message("Creating progress thread..\n");
+
+	rc = pthread_create(&th_1, NULL, th_sched_progress, &sched_1);
 	if (rc != 0) {
-		print_error("SCHED TEST 2 failed: %d\n", rc);
-		test_fail++;
+		print_error("Failed to create pthread: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = pthread_create(&th_2, NULL, th_sched_progress, &sched_2);
+	if (rc != 0) {
+		print_error("Failed to create pthread: %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = sched_test_3();
-	if (rc != 0) {
-		print_error("SCHED TEST 3 failed: %d\n", rc);
-		test_fail++;
+	for (i = 0; i < ntask * 2; i++) {
+		if (i < ntask)
+			rc = tse_task_create(test_10_task_body, &sched_1, NULL, &tasks[i]);
+		else
+			rc = tse_task_create(test_10_task_body, &sched_2, NULL, &tasks[i]);
+		if (rc != 0) {
+			print_error("Failed to create task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
-	rc = sched_test_4();
-	if (rc != 0) {
-		print_error("SCHED TEST 4 failed: %d\n", rc);
-		test_fail++;
+	for (i = 0; i < ntask; i++) {
+		rc = tse_task_register_deps(tasks[i], 1, &tasks[i + ntask]);
+		if (rc != 0) {
+			print_error("Failed to register task Deps: %d\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
-	rc = sched_test_5();
-	if (rc != 0) {
-		print_error("SCHED TEST 5 failed: %d\n", rc);
-		test_fail++;
+	for (i = 0; i < ntask * 2; i++) {
+		rc = tse_task_schedule(tasks[i], false);
+		if (rc != 0) {
+			print_error("Failed to schedule task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
-	rc = sched_test_6();
+	do {
+		flag = tse_sched_check_complete(&sched_2);
+		if (flag)
+			printf("sched not empty, sleeping\n");
+		sleep(1);
+	} while (!flag);
+	do {
+		flag = tse_sched_check_complete(&sched_1);
+		if (flag)
+			printf("sched not empty, sleeping\n");
+		sleep(1);
+	} while (!flag);
+
+	stop_progress = true;
+	rc = pthread_join(th_1, NULL);
 	if (rc != 0) {
-		print_error("SCHED TEST 6 failed: %d\n", rc);
-		test_fail++;
+		print_error("Failed pthread_join: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = pthread_join(th_2, NULL);
+	if (rc != 0) {
+		print_error("Failed pthread_join: %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = sched_test_7();
-	if (rc != 0) {
-		print_error("SCHED TEST 7 failed: %d\n", rc);
-		test_fail++;
+	print_message("COMPLETE Scheduler\n");
+	tse_sched_addref(&sched_1);
+	tse_sched_complete(&sched_1, 0, false);
+	tse_sched_addref(&sched_2);
+	tse_sched_complete(&sched_2, 0, false);
+
+	print_message("Check scheduler is empty\n");
+	flag = tse_sched_check_complete(&sched_1);
+	tse_sched_decref(&sched_1);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	flag = tse_sched_check_complete(&sched_2);
+	tse_sched_decref(&sched_2);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = sched_test_8();
-	if (rc != 0) {
-		print_error("SCHED TEST 8 failed: %d\n", rc);
-		test_fail++;
-	}
+out:
+	D_FREE(tasks);
+	TSE_TEST_EXIT(rc);
+}
 
-	rc = sched_test_9();
-	if (rc != 0) {
-		print_error("SCHED TEST 9 failed: %d\n", rc);
-		test_fail++;
-	}
 
-	if (test_fail)
-		print_error("ERROR, %d test(s) failed\n", test_fail);
-	else
-		print_message("SUCCESS, all tests passed\n");
+static int
+sched_ut_setup(void **state)
+{
+	return daos_debug_init(DAOS_LOG_DEFAULT);
+}
 
+static int
+sched_ut_teardown(void **state)
+{
 	daos_debug_fini();
-	return test_fail;
+	return 0;
+}
+
+static const struct CMUnitTest sched_uts[] = {
+	{ "SCHED_Test_1", sched_test_1, NULL, NULL},
+	{ "SCHED_Test_2", sched_test_2, NULL, NULL},
+	{ "SCHED_Test_3", sched_test_3, NULL, NULL},
+	{ "SCHED_Test_4", sched_test_4, NULL, NULL},
+	{ "SCHED_Test_5", sched_test_5, NULL, NULL},
+	{ "SCHED_Test_6", sched_test_6, NULL, NULL},
+	{ "SCHED_Test_7", sched_test_7, NULL, NULL},
+	{ "SCHED_Test_8", sched_test_8, NULL, NULL},
+	{ "SCHED_Test_9", sched_test_9, NULL, NULL},
+	{ "SCHED_Test_10", sched_test_10, NULL, NULL}
+};
+
+int main(int argc, char **argv)
+{
+	d_register_alt_assert(mock_assert);
+
+	return cmocka_run_group_tests_name("Event Queue unit tests", sched_uts,
+					   sched_ut_setup, sched_ut_teardown);
 }

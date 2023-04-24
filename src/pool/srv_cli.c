@@ -17,6 +17,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/rebuild.h>
 #include "cli_internal.h"
 
 int

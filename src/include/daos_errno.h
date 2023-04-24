@@ -65,7 +65,7 @@ extern "C" {
 	/** Try again */						\
 	ACTION(DER_AGAIN,		(DER_ERR_GURT_BASE + 13),	\
 	       Try again)						\
-	/** incompatible protocol */					\
+	/** Incompatible protocol */					\
 	ACTION(DER_PROTO,		(DER_ERR_GURT_BASE + 14),	\
 	       Incompatible protocol)					\
 	/** not initialized */						\
@@ -158,7 +158,10 @@ extern "C" {
 	/** Invalid user/group permissions.*/				\
 	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
 	       Unable to access shared memory segment due to		\
-	       incompatible user or group permissions)
+	       incompatible user or group permissions)			\
+	/** Fatal (non-retry-able) transport layer mercury error */	\
+	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
+	       Fatal transport layer mercury error)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
@@ -277,7 +280,21 @@ extern "C" {
 	       One or more control plane components are incompatible)	\
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)
+	       No service available)					\
+	/** The TX ID may be reused. */				\
+	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
+	       TX ID may be reused)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
+	       update again)						\
+	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
+	       NVMe I/O error)						\
+	ACTION(DER_NO_CERT,		(DER_ERR_DAOS_BASE + 43),	\
+	       Unable to access one or more certificates)		\
+	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
+	       Invalid x509 certificate)				\
+	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45),	\
+	       VOS partial update error)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

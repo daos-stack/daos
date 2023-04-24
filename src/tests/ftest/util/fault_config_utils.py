@@ -1,14 +1,13 @@
-#!/usr/bin/python3
-'''
-  (C) Copyright 2019-2021 Intel Corporation.
+"""
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 
 import os
-import io
 import yaml
-from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
+from general_utils import distribute_files, run_command, DaosTestError
+from run_utils import get_clush_command
 
 # a lookup table of predefined faults
 #
@@ -240,6 +239,7 @@ class FaultInjection():
 
     :avocado: recursive
     """
+
     def __init__(self):
         super().__init__()
         self._hosts = []
@@ -248,7 +248,7 @@ class FaultInjection():
         self._fault_list = []
 
     def write_fault_file(self, on_the_fly_fault=None):
-        """ Write out a fault injection config file.
+        """Write out a fault injection config file.
 
         Args:
             on_the_fly_fault --a fault dictionary that isn't predefined
@@ -258,7 +258,7 @@ class FaultInjection():
 
         fi_config = os.path.join(self._test_dir, "fi.yaml")
 
-        with io.open(fi_config, 'w', encoding='utf8') as outfile:
+        with open(fi_config, 'w', encoding='utf8') as outfile:
             yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
             fault_config = []
             if self._fault_list is not None:
@@ -267,7 +267,7 @@ class FaultInjection():
             if on_the_fly_fault is not None:
                 fault_config.append(on_the_fly_fault)
             yaml.dump({'fault_config': fault_config}, outfile,
-                        default_flow_style=False, allow_unicode=True)
+                      default_flow_style=False, allow_unicode=True)
 
         os.environ["D_FI_CONFIG"] = fi_config
 
@@ -299,16 +299,18 @@ class FaultInjection():
 
     def stop(self):
         """Remove the fault injection file created during testing.
+
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
         # Remove the fault injection files on the hosts.
         error_list = []
-        commands = ["rm -f {}".format(self.fault_file)]
+        command = "rm -f {}".format(self.fault_file)
         if self._hosts:
-            commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
+            command = get_clush_command(
+                self._hosts, args="-S -v", command=command, command_sudo=True)
         try:
-            run_command(" ".join(commands), verbose=True, raise_exception=False)
+            run_command(command, verbose=True, raise_exception=False)
         except DaosTestError as error:
             error_list.append(error)
         return error_list

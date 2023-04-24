@@ -110,12 +110,12 @@ struct btr_context {
 	/** cached tree depth, avoid loading from slow memory */
 	uint16_t			 tc_depth;
 	/** credits for drain, see dbtree_drain */
-	int				 tc_creds:30;
+	uint32_t                         tc_creds    : 30;
 	/**
 	 * credits is turned on, \a tcx::tc_creds should be checked
 	 * while draining the tree
 	 */
-	int				 tc_creds_on:1;
+	uint32_t                         tc_creds_on : 1;
 	/**
 	 * returned value of the probe, it should be reset after upsert
 	 * or delete because the probe path could have been changed.
@@ -4183,8 +4183,12 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_INVAL;
 
 	/* XXX should be multi-thread safe */
-	if (btr_class_registered[tree_class].tc_ops != NULL)
-		return -DER_EXIST;
+	if (btr_class_registered[tree_class].tc_ops != NULL) {
+		if (btr_class_registered[tree_class].tc_ops != ops ||
+		    btr_class_registered[tree_class].tc_feats != tree_feats)
+			return -DER_EXIST;
+		return 0;
+	}
 
 	/* These are mandatory functions */
 	D_ASSERT(ops != NULL);

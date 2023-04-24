@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -10,7 +9,6 @@ from network_utils import get_network_information, get_dmg_network_information, 
 
 
 class DmgNetworkScanTest(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Simple test to verify the network scan function of the dmg tool.
@@ -33,8 +31,8 @@ class DmgNetworkScanTest(TestWithServers):
         server_provider = self.server_managers[0].get_config_value("provider")
         sys_info = []
         for entry in get_network_information(self.hostlist_servers, SUPPORTED_PROVIDERS):
-            if entry.device.startswith("ib") and server_provider in entry.provider:
-                entry.ib_device = None
+            if server_provider in entry.provider:
+                entry.device = None
                 sys_info.append(entry)
         return sys_info
 
@@ -55,15 +53,15 @@ class DmgNetworkScanTest(TestWithServers):
         devices on the system.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=dmg,control
-        :avocado: tags=network_scan,basic,test_dmg_network_scan_basic
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,control,network_scan,basic
+        :avocado: tags=DmgNetworkScanTest,test_dmg_network_scan_basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
-            self.get_dmg_info(), key=lambda x: (x.device, x.provider))
+            self.get_dmg_info(), key=lambda x: (x.name, x.provider))
         sys_info = sorted(
-            self.get_sys_info(), key=lambda x: (x.device, x.provider))
+            self.get_sys_info(), key=lambda x: (x.name, x.provider))
 
         # Validate the output with what we expect.
         for title, info in {"SYS INFO": sys_info, "DMG INFO": dmg_info}.items():

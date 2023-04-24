@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,8 +42,8 @@
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
-#define DF_UOID		DF_OID".%u"
-#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+#define DF_UOID		DF_OID".%u.%u"
+#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard, (uo).id_layout_ver
 #define DF_BOOL "%s"
 #define DP_BOOL(b) ((b) ? "true" : "false")
 #define DF_IOV "<%p, %zu/%zu>"
@@ -66,11 +66,11 @@ struct daos_tree_overhead {
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
-	int				to_dyn_count;
+	int                             to_dyn_count;
 	/** Inline metadata size for each record */
-	int				to_node_rec_msize;
+	int                             to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int				to_record_msize;
+	int                             to_record_msize;
 };
 
 /** Points to a byte in an iov, in an sgl */
@@ -599,9 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
-	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
@@ -615,6 +613,7 @@ daos_quiet_error(int err)
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
+#define daos_rank_list_merge		d_rank_list_merge
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_shuffle		d_rank_list_shuffle
@@ -774,10 +773,13 @@ enum {
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 #define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
+#define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
+#define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
+#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -789,12 +791,16 @@ enum {
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
+#define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
-
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
+#define DAOS_POOL_UPGRADE_CONT_ABORT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
+
+#define DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY \
+					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
@@ -814,6 +820,9 @@ enum {
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
 #define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
+#define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
+#define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
+#define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -836,7 +845,12 @@ struct daos_hhash_table {
 extern struct daos_hhash_table daos_ht;
 
 /* daos handle hash table helpers */
-int daos_hhash_init(void);
+int daos_hhash_init_feats(uint32_t feats);
+static inline int
+daos_hhash_init(void)
+{
+	return daos_hhash_init_feats(D_HASH_FT_GLOCK | D_HASH_FT_LRU);
+}
 int daos_hhash_fini(void);
 struct d_hlink *daos_hhash_link_lookup(uint64_t key);
 void daos_hhash_link_insert(struct d_hlink *hlink, int type);
@@ -865,17 +879,40 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
 #define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
 
+/** check if recx_1 is covered by recx_2 */
+#define DAOS_RECX_COVERED(recx_1, recx_2)				\
+	(((recx_1).rx_idx >= (recx_2).rx_idx) &&			\
+	 (DAOS_RECX_END(recx_1) <= DAOS_RECX_END(recx_2)))
+
 /**
  * Merge \a src recx to \a dst recx.
  */
 static inline void
+daos_recx_merge_with_offset_size(daos_recx_t *dst, uint64_t offset, uint64_t size)
+{
+	uint64_t end;
+
+	end = max(offset + size, DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(offset, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
+static inline void
 daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 {
-	uint64_t	end;
+	daos_recx_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
+}
 
-	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
-	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
-	dst->rx_nr = end - dst->rx_idx;
+static inline bool
+daos_recx_can_merge_with_offset_size(daos_recx_t *recx, uint64_t offset, uint64_t size)
+{
+	return max(recx->rx_idx, offset) <= min(DAOS_RECX_END(*recx), offset + size);
+}
+
+static inline bool
+daos_recx_can_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	return daos_recx_can_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
 }
 
 /* NVMe shared constants */

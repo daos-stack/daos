@@ -1,59 +1,51 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
+  test_servers: 4
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
 timeout: 600
 timeouts:
-    test_daos_degraded_mode: 450
-    test_daos_management: 110
-    test_daos_pool: 120
-    test_daos_container: 250
-    test_daos_epoch: 125
-    test_daos_verify_consistency: 105
-    test_daos_io: 290
-    test_daos_ec_io: 450
-    test_daos_ec_obj: 600
-    test_daos_object_array: 105
-    test_daos_array: 106
-    test_daos_kv: 105
-    test_daos_capability: 104
-    test_daos_epoch_recovery: 104
-    test_daos_md_replication: 104
-    test_daos_rebuild_simple: 1500
-    test_daos_drain_simple: 500
-    test_daos_extend_simple: 500
-    test_daos_oid_allocator: 640
-    test_daos_checksum: 500
-    test_daos_rebuild_ec: 3600
-    test_daos_aggregate_ec: 200
-    test_daos_degraded_ec: 1900
-    test_daos_dedup: 220
+  test_daos_degraded_mode: 450
+  test_daos_management: 110
+  test_daos_pool: 180
+  test_daos_container: 450
+  test_daos_epoch: 125
+  test_daos_verify_consistency: 105
+  test_daos_io: 290
+  test_daos_ec_io: 450
+  test_daos_ec_obj: 600
+  test_daos_object_array: 105
+  test_daos_array: 106
+  test_daos_kv: 105
+  test_daos_capability: 104
+  test_daos_epoch_recovery: 104
+  test_daos_md_replication: 104
+  test_daos_rebuild_simple: 1800
+  test_daos_drain_simple: 2000
+  test_daos_extend_simple: 3600
+  test_daos_oid_allocator: 640
+  test_daos_checksum: 500
+  test_daos_rebuild_ec: 4800
+  test_daos_aggregate_ec: 200
+  test_daos_degraded_ec: 1900
+  test_daos_dedup: 220
+  test_daos_upgrade: 300
 pool:
-  #This will create 8G of SCM and 16G of NVMe size of pool.
+  # This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
   nvme_size: 16G
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
@@ -61,17 +53,13 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
@@ -79,14 +67,15 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+      storage: auto
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 daos_tests:
   num_clients:
     test_daos_degraded_mode: 1
@@ -115,6 +104,7 @@ daos_tests:
     test_daos_aggregate_ec: 1
     test_daos_degraded_ec: 1
     test_daos_dedup: 1
+    test_daos_upgrade: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management
@@ -142,6 +132,7 @@ daos_tests:
     test_daos_degraded_ec: DAOS_Degraded_EC
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
+    test_daos_upgrade: DAOS_Upgrade
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
@@ -169,11 +160,22 @@ daos_tests:
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec: X
     test_daos_dedup: U
+    test_daos_upgrade: P
   args:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
   scalable_endpoint:
-    test_daos_degraded_mode: True
+    test_daos_degraded_mode: true
   stopped_ranks:
     test_daos_degraded_mode: [5, 6, 7]
     test_daos_oid_allocator: [6, 7]
+  pools_created:
+    test_daos_management: 4
+    test_daos_pool: 9
+    test_daos_container: 17
+    test_daos_distributed_tx: 5
+    test_daos_rebuild_simple: 21
+    test_daos_drain_simple: 8
+    test_daos_extend_simple: 5
+    test_daos_rebuild_ec: 43
+    test_daos_degraded_ec: 29

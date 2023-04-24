@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,11 +66,11 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 	} while (0)
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
-#define VOS_OBJ_ORDER		20	/* Order of object tree */
-#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
-#define VOS_EVT_ORDER		23	/* evtree order */
-#define DTX_BTREE_ORDER	23	/* Order for DTX tree */
+#define VOS_OBJ_ORDER           15      /* Order of object tree */
+#define VOS_KTR_ORDER           20      /* Order of d/a-key tree */
+#define VOS_SVT_ORDER           5       /* Order of single value tree */
+#define VOS_EVT_ORDER           15      /* Order of evtree */
+#define DTX_BTREE_ORDER         23      /* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
 extern struct dss_module_key vos_module_key;
@@ -94,6 +94,14 @@ enum {
 	/** Reserved local ids */
 	DTX_LID_RESERVED,
 };
+
+/**
+ * If the highest bit (31th) of the DTX entry offset is set, then it is for
+ * solo (single modification against single replicated object) transaction.
+ */
+#define DTX_LID_SOLO_BITS	31
+#define DTX_LID_SOLO_FLAG	(1UL << DTX_LID_SOLO_BITS)
+#define DTX_LID_SOLO_MASK	(DTX_LID_SOLO_FLAG - 1)
 
 /*
  * When aggregate merge window reaches this size threshold, it will stop
@@ -132,6 +140,7 @@ enum {
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
 extern unsigned int vos_agg_nvme_thresh;
+extern bool vos_dkey_punch_propagate;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -178,9 +187,16 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 };
 
+struct vos_space_metrics {
+	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
+	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
+};
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_space_metrics vp_space_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -191,8 +207,8 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	int			vp_opened:30;
-	int			vp_dying:1;
+	uint32_t                 vp_opened : 30;
+	uint32_t                 vp_dying  : 1;
 	/** exclusive handle (see VOS_POF_EXCL) */
 	int			vp_excl:1;
 	/** caller specifies pool is small (for sys space reservation) */
@@ -232,6 +248,8 @@ struct vos_pool {
 	uint32_t		 vp_dtx_committed_count;
 	/** Tiering policy */
 	struct policy_desc_t	vp_policy_desc;
+	/** Space (in percentage) reserved for rebuild */
+	unsigned int		vp_space_rb;
 };
 
 /**
@@ -279,6 +297,12 @@ struct vos_container {
 	uint64_t		vc_agg_nospc_ts;
 	/* Last timestamp when IO reporting ENOSPACE */
 	uint64_t		vc_io_nospc_ts;
+	/* The (next) position for committed DTX entries reindex. */
+	umem_off_t		vc_cmt_dtx_reindex_pos;
+	/* The epoch for the latest committed solo DTX. Any solo
+	 * * transaction with older epoch must have been committed.
+	 */
+	daos_epoch_t		vc_solo_dtx_epoch;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -305,7 +329,7 @@ struct vos_dtx_act_ent {
 	/* If single object is modified and if it is the same as the
 	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
 	 *
-	 * If the single object is differet from 'dae_base::dae_oid',
+	 * If the single object is different from 'dae_base::dae_oid',
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
@@ -316,16 +340,21 @@ struct vos_dtx_act_ent {
 	 */
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
-	daos_epoch_t			 dae_start_time;
+	uint64_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
+					 dae_committing:1,
 					 dae_committed:1,
+					 dae_aborting:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
+					 /* Need validation on leader before commit/committable. */
+					 dae_need_validation:1,
+					 dae_preparing:1,
 					 dae_prepared:1;
 };
 
@@ -398,6 +427,62 @@ D_CASSERT((VOS_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT - VOS_AGG_NR_BITS))) == 
 CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
 CHECK_VOS_TREE_FLAG(VOS_TF_AGG_OPT);
 CHECK_VOS_TREE_FLAG(VOS_AGG_TIME_MASK);
+
+/* For solo transaction (single modification against single replicated object),
+ * consider efficiency, we do not generate persistent DTX entry. Then we need
+ * some special mechanism to maintain the semantics: any readable data must be
+ * persistently visible unless it is over-written by newer modification. That
+ * is the same behavior as non-solo cases. So if the local backend TX for the
+ * solo transaction is in committing, then related modification is invisible
+ * until related local backend TX has been successfully committed. (NOTE: in
+ * committing modification maybe lost if engine crashed before commit done.)
+ *
+ * For this purpose, we will reuse the DTX entry index (uint32_t) in the data
+ * record (ilog/svt/evt). Originally, such 32-bits integer is used as the DTX
+ * entry offset in the DTX LRU array. Up to now, we only use the lower 20 bits
+ * (DTX_ARRAY_LEN). Now, the highest (31th) bit will be used as a solo flag to
+ * indicate a solo DTX. On the other hand, we will trace the epoch against the
+ * container for the latest committed solo DTX. Anytime, for a given solo DTX,
+ * if its epoch is newer than the one for the container known latest committed
+ * solo DTX, then it is in committing status; otherwise, it has been committed.
+ */
+static inline bool
+dtx_is_committed(uint32_t tx_lid, struct vos_container *cont, daos_epoch_t epoch)
+{
+	if (tx_lid == DTX_LID_COMMITTED)
+		return true;
+
+	D_ASSERT(cont != NULL);
+
+	if (tx_lid & DTX_LID_SOLO_FLAG && cont->vc_solo_dtx_epoch >= epoch)
+		return true;
+
+	return false;
+}
+
+static inline bool
+dtx_is_aborted(uint32_t tx_lid)
+{
+	return tx_lid == DTX_LID_ABORTED;
+}
+
+static inline bool
+vos_dtx_is_normal_entry(uint32_t tx_lid)
+{
+	return tx_lid >= DTX_LID_RESERVED && !(tx_lid & DTX_LID_SOLO_FLAG);
+}
+
+static inline void
+dtx_set_committed(uint32_t *tx_lid)
+{
+	*tx_lid = DTX_LID_COMMITTED;
+}
+
+static inline void
+dtx_set_aborted(uint32_t *tx_lid)
+{
+	*tx_lid = DTX_LID_ABORTED;
+}
 
 /** Get the aggregatable write timestamp within 1/4 ms granularity */
 static inline bool
@@ -550,21 +635,22 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
  * Get local entry DTX state. Only used by VOS aggregation.
  *
  * \param entry		[IN]	DTX local id
+ * \param cont		[IN]	Pointer to the vos container.
+ * \param epoch		[IN]	Epoch for the entry.
  *
  * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
  *			DTX_ST_ABORTED.
  */
 static inline unsigned int
-vos_dtx_ent_state(uint32_t entry)
+vos_dtx_ent_state(uint32_t entry, struct vos_container *cont, daos_epoch_t epoch)
 {
-	switch (entry) {
-	case DTX_LID_COMMITTED:
+	if (dtx_is_committed(entry, cont, epoch))
 		return DTX_ST_COMMITTED;
-	case DTX_LID_ABORTED:
+
+	if (dtx_is_aborted(entry))
 		return DTX_ST_ABORTED;
-	default:
-		return DTX_ST_PREPARED;
-	}
+
+	return DTX_ST_PREPARED;
 }
 
 /**
@@ -909,6 +995,8 @@ struct vos_iterator {
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
+	uint64_t                 it_seq;
+	struct vos_iter_anchors *it_anchors;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -993,8 +1081,8 @@ struct vos_iter_ops {
 	int	(*iop_copy)(struct vos_iterator *iter,
 			    vos_iter_entry_t *it_entry, d_iov_t *iov_out);
 	/** Delete the record that the cursor points to */
-	int	(*iop_delete)(struct vos_iterator *iter,
-			      void *args);
+	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
+			       void *args);
 	/**
 	 * Optional, the iterator has no element.
 	 *
@@ -1286,31 +1374,54 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
-/* Slab allocation */
-enum {
-	VOS_SLAB_OBJ_NODE	= 0,
-	VOS_SLAB_KEY_NODE	= 1,
-	VOS_SLAB_SV_NODE	= 2,
-	VOS_SLAB_EVT_NODE	= 3,
-	VOS_SLAB_EVT_DESC	= 4,
-	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_EVT_NODE_SM	= 6,
-	VOS_SLAB_MAX		= 7
+/** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */
+static const int        slab_map[] = {
+    0,          /* 32 bytes */
+    1,          /* 64 bytes */
+    2,          /* 96 bytes */
+    3,          /* 128 bytes */
+    4,          /* 160 bytes */
+    5,          /* 192 bytes */
+    6,          /* 224 bytes */
+    7,          /* 256 bytes */
+    8,          /* 288 bytes */
+    -1, 9,      /* 352 bytes */
+    10,         /* 384 bytes */
+    11,         /* 416 bytes */
+    -1, -1, 12, /* 512 bytes */
+    -1, 13,     /* 576 bytes (2.2 compatibility only) */
+    -1, -1, 14, /* 672 bytes (2.2 compatibility only) */
+    -1, -1, 15, /* 768 bytes (2.2 compatibility only) */
 };
-D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
 static inline umem_off_t
-vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
+vos_slab_alloc(struct umem_instance *umm, int size)
 {
-	/* evtree unit tests may skip slab register in vos_pool_open() */
-	D_ASSERTF(!umem_slab_registered(umm, slab_id) ||
-		  size == umem_slab_usize(umm, slab_id),
-		  "registered: %d, id: %d, size: %d != %zu\n",
-		  umem_slab_registered(umm, slab_id),
-		  slab_id, size, umem_slab_usize(umm, slab_id));
+	int aligned_size = D_ALIGNUP(size, 32);
+	int slab_idx;
+	int slab;
 
-	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
-					POBJ_FLAG_ZERO, size);
+	slab_idx = (aligned_size >> 5) - 1;
+	if (slab_idx >= ARRAY_SIZE(slab_map))
+		goto no_slab_alloc;
+
+	if (slab_map[slab_idx] == -1) {
+		D_DEBUG(DB_MGMT, "No slab %d for allocation of size %d, idx=%d\n", aligned_size,
+			size, slab_idx);
+		goto no_slab_alloc;
+	}
+
+	slab = slab_map[slab_idx];
+
+	/* evtree unit tests may skip slab register in vos_pool_open() */
+	D_ASSERTF(!umem_slab_registered(umm, slab) || aligned_size == umem_slab_usize(umm, slab),
+		  "registered: %d, id: %d, size: %d != %zu\n", umem_slab_registered(umm, slab),
+		  slab, aligned_size, umem_slab_usize(umm, slab));
+
+	return umem_alloc_verb(umm, umem_slab_flags(umm, slab) | POBJ_FLAG_ZERO, aligned_size);
+
+no_slab_alloc:
+	return umem_zalloc(umm, size);
 }
 
 /* vos_space.c */
@@ -1326,6 +1437,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+void
+vos_space_update_metrics(struct vos_pool *pool);
 
 static inline bool
 vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
@@ -1457,6 +1570,30 @@ struct csum_recalc_args {
 
 int vos_csum_recalc_fn(void *recalc_args);
 
+static inline bool
+vos_dae_is_commit(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_committable || dae->dae_committing || dae->dae_committed;
+}
+
+static inline bool
+vos_dae_is_abort(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_aborting || dae->dae_aborted;
+}
+
+static inline bool
+vos_dae_is_prepare(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_preparing || dae->dae_prepared;
+}
+
+static inline bool
+vos_dae_in_process(struct vos_dtx_act_ent *dae)
+{
+	return dae->dae_committing || dae->dae_aborting || dae->dae_preparing;
+}
+
 static inline struct dcs_csum_info *
 vos_csum_at(struct dcs_iod_csums *iod_csums, unsigned int idx)
 {
@@ -1507,6 +1644,12 @@ vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_
  */
 int
 vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoch_t epoch);
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov);
 
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)

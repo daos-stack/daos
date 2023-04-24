@@ -1,7 +1,7 @@
 """Build versioned extent allocator"""
-import os
 
 FILES = ['vea_alloc.c', 'vea_api.c', 'vea_free.c', 'vea_hint.c', 'vea_init.c', 'vea_util.c']
+
 
 def scons():
     """Execute build"""
@@ -16,10 +16,11 @@ def scons():
     prereqs.require(denv, 'pmdk')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    denv.Library('vea', FILES, LIBS=['daos_common_pmem', 'gurt'])
+    denv.d_static_library('vea', FILES, LIBS=['daos_common_pmem'])
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

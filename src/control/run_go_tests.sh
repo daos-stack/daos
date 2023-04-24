@@ -93,6 +93,7 @@ function setup_environment()
 		echo "Unable to find .build_vars.sh" && exit 1
 	fi
 
+	# shellcheck disable=SC1090
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
@@ -102,6 +103,7 @@ function setup_environment()
 	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
 	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
+	CGO_LDFLAGS+="${SL_BUILD_DIR+ -L${SL_BUILD_DIR}/src/control/lib/spdk}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
 	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
@@ -115,18 +117,46 @@ function setup_environment()
 	fi
 }
 
+function emit_junit_failure()
+{
+    local cname="run_go_tests"
+    local tname="${1:-subtest}"
+    local fname="${DAOS_BASE}/test_results/${cname}.${tname}.xml"
+
+    local teststr="    <testcase classname=\"$cname\" name=\"$tname\">
+    <failure type=\"format\">
+      <![CDATA[$2
+        ]]>
+    </failure>
+    </testcase>"
+
+    cat > "${fname}" << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites>
+  <testsuite tests="1" failures="1" errors="0" skipped="0" >
+    ${teststr}
+  </testsuite>
+</testsuites>
+EOF
+}
+
 function check_formatting()
 {
 	srcdir=${1:-"./"}
 	output=$(find "$srcdir/" -name '*.go' -and -not -path '*vendor*' \
 		-print0 | xargs -0 gofmt -d)
 	if [ -n "$output" ]; then
-		echo "ERROR: Your code hasn't been run through gofmt!"
-		echo "Please configure your editor to run gofmt on save."
-		echo "Alternatively, at a minimum, run the following command:"
-		echo -n "find $srcdir/ -name '*.go' -and -not -path '*vendor*'"
-		echo "| xargs gofmt -w"
-		echo -e "\ngofmt check found the following:\n\n$output\n"
+		errmsg="ERROR: Your code hasn't been run through gofmt!
+Please configure your editor to run gofmt on save.
+Alternatively, at a minimum, run the following command:
+find $srcdir/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
+
+gofmt check found the following:
+
+$output
+"
+		emit_junit_failure "gofmt" "$errmsg"
+		echo "$errmsg"
 		exit 1
 	fi
 }
@@ -141,7 +171,7 @@ function get_test_runner()
 		test_runner="gotestsum --format short "
 		test_runner+="--junitfile-testcase-classname relative "
 		test_runner+="--junitfile-testsuite-name relative "
-		if [ -n "${IS_CI:-}" ]; then
+		if ${IS_CI:-false}; then
 			test_runner+="--no-color "
 		fi
 		test_runner+="--junitfile $GO_TEST_XML --"
@@ -156,10 +186,12 @@ if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
-DAOS_BASE=${DAOS_BASE:-${SL_PREFIX%/install*}}
+DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
+
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
+GO_TEST_EXTRA_ARGS=${*:-""}
 
 controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
@@ -179,7 +211,7 @@ set +e
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-	$GO_TEST_RUNNER
+	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS"
 testrc=$?
 popd >/dev/null
 

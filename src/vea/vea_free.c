@@ -132,9 +132,23 @@ undock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 	}
 }
 
+#define LARGE_AGING_FRAG_BLKS	8192
+
+static inline bool
+is_aging_frag_large(struct vea_free_extent *vfe)
+{
+	return vfe->vfe_blk_cnt >= LARGE_AGING_FRAG_BLKS;
+}
+
+static inline void
+dock_aging_entry(struct vea_space_info *vsi, struct vea_entry *entry)
+{
+	d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+	inc_stats(vsi, STAT_FRAGS_AGING, 1);
+}
+
 static int
-dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
-	   unsigned int type)
+dock_entry(struct vea_space_info *vsi, struct vea_entry *entry, unsigned int type)
 {
 	int rc = 0;
 
@@ -144,8 +158,7 @@ dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 	} else {
 		D_ASSERT(type == VEA_TYPE_AGGREGATE);
 		D_ASSERT(d_list_empty(&entry->ve_link));
-		d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
-		inc_stats(vsi, STAT_FRAGS_AGING, 1);
+		dock_aging_entry(vsi, entry);
 	}
 
 	return rc;
@@ -170,7 +183,7 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 	daos_handle_t		 btr_hdl;
 	d_iov_t			 key, key_out, val;
 	uint64_t		*off;
-	bool			 fetch_prev = true;
+	bool			 fetch_prev = true, large_prev = false;
 	int			 rc, del_opc = BTR_PROBE_BYPASS;
 
 	if (type == VEA_TYPE_COMPOUND)
@@ -252,6 +265,23 @@ repeat:
 	rc = fetch_prev ? ext_adjacent(ext, &merged) : ext_adjacent(&merged, ext);
 	if (rc < 0)
 		return rc;
+
+	/*
+	 * When the in-tree aging frag is large enough, we'd stop merging with them,
+	 * otherwise, the large aging frag could keep growing and stay in aging buffer
+	 * for too long time.
+	 *
+	 * When the 'prev' and 'next' frags are both large, the freed frag will be
+	 * merged with 'next'.
+	 */
+	if (rc > 0 && type == VEA_TYPE_AGGREGATE && is_aging_frag_large(ext)) {
+		if (fetch_prev) {
+			rc = 0;
+			large_prev = true;
+		} else if (!large_prev) {
+			rc = 0;
+		}
+	}
 
 	if (rc > 0) {
 		if (flags & VEA_FL_NO_MERGE) {
@@ -434,174 +464,186 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	entry = (struct vea_entry *)val_out.iov_buf;
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
-	/* Add to the tail of aggregate LRU list */
-	d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
-	inc_stats(vsi, STAT_FRAGS_AGING, 1);
-
+	dock_aging_entry(vsi, entry);
 	return 0;
 }
 
-struct vea_unmap_extent {
-	struct vea_free_extent	vue_ext;
-	d_list_t		vue_link;
-};
+#define FLUSH_INTVL		5	/* seconds */
+#define EXPIRE_INTVL		10	/* seconds */
 
-#define MAX_FLUSH_FRAGS	2000
-
-void
-migrate_end_cb(void *data, bool noop)
+static int
+flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_list_t *unmap_sgl)
 {
-	struct vea_space_info	*vsi = data;
 	struct vea_entry	*entry, *tmp;
 	struct vea_free_extent	 vfe;
-	struct vea_unmap_extent	*vue, *tmp_vue;
-	d_list_t		 unmap_list;
-	uint32_t		 cur_time;
-	int			 rc, frags = 0;
-
-	if (noop)
-		return;
-
-	cur_time = get_current_age();
-	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
-		return;
+	d_iov_t			*unmap_iov;
+	int			 i, rc = 0;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-	D_ASSERT(vsi != NULL);
-	D_INIT_LIST_HEAD(&unmap_list);
+	D_ASSERT(unmap_sgl->sg_nr_out == 0);
 
 	d_list_for_each_entry_safe(entry, tmp, &vsi->vsi_agg_lru, ve_link) {
 		d_iov_t	key;
 
 		vfe = entry->ve_ext;
-		/* Not force migration, and the oldest extent isn't expired */
-		if (vsi->vsi_agg_time != 0 &&
-		    cur_time < (vfe.vfe_age + VEA_MIGRATE_INTVL))
+		if (!force && cur_time < (vfe.vfe_age + EXPIRE_INTVL))
 			break;
 
 		/* Remove entry from aggregate LRU list */
 		d_list_del_init(&entry->ve_link);
 		dec_stats(vsi, STAT_FRAGS_AGING, 1);
-		frags++;
 
-		/*
-		 * Remove entry from aggregate tree, entry will be freed on
-		 * deletion.
-		 */
+		/* Remove entry from aggregate tree, entry will be freed on deletion */
 		d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 		D_ASSERT(daos_handle_is_valid(vsi->vsi_agg_btr));
 		rc = dbtree_delete(vsi->vsi_agg_btr, BTR_PROBE_EQ, &key, NULL);
 		if (rc) {
-			D_ERROR("Remove ["DF_U64", %u] from aggregated "
-				"tree error: %d\n", vfe.vfe_blk_off,
-				vfe.vfe_blk_cnt, rc);
+			D_ERROR("Remove ["DF_U64", %u] from aggregated tree error: "DF_RC"\n",
+				vfe.vfe_blk_off, vfe.vfe_blk_cnt, DP_RC(rc));
 			break;
 		}
 
-		/*
-		 * Unmap callback may yield, so we can't call it directly in
-		 * this tight loop.
-		 */
-		if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL) {
-			D_ALLOC_PTR(vue);
-			if (vue == NULL) {
-				break;
-			}
+		/* Unmap callback may yield, so we can't call it directly in this tight loop */
+		unmap_sgl->sg_nr_out++;
+		unmap_iov = &unmap_sgl->sg_iovs[unmap_sgl->sg_nr_out - 1];
+		unmap_iov->iov_buf = (void *)vfe.vfe_blk_off;
+		unmap_iov->iov_len = vfe.vfe_blk_cnt;
 
-			vue->vue_ext = vfe;
-			d_list_add_tail(&vue->vue_link, &unmap_list);
-		} else {
-			vfe.vfe_age = cur_time;
-			rc = compound_free(vsi, &vfe, 0);
-			if (rc) {
-				D_ERROR("Compound free ["DF_U64", %u] error: "
-					"%d\n", vfe.vfe_blk_off,
-					vfe.vfe_blk_cnt, rc);
-				break;
-			}
-		}
-		if (frags >= MAX_FLUSH_FRAGS)
+		if (unmap_sgl->sg_nr_out == MAX_FLUSH_FRAGS)
 			break;
 	}
 
-	/* Update aggregation time before yield */
-	vsi->vsi_agg_time = cur_time;
-	vsi->vsi_agg_scheduled = false;
+	vsi->vsi_flush_time = cur_time;
 
 	/*
 	 * According to NVMe spec, unmap isn't an expensive non-queue command
 	 * anymore, so we should just unmap as soon as the extent is freed.
+	 *
+	 * Since unmap could yield, it must be called before the compound_free(),
+	 * otherwise, the extent could be visible for allocation before unmap done.
 	 */
-	d_list_for_each_entry_safe(vue, tmp_vue, &unmap_list, vue_link) {
-		uint32_t blk_sz = vsi->vsi_md->vsd_blk_sz;
-		uint64_t off = vue->vue_ext.vfe_blk_off * blk_sz;
-		uint64_t cnt = (uint64_t)vue->vue_ext.vfe_blk_cnt * blk_sz;
-
-		d_list_del(&vue->vue_link);
-
-		/*
-		 * Since unmap could yield, it must be called before
-		 * compound_free(), otherwise, the extent could be visible
-		 * for allocation before unmap done.
-		 */
-		rc = vsi->vsi_unmap_ctxt.vnc_unmap(off, cnt,
-					vsi->vsi_unmap_ctxt.vnc_data);
+	if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL && unmap_sgl->sg_nr_out > 0) {
+		rc = vsi->vsi_unmap_ctxt.vnc_unmap(unmap_sgl, vsi->vsi_md->vsd_blk_sz,
+						   vsi->vsi_unmap_ctxt.vnc_data);
 		if (rc)
-			D_ERROR("Unmap ["DF_U64", "DF_U64"] error: %d\n",
-				off, cnt, rc);
-
-		vue->vue_ext.vfe_age = cur_time;
-		rc = compound_free(vsi, &vue->vue_ext, 0);
-		if (rc)
-			D_ERROR("Compound free ["DF_U64", %u] error: %d\n",
-				vue->vue_ext.vfe_blk_off,
-				vue->vue_ext.vfe_blk_cnt, rc);
-		D_FREE(vue);
+			D_ERROR("Unmap %u frags failed: "DF_RC"\n",
+				unmap_sgl->sg_nr_out, DP_RC(rc));
 	}
+
+	for (i = 0; i < unmap_sgl->sg_nr_out; i++) {
+		unmap_iov = &unmap_sgl->sg_iovs[i];
+
+		vfe.vfe_blk_off = (uint64_t)unmap_iov->iov_buf;
+		vfe.vfe_blk_cnt = unmap_iov->iov_len;
+		vfe.vfe_age = cur_time;
+
+		rc = compound_free(vsi, &vfe, 0);
+		if (rc)
+			D_ERROR("Compound free ["DF_U64", %u] error: "DF_RC"\n",
+				vfe.vfe_blk_off, vfe.vfe_blk_cnt, DP_RC(rc));
+	}
+
+	return rc;
 }
 
-void
-migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
+static inline bool
+need_aging_flush(struct vea_space_info *vsi, uint32_t cur_time, bool force)
 {
-	uint32_t	cur_time;
-	int		rc;
+	if (d_list_empty(&vsi->vsi_agg_lru))
+		return false;
 
-	/* Perform the migration instantly if not in a transaction */
-	if (pmemobj_tx_stage() == TX_STAGE_NONE) {
-		migrate_end_cb((void *)vsi, false);
-		return;
+	/* External flush controls the flush rate externally */
+	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+		return true;
+
+	if (!force && cur_time < (vsi->vsi_flush_time + FLUSH_INTVL))
+		return false;
+
+	return true;
+}
+
+int
+trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush,
+		    uint32_t *nr_flushed)
+{
+	d_sg_list_t	 unmap_sgl;
+	uint32_t	 cur_time, tot_flushed = 0;
+	int		 rc;
+
+	D_ASSERT(nr_flush > 0);
+	if (pmemobj_tx_stage() != TX_STAGE_NONE) {
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	/*
-	 * Skip this free extent migration if the transaction is started
-	 * without tx callback data provided, see umem_tx_begin().
-	 */
-	if (!add_tx_cb)
-		return;
-
-	/*
-	 * Check aggregation time in advance to avoid unnecessary
-	 * umem_tx_add_callback() calls.
-	 */
 	cur_time = get_current_age();
+	if (!need_aging_flush(vsi, cur_time, force)) {
+		rc = 0;
+		goto out;
+	}
 
-	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
-		return;
+	rc = d_sgl_init(&unmap_sgl, MAX_FLUSH_FRAGS);
+	if (rc)
+		goto out;
 
-	/* Schedule one migrate_end_cb() is enough */
-	if (vsi->vsi_agg_scheduled)
-		return;
+	while (tot_flushed < nr_flush) {
+		rc = flush_internal(vsi, force, cur_time, &unmap_sgl);
+
+		tot_flushed += unmap_sgl.sg_nr_out;
+		if (rc || unmap_sgl.sg_nr_out < MAX_FLUSH_FRAGS)
+			break;
+
+		unmap_sgl.sg_nr_out = 0;
+	}
+
+	d_sgl_fini(&unmap_sgl, false);
+out:
+	if (nr_flushed != NULL)
+		*nr_flushed = tot_flushed;
+
+	return rc;
+}
+
+static void
+flush_end_cb(void *data, bool noop)
+{
+	struct vea_space_info	*vsi = data;
+
+	if (!noop)
+		trigger_aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
+
+	vsi->vsi_flush_scheduled = false;
+}
+
+int
+schedule_aging_flush(struct vea_space_info *vsi)
+{
+	int	rc;
+
+	D_ASSERT(vsi != NULL);
+
+	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+		return 0;
+
+	/* Check flush condition in advance to avoid unnecessary umem_tx_add_callback() */
+	if (!need_aging_flush(vsi, get_current_age(), false))
+		return 0;
+
+	/* Schedule one transaction end callback flush is enough */
+	if (vsi->vsi_flush_scheduled)
+		return 0;
 
 	/*
-	 * Perform the migration in transaction end callback, since the
-	 * migration could yield on blob unmap.
+	 * Perform the flush in transaction end callback, since the flush operation
+	 * could yield on blob unmap.
 	 */
 	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, TX_STAGE_NONE,
-				  migrate_end_cb, vsi);
+				  flush_end_cb, vsi);
 	if (rc) {
-		D_ERROR("Add transaction end callback error "DF_RC"\n",
-			DP_RC(rc));
-		return;
+		D_ERROR("Add transaction end callback error "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
-	vsi->vsi_agg_scheduled = true;
+	vsi->vsi_flush_scheduled = true;
+
+	return 0;
 }

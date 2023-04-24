@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,6 +75,8 @@ extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 extern int  dt_obj_class;
 extern unsigned int dt_cell_size;
+extern int dt_redun_lvl;
+extern int dt_redun_fac;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -118,10 +120,10 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1,
-				op_ec:1; /* true for EC, false for replica */
+	uint32_t                 op_no_verify : 1, op_ec : 1; /* true for EC, false for replica */
 };
 
+typedef int (*test_rebuild_cb_t)(void *test_arg);
 typedef struct {
 	bool			multi_rank;
 	int			myrank;
@@ -163,19 +165,19 @@ typedef struct {
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
-	int			(*rebuild_pre_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_pre_cb;
 	void			*rebuild_pre_cb_arg;
 
 	/* The callback is called during pool rebuild, used for concurrent IO,
 	 * container destroy etc
 	 */
-	int			(*rebuild_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_cb;
 	void			*rebuild_cb_arg;
 	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
-	int			(*rebuild_post_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_post_cb;
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
@@ -347,7 +349,7 @@ int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
-int run_daos_array_test(int rank, int size);
+int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -374,9 +376,14 @@ int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
+int run_daos_upgrade_test(int rank, int size, int *sub_tests,
+			  int sub_tests_size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
+void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		       const char *grp, d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
+struct daos_acl *get_daos_acl_with_user_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
 daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
@@ -391,27 +398,10 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t *
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
-void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank, int tgt);
-void daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_extend_target(const uuid_t pool_uuid, const char *grp,
-			const char *dmg_config,
-			d_rank_t rank, int tgt, daos_size_t nvme_size);
-void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank);
-void daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
+int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
 
@@ -444,16 +434,14 @@ void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
-void reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank);
+void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool restart);
 void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
 void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-		int failed_tgt);
-void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
-void reintegrate_pools_ranks(test_arg_t **args, int args_cnt,
-		d_rank_t *failed_ranks,  int ranks_nr);
-
+				    int failed_tgt);
+void reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+			     int ranks_nr, bool restart);
 void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
@@ -470,8 +458,13 @@ int rebuild_pool_connect_internal(void *data);
 
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_rf1_setup(void **state);
+int rebuild_sub_rf0_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+int rebuild_small_sub_rf1_setup(void **state);
+int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
@@ -509,6 +502,8 @@ void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+int reintegrate_inflight_io(void *data);
+int reintegrate_inflight_io_verify(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)

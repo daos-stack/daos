@@ -63,6 +63,19 @@ message SystemStartResp {
 	string absenthosts = 3; // hostset missing from membership
 }
 
+// SystemExcludeReq supplies system exclude parameters.
+message SystemExcludeReq {
+	string sys = 1; // DAOS system name
+	string ranks = 2; // rankset to exclude
+	string hosts = 3; // hostset to exclude
+	bool clear = 4; // Clear excluded state
+}
+
+// SystemExcludeResp returns status of exclude request.
+message SystemExcludeResp {
+	repeated shared.RankResult results = 1;
+}
+
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
 	string sys = 1; // DAOS system name
@@ -75,6 +88,7 @@ message SystemQueryResp {
 	repeated SystemMember members = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
+	uint64 data_version = 4; // Version of the system database.
 }
 
 // SystemEraseReq supplies system erase parameters.

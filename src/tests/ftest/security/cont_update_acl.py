@@ -1,20 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
+
+from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
 from exception_utils import CommandFailure
-from avocado import fail_on
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
     Test to verify ACL entry update.
     :avocado: recursive
@@ -39,8 +37,10 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             expected with valid and invalid inputs in command line for the
             --entry and --acl-file options.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_update_acl_inputs
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_acl_update_invalid_inputs
         """
         # Get lists of invalid
         invalid_entries = self.params.get("invalid_acl_entries", "/run/*")
@@ -70,7 +70,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
                 self.container.uuid,
                 acl_file=acl_file)
             test_errs.extend(self.error_handling(
-                self.daos_cmd.result, "No such file or directory"))
+                self.daos_cmd.result, "no such file or directory"))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -85,8 +85,10 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container update command performs as
             expected with invalid values within ACL file.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_update_invalid_acl
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_update_invalid_acl
         """
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
@@ -98,13 +100,16 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
+            exp_err = "-1003"
+            if content == []:
+                exp_err = "no entries"
 
             # Run update command
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
                 self.container.uuid,
-                path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+                acl_file=path_to_file)
+            test_errs.extend(self.error_handling(self.daos_cmd.result, exp_err))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -122,8 +127,10 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             expected when adding an ACL file that contains principals that are
             currently in the ACL.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_update_acl
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_update_acl_file
         """
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
@@ -173,8 +180,10 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container update command fails with
             no permission -1001 when user doesn't have the right permissions.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_update_acl_noperms
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=UpdateContainerACLTest,test_no_user_permissions
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
@@ -197,7 +206,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
                 self.container.uuid,
-                path_to_file)
+                acl_file=path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
 
             # Check that the acl file was unchanged

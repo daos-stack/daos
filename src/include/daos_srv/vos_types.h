@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,9 @@
 #include <daos/checksum.h>
 
 #define VOS_SUB_OP_MAX	((uint16_t)-2)
+
+#define VOS_POOL_DF_2_2 24
+#define VOS_POOL_DF_2_4 25
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -57,6 +60,10 @@ enum dtx_entry_flags {
 	DTE_CORRUPTED		= (1 << 3),
 	/* The DTX entry on leader does not exist, then not sure the status. */
 	DTE_ORPHAN		= (1 << 4),
+	/* Related DTX may be only committed on some participants, but not
+	 * on all yet, need to be re-committed.
+	 */
+	DTE_PARTIAL_COMMITTED	= (1 << 5),
 };
 
 struct dtx_entry {
@@ -83,6 +90,8 @@ enum vos_pool_open_flags {
 	VOS_POF_EXCL	= (1 << 1),
 	/** Ignore the pool uuid passed into vos_pool_open */
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
+	/** Caller does VEA flush periodically */
+	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 };
 
 enum vos_oi_attr {
@@ -214,6 +223,12 @@ typedef enum {
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 
+typedef enum {
+	VOS_ITER_PROC_OP_UNKNOWN = 0,
+	VOS_ITER_PROC_OP_DELETE = 1,
+	VOS_ITER_PROC_OP_MARK_CORRUPT = 2,
+} vos_iter_proc_op_t;
+
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
 	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
@@ -257,11 +272,17 @@ enum {
 	VOS_OF_SKIP_FETCH		= (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
 	VOS_OF_EC			= (1 << 19),
+	/** Update from rebuild */
+	VOS_OF_REBUILD			= (1 << 20),
 };
 
 enum {
 	/** Aggregation optimization is enabled for this pool */
-	VOS_POOL_FEAT_AGG_OPT	= (1 << 0),
+	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
+	/** Pool check is supported for this pool */
+	VOS_POOL_FEAT_CHK = (1ULL << 1),
+	/** Dynamic evtree root supported for this pool */
+	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -536,12 +557,9 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_co:1,
-			ia_reprobe_obj:1,
-			ia_reprobe_dkey:1,
-			ia_reprobe_akey:1,
-			ia_reprobe_sv:1,
-			ia_reprobe_ev:1;
+	unsigned int    ia_reprobe_co : 1, ia_reprobe_obj : 1, ia_reprobe_dkey : 1,
+	    ia_reprobe_akey : 1, ia_reprobe_sv : 1, ia_reprobe_ev : 1;
+	unsigned int ia_probe_level;
 };
 
 /* Ignores DTX as they are transient records */

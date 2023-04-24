@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBI"
+#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIP"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -70,6 +70,7 @@ print_usage(int rank)
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -B|--extend_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
+	print_message("daos_test -P|--upgrade\n");
 	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -191,7 +192,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS 1-D Array test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_array_test(rank, size);
+			nr_failed += run_daos_array_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		case 'K':
 			daos_test_print(rank, "\n\n=================");
@@ -287,6 +288,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_degrade_simple_ec_test(rank, size,
 								     sub_tests,
 								sub_tests_size);
+			break;
+		case 'P':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS upgrade tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_upgrade_test(rank, size, sub_tests,
+							   sub_tests_size);
 			break;
 		default:
 			D_ASSERT(0);
@@ -384,7 +392,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:",
+			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:P",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -454,7 +462,7 @@ main(int argc, char **argv)
 	}
 
 	if (strlen(tests) == 0) {
-		strcpy(tests , all_tests);
+		strncpy(tests, all_tests, sizeof(TESTS));
 	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {

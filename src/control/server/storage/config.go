@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,6 +116,12 @@ func (tc *TierConfig) Validate() error {
 	return errors.New("no storage class set")
 }
 
+// SetNumaNodeIndex sets the NUMA node index for the tier.
+func (tc *TierConfig) SetNumaNodeIndex(idx uint) {
+	tc.Scm.NumaNodeIndex = idx
+	tc.Bdev.NumaNodeIndex = idx
+}
+
 func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	tc.Tier = tier
 	return tc
@@ -127,13 +133,19 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	return tc
 }
 
+// WithScmDisableHugepages disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+	tc.Scm.DisableHugepages = true
+	return tc
+}
+
 // WithScmMountPoint sets the path to the device used for SCM storage.
 func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	tc.Scm.MountPoint = scmPath
 	return tc
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	tc.Scm.RamdiskSize = size
@@ -177,16 +189,65 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	return tc
 }
 
+// WithNumaNodeIndex sets the NUMA node index to be used for this tier.
+func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
+	tc.SetNumaNodeIndex(idx)
+	return tc
+}
+
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) CfgHasBdevs() bool {
+func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
+	bdevs := []string{}
+	for _, bc := range tcs.BdevConfigs() {
+		if nvmeOnly && bc.Class != ClassNvme {
+			continue
+		}
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
+	}
+
+	return MustNewBdevDeviceList(bdevs...)
+}
+
+func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	return tcs.getBdevs(false)
+}
+
+func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	return tcs.getBdevs(true)
+}
+
+func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
-			return true
+			switch {
+			case nvmeOnly:
+				if bc.Class == ClassNvme {
+					return true
+				}
+			case emulOnly:
+				if bc.Class != ClassNvme {
+					return true
+				}
+			default:
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func (tcs TierConfigs) HaveBdevs() bool {
+	return tcs.checkBdevs(false, false)
+}
+
+func (tcs TierConfigs) HaveRealNVMe() bool {
+	return tcs.checkBdevs(true, false)
+}
+
+func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) Validate() error {
@@ -198,7 +259,7 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
-func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -208,7 +269,7 @@ func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
 	return
 }
 
-func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) BdevConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
@@ -224,21 +285,28 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	tid := 0
+	tmp2 := make([]*TierConfig, 0, len(tmp))
 	for i := range tmp {
-		if tmp[i].Tier == 0 {
-			tmp[i].Tier = i
+		if tmp[i] == nil {
+			continue
 		}
+		tmp[i].Tier = tid
+		tmp2 = append(tmp2, tmp[i])
+		tid++
 	}
-	*tcs = tmp
+	*tcs = tmp2
 
 	return nil
 }
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint  string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize uint     `yaml:"scm_size,omitempty"`
-	DeviceList  []string `yaml:"scm_list,omitempty"`
+	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DeviceList       []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex    uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -254,6 +322,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
+		}
+		if sc.DisableHugepages {
+			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
 		if sc.RamdiskSize == 0 {
@@ -491,10 +562,11 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  *BdevDeviceList `yaml:"bdev_list,omitempty"`
-	DeviceCount int             `yaml:"bdev_number,omitempty"`
-	FileSize    int             `yaml:"bdev_size,omitempty"`
-	BusidRange  *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
+	DeviceCount   int             `yaml:"bdev_number,omitempty"`
+	FileSize      int             `yaml:"bdev_size,omitempty"`
+	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	NumaNodeIndex uint            `yaml:"-"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -682,13 +754,36 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// SpdkRpcServer struct describes settings for an optional SPDK JSON-RPC server instance that can
+// run in the engine process.
+type SpdkRpcServer struct {
+	Enable   bool   `yaml:"enable,omitempty" json:"enable"`
+	SockAddr string `yaml:"sock_addr,omitempty" json:"sock_addr"`
+}
+
 type Config struct {
-	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool        `yaml:"-"`
-	NumaNodeIndex    uint        `yaml:"-"`
-	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool          `yaml:"-"`
+	NumaNodeIndex    uint          `yaml:"-"`
+	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
+}
+
+func (c *Config) SetNUMAAffinity(node uint) {
+	c.NumaNodeIndex = node
+	for _, tier := range c.Tiers {
+		tier.SetNumaNodeIndex(node)
+	}
+}
+
+func (c *Config) GetBdevs() *BdevDeviceList {
+	return c.Tiers.Bdevs()
+}
+
+func (c *Config) GetNVMeBdevs() *BdevDeviceList {
+	return c.Tiers.NVMeBdevs()
 }
 
 func (c *Config) Validate() error {
@@ -719,6 +814,10 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
+		return FaultBdevConfigTypeMismatch
+	}
 
 	fbc := bdevCfgs[0]
 

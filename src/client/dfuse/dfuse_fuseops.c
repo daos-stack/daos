@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,9 +67,19 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
 
+	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
+	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
+	 * does not know how large to pre-allocate any buffers.
+	 */
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
+
+#if HAVE_CACHE_READDIR
+	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
+#else
+	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
+#endif
 
 	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
 		       conn->capable);
@@ -81,7 +91,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
-	conn->time_gran = 1000000000;
+	conn->time_gran = 1;
 
 	if (fs_handle->dpi_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
@@ -158,26 +168,36 @@ err:
 void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*handle = NULL;
-	struct dfuse_inode_entry	*inode = NULL;
-	d_list_t			*rlink = NULL;
-	int rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *handle    = NULL;
+	struct dfuse_inode_entry     *inode     = NULL;
+	d_list_t                     *rlink     = NULL;
+	int                           rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
-		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
-					sizeof(ino));
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
-			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
-					ino);
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
 			D_GOTO(err, rc = ENOENT);
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	}
+
+	if (inode->ie_dfs->dfc_attr_timeout &&
+	    (atomic_load_relaxed(&inode->ie_open_write_count) == 0) &&
+	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
+		double timeout;
+
+		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+			D_GOTO(done, 0);
+		}
 	}
 
 	if (inode->ie_dfs->dfs_ops->getattr)
@@ -185,6 +205,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	else
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
+done:
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 
@@ -207,7 +228,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
@@ -382,13 +404,13 @@ err:
  * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
-df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
-	      struct fuse_file_info *fi)
+df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}
@@ -400,10 +422,11 @@ static void
 df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}

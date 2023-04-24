@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,7 +28,7 @@ class ListPoolsTest(TestWithServers):
             sr (str, optional): Service replicas. Defaults to None.
 
         Raises:
-            CommandFailure: if there was an error destoying pools
+            CommandFailure: if there was an error destroying pools
             TestFail: if there was an error verifying the created pools
 
         """
@@ -77,7 +76,10 @@ class ListPoolsTest(TestWithServers):
             output list matches the output returned when the pools were
             created.
 
-        :avocado: tags=all,large,pool,full_regression,list_pools
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=list_pools,test_list_pools
         """
         ranks = list(range(len(self.hostlist_servers)))
 

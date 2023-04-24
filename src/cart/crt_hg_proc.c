@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,19 +12,18 @@
 #include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
-#define CRT_PROC_TYPE_FUNC(type)				\
-	int crt_proc_##type(crt_proc_t proc,			\
-			     crt_proc_op_t proc_op, type *data)	\
-	{							\
-		type *buf;					\
-		if (FREEING(proc_op))				\
-			return 0;				\
-		buf = hg_proc_save_ptr(proc, sizeof(*buf));	\
-		if (ENCODING(proc_op))				\
-			*buf = *data;				\
-		else /* DECODING(proc_op) */			\
-			*data = *buf;				\
-		return 0;					\
+#define CRT_PROC_TYPE_FUNC(type)                                                                   \
+	int crt_proc_##type(crt_proc_t proc, crt_proc_op_t proc_op, type *data)                    \
+	{                                                                                          \
+		type *buf;                                                                         \
+		if (FREEING(proc_op))                                                              \
+			return 0;                                                                  \
+		buf = hg_proc_save_ptr(proc, sizeof(*buf));                                        \
+		if (ENCODING(proc_op))                                                             \
+			*buf = *data;                                                              \
+		else /* DECODING(proc_op) */                                                       \
+			*data = *buf;                                                              \
+		return 0;                                                                          \
 	}
 
 int
@@ -355,18 +354,16 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	/* Get extra input buffer; if it's null, get regular input buffer */
 	hg_ret = HG_Get_input_extra_buf(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "HG_Get_input_extra_buf failed: %d\n",
-			  hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+		RPC_ERROR(rpc_priv, "HG_Get_input_extra_buf failed: %d\n", hg_ret);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	/* If extra buffer is null, rpc can fit into a regular buffer */
 	if (in_buf == NULL) {
 		hg_ret = HG_Get_input_buf(handle, &in_buf, &in_buf_size);
 		if (hg_ret != HG_SUCCESS) {
-			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n",
-				  hg_ret);
-			D_GOTO(out, rc = -DER_HG);
+			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
 
@@ -374,24 +371,22 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	ctx = rpc_priv->crp_pub.cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 	hg_class = hg_ctx->chc_hgcla;
-	hg_ret = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE,
-				    HG_CRC32, &hg_proc);
+	hg_ret   = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE, HG_CRC32, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv, "hg_proc_create_set failed: %d\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	/* Decode header */
 	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
+	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
 			     &ctx->cc_last_unpack_hlc, &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
@@ -530,7 +525,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 						rpc_priv->crp_grp_priv,
 						rpc_priv->crp_grp_priv->gp_self
 						);
-				hdr->cch_hlc = crt_hlc_get();
+				hdr->cch_hlc = d_hlc_get();
 			} else {
 				hdr->cch_src_rank = CRT_NO_RANK;
 				/*
@@ -539,7 +534,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 				 * HLCT reading, which must be either zero or a
 				 * server HLC timestamp.
 				 */
-				hdr->cch_hlc = crt_hlct_get();
+				hdr->cch_hlc = d_hlct_get();
 			}
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
@@ -612,7 +607,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		if (ENCODING(proc_op)) {
 			/* Clients never encode replies. */
 			D_ASSERT(crt_is_service());
-			rpc_priv->crp_reply_hdr.cch_hlc = crt_hlc_get();
+			rpc_priv->crp_reply_hdr.cch_hlc = d_hlc_get();
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
@@ -626,7 +621,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			if (crt_is_service()) {
 				uint64_t clock_offset;
 
-				rc = crt_hlc_get_msg(hdr->cch_hlc,
+				rc = d_hlc_get_msg(hdr->cch_hlc,
 						     NULL /* hlc_out */,
 						     &clock_offset);
 				if (rc != 0) {
@@ -646,7 +641,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 					rc = 0;
 				}
 			} else {
-				crt_hlct_sync(hdr->cch_hlc);
+				d_hlct_sync(hdr->cch_hlc);
 			}
 		}
 

@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,14 +9,14 @@ import errno
 
 from dfuse_test_base import DfuseTestBase
 
-class Enospace(DfuseTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
+
+class DfuseEnospace(DfuseTestBase):
     """Dfuse ENOSPC File base class.
 
     :avocado: recursive
     """
 
-    def test_enospace(self):
+    def test_dfuse_enospace(self):
         """Jira ID: DAOS-8264.
 
         Test Description:
@@ -33,7 +32,7 @@ class Enospace(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuseenospace
+        :avocado: tags=DfuseEnospace,test_dfuse_enospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -48,18 +47,20 @@ class Enospace(DfuseTestBase):
 
             # Use a write size of 128.  On EL 8 this could be 1MiB, however older kernels
             # use 128k, and using a bigger size here than the kernel can support will lead to
-            # the kernel splitting writes, and the size check atfer ENOSPC failing due to writes
+            # the kernel splitting writes, and the size check after ENOSPC failing due to writes
             # having partially succeeded.
             write_size = 1024 * 128
             file_size = 0
             while True:
                 stat_pre = os.fstat(fd.fileno())
+                if stat_pre.st_size != file_size:
+                    self.log.info('file size is %d, %s', file_size, stat_pre)
                 self.assertTrue(stat_pre.st_size == file_size)
                 try:
                     fd.write(bytearray(write_size))
                     file_size += write_size
-                except OSError as e:
-                    if e.errno != errno.ENOSPC:
+                except OSError as error:
+                    if error.errno != errno.ENOSPC:
                         raise
                     self.log.info('File write returned ENOSPACE')
                     stat_post = os.fstat(fd.fileno())
@@ -71,6 +72,6 @@ class Enospace(DfuseTestBase):
         # so this is expected to fail.
         try:
             os.unlink(target_file)
-        except OSError as e:
-            if e.errno != errno.ENOSPC:
+        except OSError as error:
+            if error.errno != errno.ENOSPC:
                 raise

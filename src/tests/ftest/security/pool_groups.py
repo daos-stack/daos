@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -12,12 +11,12 @@ from pool_security_test_base import PoolSecurityTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
+
 class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
 
     def test_daos_pool_acl_groups(self):
         '''
@@ -36,8 +35,12 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             Create pool with pass-in user on primary and secondary group
             acl permission, verify pool user and group read, write, read-write
             and none permissions enforcement with all forms of input under
-            different test sceanrios.
-        :avocado: tags=all,full_regression,security,pool_acl,sec_acl_groups
+            different test scenarios
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=security,pool
+        :avocado: tags=pool_acl,sec_acl_groups,test_daos_pool_acl_groups
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
@@ -51,8 +54,8 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         if primary_grp_perm.lower() == "none":
             primary_grp_perm = ""
         if primary_grp_perm not in PERMISSIONS:
-            self.fail("##primary_grp_perm %s is invalid, valid permissions are:"
-                      "'none', 'r', w', 'rw'", primary_grp_perm)
+            self.fail("##primary_grp_perm {} is invalid, valid permissions are:"
+                      "'none', 'r', w', 'rw'".format(primary_grp_perm))
 
         self.log.info("==Starting self.pool_acl_verification")
         self.log.info(" =acl_entries = %s", acl_entries)

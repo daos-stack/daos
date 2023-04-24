@@ -30,7 +30,7 @@ class DaosRacerTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=io,daosracer
-        :avocado: tags=daos_racer_parallel
+        :avocado: tags=daos_racer,DaosRacerTest,test_parallel
         """
         # Create the dmg command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())
@@ -39,7 +39,7 @@ class DaosRacerTest(TestWithServers):
         # Create the orterun command
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(len(self.hostlist_clients))
-        self.job_manager.assign_environment(daos_racer.get_environment(self.server_managers[0]))
+        self.job_manager.assign_environment(daos_racer.env)
         self.job_manager.job = daos_racer
         self.job_manager.check_results_list = ["<stderr>"]
         self.job_manager.timeout = daos_racer.clush_timeout.value

@@ -7,8 +7,8 @@
 /*
  * This provides a simple example for how to access different DAOS objects.
  *
- * For more information on the DAOS object model, please visit this
- * page: https://daos-stack.github.io/overview/storage/#daos-object
+ * For more information on the DAOS object model, please visit this page:
+ * https://docs.daos.io/latest/overview/storage/#daos-object
  */
 
 #include <stdlib.h>
@@ -663,7 +663,8 @@ example_daos_kv()
 	ASSERT(num_keys == (KEYS - 1) * rankn,
 	       "KV enumerate after remove failed");
 
-	daos_kv_close(oh, NULL);
+	rc = daos_kv_close(oh, NULL);
+	ASSERT(rc == 0, "KV close failed with %d", rc);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0)

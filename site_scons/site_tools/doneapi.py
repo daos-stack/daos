@@ -6,17 +6,13 @@ Hack to support oneapi version of Intel compilers
 import sys
 import os
 
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 import SCons.Tool.gcc
 import SCons.Util
 import SCons.Warnings
 import SCons.Errors
-# pylint: enable=import-error
-# pylint: enable=no-name-in-module
-# pylint: disable=no-member
-# pylint: disable=too-few-public-methods
 
+
+# pylint: disable=too-few-public-methods
 class DetectCompiler():
     """Find oneapi compiler"""
 
@@ -30,28 +26,24 @@ class DetectCompiler():
         icx = os.path.join(binp, 'icx')
         self.map = {}
         sys.stdout.flush()
-        # pylint: disable=too-many-boolean-expressions
-        paths = [root, binp, libp, binarch, libarch, include, icx]
-        for path in paths:
+        for path in [root, binp, libp, binarch, libarch, include, icx]:
             if not os.path.exists(path):
                 return
-        # pylint: enable=too-many-boolean-expressions
-        self.map = {'root' : root,
-                    'bin' : binp,
-                    'lib' : libp,
-                    'binarch' : binarch,
-                    'libarch' : libarch,
-                    'include' : include,
-                    'icx' : icx}
+        self.map = {'root': root,
+                    'bin': binp,
+                    'lib': libp,
+                    'binarch': binarch,
+                    'libarch': libarch,
+                    'include': include,
+                    'icx': icx}
 
     def __getitem__(self, key):
         """Return key"""
         return self.map.get(key, None)
 
+
 def generate(env):
-    """Add Builders and construction variables for Intel Oneapi C++C++ compiler
-    to an Environment.
-    """
+    """Add Builders and construction variables for Intel Oneapi C++C++ compiler."""
     SCons.Tool.gcc.generate(env)
 
     detector = DetectCompiler()
@@ -70,8 +62,9 @@ def generate(env):
     env.PrependENVPath("LD_LIBRARY_PATH", detector["lib"])
     env['CC'] = 'icx'
     env['CXX'] = 'icpx'
-    env['AR'] = 'xiar'
+    env['AR'] = 'ar'
     env['LD'] = 'xild'  # not used by default
+
 
 def exists(_env):
     """Find if icx exists"""

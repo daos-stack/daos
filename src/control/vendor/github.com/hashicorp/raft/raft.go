@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	minCheckInterval = 10 * time.Millisecond
+	minCheckInterval       = 10 * time.Millisecond
+	oldestLogGaugeInterval = 10 * time.Second
 )
 
 var (
@@ -29,7 +30,9 @@ var (
 // responses.
 func (r *Raft) getRPCHeader() RPCHeader {
 	return RPCHeader{
-		ProtocolVersion: r.conf.ProtocolVersion,
+		ProtocolVersion: r.config().ProtocolVersion,
+		ID:              []byte(r.config().LocalID),
+		Addr:            r.trans.EncodePeer(r.config().LocalID, r.localAddr),
 	}
 }
 
@@ -56,7 +59,7 @@ func (r *Raft) checkRPCHeader(rpc RPC) error {
 	// currently what we want, and in general support one version back. We
 	// may need to revisit this policy depending on how future protocol
 	// changes evolve.
-	if header.ProtocolVersion < r.conf.ProtocolVersion-1 {
+	if header.ProtocolVersion < r.config().ProtocolVersion-1 {
 		return ErrUnsupportedProtocol
 	}
 
@@ -89,14 +92,16 @@ type leaderState struct {
 	stepDown                     chan struct{}
 }
 
-// setLeader is used to modify the current leader of the cluster
-func (r *Raft) setLeader(leader ServerAddress) {
+// setLeader is used to modify the current leader Address and ID of the cluster
+func (r *Raft) setLeader(leaderAddr ServerAddress, leaderID ServerID) {
 	r.leaderLock.Lock()
-	oldLeader := r.leader
-	r.leader = leader
+	oldLeaderAddr := r.leaderAddr
+	r.leaderAddr = leaderAddr
+	oldLeaderID := r.leaderID
+	r.leaderID = leaderID
 	r.leaderLock.Unlock()
-	if oldLeader != leader {
-		r.observe(LeaderObservation{Leader: leader})
+	if oldLeaderAddr != leaderAddr || oldLeaderID != leaderID {
+		r.observe(LeaderObservation{Leader: leaderAddr, LeaderAddr: leaderAddr, LeaderID: leaderID})
 	}
 }
 
@@ -122,19 +127,18 @@ func (r *Raft) requestConfigChange(req configurationChangeRequest, timeout time.
 	}
 }
 
-// run is a long running goroutine that runs the Raft FSM.
+// run the main thread that handles leadership and RPC requests.
 func (r *Raft) run() {
 	for {
 		// Check if we are doing a shutdown
 		select {
 		case <-r.shutdownCh:
 			// Clear the leader to prevent forwarding
-			r.setLeader("")
+			r.setLeader("", "")
 			return
 		default:
 		}
 
-		// Enter into a sub-FSM
 		switch r.getState() {
 		case Follower:
 			r.runFollower()
@@ -146,58 +150,77 @@ func (r *Raft) run() {
 	}
 }
 
-// runFollower runs the FSM for a follower.
+// runFollower runs the main loop while in the follower state.
 func (r *Raft) runFollower() {
 	didWarn := false
-	r.logger.Info("entering follower state", "follower", r, "leader", r.Leader())
+	leaderAddr, leaderID := r.LeaderWithID()
+	r.logger.Info("entering follower state", "follower", r, "leader-address", leaderAddr, "leader-id", leaderID)
 	metrics.IncrCounter([]string{"raft", "state", "follower"}, 1)
-	heartbeatTimer := randomTimeout(r.conf.HeartbeatTimeout)
+	heartbeatTimer := randomTimeout(r.config().HeartbeatTimeout)
 
 	for r.getState() == Follower {
+		r.mainThreadSaturation.sleeping()
+
 		select {
 		case rpc := <-r.rpcCh:
+			r.mainThreadSaturation.working()
 			r.processRPC(rpc)
 
 		case c := <-r.configurationChangeCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
 		case v := <-r.verifyCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			v.respond(ErrNotLeader)
 
-		case r := <-r.userRestoreCh:
+		case ur := <-r.userRestoreCh:
+			r.mainThreadSaturation.working()
 			// Reject any restores since we are not the leader
-			r.respond(ErrNotLeader)
+			ur.respond(ErrNotLeader)
 
-		case r := <-r.leadershipTransferCh:
+		case l := <-r.leadershipTransferCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
-			r.respond(ErrNotLeader)
+			l.respond(ErrNotLeader)
 
 		case c := <-r.configurationsCh:
+			r.mainThreadSaturation.working()
 			c.configurations = r.configurations.Clone()
 			c.respond(nil)
 
 		case b := <-r.bootstrapCh:
+			r.mainThreadSaturation.working()
 			b.respond(r.liveBootstrap(b.configuration))
 
+		case <-r.leaderNotifyCh:
+			//  Ignore since we are not the leader
+
+		case <-r.followerNotifyCh:
+			heartbeatTimer = time.After(0)
+
 		case <-heartbeatTimer:
+			r.mainThreadSaturation.working()
 			// Restart the heartbeat timer
-			heartbeatTimer = randomTimeout(r.conf.HeartbeatTimeout)
+			hbTimeout := r.config().HeartbeatTimeout
+			heartbeatTimer = randomTimeout(hbTimeout)
 
 			// Check if we have had a successful contact
 			lastContact := r.LastContact()
-			if time.Now().Sub(lastContact) < r.conf.HeartbeatTimeout {
+			if time.Now().Sub(lastContact) < hbTimeout {
 				continue
 			}
 
 			// Heartbeat failed! Transition to the candidate state
-			lastLeader := r.Leader()
-			r.setLeader("")
+			lastLeaderAddr, lastLeaderID := r.LeaderWithID()
+			r.setLeader("", "")
 
 			if r.configurations.latestIndex == 0 {
 				if !didWarn {
@@ -211,10 +234,15 @@ func (r *Raft) runFollower() {
 					didWarn = true
 				}
 			} else {
-				r.logger.Warn("heartbeat timeout reached, starting election", "last-leader", lastLeader)
 				metrics.IncrCounter([]string{"raft", "transition", "heartbeat_timeout"}, 1)
-				r.setState(Candidate)
-				return
+				if hasVote(r.configurations.latest, r.localID) {
+					r.logger.Warn("heartbeat timeout reached, starting election", "last-leader-addr", lastLeaderAddr, "last-leader-id", lastLeaderID)
+					r.setState(Candidate)
+					return
+				} else if !didWarn {
+					r.logger.Warn("heartbeat timeout reached, not part of a stable configuration or a non-voter, not triggering a leader election")
+					didWarn = true
+				}
 			}
 
 		case <-r.shutdownCh:
@@ -227,9 +255,14 @@ func (r *Raft) runFollower() {
 // the Raft object's member BootstrapCluster for more details. This must only be
 // called on the main thread, and only makes sense in the follower state.
 func (r *Raft) liveBootstrap(configuration Configuration) error {
+	if !hasVote(configuration, r.localID) {
+		// Reject this operation since we are not a voter
+		return ErrNotVoter
+	}
+
 	// Use the pre-init API to make the static updates.
-	err := BootstrapCluster(&r.conf, r.logs, r.stable, r.snapshots,
-		r.trans, configuration)
+	cfg := r.config()
+	err := BootstrapCluster(&cfg, r.logs, r.stable, r.snapshots, r.trans, configuration)
 	if err != nil {
 		return err
 	}
@@ -241,11 +274,10 @@ func (r *Raft) liveBootstrap(configuration Configuration) error {
 	}
 	r.setCurrentTerm(1)
 	r.setLastLog(entry.Index, entry.Term)
-	r.processConfigurationLogEntry(&entry)
-	return nil
+	return r.processConfigurationLogEntry(&entry)
 }
 
-// runCandidate runs the FSM for a candidate.
+// runCandidate runs the main loop while in the candidate state.
 func (r *Raft) runCandidate() {
 	r.logger.Info("entering candidate state", "node", r, "term", r.getCurrentTerm()+1)
 	metrics.IncrCounter([]string{"raft", "state", "candidate"}, 1)
@@ -260,7 +292,8 @@ func (r *Raft) runCandidate() {
 	// otherwise.
 	defer func() { r.candidateFromLeadershipTransfer = false }()
 
-	electionTimer := randomTimeout(r.conf.ElectionTimeout)
+	electionTimeout := r.config().ElectionTimeout
+	electionTimer := randomTimeout(electionTimeout)
 
 	// Tally the votes, need a simple majority
 	grantedVotes := 0
@@ -268,11 +301,15 @@ func (r *Raft) runCandidate() {
 	r.logger.Debug("votes", "needed", votesNeeded)
 
 	for r.getState() == Candidate {
+		r.mainThreadSaturation.sleeping()
+
 		select {
 		case rpc := <-r.rpcCh:
+			r.mainThreadSaturation.working()
 			r.processRPC(rpc)
 
 		case vote := <-voteCh:
+			r.mainThreadSaturation.working()
 			// Check if the term is greater than ours, bail
 			if vote.Term > r.getCurrentTerm() {
 				r.logger.Debug("newer term discovered, fallback to follower")
@@ -291,38 +328,55 @@ func (r *Raft) runCandidate() {
 			if grantedVotes >= votesNeeded {
 				r.logger.Info("election won", "tally", grantedVotes)
 				r.setState(Leader)
-				r.setLeader(r.localAddr)
+				r.setLeader(r.localAddr, r.localID)
 				return
 			}
 
 		case c := <-r.configurationChangeCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
 		case v := <-r.verifyCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
 			v.respond(ErrNotLeader)
 
-		case r := <-r.userRestoreCh:
+		case ur := <-r.userRestoreCh:
+			r.mainThreadSaturation.working()
 			// Reject any restores since we are not the leader
-			r.respond(ErrNotLeader)
+			ur.respond(ErrNotLeader)
 
-		case r := <-r.leadershipTransferCh:
+		case l := <-r.leadershipTransferCh:
+			r.mainThreadSaturation.working()
 			// Reject any operations since we are not the leader
-			r.respond(ErrNotLeader)
+			l.respond(ErrNotLeader)
 
 		case c := <-r.configurationsCh:
+			r.mainThreadSaturation.working()
 			c.configurations = r.configurations.Clone()
 			c.respond(nil)
 
 		case b := <-r.bootstrapCh:
+			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
+		case <-r.leaderNotifyCh:
+			//  Ignore since we are not the leader
+
+		case <-r.followerNotifyCh:
+			if electionTimeout != r.config().ElectionTimeout {
+				electionTimeout = r.config().ElectionTimeout
+				electionTimer = randomTimeout(electionTimeout)
+			}
+
 		case <-electionTimer:
+			r.mainThreadSaturation.working()
 			// Election failed! Restart the election. We simply return,
 			// which will kick us back into runCandidate
 			r.logger.Warn("Election timeout reached, restarting election")
@@ -344,10 +398,7 @@ func (r *Raft) setLeadershipTransferInProgress(v bool) {
 
 func (r *Raft) getLeadershipTransferInProgress() bool {
 	v := atomic.LoadInt32(&r.leaderState.leadershipTransferInProgress)
-	if v == 1 {
-		return true
-	}
-	return false
+	return v == 1
 }
 
 func (r *Raft) setupLeaderState() {
@@ -361,7 +412,7 @@ func (r *Raft) setupLeaderState() {
 	r.leaderState.stepDown = make(chan struct{}, 1)
 }
 
-// runLeader runs the FSM for a leader. Do the setup here and drop into
+// runLeader runs the main loop while in leader state. Do the setup here and drop into
 // the leaderLoop for the hot loop.
 func (r *Raft) runLeader() {
 	r.logger.Info("entering leader state", "leader", r)
@@ -370,8 +421,13 @@ func (r *Raft) runLeader() {
 	// Notify that we are the leader
 	overrideNotifyBool(r.leaderCh, true)
 
+	// Store the notify chan. It's not reloadable so shouldn't change before the
+	// defer below runs, but this makes sure we always notify the same chan if
+	// ever for both gaining and loosing leadership.
+	notify := r.config().NotifyCh
+
 	// Push to the notify channel if given
-	if notify := r.conf.NotifyCh; notify != nil {
+	if notify != nil {
 		select {
 		case notify <- true:
 		case <-r.shutdownCh:
@@ -382,8 +438,14 @@ func (r *Raft) runLeader() {
 	// leaderloop.
 	r.setupLeaderState()
 
+	// Run a background go-routine to emit metrics on log age
+	stopCh := make(chan struct{})
+	go emitLogStoreMetrics(r.logs, []string{"raft", "leader"}, oldestLogGaugeInterval, stopCh)
+
 	// Cleanup state on step down
 	defer func() {
+		close(stopCh)
+
 		// Since we were the leader previously, we update our
 		// last contact time when we step down, so that we are not
 		// reporting a last contact time from before we were the
@@ -418,8 +480,9 @@ func (r *Raft) runLeader() {
 		// We may have stepped down due to an RPC call, which would
 		// provide the leader, so we cannot always blank this out.
 		r.leaderLock.Lock()
-		if r.leader == r.localAddr {
-			r.leader = ""
+		if r.leaderAddr == r.localAddr && r.leaderID == r.localID {
+			r.leaderAddr = ""
+			r.leaderID = ""
 		}
 		r.leaderLock.Unlock()
 
@@ -427,7 +490,7 @@ func (r *Raft) runLeader() {
 		overrideNotifyBool(r.leaderCh, false)
 
 		// Push to the notify channel if given
-		if notify := r.conf.NotifyCh; notify != nil {
+		if notify != nil {
 			select {
 			case notify <- false:
 			case <-r.shutdownCh:
@@ -449,11 +512,7 @@ func (r *Raft) runLeader() {
 	// an unbounded number of uncommitted configurations in the log. We now
 	// maintain that there exists at most one uncommitted configuration entry in
 	// any log, so we have to do proper no-ops here.
-	noop := &logFuture{
-		log: Log{
-			Type: LogNoop,
-		},
-	}
+	noop := &logFuture{log: Log{Type: LogNoop}}
 	r.dispatchLogs([]*logFuture{noop})
 
 	// Sit in the leader loop until we step down
@@ -497,9 +556,18 @@ func (r *Raft) startStopReplication() {
 			r.goFunc(func() { r.replicate(s) })
 			asyncNotifyCh(s.triggerCh)
 			r.observe(PeerObservation{Peer: server, Removed: false})
-		} else if ok && s.peer.Address != server.Address {
-			r.logger.Info("updating peer", "peer", server.ID)
-			s.peer = server
+		} else if ok {
+
+			s.peerLock.RLock()
+			peer := s.peer
+			s.peerLock.RUnlock()
+
+			if peer.Address != server.Address {
+				r.logger.Info("updating peer", "peer", server.ID)
+				s.peerLock.Lock()
+				s.peer = server
+				s.peerLock.Unlock()
+			}
 		}
 	}
 
@@ -548,17 +616,24 @@ func (r *Raft) leaderLoop() {
 	// only a single peer (ourself) and replicating to an undefined set
 	// of peers.
 	stepDown := false
-	lease := time.After(r.conf.LeaderLeaseTimeout)
+	// This is only used for the first lease check, we reload lease below
+	// based on the current config value.
+	lease := time.After(r.config().LeaderLeaseTimeout)
 
 	for r.getState() == Leader {
+		r.mainThreadSaturation.sleeping()
+
 		select {
 		case rpc := <-r.rpcCh:
+			r.mainThreadSaturation.working()
 			r.processRPC(rpc)
 
 		case <-r.leaderState.stepDown:
+			r.mainThreadSaturation.working()
 			r.setState(Follower)
 
 		case future := <-r.leadershipTransferCh:
+			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				future.respond(ErrLeadershipTransferInProgress)
@@ -581,9 +656,20 @@ func (r *Raft) leaderLoop() {
 			// in case eg the timer expires.
 			// The leadershipTransfer function is controlled with
 			// the stopCh and doneCh.
+			// No matter how this exits, have this function set
+			// leadership transfer to false before we return
+			//
+			// Note that this leaves a window where callers of
+			// LeadershipTransfer() and LeadershipTransferToServer()
+			// may start executing after they get their future but before
+			// this routine has set leadershipTransferInProgress back to false.
+			// It may be safe to modify things such that setLeadershipTransferInProgress
+			// is set to false before calling future.Respond, but that still needs
+			// to be tested and this situation mirrors what callers already had to deal with.
 			go func() {
+				defer r.setLeadershipTransferInProgress(false)
 				select {
-				case <-time.After(r.conf.ElectionTimeout):
+				case <-time.After(r.config().ElectionTimeout):
 					close(stopCh)
 					err := fmt.Errorf("leadership transfer timeout")
 					r.logger.Debug(err.Error())
@@ -624,16 +710,17 @@ func (r *Raft) leaderLoop() {
 				doneCh <- fmt.Errorf("cannot find replication state for %v", id)
 				continue
 			}
-
+			r.setLeadershipTransferInProgress(true)
 			go r.leadershipTransfer(*id, *address, state, stopCh, doneCh)
 
 		case <-r.leaderState.commitCh:
+			r.mainThreadSaturation.working()
 			// Process the newly committed entries
 			oldCommitIndex := r.getCommitIndex()
 			commitIndex := r.leaderState.commitment.getCommitIndex()
 			r.setCommitIndex(commitIndex)
 
-			// New configration has been committed, set it as the committed
+			// New configuration has been committed, set it as the committed
 			// value.
 			if r.configurations.latestIndex > oldCommitIndex &&
 				r.configurations.latestIndex <= commitIndex {
@@ -680,7 +767,7 @@ func (r *Raft) leaderLoop() {
 			metrics.SetGauge([]string{"raft", "commitNumLogs"}, float32(len(groupReady)))
 
 			if stepDown {
-				if r.conf.ShutdownOnRemove {
+				if r.config().ShutdownOnRemove {
 					r.logger.Info("removed ourself, shutting down")
 					r.Shutdown()
 				} else {
@@ -690,6 +777,7 @@ func (r *Raft) leaderLoop() {
 			}
 
 		case v := <-r.verifyCh:
+			r.mainThreadSaturation.working()
 			if v.quorumSize == 0 {
 				// Just dispatched, start the verification
 				r.verifyLeader(v)
@@ -714,6 +802,7 @@ func (r *Raft) leaderLoop() {
 			}
 
 		case future := <-r.userRestoreCh:
+			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				future.respond(ErrLeadershipTransferInProgress)
@@ -723,6 +812,7 @@ func (r *Raft) leaderLoop() {
 			future.respond(err)
 
 		case future := <-r.configurationsCh:
+			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				future.respond(ErrLeadershipTransferInProgress)
@@ -732,6 +822,7 @@ func (r *Raft) leaderLoop() {
 			future.respond(nil)
 
 		case future := <-r.configurationChangeChIfStable():
+			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				future.respond(ErrLeadershipTransferInProgress)
@@ -740,9 +831,11 @@ func (r *Raft) leaderLoop() {
 			r.appendConfigurationEntry(future)
 
 		case b := <-r.bootstrapCh:
+			r.mainThreadSaturation.working()
 			b.respond(ErrCantBootstrap)
 
 		case newLog := <-r.applyCh:
+			r.mainThreadSaturation.working()
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				newLog.respond(ErrLeadershipTransferInProgress)
@@ -751,7 +844,7 @@ func (r *Raft) leaderLoop() {
 			// Group commit, gather all the ready commits
 			ready := []*logFuture{newLog}
 		GROUP_COMMIT_LOOP:
-			for i := 0; i < r.conf.MaxAppendEntries; i++ {
+			for i := 0; i < r.config().MaxAppendEntries; i++ {
 				select {
 				case newLog := <-r.applyCh:
 					ready = append(ready, newLog)
@@ -771,18 +864,27 @@ func (r *Raft) leaderLoop() {
 			}
 
 		case <-lease:
+			r.mainThreadSaturation.working()
 			// Check if we've exceeded the lease, potentially stepping down
 			maxDiff := r.checkLeaderLease()
 
 			// Next check interval should adjust for the last node we've
 			// contacted, without going negative
-			checkInterval := r.conf.LeaderLeaseTimeout - maxDiff
+			checkInterval := r.config().LeaderLeaseTimeout - maxDiff
 			if checkInterval < minCheckInterval {
 				checkInterval = minCheckInterval
 			}
 
 			// Renew the lease timer
 			lease = time.After(checkInterval)
+
+		case <-r.leaderNotifyCh:
+			for _, repl := range r.leaderState.replState {
+				asyncNotifyCh(repl.notifyCh)
+			}
+
+		case <-r.followerNotifyCh:
+			//  Ignore since we are not a follower
 
 		case <-r.shutdownCh:
 			return
@@ -818,7 +920,6 @@ func (r *Raft) verifyLeader(v *verifyFuture) {
 
 // leadershipTransfer is doing the heavy lifting for the leadership transfer.
 func (r *Raft) leadershipTransfer(id ServerID, address ServerAddress, repl *followerReplication, stopCh chan struct{}, doneCh chan error) {
-
 	// make sure we are not already stopped
 	select {
 	case <-stopCh:
@@ -826,10 +927,6 @@ func (r *Raft) leadershipTransfer(id ServerID, address ServerAddress, repl *foll
 		return
 	default:
 	}
-
-	// Step 1: set this field which stops this leader from responding to any client requests.
-	r.setLeadershipTransferInProgress(true)
-	defer func() { r.setLeadershipTransferInProgress(false) }()
 
 	for atomic.LoadUint64(&repl.nextIndex) <= r.getLastIndex() {
 		err := &deferError{}
@@ -872,6 +969,11 @@ func (r *Raft) checkLeaderLease() time.Duration {
 	// Track contacted nodes, we can always contact ourself
 	contacted := 0
 
+	// Store lease timeout for this one check invocation as we need to refer to it
+	// in the loop and would be confusing if it ever becomes reloadable and
+	// changes between iterations below.
+	leaseTimeout := r.config().LeaderLeaseTimeout
+
 	// Check each follower
 	var maxDiff time.Duration
 	now := time.Now()
@@ -883,14 +985,14 @@ func (r *Raft) checkLeaderLease() time.Duration {
 			}
 			f := r.leaderState.replState[server.ID]
 			diff := now.Sub(f.LastContact())
-			if diff <= r.conf.LeaderLeaseTimeout {
+			if diff <= leaseTimeout {
 				contacted++
 				if diff > maxDiff {
 					maxDiff = diff
 				}
 			} else {
 				// Log at least once at high value, then debug. Otherwise it gets very verbose.
-				if diff <= 3*r.conf.LeaderLeaseTimeout {
+				if diff <= 3*leaseTimeout {
 					r.logger.Warn("failed to contact", "server-id", server.ID, "time", diff)
 				} else {
 					r.logger.Debug("failed to contact", "server-id", server.ID, "time", diff)
@@ -1080,6 +1182,7 @@ func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
 		lastIndex++
 		applyLog.log.Index = lastIndex
 		applyLog.log.Term = term
+		applyLog.log.AppendedAt = now
 		logs[idx] = &applyLog.log
 		r.leaderState.inflight.PushBack(applyLog)
 	}
@@ -1131,7 +1234,11 @@ func (r *Raft) processLogs(index uint64, futures map[uint64]*logFuture) {
 		}
 	}
 
-	batch := make([]*commitTuple, 0, r.conf.MaxAppendEntries)
+	// Store maxAppendEntries for this call in case it ever becomes reloadable. We
+	// need to use the same value for all lines here to get the expected result.
+	maxAppendEntries := r.config().MaxAppendEntries
+
+	batch := make([]*commitTuple, 0, maxAppendEntries)
 
 	// Apply all the preceding logs
 	for idx := lastApplied + 1; idx <= index; idx++ {
@@ -1156,9 +1263,9 @@ func (r *Raft) processLogs(index uint64, futures map[uint64]*logFuture) {
 			batch = append(batch, preparedLog)
 
 			// If we have filled up a batch, send it to the FSM
-			if len(batch) >= r.conf.MaxAppendEntries {
+			if len(batch) >= maxAppendEntries {
 				applyBatch(batch)
-				batch = make([]*commitTuple, 0, r.conf.MaxAppendEntries)
+				batch = make([]*commitTuple, 0, maxAppendEntries)
 			}
 
 		case futureOk:
@@ -1274,7 +1381,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 
 	// Increase the term if we see a newer one, also transition to follower
 	// if we ever get an appendEntries call
-	if a.Term > r.getCurrentTerm() || r.getState() != Follower {
+	if a.Term > r.getCurrentTerm() || (r.getState() != Follower && !r.candidateFromLeadershipTransfer) {
 		// Ensure transition to follower
 		r.setState(Follower)
 		r.setCurrentTerm(a.Term)
@@ -1282,8 +1389,11 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	}
 
 	// Save the current leader
-	r.setLeader(ServerAddress(r.trans.DecodePeer(a.Leader)))
-
+	if len(a.Addr) > 0 {
+		r.setLeader(r.trans.DecodePeer(a.Addr), ServerID(a.ID))
+	} else {
+		r.setLeader(r.trans.DecodePeer(a.Leader), ServerID(a.ID))
+	}
 	// Verify the last log entry
 	if a.PrevLogEntry > 0 {
 		lastIdx, lastTerm := r.getLastEntry()
@@ -1334,9 +1444,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 				return
 			}
 			if entry.Term != storeEntry.Term {
-				r.logger.Warn("clearing log suffix",
-					"from", entry.Index,
-					"to", lastLogIdx)
+				r.logger.Warn("clearing log suffix", "from", entry.Index, "to", lastLogIdx)
 				if err := r.logs.DeleteRange(entry.Index, lastLogIdx); err != nil {
 					r.logger.Error("failed to clear log suffix", "error", err)
 					return
@@ -1360,7 +1468,13 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 
 			// Handle any new configuration changes
 			for _, newEntry := range newEntries {
-				r.processConfigurationLogEntry(newEntry)
+				if err := r.processConfigurationLogEntry(newEntry); err != nil {
+					r.logger.Warn("failed to append entry",
+						"index", newEntry.Index,
+						"error", err)
+					rpcErr = err
+					return
+				}
 			}
 
 			// Update the lastLog
@@ -1392,17 +1506,24 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 // processConfigurationLogEntry takes a log entry and updates the latest
 // configuration if the entry results in a new configuration. This must only be
 // called from the main thread, or from NewRaft() before any threads have begun.
-func (r *Raft) processConfigurationLogEntry(entry *Log) {
-	if entry.Type == LogConfiguration {
+func (r *Raft) processConfigurationLogEntry(entry *Log) error {
+	switch entry.Type {
+	case LogConfiguration:
 		r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
 		r.setLatestConfiguration(DecodeConfiguration(entry.Data), entry.Index)
-	} else if entry.Type == LogAddPeerDeprecated || entry.Type == LogRemovePeerDeprecated {
+
+	case LogAddPeerDeprecated, LogRemovePeerDeprecated:
 		r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
-		r.setLatestConfiguration(decodePeers(entry.Data, r.trans), entry.Index)
+		conf, err := decodePeers(entry.Data, r.trans)
+		if err != nil {
+			return err
+		}
+		r.setLatestConfiguration(conf, entry.Index)
 	}
+	return nil
 }
 
-// requestVote is invoked when we get an request vote RPC call.
+// requestVote is invoked when we get a request vote RPC call.
 func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	defer metrics.MeasureSince([]string{"raft", "rpc", "requestVote"}, time.Now())
 	r.observe(*req)
@@ -1428,11 +1549,33 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	// check the LeadershipTransfer flag is set. Usually votes are rejected if
 	// there is a known leader. But if the leader initiated a leadership transfer,
 	// vote!
-	candidate := r.trans.DecodePeer(req.Candidate)
-	if leader := r.Leader(); leader != "" && leader != candidate && !req.LeadershipTransfer {
+	var candidate ServerAddress
+	var candidateBytes []byte
+	if len(req.RPCHeader.Addr) > 0 {
+		candidate = r.trans.DecodePeer(req.RPCHeader.Addr)
+		candidateBytes = req.RPCHeader.Addr
+	} else {
+		candidate = r.trans.DecodePeer(req.Candidate)
+		candidateBytes = req.Candidate
+	}
+
+	// For older raft version ID is not part of the packed message
+	// We assume that the peer is part of the configuration and skip this check
+	if len(req.ID) > 0 {
+		candidateID := ServerID(req.ID)
+		// if the Servers list is empty that mean the cluster is very likely trying to bootstrap,
+		// Grant the vote
+		if len(r.configurations.latest.Servers) > 0 && !hasVote(r.configurations.latest, candidateID) {
+			r.logger.Warn("rejecting vote request since node is not a voter",
+				"from", candidate)
+			return
+		}
+	}
+	if leaderAddr, leaderID := r.LeaderWithID(); leaderAddr != "" && leaderAddr != candidate && !req.LeadershipTransfer {
 		r.logger.Warn("rejecting vote request since we have a leader",
 			"from", candidate,
-			"leader", leader)
+			"leader", leaderAddr,
+			"leader-id", string(leaderID))
 		return
 	}
 
@@ -1465,7 +1608,7 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	// Check if we've voted in this election before
 	if lastVoteTerm == req.Term && lastVoteCandBytes != nil {
 		r.logger.Info("duplicate requestVote for same term", "term", req.Term)
-		if bytes.Compare(lastVoteCandBytes, req.Candidate) == 0 {
+		if bytes.Compare(lastVoteCandBytes, candidateBytes) == 0 {
 			r.logger.Warn("duplicate requestVote from", "candidate", candidate)
 			resp.Granted = true
 		}
@@ -1491,7 +1634,7 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	}
 
 	// Persist a vote for safety
-	if err := r.persistVote(req.Term, req.Candidate); err != nil {
+	if err := r.persistVote(req.Term, candidateBytes); err != nil {
 		r.logger.Error("failed to persist vote", "error", err)
 		return
 	}
@@ -1542,7 +1685,11 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
 	}
 
 	// Save the current leader
-	r.setLeader(ServerAddress(r.trans.DecodePeer(req.Leader)))
+	if len(req.ID) > 0 {
+		r.setLeader(r.trans.DecodePeer(req.RPCHeader.Addr), ServerID(req.ID))
+	} else {
+		r.setLeader(r.trans.DecodePeer(req.Leader), ServerID(req.ID))
+	}
 
 	// Create a new snapshot
 	var reqConfiguration Configuration
@@ -1551,7 +1698,11 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
 		reqConfiguration = DecodeConfiguration(req.Configuration)
 		reqConfigurationIndex = req.ConfigurationIndex
 	} else {
-		reqConfiguration = decodePeers(req.Peers, r.trans)
+		reqConfiguration, rpcErr = decodePeers(req.Peers, r.trans)
+		if rpcErr != nil {
+			r.logger.Error("failed to install snapshot", "error", rpcErr)
+			return
+		}
 		reqConfigurationIndex = req.LastLogIndex
 	}
 	version := getSnapshotVersion(r.protocolVersion)
@@ -1563,8 +1714,14 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
 		return
 	}
 
+	// Separately track the progress of streaming a snapshot over the network
+	// because this too can take a long time.
+	countingRPCReader := newCountingReader(rpc.Reader)
+
 	// Spill the remote snapshot to disk
-	n, err := io.Copy(sink, rpc.Reader)
+	transferMonitor := startSnapshotRestoreMonitor(r.logger, countingRPCReader, req.Size, true)
+	n, err := io.Copy(sink, countingRPCReader)
+	transferMonitor.StopAndWait()
 	if err != nil {
 		sink.Cancel()
 		r.logger.Error("failed to copy snapshot", "error", err)
@@ -1654,8 +1811,9 @@ func (r *Raft) electSelf() <-chan *voteResult {
 	// Construct the request
 	lastIdx, lastTerm := r.getLastEntry()
 	req := &RequestVoteRequest{
-		RPCHeader:          r.getRPCHeader(),
-		Term:               r.getCurrentTerm(),
+		RPCHeader: r.getRPCHeader(),
+		Term:      r.getCurrentTerm(),
+		// this is needed for retro compatibility, before RPCHeader.Addr was added
 		Candidate:          r.trans.EncodePeer(r.localID, r.localAddr),
 		LastLogIndex:       lastIdx,
 		LastLogTerm:        lastTerm,
@@ -1684,7 +1842,7 @@ func (r *Raft) electSelf() <-chan *voteResult {
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
 				// Persist a vote for ourselves
-				if err := r.persistVote(req.Term, req.Candidate); err != nil {
+				if err := r.persistVote(req.Term, req.RPCHeader.Addr); err != nil {
 					r.logger.Error("failed to persist vote", "error", err)
 					return nil
 				}
@@ -1730,22 +1888,12 @@ func (r *Raft) setCurrentTerm(t uint64) {
 // transition causes the known leader to be cleared. This means
 // that leader should be set only after updating the state.
 func (r *Raft) setState(state RaftState) {
-	r.setLeader("")
+	r.setLeader("", "")
 	oldState := r.raftState.getState()
 	r.raftState.setState(state)
 	if oldState != state {
 		r.observe(state)
 	}
-}
-
-// LookupServer looks up a server by ServerID.
-func (r *Raft) lookupServer(id ServerID) *Server {
-	for _, server := range r.configurations.latest.Servers {
-		if server.ID != r.localID {
-			return &server
-		}
-	}
-	return nil
 }
 
 // pickServer returns the follower that is most up to date and participating in quorum.
@@ -1797,7 +1945,7 @@ func (r *Raft) initiateLeadershipTransfer(id *ServerID, address *ServerAddress) 
 
 // timeoutNow is what happens when a server receives a TimeoutNowRequest.
 func (r *Raft) timeoutNow(rpc RPC, req *TimeoutNowRequest) {
-	r.setLeader("")
+	r.setLeader("", "")
 	r.setState(Candidate)
 	r.candidateFromLeadershipTransfer = true
 	rpc.Respond(&TimeoutNowResponse{}, nil)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,7 +140,7 @@ dc_obj_verify_check_existence(struct dc_obj_verify_args *dova,
 		if (dova[0].non_exist == dova[i].non_exist)
 			continue;
 
-		D_INFO(DF_OID" (reps %d, inconsistent) "
+		D_WARN(DF_OID" (reps %d, inconsistent) "
 		       "shard %u %s, but shard %u %s.\n",
 		       DP_OID(oid), reps, start,
 		       dova[0].non_exist ? "non-exist" : "exist",
@@ -520,7 +520,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	int				 rc;
 
 	if (cur_a->type != cur_b->type) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
+		D_WARN(DF_OID" (reps %u, inconsistent) "
 		       "shard %u has rec type %u, "
 		       "but shard %u has rec type %u.\n",
 		       DP_OID(oid), reps, shard_a, cur_a->type,
@@ -533,7 +533,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
+		D_WARN(DF_OID" (reps %u, inconsistent) "
 			"shard %u has dkey "DF_KEY", but shard %u has dkey "DF_KEY".\n",
 			DP_OID(oid), reps,
 			shard_a, DP_KEY(&cur_a->dkey),
@@ -546,7 +546,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->iod.iod_name, &cur_b->iod.iod_name)) {
-		D_INFO(DF_OID" (reps %u, inconsistent) shard %u has akey "
+		D_WARN(DF_OID" (reps %u, inconsistent) shard %u has akey "
 		       DF_KEY", but shard %u has akey "DF_KEY".\n",
 		       DP_OID(oid), reps,
 		       shard_a, DP_KEY(&cur_a->iod.iod_name),
@@ -561,7 +561,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	if (cur_a->type == OBJ_ITER_RECX) {
 		if (cur_a->iod.iod_recxs->rx_idx !=
 		    cur_b->iod.iod_recxs->rx_idx) {
-			D_INFO(DF_OID" (reps %u, inconsistent) "
+			D_WARN(DF_OID" (reps %u, inconsistent) "
 			       "shard %u has EV rec start %lu, "
 			       "but shard %u has EV rec start %lu.\n",
 			       DP_OID(oid), reps,
@@ -572,7 +572,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 
 		if (cur_a->iod.iod_recxs->rx_nr !=
 		    cur_b->iod.iod_recxs->rx_nr) {
-			D_INFO(DF_OID" (reps %u, inconsistent) "
+			D_WARN(DF_OID" (reps %u, inconsistent) "
 			       "shard %u has EV rec len %lu, "
 			       "but shard %u has EV rec len %lu.\n",
 			       DP_OID(oid), reps,
@@ -583,7 +583,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	}
 
 	if (cur_a->iod.iod_size != cur_b->iod.iod_size) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
+		D_WARN(DF_OID" (reps %u, inconsistent) "
 		       "type %u, shard %u has rec size %lu, "
 		       "but shard %u has rec size %lu.\n",
 		       DP_OID(oid), reps, cur_a->type, shard_a,
@@ -609,7 +609,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	D_ASSERT(dova_b->fetch_iov.iov_buf == dova_b->fetch_buf);
 
 	if (dova_a->fetch_iov.iov_len != dova_b->fetch_iov.iov_len) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
+		D_WARN(DF_OID" (reps %u, inconsistent) "
 		       "type %u, fetched %ld bytes from shard %u, "
 		       "but fetched %ld bytes from shard %u.\n",
 		       DP_OID(oid), reps, cur_a->type,
@@ -620,7 +620,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 
 	if (memcmp(dova_a->fetch_iov.iov_buf, dova_b->fetch_iov.iov_buf,
 		   dova_a->fetch_iov.iov_len) != 0) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
+		D_WARN(DF_OID" (reps %u, inconsistent) "
 		       "type %u, shard %u and shard %u have "
 		       "different data, size %lu.\n",
 		       DP_OID(oid), reps, cur_a->type, shard_a, shard_b,
@@ -645,19 +645,19 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	tse_task_t			*verify_task;
 	uint64_t			shard = dova->current_shard;
 	int				nr = io->ui_iods_top + 1;
+	uint32_t			tgt_off;
 	int				i;
 	int				idx = 0;
 	int				rc;
 
 	D_ASSERT(obj != NULL);
-	if (!dova->ec_parity_rotate)
-		io->ui_dkey_hash = 0;
-
+	tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		"start EC "DF_U64"\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash,
-		obj_ec_shard_off(io->ui_dkey_hash, obj_get_oca(obj), io->ui_oid.id_shard));
-	if (nr == 0 || is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj)))
+		"tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
+	if (nr == 0 || is_ec_parity_shard_by_tgt_off(tgt_off, obj_get_oca(obj))) {
+		obj_decref(obj);
 		return 0;
+	}
 
 	for (i = 0; i < nr; i++) {
 		daos_size_t	size;
@@ -689,9 +689,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		sgls_verify[idx].sg_nr_out = 1;
 		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_dkey_hash,
-					       io->ui_oid.id_shard, &iod->iod_recxs,
-					       NULL, &iod->iod_nr, true);
+			rc = obj_recx_ec2_daos(obj_get_oca(obj), tgt_off, &iod->iod_recxs, NULL,
+					       &iod->iod_nr, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -701,6 +700,7 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	if (idx == 0) {
 		D_DEBUG(DB_TRACE, "all punched "DF_KEY" nr %d shard "DF_U64"\n",
 			DP_KEY(&io->ui_dkey), nr, shard);
+		obj_decref(obj);
 		return 0;
 	}
 
@@ -719,8 +719,16 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	rc = dc_task_schedule(task, true);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
+			DP_OID(obj->cob_md.omd_id), idx, shard);
+		for (i = 0; i < idx; i++)
+			D_ERROR("%d: iod_type %d, buffer size %zu iod_size %zu, unpacked iod_size "
+				"%zu, "DF_RC"\n", i, iods[i].iod_type,
+				sgls[i].sg_iovs[0].iov_buf_len, iods[i].iod_size,
+				io->ui_iods[i].iod_size, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
@@ -737,21 +745,34 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	rc = dc_task_schedule(verify_task, true);
-	if (rc)
+	if (rc) {
+		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
+			DP_OID(obj->cob_md.omd_id), idx, shard);
+		for (i = 0; i < idx; i++)
+			D_ERROR("%d: iod_type %d, buffer size %zu iod_size %zu, unpacked iod_size "
+				"%zu, "DF_RC"\n", i, iods[i].iod_type,
+				sgls[i].sg_iovs[0].iov_buf_len, iods[i].iod_size,
+				io->ui_iods[i].iod_size, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 	daos_fail_loc_set(0);
 
 	for (i = 0; i < idx; i++) {
 		if (sgls[i].sg_iovs[0].iov_len != sgls_verify[i].sg_iovs[0].iov_len ||
 		    memcmp(sgls[i].sg_iovs[0].iov_buf, sgls_verify[i].sg_iovs[0].iov_buf,
 			   sgls[i].sg_iovs[0].iov_len)) {
-			D_ERROR(DF_OID"i %d shard %u mismatch\n",
-				DP_OID(obj->cob_md.omd_id), i, dova->current_shard);
+			char *ptr = sgls[i].sg_iovs[0].iov_buf;
+			char *verify_ptr = sgls_verify[i].sg_iovs[0].iov_buf;
+
+			D_ERROR(DF_OID" i %d shard %u mismatch sgl %d/%d verify %d/%d\n",
+				DP_OID(obj->cob_md.omd_id), i, dova->current_shard, (int)(*ptr),
+				(int)sgls[i].sg_iovs[0].iov_len, (int)(*verify_ptr),
+				(int)sgls_verify[i].sg_iovs[0].iov_len);
 
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
-		D_DEBUG(DB_TRACE, DF_OID" shard %u match\n", DP_OID(obj->cob_md.omd_id),
-			dova->current_shard);
+		D_DEBUG(DB_TRACE, DF_OID" %d shard %u match\n",
+			DP_OID(obj->cob_md.omd_id), i, dova->current_shard);
 	}
 out:
 	for (i = 0; i < idx; i++) {
@@ -759,6 +780,7 @@ out:
 
 		D_FREE(iovs_verify[i].iov_buf);
 	}
+	obj_decref(obj);
 
 	return rc;
 }
@@ -797,20 +819,24 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 
 		oid.id_pub = obj->cob_md.omd_id;
 		oid.id_shard = start + i;
+		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		while (!dova->eof) {
 			rc = dc_obj_verify_list(dova);
 			if (rc < 0) {
-				D_ERROR("Failed to verify object list: "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR(DF_UOID" failed to list ec object: "DF_RC"\n",
+					DP_UOID(oid), DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 
-			rc = dc_obj_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
-						NULL, dc_obj_verify_ec_cb, dova);
-			if (rc) {
-				D_ERROR("Failed to verify ec object: "DF_RC"\n",
-					DP_RC(rc));
-				D_GOTO(out, rc);
+			if (!dova->non_exist && dova->num > 0) {
+				rc = dc_obj_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
+							NULL, dc_obj_verify_ec_cb, dova);
+				if (rc) {
+					D_ERROR(DF_UOID" failed to verify ec object: "DF_RC"\n",
+						DP_UOID(oid), DP_RC(rc));
+					D_GOTO(out, rc);
+				}
 			}
 		}
 	}
@@ -852,8 +878,8 @@ dc_obj_verify_rep_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 
 		rc = dc_obj_verify_list(&dova[i]);
 		if (rc < 0) {
-			D_ERROR("Failed to verify object list: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR(DF_OID" failed to list rep object: "DF_RC"\n",
+				DP_OID(oid), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -866,8 +892,8 @@ dc_obj_verify_rep_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		for (i = 0; i < reps; i++) {
 			rc = dc_obj_verify_move_cursor(&dova[i], oid);
 			if (rc != 0) {
-				D_ERROR("Failed to verify cursor: "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR(DF_OID" failed to verify cursor: "DF_RC"\n",
+					DP_OID(oid), DP_RC(rc));
 				goto out;
 			}
 		}
@@ -876,13 +902,13 @@ dc_obj_verify_rep_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
 			if (rc == -DER_CSUM) {
-				D_ERROR("Failed to verify because of "
-					"data corruption");
+				D_WARN(DF_OID" failed to verify because of data corruption\n",
+				       DP_OID(oid));
 				D_GOTO(out, rc = -DER_MISMATCH);
 			}
 			if (rc != 0) {
-				D_ERROR("Failed to verify cmp: "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR(DF_OID" failed to cmp rep object: "DF_RC"\n",
+					DP_OID(oid), DP_RC(rc));
 				goto out;
 			}
 		}
@@ -893,7 +919,7 @@ dc_obj_verify_rep_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	/* Check EOF */
 	for (i = 1; i < reps; i++) {
 		if (dova[i].cursor.type != OBJ_ITER_NONE || !dova[i].eof) {
-			D_INFO(DF_OID" (reps %d, inconsistent) "
+			D_WARN(DF_OID" (reps %d, inconsistent) "
 			       "shard %u eof, but shard %u not eof.\n",
 			       DP_OID(oid), reps, start, start + i);
 			D_GOTO(out, rc = -DER_MISMATCH);
@@ -909,10 +935,13 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 {
 	daos_handle_t	th;
 	int		rc;
+	daos_handle_t	coh;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, 0, &th);
+	dc_cont2hdl_noref(obj->cob_co, &coh);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc != 0) {
-		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_OID" dc_tx_local-open failed: "DF_RC"\n",
+			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 		return rc;
 	}
 

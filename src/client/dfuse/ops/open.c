@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,10 +30,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
+	dfuse_open_handle_init(oh, ie);
+
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (ie->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -47,12 +49,19 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
-	oh->doh_dfs = ie->ie_dfs->dfs_ns;
-	oh->doh_ie  = ie;
 
-	if (ie->ie_dfs->dfc_data_caching) {
+	if (ie->ie_dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
+
+		if (atomic_load_relaxed(&ie->ie_open_count) > 0) {
+			fi_out.keep_cache = 1;
+		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+			fi_out.keep_cache = 1;
+		}
+
+		if (fi_out.keep_cache)
+			oh->doh_keep_cache = true;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -75,6 +84,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
 			D_GOTO(err, rc);
+		dfuse_cache_evict(oh->doh_ie);
 	}
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
@@ -94,13 +104,41 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 	int                   rc;
+	uint32_t              il_calls;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
+	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
+
+	/* If the file was read from then set the cache time for future use, however if the
+	 * file was written to then evict the cache.
+	 * The problem here is that if the file was written to then the contents will be in the
+	 * kernel cache however dfuse has no visibility over file size and before replying with
+	 * data from the cache the kernel will call stat() to get an up-to-date file size, so
+	 * after write dfuse may continue to tell the kernel incorrect file sizes.  The fix
+	 * would be to store metadata but not cache data.
+	 *
+	 * Additionally, with caching enabled then dfuse may see create(), release(), open() calls
+	 * and neither release nor open update the cache, so do not set it valid on read.
+	 */
+	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
+		if (oh->doh_caching) {
+			DFUSE_TRA_DEBUG(oh, "Evicting cache");
+			dfuse_cache_evict(oh->doh_ie);
+		}
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
+	}
+	il_calls = atomic_load_relaxed(&oh->doh_il_calls);
+	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
+	if (il_calls != 0) {
+		if (oh->doh_caching) {
+			DFUSE_TRA_DEBUG(oh, "Evicting cache");
+			dfuse_cache_evict(oh->doh_ie);
+		}
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
+	}
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);

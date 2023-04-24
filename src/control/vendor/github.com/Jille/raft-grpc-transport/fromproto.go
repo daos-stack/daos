@@ -38,6 +38,7 @@ func decodeLog(m *pb.Log) *raft.Log {
 		Type:       decodeLogType(m.Type),
 		Data:       m.Data,
 		Extensions: m.Extensions,
+		AppendedAt: m.AppendedAt.AsTime(),
 	}
 }
 

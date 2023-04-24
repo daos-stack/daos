@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,12 +7,14 @@ import time
 from datetime import datetime
 import os
 import threading
+from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, stop_processes, get_journalctl
+from general_utils import report_errors, get_journalctl
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import stop_processes
 
 
 class AgentFailure(IorTestBase):
@@ -38,10 +39,13 @@ class AgentFailure(IorTestBase):
         testfile = os.path.join("/", file_name)
         ior_cmd.test_file.update(testfile)
 
+        # We need to provide hostnames to the util files with NodeSet.
+        clients_nodeset = NodeSet.fromlist(clients)
+
         manager = get_job_manager(
             test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
             mpi_type="mpich")
-        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         manager.ppn.update(ppn, 'mpirun.ppn')
         manager.processes.update(None, 'mpirun.np')
@@ -63,9 +67,7 @@ class AgentFailure(IorTestBase):
         2. Run IOR.
         3. Stop daos_agent process while IOR is running.
         4. Check the error on the client side. When daos_agent is killed in the middle of
-        IOR, the file write completes successfully, but the pool disconnect at the end
-        fails, so we get the error message that includes -1005. This step is more like a
-        verification of the test itself rather than the product.
+        IOR, the IOR would fail.
         5. Verify journalctl shows the log that the agent is stopped. Call:
         journalctl --system -t daos_agent --since <before> --until <after>
         This step verifies that DAOS, or daos_agent process in this case, prints useful
@@ -76,9 +78,9 @@ class AgentFailure(IorTestBase):
         verifies that DAOS can recover from the fault with minimal human intervention.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_basic
+        :avocado: tags=AgentFailure,test_agent_failure
         """
         # 1. Create a pool and a container.
         self.add_pool()
@@ -92,13 +94,13 @@ class AgentFailure(IorTestBase):
             target=self.run_ior_collect_error,
             args=[ior_results, job_num, "test_file_1", [self.hostlist_clients[0]]])
 
-        self.log.info("Start IOR 1 (thread)")
+        self.log.info("Start IOR %d (thread)", job_num)
         job.start()
 
         # We need to stop daos_agent while IOR is running, so need to wait for a few
         # seconds for IOR to start.
-        self.log.info("Waiting 5 sec for IOR to start writing data...")
-        time.sleep(5)
+        self.log.info("Waiting 10 sec for IOR to start writing data...")
+        time.sleep(10)
 
         errors = []
 
@@ -115,11 +117,10 @@ class AgentFailure(IorTestBase):
         job.join()
 
         # 4. Verify the error from the IOR command.
-        self.log.info("--- IOR results 1 ---")
-        self.log.info(ior_results)
-        ior_error = ior_results[job_num][-1]
-        if "-1005" not in ior_error:
-            errors.append("-1005 is not in IOR error! {}".format(ior_error))
+        self.log.info("--- IOR results %d ---", job_num)
+        self.log.info(ior_results[job_num])
+        if ior_results[job_num][0]:
+            errors.append("IOR worked when agent is killed!")
 
         # 5. Verify journalctl shows the log that the agent is stopped.
         results = get_journalctl(
@@ -136,17 +137,18 @@ class AgentFailure(IorTestBase):
         self.start_agent_managers()
 
         # 7. Run IOR again.
-        self.log.info("Start IOR 2")
+        job_num = 2
+        self.log.info("Start IOR %d", job_num)
         self.run_ior_collect_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
             clients=[self.hostlist_clients[0]])
 
         # Verify that there's no error this time.
-        self.log.info("--- IOR results 2 ---")
-        self.log.info(ior_results)
-        ior_error = ior_results[job_num][-1]
-        if ior_error:
-            errors.append("Error found in second IOR run! {}".format(ior_error))
+        self.log.info("--- IOR results %d ---", job_num)
+        self.log.info(ior_results[job_num])
+        if not ior_results[job_num][0]:
+            ior_error = ior_results[job_num][-1]
+            errors.append("IOR with restarted agent failed! Error: {}".format(ior_error))
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)
@@ -159,28 +161,29 @@ class AgentFailure(IorTestBase):
         2. Run IOR from the two client nodes.
         3. Stop daos_agent process while IOR is running on one of the clients.
         4. Wait until both of the IOR ends.
-        5. Check that there's no error on both of the clients. (No error occurs if there's
-        another agent running.)
+        5. Check that there's error on the kill client, but not on the keep client.
         6. On the killed client, verify journalctl shows the log that the agent is
         stopped.
         7. On the other client where agent is still running, verify that the journalctl
         doesn't show that the agent is stopped.
         8. Restart both daos_agent.
-        9. Run IOR again from both clients. It should succeed without any error.
+        9. Run IOR again from the keep client. It should succeed without any error.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_isolation
+        :avocado: tags=AgentFailure,test_agent_failure_isolation
         """
         # 1. Create a pool and a container.
         self.add_pool()
         self.add_container(self.pool)
 
+        # Use the last two agent hosts, since the first is likely the test runner node
         agent_hosts = self.agent_managers[0].hosts
         self.log.info("agent_hosts = %s", agent_hosts)
-        agent_host_keep = agent_hosts[0]
-        agent_host_kill = agent_hosts[1]
+        if len(agent_hosts) < 2:
+            self.fail("Need at least two agent hosts!")
+        agent_host_keep, agent_host_kill = agent_hosts[-2:]
 
         # 2. Run IOR from the two client nodes.
         ior_results = {}
@@ -200,8 +203,8 @@ class AgentFailure(IorTestBase):
 
         # We need to stop daos_agent while IOR is running, so need to wait for a few
         # seconds for IOR to start.
-        self.log.info("Waiting 5 sec for IOR to start writing data...")
-        time.sleep(5)
+        self.log.info("Waiting 10 sec for IOR to start writing data...")
+        time.sleep(10)
 
         errors = []
 
@@ -209,30 +212,31 @@ class AgentFailure(IorTestBase):
         since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
-        result = stop_processes(hosts=[agent_host_kill], pattern=pattern)
-        if 0 in result and len(result) == 1:
-            msg = "No daos_agent process killed from {}!".format(agent_host_kill)
+        detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern)
+        if not detected:
+            msg = "No daos_agent process killed on {}!".format(agent_host_kill)
+            errors.append(msg)
+        elif running:
+            msg = "Unable to kill daos_agent processes on {}!".format(running)
             errors.append(msg)
         else:
-            self.log.info("daos_agent in %s killed", agent_host_kill)
+            self.log.info("daos_agent processes on %s killed", detected)
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # 4. Wait until both of the IOR thread ends.
         thread_1.join()
         thread_2.join()
 
-        # 5. Check that there's no error on both of the clients. (No error occurs if
-        # there's another agent running.)
+        # 5. Check that there's error on the kill client, but not on the keep client.
         self.log.info("--- IOR results Kill ---")
         self.log.info(ior_results[job_num_kill])
-        ior_error = ior_results[job_num_kill][-1]
-        if ior_error:
-            errors.append("Error found in IOR on kill client! {}".format(ior_error))
+        if ior_results[job_num_kill][0]:
+            errors.append("IOR on agent kill host worked!")
 
         self.log.info("--- IOR results Keep ---")
         self.log.info(ior_results[job_num_keep])
-        ior_error = ior_results[job_num_keep][-1]
-        if ior_error:
+        if not ior_results[job_num_keep][0]:
+            ior_error = ior_results[job_num_keep][-1]
             errors.append("Error found in IOR on keep client! {}".format(ior_error))
 
         # 6. On the killed client, verify journalctl shows the log that the agent is
@@ -260,18 +264,17 @@ class AgentFailure(IorTestBase):
         # 8. Restart both daos_agent. (Currently, there's no clean way to restart one.)
         self.start_agent_managers()
 
-        # 9. Run IOR again from both clients. It should succeed this time without any
-        # error.
+        # 9. Run IOR again from the keep client. It should succeed without any error.
         self.log.info("--- Start IOR 2 ---")
         self.run_ior_collect_error(
             job_num=job_num_keep, results=ior_results, file_name="test_file_3",
             clients=agent_hosts)
 
-        # Verify that there's no error this time.
+        # Verify that there's no error.
         self.log.info("--- IOR results 2 ---")
         self.log.info(ior_results[job_num_keep])
-        ior_error = ior_results[job_num_keep][-1]
-        if ior_error:
+        if not ior_results[job_num_keep][0]:
+            ior_error = ior_results[job_num_keep][-1]
             errors.append("Error found in second IOR run! {}".format(ior_error))
 
         self.log.info("########## Errors ##########")

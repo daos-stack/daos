@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/srv_csum.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -53,6 +54,22 @@ stop_gc_ult(struct ds_pool_child *child)
 	sched_req_wait(child->spc_gc_req, true);
 	sched_req_put(child->spc_gc_req);
 	child->spc_gc_req = NULL;
+}
+
+static void
+stop_flush_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* Flush ULT is not started */
+	if (child->spc_flush_req == NULL)
+		return;
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Stopping Flush ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_flush_req, true);
+	sched_req_put(child->spc_flush_req);
+	child->spc_flush_req = NULL;
 }
 
 struct ds_pool_child *
@@ -90,6 +107,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 
 		/* only stop gc ULT when all ops ULTs are done */
 		stop_gc_ult(child);
+		stop_flush_ult(child);
 
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
@@ -180,9 +198,71 @@ start_gc_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_gc_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static void
+flush_ult(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	uint32_t		 sleep_ms, nr_flushed, nr_flush = 6000;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Flush ULT started\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
+	D_ASSERT(child->spc_flush_req != NULL);
+
+	while (!dss_ult_exiting(child->spc_flush_req)) {
+		rc = vos_flush_pool(child->spc_hdl, false, nr_flush, &nr_flushed);
+		if (rc < 0) {
+			D_ERROR(DF_UUID"[%d]: Flush pool failed. "DF_RC"\n",
+				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, DP_RC(rc));
+			sleep_ms = 2000;
+		} else if (rc) {	/* This pool doesn't have NVMe partition */
+			sleep_ms = 60000;
+		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
+			sleep_ms = 5000;
+		} else {
+			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
+		}
+
+		if (dss_ult_exiting(child->spc_flush_req))
+			break;
+
+		if (sleep_ms)
+			sched_req_sleep(child->spc_flush_req, sleep_ms);
+		else
+			sched_req_yield(child->spc_flush_req);
+	}
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Flush ULT stopped\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+}
+
+static int
+start_flush_ult(struct ds_pool_child *child)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+
+	D_ASSERT(child != NULL);
+	D_ASSERT(child->spc_flush_req == NULL);
+
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
+
+	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, DSS_DEEP_STACK_SZ);
+	if (child->spc_flush_req == NULL) {
+		D_ERROR(DF_UUID"[%d]: Failed to create flush ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
@@ -237,7 +317,7 @@ pool_child_add_one(void *varg)
 		goto out_metrics;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL,
+	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
@@ -264,9 +344,13 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_eventual;
 
-	rc = ds_start_scrubbing_ult(child);
+	rc = start_flush_ult(child);
 	if (rc != 0)
 		goto out_gc;
+
+	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0)
+		goto out_flush;
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
@@ -281,6 +365,8 @@ out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
 	ds_stop_scrubbing_ult(child);
+out_flush:
+	stop_flush_ult(child);
 out_gc:
 	stop_gc_ult(child);
 out_eventual:
@@ -528,27 +614,34 @@ ds_pool_cache_fini(void)
 	daos_lru_cache_destroy(pool_cache);
 }
 
-struct ds_pool *
-ds_pool_lookup(const uuid_t uuid)
+/**
+ * If the pool can not be found due to non-existence or it is being stopped, then
+ * @pool will be set to NULL and return proper failure code, otherwise return 0 and
+ * set @pool.
+ */
+int
+ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
-	struct ds_pool		*pool;
 	int			 rc;
 
+	D_ASSERT(pool != NULL);
+	*pool = NULL;
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       NULL /* create_args */, &llink);
 	if (rc != 0)
-		return NULL;
+		return rc;
 
-	pool = pool_obj(llink);
-	if (pool->sp_stopping) {
+	*pool = pool_obj(llink);
+	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
-		ds_pool_put(pool);
-		return NULL;
+		ds_pool_put(*pool);
+		*pool = NULL;
+		return -DER_SHUTDOWN;
 	}
 
-	return pool;
+	return 0;
 }
 
 void
@@ -778,11 +871,10 @@ ds_pool_stop(uuid_t uuid)
 
 	ds_pool_failed_remove(uuid);
 
-	pool = ds_pool_lookup(uuid);
+	ds_pool_lookup(uuid, &pool);
 	if (pool == NULL)
 		return;
-	if (pool->sp_stopping)
-		return;
+	D_ASSERT(!pool->sp_stopping);
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
@@ -795,8 +887,8 @@ ds_pool_stop(uuid_t uuid)
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_rebuild_abort(pool->sp_uuid, -1, -1);
-	ds_migrate_stop(pool, -1);
+	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
+	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
@@ -1177,6 +1269,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	hdl->sph_flags = pic->pic_flags;
 	hdl->sph_sec_capas = pic->pic_capas;
 	hdl->sph_global_ver = pic->pic_global_ver;
+	hdl->sph_obj_ver = pic->pic_obj_ver;
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 
@@ -1238,16 +1331,15 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 	if (in->tdi_hdls.ca_arrays == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DB_MD, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
-		DF_U64"\n", DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids),
-		in->tdi_hdls.ca_count);
+	D_DEBUG(DB_MD, DF_UUID ": handling rpc: %p hdls[0]=" DF_UUID " nhdls=" DF_U64 "\n",
+		DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids), in->tdi_hdls.ca_count);
 
 	for (i = 0; i < in->tdi_hdls.ca_count; i++)
 		ds_pool_tgt_disconnect(hdl_uuids[i]);
 out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d "DF_RC"\n",
-		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d " DF_RC "\n", DP_UUID(in->tdi_uuid), rpc,
+		out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1274,7 +1366,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1414,8 +1506,6 @@ out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)
 		pool_map_decref(map);
-	if (rc == 0)
-		rc = ds_cont_rf_check(pool->sp_uuid);
 	return rc;
 }
 
@@ -1434,10 +1524,10 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	/* Aggregate query over all targets on the node */
-	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
-	if (pool == NULL) {
-		D_ERROR("Failed to find pool "DF_UUID"\n",
-			DP_UUID(in->tqi_op.pi_uuid));
+	rc = ds_pool_lookup(in->tqi_op.pi_uuid, &pool);
+	if (rc) {
+		D_ERROR("Failed to find pool "DF_UUID": %d\n",
+			DP_UUID(in->tqi_op.pi_uuid), rc);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -1470,8 +1560,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool			*pool = (struct ds_pool *)in;
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
-	int				ret = 0;
-	uint64_t			features = 0;
+	int                              ret         = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1479,10 +1568,19 @@ update_vos_prop_on_targets(void *in)
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	if (ret)
+		goto out;
 
-	if (pool->sp_global_version >= 1)
-		features = VOS_POOL_FEAT_AGG_OPT;
-	vos_pool_features_set(child->spc_hdl, features);
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_SPACE_RB, &pool->sp_space_rb);
+	if (ret)
+		goto out;
+
+	/** If necessary, upgrade the vos pool format */
+	if (pool->sp_global_version >= 2)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+	else if (pool->sp_global_version == 1)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+out:
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1500,6 +1598,12 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_space_rb = iv_prop->pip_space_rb;
+
+	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+		pool->sp_disable_rebuild = 0;
+	else
+		pool->sp_disable_rebuild = 1;
 
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
@@ -1508,6 +1612,12 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 		return -DER_MISMATCH;
 	}
 	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+
+	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
+		iv_prop->pip_scrub_mode);
+	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
+	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
+	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 
 	return ret;
 }
@@ -1521,45 +1631,329 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_map_in   *in = crt_req_get(rpc);
 	struct pool_tgt_query_map_out  *out = crt_reply_get(rpc);
-	struct ds_pool_hdl	       *hdl;
 	struct ds_pool		       *pool;
 	struct pool_buf		       *buf;
 	unsigned int			version;
 	int				rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p\n",
-		DP_UUID(in->tmi_op.pi_uuid), rpc);
+	D_DEBUG(DB_TRACE, DF_UUID ": handling rpc: %p hdl=" DF_UUID "\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_UUID(in->tmi_op.pi_hdl));
 
-	hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
-	if (hdl == NULL) {
-		rc = -DER_NO_HDL;
-		goto out;
+	/* Validate the pool handle and get the ds_pool object. */
+	if (daos_rpc_from_client(rpc)) {
+		struct ds_pool_hdl *hdl;
+
+		hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
+		if (hdl == NULL) {
+			D_ERROR(DF_UUID": cannot find pool handle "DF_UUID"\n",
+				DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
+			rc = -DER_NO_HDL;
+			goto out;
+		}
+		ds_pool_get(hdl->sph_pool);
+		pool = hdl->sph_pool;
+		ds_pool_hdl_put(hdl);
+	} else {
+		/*
+		 * See the comment on validating the pool handle in
+		 * ds_pool_query_handler.
+		 */
+		rc = ds_pool_lookup(in->tmi_op.pi_uuid, &pool);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to look up pool: %d\n",
+				DP_UUID(in->tmi_op.pi_uuid), rc);
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		rc = ds_pool_hdl_is_from_srv(pool, in->tmi_op.pi_hdl);
+		if (rc < 0) {
+			D_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR,
+				 DF_UUID": failed to check server pool handle "DF_UUID": "DF_RC"\n",
+				 DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl),
+				 DP_RC(rc));
+			if (rc == -DER_NOTLEADER)
+				rc = -DER_AGAIN;
+			goto out_pool;
+		} else if (!rc) {
+			D_ERROR(DF_UUID": cannot find server pool handle "DF_UUID"\n",
+				DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
+			rc = -DER_NO_HDL;
+			goto out_pool;
+		}
 	}
 
 	/* Inefficient; better invent some zero-copy IV APIs. */
-	pool = hdl->sph_pool;
 	ABT_rwlock_rdlock(pool->sp_lock);
 	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
 	if (version <= in->tmi_map_version) {
 		rc = 0;
 		ABT_rwlock_unlock(pool->sp_lock);
-		goto out_hdl;
+		goto out_version;
 	}
 	rc = pool_buf_extract(pool->sp_map, &buf);
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0)
-		goto out_hdl;
+		goto out_version;
 
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 
 	D_FREE(buf);
-out_hdl:
+out_version:
 	out->tmo_op.po_map_version = version;
-	ds_pool_hdl_put(hdl);
+out_pool:
+	ds_pool_put(pool);
 out:
 	out->tmo_op.po_rc = rc;
-	D_DEBUG(DB_TRACE, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_RC(out->tmo_op.po_rc));
+	D_DEBUG(DB_TRACE, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->tmi_op.pi_uuid),
+		rpc, DP_RC(out->tmo_op.po_rc));
 	crt_reply_send(rpc);
+}
+
+struct tgt_discard_arg {
+	uuid_t			     pool_uuid;
+	uint64_t		     epoch;
+	struct pool_target_addr_list tgt_list;
+};
+
+struct child_discard_arg {
+	struct tgt_discard_arg	*tgt_discard;
+	uuid_t			cont_uuid;
+};
+
+static struct tgt_discard_arg*
+tgt_discard_arg_alloc(struct pool_target_addr_list *tgt_list)
+{
+	struct tgt_discard_arg	*arg;
+	int			i;
+	int			rc;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return NULL;
+
+	rc = pool_target_addr_list_alloc(tgt_list->pta_number, &arg->tgt_list);
+	if (rc != 0) {
+		D_FREE(arg);
+		return NULL;
+	}
+
+	for (i = 0; i < tgt_list->pta_number; i++) {
+		arg->tgt_list.pta_addrs[i].pta_rank = tgt_list->pta_addrs[i].pta_rank;
+		arg->tgt_list.pta_addrs[i].pta_target = tgt_list->pta_addrs[i].pta_target;
+	}
+
+	return arg;
+}
+
+static void
+tgt_discard_arg_free(struct tgt_discard_arg *arg)
+{
+	pool_target_addr_list_free(&arg->tgt_list);
+	D_FREE(arg);
+}
+
+static int
+obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
+	       vos_iter_type_t type, vos_iter_param_t *param,
+	       void *data, unsigned *acts)
+{
+	struct child_discard_arg	*arg = data;
+	daos_epoch_range_t		epr;
+	int				rc;
+
+	epr.epr_hi = arg->tgt_discard->epoch;
+	epr.epr_lo = 0;
+	rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+	if (rc != 0)
+		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
+			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
+			DP_RC(rc));
+	return rc;
+}
+
+/** vos_iter_cb_t */
+static int
+cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		vos_iter_type_t type, vos_iter_param_t *iter_param,
+		void *cb_arg, unsigned int *acts)
+{
+	struct child_discard_arg *arg = cb_arg;
+	struct ds_cont_child	*cont = NULL;
+	vos_iter_param_t	param = { 0 };
+	struct vos_iter_anchors	anchor = { 0 };
+	daos_handle_t		coh;
+	int			rc;
+
+	D_ASSERT(type == VOS_ITER_COUUID);
+	if (uuid_compare(arg->cont_uuid, entry->ie_couuid) == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID" already discard\n",
+			DP_UUID(arg->cont_uuid));
+		return 0;
+	}
+
+	rc = ds_cont_child_lookup(arg->tgt_discard->pool_uuid, entry->ie_couuid,
+				  &cont);
+	if (rc != DER_SUCCESS) {
+		D_ERROR("Lookup container '"DF_UUIDF"' failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	if (rc != 0) {
+		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		D_GOTO(put, rc);
+	}
+
+	param.ip_hdl = coh;
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
+	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
+			 arg, NULL);
+	vos_cont_close(coh);
+	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
+		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
+		DP_RC(rc));
+
+put:
+	ds_cont_child_put(cont);
+	return rc;
+}
+
+static int
+pool_child_discard(void *data)
+{
+	struct tgt_discard_arg	*arg = data;
+	struct child_discard_arg cont_arg;
+	struct ds_pool_child	*child;
+	vos_iter_param_t	param = { 0 };
+	struct vos_iter_anchors	anchor = { 0 };
+	struct pool_target_addr addr;
+	uint32_t		myrank;
+	int			rc;
+
+	myrank = dss_self_rank();
+	addr.pta_rank = myrank;
+	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
+	if (!pool_target_addr_found(&arg->tgt_list, &addr)) {
+		D_DEBUG(DB_TRACE, "skip discard %u/%u.\n", addr.pta_rank,
+			addr.pta_target);
+		return 0;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
+		myrank, addr.pta_target);
+
+	child = ds_pool_child_lookup(arg->pool_uuid);
+	D_ASSERT(child != NULL);
+	param.ip_hdl = child->spc_hdl;
+
+	cont_arg.tgt_discard = arg;
+	child->spc_discard_done = 0;
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+			 cont_discard_cb, NULL, &cont_arg, NULL);
+
+	child->spc_discard_done = 1;
+
+	ds_pool_child_put(child);
+
+	return rc;
+}
+
+/* Discard the objects by epoch in this pool */
+static void
+ds_pool_tgt_discard_ult(void *data)
+{
+	struct ds_pool		*pool;
+	struct tgt_discard_arg	*arg = data;
+	struct dss_coll_ops	coll_ops = { 0 };
+	struct dss_coll_args	coll_args = { 0 };
+	int			rc;
+
+	/* If discard failed, let's still go ahead, since reintegration might
+	 * still succeed, though it might leave some garbage on the reintegration
+	 * target, the future scrub tool might fix it. XXX
+	 */
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (pool == NULL) {
+		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
+		D_GOTO(free, rc = 0);
+	}
+
+	/* collective operations */
+	coll_ops.co_func = pool_child_discard;
+	coll_args.ca_func_args	= arg;
+	if (pool->sp_map != NULL) {
+		unsigned int status;
+
+		/* It should only discard the target in DOWNOUT state, and skip
+		 * targets in other state.
+		 */
+		status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
+			 PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
+		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status,
+						  &coll_args.ca_exclude_tgts,
+						  &coll_args.ca_exclude_tgts_cnt);
+		if (rc) {
+			D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+				DP_UUID(arg->pool_uuid), DP_RC(rc));
+			D_GOTO(put, rc);
+		}
+	}
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
+	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
+		 DP_UUID(arg->pool_uuid), DP_RC(rc));
+put:
+	pool->sp_need_discard = 0;
+	ds_pool_put(pool);
+free:
+	tgt_discard_arg_free(arg);
+}
+
+void
+ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_discard_in	*in = crt_req_get(rpc);
+	struct pool_tgt_discard_out	*out = crt_reply_get(rpc);
+	struct pool_target_addr_list	pta_list;
+	struct tgt_discard_arg		*arg = NULL;
+	struct ds_pool			*pool;
+	int				rc;
+
+	pta_list.pta_number = in->ptdi_addrs.ca_count;
+	pta_list.pta_addrs = in->ptdi_addrs.ca_arrays;
+	arg = tgt_discard_arg_alloc(&pta_list);
+	if (arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* POOL is already started in ds_mgmt_hdlr_tgt_create() during reintegration,
+	 * though pool might being stopped for some reason.
+	 * Let's do pool lookup to make sure pool child is already created.
+	 */
+	uuid_copy(arg->pool_uuid, in->ptdi_uuid);
+	arg->epoch = DAOS_EPOCH_MAX;
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc) {
+		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
+		D_GOTO(out, rc = 0);
+	}
+
+	pool->sp_need_discard = 1;
+	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+
+	ds_pool_put(pool);
+out:
+	out->ptdo_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID": replying rpc "DF_RC"\n", DP_UUID(in->ptdi_uuid),
+		DP_RC(rc));
+	crt_reply_send(rpc);
+	if (rc != 0 && arg != NULL)
+		tgt_discard_arg_free(arg);
 }

@@ -1,0 +1,12 @@
+"""Build wrapper libraries"""
+
+
+def scons():
+    """Execute build"""
+
+    # MPI wrapper library
+    SConscript('mpi/SConscript')
+
+
+if __name__ == "SCons.Script":
+    scons()

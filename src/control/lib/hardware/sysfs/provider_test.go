@@ -18,7 +18,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -177,6 +176,30 @@ func setupNUMANode(t *testing.T, devPath, numaStr string) {
 	writeTestFile(t, filepath.Join(devPath, "device", "numa_node"), numaStr)
 }
 
+func setupVirtualIB(t *testing.T, root, virtDev, parent string) {
+	virtDevDir := filepath.Join(root, "devices", "virtual", "net", virtDev)
+	if err := os.MkdirAll(virtDevDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	setupClassLink(t, root, "net", virtDevDir)
+	setupTestNetDevClasses(t, root, map[string]uint32{
+		virtDev: uint32(hardware.Infiniband),
+	})
+
+	// Link to the parent device is just the parent's name
+	f, err := os.Create(filepath.Join(virtDevDir, "parent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%s\n", parent))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestProvider_GetTopology(t *testing.T) {
 	validPCIAddr := "0000:02:00.0"
 	testTopo := &hardware.Topology{
@@ -312,6 +335,9 @@ func TestProvider_GetTopology(t *testing.T) {
 
 				setupClassLink(t, root, "net", virtPath1)
 
+				// Virtual IB device
+				setupVirtualIB(t, root, "virt_ib0", "net0")
+
 				// Virtual device with no physical device
 				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt0")
 				if err := os.MkdirAll(virtPath, 0755); err != nil {
@@ -319,7 +345,6 @@ func TestProvider_GetTopology(t *testing.T) {
 				}
 
 				setupClassLink(t, root, "net", virtPath)
-
 			},
 			p: &Provider{},
 			expResult: &hardware.Topology{
@@ -328,6 +353,11 @@ func TestProvider_GetTopology(t *testing.T) {
 					{
 						Name: "virt0",
 						Type: hardware.DeviceTypeNetInterface,
+					},
+					{
+						Name:          "virt_ib0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
 					},
 					{
 						Name:          "virt_net0",
@@ -501,6 +531,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		p         *Provider
+		provider  string
 		setup     func(*testing.T, string)
 		expErr    error
 		expResult *hardware.FabricInterfaceSet
@@ -517,16 +548,53 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 			p: &Provider{},
 			expResult: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:      "cxi0",
-					OSName:    "cxi0",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 				&hardware.FabricInterface{
-					Name:      "cxi1",
-					OSName:    "cxi1",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 			),
+		},
+		"CXI specified": {
+			p:        &Provider{},
+			provider: "ofi+cxi",
+			expResult: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+				&hardware.FabricInterface{
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+			),
+		},
+		"specified different fabric provider": {
+			p:         &Provider{},
+			provider:  "ofi+tcp",
+			expResult: hardware.NewFabricInterfaceSet(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -548,12 +616,13 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetFabricInterfaces(context.Background())
+			result, err := tc.p.GetFabricInterfaces(context.Background(), tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
+				cmp.AllowUnexported(hardware.FabricProviderSet{}),
 			); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
@@ -772,6 +841,15 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 			p:        &Provider{},
 			iface:    "ib0",
 			expState: hardware.NetDevStateUnknown,
+		},
+		"virtual IB device": {
+			setup: func(t *testing.T, root string) {
+				setupIB(t, root)
+				setupVirtualIB(t, root, "ib0.1", "ib0")
+			},
+			p:        &Provider{},
+			iface:    "ib0.1",
+			expState: hardware.NetDevStateReady,
 		},
 		"no port info": {
 			setup: func(t *testing.T, root string) {

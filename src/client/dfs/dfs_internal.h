@@ -28,18 +28,21 @@ enum {
 /** hash entry for open pool/container handles */
 struct dfs_mnt_hdls {
 	d_list_t	entry;
-	char		value[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		value[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
 	daos_handle_t	handle;
 	int		ref;
 	int		type;
 };
 
 struct dfs_mnt_hdls *
-dfs_hdl_lookup(const char *str, int type);
+dfs_hdl_lookup(const char *str, int type, const char *pool);
 void
 dfs_hdl_release(struct dfs_mnt_hdls *hdl);
 int
-dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl);
+dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
+	       struct dfs_mnt_hdls **_hdl);
+int
+dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force);
 int
 dfs_is_init();
 
@@ -66,7 +69,11 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 void
 dfs_free_sb_layout(daos_iod_t *iods[]);
 
-/** as dfs_open() but takes a stbuf to be populated if O_CREATE is specified */
+/** as dfs_open() but takes a stbuf to be populated if O_CREATE is specified
+ *
+ * If O_CREATE is set then entry->uid and entry->gid are popouated with the desired user,
+ * otherwise read them from the calling process.
+ */
 int
 dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,

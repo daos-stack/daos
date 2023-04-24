@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,13 +7,14 @@
 package engine
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
@@ -28,10 +29,15 @@ type FabricConfig struct {
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
 func (fc *FabricConfig) Update(other FabricConfig) {
+	if fc == nil {
+		return
+	}
+
 	if fc.Provider == "" {
 		fc.Provider = other.Provider
 	}
@@ -46,6 +52,12 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
+	}
+	if fc.DisableSRX == false {
+		fc.DisableSRX = other.DisableSRX
+	}
+	if fc.AuthKey == "" {
+		fc.AuthKey = other.AuthKey
 	}
 }
 
@@ -63,6 +75,11 @@ func (fc *FabricConfig) Validate() error {
 	default:
 		return nil
 	}
+}
+
+// GetAuthKeyEnv returns the environment variable string for the auth key.
+func (fc *FabricConfig) GetAuthKeyEnv() string {
+	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -88,60 +105,8 @@ func cleanEnvVars(in, allowed []string) (out []string) {
 	return
 }
 
-// mergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
-	mergeMap := make(map[string]string)
-	for _, pair := range curVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in curVars; shouldn't be any
-		// but this will ensure it.
-		if _, found := mergeMap[kv[0]]; found {
-			continue
-		}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	mergedKeys := make(map[string]struct{})
-	for _, pair := range newVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in newVars
-		if _, found := mergedKeys[kv[0]]; found {
-			continue
-		}
-		mergedKeys[kv[0]] = struct{}{}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	merged = make([]string, 0, len(mergeMap))
-	for key, val := range mergeMap {
-		merged = append(merged, strings.Join([]string{key, val}, "="))
-	}
-
-	return
-}
-
-type LegacyStorage struct {
-	storage.ScmConfig  `yaml:",inline,omitempty"`
-	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
-	storage.BdevConfig `yaml:",inline,omitempty"`
-	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
-}
-
-func (ls *LegacyStorage) WasDefined() bool {
-	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank   `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -189,6 +154,51 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+type cfgNumaMismatch struct {
+	cfgNode uint
+	detNode uint
+}
+
+func (cnm *cfgNumaMismatch) Error() string {
+	return fmt.Sprintf("configured NUMA node %d does not match detected NUMA node %d", cnm.cfgNode, cnm.detNode)
+}
+
+func errNumaMismatch(cfg, det uint) error {
+	return &cfgNumaMismatch{cfgNode: cfg, detNode: det}
+}
+
+// IsNUMAMismatch returns true if the supplied error is the result
+// of a NUMA node configuration error.
+func IsNUMAMismatch(err error) bool {
+	_, ok := errors.Cause(err).(*cfgNumaMismatch)
+	return ok
+}
+
+// SetNUMAAffinity sets the NUMA affinity for the engine,
+// if not already set in the configuration.
+func (c *Config) SetNUMAAffinity(node uint) error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	var hasMismatch error
+	if c.PinnedNumaNode != nil {
+		if *c.PinnedNumaNode != node {
+			// advisory for now; may become fatal in future
+			hasMismatch = errNumaMismatch(*c.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		c.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	c.Storage.SetNUMAAffinity(*c.PinnedNumaNode)
+	c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+
+	return hasMismatch
+}
+
 // CmdLineArgs returns a slice of command line arguments to be
 // supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineArgs() ([]string, error) {
@@ -219,10 +229,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = mergeEnvVars(env, sEnv)
+		env = common.MergeEnvVars(env, sEnv)
 	}
 
-	return mergeEnvVars(c.EnvVars, env), nil
+	return common.MergeEnvVars(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -244,9 +254,8 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		return "", err
 	}
 
-	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
-
-	for _, keyPair := range c.EnvVars {
+	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+	for _, keyPair := range env {
 		keyValue := strings.SplitN(keyPair, "=", 2)
 		if keyValue[0] == name {
 			return keyValue[1], nil
@@ -260,7 +269,7 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeEnvVars(c.EnvVars, newVars)
 
 	return c
 }
@@ -270,12 +279,6 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
-	return c
-}
-
-// WithRank sets the instance rank.
-func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = system.NewRankPtr(r)
 	return c
 }
 
@@ -360,6 +363,18 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
+// WithFabricAuthKey sets the fabric authorization key.
+func (c *Config) WithFabricAuthKey(key string) *Config {
+	c.Fabric.AuthKey = key
+	return c
+}
+
+// WithSrxDisabled disables or enables SRX.
+func (c *Config) WithSrxDisabled(disable bool) *Config {
+	c.Fabric.DisableSRX = disable
+	return c
+}
+
 // WithFabricNumaNodeIndex sets the NUMA node index to be used by this instance.
 func (c *Config) WithFabricNumaNodeIndex(nodeIndex uint) *Config {
 	c.Fabric.NumaNodeIndex = nodeIndex
@@ -436,5 +451,18 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
 	c.Storage.AccelProps.Engine = name
 	c.Storage.AccelProps.Options = mask
+	return c
+}
+
+// WithStorageSpdkRpcSrvProps specifies whether a SPDK JSON-RPC server will run in the I/O Engine.
+func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
+	c.Storage.SpdkRpcSrvProps.Enable = enable
+	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
+// WithIndex sets the I/O Engine instance index.
+func (c *Config) WithIndex(i uint32) *Config {
+	c.Index = i
 	return c
 }

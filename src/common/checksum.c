@@ -746,9 +746,9 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 }
 
 /** Using the data from the iov, calculate the checksum */
-static int
-calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
-	     uint8_t *csum_buf, uint16_t csum_buf_len)
+int
+daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
+			  uint8_t *csum_buf, uint16_t csum_buf_len)
 {
 	int rc;
 
@@ -829,8 +829,9 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 
 		/** akey */
 		if (!obj->dcs_skip_key_calc) {
-			rc = calc_for_iov(obj, &iod->iod_name,
-					  csums->ic_akey.cs_csum, csum_len);
+			rc = daos_csummer_calc_for_iov(obj, &iod->iod_name,
+						       csums->ic_akey.cs_csum,
+						       csum_len);
 			if (rc != 0) {
 				D_ERROR("calc_for_iov error: "DF_RC"\n",
 					DP_RC(rc));
@@ -895,7 +896,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 
 	ci_set(csum_info, dkey_csum_buf, size, size, 1, CSUM_NO_CHUNK, type);
 
-	rc = calc_for_iov(csummer, key, dkey_csum_buf, size);
+	rc = daos_csummer_calc_for_iov(csummer, key, dkey_csum_buf, size);
 	if (rc == 0) {
 		*p_csum = csum_info;
 		C_TRACE("Checksum created for key: "DF_KEY"->"DF_CI"\n",

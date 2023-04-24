@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,6 @@ drpc_hdlr_init(void)
 {
 	D_ALLOC_ARRAY(registry_table, NUM_DRPC_MODULES);
 	if (registry_table == NULL) {
-		D_ERROR("Failed to allocate handler registry table\n");
 		return -DER_NOMEM;
 	}
 

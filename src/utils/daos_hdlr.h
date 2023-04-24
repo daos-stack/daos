@@ -9,6 +9,8 @@
 
 #include <daos_fs.h>
 
+#define OID_ARR_SIZE 8
+
 enum fs_op {
 	FS_COPY,
 	FS_SET_ATTR,
@@ -66,6 +68,30 @@ enum sh_op {
 	SH_VOS
 };
 
+struct fs_copy_stats {
+	uint64_t		num_dirs;
+	uint64_t		num_files;
+	uint64_t		num_links;
+};
+
+struct dm_args {
+	char		*src;
+	char		*dst;
+	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	src_poh;
+	daos_handle_t	src_coh;
+	daos_handle_t	dst_poh;
+	daos_handle_t	dst_coh;
+	uint32_t	cont_prop_oid;
+	uint32_t	cont_prop_layout;
+	uint64_t	cont_layout;
+	uint64_t	cont_oid;
+
+};
+
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -94,7 +120,10 @@ struct cmd_args_s {
 	char			*preserve_props; /* --path to metadata file */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
+	daos_oclass_id_t	dir_oclass;	/* --dir_oclass object class */
+	daos_oclass_id_t	file_oclass;	/* --file_oclass object class */
 	uint32_t		mode;		/* --posix consistency mode */
+	char			*hints;		/* --posix hints */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
 
 	/* Container snapshot/rollback related */
@@ -105,6 +134,11 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
+
+	/* Container datamover related */
+	struct dm_args		*dm_args;	/* datamover arguments */
+	struct fs_copy_stats	*fs_copy_stats;	/* fs copy stats */
+	bool			 fs_copy_posix; /* fs copy to POSIX */
 
 	FILE			*outstream;	/* normal output stream */
 	FILE			*errstream;	/* errors stream */
@@ -162,16 +196,6 @@ int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap);
-int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
-int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
-int cont_update_acl_hdlr(struct cmd_args_s *ap);
-int cont_delete_acl_hdlr(struct cmd_args_s *ap);
-int cont_set_owner_hdlr(struct cmd_args_s *ap);
-int cont_rollback_hdlr(struct cmd_args_s *ap);
-int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -180,7 +204,5 @@ int cont_list_objs_hdlr(struct cmd_args_s *ap);
  * int cont_stat_hdlr()
  * int cont_rollback_hdlr()
  */
-
-int obj_query_hdlr(struct cmd_args_s *ap);
 
 #endif /* __DAOS_HDLR_H__ */

@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -222,7 +223,7 @@ func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
 // AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
-//       legal so use with caution.
+// legal so use with caution.
 func (m *Membership) AddOrReplace(newMember *Member) error {
 	m.Lock()
 	defer m.Unlock()
@@ -382,7 +383,8 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		// - if transition from current to result state is illegal
 
 		if result.Errored {
-			if result.State != MemberStateErrored {
+			// Check state matches errored flag.
+			if result.State != MemberStateErrored && result.State != MemberStateUnresponsive {
 				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
@@ -545,18 +547,25 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	ns := MemberStateErrored
-	if member.State.isTransitionIllegal(ns) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
+	newState := MemberStateErrored
+	if member.State.isTransitionIllegal(newState) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
 		return
 	}
 
-	member.State = ns
+	oldState := member.State
+	member.State = newState
 	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
 	}
+
+	var msg string
+	if evt.Msg != "" {
+		msg = fmt.Sprintf(" (%s)", evt.Msg)
+	}
+	m.log.Errorf("rank %d: %s->%s%s", member.Rank, oldState, newState, msg)
 }
 
 // OnEvent handles events on channel and updates member states accordingly.
@@ -613,18 +622,19 @@ func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomain
 	return tree.Subtree(rankDomains...)
 }
 
-const rankFaultDomainPrefix = "rank"
+// RankFaultDomainPrefix is the prefix for rank-level fault domains.
+const RankFaultDomainPrefix = "rank"
 
 // MemberFaultDomain generates a standardized fault domain for a Member,
 // based on its parent fault domain and rank.
 func MemberFaultDomain(m *Member) *FaultDomain {
-	rankDomain := fmt.Sprintf("%s%d", rankFaultDomainPrefix, uint32(m.Rank))
+	rankDomain := fmt.Sprintf("%s%d", RankFaultDomainPrefix, m.Rank.Uint32())
 	// we know the string we're adding is valid, so can't fail
 	return m.FaultDomain.MustCreateChild(rankDomain)
 }
 
 func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
-	fmtStr := rankFaultDomainPrefix + "%d"
+	fmtStr := RankFaultDomainPrefix + "%d"
 	var rank uint32
 	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
 	if err != nil || n != 1 {

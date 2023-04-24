@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -113,7 +113,7 @@ get_module_info(void)
 static uint64_t
 hlc_recovery_begin(void)
 {
-	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+	return d_hlc_epsilon_get_bound(d_hlc_get());
 }
 
 /* See the comment near where this function is called. */
@@ -122,12 +122,12 @@ hlc_recovery_end(uint64_t bound)
 {
 	int64_t	diff;
 
-	diff = bound - crt_hlc_get();
+	diff = bound - d_hlc_get();
 	if (diff > 0) {
 		struct timespec	tv;
 
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+		tv.tv_sec = d_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = d_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -168,6 +168,13 @@ register_dbtree_classes(void)
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
 			DP_RC(rc));
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_IFV: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -253,6 +260,8 @@ dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 	/* at most 2 helper XS per target */
 	if (dss_tgt_offload_xs_nr > 2 * nr)
 		dss_tgt_offload_xs_nr = 2 * nr;
+	else if (dss_tgt_offload_xs_nr == 0)
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 
 	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
 	 * offload XS. Calculate the tgt_nr as the number of main XS based
@@ -486,6 +495,51 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+#ifdef ULT_MMAP_STACK
+	FILE *fp;
+
+	/* read vm.max_map_count from /proc instead of using sysctl() API
+	 * as it seems the preferred way ...
+	 */
+	fp = fopen("/proc/sys/vm/max_map_count", "r");
+	if (fp == NULL) {
+		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
+			strerror(errno));
+	} else {
+		int n;
+
+		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
+		if (n == EOF) {
+			D_ERROR("Unable to read vm.max_map_count value: %s\n",
+				strerror(errno));
+			/* just in case, to ensure value can be later safely
+			 * compared and thus no ULT stack be mmap()'ed
+			 */
+			max_nb_mmap_stacks = 0;
+		} else {
+			/* need a minimum value to start mmap() ULT stacks */
+			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
+				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
+				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
+				max_nb_mmap_stacks = 0;
+			} else {
+				/* consider half can be used to mmap() ULT
+				 * stacks
+				 */
+				max_nb_mmap_stacks /= 2;
+				D_INFO("Will be able to mmap() %d ULT stacks\n",
+				       max_nb_mmap_stacks);
+			}
+		}
+	}
+
+	rc = ABT_key_create(free_stack, &stack_key);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT key for stack create failed: %d\n", rc);
+		ABT_finalize();
+		return dss_abterr2der(rc);
+	}
+#endif
 	dss_abt_init = true;
 
 	return 0;
@@ -494,6 +548,9 @@ abt_init(int argc, char *argv[])
 static void
 abt_fini(void)
 {
+#ifdef ULT_MMAP_STACK
+	ABT_key_free(&stack_key);
+#endif
 	dss_abt_init = false;
 	ABT_finalize();
 }
@@ -503,24 +560,40 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
-	struct engine_metrics	*metrics;
+	struct engine_metrics	*metrics = &dss_engine_metrics;
 
 	/* We only care about dead ranks for now */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
-			src, type);
+	if (type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d\n", src, type);
 		return;
 	}
 
-	metrics = &dss_engine_metrics;
-
-	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank, incarnation);
-	if (rc)
-		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
-			src, type, DP_RC(rc));
+	if (src == CRT_EVS_SWIM) {
+		d_tm_inc_counter(metrics->dead_rank_events, 1);
+		rc = ds_notify_swim_rank_dead(rank, incarnation);
+		if (rc)
+			D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+				src, type, DP_RC(rc));
+	} else if (src == CRT_EVS_GRPMOD) {
+		d_rank_t self_rank = dss_self_rank();
+
+		if (rank == dss_self_rank()) {
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
+			       self_rank);
+			/*
+			 * For now, we just raise a SIGKILL to ourselves; we could
+			 * inform daos_server, who would initiate a termination and
+			 * decide whether to restart us.
+			 */
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+			return;
+		}
+
+	}
 }
 
 static void
@@ -569,6 +642,15 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 }
 
+static uint64_t
+metrics_region_size(int num_tgts)
+{
+	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+
+	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -590,8 +672,12 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/** initialize server topology data - this is needed to set up the number of targets */
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	rc = d_tm_init(dss_instance_idx, metrics_region_size(dss_tgt_nr), D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -612,11 +698,6 @@ server_init(int argc, char *argv[])
 	}
 
 	rc = register_dbtree_classes();
-	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
-
-	/** initialize server topology data */
-	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
@@ -692,13 +773,8 @@ server_init(int argc, char *argv[])
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -1025,23 +1101,26 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	return 0;
 }
 
+#define PRINT_ERROR(...)                                                                           \
+	do {                                                                                       \
+		fprintf(stderr, __VA_ARGS__);                                                      \
+		D_ERROR(__VA_ARGS__);                                                              \
+	} while (0)
+
+/** This should be safe on Linux since tls is allocated on thread creation */
+#define MAX_BT_ENTRIES 256
+static __thread void *bt[MAX_BT_ENTRIES];
+
 static void
 print_backtrace(int signo, siginfo_t *info, void *p)
 {
-	void	*bt[128];
-	int	 bt_size, i, rc;
+	int   bt_size, rc;
 
-	/* since we mainly handle fatal signals here, flush the log to not
-	 * risk losing any debug traces
-	 */
-	d_log_sync();
-
-	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
-		signo);
+	PRINT_ERROR("*** Process %d received signal %d ***\n", getpid(), signo);
 
 	if (info != NULL) {
-		fprintf(stderr, "Associated errno: %s (%d)\n",
-			strerror(info->si_errno), info->si_errno);
+		PRINT_ERROR("Associated errno: %s (%d)\n", strerror(info->si_errno),
+			    info->si_errno);
 
 		/* XXX we could get more signal/fault specific details from
 		 * info->si_code decode
@@ -1050,27 +1129,29 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		switch (signo) {
 		case SIGILL:
 		case SIGFPE:
-			fprintf(stderr, "Failing at address: %p\n",
-				info->si_addr);
+			PRINT_ERROR("Failing at address: %p\n", info->si_addr);
 			break;
 		case SIGSEGV:
 		case SIGBUS:
-			fprintf(stderr, "Failing for address: %p\n",
-				info->si_addr);
+			PRINT_ERROR("Failing for address: %p\n", info->si_addr);
 			break;
 		}
 	} else {
-		fprintf(stderr, "siginfo is NULL, additional information "
-			"unavailable\n");
+		PRINT_ERROR("siginfo is NULL, additional information unavailable\n");
 	}
 
-	bt_size = backtrace(bt, 128);
-	if (bt_size >= 128)
-		fprintf(stderr, "backtrace may have been truncated\n");
+	/* since we mainly handle fatal signals here, flush the log to not
+	 * risk losing any debug traces
+	 */
+	d_log_sync();
 
-	/* start at 1 to forget about me! */
-	for (i = 1; i < bt_size; i++)
-		backtrace_symbols_fd(&bt[i], 1, fileno(stderr));
+	bt_size = backtrace(bt, MAX_BT_ENTRIES);
+	if (bt_size == MAX_BT_ENTRIES)
+		fprintf(stderr, "backtrace may have been truncated\n");
+	if (bt_size > 1) /* start at 1 to ignore this frame */
+		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
+	else
+		fprintf(stderr, "No useful backtrace available");
 
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);

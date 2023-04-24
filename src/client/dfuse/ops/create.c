@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -102,6 +102,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_obj_hdl		*oh = NULL;
 	struct fuse_file_info		fi_out = {0};
@@ -128,8 +129,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
-		(fi->flags & O_ACCMODE) == O_WRONLY) {
+	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
+	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
@@ -152,9 +153,19 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(oh, ie, "open handle");
 	ie->ie_dfs = dfs;
 
-	rc = _dfuse_mode_update(req, parent, &mode);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
+
+	dfuse_ie_init(ie);
+	dfuse_open_handle_init(oh, ie);
+
+	oh->doh_linear_read = false;
+
+	if (!fs_handle->dpi_info->di_multi_user) {
+		rc = _dfuse_mode_update(req, parent, &mode);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
 
@@ -163,18 +174,23 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(err, rc);
 
+	dfuse_cache_evict_dir(fs_handle, parent);
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)
 		D_GOTO(release, rc);
 
-	oh->doh_dfs = dfs->dfs_ns;
-	oh->doh_ie = ie;
 	oh->doh_writeable = true;
 
-	if (dfs->dfc_data_caching) {
+	if (dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
+
+		/* keep_cache cannot be set here as ie is new and create might be being called
+		 * to open an existing file so the check needs to happen in reply_create()
+		 * after the hash table lookup.
+		 */
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -182,15 +198,16 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (dfs->dfc_direct_io_disable)
 		fi_out.direct_io = 0;
 
-	if (!fi_out.direct_io)
+	if (!fi_out.direct_io) {
 		oh->doh_caching = true;
+		oh->doh_keep_cache = true;
+	}
 
 	fi_out.fh = (uint64_t)oh;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);

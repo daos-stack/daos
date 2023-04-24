@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,7 +41,6 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_FREE(value);
 	return;
 err:
-	if (value != NULL)
-		D_FREE(value);
+	D_FREE(value);
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

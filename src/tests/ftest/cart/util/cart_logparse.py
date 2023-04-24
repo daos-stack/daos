@@ -1,46 +1,13 @@
-#!/usr/bin/env python3
-# Copyright 2018-2022 Intel Corporation
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# /*
+#  * (C) Copyright 2016-2023 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
+
 """
-LogIter class definition.
-LogLine class definition.
+LogIter and LogLine class definitions.
 
 This provides a way of querying CaRT logfiles for processing.
-
 """
 
 from collections import OrderedDict
@@ -51,6 +18,7 @@ import re
 
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested."""
+
 
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
@@ -69,8 +37,9 @@ LOG_LEVELS = {
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
-for (name,value) in LOG_LEVELS.items():
+for (name, value) in LOG_LEVELS.items():
     LOG_NAMES[value] = name
+
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -85,12 +54,11 @@ class LogRaw():
         self.trace = False
 
     def to_str(self):
-        """Convert the object to a string, in a way that is compatible with
-        LogLine
-        """
+        """Convert the object to a string, in a way that is compatible with LogLine"""
         return self.line
 
-# pylint: disable=too-many-instance-attributes
+
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class LogLine():
     """Class for parsing CaRT log lines
 
@@ -134,7 +102,7 @@ class LogLine():
         except KeyError as error:
             raise InvalidLogFile(fields[4]) from error
 
-        self.ts = fields[0]
+        # self.time_stamp = fields[0]
         self._fields = fields[5:]
         try:
             if self._fields[1][-2:] == '()':
@@ -148,16 +116,14 @@ class LogLine():
             # Catch truncated log lines.
             self.trace = False
 
-        if self.trace:
-            if self.level == 7 or self.level == 3:
-                if self.fac == 'rpc' or self.fac == 'hg':
-                    del self._fields[2:5]
+        if self.trace and self.level in (7, 3) and self.fac in ('rpc', 'hg'):
+            del self._fields[2:5]
 
         if self.trace:
             fn_str = self._fields[1]
             start_idx = fn_str.find('(')
             self.function = fn_str[:start_idx]
-            desc = fn_str[start_idx+1:-1]
+            desc = fn_str[start_idx + 1:-1]
             if desc == '(nil)':
                 self.descriptor = ''
             else:
@@ -197,14 +163,14 @@ class LogLine():
         raise AttributeError
 
     def get_msg(self):
-        """Return the message part of a line, stripping up to and
-        including the filename"""
+        """Return the message part of a line, stripping up to and including the filename"""
         return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
-        """Return the message part of a line, stripping up to and
-        including the filename but removing pointers"""
+        """Return the message part of a line.
 
+        stripping up to and including the filename but removing pointers
+        """
         # As get_msg, but try and remove specific information from the message,
         # This is so that large volumes of logs can be amalgamated and reduced
         # a common set for easier reporting.  Specifically the trace pointer,
@@ -213,6 +179,7 @@ class LogLine():
         # These can then be fed back as source-level comments to the source-code
         # without creating too much output.
 
+        # pylint: disable=invalid-name
         fields = []
         for entry in self._fields[2:]:
             field = None
@@ -257,10 +224,10 @@ class LogLine():
         return '{}() {}'.format(self.function, ' '.join(fields))
 
     def endswith(self, item):
-        """Mimic the str.endswith() function
+        """Check if the line ends with a string.
 
-        This only matches on the actual string part of the message, not the
-        timestamp/pid/faculty parts.
+        This only matches on the actual string part of the message, not the timestamp/pid/faculty
+        parts.
         """
         return self._msg.endswith(item)
 
@@ -278,21 +245,18 @@ class LogLine():
 
         # Check that the contents of two arrays are equal, using text as is and
         # selecting only the correct entries of the fields array.
-        return text == self._fields[base:base+len(text)]
+        return text == self._fields[base:base + len(text)]
 
     def is_new(self):
         """Returns True if line is new descriptor"""
-
         return self._is_type(['Registered', 'new'])
 
     def is_dereg(self):
         """Returns true if line is descriptor deregister"""
-
         return self._is_type(['Deregistered'])
 
     def is_new_rpc(self):
         """Returns True if line is new rpc"""
-
         if not self.trace:
             return False
 
@@ -306,7 +270,6 @@ class LogLine():
 
     def is_dereg_rpc(self):
         """Returns true if line is a rpc deregister"""
-
         if not self.trace:
             return False
         if self.function != 'crt_hg_req_destroy':
@@ -316,7 +279,6 @@ class LogLine():
 
     def is_callback(self):
         """Returns true if line is RPC callback"""
-
         if self.function not in ('crt_hg_req_send_cb', 'crt_rpc_complete'):
             return False
 
@@ -324,7 +286,6 @@ class LogLine():
 
     def is_link(self):
         """Returns True if line is Link descriptor"""
-
         return self._is_type(['Link'])
 
     def is_fi_site(self):
@@ -369,7 +330,6 @@ class LogLine():
 
     def realloc_sizes(self):
         """Returns a tuple of old and new memory region sizes"""
-
         # See comment in realloc_pointers() for basic method here.
         # new_size is made by combining count and elem size,
         # old_size is simply a size which is the only oddity.
@@ -404,18 +364,20 @@ class LogLine():
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
 
+
 # pylint: disable=too-many-branches
 class StateIter():
-    """Helper class for LogIter to add a statefull iterator.
+    """Helper class for LogIter to add a state-full iterator.
 
     Implement a new iterator() for LogIter() that tracks descriptors
     and adds two new attributes, pdesc and pparent which are the local
     descriptor with the reuse-count appended.
     """
-    def __init__(self, li):
+
+    def __init__(self, log_iter):
         self.reuse_table = {}
         self.active_desc = {}
-        self.li = li
+        self._li = log_iter
         self._l = None
 
     def __iter__(self):
@@ -425,7 +387,7 @@ class StateIter():
         # Conversion from active pointer to line where it was created.
         self.active_desc = {}
 
-        self._l = iter(self.li)
+        self._l = iter(self._li)
         return self
 
     def __next__(self):
@@ -438,8 +400,7 @@ class StateIter():
         if line.is_new() or line.is_new_rpc():
             if line.descriptor in self.reuse_table:
                 self.reuse_table[line.descriptor] += 1
-                line.pdesc = '{}_{}'.format(line.descriptor,
-                                            self.reuse_table[line.descriptor])
+                line.pdesc = '{}_{}'.format(line.descriptor, self.reuse_table[line.descriptor])
             else:
                 self.reuse_table[line.descriptor] = 0
                 line.pdesc = line.descriptor
@@ -470,20 +431,15 @@ class StateIter():
                 line.pdesc = line.descriptor
                 line.rpc = False
 
-            if (line.is_dereg() or line.is_dereg_rpc()) and \
-               line.descriptor in self.active_desc:
+            if (line.is_dereg() or line.is_dereg_rpc()) and line.descriptor in self.active_desc:
                 del self.active_desc[line.descriptor]
 
         return line
 
-    def next(self):
-        """Python2/3 compat function"""
-        return self.__next__()
-
 # pylint: disable=too-many-branches
 
-# pylint: disable=too-few-public-methods
 
+# pylint: disable=too-few-public-methods
 class LogIter():
     """Class for parsing CaRT log files
 
@@ -493,7 +449,6 @@ class LogIter():
 
     def __init__(self, fname, check_encoding=False):
         """Load a file, and check how many processes have written to it"""
-
         # Depending on file size either pre-read entire file into memory,
         # or do a first pass checking the pid list.  This allows the same
         # iterator to work fast if the file can be kept in memory, or the
@@ -511,8 +466,8 @@ class LogIter():
         self.bz2 = False
 
         # Force check encoding for smaller files.
-        i = os.stat(fname)
-        if i.st_size < (1024*1024*5):
+        stbuf = os.stat(fname)
+        if stbuf.st_size < (1024 * 1024 * 5):
             check_encoding = True
 
         if fname.endswith('.bz2'):
@@ -544,8 +499,8 @@ class LogIter():
         self.fname = fname
         self._data = []
 
-        i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*100)) or self.bz2
+        stbuf = os.fstat(self._fd.fileno())
+        self.__from_file = bool(stbuf.st_size > (1024 * 1024 * 100)) or self.bz2
 
         if self.__from_file:
             self._load_pids()
@@ -566,7 +521,6 @@ class LogIter():
 
     def _load_data(self):
         """Load all data into memory"""
-
         pids = OrderedDict()
 
         index = 0
@@ -582,14 +536,12 @@ class LogIter():
                 if l_pid in pids:
                     pids[l_pid]['line_count'] += 1
                 else:
-                    pids[l_pid] = {'line_count': 1,
-                                   'first_index': index}
+                    pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
         self._pids = pids
 
     def _load_pids(self):
         """Iterate through the file, loading data on pids"""
-
         pids = OrderedDict()
 
         index = 0
@@ -606,18 +558,12 @@ class LogIter():
             if l_pid in pids:
                 pids[l_pid]['line_count'] += 1
             else:
-                pids[l_pid] = {'line_count': 1,
-                               'file_pos': position,
-                               'first_index': index}
+                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
             pids[l_pid]['last_index'] = index
             position += len(line)
         self._pids = pids
 
-    def new_iter(self,
-                 pid=None,
-                 stateful=False,
-                 trace_only=False,
-                 raw=False):
+    def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
         """Rewind file iterator, and set options
 
         If pid is set the the iterator will only return lines matching the pid
@@ -625,7 +571,6 @@ class LogIter():
         if raw is set then all lines in the file are returned, even non-log
         lines.
         """
-
         if pid is not None:
             try:
                 self._iter_pid = self._pids[pid]
@@ -636,8 +581,8 @@ class LogIter():
                 if self.bz2:
                     self._iter_last_index = self._iter_pid['last_index']
                 else:
-                    self._iter_last_index = self._iter_pid['last_index'] - \
-                                            self._iter_pid['first_index'] + 1
+                    self._iter_last_index = \
+                        self._iter_pid['last_index'] - self._iter_pid['first_index'] + 1
             else:
                 self._iter_last_index = self._iter_pid['last_index']
 
@@ -670,7 +615,6 @@ class LogIter():
 
     def __lnext(self):
         """Helper function for __next__"""
-
         if self.__from_file:
             line = self._fd.readline()
             if not line:
@@ -692,8 +636,7 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid is not None and \
-               self._iter_index > self._iter_last_index:
+            if self._pid is not None and self._iter_index > self._iter_last_index:
                 assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
@@ -714,10 +657,6 @@ class LogIter():
 
             self._iter_count += 1
             return line
-
-    def next(self):
-        """Python2/3 compat function"""
-        return self.__next__()
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""

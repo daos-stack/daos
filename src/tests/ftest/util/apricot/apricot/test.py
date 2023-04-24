@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,12 +9,14 @@ from ast import literal_eval
 import os
 import json
 import re
-from time import sleep, time
+import sys
+from time import time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
 from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
@@ -26,14 +27,16 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, \
     get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command, \
-    dump_engines_stacks
+    dump_engines_stacks, get_avocado_config_value, set_avocado_config_value, \
+    nodeset_append_suffix, dict_to_str
+from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
+from run_utils import stop_processes
+from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
 from job_manager_utils import get_job_manager
 
@@ -112,11 +115,9 @@ class Test(avocadoTest):
             self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
-        item_list = self.logdir.split('/')
-        for index, item in enumerate(item_list):
-            if item == 'job-results':
-                self.job_id = item_list[index + 1]
-                break
+        # Set the job_id to the unique sub directory name of the test-results sub directory
+        self.log.debug("self.logdir: %s", self.logdir)
+        self.job_id = self.logdir.split('/')[-3]
 
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
@@ -128,13 +129,17 @@ class Test(avocadoTest):
         self.basepath = None
         self.prefix = None
         self.ofi_prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch",
-                                        "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
+
+        # List of methods to call during tearDown to cleanup after the steps
+        # Use the register_cleanup() method to add methods with optional arguments
+        self._cleanup_methods = []
 
         # Current CI stage name
         self._stage_name = os.environ.get("STAGE_NAME", None)
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
+        self._test_step = 1
 
     def setUp(self):
         """Set up each test case."""
@@ -189,7 +194,7 @@ class Test(avocadoTest):
             vals = item.split('|')
             skip_it, ticket = self._check_variant_skip(literal_eval(vals[0]))
             if skip_it:
-                # test is on the skiplist
+                # test is on the skip list
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
@@ -311,20 +316,6 @@ class Test(avocadoTest):
             ": {}".format(reason) if reason else "")
         self._teardown_cancel.add(ticket)
 
-    def get_test_info(self):
-        """Get the python file, class, and method from the test name.
-
-        Returns:
-            tuple: the test filename, python class, and python method
-
-        """
-        keys = ("id", "file", "class", "method", "variant")
-        info = [self.name.uid]
-        info.extend(self.name.name.split(":"))
-        info.extend(info.pop(-1).split("."))
-        info.append(self.name.variant)
-        return {key: info[index] for index, key in enumerate(keys)}
-
     def get_test_name(self):
         """Obtain the test method name from the Avocado test name.
 
@@ -332,7 +323,7 @@ class Test(avocadoTest):
             str: name of the test method
 
         """
-        return self.get_test_info()["method"]
+        return self.name.name.split(".")[-1]
 
     def get_elapsed_time(self):
         """Get the elapsed test time.
@@ -398,6 +389,69 @@ class Test(avocadoTest):
             errors.append("Error removing temporary test files: {}".format(error))
         return errors
 
+    def _cleanup(self):
+        """Run all the the cleanup methods from last to first.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        while self._cleanup_methods:
+            try:
+                cleanup = self._cleanup_methods.pop()
+                errors.extend(cleanup["method"](**cleanup["kwargs"]))
+            except Exception as error:      # pylint: disable=broad-except
+                errors.append(
+                    "Unhandled exception when calling {}({}): {}".format(
+                        str(cleanup["method"]), dict_to_str(cleanup["kwargs"]), str(error)))
+        return errors
+
+    def register_cleanup(self, method, **kwargs):
+        """Add a method call to the list of cleanup methods to run in tearDown().
+
+        Args:
+            method (str): method to call with the kwargs
+        """
+        self._cleanup_methods.append({"method": method, "kwargs": kwargs})
+        self.log.debug(
+            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
+
+    def increment_timeout(self, increment):
+        """Increase the avocado runner timeout configuration settings by the provided value.
+
+        Increase the various runner timeout configuration values to ensure tearDown is given enough
+        time to perform all of its steps.
+
+        Args:
+            increment (int): number of additional seconds by which to increase the timeout.
+        """
+        namespace = "runner.timeout"
+        for key in ("after_interrupted", "process_alive", "process_died"):
+            section = ".".join([namespace, key])
+
+            # Get the existing value
+            try:
+                value = int(get_avocado_config_value(namespace, key))
+            except (TypeError, ValueError) as error:
+                self.log.debug("Unable to obtain the %s setting: %s", section, str(error))
+                continue
+
+            # Update the setting with the incremented value
+            self.log.debug(
+                "Incrementing %s from %s to %s seconds", section, value, value + increment)
+            set_avocado_config_value(namespace, key, value + increment)
+
+    def log_step(self, message):
+        """Log a test step.
+
+        Args:
+            message (str): description of test step.
+
+        """
+        self.log.info("==> Step %s: %s", self._test_step, message)
+        self._test_step += 1
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
@@ -435,6 +489,7 @@ class TestWithoutServers(Test):
         self.context = None
         self.d_log = None
         self.fault_injection = None
+        self.label_generator = LabelGenerator()
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -478,91 +533,45 @@ class TestWithoutServers(Test):
 
         Args:
             processes (list): list of process names to stop
-            hosts (list): list of hosts on which to stop the leftover processes
+            hosts (NodeSet): hosts on which to stop the leftover processes
         """
         if processes:
             self.log.info(
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
-            stop_processes(hosts, "'({})'".format("|".join(processes)))
+            stop_processes(self.log, hosts, "'({})'".format("|".join(processes)))
 
     def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
         """Get a NodeSet for the hosts to use in the test.
+
         Args:
             yaml_key (str): test yaml key used to obtain the set of hosts to test
             partition_key (str): test yaml key used to obtain the host partition name
             reservation_key (str): test yaml key used to obtain the host reservation name
             namespace (str): test yaml path to the keys
+
         Returns:
             NodeSet: the set of hosts to test obtained from the test yaml
+
         """
-        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
-
-        # Collect any host information from the test yaml
-        host_data = self.params.get(yaml_key, namespace)
-        partition = self.params.get(partition_key, namespace)
-        reservation = self.params.get(reservation_key, namespace, reservation_default)
-        if partition is not None and host_data is not None:
-            self.fail(
-                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
-                    partition_key, yaml_key))
-
-        if partition is not None and host_data is None:
-            # If a partition is provided instead of a set of hosts get the set of hosts from the
-            # partition information
-            setattr(self, partition_key, partition)
-            setattr(self, reservation_key, reservation)
-            slurm_nodes = get_partition_hosts(partition, reservation)
-            if not slurm_nodes:
-                self.fail(
-                    "No valid nodes in {} partition with {} reservation".format(
-                        partition, reservation))
-            host_data = slurm_nodes
-
-        # Convert the set of hosts from slurm or the yaml file into a NodeSet
-        if isinstance(host_data, (list, tuple)):
-            return NodeSet.fromlist(host_data)
-        return NodeSet(host_data)
-
-    def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
-                              timeout=30):
-        """Check pool free space with expected value.
-        Args:
-            pool (TestPool): The pool for which to check free space.
-            expected_scm (int, optional): pool expected SCM free space.
-            expected_nvme (int, optional): pool expected NVME free space.
-            timeout(int, optional): time to fail test if it could not match
-                expected values.
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-        """
-        if not expected_scm and not expected_nvme:
-            self.fail("at least one space parameter must be specified")
-        done = False
-        scm_fs = 0
-        nvme_fs = 0
-        start = time()
-        scm_index, nvme_index = 0, 1
-        while time() - start < timeout:
-            sleep(1)
-            checks = []
-            pool.get_info()
-            scm_fs = pool.info.pi_space.ps_space.s_free[scm_index]
-            nvme_fs = pool.info.pi_space.ps_space.s_free[nvme_index]
-            if expected_scm is not None:
-                checks.append(("scm", scm_fs, expected_scm))
-            if expected_nvme is not None:
-                checks.append(("nvme", nvme_fs, expected_nvme))
-            done = pool._check_info(checks)
-            if done:
-                break
-
-        if not done:
-            self.fail(
-                "Pool Free space did not match: actual={},{} expected={},{}".format(
-                    scm_fs, nvme_fs, expected_scm, expected_nvme))
+        control = get_local_host()
+        data = list(get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace))
+        try:
+            data.append(get_partition_hosts(self.log, control, data[1]))
+        except SlurmFailed:
+            self.log.error(
+                "Error collecting hosts from the %s partition",
+                partition_key, exc_info=sys.exc_info())
+            self.fail("Unable to collect partition information")
+        try:
+            data.append(get_reservation_hosts(self.log, control, data[2]))
+        except SlurmFailed:
+            self.log.error(
+                "Error collecting hosts from the %s reservation",
+                reservation_key, exc_info=sys.exc_info())
+            self.fail("Unable to collect reservation information")
+        role = HostRole(*data)
+        return role.hosts
 
 
 class TestWithServers(TestWithoutServers):
@@ -618,13 +627,12 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
-        self.hostlist_servers = None
-        self.hostlist_clients = None
+        self.slurm_exclude_servers = False
+        self.slurm_exclude_nodes = NodeSet()
+        self.host_info = HostInfo()
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
-        self.server_partition = None
-        self.client_partition = None
-        self.server_reservation = None
-        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -642,7 +650,8 @@ class TestWithServers(TestWithoutServers):
         self.job_manager = None
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
-        self.label_generator = LabelGenerator()
+        # Suffix to append to each access point name
+        self.access_points_suffix = None
 
     def setUp(self):
         """Set up each test case."""
@@ -667,46 +676,46 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = self.params.get(
             "start_agents", "/run/setup/*", self.setup_start_agents)
 
+        # Support removing any servers from the client list
+        self.slurm_exclude_servers = self.params.get(
+            "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
-        self.server_group = self.params.get(
-            "name", "/server_config/", "daos_server")
+        self.server_group = self.params.get("name", "/server_config/", "daos_server")
+
+        # The optional namespace for the server configuration test yaml parameters.
+        self.server_config_namespace = self.params.get("server_config_namespace", "/run/setup/*")
 
         # Support using different job managers to launch the daos agent/servers
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.hostlist_servers = self.params.get("test_servers", "/run/hosts/*")
-        self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
+        server_params = get_host_parameters(
+            self, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        client_params = get_host_parameters(
+            self, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+        try:
+            self.host_info.set_hosts(self.log, get_local_host(), *server_params, *client_params)
+        except HostException:
+            self.log.error("Error collecting host information", exc_info=sys.exc_info())
+            self.fail("Unable to collect host information for the test")
+        self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
+        self.hostlist_clients = NodeSet(self.host_info.clients.hosts)
 
-        # If server or client host list are defined through valid slurm
-        # partition names override any hosts specified through lists.
-        for name in ("servers", "clients"):
-            host_list_name = "_".join(["hostlist", name])
-            partition_name = "_".join([name[:-1], "partition"])
-            reservation_name = "_".join([name[:-1], "reservation"])
-            reservation_env = "_".join(["DAOS", reservation_name.upper()])
-            partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = os.environ.get(reservation_env, None)
-            self.log.info("env %s = %s", reservation_env, reservation)
-            if reservation is None:
-                reservation = self.params.get(reservation_name, "/run/hosts/*")
-            host_list = getattr(self, host_list_name)
-            if partition is not None and host_list is None:
-                # If a partition is provided instead of a list of hosts use the
-                # partition information to populate the list of hosts.
-                setattr(self, partition_name, partition)
-                setattr(self, reservation_name, reservation)
-                slurm_nodes = get_partition_hosts(partition, reservation)
-                if not slurm_nodes:
-                    self.fail(
-                        "No valid nodes in {} partition with {} "
-                        "reservation".format(partition, reservation))
-                setattr(self, host_list_name, slurm_nodes)
-            elif partition is not None and host_list is not None:
-                self.fail(
-                    "Specifying both a {} partition name and a list of hosts "
-                    "is not supported!".format(name))
+        # Access points to use by default when starting servers and agents
+        #  - for 1 or 2 servers use 1 access point
+        #  - for 3 or more servers use 3 access points
+        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points = self.hostlist_servers[:access_points_qty]
+        self.access_points = NodeSet(
+            self.params.get("access_points", "/run/setup/*", default_access_points))
+        self.access_points_suffix = self.params.get(
+            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
+        if self.access_points_suffix:
+            self.access_points = nodeset_append_suffix(
+                self.access_points, self.access_points_suffix)
+        self.host_info.access_points = self.access_points
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -722,47 +731,34 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-        # Access points to use by default when starting servers and agents
-        self.access_points = self.params.get(
-            "access_points", "/run/setup/*", self.hostlist_servers[:1])
-
         # Display host information
-        self.log.info("-" * 100)
-        self.log.info("--- HOST INFORMATION ---")
-        self.log.info("hostlist_servers:    %s", self.hostlist_servers)
-        self.log.info("hostlist_clients:    %s", self.hostlist_clients)
-        self.log.info("server_partition:    %s", self.server_partition)
-        self.log.info("client_partition:    %s", self.client_partition)
-        self.log.info("server_reservation:  %s", self.server_reservation)
-        self.log.info("client_reservation:  %s", self.client_reservation)
-        self.log.info("access_points:       %s", self.access_points)
+        self.host_info.display(self.log)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)
 
-        if not self.start_servers_once or self.get_test_info()["id"] == 1:
+        if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
             # before starting any tests.  Currently only handles 'orterun'
             # processes, but can be expanded.
-            hosts = list(self.hostlist_servers)
+            hosts = self.hostlist_servers.copy()
             if self.hostlist_clients:
-                hosts.extend(self.hostlist_clients)
+                hosts.add(self.hostlist_clients)
             self.log.info("-" * 100)
             self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
-            if (self.agent_manager_class == "Systemctl" or
-                    self.server_manager_class == "Systemctl"):
+            if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
@@ -791,7 +787,7 @@ class TestWithServers(TestWithoutServers):
         if self.start_servers_once and not force_agent_start:
             # Check for any existing pools that may still exist in each
             # continually running server group.  Pools may still exists if a
-            # previous test method/varaint's tearDown was unable to complete.
+            # previous test method/variant's tearDown was unable to complete.
             # This will hopefully ensure these errors do not affect the next
             # test.  Since the storage is reformatted and the pool metadata is
             # erased when the servers are restarted this check is only needed
@@ -1121,11 +1117,15 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class)
+                self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
+        if self.server_config_namespace is not None:
+            self.log.debug(
+                "Updating server manager (%s) config namespace: %s",
+                len(self.server_managers) - 1, self.server_config_namespace)
+            self.server_managers[-1].manager.job.yaml.namespace = self.server_config_namespace
 
-    def configure_manager(self, name, manager, hosts, slots,
-                          access_points=None):
+    def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.
 
         Defines the environment variables, host list, and hostfile settings used
@@ -1134,18 +1134,19 @@ class TestWithServers(TestWithoutServers):
         Args:
             name (str): manager name
             manager (SubprocessManager): the daos agent/server process manager
-            hosts (list): list of hosts on which to start the daos agent/server
+            hosts (NodeSet): hosts on which to start the daos agent/server
             slots (int): number of slots per engine to define in the hostfile
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
+
         """
         self.log.info("-" * 100)
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_points is None:
-            access_points = self.access_points
+            access_points = NodeSet(self.access_points)
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.set_config_value("access_points", access_points)
+        manager.set_config_value("access_points", list(access_points))
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
@@ -1292,9 +1293,9 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         all_hosts = include_local_host(hosts)
         self.log.info(
             "Removing temporary test files in %s from %s",
@@ -1356,8 +1357,8 @@ class TestWithServers(TestWithoutServers):
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
-        # Destroy any pools next
-        self._teardown_errors.extend(self.destroy_pools(self.pool))
+        # Destroy any pools next - eventually this call will encompass all teardown steps
+        self._teardown_errors.extend(self._cleanup())
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
@@ -1495,12 +1496,20 @@ class TestWithServers(TestWithoutServers):
                 labels = []
 
             # Destroy each pool found
+            if len(labels) > 0:
+                self.log.info("Elevating engines log_mask before destroying found pools")
+                manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
             for label in labels:
                 try:
                     manager.dmg.pool_destroy(pool=label, force=True)
 
                 except CommandFailure as error:
                     error_list.append("Error destroying pool: {}".format(error))
+
+            if len(labels) > 0:
+                self.log.info("Restoring engines log_mask after destroying found pools")
+                manager.dmg.server_set_logmasks(raise_exception=False)
 
         return error_list
 
@@ -1616,7 +1625,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
         self.control_log = "{}_daos_control.log".format(self.test_id)
-        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.helper_log = "{}_daos_server_helper.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
         self.config_file_base = "{}_".format(self.test_id)
 
@@ -1654,7 +1663,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp)
+            dmg_config_temp, self.access_points_suffix)
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 
@@ -1675,56 +1684,47 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(None, True, True, 0)
+        self.add_pool()
 
-    def get_pool(self, namespace=None, create=True, connect=True, index=0):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
 
         Returns:
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
-        if namespace is not None:
-            pool.namespace = namespace
-        pool.get_params(self)
-        if create:
-            pool.create()
-        if create and connect:
-            pool.connect()
-        return pool
+        return add_pool(self, namespace, create, connect, dmg, **params)
 
-    def add_pool(self, namespace=None, create=True, connect=True, index=0):
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
         """
-        self.pool = self.get_pool(namespace, create, connect, index)
+        self.pool = self.get_pool(namespace, create, connect, dmg, **params)
 
-    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
-                     index=0):
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None):
         """Add multiple pools to the test case.
 
         This method requires self.pool to be defined as a list.  If self.pool is
@@ -1733,12 +1733,13 @@ class TestWithServers(TestWithoutServers):
         Args:
             quantity (int): number of pools to create
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+                calls test.get_dmg_command().
 
         Raises:
             TestFail: if self.pool is defined, but not as a list object.
@@ -1747,14 +1748,12 @@ class TestWithServers(TestWithoutServers):
         if self.pool is None:
             self.pool = []
         if not isinstance(self.pool, list):
-            self.fail(
-                "add_pool_qty(): self.pool must be a list: {}".format(
-                    type(self.pool)))
+            self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
         for _ in range(quantity):
-            self.pool.append(self.get_pool(namespace, create, connect, index))
+            self.pool.append(self.get_pool(namespace, create, connect, dmg))
 
     @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, **kwargs):
+    def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):
         """Create a TestContainer object.
 
         Args:
@@ -1762,6 +1761,8 @@ class TestWithServers(TestWithoutServers):
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults to True.
+            daos_command (DaosCommand, optional): daos command object.
+                Defaults to self.get_daos_command()
             kwargs (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
 
@@ -1773,14 +1774,15 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=self.get_daos_command())
+        container = TestContainer(
+            pool, daos_command=(daos_command or self.get_daos_command()),
+            label_generator=self.label_generator)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
 
         # Set passed params
-        for name, value in kwargs.items():
-            getattr(container, name).update(value, name=name)
+        container.update_params(**kwargs)
 
         if create:
             container.create()
@@ -1829,19 +1831,17 @@ class TestWithServers(TestWithoutServers):
             self.container.append(
                 self.get_container(pool=pool, namespace=namespace, create=create))
 
-    def start_additional_servers(self, additional_servers, index=0,
-                                 access_points=None):
+    def start_additional_servers(self, additional_servers, index=0, access_points=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
 
         Args:
-            additional_servers (list of str): List of hostnames to start
-                daos_server.
+            additional_servers (NodeSet): hosts on which to start daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),

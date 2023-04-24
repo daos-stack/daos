@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -47,6 +48,10 @@ func act2state(a string) string {
 		return stateString(system.MemberStateReady)
 	case "reset format":
 		return stateString(system.MemberStateAwaitFormat)
+	case "set admin-excluded state":
+		return stateString(system.MemberStateAdminExcluded)
+	case "clear admin-excluded state":
+		return stateString(system.MemberStateExcluded)
 	default:
 		return ""
 	}
@@ -115,7 +120,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						Uri:  nonReplica.FabricURI,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 		"Server uses TCP sockets + Ethernet": {
@@ -146,7 +152,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						Uri:  nonReplica.FabricURI,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 		"older client (AllRanks: false)": {
@@ -173,7 +180,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						Uri:  msReplica.FabricURI,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 	} {
@@ -393,19 +401,26 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 	}{
 		"no peer": {
 			ctx:    context.Background(),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer details not found in context"),
 		},
-		"bad input address": {
+		"no input address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
 			expErr: errors.New("get listening port: missing port in address"),
 		},
 		"non tcp address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer address (127.0.0.1) not tcp"),
 		},
 		"normal operation": {
 			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
 			addr:    "0.0.0.0:15001",
+			expAddr: combinedAddr,
+		},
+		"specific addr": {
+			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			addr:    combinedAddr.String(),
 			expAddr: combinedAddr,
 		},
 	} {
@@ -427,16 +442,17 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	t.Helper()
 
 	state := map[string]system.MemberState{
-		"awaitformat":  system.MemberStateAwaitFormat,
-		"errored":      system.MemberStateErrored,
-		"excluded":     system.MemberStateExcluded,
-		"joined":       system.MemberStateJoined,
-		"ready":        system.MemberStateReady,
-		"starting":     system.MemberStateStarting,
-		"stopped":      system.MemberStateStopped,
-		"stopping":     system.MemberStateStopping,
-		"unknown":      system.MemberStateUnknown,
-		"unresponsive": system.MemberStateUnresponsive,
+		"awaitformat":   system.MemberStateAwaitFormat,
+		"errored":       system.MemberStateErrored,
+		"excluded":      system.MemberStateExcluded,
+		"joined":        system.MemberStateJoined,
+		"ready":         system.MemberStateReady,
+		"starting":      system.MemberStateStarting,
+		"stopped":       system.MemberStateStopped,
+		"stopping":      system.MemberStateStopping,
+		"unknown":       system.MemberStateUnknown,
+		"unresponsive":  system.MemberStateUnresponsive,
+		"adminexcluded": system.MemberStateAdminExcluded,
 	}[s]
 
 	if state == system.MemberStateUnknown && s != "unknown" {
@@ -450,7 +466,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	}
 	uri := fmt.Sprintf("tcp://%s", addr)
 
-	m := system.MockMemberFullSpec(t, system.Rank(r), test.MockUUID(r), uri, addr, state)
+	m := system.MockMemberFullSpec(t, ranklist.Rank(r), test.MockUUID(r), uri, addr, state)
 	m.FabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
@@ -519,7 +535,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
-	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
+	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = ranklist.NewRankPtr(0)
 	svc.sysdb = raft.MockDatabase(t, l)
 	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
@@ -636,7 +652,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method:     control.StartRanks,
-				Ranks:      system.MustCreateRankSet("0-7"),
+				Ranks:      ranklist.MustCreateRankSet("0-7"),
 				FullSystem: true,
 			},
 			// results from ranks on failing hosts generated
@@ -660,22 +676,22 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 4, Msg: "connection refused",
+					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Msg: "connection refused",
+					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 6, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
@@ -736,7 +752,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
-				Ranks:  system.MustCreateRankSet("0-3,6-7"),
+				Ranks:  ranklist.MustCreateRankSet("0-3,6-7"),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -760,12 +776,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 6, Msg: "connection refused",
+					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 7, Msg: "connection refused",
+					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
@@ -827,7 +843,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
-				Ranks:  system.MustCreateRankSet("0-5"),
+				Ranks:  ranklist.MustCreateRankSet("0-5"),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -851,12 +867,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 4, Msg: "connection refused",
+					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
-					Rank: 5, Msg: "connection refused",
+					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
@@ -919,7 +935,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StopRanks,
-				Ranks:  system.MustCreateRankSet("0-3"),
+				Ranks:  ranklist.MustCreateRankSet("0-3"),
 			},
 			// Verifies de-duplication of rank results.
 			expResults: system.MemberResults{
@@ -1575,6 +1591,151 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *mgmtpb.SystemExcludeReq
+		members    system.Members
+		mResps     []*control.HostResponse
+		expMembers system.Members
+		expResults []*sharedpb.RankResult
+		expAPIErr  error
+	}{
+		"nil req": {
+			req:       (*mgmtpb.SystemExcludeReq)(nil),
+			expAPIErr: errors.New("nil request"),
+		},
+		"not system leader": {
+			req: &mgmtpb.SystemExcludeReq{
+				Sys: "quack",
+			},
+			expAPIErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"no hosts or ranks": {
+			req: &mgmtpb.SystemExcludeReq{},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: errors.New("no hosts or ranks"),
+		},
+		"hosts and ranks": {
+			req: &mgmtpb.SystemExcludeReq{
+				Hosts: "host1,host2",
+				Ranks: "0,1",
+			},
+			expAPIErr: errors.New("ranklist and hostlist"),
+		},
+		"invalid ranks": {
+			req:       &mgmtpb.SystemExcludeReq{Ranks: "41,42"},
+			expAPIErr: errors.New("invalid"),
+		},
+		"invalid hosts": {
+			req:       &mgmtpb.SystemExcludeReq{Hosts: "host-[1-2]"},
+			expAPIErr: errors.New("invalid"),
+		},
+		"exclude ranks": {
+			req: &mgmtpb.SystemExcludeReq{Ranks: "0-1"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("set admin-excluded state", 0, 1),
+				mockRankSuccess("set admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"exclude hosts": {
+			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String()},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("set admin-excluded state", 0, 1),
+				mockRankSuccess("set admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"unexclude ranks": {
+			req: &mgmtpb.SystemExcludeReq{Ranks: "0-1", Clear: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("clear admin-excluded state", 0, 1),
+				mockRankSuccess("clear admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"unexclude hosts": {
+			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("clear admin-excluded state", 0, 1),
+				mockRankSuccess("clear admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			gotResp, gotAPIErr := svc.SystemExclude(ctx, tc.req)
+			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
+			if tc.expAPIErr != nil {
+				return
+			}
+
+			checkRankResults(t, tc.expResults, gotResp.Results)
+			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
@@ -1736,15 +1897,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host": {
 			req: &mgmtpb.JoinReq{
-				Rank: curMember.Rank.Uint32(),
-				Uuid: curMember.UUID.String(),
+				Rank:        curMember.Rank.Uint32(),
+				Uuid:        curMember.UUID.String(),
+				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
-						Rank: curMember.Rank.Uint32(),
-						Uri:  curMember.FabricURI,
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         curMember.FabricURI,
+						Incarnation: curMember.Incarnation + 1,
 					},
 				},
 			},
@@ -1756,15 +1919,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host; NilRank": {
 			req: &mgmtpb.JoinReq{
-				Rank: uint32(system.NilRank),
-				Uuid: curMember.UUID.String(),
+				Rank:        uint32(ranklist.NilRank),
+				Uuid:        curMember.UUID.String(),
+				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
-						Rank: curMember.Rank.Uint32(),
-						Uri:  curMember.FabricURI,
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         curMember.FabricURI,
+						Incarnation: curMember.Incarnation + 1,
 					},
 				},
 			},
@@ -1776,15 +1941,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
-				Rank: uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
+				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
-						Rank: newMember.Rank.Uint32(),
-						Uri:  newMember.FabricURI,
+						Rank:        newMember.Rank.Uint32(),
+						Uri:         newMember.FabricURI,
+						Incarnation: newMember.Incarnation,
 					},
 				},
 			},
@@ -1797,17 +1964,19 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (local)": {
 			req: &mgmtpb.JoinReq{
-				Addr: common.LocalhostCtrlAddr().String(),
-				Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
-				Rank: uint32(system.NilRank),
+				Addr:        common.LocalhostCtrlAddr().String(),
+				Uri:         "tcp://" + common.LocalhostCtrlAddr().String(),
+				Rank:        uint32(ranklist.NilRank),
+				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
-						Rank: newMember.Rank.Uint32(),
-						Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+						Rank:        newMember.Rank.Uint32(),
+						Uri:         "tcp://" + common.LocalhostCtrlAddr().String(),
+						Incarnation: newMember.Incarnation,
 					},
 				},
 			},
@@ -1826,13 +1995,13 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			// Make a copy to avoid test side-effects.
 			curCopy := &system.Member{}
 			*curCopy = *curMember
-			curCopy.Rank = system.NilRank // ensure that db.data.NextRank is incremented
+			curCopy.Rank = ranklist.NilRank // ensure that db.data.NextRank is incremented
 
 			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			svc.startJoinLoop(ctx)
+			svc.startBatchLoops(ctx)
 
 			if tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName

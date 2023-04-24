@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package pbin
 
 import (
@@ -16,18 +17,18 @@ import (
 )
 
 const (
-	// DaosAdminName is the name of the daos_admin privileged helper.
-	DaosAdminName = "daos_admin"
+	// DaosPrivHelperName is the name of the privileged helper.
+	DaosPrivHelperName = "daos_server_helper"
 
-	// DaosAdminLogFileEnvVar is the name of the environment variable which
-	// can be set to enable non-ERROR logging in the privileged binary.
-	DaosAdminLogFileEnvVar = "DAOS_ADMIN_LOG_FILE"
+	// DaosPrivHelperLogFileEnvVar is the name of the environment variable which
+	// can be set to enable non-ERROR logging in the privileged helper.
+	DaosPrivHelperLogFileEnvVar = "DAOS_HELPER_LOG_FILE"
 
-	// DaosFWName is the name of the daos_firmware privileged helper.
-	DaosFWName = "daos_firmware"
+	// DaosFWName is the name of the firmware helper.
+	DaosFWName = "daos_firmware_helper"
 
 	// DaosFWLogFileEnvVar is the name of the environment variable that
-	// can be set to enable non-ERROR logging in the daos_firmware binary.
+	// can be set to enable non-ERROR logging in the firmware helper.
 	DaosFWLogFileEnvVar = "DAOS_FIRMWARE_LOG_FILE"
 )
 

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,11 +29,12 @@ class DestroyRebuild(TestWithServers):
             Verifying that a pool can be destroyed during rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=medium
-        :avocado: tags=pool,destroy_pool_rebuild
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=DestroyRebuild,test_destroy_while_rebuilding
         """
         # Get the test parameters
-        targets = self.params.get("targets", "/run/server_config/servers/*")
+        targets = self.server_managers[0].get_config_value("targets")
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
@@ -52,7 +52,7 @@ class DestroyRebuild(TestWithServers):
 
         # Start rebuild
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
         # Destroy the pool while rebuild is active
         self.pool.destroy()

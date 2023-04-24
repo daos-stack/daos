@@ -11,6 +11,8 @@ import (
 	"math"
 	"net"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 var hostAddrs = make(map[int32]*net.TCPAddr)
@@ -35,6 +37,13 @@ func MockUUID(varIdx ...int32) string {
 	idx := GetIndex(varIdx...)
 
 	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
+}
+
+// MockPoolUUID returns mock pool UUID values for use in tests.
+func MockPoolUUID(varIdx ...int32) uuid.UUID {
+	idx := GetIndex(varIdx...)
+
+	return uuid.MustParse(fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx))
 }
 
 // MockHostAddr returns mock tcp addresses for use in tests.

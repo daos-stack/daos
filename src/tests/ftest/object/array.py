@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2017-2021 Intel Corporation.
+  (C) Copyright 2017-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -31,7 +30,10 @@ class ArrayObjTest(TestWithServers):
         Test Description: Writes an array to an object and then reads it
         back and verifies it.
 
-        :avocado: tags=all,smoke,daily_regression,object,tiny,basicobject
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object,smoke
+        :avocado: tags=basicobject,test_array_obj
         """
         self.prepare_pool()
 
@@ -65,15 +67,15 @@ class ArrayObjTest(TestWithServers):
 
             # read the data back and make sure its correct
             length = len(thedata[0])
-            thedata2 = container.read_an_array(len(thedata), length+1,
+            thedata2 = container.read_an_array(len(thedata), length + 1,
                                                dkey, akey, oid)
-            if thedata[0][0:length-1] != thedata2[0][0:length-1]:
+            if thedata[0][0:length - 1] != thedata2[0][0:length - 1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[0])
                 self.plog.error("Read: >%s<", thedata2[0])
                 self.fail("Write data, read it back, didn't match\n")
 
-            if thedata[2][0:length-1] != thedata2[2][0:length-1]:
+            if thedata[2][0:length - 1] != thedata2[2][0:length - 1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[2])
                 self.plog.error("Read: >%s<", thedata2[2])

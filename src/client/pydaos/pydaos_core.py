@@ -274,7 +274,7 @@ class DDict(_DObj):
 
     # Size of buffer to use for reads.  If the object value is bigger than this
     # then it'll require two round trips rather than one.
-    value_size = 1024*1024
+    value_size = 1024 * 1024
 
     def _open(self, hdl):
         (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, hdl, self.hi, self.lo, 0)

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -72,6 +71,9 @@ class DaosServerCommand(YamlCommand):
         # command.
         self._exe_names.append("daos_engine")
 
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the daos_server sub command object based upon the sub-command."""
@@ -83,15 +85,28 @@ class DaosServerCommand(YamlCommand):
             sub_command = self.sub_command.value
 
         # Available daos_server sub-commands:
-        #   network  Perform network device scan based on fabric provider
-        #   start    Start daos_server
-        #   storage  Perform tasks related to locally-attached storage
-        if sub_command == "network":
-            self.sub_command_class = self.StartSubCommand()
+        #   dump-topology  Dump system topology
+        #   ms             Perform tasks related to management service replicas
+        #   network        Perform network device scan based on fabric provider
+        #   nvme           Perform tasks related to locally-attached NVMe storage
+        #   scm            Perform tasks related to locally-attached SCM storage
+        #   start          Start daos_server
+        #   storage        Perform tasks related to locally-attached storage
+        #   version        Print daos_server version
+        if sub_command == "ms":
+            self.sub_command_class = self.MsSubCommand()
+        elif sub_command == "network":
+            self.sub_command_class = self.NetworkSubCommand()
+        elif sub_command == "nvme":
+            self.sub_command_class = self.NvmeSubCommand()
+        elif sub_command == "scm":
+            self.sub_command_class = self.ScmSubCommand()
         elif sub_command == "start":
             self.sub_command_class = self.StartSubCommand()
         elif sub_command == "storage":
             self.sub_command_class = self.StorageSubCommand()
+        elif sub_command == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -182,6 +197,57 @@ class DaosServerCommand(YamlCommand):
             engine_values = self.yaml.get_engine_values(name)
         return engine_values
 
+    class MsSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server ms sub command."""
+
+        def __init__(self):
+            """Create an ms subcommand object."""
+            super().__init__("/run/daos_server/ms/*", "ms")
+
+        def get_sub_command_class(self):
+            """Get the daos_server ms sub command object."""
+            # Available daos_server ms sub-commands:
+            #   recover  Recover the management service using this replica
+            #   restore  Restore the management service from a snapshot
+            #   status   Show status of the local management service replica
+            if self.sub_command.value == "recover":
+                self.sub_command_class = self.RecoverSubCommand()
+            elif self.sub_command.value == "restore":
+                self.sub_command_class = self.RestoreSubCommand()
+            elif self.sub_command.value == "status":
+                self.sub_command_class = self.StatusSubCommand()
+
+        class RecoverSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms recover command."""
+
+            def __init__(self):
+                """Create a ms recover subcommand object."""
+                super().__init__("/run/daos_server/ms/recover/*", "recover")
+
+                # daos_server ms recover command options:
+                #   -f, --force     Don't prompt for confirmation
+                self.force = FormattedParameter("--force", False)
+
+        class RestoreSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms restore command."""
+
+            def __init__(self):
+                """Create a ms restore subcommand object."""
+                super().__init__("/run/daos_server/ms/restore/*", "restore")
+
+                # daos_server ms restore command options:
+                #   -f, --force     Don't prompt for confirmation
+                #   -p, --path=     Path to snapshot file
+                self.force = FormattedParameter("--force", False)
+                self.path = FormattedParameter("--path={}")
+
+        class StatusSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms status command."""
+
+            def __init__(self):
+                """Create a ms status subcommand object."""
+                super().__init__("/run/daos_server/ms/status/*", "status")
+
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -250,6 +316,164 @@ class DaosServerCommand(YamlCommand):
             self.insecure = FormattedParameter("--insecure", False)
             self.recreate = FormattedParameter("--recreate-superblocks", False)
 
+    class NvmeSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server nvme sub command."""
+
+        def __init__(self):
+            """Create a daos_server nvme subcommand object."""
+            super().__init__("/run/daos_server/nvme/*", "nvme")
+
+        def get_sub_command_class(self):
+            """Get the daos_server nvme sub command object."""
+            # Available sub-commands:
+            #   prepare  Prepare NVMe SSDs for use by DAOS
+            #   reset    Reset NVMe SSDs for use by OS
+            #   scan     Scan NVMe SSDs
+            if self.sub_command.value == "prepare":
+                self.sub_command_class = self.PrepareSubCommand()
+            elif self.sub_command.value == "reset":
+                self.sub_command_class = self.ResetSubCommand()
+            elif self.sub_command.value == "scan":
+                self.sub_command_class = self.ScanSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class PrepareSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server nvme prepare command."""
+
+            def __init__(self):
+                """Create a daos_server nvme prepare subcommand object."""
+                super().__init__("/run/daos_server/nvme/prepare/*", "prepare")
+
+                # daos_server nvme prepare command options:
+                #   --helper-log-file=  Log file location for debug from daos_admin binary
+                #   --ignore-config     Ignore parameters set in config file when running command
+                #   --pci-block-list=   Comma-separated list of PCI devices (by address) to be
+                #                       ignored when unbinding devices from Kernel driver to be
+                #                       used with SPDK (default is no PCI devices)
+                #   --hugepages=        Number of hugepages to allocate for use by SPDK
+                #                       (default 1024)
+                #   --target-user=      User that will own hugepage mountpoint directory and vfio
+                #                       groups.
+                #   --disable-vfio      Force SPDK to use the UIO driver for NVMe device access
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.ignore_config = FormattedParameter("--ignore-config", False)
+                self.pci_block_list = FormattedParameter("--pci-block-list={}")
+                self.hugepages = FormattedParameter("--hugepages={}")
+                self.target_user = FormattedParameter("--target-user={}")
+                self.disable_vfio = FormattedParameter("--disable-vfio", False)
+
+        class ResetSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server nvme reset command."""
+
+            def __init__(self):
+                """Create a daos_server nvme reset subcommand object."""
+                super().__init__("/run/daos_server/nvme/reset/*", "reset")
+
+                # daos_server nvme reset command options:
+                #   --helper-log-file= Log file location for debug from daos_server_helper binary
+                #   --ignore-config    Ignore parameters set in config file when running command
+                #   --pci-block-list=  Comma-separated list of PCI devices (by address) to be
+                #                      ignored when unbinding devices from Kernel driver to be used
+                #                      with SPDK (default is no PCI devices)
+                #   --target-user=     User that will own hugepage mountpoint directory and vfio
+                #                      groups.
+                #   --disable-vfio     Force SPDK to use the UIO driver for NVMe device access
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.ignore_config = FormattedParameter("--ignore-config", False)
+                self.pci_block_list = FormattedParameter("--pci-block-list={}")
+                self.target_user = FormattedParameter("--target-user={}")
+                self.disable_vfio = FormattedParameter("--disable-vfio", False)
+
+        class ScanSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server nvme scan command."""
+
+            def __init__(self):
+                """Create a daos_server nvme scan subcommand object."""
+                super().__init__(
+                    "/run/daos_server/nvme/scan/*", "scan")
+
+                # daos_server nvme scan command options:
+                #   --helper-log-file=  Log file location for debug from daos_admin binary
+                #   --ignore-config     Ignore parameters set in config file when running command
+                #   --disable-vmd       Disable VMD-aware scan.
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.ignore_config = FormattedParameter("--ignore-config", False)
+                self.disable_vmd = FormattedParameter("--disable-vmd", False)
+
+    class ScmSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server scm sub command."""
+
+        def __init__(self):
+            """Create a daos_server scm subcommand object."""
+            super().__init__("/run/daos_server/scm/*", "scm")
+
+        def get_sub_command_class(self):
+            """Get the daos_server scm sub command object."""
+            # Available sub-commands:
+            #   prepare  Prepare SCM devices so that they can be used with DAOS
+            #   reset    Reset SCM devices that have been used with DAOS
+            #   scan     Scan SCM devices
+            if self.sub_command.value == "prepare":
+                self.sub_command_class = self.PrepareSubCommand()
+            elif self.sub_command.value == "reset":
+                self.sub_command_class = self.ResetSubCommand()
+            elif self.sub_command.value == "scan":
+                self.sub_command_class = self.ScanSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class PrepareSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server scm prepare command."""
+
+            def __init__(self):
+                """Create a daos_server scm prepare subcommand object."""
+                super().__init__("/run/daos_server/scm/prepare/*", "prepare")
+
+                # daos_server scm prepare command options:
+                #   --helper-log-file=   Log file location for debug from daos_admin binary
+                #   --ignore-config      Ignore parameters set in config file when running command
+                #   --socket=            Perform PMem namespace operations on the socket
+                #                        identified by this ID (defaults to all sockets). PMem
+                #                        region operations will be performed across all sockets.
+                #   --scm-ns-per-socket= Number of PMem namespaces to create per socket (default:1)
+                #   --force              Perform SCM operations without waiting for confirmation
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.ignore_config = FormattedParameter("--ignore-config", False)
+                self.socket = FormattedParameter("--socket={}")
+                self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
+                self.force = FormattedParameter("--force", False)
+
+        class ResetSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server scm reset command."""
+
+            def __init__(self):
+                """Create a daos_server scm reset subcommand object."""
+                super().__init__("/run/daos_server/scm/reset/*", "reset")
+
+                # daos_server scm reset command options:
+                #   --helper-log-file=   Log file location for debug from daos_admin binary
+                #   --ignore-config      Ignore parameters set in config file when running command
+                #   --socket=            Perform PMem namespace operations on the socket
+                #                        identified by this ID (defaults to all sockets). PMem
+                #                        region operations will be performed across all sockets.
+                #   --force              Perform SCM operations without waiting for confirmation
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.ignore_config = FormattedParameter("--ignore-config", False)
+                self.socket = FormattedParameter("--socket={}")
+                self.force = FormattedParameter("--force", False)
+
+        class ScanSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server scm scan command."""
+
+            def __init__(self):
+                """Create a daos_server scm scan subcommand object."""
+                super().__init__("/run/daos_server/scm/scan/*", "scan")
+
+                # daos_server scm scan command option:
+                #   --helper-log-file=   Log file location for debug from daos_admin binary
+                self.helper_log_file = FormattedParameter("--helper-log-file={}")
+
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server storage sub command."""
 
@@ -271,7 +495,7 @@ class DaosServerCommand(YamlCommand):
             """Defines an object for the daos_server storage prepare command."""
 
             def __init__(self):
-                """Create a storage subcommand object."""
+                """Create a storage prepare subcommand object."""
                 super().__init__(
                     "/run/daos_server/storage/prepare/*", "prepare")
 
@@ -292,6 +516,7 @@ class DaosServerCommand(YamlCommand):
                 #                       kernel modules.
                 #   --force             Perform format without prompting for
                 #                       confirmation
+                #   --scm-ns-per-socket Number of SCM namespaces to create per socket (default: 1)
                 self.pci_allowlist = FormattedParameter("--pci-allowlist={}")
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
@@ -299,6 +524,15 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
+                self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server version sub command."""
+
+        def __init__(self):
+            """Create a version subcommand object."""
+            super().__init__("/run/daos_server/version/*", "version")
+
 
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
@@ -551,3 +785,77 @@ class DaosServerInformation():
             self.log.info("  %-4s : %s", category.upper(), sizes)
 
         return storage_capacity
+
+
+class DaosServerCommandRunner(DaosServerCommand):
+    """Defines a object representing a daos_server command."""
+
+    def __init__(self, path):
+        """Create a daos_server Command object.
+
+        Args:
+            path (str): path to the daos_server command
+        """
+        super().__init__(path)
+
+        self.debug.value = False
+        self.json_logs.value = False
+
+    def recover(self, force=False):
+        """Call daos_server ms recover.
+
+        Args:
+            force (bool, optional): Don't prompt for confirmation. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server recover command fails.
+
+        """
+        return self._get_result(["ms", "recover"], force=force)
+
+    def restore(self, force=False, path=None):
+        """Call daos_server ms restore.
+
+        Args:
+            force (bool, optional): Don't prompt for confirmation. Defaults to False.
+            path (str, optional): Path to snapshot file. Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server restore command fails.
+
+        """
+        return self._get_result(["ms", "restore"], force=force, path=path)
+
+    def status(self):
+        """Call daos_server ms status.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server status command fails.
+
+        """
+        return self._get_result(["ms", "status"])
+
+    def version(self):
+        """Call daos_server version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server version command fails.
+
+        """
+        return self._get_result(["version"])

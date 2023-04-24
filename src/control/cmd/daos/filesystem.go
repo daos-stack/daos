@@ -62,10 +62,45 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to copy %s -> %s",
-			cmd.Source, cmd.Dest)
+		return errors.Wrapf(err, "failed to copy %s -> %s", cmd.Source, cmd.Dest)
 	}
+
+	if cmd.shouldEmitJSON {
+		type CopyStats struct {
+			NumDirs  uint64 `json:"num_dirs"`
+			NumFiles uint64 `json:"num_files"`
+			NumLinks uint64 `json:"num_links"`
+		}
+
+		return cmd.outputJSON(struct {
+			SourcePool string    `json:"src_pool"`
+			SourceCont string    `json:"src_cont"`
+			DestPool   string    `json:"dst_pool"`
+			DestCont   string    `json:"dst_cont"`
+			CopyStats  CopyStats `json:"copy_stats"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+			CopyStats{
+				uint64(ap.fs_copy_stats.num_dirs),
+				uint64(ap.fs_copy_stats.num_files),
+				uint64(ap.fs_copy_stats.num_links),
+			},
+		}, nil)
+	}
+
+	fsType := "DAOS"
+	if ap.fs_copy_posix {
+		fsType = "POSIX"
+	}
+	// Compat with old-style output
+	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.Infof("Successfully copied to %s: %s", fsType, cmd.Dest)
+	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
+	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
+	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
 
 	return nil
 }
@@ -73,7 +108,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 type fsAttrCmd struct {
 	existingContainerCmd
 
-	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container, when using pool and container instead of --path and the UNS"`
+	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container (required when using pool and container instead of --path)"`
 	DfsPrefix string `long:"dfs-prefix" short:"I" description:"Optional prefix path to the root of the DFS container when using pool and container"`
 }
 
@@ -83,12 +118,21 @@ func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
 		return nil, nil, err
 	}
 
+	if cmd.DfsPath == "" && cmd.Path == "" {
+		deallocCmdArgs()
+		return nil, nil, errors.New("If not using --path, --dfs-path must be specified along with pool/container IDs")
+	}
 	if cmd.DfsPath != "" {
 		if cmd.Path != "" {
 			deallocCmdArgs()
 			return nil, nil, errors.New("Cannot use both --dfs-path and --path")
 		}
 		ap.dfs_path = C.CString(cmd.DfsPath)
+	} else {
+		if cmd.Path == "" {
+			deallocCmdArgs()
+			return nil, nil, errors.New("--dfs-path is required if not using --path")
+		}
 	}
 	if cmd.DfsPrefix != "" {
 		if cmd.Path != "" {

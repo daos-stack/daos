@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -160,6 +160,9 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
 				"identical rank[%d](%d).\n", __FILE__, __LINE__,
 				rank_list, i, rank_tmp);
+
+			i--;
+			rank_num--;
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
@@ -217,6 +220,60 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
 			__FILE__, __LINE__, dst_set, filter_num);
 	}
+}
+
+int
+d_rank_list_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
+{
+	d_rank_t	*rs;
+	int		*indexes;
+	int		num = 0;
+	int		src_num;
+	int		i;
+	int		j;
+	int		rc = 0;
+
+	D_ASSERT(src_ranks != NULL);
+	if (ranks_merge == NULL || ranks_merge->rl_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(indexes, ranks_merge->rl_nr);
+	if (indexes == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < ranks_merge->rl_nr; i++) {
+		if (!d_rank_list_find(src_ranks, ranks_merge->rl_ranks[i], NULL)) {
+			indexes[num] = i;
+			num++;
+		}
+	}
+
+	if (num == 0)
+		D_GOTO(free, rc = 0);
+
+	src_num = src_ranks->rl_nr;
+	D_ALLOC_ARRAY(rs, (num + src_num));
+	if (rs == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	for (i = 0; i < src_num; i++)
+		rs[i] = src_ranks->rl_ranks[i];
+
+	for (i = src_num, j = 0; i < src_num + num; i++, j++) {
+		int idx = indexes[j];
+
+		rs[i] = ranks_merge->rl_ranks[idx];
+	}
+
+	if (src_ranks->rl_ranks)
+		D_FREE(src_ranks->rl_ranks);
+
+	src_ranks->rl_nr = num + src_num;
+	src_ranks->rl_ranks = rs;
+
+free:
+	D_FREE(indexes);
+	return rc;
 }
 
 d_rank_list_t *
@@ -531,6 +588,30 @@ out:
 	return rc;
 }
 
+/**
+ * Create a ranged string representation of a rank list.
+ *
+ * \param[in]  rank_list	the rank list to represent
+ *
+ * \return			a ranged string (caller must free)
+ */
+char *
+d_rank_list_to_str(d_rank_list_t *rank_list)
+{
+	char			*str;
+	bool			 truncated = false;
+	d_rank_range_list_t	*range_list;
+
+	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	if (range_list == NULL)
+		return NULL;
+	str = d_rank_range_list_str(range_list, &truncated);
+
+	d_rank_range_list_free(range_list);
+
+	return str;
+}
+
 d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {
@@ -739,6 +820,12 @@ dis_integer_str(char *str)
 	return true;
 }
 
+static inline bool
+dis_single_char_str(char *str)
+{
+	return strlen(str) == 1;
+}
+
 /**
  * get a bool type environment variables
  *
@@ -765,6 +852,31 @@ d_getenv_bool(const char *env, bool *bool_val)
 		*bool_val = true;
 
 	*bool_val = (atoi(env_val) == 0 ? false : true);
+}
+
+/**
+ * get single character environment variable
+ *
+ * \param[in]           env     name of the environment variable
+ * \param[in,out]       char_val returned value of the ENV. Will not change the original value
+ */
+void
+d_getenv_char(const char *env, char *char_val)
+{
+	char		*env_val;
+
+	if (env == NULL || char_val == NULL)
+		return;
+
+	env_val = getenv(env);
+	if (!env_val)
+		return;
+
+	if (!dis_single_char_str(env_val)) {
+		D_ERROR("ENV %s is not single character.\n", env_val);
+		return;
+	}
+	*char_val = *env_val;
 }
 
 /**
@@ -1028,4 +1140,55 @@ d_stand_div(double *array, int nr)
 
 	std /= nr;
 	return sqrt(std);
+}
+
+int
+d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap)
+{
+	void **buf = NULL;
+
+	if (cap > 0) {
+		D_ALLOC_ARRAY(buf, cap);
+		if (buf == NULL)
+			return -DER_NOMEM;
+	}
+
+	pointers->p_buf = buf;
+	pointers->p_cap = cap;
+	pointers->p_len = 0;
+	return 0;
+}
+
+void
+d_vec_pointers_fini(struct d_vec_pointers *pointers)
+{
+	D_FREE(pointers->p_buf);
+	pointers->p_cap = 0;
+	pointers->p_len = 0;
+}
+
+int
+d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
+{
+	if (pointers->p_len == pointers->p_cap) {
+		void		**buf;
+		uint32_t	  cap;
+
+		if (pointers->p_cap == 0)
+			cap = 1;
+		else
+			cap = 2 * pointers->p_cap;
+
+		D_REALLOC_ARRAY(buf, pointers->p_buf, pointers->p_cap, cap);
+		if (buf == NULL)
+			return -DER_NOMEM;
+
+		pointers->p_buf = buf;
+		pointers->p_cap = cap;
+	}
+
+	D_ASSERTF(pointers->p_len < pointers->p_cap, "%u < %u\n", pointers->p_len, pointers->p_cap);
+	pointers->p_buf[pointers->p_len] = pointer;
+	pointers->p_len++;
+	return 0;
 }

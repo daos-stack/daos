@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +9,6 @@ from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTestDfs(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
     """Runs DAOS File System (DFS) tests.
 
     :avocado: recursive

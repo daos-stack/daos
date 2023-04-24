@@ -1,19 +1,17 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import general_utils
-
 from ClusterShell.NodeSet import NodeSet
+
+import general_utils
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
 
 
 class Cmd(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Cmd test class.
 
     :avocado: recursive
@@ -49,10 +47,10 @@ class Cmd(DfuseTestBase):
               Remove renamed file
               Remove a directory
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,small
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=bashcmd
+        :avocado: tags=Cmd,test_bashcmd
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')
@@ -70,7 +68,7 @@ class Cmd(DfuseTestBase):
                 self.add_container(self.pool)
                 mount_dir = "/tmp/{}_daos_dfuse{}".format(self.pool.uuid, count)
                 self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container, mount_dir)
+                    self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
                 abs_dir_path = os.path.join(
                     self.dfuse.mount_dir.value, dir_name)
                 abs_file_path1 = os.path.join(abs_dir_path, file_name1)
@@ -86,13 +84,10 @@ class Cmd(DfuseTestBase):
                             "filesize=$(stat -c%s '{}');\
                             if (( filesize != {}*{} )); then exit 1;\
                             fi".format(abs_file_path1, dd_count, dd_blocksize),
-                            "cp -r {} {}".format(abs_file_path1,
-                                                  abs_file_path2),
-                            "cmp --silent {} {}".format(abs_file_path1,
-                                                         abs_file_path2),
+                            "cp -r {} {}".format(abs_file_path1, abs_file_path2),
+                            "cmp --silent {} {}".format(abs_file_path1, abs_file_path2),
                             "rm {}".format(abs_file_path2),
-                            "mv {} {}".format(abs_file_path1,
-                                               abs_file_path2),
+                            "mv {} {}".format(abs_file_path1, abs_file_path2),
                             "ls -al {}".format(abs_file_path2),
                             "ls -al {}/.".format(abs_dir_path),
                             "ls -al {}/..".format(abs_dir_path),
@@ -109,8 +104,8 @@ class Cmd(DfuseTestBase):
                                     [str(node_set) for code, node_set in
                                      list(ret_code.items()) if code != 0]))
                             raise CommandFailure(
-                                "Error running '{}' on the following "
-                                "hosts: {}".format(cmd, error_hosts))
+                                "Error running '{}' on the following hosts: {}".format(
+                                    cmd, error_hosts))
                     # report error if any command fails
                     except CommandFailure as error:
                         self.log.error("BashCmd Test Failed: %s",

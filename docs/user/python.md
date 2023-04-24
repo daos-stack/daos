@@ -5,8 +5,7 @@ provides the DAOS API to python users. It aims at providing a pythonic interface
 to the DAOS objects by exposing them via native python data structures.
 This section focuses on the main PyDAOS interface that comes with its own
 container type and layout. It does not cover the python bindings for the native
-DAOS API which is available via the [PyDAOS.raw](#Native_Programming_Interface)
-submodule.
+DAOS API which is available via the `PyDAOS.raw` submodule.
 
 ## Design
 

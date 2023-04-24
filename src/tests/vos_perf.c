@@ -24,18 +24,22 @@
 #include <daos_test.h>
 #include <daos/dts.h>
 #include "perf_internal.h"
+#include <daos/stack_mmap.h>
 
 uint64_t	ts_flags;
 
 char		ts_pmem_path[PATH_MAX - 32];
 char		ts_pmem_file[PATH_MAX];
-bool		ts_zero_copy;	/* use zero-copy API for VOS */
-bool		ts_nest_iterator;
+bool                    ts_zero_copy; /* use zero-copy API for VOS */
 
 daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 
 bool		ts_in_ult;	/* Run tests in ULT mode */
 static ABT_xstream	abt_xstream;
+
+#ifdef ULT_MMAP_STACK
+struct stack_pool *sp;
+#endif
 
 static int
 ts_abt_init(void)
@@ -201,9 +205,10 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult,
-					  &ult_arg, ABT_THREAD_ATTR_NULL,
-					  &thread);
+	rc = daos_abt_thread_create_on_xstream(sp, NULL, abt_xstream,
+					       vos_update_or_fetch_ult,
+					       &ult_arg, ABT_THREAD_ATTR_NULL,
+					       &thread);
 	if (rc != ABT_SUCCESS)
 		return rc;
 
@@ -219,7 +224,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 static int
 objects_query(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	char		*akey = "0";
 	d_iov_t		dkey_iov;
 	d_iov_t		akey_iov;
@@ -361,7 +366,7 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 static int
 objects_punch(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	int		i;
 	int		rc = 0;
 	uint64_t	start = 0;
@@ -463,7 +468,7 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 static int
 pf_aggregate(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -485,7 +490,7 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 static int
 pf_discard(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -540,7 +545,6 @@ pf_verify(struct pf_test *ts, struct pf_param *param)
 static int
 pf_iterate(struct pf_test *pf, struct pf_param *param)
 {
-	ts_nest_iterator = param->pa_iter.nested;
 	return obj_iter_records(ts_uoids[0], param);
 }
 
@@ -596,10 +600,6 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 {
 	switch (*str) {
 	default:
-		str++;
-		break;
-	case 'n':
-		pa->pa_iter.nested = true;
 		str++;
 		break;
 	case 'V':
@@ -887,6 +887,12 @@ main(int argc, char **argv)
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc)
+		return -1;
+#endif
+
 	rc = dts_ctx_init(&ts_ctx, &vos_engine);
 	if (rc)
 		return -1;
@@ -949,6 +955,9 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
 	par_fini();
 
 	if (ts_uoids)

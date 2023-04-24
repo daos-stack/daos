@@ -27,6 +27,9 @@
 #include <cart/iv.h>
 #include <daos/checksum.h>
 
+/* Standard max length of addresses e.g. URI, PCI */
+#define ADDR_STR_MAX_LEN 128
+
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
@@ -71,10 +74,11 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	DAOS_SYS_TAG	= 1 << 0, /** only run on system xstream */
-	DAOS_TGT_TAG	= 1 << 1, /** only run on target xstream */
-	DAOS_OFF_TAG	= 1 << 2, /** only run on offload/helper xstream */
-	DAOS_SERVER_TAG	= 0xff,	  /** run on all xstream */
+	DAOS_SYS_TAG    = 1 << 0, /** only run on system xstream */
+	DAOS_TGT_TAG    = 1 << 1, /** only run on target xstream */
+	DAOS_RDB_TAG    = 1 << 2, /** only run on rdb xstream */
+	DAOS_OFF_TAG    = 1 << 3, /** only run on offload/helper xstream */
+	DAOS_SERVER_TAG = 0xff,   /** run on all xstream */
 };
 
 /* The module key descriptor for each xstream */
@@ -85,10 +89,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(int xs_id, int tgt_id);
+	void *(*dmk_init)(int tags, int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(void *data);
+	void (*dmk_fini)(int tags, void *data);
 };
 
 extern pthread_key_t dss_tls_key;
@@ -659,13 +663,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {
@@ -744,8 +748,8 @@ struct tree_cache_root {
 };
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-		d_iov_t *val_iov);
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
+		daos_unit_oid_t oid, d_iov_t *val_iov);
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
@@ -759,16 +763,25 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
 			struct ds_migrate_status *dms);
 int
-ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
-		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		  unsigned int migrate_opc);
+ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
+		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
+		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
+		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		       uint32_t new_gl_ver, unsigned int migrate_opc);
+int
+ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
+		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
+		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
+		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
-ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
+
+int
+obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
+		struct daos_obj_md *md, uint32_t *tgt, uint32_t *shard_p);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
@@ -792,8 +805,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id);
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
 struct sys_db;
 typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,

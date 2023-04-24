@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -19,6 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -222,14 +225,17 @@ func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Conte
 	return context.WithDeadline(parent, rd)
 }
 
-// isTimeout returns true if the error is a context timeout error.
+// isTimeout returns true if the error is a context/connection timeout error.
 func isTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
 
 	cause := errors.Cause(err)
-	return cause == context.DeadlineExceeded || status.Code(cause) == codes.DeadlineExceeded
+	return cause == context.DeadlineExceeded ||
+		cause == os.ErrDeadlineExceeded ||
+		fault.IsFaultCode(cause, code.ClientConnectionTimedOut) ||
+		status.Code(cause) == codes.DeadlineExceeded
 }
 
 // wrapReqTimeout checks the error for a timeout and returns a
@@ -321,7 +327,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, err
 		}
 
-		ur := new(UnaryResponse)
+		ur := &UnaryResponse{log: log}
 		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
 			return nil, wrapReqTimeout(req, err)
 		}
@@ -409,13 +415,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		ur := &UnaryResponse{fromMS: true}
+		ur := &UnaryResponse{log: log, fromMS: true, retryCount: try}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		_, err = ur.getMSResponse()
+		err = ur.getMSError()
 		// If the request specifies that the error is retryable,
 		// check to see if it also defines its own retry logic
 		// and run that if so. Otherwise, let the usual retry
@@ -486,7 +492,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 
 		backoff := common.ExpBackoff(req.retryAfter(baseMSBackoff), uint64(try), maxMSBackoffFactor)
-		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
+		log.Debugf("retrying MS request after %s", backoff)
 		select {
 		case <-reqCtx.Done():
 			if isTimeout(reqCtx.Err()) {

@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,7 +9,6 @@ from ior_test_base import IorTestBase
 
 
 class EcodCellSizeProperty(IorTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """EC IOR class to run tests with different container cell size.
 
@@ -28,7 +26,7 @@ class EcodCellSizeProperty(IorTestBase):
         """
         daos_cmd = self.get_daos_command()
         cont_prop = daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell"])
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell_sz"])
         actual_size = cont_prop["response"][0]["value"]
 
         self.assertEqual(expected_size, actual_size)
@@ -51,8 +49,8 @@ class EcodCellSizeProperty(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_ior
-        :avocado: tags=ec_cell_property
+        :avocado: tags=ec,ec_ior,daos_cmd
+        :avocado: tags=ec_cell_property,test_ec_pool_property
         """
         ior_transfer_size = self.params.get("ior_transfer_size",
                                             '/run/ior/iorflags/*')
@@ -74,7 +72,7 @@ class EcodCellSizeProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_cell != pool_prop_expected:
-                self.container.properties.update("ec_cell:{}"
+                self.container.properties.update("ec_cell_sz:{}"
                                                  .format(cont_cell))
 
             # Create the container and open handle

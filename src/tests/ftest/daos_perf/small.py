@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -8,7 +7,6 @@ from daos_perf_base import DaosPerfBase
 
 
 class DaosPerf(DaosPerfBase):
-    # pylint: disable=too-many-ancestors
     """Test cases for the daos_perf command.
 
     Test Class Description:
@@ -29,7 +27,8 @@ class DaosPerf(DaosPerfBase):
             with multiple server/client configuration.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=daosperf,daosperfsmall
+        :avocado: tags=hw,medium
+        :avocado: tags=daos_perf
+        :avocado: tags=DaosPerf,test_small
         """
         self.run_daos_perf()

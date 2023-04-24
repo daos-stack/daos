@@ -339,7 +339,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(umm, root, cbs, 0, &ilog_entries);
+	rc = ilog_fetch(umm, root, cbs, 0, false, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)
@@ -1096,7 +1096,7 @@ run_ilog_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS Incarnation log tests %s", cfg);
+	dts_create_config(test_name, "ILOG tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   inc_tests, setup_ilog,
 					   teardown_ilog);

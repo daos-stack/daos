@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,6 @@
 #include "crt_group.h"
 #include "crt_tree.h"
 #include "crt_self_test.h"
-#include "crt_ctl.h"
 #include "crt_swim.h"
 
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
@@ -75,5 +74,21 @@
 #	define CRT_EXIT()	/* */
 
 #endif
+
+/* crt uri lookup cache info */
+struct crt_uri_cache {
+	struct crt_grp_cache *grp_cache;
+	uint32_t              max_count;
+	uint32_t              idx;
+};
+
+void
+crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req);
+void
+crt_hdlr_ctl_ls(crt_rpc_t *rpc_req);
+void
+crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req);
+void
+crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_INTERNAL_H__ */

@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package daos
 
 import (
@@ -47,6 +48,8 @@ const (
 	PropEntryEncryption = C.DAOS_PROP_ENTRY_ENCRYPT
 	// PropEntryGlobalVersion is the global version property.
 	PropEntryGlobalVersion = C.DAOS_PROP_ENTRY_GLOBAL_VERSION
+	// PropEntryObjectVersion is the object layout version property.
+	PropEntryObjectVersion = C.DAOS_PROP_ENTRY_OBJ_VERSION
 	// PropEntryGroup is the group property.
 	PropEntryGroup = C.DAOS_PROP_ENTRY_GROUP
 	// PropEntryLabel is the label property.
@@ -72,6 +75,8 @@ const (
 )
 
 const (
+	// PoolPropertyMin before any pool property
+	PoolPropertyMin = C.DAOS_PROP_PO_MIN
 	// PoolPropertyLabel is a string that a user can associate with a pool.
 	PoolPropertyLabel = C.DAOS_PROP_PO_LABEL
 	// PoolPropertyACL is the Access Control List for a pool.
@@ -101,6 +106,16 @@ const (
 	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
 	//PoolPropertyUpgradeStatus is pool upgrade status
 	PoolPropertyUpgradeStatus = C.DAOS_PROP_PO_UPGRADE_STATUS
+	// PoolPropertyScrubMode Checksum scrubbing schedule
+	PoolPropertyScrubMode = C.DAOS_PROP_PO_SCRUB_MODE
+	// PoolPropertyScrubFreq Checksum scrubbing frequency
+	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
+	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
+	// PoolPropertySvcRedunFac defines redundancy factor of the pool service.
+	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
+	// PoolPropertySvcList is the list of pool service replicas.
+	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
 	//PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
 )
@@ -150,6 +165,17 @@ const (
 	PoolUpgradeStatusCompleted = C.DAOS_UPGRADE_STATUS_COMPLETED
 	//PoolUpgradeStatusFailed defines pool upgrading operation failed.
 	PoolUpgradeStatusFailed = C.DAOS_UPGRADE_STATUS_FAILED
+)
+
+const (
+	// PoolRedunFacMax defines the maximum value of PoolPropertyRedunFac.
+	PoolRedunFacMax = C.DAOS_PROP_PO_REDUN_FAC_MAX
+	// PoolRedunFacDefault defines the default value of PoolPropertyRedunFac.
+	PoolRedunFacDefault = C.DAOS_PROP_PO_REDUN_FAC_DEFAULT
+	// PoolSvcRedunFacMax defines the maximum value of PoolPropertySvcRedunFac.
+	PoolSvcRedunFacMax = C.DAOS_PROP_PO_SVC_REDUN_FAC_MAX
+	// PoolSvcRedunFacDefault defines the default value of PoolPropertySvcRedunFac.
+	PoolSvcRedunFacDefault = C.DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT
 )
 
 const (
@@ -225,3 +251,9 @@ func PerfDomainIsValid(perfdomain string) bool {
 
 	return bool(C.daos_perf_domain_is_valid(cPerfDomain))
 }
+
+const (
+	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
+	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
+	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)

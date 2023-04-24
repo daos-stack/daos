@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -149,8 +149,12 @@ type OidFlag struct {
 	Oid C.daos_obj_id_t
 }
 
+func oidString(oid C.daos_obj_id_t) string {
+	return fmt.Sprintf("%d.%d", oid.hi, oid.lo)
+}
+
 func (f *OidFlag) String() string {
-	return fmt.Sprintf("%d.%d", f.Oid.hi, f.Oid.lo)
+	return oidString(f.Oid)
 }
 
 func (f *OidFlag) UnmarshalFlag(fv string) error {

@@ -743,6 +743,19 @@ punch_model_test(void **state)
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
 	assert_int_equal(max_write, 11);
+
+	/** Just query max_write */
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, 0, 11, NULL, NULL, NULL, &max_write, 0, 0,
+			       NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(max_write, 11);
+
+	/** Invalid arguments tests */
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_MAX, 11, NULL, NULL, NULL,
+			       &max_write, 0, 0, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, 0, 11, NULL, NULL, NULL, NULL, 0, 0, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static void
@@ -2729,6 +2742,68 @@ uncommitted_parent(void **state)
 }
 
 static void
+test_uncommitted_key(void **state)
+{
+	struct io_test_args *arg = *state;
+	int                  rc  = 0;
+	daos_epoch_range_t   epr;
+	daos_key_t           dkey;
+	daos_key_t           akey;
+	daos_iod_t           iod;
+	d_sg_list_t          sgl;
+	char                 buf[32];
+	daos_epoch_t         epoch = start_epoch;
+	daos_handle_t        coh;
+	char                *first = "Hello";
+	char                 dkey_buf[UPDATE_DKEY_SIZE];
+	char                 akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t      oid;
+	struct dtx_id        xid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	coh = arg->ctx.tc_co_hdl;
+
+	memset(&iod, 0, sizeof(iod));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->otype);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	vts_key_gen(&akey_buf[0], arg->akey_size, true, arg);
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	/** Update the dkey */
+	execute_op(coh, oid, epoch, &dkey, &akey, &sgl, first, 5, true, TX_OP_UPDATE1);
+	epoch += 10;
+	/** Punch the dkey */
+	execute_op(coh, oid, epoch, &dkey, NULL, NULL, NULL, 0, true, TX_OP_PUNCH_DKEY);
+	epoch += 10;
+	/** Update the dkey but don't commit */
+	xid = execute_op(coh, oid, epoch, &dkey, &akey, &sgl, first, 5, false, TX_OP_UPDATE1);
+	epoch += 10;
+
+	epr.epr_hi = epoch;
+	epr.epr_lo = 0;
+	rc         = vos_aggregate(coh, &epr, NULL, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/** Commit the update */
+	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	assert_rc_equal(rc, 1);
+
+	memset(buf, 'x', sizeof(buf));
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey, &sgl, buf, 5, true, TX_OP_FETCH1);
+	assert_memory_equal(buf, "Hello", 5);
+
+	d_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
+}
+
+static void
 test_multiple_key_conditionals_common(void **state, bool with_dtx)
 {
 	struct io_test_args	*arg = *state;
@@ -2956,17 +3031,15 @@ test_multiple_key_conditionals_tx(void **state)
 }
 
 static const struct CMUnitTest punch_model_tests_pmdk[] = {
-	{ "VOS860: Conditionals test", cond_test, NULL, NULL },
-	{ "VOS861: Multiple oid cond test", multiple_oid_cond_test, NULL,
-		NULL },
-	{ "VOS862: Punch while other akey is inprogress",
-		test_inprogress_parent_punch, NULL, NULL },
-	{ "VOS863: Multikey conditionals",
-		test_multiple_key_conditionals, NULL, NULL },
-	{ "VOS864: Multikey conditionals with tx",
-		test_multiple_key_conditionals_tx, NULL, NULL },
-	{ "VOS865: Many transactions", many_tx, NULL, NULL },
-	{ "VOS866: Uncommitted parent punch", uncommitted_parent, NULL, NULL },
+    {"VOS860: Conditionals test", cond_test, NULL, NULL},
+    {"VOS861: Multiple oid cond test", multiple_oid_cond_test, NULL, NULL},
+    {"VOS862: Punch while other akey is inprogress", test_inprogress_parent_punch, NULL, NULL},
+    {"VOS863: Multikey conditionals", test_multiple_key_conditionals, NULL, NULL},
+    {"VOS864: Multikey conditionals with tx", test_multiple_key_conditionals_tx, NULL, NULL},
+    {"VOS865: Many transactions", many_tx, NULL, NULL},
+    {"VOS866: Uncommitted parent punch", uncommitted_parent, NULL, NULL},
+    {"VOS867: Aggregate committed key punch with subsequent in-flight update", test_uncommitted_key,
+     NULL, NULL},
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
@@ -3004,14 +3077,14 @@ run_pm_tests(const char *cfg)
 	char	test_name[DTS_CFG_MAX];
 	int	rc;
 
-	dts_create_config(test_name, "VOS Universal Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Punch tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
 
-	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Conditional tests %s", cfg);
 
 	rc += cmocka_run_group_tests_name(test_name, punch_model_tests_pmdk,
 					  setup_io, teardown_io);

@@ -31,7 +31,7 @@ struct stats_cycle {
 	uint64_t	sc_kicked_wts[SCHED_REQ_MAX];
 };
 
-#define SW_CYCLE_MAX	5000
+#define SW_CYCLE_MAX	10000
 
 struct stats_window {
 	/* All schedule cycles in the stats window */
@@ -55,7 +55,7 @@ struct stats_window {
  * pool) when the total kicked weights are less than the SW_MIN_WEIGHTS within a
  * stats window.
  */
-#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 2 */
+#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 4 */
 
 static inline void
 sw_cycle_update(struct stats_window *sw, unsigned int req_type)
@@ -434,7 +434,6 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
-		D_ERROR("Alloc purge item failed.\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&pi->pi_link);
@@ -475,7 +474,6 @@ prealloc_requests(struct sched_info *info, int cnt)
 	for (i = 0; i < cnt; i++) {
 		D_ALLOC_PTR(req);
 		if (req == NULL) {
-			D_ERROR("Alloc req failed.\n");
 			return -DER_NOMEM;
 		}
 		D_INIT_LIST_HEAD(&req->sr_link);
@@ -485,8 +483,9 @@ prealloc_requests(struct sched_info *info, int cnt)
 	return 0;
 }
 
-#define SCHED_PREALLOC_INIT_CNT		8192
-#define SCHED_PREALLOC_BATCH_CNT	1024
+/* These values will be tuned down in the code if Valgrind is being used. */
+#define SCHED_PREALLOC_INIT_CNT  8192
+#define SCHED_PREALLOC_BATCH_CNT 1024
 
 static void
 sched_metrics_init(struct dss_xstream *dx)
@@ -533,8 +532,9 @@ sched_metrics_init(struct dss_xstream *dx)
 static int
 sched_info_init(struct dss_xstream *dx)
 {
-	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
+	struct sched_info *info = &dx->dx_sched_info;
+	int                rc;
+	int                count = SCHED_PREALLOC_INIT_CNT;
 
 	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_cur_seq = 0;
@@ -552,11 +552,14 @@ sched_info_init(struct dss_xstream *dx)
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("Create sched pool hash failed. "DF_RC".\n", DP_RC(rc));
+		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
-	rc = prealloc_requests(info, SCHED_PREALLOC_INIT_CNT);
+	if (D_ON_VALGRIND)
+		count = 16;
+
+	rc = prealloc_requests(info, count);
 	if (rc)
 		sched_info_fini(dx);
 
@@ -583,7 +586,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 	D_ALLOC_PTR(spi);
 	if (spi == NULL) {
-		D_ERROR("Failed to allocate spi\n");
 		return NULL;
 	}
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
@@ -602,7 +604,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	D_ASSERT(spi->spi_ref == 1);
 	return spi;
 }
-
 
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
@@ -625,7 +626,12 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
-		rc = prealloc_requests(info, SCHED_PREALLOC_BATCH_CNT);
+		int count = SCHED_PREALLOC_BATCH_CNT;
+
+		if (D_ON_VALGRIND)
+			count = 8;
+
+		rc = prealloc_requests(info, count);
 		if (rc)
 			return NULL;
 	}
@@ -936,10 +942,6 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 	for (req_type = SCHED_REQ_UPDATE; req_type < SCHED_REQ_MAX; req_type++)
 		tot_wts += (uint64_t)kick[req_type] * req_weights[req_type];
 
-	/* CPU is under utilized, no throttling on any ULTs */
-	if (tot_wts < SW_MIN_WEIGHTS)
-		return;
-
 	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
 	avail_wts = (uint64_t)kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
 	if (gc_wts > gc_wts_max) {
@@ -958,11 +960,11 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 		if (pr->pr_free != 0 && !is_gc_pending(spi))
 			goto done;
 		/*
-		 * If space pressure stays in same level for a while, we just assume that
+		 * If space pressure stays in highest level for a while, we just assume that
 		 * no available space can be reclaimed, so throttling will be skipped and
 		 * ENOSPACE could be returned to client sooner.
 		 */
-		if (!is_pressure_recent(info, spi))
+		if (pr->pr_free == 0 && !is_pressure_recent(info, spi))
 			goto done;
 
 		D_ASSERT(sw->sw_kicked_wts_tot >= kicked_wts[SCHED_REQ_GC]);
@@ -1909,6 +1911,9 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	struct sched_info	*info = &dx->dx_sched_info;
 	ABT_thread		 thread;
 	void			 (*thread_func)(void *);
+#ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t		*desc;
+#endif
 	int			 rc;
 
 	if (!watchdog_enabled(dx))
@@ -1919,6 +1924,18 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
+#ifdef ULT_MMAP_STACK
+	/* has ULT stack been allocated using mmap() or using
+	 * Argobots standard way ? With the later case the ULT
+	 * argument could not be used to address the mmap()'ed
+	 * stack descriptor !
+	 */
+	if (likely(thread_func == mmap_stack_wrapper)) {
+		rc = ABT_thread_get_arg(thread, (void **)&desc);
+		D_ASSERT(rc == ABT_SUCCESS);
+		thread_func = desc->thread_func;
+	}
+#endif
 	info->si_ult_func = thread_func;
 }
 

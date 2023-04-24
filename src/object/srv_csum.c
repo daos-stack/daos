@@ -10,7 +10,7 @@
 #include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos_types.h>
-#include "daos_srv/srv_csum.h"
+#include <daos_srv/bio.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 #define YES_NO(b) b ? "YES" : "NO"

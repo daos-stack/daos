@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package pbin
 
 import (
@@ -144,9 +145,13 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	}
 	conn := NewStdioConn("server", binPath, fromChild, toChild)
 
-	// ensure that /usr/sbin is in $PATH
-	os.Setenv("PATH", os.Getenv("PATH")+":/usr/sbin")
 	child.Env = os.Environ()
+	// ensure that /sbin and /usr/sbin are in child's $PATH
+	for i, env := range child.Env {
+		if strings.HasPrefix(env, "PATH=") {
+			child.Env[i] = env + ":/sbin:/usr/sbin"
+		}
+	}
 
 	if err := child.Start(); err != nil {
 		return nil, err

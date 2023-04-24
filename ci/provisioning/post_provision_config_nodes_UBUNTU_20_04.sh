@@ -7,7 +7,7 @@ post_provision_config_nodes() {
     #    yum -y erase fio fuse ior-hpc mpich-autoload               \
     #                 ompi argobots cart daos daos-client dpdk      \
     #                 fuse-libs libisa-l libpmemobj mercury mpich   \
-    #                 openpa pmix protobuf-c spdk libfabric libpmem \
+    #                 pmix protobuf-c spdk libfabric libpmem        \
     #                 libpmemblk munge-libs munge slurm             \
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi

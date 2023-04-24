@@ -192,7 +192,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -1835,9 +1835,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config,
-			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      layout1->ol_shards[0]->os_shard_loc[0].sd_rank, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, &affected_engines);
 	assert_true(disabled_nr < after_disabled_nr);
 	assert_true(d_rank_list_find(affected_engines, rank_to_exclude, NULL));
@@ -1872,8 +1872,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	daos_fail_loc_reset();
 	daos_fail_num_set(0);
 
-	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  rank_to_exclude);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank_to_exclude, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, NULL);
 	assert_int_equal(disabled_nr, after_disabled_nr);
 	/** wait for rebuild */
@@ -2246,7 +2247,6 @@ test_enumerate_object(void **state)
 	struct dcs_csum_info	*csum_info = NULL;
 	void			*end_byte;
 	daos_key_desc_t		*kds = NULL;
-	uint32_t		 csum_count = 0;
 	uint32_t		 nr;
 	int			 rc;
 	char			 dkey[32];
@@ -2364,7 +2364,6 @@ test_enumerate_object(void **state)
 		tmp_csum_iov.iov_buf += ci_size(*csum_info);
 		tmp_csum_iov.iov_buf_len -= ci_size(*csum_info);
 		tmp_csum_iov.iov_len -= ci_size(*csum_info);
-		csum_count++;
 	}
 
 
@@ -2566,6 +2565,65 @@ ec_two_chunk_plus_one(void **state)
 	});
 }
 
+static void
+basic_scrubbing_test(void **state, char *scrub_freq)
+{
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	int			 rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
+
+	/**
+	 * Setup
+	 */
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub", "timed",
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
+
+	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC32, false, 1024, oc);
+
+	/**
+	 * Act
+	 */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_success(rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_success(rc);
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
+
+	/**
+	 * Clean up
+	 */
+
+	sleep(5); /* Make sure scrubber has had time to start running */
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+}
+
+static void
+scrubbing_a_lot(void **state)
+{
+	basic_scrubbing_test(state, "1");
+}
+
+static void
+scrubbing_with_large_sleep(void **state)
+{
+	basic_scrubbing_test(state, "100000");
+}
+
 static int
 setup(void **state)
 {
@@ -2665,6 +2723,12 @@ static const struct CMUnitTest csum_tests[] = {
 		  "EC chunk", ec_chunk_plus_one),
 	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
 		  "2 EC chunks", ec_two_chunk_plus_one),
+	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
+		  "running very frequently",
+		  scrubbing_a_lot),
+	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
+		  "in between. Should still be able to destroy cont and pool",
+		  scrubbing_with_large_sleep)
 };
 
 static int

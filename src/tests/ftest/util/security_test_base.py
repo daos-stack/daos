@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +7,7 @@
 import os
 import random
 from general_utils import pcmd
+
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
@@ -26,7 +26,7 @@ def acl_entry(usergroup, name, perm, permissions=None):
 
     """
     if perm == "random":
-        perm = random.choice(permissions) #nosec
+        perm = random.choice(permissions)  # nosec
     if perm == "nonexist":
         return ""
     if "group" in usergroup:
@@ -53,6 +53,7 @@ def acl_principal(usergroup, name):
         entry = "u:" + name + "@"
     return entry
 
+
 def get_user_type(test_user):
     """Get test user's user type for ACE access control entry.
 
@@ -68,12 +69,13 @@ def get_user_type(test_user):
         user_type = "group"
     return user_type
 
+
 def add_del_user(hosts, bash_cmd, user):
     """Add or delete the daos user and group on host by sudo command.
 
     Args:
-        hosts (list): list of host.
-        bash_cmd (str): linux bash command to create user or group.
+        hosts (NodeSet): hosts on which to add/delete the user.
+        bash_cmd (str): Linux bash command to create user or group.
         user (str): user or group name to be created or cleaned.
 
     """
@@ -120,6 +122,7 @@ def read_acl_file(filename):
             acl.append(entry.strip())
 
     return acl
+
 
 def generate_acl_file(acl_type, acl_args):
     """Creates an acl file for the specified type.

@@ -298,10 +298,25 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 			return err
 		}
 
+		numaID := p.getDeviceNUMANodeID(osDev, topo)
+
 		var addr *hardware.PCIAddress
 		var linkSpeed float64
 		switch osDevType {
 		case osDevTypeBlock, osDevTypeNetwork, osDevTypeOpenFabrics:
+			// If the device is an NVDIMM, it does not have an
+			// associated PCI Device.
+			if osDev.objSubTypeString() == "NVDIMM" {
+				dev, err := osDev.blockDevice()
+				if err != nil {
+					return err
+				}
+				if err := nodes.AddBlockDevice(numaID, dev); err != nil {
+					return err
+				}
+				continue
+			}
+
 			if pciDev, err := osDev.getAncestorByType(objTypePCIDevice); err == nil {
 				addr, err = pciDev.pciAddr()
 				if err != nil {
@@ -320,17 +335,27 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 			continue
 		}
 
-		numaID := p.getDeviceNUMANodeID(osDev, topo)
-		for _, node := range nodes {
-			if node.ID != numaID {
-				continue
+		pciDev := &hardware.PCIDevice{
+			Name:      osDev.name(),
+			Type:      osDevTypeToHardwareDevType(osDevType),
+			PCIAddr:   *addr,
+			LinkSpeed: linkSpeed,
+		}
+		if err := nodes.AddPCIDevice(numaID, pciDev); err != nil {
+			return err
+		}
+
+		if osDevType == osDevTypeBlock {
+			blockDev, err := osDev.blockDevice()
+			if err != nil {
+				return err
 			}
-			node.AddDevice(&hardware.PCIDevice{
-				Name:      osDev.name(),
-				Type:      osDevTypeToHardwareDevType(osDevType),
-				PCIAddr:   *addr,
-				LinkSpeed: linkSpeed,
-			})
+			blockDev.BackingDevice = pciDev
+			pciDev.BlockDevice = blockDev
+
+			if err := nodes.AddBlockDevice(numaID, blockDev); err != nil {
+				return err
+			}
 		}
 	}
 

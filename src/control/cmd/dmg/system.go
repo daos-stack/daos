@@ -18,26 +18,27 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd   `command:"leader-query" description:"Query for current Management Service leader"`
-	Query       systemQueryCmd   `command:"query" description:"Query DAOS system status"`
-	Stop        systemStopCmd    `command:"stop" description:"Perform controlled shutdown of DAOS system"`
-	Start       systemStartCmd   `command:"start" description:"Perform start of stopped DAOS system"`
-	Erase       systemEraseCmd   `command:"erase" description:"Erase system metadata prior to reformat"`
-	ListPools   PoolListCmd      `command:"list-pools" description:"List all pools in the DAOS system"`
-	Cleanup     systemCleanupCmd `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
-	SetAttr     systemSetAttrCmd `command:"set-attr" description:"Set system attributes"`
-	GetAttr     systemGetAttrCmd `command:"get-attr" description:"Get system attributes"`
-	DelAttr     systemDelAttrCmd `command:"del-attr" description:"Delete system attributes"`
-	SetProp     systemSetPropCmd `command:"set-prop" description:"Set system properties"`
-	GetProp     systemGetPropCmd `command:"get-prop" description:"Get system properties"`
+	LeaderQuery  leaderQueryCmd        `command:"leader-query" description:"Query for current Management Service leader"`
+	Query        systemQueryCmd        `command:"query" description:"Query DAOS system status"`
+	Stop         systemStopCmd         `command:"stop" description:"Perform controlled shutdown of DAOS system"`
+	Start        systemStartCmd        `command:"start" description:"Perform start of stopped DAOS system"`
+	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
+	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
+	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
+	ListPools    PoolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
+	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
+	SetAttr      systemSetAttrCmd      `command:"set-attr" description:"Set system attributes"`
+	GetAttr      systemGetAttrCmd      `command:"get-attr" description:"Get system attributes"`
+	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
+	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
+	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
 }
 
 type leaderQueryCmd struct {
@@ -77,28 +78,19 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 // rankListCmd enables rank or host list to be supplied with command to filter
 // which ranks are operated upon.
 type rankListCmd struct {
-	Ranks string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
-	Hosts string `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+	Ranks ui.RankSetFlag `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
+	Hosts ui.HostSetFlag `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
 }
 
 // validateHostsRanks validates rank and host lists have correct format.
 //
 // Populate request with valid list strings.
-func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRanks *system.RankSet, err error) {
-	outHosts, err = hostlist.CreateSet(cmd.Hosts)
-	if err != nil {
-		return
-	}
-	outRanks, err = system.CreateRankSet(cmd.Ranks)
-	if err != nil {
-		return
+func (cmd *rankListCmd) validateHostsRanks() error {
+	if cmd.Hosts.Count() > 0 && cmd.Ranks.Count() > 0 {
+		return errors.New("--ranks and --rank-hosts options cannot be set together")
 	}
 
-	if outHosts.Count() > 0 && outRanks.Count() > 0 {
-		err = errors.New("--ranks and --rank-hosts options cannot be set together")
-	}
-
-	return
+	return nil
 }
 
 // systemQueryCmd is the struct representing the command to query system status.
@@ -117,13 +109,12 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system query failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemQueryReq)
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -179,13 +170,12 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system stop failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := &control.SystemStopReq{Force: cmd.Force}
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -208,6 +198,64 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+type baseExcludeCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	rankListCmd
+}
+
+func (cmd *baseExcludeCmd) execute(clear bool) error {
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
+		return errors.New("no ranks or hosts specified")
+	}
+
+	req := &control.SystemExcludeReq{Clear: clear}
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemExclude(context.Background(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	updated := ranklist.NewRankSet()
+	for _, result := range resp.Results {
+		updated.Add(result.Rank)
+	}
+
+	if resp.Errors() != nil {
+		cmd.Errorf("Errors: %s", resp.Errors())
+	}
+	cmd.Infof("updated ranks: %s", updated)
+
+	return nil
+}
+
+type systemExcludeCmd struct {
+	baseExcludeCmd
+}
+
+func (cmd *systemExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(false)
+}
+
+type systemClearExcludeCmd struct {
+	baseExcludeCmd
+}
+
+func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(true)
+}
+
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
 	baseCmd
@@ -223,13 +271,12 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system start failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemStartReq)
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

@@ -7,64 +7,77 @@
 package ucx
 
 import (
-	"context"
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
-	cleanup, err := Load()
-	if err != nil {
-		t.Skipf("can't load lib (%s)", err.Error())
-	}
-	defer cleanup()
-
-	// Can't mock the underlying UCX calls, but we can make sure it doesn't crash or
-	// error on the normal happy path.
-
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	p := NewProvider(log)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := p.GetFabricInterfaces(ctx)
-
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	fmt.Printf("FabricInterfaceSet:\n%s\n", result)
-}
 
 func TestUCX_Provider_getProviderSet(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in     string
-		expSet common.StringSet
+		expSet *hardware.FabricProviderSet
 	}{
 		"dc": {
-			in:     "dc_mlx5",
-			expSet: common.NewStringSet("ucx+dc_x", "ucx+dc", "ucx+all"),
+			in: "dc_mlx5",
+			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name: "ucx+dc_x",
+				},
+				&hardware.FabricProvider{
+					Name: "ucx+dc",
+				},
+				&hardware.FabricProvider{
+					Name:     "ucx+all",
+					Priority: catchallPriority,
+				},
+			),
 		},
 		"tcp": {
-			in:     "tcp",
-			expSet: common.NewStringSet("ucx+tcp", "ucx+all"),
+			in: "tcp",
+			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name:     "ucx+tcp",
+					Priority: tcpPriority,
+				},
+				&hardware.FabricProvider{
+					Name:     "ucx+all",
+					Priority: catchallPriority,
+				},
+			),
 		},
 		"add generic rc": {
-			in:     "rc_verbs",
-			expSet: common.NewStringSet("ucx+rc_v", "ucx+rc", "ucx+all"),
+			in: "rc_verbs",
+			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name: "ucx+rc_v",
+				},
+				&hardware.FabricProvider{
+					Name: "ucx+rc",
+				},
+				&hardware.FabricProvider{
+					Name:     "ucx+all",
+					Priority: catchallPriority,
+				},
+			),
 		},
 		"add generic ud": {
-			in:     "ud_mlx5",
-			expSet: common.NewStringSet("ucx+ud_x", "ucx+ud", "ucx+all"),
+			in: "ud_mlx5",
+			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name: "ucx+ud_x",
+				},
+				&hardware.FabricProvider{
+					Name: "ucx+ud",
+				},
+				&hardware.FabricProvider{
+					Name:     "ucx+all",
+					Priority: catchallPriority,
+				},
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -75,7 +88,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 
 			set := p.getProviderSet(tc.in)
 
-			if diff := cmp.Diff(tc.expSet, set); diff != "" {
+			if diff := cmp.Diff(tc.expSet, set, cmp.AllowUnexported(hardware.FabricProviderSet{})); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -126,50 +139,6 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
-		})
-	}
-}
-
-func TestUCX_getExternalName(t *testing.T) {
-	for name, tc := range map[string]struct {
-		devName   string
-		devComp   string
-		allDevs   []string
-		expResult string
-	}{
-		"single IB device": {
-			devName:   "d1",
-			devComp:   compInfiniband,
-			expResult: "d1",
-		},
-		"multiple IB devices": {
-			devName:   "d1",
-			devComp:   compInfiniband,
-			allDevs:   []string{"d0"},
-			expResult: "d1,d0",
-		},
-		"IB duplicates ignored": {
-			devName:   "d1",
-			devComp:   compInfiniband,
-			allDevs:   []string{"d0", "d1", "d2"},
-			expResult: "d1,d0,d2",
-		},
-		"single TCP device": {
-			devName:   "d1",
-			devComp:   compTCP,
-			expResult: "d1",
-		},
-		"multiple TCP devices": {
-			devName:   "d1",
-			devComp:   compTCP,
-			allDevs:   []string{"d0"},
-			expResult: "d1",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result := getExternalName(tc.devComp, tc.devName, tc.allDevs)
-
-			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

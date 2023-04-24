@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,15 +10,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// NvmeHealth is an alias for protobuf NvmeController_Health message.
-type NvmeHealth ctlpb.NvmeController_Health
+// NvmeHealth is an alias for protobuf BioHealthResp message.
+type NvmeHealth ctlpb.BioHealthResp
 
 // FromNative converts storage package type to protobuf equivalent.
 func (pb *NvmeHealth) FromNative(native *storage.NvmeHealth) error {
@@ -32,8 +30,8 @@ func (pb *NvmeHealth) ToNative() (*storage.NvmeHealth, error) {
 }
 
 // AsProto converts pointer receiver alias type to protobuf type.
-func (pb *NvmeHealth) AsProto() *ctlpb.NvmeController_Health {
-	return (*ctlpb.NvmeController_Health)(pb)
+func (pb *NvmeHealth) AsProto() *ctlpb.BioHealthResp {
+	return (*ctlpb.BioHealthResp)(pb)
 }
 
 // NvmeNamespace is an alias for protobuf NvmeController_Namespace message.
@@ -59,9 +57,9 @@ func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
-// SmdDevice is an alias for protobuf NvmeController_SmdDevice message
+// SmdDevice is an alias for protobuf SmdDevice message
 // representing DAOS server meta data existing on a NVMe SSD.
-type SmdDevice ctlpb.NvmeController_SmdDevice
+type SmdDevice ctlpb.SmdDevice
 
 // FromNative converts storage package type to protobuf equivalent.
 func (pb *SmdDevice) FromNative(native *storage.SmdDevice) error {
@@ -75,13 +73,13 @@ func (pb *SmdDevice) ToNative() (*storage.SmdDevice, error) {
 }
 
 // AsProto converts pointer receiver alias type to protobuf type.
-func (pb *SmdDevice) AsProto() *ctlpb.NvmeController_SmdDevice {
-	return (*ctlpb.NvmeController_SmdDevice)(pb)
+func (pb *SmdDevice) AsProto() *ctlpb.SmdDevice {
+	return (*ctlpb.SmdDevice)(pb)
 }
 
-// SmdDevices is an alias for protobuf NvmeController_SmdDevice message slice
+// SmdDevices is an alias for protobuf SmdDevice message slice
 // representing DAOS server meta data existing on a NVMe SSD.
-type SmdDevices []*ctlpb.NvmeController_SmdDevice
+type SmdDevices []*ctlpb.SmdDevice
 
 // NvmeController is an alias for protobuf NvmeController message slice.
 type NvmeController ctlpb.NvmeController
@@ -249,17 +247,4 @@ func (smr ScmMountResults) HasErrors() bool {
 		}
 	}
 	return false
-}
-
-// AccessControlListFromPB converts from the protobuf ACLResp structure to an
-// AccessControlList structure.
-func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
-	if pbACL == nil {
-		return &common.AccessControlList{}
-	}
-	return &common.AccessControlList{
-		Entries:    pbACL.ACL,
-		Owner:      pbACL.OwnerUser,
-		OwnerGroup: pbACL.OwnerGroup,
-	}
 }

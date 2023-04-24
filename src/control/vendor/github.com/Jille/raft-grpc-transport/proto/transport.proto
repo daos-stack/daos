@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 option go_package = "github.com/Jille/raft-grpc-transport/proto";
+import "google/protobuf/timestamp.proto";
 
 service RaftTransport {
   // AppendEntriesPipeline opens an AppendEntries message stream.
@@ -34,6 +35,7 @@ message Log {
 	LogType type = 3;
 	bytes data = 4;
 	bytes extensions = 5;
+	google.protobuf.Timestamp appended_at = 6;
 }
 
 message AppendEntriesRequest {

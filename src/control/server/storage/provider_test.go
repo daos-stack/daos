@@ -291,6 +291,31 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		"spdk rpc server enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				SpdkRpcSrvProps: SpdkRpcServer{
+					Enable:   true,
+					SockAddr: "/tmp/spdk.sock",
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				SpdkRpcSrvProps: SpdkRpcServer{
+					Enable:   true,
+					SockAddr: "/tmp/spdk.sock",
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

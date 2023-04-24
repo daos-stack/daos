@@ -491,3 +491,10 @@
    ...
    fun:fi_tsend
 }
+{
+   Go syscall.
+   Memcheck:Param
+   write(buf)
+   fun:syscall.Syscall.abi0
+}
+

@@ -16,6 +16,7 @@
 RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
+RDB_STRING_KEY(ds_cont_prop_, oit_oids);
 
 /* Container properties KVS */
 RDB_STRING_KEY(ds_cont_prop_, ghce);
@@ -49,6 +50,10 @@ RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_cont_prop_, ec_pda);
 RDB_STRING_KEY(ds_cont_prop_, rp_pda);
 RDB_STRING_KEY(ds_cont_prop_, cont_global_version);
+RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
+RDB_STRING_KEY(ds_cont_prop_, co_md_times);
+RDB_STRING_KEY(ds_cont_prop_, cont_obj_version);
+RDB_STRING_KEY(ds_cont_prop_, nhandles);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
@@ -57,7 +62,7 @@ static struct daos_prop_co_roots dummy_roots;
 struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container_label_not_set",
+		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
@@ -123,7 +128,7 @@ struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container_label_not_set",
+		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
@@ -144,7 +149,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,
+		.dpe_val	= DAOS_PROP_CO_REDUN_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_SNAPSHOT_MAX,
 		.dpe_val	= 0, /* No limitation */
@@ -190,6 +195,12 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= 0, /* inherit from pool by default */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_GLOBAL_VERSION,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_SCRUBBER_DISABLED,
+		.dpe_val	= 0,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_OBJ_VERSION,
 		.dpe_val	= 0, /* inherit from pool by default */
 	}
 };

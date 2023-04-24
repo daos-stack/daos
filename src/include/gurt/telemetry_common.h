@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -168,6 +168,12 @@ enum {
 	D_TM_INCLUDE_TYPE		= 0x004,
 };
 
+/* iterate ops */
+enum {
+	D_TM_ITER_READ			= 0x001,
+	D_TM_ITER_RESET			= 0x002,
+};
+
 /**
  * @brief Statistics for gauge and duration metrics
  *
@@ -223,6 +229,14 @@ struct d_tm_nodeList_t {
 	struct d_tm_node_t	*dtnl_node;
 	struct d_tm_nodeList_t	*dtnl_next;
 };
+
+/*
+ * Estimate of a metric size. This leans toward a large estimate, but is not the absolute maximum
+ * possible size.
+ */
+#define D_TM_METRIC_SIZE (sizeof(struct d_tm_node_t) + sizeof(struct d_tm_metric_t) + \
+			  D_TM_MAX_DESC_LEN + D_TM_MAX_NAME_LEN + D_TM_MAX_UNIT_LEN + \
+			  sizeof(struct d_tm_stats_t))
 
 /** Context for a telemetry instance */
 struct d_tm_context;

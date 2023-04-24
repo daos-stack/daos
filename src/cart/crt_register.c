@@ -79,9 +79,8 @@ crt_opc_map_L3_destroy(struct crt_opc_map_L3 *L3_entry)
 		return;
 
 	L3_entry->L3_num_slots_total = 0;
-	L3_entry->L3_num_slots_used = 0;
-	if (L3_entry->L3_map)
-		D_FREE(L3_entry->L3_map);
+	L3_entry->L3_num_slots_used  = 0;
+	D_FREE(L3_entry->L3_map);
 }
 
 static void
@@ -98,8 +97,7 @@ crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 	L2_entry->L2_num_slots_total = 0;
 	L2_entry->L2_num_slots_used = 0;
 
-	if (L2_entry->L2_map)
-		D_FREE(L2_entry->L2_map);
+	D_FREE(L2_entry->L2_map);
 }
 
 void

@@ -1527,6 +1527,7 @@ update_fetch_sv(void **state)
 			    from_vos_begin.cs_len);
 
 	daos_csummer_destroy(&csummer);
+	dcs_csum_info_list_fini(&from_vos_begin_list);
 }
 
 #define	TS(desc, test_fn) \
@@ -1536,9 +1537,6 @@ static const struct CMUnitTest sv_tests[] = {
 	TS("01: Various scenarios for update/fetch with fault injection",
 	   update_fetch_sv),
 };
-
-/** in srv_scrubbing_tests.c */
-extern int run_scrubbing_tests(void);
 
 int
 main(int argc, char **argv)

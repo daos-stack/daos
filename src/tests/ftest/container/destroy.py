@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +7,7 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, conversion
+from pydaos.raw import DaosApiError
 
 
 class ContainerDestroyTest(TestWithServers):
@@ -25,7 +24,7 @@ class ContainerDestroyTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke
-        :avocado: tags=container_destroy
+        :avocado: tags=container_destroy,test_container_destroy
         """
         expected_for_param = []
         change_result_uuid = self.params.get(
@@ -78,11 +77,10 @@ class ContainerDestroyTest(TestWithServers):
         else:
             poh = self.pool.pool.handle
 
+        con_uuid = None
         # Update container UUID used during destroy based on the variant.
         if change_uuid:
             con_uuid = uuid.uuid4()
-        else:
-            con_uuid = uuid.UUID(self.container.uuid)
 
         try:
             self.container.container.destroy(force=force, poh=poh, con_uuid=con_uuid)
@@ -96,10 +94,6 @@ class ContainerDestroyTest(TestWithServers):
             # here before getting to tearDown. To do so, set uuid and poh in the
             # DaosContainer instance. Then call destroy on the TestContainer instance.
             self.container.container.poh = self.pool.pool.handle
-            con_uuid = uuid.UUID(self.container.uuid)
-            # Use conversion.c_uuid() to set the correct UUID into uuid.
-            conversion.c_uuid(con_uuid, self.container.container.uuid)
-
             self.container.destroy()
 
         if expected_result == 'PASS' and not passed:

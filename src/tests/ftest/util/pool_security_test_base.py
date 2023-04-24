@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,6 +27,7 @@ class PoolSecurityTestBase(TestWithServers):
 
     :avocado: recursive
     """
+
     def modify_acl_file_entry(self, file_name, entry, new_entry):
         """Modify the acl_file acl list entry.
 
@@ -36,21 +36,18 @@ class PoolSecurityTestBase(TestWithServers):
             entry (str): acl entry to be modified.
             new_entry (str): new acl entry.
         """
-        acl_file = open(file_name, "r+")
-        new_permissions = ""
-        for line in acl_file.readlines():
-            line = line.split("\n")[0]
-            if line == entry:
-                line = new_entry
-                self.log.info(
-                    "==>replaceing \n %s  with\n %s", entry, new_entry)
-            new_permissions = new_permissions + line + "\n"
-        if entry is None:
-            new_permissions = new_permissions + new_entry + "\n"
-        acl_file.close()
-        acl_file = open(file_name, "w")
-        acl_file.write(new_permissions)
-        acl_file.close()
+        with open(file_name, "r+") as acl_file:
+            new_permissions = ""
+            for line in acl_file.readlines():
+                line = line.split("\n")[0]
+                if line == entry:
+                    line = new_entry
+                    self.log.info("==>replaceing \n %s  with\n %s", entry, new_entry)
+                new_permissions = new_permissions + line + "\n"
+            if entry is None:
+                new_permissions = new_permissions + new_entry + "\n"
+        with open(file_name, "w") as acl_file:
+            acl_file.write(new_permissions)
 
     def get_pool_acl_list(self):
         """Get daos pool acl list by dmg get-acl.
@@ -104,7 +101,7 @@ class PoolSecurityTestBase(TestWithServers):
             return result["status"] != 0 or result["error"] is not None
 
         # Result is CmdResult.
-        return result.exit_status != 0 or result.stderr_text != ""
+        return result.exit_status != 0
 
     @staticmethod
     def _command_missing_err_code(result, err_code):
@@ -271,7 +268,7 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
         """
         action = "cont_delete"
-        result = self.destroy_test_container(self.pool.uuid, self.container)
+        result = self.destroy_test_container(self.pool.identifier, self.container.identifier)
         self.log.info(
             "  In verify_cont_delete %s.\n =destroy_test_container() result:"
             "\n%s", action, result)

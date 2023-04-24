@@ -22,14 +22,13 @@ func MockConfig() *Config {
 
 type (
 	TestRunnerConfig struct {
-		StartCb    func()
-		StartErr   error
-		Running    atm.Bool
-		SignalCb   func(uint32, os.Signal)
-		SignalErr  error
-		LastPid    uint64
-		ErrChanCb  func() error
-		ErrChanErr error
+		StartCb          func()
+		StartErr         error
+		Running          atm.Bool
+		SignalCb         func(uint32, os.Signal)
+		LastPid          uint64
+		RunnerExitInfoCb func() *RunnerExitInfo
+		RunnerExitInfo   *RunnerExitInfo
 	}
 
 	TestRunner struct {
@@ -48,23 +47,22 @@ func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+func (tr *TestRunner) Start(ctx context.Context) (RunnerExitChan, error) {
 	if tr.runnerCfg.StartCb != nil {
 		tr.runnerCfg.StartCb()
 	}
-	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func() error {
-			return tr.runnerCfg.ErrChanErr
+	if tr.runnerCfg.RunnerExitInfoCb == nil {
+		tr.runnerCfg.RunnerExitInfoCb = func() *RunnerExitInfo {
+			return tr.runnerCfg.RunnerExitInfo
 		}
 	}
 
+	runnerExitInfoCh := make(chan *RunnerExitInfo)
 	go func() {
 		select {
 		case <-ctx.Done():
-		case errChan <- tr.runnerCfg.ErrChanCb():
-			if tr.runnerCfg.ErrChanErr != nil {
-				tr.runnerCfg.Running.SetFalse()
-			}
+		case runnerExitInfoCh <- tr.runnerCfg.RunnerExitInfoCb():
+			tr.runnerCfg.Running.SetFalse()
 		}
 	}()
 
@@ -72,14 +70,13 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 		tr.runnerCfg.Running.SetTrue()
 	}
 
-	return tr.runnerCfg.StartErr
+	return runnerExitInfoCh, tr.runnerCfg.StartErr
 }
 
-func (tr *TestRunner) Signal(sig os.Signal) error {
+func (tr *TestRunner) Signal(sig os.Signal) {
 	if tr.runnerCfg.SignalCb != nil {
 		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
 	}
-	return tr.runnerCfg.SignalErr
 }
 
 func (tr *TestRunner) IsRunning() bool {

@@ -15,44 +15,61 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 // ScmState represents the probed state of PMem modules on the system.
+//
 //go:generate stringer -type=ScmState
 type ScmState int
 
 const (
 	// ScmStateUnknown represents the default (unknown) state.
 	ScmStateUnknown ScmState = iota
-	// ScmStateNoRegions indicates that PMem modules exist, but no regions have been created.
-	ScmStateNoRegions
-	// ScmStateFreeCapacity indicates that PMem modules exist with configured regions with
-	// available free capacity.
-	ScmStateFreeCapacity
-	// ScmStateNoFreeCapacity indicates that PMem modules exist with configured regions and no free
-	// capacity.
-	ScmStateNoFreeCapacity
-	// ScmStateNotInterleaved indicates that PMem modules exist with configured regions but not
-	// in AppDirect interleaved/persistent mirror mode.
-	ScmStateNotInterleaved
-	// ScmStateNoModules indicates that no PMem modules exist.
-	ScmStateNoModules
+	// ScmNoRegions indicates that PMem modules exist, but no regions have been created.
+	ScmNoRegions
+	// ScmFreeCap indicates that PMem AppDirect regions have free capacity.
+	ScmFreeCap
+	// ScmNoFreeCap indicates that PMem AppDirect regions have no free capacity.
+	ScmNoFreeCap
+	// ScmNotInterleaved indicates that a PMem AppDirect region is in non-interleaved mode.
+	ScmNotInterleaved
+	// ScmNoModules indicates that no PMem modules exist.
+	ScmNoModules
+	// ScmNotHealthy indicates a PMem AppDirect region is showing health state as "Error".
+	ScmNotHealthy
+	// ScmPartFreeCap indicates a PMem AppDirect region has only partial free capacity.
+	ScmPartFreeCap
+	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
+	ScmUnknownMode
 )
 
 func (ss ScmState) String() string {
-	return map[ScmState]string{
-		ScmStateUnknown:        "Unknown",
-		ScmStateNoRegions:      "NoRegions",
-		ScmStateFreeCapacity:   "FreeCapacity",
-		ScmStateNoFreeCapacity: "NoFreeCapacity",
-		ScmStateNotInterleaved: "NotInterleaved",
-		ScmStateNoModules:      "NoModules",
-	}[ss]
+	if val, exists := map[ScmState]string{
+		ScmStateUnknown:   "Unknown",
+		ScmNoRegions:      "NoRegions",
+		ScmFreeCap:        "FreeCapacity",
+		ScmNoFreeCap:      "NoFreeCapacity",
+		ScmNotInterleaved: "NotInterleaved",
+		ScmNoModules:      "NoModules",
+		ScmNotHealthy:     "NotHealthy",
+		ScmPartFreeCap:    "PartialFreeCapacity",
+		ScmUnknownMode:    "UnknownMode",
+	}[ss]; exists {
+		return val
+	}
+	return "Unknown"
 }
 
 type (
+	// ScmSocketState indicates the state of PMem for either a specific socket or all sockets.
+	ScmSocketState struct {
+		SocketID *uint // If set, state applies to a specific socket.
+		State    ScmState
+	}
+
 	// ScmModule represents a PMem DIMM.
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
@@ -73,18 +90,19 @@ type (
 
 	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
-		Class      Class    `json:"class"`
-		DeviceList []string `json:"device_list"`
-		Info       string   `json:"info"`
-		Path       string   `json:"path"`
-		TotalBytes uint64   `json:"total_bytes"`
-		AvailBytes uint64   `json:"avail_bytes"`
+		Class      Class         `json:"class"`
+		DeviceList []string      `json:"device_list"`
+		Info       string        `json:"info"`
+		Path       string        `json:"path"`
+		Rank       ranklist.Rank `json:"rank"`
+		TotalBytes uint64        `json:"total_bytes"`
+		AvailBytes uint64        `json:"avail_bytes"`
 	}
 
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
 	ScmMountPoints []*ScmMountPoint
 
-	// ScmNamespace represents a mapping of AppDirect regions to block device files.
+	// ScmNamespace is a block device exposing a PMem AppDirect region.
 	ScmNamespace struct {
 		UUID        string         `json:"uuid" hash:"ignore"`
 		BlockDevice string         `json:"blockdev"`
@@ -94,7 +112,7 @@ type (
 		Mount       *ScmMountPoint `json:"mount"`
 	}
 
-	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
+	// ScmNamespaces is a type alias for a slice of ScmNamespace references.
 	ScmNamespaces []*ScmNamespace
 
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
@@ -240,8 +258,8 @@ const (
 type (
 	// ScmProvider defines an interface to be implemented by a PMem provider.
 	ScmProvider interface {
-		Mount(ScmMountRequest) (*ScmMountResponse, error)
-		Unmount(ScmMountRequest) (*ScmMountResponse, error)
+		Mount(ScmMountRequest) (*MountResponse, error)
+		Unmount(ScmMountRequest) (*MountResponse, error)
 		Format(ScmFormatRequest) (*ScmFormatResponse, error)
 		CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error)
 		Scan(ScmScanRequest) (*ScmScanResponse, error)
@@ -253,13 +271,14 @@ type (
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
 	ScmPrepareRequest struct {
 		pbin.ForwardableRequest
-		Reset                 bool // Clear PMem namespaces and regions.
-		NrNamespacesPerSocket uint // Request this many PMem namespaces per socket.
+		Reset                 bool  // Clear PMem namespaces and regions.
+		NrNamespacesPerSocket uint  // Request this many PMem namespaces per socket.
+		SocketID              *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.
 	ScmPrepareResponse struct {
-		State          ScmState
+		Socket         *ScmSocketState
 		RebootRequired bool
 		Namespaces     ScmNamespaces
 	}
@@ -267,24 +286,21 @@ type (
 	// ScmScanRequest defines the parameters for a Scan operation.
 	ScmScanRequest struct {
 		pbin.ForwardableRequest
+		SocketID *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.
 	ScmScanResponse struct {
-		State      ScmState
 		Modules    ScmModules
 		Namespaces ScmNamespaces
 	}
 
-	// DcpmParams defines the sub-parameters of a Format operation that will use PMem
-	DcpmParams struct {
-		Device string
-	}
-
-	// RamdiskParams defines the sub-parameters of a Format operation that
+	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size uint
+		Size             uint
+		NUMANode         uint
+		DisableHugepages bool
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
@@ -295,7 +311,7 @@ type (
 		OwnerUID   int
 		OwnerGID   int
 		Ramdisk    *RamdiskParams
-		Dcpm       *DcpmParams
+		Dcpm       *DeviceParams
 	}
 
 	// ScmFormatResponse contains the results of a successful Format operation or query.
@@ -306,19 +322,13 @@ type (
 		Mountable  bool
 	}
 
-	// ScmMountRequest defines the parameters for a Mount operation.
+	// ScmMountRequest represents an SCM mount request.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class  Class
-		Device string
-		Target string
-		Size   uint
-	}
-
-	// ScmMountResponse contains the results of a successful Mount operation.
-	ScmMountResponse struct {
+		Class   Class
+		Device  string
 		Target  string
-		Mounted bool
+		Ramdisk *RamdiskParams
 	}
 
 	// ScmFirmwareQueryRequest defines the parameters for a firmware query.
@@ -383,7 +393,7 @@ type ScmAdminForwarder struct {
 
 // NewScmAdminForwarder creates a new ScmAdminForwarder.
 func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &ScmAdminForwarder{
 		Forwarder: *pf,
@@ -391,10 +401,10 @@ func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
 }
 
 // Mount forwards an SCM mount request.
-func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmMount", req, res); err != nil {
 		return nil, err
 	}
@@ -403,10 +413,10 @@ func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error
 }
 
 // Unmount forwards an SCM unmount request.
-func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmUnmount", req, res); err != nil {
 		return nil, err
 	}

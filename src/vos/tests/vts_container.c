@@ -362,7 +362,7 @@ run_co_test(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS container tests %s", cfg);
+	dts_create_config(test_name, "Container tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);

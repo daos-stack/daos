@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -158,6 +158,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_SVC_LIST:
 			svc_list = prop_entry->dpe_val_ptr;
 			if (svc_list) {
+				int rc;
+
 				D_ASSERT(svc_list->rl_nr <
 					 PROP_SVC_LIST_MAX_TMP);
 				iv_prop->pip_svc_list.rl_nr = svc_list->rl_nr;
@@ -165,8 +167,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 						(void *)(iv_prop->pip_iv_buf +
 						roundup(offset, 8));
 				iv_prop->pip_svc_list_offset = offset;
-				d_rank_list_copy(&iv_prop->pip_svc_list,
-						 svc_list);
+				rc = d_rank_list_copy(&iv_prop->pip_svc_list, svc_list);
+				D_ASSERT(rc == 0);
 				offset += roundup(
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
@@ -185,6 +187,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			iv_prop->pip_obj_version = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
@@ -192,6 +197,17 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
 			strcpy(iv_prop->pip_perf_domain, prop_entry->dpe_str);
+		case DAOS_PROP_PO_SCRUB_MODE:
+			iv_prop->pip_scrub_mode = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			iv_prop->pip_scrub_freq = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			iv_prop->pip_scrub_thresh = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			iv_prop->pip_svc_redun_fac = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -253,6 +269,15 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_SELF_HEAL:
 			prop_entry->dpe_val = iv_prop->pip_self_heal;
 			break;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			prop_entry->dpe_val = iv_prop->pip_scrub_mode;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			prop_entry->dpe_val = iv_prop->pip_scrub_freq;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_scrub_thresh;
+			break;
 		case DAOS_PROP_PO_RECLAIM:
 			prop_entry->dpe_val = iv_prop->pip_reclaim;
 			break;
@@ -310,6 +335,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
 			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			prop_entry->dpe_val = iv_prop->pip_obj_version;
+			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
 			break;
@@ -321,6 +349,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			perf_domain_alloc = prop_entry->dpe_str;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			prop_entry->dpe_val = iv_prop->pip_svc_redun_fac;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -580,7 +610,7 @@ pool_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+pool_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -764,14 +794,18 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		   d_sg_list_t *src, void **priv)
 {
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*ent_pool_key = key2priv(&entry->iv_key);
+	struct pool_iv_key	*pool_key = key2priv(key);
 	struct ds_pool		*pool;
 	d_rank_t		rank;
 	int			rc;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
-		D_GOTO(out_put, rc = 0);
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc) {
+		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		D_GOTO(out_put, rc);
 	}
 
 	rc = crt_group_rank(pool->sp_group, &rank);
@@ -780,6 +814,16 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (rank != entry->ns->iv_master_rank)
 		D_GOTO(out_put, rc = -DER_IVCB_FORWARD);
+
+	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+		/* If incoming key/eph is older than the current entry/key, then it means
+		 * incoming update request is stale, especially for LAZY/asynchronous/retry
+		 * cases, see iv_op().
+		 */
+		D_DEBUG(DB_MD, "current entry eph "DF_U64" > "DF_U64"\n",
+			ent_pool_key->pik_eph, pool_key->pik_eph);
+		D_GOTO(out_put, rc);
+	}
 
 	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), rank,
@@ -817,11 +861,21 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
+
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
-	ds_pool_put(pool);
+	if (pool != NULL)
+		ds_pool_put(pool);
 	return rc;
 }
 
@@ -835,6 +889,8 @@ ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 				 pih->pih_cont_hdl) == 0)
 			return 0;
 		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_pool_hdl);
 	}
 
 	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
@@ -859,12 +915,16 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
-			pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-			if (pool == NULL)
-				return 0;
+			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+			if (rc) {
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+				return rc;
+			}
 			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
+			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);
 			ds_pool_put(pool);
 			return 0;
 		}
@@ -883,14 +943,28 @@ static int
 pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
+	struct pool_iv_key	*pool_key = key2priv(key);
+	struct pool_iv_key	*ent_pool_key = key2priv(&entry->iv_key);
 	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool = 0;
-	int			rc = 0;
+	int			rc;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
-		D_GOTO(out_put, rc = 0);
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc) {
+		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		D_GOTO(out_put, rc);
+	}
+
+	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+		/* If incoming key/eph is older than the current entry/key, then it means
+		 * incoming update request is stale, especially for LAZY/asynchronous/retry
+		 * cases, see iv_op().
+		 */
+		D_DEBUG(DB_MD, "current entry eph "DF_U64" > "DF_U64"\n",
+			ent_pool_key->pik_eph, pool_key->pik_eph);
+		D_GOTO(out_put, rc);
 	}
 
 	if (src == NULL) {
@@ -949,8 +1023,15 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 
 update_iv_cache:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -972,6 +1053,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *value)
 {
 	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*pool_key;
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
@@ -980,18 +1062,22 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (entry->iv_class->iv_class_id != IV_POOL_MAP)
 		return 0;
 
-	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL) {
-		D_DEBUG(DB_TRACE, DF_UUID": pool not found\n",
-			DP_UUID(entry->ns->iv_pool_uuid));
+	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, DF_UUID": pool not found: %d\n",
+			DP_UUID(entry->ns->iv_pool_uuid), rc);
 		/* Return 0 to keep forwarding this sync request. */
-		return 0;
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		return rc;
 	}
 
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
-	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
+	pool_key = (struct pool_iv_key *)key->key_buf;
+	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank,
+			     pool_key->pik_term);
 
 	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
@@ -1060,7 +1146,7 @@ retry:
 }
 
 static int
-pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
+pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 	       struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
 	       unsigned int sync_mode, bool retry)
@@ -1082,6 +1168,8 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	key.class_id = class_id;
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
+	pool_key->pik_eph = d_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
@@ -1137,7 +1225,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int
 ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   uint64_t flags, uint64_t sec_capas,
-			   d_iov_t *cred, uint32_t global_ver)
+			   d_iov_t *cred, uint32_t global_ver, uint32_t layout_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	daos_size_t		iv_entry_size;
@@ -1157,6 +1245,7 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	pic->pic_capas = sec_capas;
 	pic->pic_cred_size = cred->iov_len;
 	pic->pic_global_ver = global_ver;
+	pic->pic_obj_ver = layout_ver;
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,
@@ -1258,9 +1347,9 @@ ds_pool_map_refresh_ult(void *arg)
 
 	/* Pool IV fetch should only be done in xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	pool = ds_pool_lookup(iv_arg->iua_pool_uuid);
-	if (pool == NULL) {
-		rc = -DER_NONEXIST;
+	rc = ds_pool_lookup(iv_arg->iua_pool_uuid, &pool);
+	if (rc != 0) {
+		D_WARN(DF_UUID" refresh pool map: %d\n", DP_UUID(iv_arg->iua_pool_uuid), rc);
 		goto out;
 	}
 

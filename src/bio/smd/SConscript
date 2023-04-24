@@ -2,6 +2,7 @@
 
 FILES = ['smd_device.c', 'smd_pool.c', 'smd_store.c']
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -10,10 +11,11 @@ def scons():
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
 
-    denv.Library('smd', FILES, LIBS=[])
+    denv.d_static_library('smd', FILES, LIBS=[])
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

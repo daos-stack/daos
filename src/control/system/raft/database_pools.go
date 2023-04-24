@@ -12,12 +12,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
 	// PoolRankMap provides a map of Rank->[]*PoolService.
-	PoolRankMap map[system.Rank][]*system.PoolService
+	PoolRankMap map[ranklist.Rank][]*system.PoolService
 	// PoolUuidMap provides a map of UUID->*PoolService.
 	PoolUuidMap map[uuid.UUID]*system.PoolService
 	// PoolLabelMap provides a map of Label->*PoolService.
@@ -36,7 +37,7 @@ type (
 // The pool's UUID is used to represent the pool service in order to
 // avoid duplicating pool service details in the serialized format.
 func (prm PoolRankMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[system.Rank][]uuid.UUID)
+	jm := make(map[ranklist.Rank][]uuid.UUID)
 	for rank, svcList := range prm {
 		if _, exists := jm[rank]; !exists {
 			jm[rank] = []uuid.UUID{}
@@ -70,11 +71,11 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 
 	type fromJSON PoolDatabase
 	from := &struct {
-		Ranks  map[system.Rank][]uuid.UUID
+		Ranks  map[ranklist.Rank][]uuid.UUID
 		Labels map[string]uuid.UUID
 		*fromJSON
 	}{
-		Ranks:    make(map[system.Rank][]uuid.UUID),
+		Ranks:    make(map[ranklist.Rank][]uuid.UUID),
 		Labels:   make(map[string]uuid.UUID),
 		fromJSON: (*fromJSON)(pdb),
 	}

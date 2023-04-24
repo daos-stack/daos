@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,16 +130,19 @@ out:
 int
 crt_bulk_addref(crt_bulk_t bulk_hdl)
 {
-	int	rc;
+	int         rc = -DER_SUCCESS;
+	hg_return_t hg_ret;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_addref(bulk_hdl);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_addref() failed, rc: %d.\n", rc);
+	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
+	}
 
 out:
 	return rc;
@@ -148,16 +151,20 @@ out:
 int
 crt_bulk_free(crt_bulk_t bulk_hdl)
 {
-	int	rc;
+	int         rc = -DER_SUCCESS;
+	hg_return_t hg_ret;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_free(bulk_hdl);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_free() failed, rc: %d.\n", rc);
+	hg_ret = HG_Bulk_free(bulk_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+
+		rc = crt_hgret_2_der(hg_ret);
+	}
 
 out:
 	return rc;
@@ -205,13 +212,34 @@ out:
 int
 crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 {
-	return crt_hg_bulk_get_len(bulk_hdl, bulk_len);
+	hg_size_t hg_size;
+
+	if (bulk_len == NULL) {
+		D_ERROR("bulk_len is NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (bulk_hdl == CRT_BULK_NULL) {
+		D_ERROR("bulk_hdl is NULL\n");
+		return -DER_INVAL;
+	}
+
+	hg_size   = HG_Bulk_get_size(bulk_hdl);
+	*bulk_len = hg_size;
+
+	return 0;
 }
 
 int
 crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 {
-	return crt_hg_bulk_get_sgnum(bulk_hdl, bulk_sgnum);
+	hg_uint32_t hg_sgnum;
+
+	D_ASSERT(bulk_sgnum != NULL);
+	hg_sgnum    = HG_Bulk_get_segment_count(bulk_hdl);
+	*bulk_sgnum = hg_sgnum;
+
+	return 0;
 }
 
 int
@@ -237,5 +265,5 @@ out:
 int
 crt_bulk_abort(crt_context_t crt_ctx, crt_bulk_opid_t opid)
 {
-	return crt_hg_bulk_cancel(opid);
+	return HG_Bulk_cancel(opid);
 }

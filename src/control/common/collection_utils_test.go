@@ -225,6 +225,66 @@ func TestCommon_StringSet_String(t *testing.T) {
 	}
 }
 
+func TestCommon_StringSet_UnmarshalYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		yamlStrs  []string
+		yamlErr   error
+		expResult StringSet
+		expErr    error
+	}{
+		"yaml error": {
+			yamlErr: errors.New("yaml error"),
+			expErr:  errors.New("yaml error"),
+		},
+		"empty": {
+			expResult: NewStringSet(),
+		},
+		"success": {
+			yamlStrs:  []string{"one", "two"},
+			expResult: NewStringSet("one", "two"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var set StringSet
+			err := set.UnmarshalYAML(func(result interface{}) error {
+				if slice, ok := result.(*[]string); ok {
+					*slice = tc.yamlStrs
+				} else {
+					t.Fatalf("%+v wasn't a string slice", result)
+				}
+				return tc.yamlErr
+			})
+
+			CmpErr(t, tc.expErr, err)
+			AssertEqual(t, tc.expResult, set, "")
+		})
+	}
+}
+
+func TestCommon_StringSet_MarshalYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set       StringSet
+		expResult []string
+		expErr    error
+	}{
+		"empty": {
+			set:       NewStringSet(),
+			expResult: []string{},
+		},
+		"success": {
+			set:       NewStringSet("one", "two"),
+			expResult: []string{"one", "two"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := tc.set.MarshalYAML()
+
+			AssertEqual(t, tc.expResult, result, "")
+			CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
 func TestCommon_ParseNumberListUint32(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     string

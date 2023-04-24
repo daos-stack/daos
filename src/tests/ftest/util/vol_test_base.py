@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2020-2022 Intel Corporation.
+(C) Copyright 2020-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,14 +11,13 @@ from command_utils import ExecutableCommand
 
 
 class VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
-    """Runs HDF5 vol test suites.
+    """Runs HDF5 vol test-suites.
 
     :avocado: recursive
     """
 
     def run_test(self, job_manager, plugin_path, test_repo):
-        """Run the HDF5 VOL testsuites.
+        """Run the HDF5 VOL test-suites.
 
         Raises:
             VolFailed: for an invalid test name or test execution failure
@@ -47,8 +45,6 @@ class VolTestBase(DfuseTestBase):
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_SVCL"] = "{}".format(",".join([str(item) for item in
-                                                 self.pool.svc_ranks]))
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)

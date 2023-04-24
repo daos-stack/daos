@@ -1,14 +1,13 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
 from daos_utils import DaosCommand
 
+
 class RbldDeleteObjects(RebuildTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:
@@ -29,11 +28,9 @@ class RbldDeleteObjects(RebuildTestBase):
     def execute_during_rebuild(self):
         """Delete half of the objects from the container during rebuild."""
         self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
+                                         cont=self.container.uuid,
+                                         prop="status", value="healthy")
 
         if self.punch_type == "object":
             # Punch half of the objects
@@ -62,8 +59,7 @@ class RbldDeleteObjects(RebuildTestBase):
         if self.punch_type == "object":
             expected_qty = len(self.punched_indices)
         elif self.punch_type == "record":
-            expected_qty = \
-                 len(self.punched_indices) * self.container.object_qty.value
+            expected_qty = len(self.punched_indices) * self.container.object_qty.value
         else:
             expected_qty = 0
         self.assertEqual(
@@ -87,8 +83,9 @@ class RbldDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,full_regression
-        :avocado: tags=large
-        :avocado: tags=rebuild,delete_objects,rebuilddeleteobject
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=delete_objects,rebuilddeleteobject,test_rebuild_delete_objects
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -106,8 +103,9 @@ class RbldDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,full_regression
-        :avocado: tags=large
-        :avocado: tags=rebuild,delete_objects,rebuilddeleterecord
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=delete_objects,rebuilddeleterecord,test_rebuild_delete_records
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

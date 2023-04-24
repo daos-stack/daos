@@ -25,6 +25,41 @@ static const char *dts_dtx_dkey	= "dtx_dkey";
 static const char *dts_dtx_akey	= "dtx_akey";
 
 static void
+dtx_0(void **state)
+{
+	test_arg_t		*arg = *state;
+	const char		*dkey = dts_dtx_dkey;
+	const char		*akey = dts_dtx_akey;
+	const daos_size_t	 fetch_size = 2 << 20 /* 2 MB */;
+	char			 fetch_buf[fetch_size];
+	daos_handle_t		 th = { 0 };
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+
+	/*
+	 * Trigger a fan-out at the beginning of a TX to test the wait in
+	 * dc_tx_get_epoch.
+	 */
+	print_message("DTX0: SV fetch against EC obj\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	arg->async = 0;
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	lookup_single(dkey, akey, 0, fetch_buf, fetch_size, th, &req);
+
+	MUST(daos_tx_commit(th, NULL));
+
+	ioreq_fini(&req);
+	MUST(daos_tx_close(th, NULL));
+}
+
+static void
 dtx_1(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -2431,8 +2466,8 @@ dtx_35(void **state)
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
-	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
-	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[0], DAOS_OO_RW, &reqs[0].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[1], DAOS_OO_RW, &reqs[1].oh, NULL));
 
 	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
@@ -2603,7 +2638,7 @@ dtx_36(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -2735,7 +2770,7 @@ dtx_37(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(&req, akeys, 1, DTX_NC_CNT);
 }
@@ -2850,7 +2885,7 @@ dtx_38(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	rebuild_single_pool_rank(arg, kill_ranks[0], false);
-
+	daos_cont_status_clear(arg->coh, NULL);
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		print_message("Verifying data after rebuild...\n");
@@ -2908,7 +2943,7 @@ dtx_38(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_ranks[0]);
+	reintegrate_single_pool_rank(arg, kill_ranks[0], false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -2985,7 +3020,7 @@ dtx_39(void **state)
 		ioreq_fini(&req);
 	}
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 }
 
 static void
@@ -3017,8 +3052,38 @@ dtx_sub_setup(void **state)
 
 	saved_dtx_arg = *state;
 	*state = NULL;
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
-			0, NULL);
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF2);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf0_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF0);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf1_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF1);
+
 	return rc;
 }
 
@@ -3035,6 +3100,8 @@ dtx_sub_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
+	{"DTX0: SV fetch against EC obj",
+	 dtx_0, NULL, test_case_teardown},
 	{"DTX1: multiple SV update against the same obj",
 	 dtx_1, NULL, test_case_teardown},
 	{"DTX2: multiple EV update against the same obj",
@@ -3114,9 +3181,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX37: resync - leader failed during prepare",
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
-	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
 	{"DTX39: not restart the transaction with fixed epoch",
-	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_39, dtx_sub_rf1_setup, dtx_sub_teardown},
 
 	{"DTX40: uncertain check - miss commit with delay",
 	 dtx_40, NULL, test_case_teardown},

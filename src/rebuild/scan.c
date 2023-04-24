@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,14 +36,13 @@ struct rebuild_send_arg {
 	uuid_t				cont_uuid;
 	unsigned int			*shards;
 	int				count;
-	int				tgt_id;
+	unsigned int			tgt_id;
 };
 
 struct rebuild_obj_val {
 	daos_epoch_t    eph;
 	daos_epoch_t	punched_eph;
 	uint32_t	shard;
-	uint32_t        tgt_id;
 };
 
 static int
@@ -60,13 +59,6 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	int			count = arg->count;
 	int			rc;
 
-	if (arg->tgt_id != -1 && arg->tgt_id != obj_val->tgt_id) {
-		D_DEBUG(DB_REBUILD, "Current tgt id %d, entry id %d\n",
-			arg->tgt_id, obj_val->tgt_id);
-		return 0;
-	}
-
-	arg->tgt_id = obj_val->tgt_id;
 	D_ASSERT(count < REBUILD_SEND_LIMIT);
 	oids[count] = *oid;
 	ephs[count] = obj_val->eph;
@@ -74,14 +66,14 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	rc = dbtree_iter_delete(ih, NULL);
-	if (rc != 0)
-		return rc;
-
 	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
 		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
 		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
+
+	rc = dbtree_iter_delete(ih, NULL);
+	if (rc != 0)
+		return rc;
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
@@ -104,7 +96,6 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 
 	/* re-init the send argument to fill the object buffer */
 	arg->count = 0;
-	arg->tgt_id = -1;
 	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
@@ -120,12 +111,12 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
 		arg->count, rpt->rt_stable_epoch);
 	while (1) {
-		rc = ds_object_migrate(rpt->rt_pool, rpt->rt_poh_uuid,
-				       rpt->rt_coh_uuid, arg->cont_uuid,
-				       arg->tgt_id, rpt->rt_rebuild_ver,
-				       rpt->rt_stable_epoch, arg->oids,
-				       arg->ephs, arg->punched_ephs, arg->shards,
-				       arg->count, rpt->rt_rebuild_op);
+		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
+					    rpt->rt_coh_uuid, arg->cont_uuid,
+					    arg->tgt_id, rpt->rt_rebuild_ver,
+					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -134,33 +125,19 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
 			DP_UUID(rpt->rt_pool_uuid), arg->tgt_id);
-		ABT_thread_yield();
+		dss_sleep(0);
 	}
 out:
 	return rc;
 }
 
 static int
-rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
-		     d_iov_t *val_iov, void *data)
+obj_tree_destroy_current_probe(daos_handle_t ih, daos_handle_t cur_hdl, d_iov_t *key_iov)
 {
-	struct rebuild_send_arg	*arg = data;
-	struct tree_cache_root	*root;
-	int			rc;
+	int rc;
 
-	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
-	root = val_iov->iov_buf;
-	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = rebuild_obj_send_cb(root, arg);
-		if (rc < 0) {
-			D_ERROR("rebuild_obj_send_cb failed: "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-	}
-
-	rc = dbtree_destroy(root->root_hdl, NULL);
-	if (rc) {
+	rc = dbtree_destroy(cur_hdl, NULL);
+	if (rc && rc != -DER_NO_HDL) {
 		D_ERROR("dbtree_destroy failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
@@ -188,6 +165,90 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	return rc;
 }
 
+static int
+tgt_tree_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
+		    d_iov_t *val_iov, void *data)
+{
+	struct tree_cache_root *root = val_iov->iov_buf;
+
+	return obj_tree_destroy(root->root_hdl);
+}
+
+int
+rebuild_obj_tree_destroy(daos_handle_t btr_hdl)
+{
+	int	rc;
+
+	rc = dbtree_iterate(btr_hdl, DAOS_INTENT_PUNCH, false,
+			    tgt_tree_destory_cb, NULL);
+	if (rc) {
+		D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = dbtree_destroy(btr_hdl, NULL);
+out:
+	return rc;
+}
+
+static int
+rebuild_tgt_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *data)
+{
+	struct rebuild_send_arg	*arg = data;
+	d_iov_t			save_key_iov;
+	struct tree_cache_root	*root;
+	uint64_t		tgt_id;
+	int			ret;
+	int			rc = 0;
+
+	tgt_id = *(uint64_t *)key_iov->iov_buf;
+	arg->tgt_id = (unsigned int)tgt_id;
+	root = val_iov->iov_buf;
+	while (!dbtree_is_empty(root->root_hdl)) {
+		rc = rebuild_obj_send_cb(root, arg);
+		if (rc < 0) {
+			D_ERROR("rebuild_obj_send_cb failed: "DF_RC"\n",
+				DP_RC(rc));
+			break;
+		}
+	}
+
+	d_iov_set(&save_key_iov, &tgt_id, sizeof(tgt_id));
+	ret = obj_tree_destroy_current_probe(ih, root->root_hdl, &save_key_iov);
+	if (rc == 0)
+		rc = ret;
+	return rc;
+}
+
+static int
+rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
+		     d_iov_t *val_iov, void *data)
+{
+	struct rebuild_send_arg	*arg = data;
+	struct tree_cache_root	*root;
+	d_iov_t			save_key_iov;
+	int			ret;
+	int			rc = 0;
+
+	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
+	root = val_iov->iov_buf;
+	while (!dbtree_is_empty(root->root_hdl)) {
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
+				    rebuild_tgt_iter_cb, arg);
+		if (rc < 0) {
+			D_ERROR("rebuild_tgt_send_cb failed: "DF_RC"\n",
+				DP_RC(rc));
+			break;
+		}
+	}
+
+	d_iov_set(&save_key_iov, arg->cont_uuid, sizeof(uuid_t));
+	ret = obj_tree_destroy_current_probe(ih, root->root_hdl, &save_key_iov);
+	if (rc == 0)
+		rc = ret;
+	return rc;
+}
+
 static void
 rebuild_objects_send_ult(void *data)
 {
@@ -200,7 +261,8 @@ rebuild_objects_send_ult(void *data)
 	unsigned int			*shards = NULL;
 	int				rc = 0;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
@@ -227,18 +289,23 @@ rebuild_objects_send_ult(void *data)
 	arg.rpt = rpt;
 	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
 		if (rpt->rt_stable_epoch == 0) {
-			ABT_thread_yield();
+			dss_sleep(0);
+			continue;
+		}
+
+		if (dbtree_is_empty(tls->rebuild_tree_hdl)) {
+			dss_sleep(0);
 			continue;
 		}
 
 		/* walk through the rebuild tree and send the rebuild objects */
 		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_MIGRATION,
-				    false, rebuild_cont_send_cb, &arg);
+				    false, rebuild_cont_iter_cb, &arg);
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
-		ABT_thread_yield();
+		dss_sleep(0);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID"/%d objects send finish\n",
@@ -264,7 +331,8 @@ rebuild_scan_done(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls *tls;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	tls->rebuild_pool_scanning = 0;
@@ -276,16 +344,17 @@ rebuild_scan_done(void *data)
  * target id.
  **/
 static int
-rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
-		      unsigned int tgt_id, unsigned int shard, uuid_t co_uuid,
-		      daos_unit_oid_t oid, daos_epoch_t epoch, daos_epoch_t punched_epoch)
+rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
+		      daos_unit_oid_t oid, unsigned int tgt_id, unsigned int shard,
+		      daos_epoch_t epoch, daos_epoch_t punched_epoch)
 {
 	struct rebuild_pool_tls *tls;
 	struct rebuild_obj_val	val;
 	d_iov_t			val_iov;
 	int			rc;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
@@ -293,22 +362,23 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 	val.eph = epoch;
 	val.punched_eph = punched_epoch;
 	val.shard = shard;
-	val.tgt_id = tgt_id;
 	d_iov_set(&val_iov, &val, sizeof(struct rebuild_obj_val));
 	oid.id_shard = shard; /* Convert the OID to rebuilt one */
-	rc = obj_tree_insert(tls->rebuild_tree_hdl, co_uuid, oid, &val_iov);
+	rc = obj_tree_insert(tls->rebuild_tree_hdl, co_uuid, tgt_id, oid, &val_iov);
 	if (rc == -DER_EXIST) {
 		/* If there is reintegrate being restarted due to the failure, then
 		 * it might put multiple shards into the same VOS target, because
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND)
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
-			rc = 0;
-		}
-
+		else
+			/* Since it is harmless, let's skip duplicate obj for other cases. */
+			D_WARN(DF_UUID" found duplicate "DF_UOID" %d\n",
+			       DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
+		rc = 0;
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -322,8 +392,10 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
+	struct cont_props		co_props;
 	int				snapshot_cnt;
 	uint32_t			yield_freq;
+	int32_t				obj_yield_cnt;
 };
 
 /**
@@ -335,135 +407,244 @@ struct rebuild_scan_arg {
  * It's possible that placement might return -DER_REC2BIG, in which case a
  * larger buffer will be allocated and the request repeated until it succeeds.
  *
- * \param[in]	tgt_stack_array		stack buffer of size LOCAL_ARRAY_SIZE
- *					to use if it is big enough
- * \param[in]	shard_stack_array	stack buffer of size LOCAL_ARRAY_SIZE
- *					to use if it is big enough
- * \param[out]	tgts			filled remap list, caller must free if
- *					it does not point to tgt_stack_array
- * \param[out]	shards			filled remap list, caller must free if
- *					it does not point to shard_stack_array
  * \param[in]	map			placement map
+ * \param[in]	gl_layout_ver		global layout version from pool/container.
  * \param[in]	md			object metadata
  * \param[in]	num_rebuild_tgts	the number of targets being rebuilt now
  * \param[in]	rebuild_op		the rebuild operation
  * \param[in]	rebuild_ver		the rebuild version
  * \param[in]	myrank			this system's rank
- * \param[out]	rebuild_nr		number of filled entries in tgts and
- *					shards that need remapping
+ * \param[out]	tgts			filled remap list, caller must free if
+ *					it is re-allocated.
+ * \param[out]	shards			filled remap list, caller must free if
+ *					it is re-allocated.
+ * \param[in]   orig_array_size		original size of tgts and shards
  *
- * \retval	0	Success
+ * \retval	>= 0	Success
+ * \retval	> 0	number of filled entries in tgts and shards needs to be remapped
  * \retval	< 0	-DER_* error. Will not return -DER_REC2BIG
  */
 static int
-find_rebuild_shards(unsigned int *tgt_stack_array,
-		    unsigned int *shard_stack_array,
-		    unsigned int **tgts, unsigned int **shards,
-		    struct pl_map *map, struct daos_obj_md *md,
-		    uint32_t num_rebuild_tgts,
-		    daos_rebuild_opc_t rebuild_op,
-		    uint32_t rebuild_ver,
-		    d_rank_t myrank,
-		    int *rebuild_nr)
+find_rebuild_shards(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+		    uint32_t num_rebuild_tgts, daos_rebuild_opc_t rebuild_op,
+		    uint32_t rebuild_ver, d_rank_t myrank, unsigned int **tgts,
+		    unsigned int **shards, uint32_t orig_array_size)
 {
-	uint32_t max_shards;
-	int rc = 0;
+	uint32_t max_shards_size = orig_array_size;
+	int	rc = 0;
 
-	/*
-	 * Compute the starting buffer space allocated for remapped shards.
-	 * Use the larger of num_rebuild_tgts or LOCAL_ARRAY_SIZE
-	 * There is no point in using anything less than LOCAL_ARRAY_SIZE since
-	 * it was already allocated (on the stack)
-	 */
-	max_shards = num_rebuild_tgts > LOCAL_ARRAY_SIZE ? num_rebuild_tgts :
-							   LOCAL_ARRAY_SIZE;
+retry:
+	switch (rebuild_op) {
+	case RB_OP_EXCLUDE:
+		rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
+					 *tgts, *shards, max_shards_size);
+		break;
+	case RB_OP_DRAIN:
+		rc = pl_obj_find_drain(map, gl_layout_ver, md, NULL, rebuild_ver,
+				       *tgts, *shards, max_shards_size);
+		break;
+	case RB_OP_REINT:
+		rc = pl_obj_find_reint(map, gl_layout_ver, md, NULL, rebuild_ver,
+				       *tgts, *shards, max_shards_size);
+		break;
+	case RB_OP_EXTEND:
+		rc = pl_obj_find_addition(map, gl_layout_ver, md, NULL, rebuild_ver,
+					  *tgts, *shards, max_shards_size);
+		break;
+	default:
+		D_ASSERT(0);
+	}
 
-	/* Default to using the provided stack arrays */
-	*tgts = tgt_stack_array;
-	*shards = shard_stack_array;
-
-	do {
-		if (rc == -DER_REC2BIG) {
-			/*
-			 * The last attempt failed because there was not enough
-			 * room for all the remapped shards.
-			 *
-			 * Need to allocate more space and try again
-			 */
-
-			/*
-			 * Free any non-stack buffers that were allocated
-			 * on the last attempt
-			 */
-			if (*tgts != tgt_stack_array && *tgts != NULL)
-				D_FREE(*tgts);
-			if (*shards != shard_stack_array && *shards != NULL)
-				D_FREE(*shards);
-
-			/* Increase by the step size */
-			max_shards += NUM_SHARDS_STEP_INCREASE;
-
-			D_DEBUG(DB_REBUILD, "Got REC2BIG, increasing rebuild "
-					    "array size by %u to %u",
-					    NUM_SHARDS_STEP_INCREASE,
-					    max_shards);
-		}
-
+	if (rc == -DER_REC2BIG) {
 		/*
-		 * If the amount of space is too big for the stack arrays,
-		 * allocate some space
+		 * The last attempt failed because there was not enough
+		 * room for all the remapped shards.
+		 *
+		 * Need to allocate more space and try again
 		 */
-		if (max_shards > LOCAL_ARRAY_SIZE) {
-			D_DEBUG(DB_REBUILD, "Insufficient stack buffer to find "
-					    "rebuild shards, allocating %u\n",
-				max_shards);
-			D_ALLOC_ARRAY(*tgts, max_shards);
-			D_ALLOC_ARRAY(*shards, max_shards);
-			if (*tgts == NULL || *shards == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-		}
+		if (max_shards_size != orig_array_size && *tgts != NULL)
+			D_FREE(*tgts);
+		if (max_shards_size != orig_array_size && *shards != NULL)
+			D_FREE(*shards);
 
-		if (rebuild_op == RB_OP_FAIL) {
-			rc = pl_obj_find_rebuild(map, md, NULL,
-						 rebuild_ver,
-						 *tgts, *shards,
-						 max_shards);
-		} else if (rebuild_op == RB_OP_DRAIN) {
-			rc = pl_obj_find_drain(map, md, NULL, rebuild_ver,
-					       *tgts, *shards, max_shards);
-		} else if (rebuild_op == RB_OP_REINT) {
-			rc = pl_obj_find_reint(map, md, NULL,
-					       rebuild_ver,
-					       *tgts, *shards,
-					       max_shards);
-		} else if (rebuild_op == RB_OP_EXTEND) {
-			rc = pl_obj_find_addition(map, md, NULL,
-						  rebuild_ver,
-						  *tgts, *shards,
-						  max_shards);
-		} else {
-			D_ASSERT(rebuild_op == RB_OP_FAIL ||
-				 rebuild_op == RB_OP_DRAIN ||
-				 rebuild_op == RB_OP_REINT ||
-				 rebuild_op == RB_OP_EXTEND);
-		}
-	} while (rc == -DER_REC2BIG); /* Retry and increase space on -REC2BIG */
+		/* Increase by the step size */
+		max_shards_size += NUM_SHARDS_STEP_INCREASE;
+		D_DEBUG(DB_REBUILD, "Got REC2BIG, increase rebuild array size by %u to %u",
+			NUM_SHARDS_STEP_INCREASE, max_shards_size);
+		D_ALLOC_ARRAY(*tgts, max_shards_size);
+		D_ALLOC_ARRAY(*shards, max_shards_size);
+		if (*tgts == NULL || *shards == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
-	if (rc > 0)  {
-		/* Successfully filled the rebuild lists */
-		*rebuild_nr = rc;
-		rc = 0;
-		D_ASSERT(*rebuild_nr < max_shards);
+		goto retry;
 	}
 
 out:
-	if (rc != 0) {
-		/* Failed - clean up arrays if they were allocated */
-		if (*tgts != tgt_stack_array && *tgts != NULL)
+	if (rc < 0) {
+		/*
+		 * Free any non-stack buffers that were allocated
+		 * on the last attempt
+		 */
+		if (max_shards_size != orig_array_size && *tgts != NULL)
 			D_FREE(*tgts);
-		if (*shards != shard_stack_array && *shards != NULL)
+		if (max_shards_size != orig_array_size && *shards != NULL)
 			D_FREE(*shards);
 	}
+
+	return rc;
+}
+
+static int
+obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
+	    struct daos_obj_md *md, struct rebuild_tgt_pool_tracker *rpt,
+	    d_rank_t myrank, daos_unit_oid_t oid, vos_iter_param_t *param,
+	    unsigned *acts)
+{
+	uint32_t		mytarget = dss_get_module_info()->dmi_tgt_id;
+	struct pl_obj_layout	*layout = NULL;
+	struct rebuild_pool_tls *tls;
+	daos_epoch_range_t	discard_epr;
+	bool			still_needed;
+	int			rc;
+
+	/*
+	 * Compute placement for the object, then check if the layout
+	 * still includes the current rank. If not, the object can be
+	 * deleted/reclaimed because it is no longer reachable
+	 */
+	rc = pl_obj_place(map, layout_ver, md, DAOS_OO_RO, NULL, &layout);
+	if (rc != 0)
+		return rc;
+
+	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank, mytarget,
+					      oid.id_shard);
+	pl_obj_layout_free(layout);
+	if (still_needed && new_layout_ver <= oid.id_layout_ver)
+		return 0;
+
+	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
+		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	D_ASSERT(tls != NULL);
+	tls->rebuild_pool_reclaim_obj_count++;
+
+	discard_epr.epr_hi = rpt->rt_reclaim_epoch;
+	discard_epr.epr_lo = 0;
+	/*
+	 * It's possible this object might still be being
+	 * accessed elsewhere - retry until until it is possible
+	 * to delete
+	 */
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_discard(param->ip_hdl, &oid, &discard_epr, NULL, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
+			DP_RC(rc), DP_UOID(oid));
+		/* Busy - inform iterator and yield */
+		*acts |= VOS_ITER_CB_YIELD;
+		dss_sleep(0);
+	} while (1);
+
+	if (rc != 0)
+		D_ERROR("Failed to delete object "DF_UOID" :"DF_RC"\n", DP_UOID(oid), DP_RC(rc));
+
+	return rc;
+}
+
+struct rebuild_obj_arg {
+	struct rebuild_tgt_pool_tracker *rpt;
+	daos_unit_oid_t			oid;
+	uuid_t				co_uuid;
+	daos_epoch_t			epoch;
+	daos_epoch_t			punched_epoch;
+	daos_epoch_t			max_eph;
+	uint32_t			shard;
+	uint32_t			tgt_index;
+};
+
+static void
+rebuild_obj_ult(void *data)
+{
+	struct rebuild_obj_arg		*arg = data;
+	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
+
+	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+	rpt_put(rpt);
+	D_FREE(arg);
+}
+
+static int
+rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
+		     daos_unit_oid_t oid, unsigned int tgt_index, unsigned int shard,
+		     daos_epoch_t eph, daos_epoch_t punched_eph)
+{
+	struct rebuild_obj_arg	*arg;
+	int			rc;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return -DER_NOMEM;
+
+	rpt_get(rpt);
+	arg->rpt = rpt;
+	arg->oid = oid;
+	arg->oid.id_shard = shard; /* Convert the OID to rebuilt one */
+	arg->epoch = eph;
+	arg->punched_epoch = punched_eph;
+	uuid_copy(arg->co_uuid, co_uuid);
+	arg->tgt_index = tgt_index;
+	arg->shard = shard;
+
+	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc) {
+		D_FREE(arg);
+		rpt_put(rpt);
+	}
+
+	return rc;
+}
+
+static int
+rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_oid_t oid,
+	       unsigned int tgt, uint32_t shard, d_rank_t myrank, vos_iter_entry_t *ent)
+{
+	uint32_t		mytarget = dss_get_module_info()->dmi_tgt_id;
+	struct pool_target	*target;
+	daos_epoch_t		eph;
+	daos_epoch_t		punched_eph;
+	int			rc;
+
+	rc = pool_map_find_target(rpt->rt_pool->sp_map, tgt, &target);
+	D_ASSERT(rc == 1);
+	rc = 0;
+
+	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
+	    rpt->rt_rebuild_op != RB_OP_UPGRADE) {
+		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
+			DP_UOID(oid), myrank, mytarget);
+		return 0;
+	}
+
+	if (ent->ie_vis_flags & VOS_VIS_FLAG_COVERED) {
+		eph = 0;
+		punched_eph = ent->ie_epoch;
+	} else {
+		eph = ent->ie_epoch;
+		punched_eph = 0;
+	}
+
+	if (myrank == target->ta_comp.co_rank)
+		rc = rebuild_object_local(rpt, co_uuid, oid, target->ta_comp.co_index, shard,
+					  eph, punched_eph);
+	else
+		rc = rebuild_object_insert(rpt, co_uuid, oid, tgt, shard, eph, punched_eph);
 
 	return rc;
 }
@@ -499,8 +680,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
-		D_ERROR(DF_UOID"Cannot find valid placement map"
-			DF_UUID"\n", DP_UOID(oid),
+		D_ERROR(DF_UOID ": Cannot find valid placement map" DF_UUID "\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -517,99 +697,41 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
-
-	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
-	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
-	    rpt->rt_rebuild_op == RB_OP_REINT ||
-	    rpt->rt_rebuild_op == RB_OP_EXTEND) {
-		/*
-		 * Use the appropriate placement algorithm to compute which
-		 * shards need to be sent to which targets
-		 */
-		rc = find_rebuild_shards(tgt_array, shard_array, &tgts, &shards,
-					 map, &md, rpt->rt_tgts_num,
-					 rpt->rt_rebuild_op, rpt->rt_rebuild_ver,
-					 myrank, &rebuild_nr);
-		if (rc != 0) {
-			D_ERROR("Failed to find rebuild shards for object "
-				DF_UOID": "DF_RC,
-				DP_UOID(oid), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
-		struct pl_obj_layout *layout = NULL;
-		bool still_needed;
-		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
-
-		/*
-		 * Compute placement for the object, then check if the layout
-		 * still includes the current rank. If not, the object can be
-		 * deleted/reclaimed because it is no longer reachable
-		 */
-		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
-		if (rc != 0)
-			D_GOTO(out, rc);
-
-		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget,
-						      oid.id_shard);
-		pl_obj_layout_free(layout);
-		if (!still_needed) {
-			struct rebuild_pool_tls *tls;
-
-			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
-						      rpt->rt_rebuild_ver);
-			D_ASSERT(tls != NULL);
-			tls->rebuild_pool_reclaim_obj_count++;
-			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
-				" which is not reachable on rank %u tgt %u",
-				DP_UOID(oid), myrank, mytarget);
-
-			/*
-			 * It's possible this object might still be being
-			 * accessed elsewhere - retry until until it is possible
-			 * to delete
-			 */
-			do {
-				/* Inform the iterator and delete the object */
-				*acts |= VOS_ITER_CB_DELETE;
-				rc = vos_obj_delete(param->ip_hdl, oid);
-				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
-					D_DEBUG(DB_REBUILD,
-						"got "DF_RC
-						" error while deleting object "
-						DF_UOID
-						" during reclaim; retrying\n",
-						DP_RC(rc), DP_UOID(oid));
-					/* Busy - inform iterator and yield */
-					*acts |= VOS_ITER_CB_YIELD;
-					ABT_thread_yield();
-				}
-			} while (rc == -DER_BUSY || rc == -DER_INPROGRESS);
-
-			if (rc != 0) {
-				D_ERROR("Failed to delete object "DF_UOID
-					" during reclaim: "DF_RC,
-					DP_UOID(oid), DP_RC(rc));
-				D_GOTO(out, rc);
-			}
-		}
-
-		/* Reclaim does not require sending any objects */
-		rebuild_nr = 0;
-	} else {
-		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
-			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
-			 rpt->rt_rebuild_op == RB_OP_REINT ||
-			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
-			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
+	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
+	tgts = tgt_array;
+	shards = shard_array;
+	switch (rpt->rt_rebuild_op) {
+	case RB_OP_EXCLUDE:
+	case RB_OP_DRAIN:
+	case RB_OP_REINT:
+	case RB_OP_EXTEND:
+		rc = find_rebuild_shards(map, arg->co_props.dcp_obj_version, &md,
+					 rpt->rt_tgts_num, rpt->rt_rebuild_op,
+					 rpt->rt_rebuild_ver, myrank,
+					 &tgts, &shards, LOCAL_ARRAY_SIZE);
+		break;
+	case RB_OP_RECLAIM:
+	case RB_OP_FAIL_RECLAIM:
+		rc = obj_reclaim(map, arg->co_props.dcp_obj_version, rpt->rt_new_layout_ver,
+				 &md, rpt, myrank, oid, param, acts);
+		break;
+	case RB_OP_UPGRADE:
+		rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
+				     arg->co_props.dcp_obj_version, &md, tgts, shards);
+		break;
+	default:
+		D_ASSERT(0);
 	}
-	if (rebuild_nr <= 0) /* No need rebuild */
-		D_GOTO(out, rc = rebuild_nr);
 
+	if (rc <= 0) {
+		D_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, DF_UOID" rebuild shards:" DF_RC"\n",
+			 DP_UOID(oid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rebuild_nr = rc;
+	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
-		struct pool_target *target;
-
 		D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 			"on %d for shard %d eph "DF_U64" visible %s\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid), DP_UUID(arg->co_uuid),
@@ -617,24 +739,17 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			ent->ie_vis_flags & VOS_VIS_FLAG_COVERED ? "no" : "yes");
 
 		/* Ignore the shard if it is not in the same group of failure shard */
-		if (oid.id_shard / grp_size != shards[i] / grp_size)
+		if (oid.id_shard / grp_size != shards[i] / grp_size) {
+			D_DEBUG(DB_REBUILD, "stale object "DF_UOID" shards %u grp_size %u\n",
+				DP_UOID(oid), shards[i], grp_size);
 			continue;
-
-		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
-		D_ASSERT(rc == 1);
-
-		if (ent->ie_vis_flags & VOS_VIS_FLAG_COVERED) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid, oid, 0,
-						   ent->ie_epoch);
-		} else {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid, oid, ent->ie_epoch,
-						   0);
 		}
 
+		rc = rebuild_object(rpt, arg->co_uuid, oid, tgts[i], shards[i], myrank, ent);
 		if (rc)
 			D_GOTO(out, rc);
+
+		arg->obj_yield_cnt--;
 	}
 
 out:
@@ -647,10 +762,11 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (--arg->yield_freq == 0) {
+	if (--arg->yield_freq == 0 || arg->obj_yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		arg->yield_freq = DEFAULT_YIELD_FREQ;
+		arg->yield_freq = SCAN_YIELD_FREQ;
+		arg->obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
 		if (rc == 0)
 			dss_sleep(0);
 		*acts |= VOS_ITER_CB_YIELD;
@@ -670,6 +786,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct ds_cont_child		*cont_child = NULL;
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -692,9 +809,30 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		vos_cont_close(coh);
 		return rc;
+	}
+
+	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
+	if (rc) {
+		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+		if (rc != 0) {
+			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
+			vos_cont_close(coh);
+			return rc;
+		}
+		cont_child->sc_discarding = 1;
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
@@ -708,6 +846,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
+
 	/* If there is no snapshots, then rebuild does not need to migrate
 	 * punched objects at all. Ideally, it should ignore any objects
 	 * whose creation epoch > snapshot epoch.
@@ -718,10 +857,16 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
 	dtx_end(dth, NULL, rc);
+
 	vos_cont_close(coh);
 
+	if (cont_child != NULL) {
+		cont_child->sc_discarding = 0;
+		ds_cont_child_put(cont_child);
+	}
+
 	*acts |= VOS_ITER_CB_YIELD;
-	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
+	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
 
@@ -741,7 +886,8 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc = 0;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN |
@@ -753,6 +899,11 @@ rebuild_scanner(void *data)
 	}
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		/* Skip reclaim OP for HANG failure injection */
+		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+		    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
+			break;
+
 		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
 		dss_sleep(2 * 1000);
 	}
@@ -767,12 +918,14 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc);
 	}
 
-	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
-			    0, 0, &ult_send);
-	if (rc != 0) {
-		rpt_put(rpt);
-		D_GOTO(out, rc);
+	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
+		rpt_get(rpt);
+		rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
+				    0, 0, &ult_send);
+		if (rc != 0) {
+			rpt_put(rpt);
+			D_GOTO(out, rc);
+		}
 	}
 
 	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
@@ -782,7 +935,8 @@ rebuild_scanner(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
-	arg.yield_freq = DEFAULT_YIELD_FREQ;
+	arg.yield_freq = SCAN_YIELD_FREQ;
+	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 				 rebuild_container_scan_cb, NULL, &arg, NULL);
@@ -847,7 +1001,8 @@ rebuild_scan_leader(void *data)
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 out:
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
@@ -869,9 +1024,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d gen %u\n",
+	D_DEBUG(DB_REBUILD, "%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
+		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
+		rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -879,23 +1035,25 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	 */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
-		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
-			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
-			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+		    ((rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) ||
+		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
+		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
+		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
+			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
+			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term);
 			rpt->rt_abort = 1;
 		}
 	}
 
-	/* check if the rebuild is already started */
+	/* check if the rebuild with different leader is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild "DF_UUID"/%d"
-			       " is not cleanup yet\n",
-			       DP_UUID(rsi->rsi_pool_uuid),
-		               rsi->rsi_rebuild_ver);
+			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term, rpt);
 			D_GOTO(out, rc = -DER_BUSY);
 		}
 
@@ -904,8 +1062,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
 			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
-		D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
-			DP_UUID(rsi->rsi_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" already started, req "DF_U64" master %u/"DF_U64"\n",
+			DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_leader_term, rsi->rsi_master_rank,
+			rpt->rt_leader_term);
 
 		/* Ignore the rebuild trigger request if it comes from
 		 * an old or same leader.
@@ -913,27 +1072,20 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		if (rsi->rsi_leader_term <= rpt->rt_leader_term)
 			D_GOTO(out, rc = 0);
 
-		if (rpt->rt_pool->sp_iv_ns != NULL &&
-		    rpt->rt_pool->sp_iv_ns->iv_master_rank !=
-					rsi->rsi_master_rank) {
+		if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
 			D_DEBUG(DB_REBUILD, DF_UUID" master rank"
 				" %d -> %d term "DF_U64" -> "DF_U64"\n",
 				DP_UUID(rpt->rt_pool_uuid),
-				rpt->rt_pool->sp_iv_ns->iv_master_rank,
-				rsi->rsi_master_rank,
-				rpt->rt_leader_term,
-				rsi->rsi_leader_term);
+				rpt->rt_leader_rank, rsi->rsi_master_rank,
+				rpt->rt_leader_term, rsi->rsi_leader_term);
 			/* re-report the #rebuilt cnt next time */
 			rpt->rt_re_report = 1;
-			/* Update master rank */
-			ds_pool_iv_ns_update(rpt->rt_pool,
-					     rsi->rsi_master_rank);
 
-			/* If this is the old leader, then also stop the rebuild
-			 * tracking ULT.
-			 */
-			ds_rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					       rsi->rsi_rebuild_gen);
+			rpt->rt_leader_rank = rsi->rsi_master_rank;
+
+			/* If this is the old leader, then also stop the rebuild tracking ULT. */
+			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+					    rsi->rsi_rebuild_gen, rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
@@ -941,7 +1093,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {
 		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
 		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
@@ -957,7 +1110,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -982,7 +1135,7 @@ out:
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
-	ro->rso_stable_epoch = crt_hlc_get();
+	ro->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 

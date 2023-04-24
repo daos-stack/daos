@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,12 +17,14 @@
 #define DTX_REFRESH_MAX 4
 
 struct dtx_share_peer {
-	d_list_t		dsp_link;
-	struct dtx_id		dsp_xid;
-	daos_unit_oid_t		dsp_oid;
-	daos_epoch_t		dsp_epoch;
-	uint64_t		dsp_dkey_hash;
-	struct dtx_memberships	dsp_mbs;
+	d_list_t		 dsp_link;
+	struct dtx_id		 dsp_xid;
+	daos_unit_oid_t		 dsp_oid;
+	daos_epoch_t		 dsp_epoch;
+	uint64_t		 dsp_dkey_hash;
+	int			 dsp_status;
+	uint32_t		 dsp_inline_mbs:1;
+	struct dtx_memberships	*dsp_mbs;
 };
 
 /**
@@ -65,6 +67,8 @@ struct dtx_handle {
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
+					 /* Do not keep committed entry. */
+					 dth_drop_cmt:1,
 					 /* Modified shared items: object/key */
 					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */
@@ -81,12 +85,12 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
-					 /* The DTX handle has been verified. */
-					 dth_verified:1,
 					 /* The DTX handle is aborted. */
 					 dth_aborted:1,
 					 /* The modification is done by others. */
 					 dth_already:1,
+					 /* Need validation on leader before commit/committable. */
+					 dth_need_validation:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -140,7 +144,8 @@ struct dtx_sub_status {
 };
 
 struct dtx_leader_handle;
-typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, void *arg);
+typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, int allow_failure);
+
 /* Transaction handle on the leader node to manage the transaction */
 struct dtx_leader_handle {
 	/* The dtx handle on the leader node */
@@ -155,16 +160,22 @@ struct dtx_leader_handle {
 	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
-	/* Normal sub requests have been processed. */
-	uint32_t			dlh_normal_sub_done:1;
+	dtx_agg_cb_t			dlh_agg_cb;
+	int32_t				dlh_allow_failure;
+					/* Normal sub requests have been processed. */
+	uint32_t			dlh_normal_sub_done:1,
+					/* Drop conditional flags when forward RPC. */
+					dlh_drop_cond:1;
 	/* How many normal sub request. */
 	uint32_t			dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
 	uint32_t			dlh_delay_sub_cnt;
+	/* The index of the first target that forward sub-request to. */
+	uint32_t			dlh_forward_idx;
+	/* The count of the targets that forward sub-request to. */
+	uint32_t			dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
-	dtx_agg_cb_t			dlh_agg_cb;
-	void				*dlh_agg_cb_arg;
 };
 
 struct dtx_stat {
@@ -200,8 +211,12 @@ enum dtx_flags {
 	DTX_FORCE_REFRESH	= (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED		= (1 << 7),
+	/** Do not keep committed entry. */
+	DTX_DROP_CMT		= (1 << 8),
 };
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
@@ -232,7 +247,7 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	     uint64_t dkey_hash, int max, struct dtx_id **dtis);
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
+		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg);
 
 int dtx_cont_open(struct ds_cont_child *cont);
 
@@ -274,15 +289,24 @@ int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
+static inline void
+dtx_dsp_free(struct dtx_share_peer *dsp)
+{
+	if (dsp->dsp_inline_mbs == 0)
+		D_FREE(dsp->dsp_mbs);
+
+	D_FREE(dsp);
+}
+
 static inline uint64_t
 dtx_hlc_age2sec(uint64_t hlc)
 {
-	uint64_t now = crt_hlc_get();
+	uint64_t now = d_hlc_get();
 
 	if (now <= hlc)
 		return 0;
 
-	return crt_hlc2sec(now - hlc);
+	return d_hlc2sec(now - hlc);
 }
 
 static inline struct dtx_entry *
@@ -310,8 +334,7 @@ struct dtx_scan_args {
 	uint32_t	version;
 };
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
-	       uint32_t ver, bool block, bool resync_all);
+int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block);
 void dtx_resync_ult(void *arg);
 
 #endif /* __DAOS_DTX_SRV_H__ */

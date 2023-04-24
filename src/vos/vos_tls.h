@@ -115,7 +115,7 @@ vos_dth_set(struct dtx_handle *dth)
 		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 		dth->dth_share_tbd_count = 0;
 	}
 

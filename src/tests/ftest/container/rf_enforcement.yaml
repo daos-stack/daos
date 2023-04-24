@@ -1,21 +1,20 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-  test_clients:
-    - client-G
+  test_servers: 6
+  test_clients: 1
 timeout: 360
 server_config:
   name: daos_server
-  servers:
-    targets: 2
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 1GB
   svcn: 3
   control_method: dmg
@@ -29,15 +28,15 @@ container:
   record_qty: 10
   cont_property: !mux
     rf_0:
-      properties: rf:0
+      properties: rd_fac:0
     rf_1:
-      properties: rf:1
+      properties: rd_fac:1
     rf_2:
-      properties: rf:2
+      properties: rd_fac:2
     rf_3:
-      properties: rf:3
+      properties: rd_fac:3
     rf_4:
-      properties: rf:4
+      properties: rd_fac:4
 rebuild:
   traffic_oc: !mux
     object_class_sx:

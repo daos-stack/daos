@@ -1,15 +1,16 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 import uuid
 import re
 
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
+from general_utils import get_log_file
 
 
 class MdtestCommand(ExecutableCommand):
@@ -90,8 +91,8 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
@@ -144,17 +145,18 @@ class MdtestCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
         env["FI_PSM2_DISCONNECT"] = "1"
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value
             env["DAOS_CONT"] = self.dfs_cont.value
-            env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                self.dfs_oclass.value
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
 
         return env
+
 
 class MdtestMetrics():
     # pylint: disable=too-few-public-methods
@@ -173,10 +175,10 @@ class MdtestMetrics():
         """Metrics for an individual operation. E.g. file_creation."""
         def __init__(self):
             """Initialize operations values."""
-            self.max = 0
-            self.min = 0
-            self.mean = 0
-            self.stddev = 0
+            self.max = 0.0
+            self.min = 0.0
+            self.mean = 0.0
+            self.stddev = 0.0
 
     class MdtestMetricsGroup():
         """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
@@ -248,9 +250,9 @@ class MdtestMetrics():
             operation_name = operation_name.lower().replace(" ", "_")
             try:
                 operation = getattr(group_obj, operation_name)
-                operation.max = metric_vals[2]
-                operation.min = metric_vals[3]
-                operation.mean = metric_vals[4]
-                operation.stddev = metric_vals[5]
+                operation.max = float(metric_vals[2])
+                operation.min = float(metric_vals[3])
+                operation.mean = float(metric_vals[4])
+                operation.stddev = float(metric_vals[5])
             except AttributeError:
                 pass

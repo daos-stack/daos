@@ -1,12 +1,12 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
 import avocado
+
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrSerialSmall(DataMoverTestBase):
@@ -60,7 +60,7 @@ class DmvrSerialSmall(DataMoverTestBase):
         pool1.connect(2)
 
         # Create cont1
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create dataset in cont1
         obj_list = self.dataset_gen(
@@ -79,10 +79,10 @@ class DmvrSerialSmall(DataMoverTestBase):
             "DAOS_UUID", None, pool2, None)
 
         # Get the destination cont2 uuid
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Verify data in cont2
-        cont2 = self.get_cont(pool2, cont2_uuid)
+        cont2 = self.get_cont(pool2, cont2_label)
         self.dataset_verify(
             obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
@@ -102,6 +102,6 @@ class DmvrSerialSmall(DataMoverTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_serialize,mfu_deserialize,hdf5
-        :avocado: tags=dm_serial_small,dm_serial_small_dserialize
+        :avocado: tags=dm_serial_small,dm_serial_small_dserialize,test_dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")

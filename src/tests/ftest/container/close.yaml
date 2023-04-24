@@ -1,21 +1,28 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 60
 server_config:
-    name: daos_server
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 1G
-    control_method: dmg
+  scm_size: 1G
+  control_method: dmg
 container:
-    container_handle: !mux
-        good_coh:
-            coh:
-                - GOOD
-                - 'PASS'
-        bad_coh:
-            coh:
-                - BAD
-                - 'FAIL'
+  container_handle: !mux
+    good_coh:
+      coh:
+        - GOOD
+        - 'PASS'
+    bad_coh:
+      coh:
+        - BAD
+        - 'FAIL'

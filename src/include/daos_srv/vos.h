@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,9 +42,10 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ * \param exist		[IN]	Related DTX entry exists or not.
  */
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist);
 
 /**
  * Detach the DTX entry from the DTX handle.
@@ -76,6 +77,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
+ * \param for_refresh	[IN]	It is for DTX_REFRESH or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -94,7 +96,20 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh);
+
+/**
+ * Load participants information for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
 
 /**
  * Commit the specified DTXs.
@@ -126,13 +141,14 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param dtis	[IN]	The array for DTX identifiers to be set.
+ * \param count [IN]	The count of DTXs to be set.
  * \param flags [IN]	The flags for the DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -178,23 +194,22 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  * Establish the indexed committed DTX table in DRAM.
  *
  * \param coh	[IN]		Container open handle.
- * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
- *				contains committed DTX entries to be handled.
  *
  * \return	Zero on success, need further re-index.
  *		Positive, re-index is completed.
  *		Negative value if error.
  */
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+vos_dtx_cmt_reindex(daos_handle_t coh);
 
 /**
  * Cleanup local DTX when local modification failed.
  *
  * \param dth	[IN]	The DTX handle.
+ * \param unpin	[IN]	unpin the DTX entry or not.
  */
 void
-vos_dtx_cleanup(struct dtx_handle *dth);
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
 
 /**
  * Reset DTX related cached information in VOS.
@@ -289,13 +304,15 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
-/** Enable any version specific features on the pool
+/** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param feats	[IN]	Features to enable
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
+ *
+ * \return	0 on success, error otherwise
  */
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -784,6 +801,15 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
+ * Renew the epoch for the update handle.
+ *
+ * \param ioh	[IN]	The I/O handle for update.
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -983,9 +1009,10 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
 	      d_iov_t *iov_out);
 
 /**
- * Delete the current data entry of the iterator
+ * Process the operation for the current cursor.
  *
- * \param ih	[IN]	Iterator handle
+ * \param ih	[IN]	Iterator open handle.
+ * \param op	[IN]	op code to process. See vos_iter_proc_op_t
  * \param args	[IN/OUT]
  *			Optional, Provide additional hints while
  *			deletion to handle special cases.
@@ -995,10 +1022,9 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
  * \return		Zero on Success
  *			-DER_NONEXIST if cursor does
  *			not exist. negative value if error
- *
  */
 int
-vos_iter_delete(daos_handle_t ih, void *args);
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op_t op, void *args);
 
 /**
  * If the iterator has any element. The condition provided to vos_iter_prepare
@@ -1014,6 +1040,21 @@ vos_iter_delete(daos_handle_t ih, void *args);
  */
 int
 vos_iter_empty(daos_handle_t ih);
+
+/**
+ * When the callback executes code that may yield, in some cases, it needs to
+ * verify the value or key it is operating on still exists before continuing.
+ * This function will revalidate from the object layer down.   This is only
+ * supported in conjunction with recursive vos_iterate from VOS_ITER_OBJ.
+ *
+ * \param[in]	ih	The iterator handle
+ *
+ * \return		0 if iterator value is valid
+ *			VOS_ITER_* level that needs probe
+ *			<0 on error
+ */
+int
+vos_iter_validate(daos_handle_t ih);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
@@ -1061,15 +1102,18 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
+ * The maximum write epoch for the object can be returned at the same time
+ * as the min or max query. Alternatively, this API can be used to only query
+ * the maximum write for an object if no flags are given.
+ *
  * \param[in]	coh		Container open handle.
  * \param[in]	oid		Object id
  * \param[in]	flags		mask with the following options:
  *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
  *				DAOS_GET_MAX, DAOS_GET_MIN
- *				User has to indicate whether to query the MAX or MIN, in
- *				addition to what needs to be queried. Providing
- *				(MAX | MIN) in any combination will return an error.
- *				i.e. user can only query MAX or MIN in one call.
+ *				If the user isn't querying max_write, they must specify either
+ *				DAOS_GET_MAX or DAOS_GET_MIN, exclusively. Anything else is
+ *				an error.
  * \param[in,out]
  *		dkey		[in]: allocated integer dkey. User can provide the dkey
  *				if not querying the max or min dkey.
@@ -1081,7 +1125,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx		max or min offset in dkey/akey, and the size of the
  *				extent at the offset. If there are no visible array
  *				records, the size in the recx returned will be 0.
- * \param[out]	max_write	Optional: Returns max write epoch for object
+ * \param[out]	max_write	Optional: Returns max write epoch for object.
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
@@ -1135,6 +1179,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_RESET_GC,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
+	/** Set space reserve ratio for rebuild */
+	VOS_PO_CTL_SET_SPACE_RB,
 };
 
 /**
@@ -1147,6 +1193,9 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
+int
+vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1169,6 +1218,9 @@ vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh);
+
 /**
  * Helper functions for dedup verify.
  */
@@ -1188,5 +1240,156 @@ int vos_db_init(const char *db_path);
 int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
+
+/**
+ * The following declarations are for checksum scrubbing functions. The function
+ * types provide an interface for injecting dependencies into the
+ * scrubber (srv_pool_scrub.c) from the schedule/ult management
+ * so that it can be more easily tested without depending on the entire daos
+ * engine to be running or waiting for schedules to run.
+ */
+
+struct cont_scrub {
+	struct daos_csummer	*scs_cont_csummer;
+	void			*scs_cont_src;
+	daos_handle_t		 scs_cont_hdl;
+	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
+};
+
+/*
+ * Because the scrubber operates at the pool level, it will need a way to
+ * get some info for each container within the pool as it's scrubbed.
+ */
+typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
+			       struct cont_scrub *cont);
+typedef void(*sc_put_cont_fn_t)(void *cont);
+typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
+
+typedef bool (*sc_is_idle_fn_t)();
+typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
+typedef int (*sc_yield_fn_t)(void *);
+typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);
+
+enum scrub_status {
+	SCRUB_STATUS_UNKNOWN = 0,
+	SCRUB_STATUS_RUNNING = 1,
+	SCRUB_STATUS_NOT_RUNNING = 2,
+};
+
+struct scrub_ctx_metrics {
+	struct d_tm_node_t	*scm_next_csum_scrub;
+	struct d_tm_node_t	*scm_next_tree_scrub;
+	struct d_tm_node_t	*scm_busy_time;
+	struct d_tm_node_t	*scm_start;
+	struct d_tm_node_t	*scm_last_duration;
+	struct d_tm_node_t	*scm_csum_calcs;
+	struct d_tm_node_t	*scm_csum_calcs_last;
+	struct d_tm_node_t	*scm_csum_calcs_total;
+	struct d_tm_node_t	*scm_bytes_scrubbed;
+	struct d_tm_node_t	*scm_bytes_scrubbed_last;
+	struct d_tm_node_t	*scm_bytes_scrubbed_total;
+	struct d_tm_node_t	*scm_corruption;
+	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_scrub_count;
+	struct timespec		 scm_busy_start;
+
+};
+
+/* Scrub the pool */
+struct scrub_ctx {
+	/**
+	 * Metrics gathered during scrubbing process
+	 */
+	struct scrub_ctx_metrics sc_metrics;
+
+	struct dss_module_info	*sc_dmi;
+
+	/**
+	 * Pool
+	 **/
+	uuid_t			 sc_pool_uuid;
+	daos_handle_t		 sc_vos_pool_hdl;
+	struct ds_pool		*sc_pool; /* Used to get properties */
+	uint32_t		 sc_pool_scrub_count;
+	struct timespec		 sc_pool_start_scrub;
+	int			 sc_pool_last_csum_calcs;
+	int			 sc_pool_csum_calcs;
+	uint64_t		 sc_bytes_scrubbed;
+	uint32_t		 sc_pool_tgt_corrupted_detected;
+	ds_pool_tgt_drain	 sc_drain_pool_tgt_fn;
+
+	/**
+	 * Container
+	 **/
+	/* callback function that will provide the csummer for the container */
+	sc_get_cont_fn_t	 sc_cont_lookup_fn;
+	sc_put_cont_fn_t	 sc_cont_put_fn;
+	sc_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
+	struct cont_scrub	 sc_cont;
+	uuid_t			 sc_cont_uuid;
+
+	/**
+	 * Object
+	 */
+	daos_unit_oid_t		 sc_cur_oid;
+	daos_key_t		 sc_dkey;
+	struct dcs_csum_info	*sc_csum_to_verify;
+	daos_epoch_t		 sc_epoch;
+	uint16_t		 sc_minor_epoch;
+	daos_iod_t		 sc_iod;
+	struct bio_iov		*sc_cur_biov;
+
+	/* Current vos object iterator */
+	daos_handle_t		 sc_vos_iter_handle;
+
+	/* Schedule controlling function pointers and arg */
+	sc_is_idle_fn_t		 sc_is_idle_fn;
+	sc_sleep_fn_t		 sc_sleep_fn;
+	sc_yield_fn_t		 sc_yield_fn;
+	void			*sc_sched_arg;
+
+	enum scrub_status        sc_status;
+	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
+	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
+};
+
+/*
+ * It is expected that the pool uuid/handle and any functional dependencies are
+ * set in the scrubbing context. The container/object info should not be set.
+ * This function will iterate over all of the containers in the pool and if
+ * checksums are enabled on the pool, each object in the container will be
+ * scrubbed.
+ */
+int vos_scrub_pool(struct scrub_ctx *ctx);
+
+/*
+ * A generic utility function that, given a start time, duration, number of
+ * periods that can be processed, and the current period index, calculate how
+ * long the caller should wait/sleep in order to fill the space of the current
+ * period.
+ *
+ * Returns number of milliseconds to wait
+ */
+uint64_t
+get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
+		       uint64_t duration_seconds, uint64_t periods_nr,
+		       uint64_t per_idx);
+
+/** Set the VOS portion of the anchor for a given dkey or akey
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	Object ID
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Optional attribute key. If NULL, anchor is set using dkey
+ * \param[out]	anchor	The anchor to set.
+ *
+ * \return 0 on success, error otherwise.
+ *
+ * If the tree containing the key doesn't exist, the anchor will be set anchor to EOF.
+ */
+int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor);
 
 #endif /* __VOS_API_H */

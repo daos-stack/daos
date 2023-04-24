@@ -1,12 +1,15 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package daos
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -58,6 +61,77 @@ func (pv BoolPropVal) Choices() []string {
 
 func (pv BoolPropVal) copy() SystemPropertyValue {
 	return NewBoolPropVal(bool(pv))
+}
+
+// IntPropVal is an integer property value. It may be used to store
+// a signed 64-bit integer value.
+type IntPropVal struct {
+	value        int64
+	valueChoices []int64
+}
+
+// NewIntPropVal returns a new IntPropVal initialized to a default value.
+func NewIntPropVal(defVal int64, choices ...int64) *IntPropVal {
+	return &IntPropVal{
+		value:        defVal,
+		valueChoices: choices,
+	}
+}
+
+func (pv *IntPropVal) Handler(val string) error {
+	if pv == nil {
+		return errors.Errorf("%T is nil", pv)
+	}
+
+	v, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return errors.Wrapf(err, "invalid value %q", val)
+	}
+
+	if len(pv.valueChoices) == 0 {
+		pv.value = v
+		return nil
+	}
+
+	for _, choice := range pv.valueChoices {
+		if choice == v {
+			pv.value = v
+			return nil
+		}
+	}
+
+	choices := pv.Choices()
+	return errors.Errorf("invalid value %s (valid: %s)", val, strings.Join(choices, ","))
+}
+
+func (pv *IntPropVal) Choices() []string {
+	if len(pv.valueChoices) == 0 {
+		return nil
+	}
+
+	choices := make([]string, len(pv.valueChoices))
+	for i, choice := range pv.valueChoices {
+		choices[i] = strconv.FormatInt(choice, 10)
+	}
+	return choices
+}
+
+func (pv *IntPropVal) String() string {
+	if pv == nil {
+		return "(nil)"
+	}
+	return strconv.FormatInt(pv.value, 10)
+}
+
+func (pv *IntPropVal) Value() int64 {
+	return pv.value
+}
+
+func (pv *IntPropVal) copy() SystemPropertyValue {
+	return &IntPropVal{
+		value:        pv.value,
+		valueChoices: pv.valueChoices,
+	}
 }
 
 // StringPropVal is a string-based property value.
@@ -210,8 +284,10 @@ func (sp SystemPropertyKey) IsValid() bool {
 
 func (sp SystemPropertyKey) String() string {
 	if str, found := map[SystemPropertyKey]string{
-		SystemPropertyDaosVersion: "daos_version",
-		SystemPropertyDaosSystem:  "daos_system",
+		SystemPropertyDaosVersion:     "daos_version",
+		SystemPropertyDaosSystem:      "daos_system",
+		SystemPropertyPoolScrubMode:   "pool_scrub_mode",
+		SystemPropertyPoolScrubThresh: "pool_scrub_thresh",
 	}[sp]; found {
 		return str
 	}
@@ -247,7 +323,10 @@ const (
 	SystemPropertyDaosVersion
 	// SystemPropertyDaosSystem retrieves the DAOS system name.
 	SystemPropertyDaosSystem
-
+	// SystemPropertyPoolScrubMode sets or retrieves the scrubbing mode for each pool in the system.
+	SystemPropertyPoolScrubMode
+	// SystemPropertyPoolScrubThresh sets or retrieves the scrubbing error threshold for each pool in the system.
+	SystemPropertyPoolScrubThresh
 	// NB: This must be the last entry.
 	systemPropertyMax
 )
@@ -329,8 +408,74 @@ func (spm SystemPropertyMap) UpdateCompPropVal(key SystemPropertyKey, sourceFn f
 	return errors.Errorf("system property %q does not exist", key)
 }
 
+// poolPropValue is a wrapper for the PoolProperty type to allow it to
+// implement our SystemPropertyValue interface. This functionality
+// is used for setting system-level pool properties which are then
+// applied to all existing and future pools.
+type poolPropValue struct {
+	pph *PoolPropHandler
+}
+
+func (ppv poolPropValue) Handler(val string) error {
+	if ppv.pph == nil {
+		return errors.New("nil handler")
+	}
+
+	return ppv.pph.Property.SetValue(val)
+}
+
+func (ppv poolPropValue) Choices() []string {
+	if ppv.pph == nil {
+		return nil
+	}
+
+	return ppv.pph.Values()
+}
+
+func (ppv poolPropValue) String() string {
+	if ppv.pph == nil {
+		return "<nil>"
+	}
+
+	return ppv.pph.Property.valueStringer(&ppv.pph.Property.Value)
+}
+
+func (ppv poolPropValue) copy() SystemPropertyValue {
+	pphCpy := new(PoolPropHandler)
+	*pphCpy = *ppv.pph
+	return poolPropValue{
+		pph: pphCpy,
+	}
+}
+
+func (ppv poolPropValue) PoolProperty() *PoolProperty {
+	if ppv.pph == nil {
+		return nil
+	}
+
+	return &ppv.pph.Property
+}
+
+func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemProperty {
+	value := &poolPropValue{pph: pph}
+	pph.GetProperty(key.String())
+	err := value.PoolProperty().SetValue(def)
+	if err != nil {
+		fmt.Printf("Unable to set default value: %s", err)
+	}
+
+	property := SystemProperty{
+		Key:         key,
+		Value:       value,
+		Description: pph.Property.Description,
+	}
+	return property
+}
+
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
+	poolProps := PoolProperties()
+
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
 			Key:         SystemPropertyDaosVersion,
@@ -342,5 +487,7 @@ func SystemProperties() SystemPropertyMap {
 			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
 			Description: "DAOS system name",
 		},
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub-thresh"], "0"),
+		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
 	}
 }

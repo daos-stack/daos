@@ -11,7 +11,9 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
-      - utils/run_in_ga.sh
+      - 'utils/scripts/helpers/*'
+      - utils/ci
+      - ci
       - requirements.txt
 
 jobs:
@@ -29,39 +31,39 @@ jobs:
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
     name: Create Docker images
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu.20.04, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, fedora, leap.15]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu:20.04
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:35
+            with: fedora:36
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.3
+            with: opensuse/leap:15.4
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
       - name: Setup docker cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         with:
           key: ${{ steps.commit-hash.outputs.key }}
           restore-keys: ${{ steps.commit-hash.outputs.restore }}
@@ -82,24 +84,29 @@ jobs:
   Build-and-test:
     name: Run DAOS/NLT tests
     needs: Prepare
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [ubuntu]
+        include:
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
-      BASE_DISTRO: ${{ matrix.distro }}
+      BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -108,14 +115,16 @@ jobs:
             ${{ steps.commit-hash.outputs.restore_prev }}
           skip-save: true
       - name: Update dependencies in image.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image ./daos/utils/run_in_ga.sh
+              --env COMPILER --env DEPS_JOBS --user root:root build-image
+              ./daos/utils/ci/run_in_gha.sh
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -131,26 +140,26 @@ jobs:
   Build:
     name: Build DAOS in image
     needs: Prepare
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        distro: [ubuntu.20.04, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, fedora, leap.15]
         compiler: [clang, gcc]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu:20.04
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:35
+            with: fedora:36
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.3
+            with: opensuse/leap:15.4
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -158,14 +167,14 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -209,24 +218,113 @@ jobs:
 
   Build-branch:
     name: Build DAOS
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        distro: [centos.7, alma]
+        distro: [alma.8, alma.9, rocky.8]
         include:
-          - distro: centos.7
-            base: centos.7
-            with: centos.7
-          - distro: alma
+          - distro: alma.8
             base: el.8
             with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
+          - distro: rocky.8
+            base: el.8
+            with: rockylinux/rockylinux:8
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Build dependencies in image.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_BUILD=no
+      - name: Build in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER=clang
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build Java in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=yes
+                            --build-arg COMPILER=clang
+      - name: Build debug in docker with clang.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER=clang
+      - name: Build devel in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER=clang
+      - name: Build in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER=gcc
+      - name: Build debug in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER=gcc
+      - name: Build devel in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER=gcc
+      - name: Run NLT
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+                 build-image ./daos/utils/node_local_test.py --no-root
+                 --memcheck no --test cont_copy
+
+  Build-branch-ARM:
+    name: Build DAOS (ARM64)
+    runs-on: [self-hosted, ARM64]
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu, alma.8, leap.15]
+        compiler: [clang]
+        include:
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
+          - distro: alma.8
+            base: el.8
+            with: almalinux:8
+          - distro: leap.15
+            base: leap.15
+            with: opensuse/leap:15.4
+    env:
+      DEPS_JOBS: 10
+      BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
+      COMPILER: ${{ matrix.compiler }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Build dependencies in image.

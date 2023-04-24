@@ -10,24 +10,24 @@ communicated and logged within DAOS and syslog.
 The following table describes the structure of a DAOS RAS event, including
 descriptions of mandatory and optional fields.
 
-
 | Field             | Optional/Mandatory   | Description                                              |
 |:----|:----|:----|
 | ID                | Mandatory            | Unique event identifier referenced in the manual.        |
+| Timestamp (ts)    | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
+| Hostname (host)   | Optional             | Hostname of the node involved in the event.              |
 | Type              | Mandatory            | Event type of STATE\_CHANGE causes an update to the Management Service (MS) database in addition to event being written to SYSLOG. INFO\_ONLY type events are only written to SYSLOG.                                       |
-| Timestamp         | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
-| Severity          | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
+| Severity (sev)    | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
 | Msg               | Mandatory            | Human readable message.                                  |
-| HID               | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
-| Rank              | Optional             | DAOS rank involved in the event.                         |
 | PID               | Optional             | Identifier of the process involved in the RAS event      |
 | TID               | Optional             | Identifier of the thread involved in the RAS event.      |
+| Rank              | Optional             | DAOS rank involved in the event.                         |
+| Incarnation (inc) | Optional             | Incarnation version of DAOS rank involved in the event. An incarnation of an engine (engine is identified by a rank) is an internal sequence number used to order aliveness events related to an engine.           |
+| HWID              | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
 | JOBID             | Optional             | Identifier of the job involved in the RAS event.         |
-| Hostname          | Optional             | Hostname of the node involved in the event.              |
-| PUUID             | Optional             | Pool UUID involved in the event, if any.                 |
-| CUUID             | Optional             | Container UUID involved in the event, if relevant.       |
-| OID               | Optional             | Object identifier involved in the event, if relevant.                                                |
-| Control Operation | Optional             | Recommended automatic action, if any.                    |
+| PUUID (pool)      | Optional             | Pool UUID involved in the event, if any.                 |
+| CUUID (cont)      | Optional             | Container UUID involved in the event, if relevant.       |
+| OID (objid)       | Optional             | Object identifier involved in the event, if relevant.    |
+| Control Op (ctlop)| Optional             | Recommended automatic action, if any.                    |
 | Data              | Optional             | Specific instance data treated as a blob.                |
 
 Below is an example of a RAS event signaling an exclusion of an unresponsive
@@ -65,7 +65,7 @@ severity, message, description, and cause.
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
 parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://docs.daos.io/v2.2/admin/troubleshooting/#debugging-system)
+[`Debugging System`](https://docs.daos.io/v2.4/admin/troubleshooting/#debugging-system)
 section.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks
@@ -269,7 +269,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.2/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.4/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
@@ -358,15 +358,15 @@ boro-11
 -------
   Devices
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 2] Rank:0 State:NORMAL
+      Targets:[0 2] Rank:0 State:NORMAL LED:OFF
     UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:0000:8b:00.0]
-      Targets:[1 3] Rank:0 State:NORMAL
+      Targets:[1 3] Rank:0 State:NORMAL LED:OFF
     UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d [TrAddr:0000:8c:00.0]
-      Targets:[] Rank:0 State:NEW
+      Targets:[] Rank:0 State:NEW LED:OFF
     UUID:81905b24-be44-4106-8ff9-03002e9dd86a [TrAddr:5d0505:01:00.0]
-      Targets:[0 2] Rank:1 State:EVICTED
+      Targets:[0 2] Rank:1 State:EVICTED LED:ON
     UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
-      Targets:[1 3] Rank:1 State:NORMAL
+      Targets:[1 3] Rank:1 State:NORMAL LED:OFF
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -503,21 +503,31 @@ Usage:
 ```
 
 To manually evict an NVMe SSD (auto eviction will be supported in a future release),
-the device state needs to be set to "FAULTY" by running the following command:
+the device state needs to be set faulty by running the following command:
 ```bash
 $ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+NOTICE: This command will permanently mark the device as unusable!
+Are you sure you want to continue? (yes/no)
+yes
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:FAULTY
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
+            Targets:[] Rank:0 State:EVICTED LED:ON
 ```
-The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
-trigger the faulty device reaction (all targets on the SSD will be rebuilt, and the SSD
-will remain evicted until device replacement occurs).
+The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
+faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
+The SSD will remain evicted until device replacement occurs.
+
+If an NVMe SSD is faulty, the status LED on the VMD device will be set to an ON state,
+represented by a solidly ON amber light.
+This LED activity visually indicates a fault and that the device needs to be replaced and is no
+longer in use by DAOS.
+The LED of the VMD device will remain in this state until replaced by a new device.
 
 !!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
+    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
     Use is currently intended for testing only and is not supported for production.
 
 - To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
@@ -574,7 +584,8 @@ $ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc256
 boro-11
 -------
   Devices
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[] Rank:1 State:NORMAL
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:]
+      Targets:[] Rank:1 State:NORMAL LED:OFF
 ```
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
@@ -586,11 +597,13 @@ system, an admin can run the following command (setting the old device UUID to b
 new device UUID):
 ```bash
 $ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+NOTICE: Attempting to reuse a previously set FAULTY device!
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:NORMAL
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
+      Targets:[] Rank:1 State:NORMAL LED:OFF
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
@@ -606,36 +619,92 @@ an evicted device.
 
 - Locate a Healthy SSD:
 ```bash
-$ dmg storage identify vmd --help
+$ dmg storage led identify --help
 Usage:
-  dmg [OPTIONS] storage identify vmd [vmd-OPTIONS]
+  dmg [OPTIONS] storage led identify [identify-OPTIONS] [ids]
 
 ...
 
-[vmd command options]
-          --uuid=     Device UUID of the VMD device to identify
+[identify command options]
+          --reset     Reset blinking LED on specified VMD device back to previous state
+
+[identify command arguments]
+  ids:                Comma-separated list of identifiers which could be either VMD backing device
+                      (NVMe SSD) PCI addresses or device
 ```
 
-To quickly identify an SSD in question, an administrator can run the following
+To identify a single SSD, any of the Device-UUIDs can be used which can be found from
+output of the `dmg storage query list-devices` command:
+```bash
+$ dmg -l boro-11 storage led identify 6fccb374-413b-441a-bfbe-860099ac5e8d
+---------
+boro-11
+---------
+  Devices
+    TrAddr:850505:0b:00.0 LED:QUICK_BLINK
+```
+
+The SSD PCI address can also be used in the command to identify a SSD. The PCI address
+should refer to a VMD backing device and can be found from either `dmg storage scan -v`
+or `dmg storage query list-devices` commands:
+```bash
+$ dmg -l boro-11 storage led identify 850505:0b:00.0
+---------
+boro-11
+---------
+  Devices
+    TrAddr:850505:0b:00.0 LED:QUICK_BLINK
+```
+
+To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
+adding custom timeout of 5 minutes for LED identification (time to flash LED for):
+```bash
+$ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
+---------
+boro-11
+---------
+  Devices
+    TrAddr:850505:0a:00.0 LED:QUICK_BLINK
+    TrAddr:850505:0b:00.0 LED:QUICK_BLINK
+    TrAddr:850505:11:00.0 LED:QUICK_BLINK
+```
+
+If a Device-UUID is specified then the command output will display the PCI address of the SSD to
+which the Device-UUID belongs and the LED state of that SSD.
+
+Mappings of Device-UUIDs to PCI address can be found in the output of the
+`dmg storage query list-devices` command.
+
+An error will be returned if the Device-UUID or PCI address of a non-VMD enabled SSD is specified
+in the command.
+
+Upon issuing a device identify command with specified device IDs and optional custom timeout value,
+an admin now can quickly identify a device in question.
+After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
+state, representing a quick, 4Hz blinking amber light.
+The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
+no value is specified on the command line, after which the LED state will return to the previous
+state (faulty "ON" or default "OFF").
+
+- Check LED state of SSDs:
+
+To verify the LED state of SSDs the following command can be used in a similar way to the identify
 command:
 ```bash
-$ dmg -l boro-11 storage identify vmd --uuid=6fccb374-413b-441a-bfbe-860099ac5e8d
-
-If a non-VMD device UUID is used with the command, the following error will occur:
-localhost DAOS error (-1010): DER_NOSYS
-
+$ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
+---------
+boro-11
+---------
+  Devices
+    TrAddr:850505:0a:00.0 LED:QUICK_BLINK
+    TrAddr:850505:0b:00.0 LED:QUICK_BLINK
+    TrAddr:850505:11:00.0 LED:QUICK_BLINK
 ```
-The status LED on the VMD device is now set to an "IDENTIFY" state, represented
-by a quick, 4Hz blinking amber light. The device will quickly blink by default for
-about 60 seconds and then return to the default "OFF" state. The LED event duration
-can be customized by setting the VMD_LED_PERIOD environment variable if a duration
-other than the default value is desired.
-
 
 - Locate an Evicted SSD:
 
 If an NVMe SSD is evicted, the status LED on the VMD device is set to a "FAULT"
-state, represented by a solidly ON amber light. No additional command apart from
+state, represented by a solidly "ON" amber light. No additional command apart from
 the SSD eviction command would be needed, and this would visually indicate that the
 device needs to be replaced and is no longer in use by DAOS. The LED of the VMD
 device would remain in this state until replaced by a new device.
@@ -836,9 +905,9 @@ formatted again by running `dmg storage format`.
     The `/dev/pmemX` devices will remain mounted,
     and the PMem configuration will not be reset to Memory Mode.
     To completely unconfigure the SCM, it is advisable to run
-    `daos_server storage prepare --scm-only --reset` which will
-    completely reset the PMem. A reboot will be required to finalize
-    the change of the PMem allocation goals.
+    `daos_server scm reset` which will completely reset the PMem.
+    A reboot will be required to finalize the change of the PMem
+    allocation goals.
 
 
 ### System Extension

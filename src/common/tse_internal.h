@@ -49,7 +49,9 @@ struct tse_task_private {
 					 dtp_completed:1,
 					/* task is in running state */
 					 dtp_running:1,
-					 dtp_dep_cnt:29;
+					/* Don't propagate err-code from dependent tasks */
+					 dtp_no_propagate:1,
+					 dtp_dep_cnt:28;
 	/* refcount of the task */
 	uint32_t			 dtp_refcnt;
 	/**
@@ -74,7 +76,7 @@ struct tse_task_private {
 	 */
 	uint16_t			 dtp_stack_top;
 	uint16_t			 dtp_embed_top;
-	/* generation of the task, +1 every time when task re-init */
+	/* generation of the task, +1 every time when task re-init or add dependent task */
 	ATOMIC uint32_t			 dtp_generation;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };

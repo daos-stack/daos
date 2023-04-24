@@ -16,31 +16,23 @@
 
 #include "srv_internal.h"
 
-/**
- * Destroy the pool on the specified ranks.
- * If filter_invert == false: destroy on all ranks EXCEPT those in filter_ranks.
- * If filter_invert == true:  destroy on all ranks specified in filter_ranks.
- */
+/** Destroy the pool on the specified ranks. */
 static int
-ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid,
-			       d_rank_list_t *filter_ranks, bool filter_invert)
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
-	uint32_t			flags;
 	int				rc;
 
 	/* Collective RPC to destroy the pool on all of targets */
-	flags = filter_invert ? CRT_RPC_FLAG_FILTER_INVERT : 0;
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  filter_ranks, opc, NULL, NULL, flags, topo,
-				  &td_req);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, filter_ranks, opc, NULL,
+				  NULL, CRT_RPC_FLAG_FILTER_INVERT, topo, &td_req);
 	if (rc)
 		D_GOTO(fini_ranks, rc);
 
@@ -63,21 +55,6 @@ out_rpc:
 	crt_req_decref(td_req);
 
 fini_ranks:
-	return rc;
-}
-
-/**
- * Destroy the pool on specified storage ranks
- */
-static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks)
-{
-	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID ": send tgt destroy to %u UP ranks:\n",
-		DP_UUID(pool_uuid), ranks->rl_nr);
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks, true);
-
 	return rc;
 }
 
@@ -124,13 +101,12 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	tc_out = crt_reply_get(tc_req);
 	rc = tc_out->tc_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to update pool map on targets: rc="
-			DF_RC"\n",
+		D_ERROR(DF_UUID": failed to create targets: rc="DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 		D_GOTO(decref, rc);
 	}
 
-	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
+	D_DEBUG(DB_MGMT, DF_UUID" created pool tgts on %zu ranks\n",
 		DP_UUID(pool_uuid), tc_out->tc_ranks.ca_count);
 
 decref:
@@ -139,11 +115,13 @@ decref:
 
 	crt_req_decref(tc_req);
 	if (rc) {
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list, true);
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, rank_list);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		else
+			D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
+				DP_UUID(pool_uuid));
 	}
 
 	return rc;
@@ -151,47 +129,62 @@ decref:
 
 static int
 ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_rank_list_t *ranks,
-			daos_prop_t *prop, d_rank_list_t *svc_list, size_t domains_nr,
+			daos_prop_t *prop, d_rank_list_t **svc_list, size_t domains_nr,
 			uint32_t *domains)
 {
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_create(pool_uuid, ranks->rl_nr, group, ranks, domains_nr, domains, prop,
-				  svc_list);
+	return ds_pool_svc_dist_create(pool_uuid, ranks->rl_nr, group, ranks, domains_nr, domains,
+				       prop, svc_list);
 }
 
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
-		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
+		    daos_prop_t *prop, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*filtered_targets = NULL;
 	d_rank_list_t			*pg_ranks = NULL;
-	uint32_t			pg_size;
+	d_rank_list_t			*pg_targets = NULL;
 	int				rc;
 	int				rc_cleanup;
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
 	 */
-	rc = crt_group_size(NULL, &pg_size);
+	rc = crt_group_ranks_get(NULL, &pg_ranks);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	pg_ranks = d_rank_list_alloc(pg_size);
-	if (pg_ranks == NULL) {
-		rc = -DER_NOMEM;
+
+	rc = d_rank_list_dup(&pg_targets, targets);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
-	rc = d_rank_list_dup(&filtered_targets, targets);
-	if (rc) {
-		rc = -DER_NOMEM;
-		D_GOTO(out, rc);
-	}
-	/* Remove any targets not found in pg_ranks */
-	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
-	if (!d_rank_list_identical(filtered_targets, targets)) {
-		D_ERROR("some ranks not found in cart primary group\n");
+
+	/* The pg_ranks and targets lists should overlap perfectly.
+	 * If not, fail early to avoid expensive corpc failures.
+	 */
+	d_rank_list_filter(pg_ranks, pg_targets, false /* exclude */);
+	if (!d_rank_list_identical(pg_targets, targets)) {
+		char *pg_str, *tgt_str;
+
+		pg_str = d_rank_list_to_str(pg_ranks);
+		if (pg_str == NULL) {
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		tgt_str = d_rank_list_to_str(targets);
+		if (tgt_str == NULL) {
+			D_FREE(pg_str);
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
+			DP_UUID(pool_uuid), tgt_str, pg_str);
+
+		D_FREE(pg_str);
+		D_FREE(tgt_str);
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
@@ -203,34 +196,32 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		D_GOTO(out, rc);
 	}
 
-	/** allocate service rank list */
-	*svcp = d_rank_list_alloc(svc_nr);
-	if (*svcp == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	D_INFO(DF_UUID": creating targets on ranks succeeded\n", DP_UUID(pool_uuid));
 
-	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, group, targets, prop, *svcp,
+	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, group, targets, prop, svcp,
 				     domains_nr, domains);
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_svcp;
-	}
-
-out_svcp:
-	if (rc) {
-		d_rank_list_free(*svcp);
-		*svcp = NULL;
-
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    targets, true);
+		/*
+		 * The ds_mgmt_pool_svc_create call doesn't clean up any
+		 * successful PS replica creations upon errors; we clean up
+		 * those here together with other pool resources to save one
+		 * round of RPCs.
+		 */
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets);
 		if (rc_cleanup)
-			D_ERROR(DF_UUID": failed to clean up failed pool: "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
+		else
+			D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
+				DP_UUID(pool_uuid));
+	} else {
+		D_INFO(DF_UUID": creating svc succeeded\n", DP_UUID(pool_uuid));
 	}
+
 out:
-	d_rank_list_free(filtered_targets);
+	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
@@ -238,62 +229,25 @@ out:
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		     const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
-	int		 rc;
-	d_rank_list_t	*ranks = NULL;
-	d_rank_list_t	*filtered_svc = NULL;
+	int rc;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	if (svc_ranks == NULL) {
-		D_ERROR("svc_ranks was NULL\n");
+	if (ranks == NULL) {
+		D_ERROR("ranks was NULL\n");
 		return -DER_INVAL;
 	}
 
-	/* Ask PS for list of storage ranks (tgt corpc destinations) */
-	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
-	if (rc) {
-		D_ERROR(DF_UUID ": failed to get pool storage ranks, "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks);
+	if (rc != 0) {
+		D_ERROR("Destroying pool " DF_UUID " failed, " DF_RC "\n", DP_UUID(pool_uuid),
+			DP_RC(rc));
 		goto out;
 	}
 
-	/* Destroy pool service. Send corpc only to svc_ranks found in ranks.
-	 * Control plane may not have been updated yet if any of svc_ranks
-	 * were recently excluded from the pool.
-	 */
-	rc = d_rank_list_dup(&filtered_svc, svc_ranks);
-	if (rc)
-		D_GOTO(free_ranks, rc = -DER_NOMEM);
-	d_rank_list_filter(ranks, filtered_svc, false /* exclude */);
-	if (!d_rank_list_identical(filtered_svc, svc_ranks)) {
-		D_DEBUG(DB_MGMT, DF_UUID": %u svc_ranks, but only %u found "
-			"in pool map\n", DP_UUID(pool_uuid),
-			svc_ranks->rl_nr, filtered_svc->rl_nr);
-	}
-
-	rc = ds_pool_svc_destroy(pool_uuid, filtered_svc);
-	if (rc != 0) {
-		D_ERROR("Failed to destroy pool service " DF_UUID ", "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_filtered;
-	}
-
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
-	if (rc != 0) {
-		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_filtered;
-	}
-
-	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
-		DP_UUID(pool_uuid));
-free_filtered:
-	d_rank_list_free(filtered_svc);
-free_ranks:
-	d_rank_list_free(ranks);
+	D_INFO(DF_UUID": destroy succeeded.\n", DP_UUID(pool_uuid));
 out:
 	return rc;
 }
@@ -332,8 +286,7 @@ out:
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
-		   uint32_t destroy, uint32_t force_destroy, char *machine,
-		   const char *group, uint32_t *count)
+		   uint32_t destroy, uint32_t force_destroy, char *machine, uint32_t *count)
 {
 	int		 rc;
 
@@ -348,8 +301,7 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "evicting pool connections "DF_UUID" succeed.\n",
-		DP_UUID(pool_uuid));
+	D_INFO(DF_UUID": evict connections succeeded\n", DP_UUID(pool_uuid));
 out:
 	return rc;
 }
@@ -357,7 +309,7 @@ out:
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state)
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size)
 {
 	int			rc;
 
@@ -374,19 +326,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		reint_ranks.rl_nr = 1;
 		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
-		/* TODO: The size information and "pmem" type need to be
-		 * determined automatically, perhaps by querying the pool leader
-		 * This works for now because these parameters are ignored if
-		 * the pool already exists on the destination node. This is
-		 * just used to ensure the pool is started.
-		 *
-		 * Fixing this will add the ability to reintegrate with a new
-		 * node, rather than only the previously failed node.
-		 *
-		 * This is tracked in DAOS-5041
-		 */
-		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
-						   &reint_ranks, 0, 0);
+		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem", &reint_ranks, scm_size,
+						   nvme_size);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -415,23 +356,27 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool.
- * \param[in]		svc_ranks	Ranks of pool svc replicas.
- * \param[out]		ranks		Optional, returned storage ranks in this pool.
- *					If #pool_info is NULL, engines with disabled targets.
- *					If #pool_info is passed, engines with enabled or disabled
- *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					The caller must free the list with d_rank_list_free().
- * \param[in][out]	pool_info	Query results
+ * \param[in]		pool_uuid	   UUID of the pool.
+ * \param[in]		svc_ranks	   Ranks of pool svc replicas.
+ * \param[out]		ranks		   Optional, returned storage ranks in this pool.
+ *					   If #pool_info is NULL, engines with disabled targets.
+ *					   If #pool_info is passed, engines with enabled or
+ *					   disabled targets according to
+ *					   #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					   The caller must free the list with d_rank_list_free().
+ * \param[in][out]	pool_info	   Query results
+ * \param[in][out]	pool_layout_ver	   Pool global version
+ * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
  *
- * \return		0		Success
- *			-DER_INVAL	Invalid inputs
- *			Negative value	Other error
+ * \return		0		   Success
+ *			-DER_INVAL	   Invalid inputs
+ *			Negative value	   Other error
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info)
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -440,7 +385,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
+	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
+				 pool_layout_ver, upgrade_layout_ver);
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,17 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		struct dfuse_inode_entry *inode;
 
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+		if (fi_out) {
+			struct dfuse_obj_hdl *oh;
+			/* DAOS-12714 If create returns an existing file then oh->doe_ie will point
+			 * to the stale ie in this case.  This can probably only happen when there
+			 * is a race between a create call from one client and rename from a
+			 * different client.
+			 */
+			oh         = (struct dfuse_obj_hdl *)fi_out->fh;
+			oh->doh_ie = inode;
+		}
 
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
@@ -124,10 +135,22 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	if (fi_out)
+	ie->ie_stat = entry.attr;
+
+	if (fi_out) {
+		/* Now set the value of keep_cache, this is for creat where we need to do the hash
+		 * table lookup before setting this value.
+		 */
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
+			fi_out->keep_cache = 1;
+		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+			fi_out->keep_cache = 1;
+		}
+
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
-	else
+	} else {
 		DFUSE_REPLY_ENTRY(ie, req, entry);
+	}
 
 	if (wipe_parent == 0)
 		return;
@@ -165,22 +188,19 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		return rc;
 
-	/** TODO: should switch dfuse to use da_pool and da_cont instead of the uuids. */
-	duns_destroy_attr(&dattr);
-
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
-		return ENOTSUP;
+		D_GOTO(out_err, rc = ENOTSUP);
 
 	/* Search the currently connect dfp list, if one matches then use that,
 	 * otherwise allocate a new one.
 	 */
 
-	rc = dfuse_pool_connect(fs_handle, &dattr.da_puuid, &dfp);
-	if (rc != -DER_SUCCESS)
+	rc = dfuse_pool_get_handle(fs_handle, dattr.da_puuid, &dfp);
+	if (rc != 0)
 		D_GOTO(out_err, rc);
 
 	rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cuuid, &dfs);
-	if (rc != -DER_SUCCESS)
+	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 
 	/* The inode has a reference to the dfs, so keep that. */
@@ -188,16 +208,13 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
-			NULL, &ie->ie_stat);
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
@@ -207,8 +224,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx",
-		       dfs->dfs_ino);
+	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+
+	duns_destroy_attr(&dattr);
 
 	return rc;
 out_dfs:
@@ -216,6 +234,8 @@ out_dfs:
 out_dfp:
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 out_err:
+	duns_destroy_attr(&dattr);
+
 	return rc;
 }
 
@@ -239,6 +259,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
+
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
@@ -252,10 +274,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	if (attr_len)
+		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 

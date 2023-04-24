@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -30,7 +29,9 @@ class Permission(TestWithServers):
             permission levels.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=pool,permission,file_modification
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=permission,file_modification,test_file_modification
         """
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
@@ -70,8 +71,7 @@ class Permission(TestWithServers):
             self.test_log.debug("Container write successful")
             if expected_result == RESULT_FAIL:
                 self.fail(
-                    "Test was expected to fail at container operations " +
-                    "but it passed.\n")
+                    "Test was expected to fail at container operations but it passed.\n")
             else:
                 self.test_log.debug("Test Passed.")
         except DaosApiError as excep:

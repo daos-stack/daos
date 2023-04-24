@@ -70,10 +70,12 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
-CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v4, DAOS_ISEQ_POOL_CONNECT_V4, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v5, DAOS_ISEQ_POOL_CONNECT_V5, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
-CRT_RPC_DEFINE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+CRT_RPC_DEFINE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
+CRT_RPC_DEFINE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
@@ -114,10 +116,88 @@ CRT_RPC_DEFINE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE,
 		DAOS_OSEQ_POOL_UPGRADE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
-CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
-		DAOS_OSEQ_POOL_QUERY_INFO)
-CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
-		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+
+static int
+pool_cont_filter_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op,
+			      uint32_t n_parts, daos_pool_cont_filter_part_t ***parts)
+{
+	int				rc = 0;
+	uint32_t			p = 0;
+	uint32_t			j;
+	daos_pool_cont_filter_part_t   *part;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(*parts, n_parts);
+		if (*parts == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	while (p < n_parts) {
+		if (DECODING(proc_op)) {
+			D_ALLOC((*parts)[p], sizeof(daos_pool_cont_filter_part_t));
+			if ((*parts)[p] == NULL)
+				D_GOTO(out_free, rc = -DER_NOMEM);
+		}
+		part = (*parts)[p++];
+
+		rc = crt_proc_uint32_t(proc, proc_op, &part->pcfp_func);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+
+		rc = crt_proc_uint32_t(proc, proc_op, &part->pcfp_key);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+
+		/* all keys have uint64_t values for now */
+		rc = crt_proc_uint64_t(proc, proc_op, &part->pcfp_val64);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+	}
+
+	if (FREEING(proc_op)) {
+out_free:
+		for (j = 0; j < p; j++)
+			D_FREE((*parts)[j]);
+		D_FREE(*parts);
+	}
+out:
+	return rc;
+}
+
+static int
+crt_proc_daos_pool_cont_filter_t(crt_proc_t proc, crt_proc_op_t proc_op,
+				 daos_pool_cont_filter_t *filt)
+{
+	int	rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &filt->pcf_combine_func);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &filt->pcf_nparts);
+	if (unlikely(rc))
+		return rc;
+
+	rc = pool_cont_filter_t_proc_parts(proc, proc_op, filt->pcf_nparts, &filt->pcf_parts);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
+CRT_RPC_DEFINE(pool_filter_cont, DAOS_ISEQ_POOL_FILTER_CONT, DAOS_OSEQ_POOL_FILTER_CONT)
+CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO, DAOS_OSEQ_POOL_QUERY_INFO)
+CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -130,18 +210,31 @@ CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 	.prf_co_ops  = NULL,	\
 }
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt[] = {
-	POOL_PROTO_CLI_RPC_LIST,
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
+	POOL_PROTO_CLI_RPC_LIST(4),
+	POOL_PROTO_SRV_RPC_LIST,
+};
+
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
+	POOL_PROTO_CLI_RPC_LIST(5),
 	POOL_PROTO_SRV_RPC_LIST,
 };
 
 #undef X
 
-struct crt_proto_format pool_proto_fmt = {
+struct crt_proto_format pool_proto_fmt_v4 = {
 	.cpf_name  = "pool",
-	.cpf_ver   = DAOS_POOL_VERSION,
-	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt),
-	.cpf_prf   = pool_proto_rpc_fmt,
+	.cpf_ver   = 4,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v4),
+	.cpf_prf   = pool_proto_rpc_fmt_v4,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
+};
+
+struct crt_proto_format pool_proto_fmt_v5 = {
+	.cpf_name  = "pool",
+	.cpf_ver   = 5,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v5),
+	.cpf_prf   = pool_proto_rpc_fmt_v5,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
@@ -213,6 +306,24 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			bits |= DAOS_PO_QUERY_PROP_UPGRADE_STATUS;
 			break;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_MODE;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_FREQ;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_THRESH;
+			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			bits |= DAOS_PO_QUERY_PROP_SVC_REDUN_FAC;
+			break;
+		case DAOS_PROP_PO_SVC_LIST:
+			bits |= DAOS_PO_QUERY_PROP_SVC_LIST;
+			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			bits |= DAOS_PO_QUERY_PROP_OBJ_VERSION;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -246,10 +357,10 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 	D_ASSERT(rs != NULL);
 
 	uuid_copy(info->pi_uuid, pool_uuid);
-	info->pi_ntargets	= map_buf->pb_target_nr;
-	info->pi_nnodes		= map_buf->pb_node_nr;
-	info->pi_map_ver	= map_version;
-	info->pi_leader		= leader_rank;
+	info->pi_ntargets		= map_buf->pb_target_nr;
+	info->pi_nnodes			= map_buf->pb_node_nr;
+	info->pi_map_ver		= map_version;
+	info->pi_leader			= leader_rank;
 	if (info->pi_bits & DPI_SPACE)
 		info->pi_space		= *ps;
 	if (info->pi_bits & DPI_REBUILD_STATUS)
@@ -258,12 +369,12 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 
 int
 list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+		      void *buf, daos_size_t buf_nbytes)
 {
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
-	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	d_iov_set(&iov, buf, buf_nbytes);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;

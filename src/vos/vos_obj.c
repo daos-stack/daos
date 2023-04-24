@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 /** Ensure the values of recx flags map to those exported by evtree */
 D_CASSERT((uint32_t)VOS_VIS_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
@@ -23,6 +23,8 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_COVERED == (uint32_t)EVT_COVERED);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
+
+bool vos_dkey_punch_propagate;
 
 struct vos_key_info {
 	umem_off_t		*ki_known_key;
@@ -189,8 +191,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** For now, don't propagate the punch to object layer */
-		return 0;
+		if (!vos_dkey_punch_propagate)
+			return 0; /** Unless we explicitly enable it, disable punch propagation */
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -524,32 +526,97 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
-
-	if (rc == 0) {
+	if (rc == 0)
 		vos_ts_set_upgrade(ts_set);
-		if (daes != NULL) {
-			vos_dtx_post_handle(cont, daes, dces,
-					    dth->dth_dti_cos_count,
-					    false, false);
-			dth->dth_cos_done = 1;
-		}
-	} else if (daes != NULL) {
-		vos_dtx_post_handle(cont, daes, dces,
-				    dth->dth_dti_cos_count, false, true);
-		dth->dth_cos_done = 1;
-	}
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
 		vos_ts_set_update(ts_set, epr.epr_hi);
+	}
+
+	if (rc == 0)
+		vos_ts_set_wupdate(ts_set, epr.epr_hi);
+
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
-			vos_ts_set_wupdate(ts_set, epr.epr_hi);
+			dth->dth_cos_done = 1;
+		else
+			dth->dth_cos_done = 0;
+
+		if (daes != NULL)
+			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
+					    false, rc != 0);
 	}
 
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
+
+	return rc;
+}
+
+int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor)
+{
+	struct vos_container  *cont;
+	struct daos_lru_cache *occ = vos_obj_cache_current();
+	int                    rc;
+	struct vos_object     *obj;
+	daos_epoch_range_t     epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t          toh;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Container is not open");
+		return -DER_INVAL;
+	}
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, DAOS_EPOCH_MAX, 0, DAOS_INTENT_DEFAULT, &obj, NULL);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			return 0;
+		}
+
+		D_ERROR("Could not hold object oid=" DF_UOID " rc=" DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
+
+	if (akey == NULL) {
+		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
+		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		goto out;
+	}
+
+	/** Otherwise, we need to find the dkey to convert the akey to the anchor */
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_DEFAULT, NULL,
+			      &toh, NULL);
+	if (rc) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			goto out;
+		}
+		D_ERROR("Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY " rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = dbtree_key2anchor(toh, akey, anchor);
+	D_DEBUG(DB_TRACE,
+		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
+
+	key_tree_release(toh, false);
+out:
+	vos_obj_release(occ, obj, false);
 
 	return rc;
 }
@@ -570,7 +637,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return 0;
 
 	if (rc) {
-		D_ERROR("Failed to hold object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to hold object: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -580,7 +647,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 
 	rc = vos_oi_delete(cont, obj->obj_id);
 	if (rc)
-		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
 
 	rc = umem_tx_end(umm, rc);
 
@@ -606,7 +673,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE | VOS_OBJ_KILL_DKEY,
 			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
@@ -642,17 +709,18 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		toh = obj->obj_toh;
 	}
 
-	key_tree_delete(obj, toh, key);
+	rc = key_tree_delete(obj, toh, key);
 	if (rc) {
 		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
-		goto out_tx;
+		goto out_tree;
 	}
+	/* fall through */
+out_tree:
+	if (akey)
+		key_tree_release(toh, false);
 out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
-	if (akey)
-		key_tree_release(toh, false);
-
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
@@ -668,7 +736,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound, false,
 			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)
@@ -1968,6 +2036,60 @@ exit:
 	return rc;
 }
 
+/*
+ * For a single value btree, grab the value of the current iter cursor, and use
+ * the offset to get the durable format (pmem) structure with the bio_addr. Then
+ * set it to corrupt.
+ */
+static int
+sv_iter_corrupt(struct vos_obj_iter *oiter)
+{
+	struct umem_instance	*umm;
+	struct vos_svt_key	 skey = {0};
+	struct vos_rec_bundle	 rbund = {0};
+	struct bio_iov		 biov = {0};
+	daos_anchor_t		 anchor = {0};
+	d_iov_t			 key, val;
+	size_t			 addr_offset;
+	struct vos_irec_df	*irec;
+	int			 rc = 0;
+
+	umm = vos_obj2umm(oiter->it_obj);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	/* Bundle the key and value structures into appropriate iovs */
+	tree_rec_bundle2iov(&rbund, &val);
+	rbund.rb_biov = &biov;
+	d_iov_set(&key, &skey, sizeof(skey));
+
+	/* Fetch the key/value for the current iter cursor */
+	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
+	if (rc != 0) {
+		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
+	}
+
+	addr_offset = offsetof(struct vos_irec_df, ir_ex_addr);
+	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
+			 sizeof(*irec) - addr_offset);
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
+	}
+
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	irec = umem_off2ptr(umm, rbund.rb_off);
+	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
+
+	rc = umem_tx_end(umm, rc);
+	return rc;
+}
+
 int
 vos_obj_iter_check_punch(daos_handle_t ih)
 {
@@ -2080,23 +2202,34 @@ exit:
 }
 
 static int
-vos_obj_iter_delete(struct vos_iterator *iter, void *args)
+vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
+		     void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
+	switch (op) {
+	case VOS_ITER_PROC_OP_DELETE:
+		switch (iter->it_type) {
+		default:
+			D_ASSERT(0);
+			return -DER_INVAL;
+		case VOS_ITER_DKEY:
+		case VOS_ITER_AKEY:
+		case VOS_ITER_SINGLE:
+			return obj_iter_delete(oiter, args);
+		case VOS_ITER_RECX:
+			return evt_iter_delete(oiter->it_hdl, NULL);
+		}
+	case VOS_ITER_PROC_OP_MARK_CORRUPT:
+		if (iter->it_type == VOS_ITER_SINGLE)
+			return sv_iter_corrupt(oiter);
+		if (iter->it_type == VOS_ITER_RECX)
+			return evt_iter_corrupt(oiter->it_hdl);
+		break;
 	default:
 		D_ASSERT(0);
-		return -DER_INVAL;
-
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-	case VOS_ITER_SINGLE:
-		return obj_iter_delete(oiter, args);
-
-	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
+	return 0;
 }
 
 static int
@@ -2129,7 +2262,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next		= vos_obj_iter_next,
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
-	.iop_delete		= vos_obj_iter_delete,
+	.iop_process		= vos_obj_iter_process,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**

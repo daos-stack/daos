@@ -41,7 +41,8 @@ func (p *Provider) QueryFirmware(req storage.ScmFirmwareQueryRequest) (*storage.
 }
 
 func (p *Provider) getRequestedModules(requestedUIDs []string, ignoreMissing bool) (storage.ScmModules, error) {
-	modules, err := p.backend.getModules()
+	// Retrieve details of modules attached to all sockets.
+	modules, err := p.backend.getModules(sockAny)
 	if err != nil {
 		return nil, err
 	}

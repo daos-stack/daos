@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -6,8 +5,8 @@
 '''
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestNvme(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
     """Run just the daos_test NVMe Recovery tests.
 
     :avocado: recursive

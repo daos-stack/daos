@@ -15,9 +15,10 @@
 #include <daos/btree.h>
 #include <daos/object.h>
 #include <daos_types.h>
-#include <vos_internal.h>
-#include <vos_ilog.h>
-#include <vos_obj.h>
+#include "vos_internal.h"
+#include "vos_ilog.h"
+#include "vos_obj.h"
+#include <daos_srv/vos.h>
 
 /** iterator for oid */
 struct vos_oi_iter {
@@ -77,8 +78,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df),
-				 VOS_SLAB_OBJ_DF);
+	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -164,7 +164,7 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 oi_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_OBJ_NODE);
+	return vos_slab_alloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t oi_btr_ops = {
@@ -377,7 +377,7 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound,
+			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound, false,
 			    NULL, NULL, &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;
@@ -683,12 +683,14 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-oi_iter_delete(struct vos_iterator *iter, void *args)
+oi_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
@@ -804,7 +806,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
-		/** ilog isn't visible in range but still has some enrtries */
+		/** ilog isn't visible in range but still has some entries */
 		invisible = true;
 		rc = 0;
 	}
@@ -824,7 +826,7 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_probe		= oi_iter_probe,
 	.iop_next		= oi_iter_next,
 	.iop_fetch		= oi_iter_fetch,
-	.iop_delete		= oi_iter_delete,
+	.iop_process		= oi_iter_process,
 };
 
 /**

@@ -19,6 +19,9 @@ import (
 const (
 	compInfiniband = "ib"
 	compTCP        = "tcp"
+
+	tcpPriority      = 25
+	catchallPriority = 99
 )
 
 // NewProvider creates a new UCX data provider.
@@ -34,7 +37,7 @@ type Provider struct {
 }
 
 // GetFabricInterfaces harvests the collection of fabric interfaces from UCX.
-func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
+func (p *Provider) GetFabricInterfaces(ctx context.Context, provider string) (*hardware.FabricInterfaceSet, error) {
 	uctHdl, err := openUCT()
 	if err != nil {
 		return nil, err
@@ -82,7 +85,7 @@ func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInt
 			continue
 		}
 
-		if err := p.addFabricDevices(comp.name, netDevs, fis); err != nil {
+		if err := p.addFabricDevices(comp.name, netDevs, provider, fis); err != nil {
 			p.log.Error(err.Error())
 		}
 	}
@@ -121,18 +124,23 @@ func (p *Provider) getCompNetworkDevices(uctHdl *dlopen.LibHandle, comp *uctComp
 	return netDevs, nil
 }
 
-func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, fis *hardware.FabricInterfaceSet) error {
+func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, provider string, fis *hardware.FabricInterfaceSet) error {
 	allDevs := common.NewStringSet()
 	for _, dev := range netDevs {
 		allDevs.AddUnique(dev.device)
 	}
 
 	for _, dev := range netDevs {
+		provSet := p.getProviderSet(dev.transport)
+		if provider != "" && !provSet.Has(provider) {
+			continue
+		}
+
 		// the device name is in a format like "mlx5_0:1"
 		osDev := strings.Split(dev.device, ":")[0]
 
 		fis.Update(&hardware.FabricInterface{
-			Name:      getExternalName(comp, dev.device, allDevs.ToSlice()),
+			Name:      dev.device,
 			OSName:    osDev,
 			Providers: p.getProviderSet(dev.transport),
 		})
@@ -141,35 +149,31 @@ func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, fis *h
 	return nil
 }
 
-// getExternalName constructs the name that must be used by DAOS to specify the fabric device.
-func getExternalName(comp, dev string, allDevs []string) string {
-	if comp != compInfiniband {
-		return dev
-	}
-
-	// Infiniband device names need to include the full list of devices for the component.
-	// To ensure unique names, each list has the main device string first.
-	ordered := []string{dev}
-	for _, d := range allDevs {
-		if d != dev {
-			ordered = append(ordered, d)
-		}
-	}
-
-	return strings.Join(ordered, ",")
-}
-
-func (p *Provider) getProviderSet(transport string) common.StringSet {
+func (p *Provider) getProviderSet(transport string) *hardware.FabricProviderSet {
 	genericTransport := strings.Split(transport, "_")[0]
 
-	providers := common.NewStringSet(transportToDAOSProvider(transport))
+	priority := 0 // by default use the highest
+	daosProv := transportToDAOSProvider(transport)
+	if daosProv == "ucx+tcp" {
+		priority = tcpPriority // TCP is less desirable than other options if this is Infiniband
+	}
+	providers := hardware.NewFabricProviderSet(
+		&hardware.FabricProvider{
+			Name:     daosProv,
+			Priority: priority,
+		},
+	)
 	if shouldAddGeneric(transport) {
-		if err := providers.AddUnique(transportToDAOSProvider(genericTransport)); err != nil {
-			p.log.Error(err.Error())
-		}
+		providers.Add(&hardware.FabricProvider{
+			Name:     transportToDAOSProvider(genericTransport),
+			Priority: priority,
+		})
 	}
 	// Any interface with at least one provider should allow ucx+all
-	providers.Add("ucx+all")
+	providers.Add(&hardware.FabricProvider{
+		Name:     "ucx+all",
+		Priority: catchallPriority,
+	})
 	return providers
 }
 

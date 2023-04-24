@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -24,16 +23,28 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
+	hostListGetter interface {
+		getHostList() []string
+	}
+
 	hostListSetter interface {
-		setHostList([]string)
+		setHostList(*hostlist.HostSet)
 	}
 
 	hostListCmd struct {
+		HostList ui.HostSetFlag `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 		hostlist []string
+	}
+
+	singleHostCmd struct {
+		HostList singleHostFlag `short:"l" long:"host-list" default:"localhost" description:"Single host address <ipv4addr/hostname> to connect to"`
+		host     string
 	}
 
 	ctlInvoker interface {
@@ -62,8 +73,30 @@ func (cmd *ctlInvokerCmd) setInvoker(c control.Invoker) {
 	cmd.ctlInvoker = c
 }
 
-func (cmd *hostListCmd) setHostList(hl []string) {
-	cmd.hostlist = hl
+func (cmd *hostListCmd) getHostList() []string {
+	if cmd.hostlist == nil && !cmd.HostList.Empty() {
+		cmd.hostlist = cmd.HostList.Slice()
+	}
+	return cmd.hostlist
+}
+
+func (cmd *hostListCmd) setHostList(newList *hostlist.HostSet) {
+	cmd.HostList.Replace(newList)
+}
+
+func (cmd *singleHostCmd) getHostList() []string {
+	if cmd.host == "" {
+		if cmd.HostList.Count() == 0 {
+			cmd.host = "localhost"
+		} else {
+			cmd.host = cmd.HostList.Slice()[0]
+		}
+	}
+	return []string{cmd.host}
+}
+
+func (cmd *singleHostCmd) setHostList(newList *hostlist.HostSet) {
+	cmd.HostList.Replace(newList)
 }
 
 func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer, wj *atm.Bool) {
@@ -87,6 +120,7 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		} else {
 			status = int(daos.MiscError)
 		}
+		in = nil // response should be null if err isn't
 	}
 
 	data, err := json.MarshalIndent(struct {
@@ -95,10 +129,12 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		Status   int         `json:"status"`
 	}{in, errStr, status}, "", "  ")
 	if err != nil {
+		fmt.Fprintf(out, "unable to marshal json: %s\n", err.Error())
 		return err
 	}
 
 	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
+		fmt.Fprintf(out, "unable to write json: %s\n", err.Error())
 		return err
 	}
 
@@ -149,9 +185,10 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool           `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string         `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	HostList       ui.HostSetFlag `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
 	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
+	LogFile        string         `long:"log-file" description:"Log command output to the specified file"`
 	JSON           bool           `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool           `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string         `short:"o" long:"config-path" description:"Client config file path"`
@@ -211,6 +248,24 @@ and access control settings, along with system wide operations.`
 			common.ScrubProxyVariables()
 		}
 
+		if opts.LogFile != "" {
+			f, err := common.AppendFile(opts.LogFile)
+			if err != nil {
+				return errors.WithMessage(err, "create log file")
+			}
+			defer f.Close()
+
+			log.Debugf("%s logging to file %s",
+				os.Args[0], opts.LogFile)
+
+			// Create an additional set of loggers which append everything
+			// to the specified file.
+			log = log.
+				WithErrorLogger(logging.NewErrorLogger("dmg", f)).
+				WithInfoLogger(logging.NewInfoLogger("dmg", f)).
+				WithDebugLogger(logging.NewDebugLogger(f))
+		}
+
 		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("debug output enabled")
@@ -256,14 +311,22 @@ and access control settings, along with system wide operations.`
 			ctlCmd.setInvoker(invoker)
 		}
 
-		if opts.HostList != "" {
+		// Handle the deprecated global hostlist flag
+		if !opts.HostList.Empty() {
 			if hlCmd, ok := cmd.(hostListSetter); ok {
-				hl := strings.Split(opts.HostList, ",")
-				hlCmd.setHostList(hl)
-				ctlCfg.HostList = hl
+				hlCmd.setHostList(&opts.HostList.HostSet)
 			} else {
-				return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
-					control.UserConfigPath(), control.SystemConfigPath())
+				return &flags.Error{
+					Type:    flags.ErrUnknownFlag,
+					Message: "unknown flag `l'/`host-list'",
+				}
+			}
+		}
+
+		if hlCmd, ok := cmd.(hostListGetter); ok {
+			hl := hlCmd.getHostList()
+			if len(hl) > 0 {
+				ctlCfg.HostList = hl
 			}
 		}
 

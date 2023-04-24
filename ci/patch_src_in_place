@@ -2,20 +2,10 @@
 
 set -x
 
-# shellcheck disable=SC2046,SC2035
-codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $(git diff --name-only origin/"$CHANGE_TARGET"...)
-
-# The return code of codespell is the number of words it could not correct
-# because of multiple options.  We could report on these but they're rare
-# so just save the exit code here and use it later on.  They are reported
-# in the output of the CI job, just will not be commented on in github.
-# CORCI-988 tracks this, with a view to improving reporting in this case.
-RC=$?
-
 def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
 def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO"
-def_ignore+=",CONCATENATED_STRING"
+def_ignore+=",CONCATENATED_STRING,SPACING"
 
 CP=../code_review/checkpatch.pl
 if [ ! -x $CP ]
@@ -38,4 +28,4 @@ fi
 # Correct any formatting of go code.
 find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
 
-exit $RC
+exit 0

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -118,6 +118,10 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
+	DAOS_OPC_POOL_FILTER_CONT,
+	DAOS_OPC_OBJ_KEY2ANCHOR,
+	DAOS_OPC_CONT_SNAP_OIT_CREATE,
+	DAOS_OPC_CONT_SNAP_OIT_DESTROY,
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -215,6 +219,18 @@ typedef struct {
 	/** Array of container structures. */
 	struct daos_pool_cont_info	*cont_buf;
 } daos_pool_list_cont_t;
+
+/** pool filter containers args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t			 poh;
+	/** [in] filter selection criteria */
+	daos_pool_cont_filter_t		*filt;
+	/** [in] length of \a cont_buf. [out] number of containers that match filter criteria. */
+	daos_size_t			*ncont;
+	/** Array of container extended info structures. */
+	struct daos_pool_cont_info2	*cont_buf;
+} daos_pool_filter_cont_t;
 
 /** pool list attributes args */
 typedef struct {
@@ -504,6 +520,34 @@ typedef struct {
 	/** Epoch range of snapshots to destroy. */
 	daos_epoch_range_t	epr;
 } daos_cont_destroy_snap_t;
+
+/** Container snapshot oit oid get args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/* Epoch of snapshot for getting oit oid */
+	daos_epoch_t		 epoch;
+	/* Returned OIT OID for the epoch snapshot */
+	daos_obj_id_t		*oid;
+} daos_cont_snap_oit_oid_get_t;
+
+/** Container snapshot oit create args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/** epoch of persistent snapshot taken. */
+	daos_epoch_t		 epoch;
+	/** Optional null terminated name for snapshot. */
+	char			*name;
+} daos_cont_snap_oit_create_t;
+
+/** Container snapshot oit destroy args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** epoch of persistent snapshot. */
+	daos_epoch_t		epoch;
+} daos_cont_snap_oit_destroy_t;
 
 /** Transaction Open args */
 typedef struct {
@@ -798,6 +842,20 @@ typedef daos_obj_list_t		daos_obj_list_recx_t;
  * bool			incr_order;
 */
 typedef daos_obj_list_t		daos_obj_list_obj_t;
+
+/** daos_obj_key2anchor args */
+typedef struct {
+	/** Object open handle */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+	/** Distribution key. */
+	daos_key_t		*dkey;
+	/** Attribute key. */
+	daos_key_t		*akey;
+	/** Anchor to set */
+	daos_anchor_t		*anchor;
+} daos_obj_key2anchor_t;
 
 /** Array create args */
 typedef struct {

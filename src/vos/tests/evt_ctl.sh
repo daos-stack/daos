@@ -97,7 +97,7 @@ EOF
 }
 
 # Sequence
-cmd="$VCMD $EVT_CTL --start-test \"evt tests $*\" $* -C o:4"
+cmd="$VCMD $EVT_CTL --start-test \"evtree tests $*\" $* -C o:4"
 
 i=0
 while [ $i -lt 20 ]; do

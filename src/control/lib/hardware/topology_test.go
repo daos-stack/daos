@@ -320,6 +320,80 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 	}
 }
 
+func TestHardware_Topology_AddBlockDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topo      *Topology
+		numaNode  uint
+		device    *BlockDevice
+		expResult *Topology
+		expErr    error
+	}{
+		"nil topology": {
+			device: &BlockDevice{
+				Name: "test",
+			},
+			expErr: errors.New("nil"),
+		},
+		"nil input": {
+			topo:      &Topology{},
+			expErr:    errors.New("nil"),
+			expResult: &Topology{},
+		},
+		"add to empty": {
+			topo:     &Topology{},
+			numaNode: 1,
+			device: &BlockDevice{
+				Name: "test",
+			},
+			expResult: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 0).WithBlockDevices([]*BlockDevice{
+						{
+							Name: "test",
+						},
+					}),
+				},
+			},
+		},
+		"add to existing node": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 6).WithBlockDevices([]*BlockDevice{
+						{
+							Name: "test0",
+						},
+					}),
+				},
+			},
+			numaNode: 1,
+			device: &BlockDevice{
+				Name: "test1",
+			},
+			expResult: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 6).WithBlockDevices([]*BlockDevice{
+						{
+							Name: "test0",
+						},
+						{
+							Name: "test1",
+						},
+					}),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.topo.AddBlockDevice(tc.numaNode, tc.device)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, tc.topo); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestHardware_Topology_AddVirtualDevice(t *testing.T) {
 	for name, tc := range map[string]struct {
 		topo      *Topology

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -704,8 +704,10 @@ ik_btr_batch_oper(void **state)
 	}
 
 	D_ALLOC_ARRAY(arr, key_nr);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		return;
+	}
 
 	D_PRINT("Batch add %d records.\n", key_nr);
 	ik_btr_gen_keys(arr, key_nr);
@@ -830,8 +832,10 @@ ik_btr_drain(void **state)
 	int		 i;
 
 	D_ALLOC_ARRAY(arr, drain_keys);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		return;
+	}
 
 	D_PRINT("Batch add %d records.\n", drain_keys);
 	ik_btr_gen_keys(arr, drain_keys);

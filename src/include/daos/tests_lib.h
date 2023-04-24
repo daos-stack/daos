@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,14 +14,6 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_success(r)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != 0)						\
-			fail_msg("Not successful!! Error code: "	\
-				 DF_RC, DP_RC(__rc));			\
-	} while (0)
-
 #define assert_rc_equal(rc, expected_rc)				\
 	do {								\
 		if ((rc) == (expected_rc))				\
@@ -33,6 +25,9 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 		assert_int_equal(rc, expected_rc);			\
 	} while (0)
+
+/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
+#define assert_success(r) assert_rc_equal(r, 0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 
@@ -129,6 +124,9 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 				 uint32_t count, char *d, ...);
+
+void
+dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size);
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -239,6 +237,58 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Exclude an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for exclusion
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to exclude (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to exclude (ignored if -1)
+ */
+int dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
+		     const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Reintegrate an entire rank or a target on that rank to a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to reintegrate (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to reintegrate (ignored if -1)
+ */
+int dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
+			 const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Drain an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to drain (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to drain (ignored if -1)
+ */
+int dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
+		   const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Extend a pool by adding ranks.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param ranks		[IN]	Ranks to add to the pool
+ * \param ranks_nr	[IN]	Number of ranks to add to the pool
+ */
+int dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
+		    const char *grp, d_rank_t *ranks, int ranks_nr);
+
+/**
  * Set property of the pool with \a pool_uuid.
  *
  * \param dmg_config_file	[IN] DMG config file.
@@ -305,6 +355,25 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  *					expected state
  */
 int verify_blobstore_state(int state, const char *state_str);
+
+/**
+ * Stop a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
+/**
+ * Start a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to start.
+ */
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
 

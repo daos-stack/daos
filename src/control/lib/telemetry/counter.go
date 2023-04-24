@@ -3,8 +3,9 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux && (amd64 || arm64)
+// +build linux
+// +build amd64 arm64
 
 //
 

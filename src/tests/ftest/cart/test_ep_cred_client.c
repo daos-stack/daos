@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,11 +67,12 @@ test_run()
 	DBG_PRINT("Number of credits: %d Number of burst: %d\n",
 		   test.tg_credits, test.tg_burst_count);
 
-	crtu_cli_start_basic(test.tg_local_group_name,
-			     test.tg_remote_group_name,
-			     &grp, &rank_list, &test.tg_crt_ctx,
-			     &test.tg_tid, true, test.tg_use_cfg, &opt,
-			     test.tg_use_daos_agent_env);
+	rc = crtu_cli_start_basic(test.tg_local_group_name,
+				  test.tg_remote_group_name,
+				  &grp, &rank_list, &test.tg_crt_ctx,
+				  &test.tg_tid, true, test.tg_use_cfg, &opt,
+				  test.tg_use_daos_agent_env);
+	D_ASSERTF(rc == 0, "crtu_cli_start_basic failed\n");
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");

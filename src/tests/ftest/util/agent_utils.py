@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +7,8 @@ import socket
 import re
 import os
 from getpass import getuser
+
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     FormattedParameter, EnvironmentVariables, \
@@ -23,20 +24,15 @@ def include_local_host(hosts):
     """Ensure the local host is included in the specified host list.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
 
     Returns:
-        list: list of hosts including the local host
+        NodeSet: list of hosts including the local host
 
     """
-    local_host = socket.gethostname().split('.', 1)[0]
-    if hosts is None:
-        hosts = [local_host]
-    elif local_host not in hosts:
-        # Take a copy of hosts to avoid modifying-in-place
-        hosts = list(hosts)
-        hosts.append(local_host)
-    return hosts
+    with_localhost = NodeSet(socket.gethostname().split('.', 1)[0])
+    with_localhost.add(hosts)
+    return with_localhost
 
 
 def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -243,7 +239,6 @@ class DaosAgentManager(SubprocessManager):
 
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent."""
-
         server_name = self.get_config_value("name")
 
         self.dump_attachinfo()

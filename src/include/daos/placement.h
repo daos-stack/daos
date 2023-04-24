@@ -77,7 +77,7 @@ struct pl_obj_layout {
 
 /** common header of all placement map */
 struct pl_map {
-	/** correpsonding pool uuid */
+	/** corresponding pool uuid */
 	uuid_t			 pl_uuid;
 	/** link chain on hash */
 	d_list_t		 pl_link;
@@ -127,27 +127,29 @@ bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 			    uint32_t rank, uint32_t target_index,
 			    uint32_t shard);
 
-int pl_obj_place(struct pl_map *map, struct daos_obj_md *md, unsigned int mode,
-		 struct daos_obj_shard_md *shard_md, struct pl_obj_layout **layout_pp);
+int pl_obj_place(struct pl_map *map, uint16_t gl_layout_ver, struct daos_obj_md *md,
+		 unsigned int mode, struct daos_obj_shard_md *shard_md,
+		 struct pl_obj_layout **layout_pp);
 
-int pl_obj_find_rebuild(struct pl_map *map,
+int pl_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size);
 
-int pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+int pl_obj_find_drain(struct pl_map *map, uint32_t gl_layout_ver,
+		      struct daos_obj_md *md,
 		      struct daos_obj_shard_md *shard_md,
 		      uint32_t rebuild_ver, uint32_t *tgt_rank,
 		      uint32_t *shard_id, unsigned int array_size);
 
-int pl_obj_find_reint(struct pl_map *map,
+int pl_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size);
 
-int pl_obj_find_addition(struct pl_map *map,
+int pl_obj_find_addition(struct pl_map *map, uint32_t gl_layout_ver,
 			 struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,

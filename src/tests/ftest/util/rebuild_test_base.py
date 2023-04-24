@@ -1,12 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
 from daos_utils import DaosCommand
+
 
 class RebuildTestParams(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
@@ -129,14 +129,12 @@ class RebuildTestBase(TestWithServers):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
-            self.server_managers[0].stop_ranks(
-                self.inputs.rank.value, self.d_log, force=True)
+            self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log, force=True)
         else:
-            self.server_managers[0].stop_ranks(
-                [self.inputs.rank.value], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True, 1)
+        self.pool.wait_for_rebuild_to_start(1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
@@ -182,14 +180,14 @@ class RebuildTestBase(TestWithServers):
         self.execute_during_rebuild()
 
         # Confirm rebuild completes
-        self.pool.wait_for_rebuild(False, 1)
+        self.pool.wait_for_rebuild_to_end(1)
 
         # clear container status for the RF issue
         self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+            pool=self.pool.uuid,
+            cont=self.container.uuid,
+            prop="status",
+            value="healthy")
 
         # Refresh local pool and container
         self.pool.check_pool_info()
