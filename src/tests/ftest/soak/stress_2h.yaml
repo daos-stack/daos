@@ -61,7 +61,8 @@ container_reserved:
 soak_stress:
   name: soak_stress
   # stress test timeout in hours
-  test_timeout: 2
+  test_timeout:
+    test_soak_stress: 2
   joblist:
     - ior_stress
     - mdtest_stress
