@@ -8,12 +8,13 @@
  *
  * rdb: Raft Integration
  *
- * Each replica employs four daemon ULTs:
+ * Each replica employs four or five daemon ULTs:
  *
  *   ~ rdb_timerd(): Call raft_periodic() periodically.
  *   ~ rdb_recvd(): Process RPC replies received.
  *   ~ rdb_callbackd(): Invoke user dc_step_{up,down} callbacks.
  *   ~ rdb_compactd(): Compact polled entries by calling rdb_lc_aggregate().
+ *   ~ rdb_checkpointd(): Checkpoint RDB pool (MD on SSD only).
  *
  * rdb uses its own last applied index, which always equal to the last
  * committed index, instead of using raft's version.
@@ -1556,6 +1557,144 @@ rdb_gc_yield(void *arg)
 	return 0;
 }
 
+static void
+rdb_raft_checkpoint_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
+		goto out;
+
+	ABT_mutex_lock(db->d_raft_mutex);
+	dcr->dcr_waiting = 1;
+	dcr->dcr_wait_id = wait_id;
+	do {
+		sched_cond_wait(db->d_commit_cv, db->d_raft_mutex);
+	} while (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) < 0);
+	ABT_mutex_unlock(db->d_raft_mutex);
+
+out:
+	*commit_id = dcr->dcr_commit_id;
+}
+
+static void
+rdb_raft_checkpoint_update(void *arg, uint64_t commit_id, uint32_t used_blocks,
+			   uint32_t total_blocks)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	if (!dcr->dcr_init) {
+		/** Set threshold to 50% of blocks */
+		dcr->dcr_thresh = total_blocks >> 1;
+	}
+
+	dcr->dcr_commit_id = commit_id;
+
+	if (dcr->dcr_idle) {
+		if (used_blocks >= dcr->dcr_thresh) {
+			dcr->dcr_needed = 1;
+			dcr->dcr_idle   = 0;
+			D_DEBUG(DB_MD,
+				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
+				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
+			ABT_cond_broadcast(db->d_checkpoint_cv);
+		}
+		return;
+	}
+
+	if (!dcr->dcr_waiting)
+		return;
+
+	/** Checkpoint ULT is waiting for a commit, check if we can wake it up */
+	if (store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
+		dcr->dcr_waiting = 0;
+		D_DEBUG(DB_MD,
+			DF_DB ": waking checkpoint on commit commit_id=" DF_X64 ", wait_id=" DF_X64
+			      "\n",
+			DP_DB(db), commit_id, dcr->dcr_wait_id);
+		ABT_cond_broadcast(db->d_commit_cv);
+	}
+}
+
+static bool
+rdb_raft_checkpoint_enabled(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+
+	if (dcr->dcr_init)
+		return dcr->dcr_enabled == 1;
+
+	if (!vos_pool_needs_checkpoint(db->d_pool)) {
+		D_DEBUG(DB_MD, DF_DB ": checkpointing is disabled for rdb replica\n", DP_DB(db));
+		dcr->dcr_init    = 1;
+		dcr->dcr_enabled = 0;
+		return false;
+	}
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointing is enabled for rdb replica\n", DP_DB(db));
+	vos_pool_checkpoint_init(db->d_pool, rdb_raft_checkpoint_update, rdb_raft_checkpoint_wait,
+				 db, &dcr->dcr_store);
+
+	dcr->dcr_enabled = 1;
+	dcr->dcr_init    = 1;
+
+	return true;
+}
+
+static void
+rdb_raft_checkpoint_fini(struct rdb *db)
+{
+	if (!rdb_raft_checkpoint_enabled(db))
+		vos_pool_checkpoint_fini(db->d_pool);
+}
+
+static int
+rdb_raft_checkpoint(struct rdb *db)
+{
+	D_DEBUG(DB_MD, DF_DB ": starting checkpoint\n", DP_DB(db));
+	return vos_pool_checkpoint(db->d_pool);
+}
+
+/* Daemon ULT for checkpointing to metadata blob (MD on SSD only) */
+static void
+rdb_checkpointd(void *arg)
+{
+	struct rdb *db = arg;
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
+	for (;;) {
+		bool stop;
+		int  rc;
+
+		ABT_mutex_lock(db->d_raft_mutex);
+		for (;;) {
+			stop = db->d_stop;
+			if (db->d_chkpt_record.dcr_needed)
+				break;
+			if (stop)
+				break;
+			db->d_chkpt_record.dcr_idle = 1;
+			sched_cond_wait(db->d_checkpoint_cv, db->d_raft_mutex);
+		}
+		ABT_mutex_unlock(db->d_raft_mutex);
+		if (stop)
+			break;
+		rc = rdb_raft_checkpoint(db);
+		if (rc != 0) {
+			D_ERROR(DF_DB ": failed to checkpoint: rc=" DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
+			break;
+		}
+		db->d_chkpt_record.dcr_needed = 0;
+	}
+	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
+	rdb_raft_checkpoint_fini(db);
+}
+
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */
 static void
 rdb_compactd(void *arg)
@@ -2535,6 +2674,22 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 		goto err_compact_cv;
 	}
 
+	if (rdb_raft_checkpoint_enabled(db)) {
+		rc = ABT_cond_create(&db->d_checkpoint_cv);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR(DF_DB ": failed to create checkpoint CV: %d\n", DP_DB(db), rc);
+			rc = dss_abterr2der(rc);
+			goto err_compacted_cv;
+		}
+
+		rc = ABT_cond_create(&db->d_commit_cv);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR(DF_DB ": failed to create commit CV: %d\n", DP_DB(db), rc);
+			rc = dss_abterr2der(rc);
+			goto err_checkpoint_cv;
+		}
+	}
+
 	if (caller_term != RDB_NIL_TERM) {
 		uint64_t	term;
 		d_iov_t		value;
@@ -2544,29 +2699,35 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 		if (rc == -DER_NONEXIST)
 			term = 0;
 		else if (rc != 0)
-			goto err_compacted_cv;
+			goto err_commit_cv;
 
 		if (caller_term < term) {
 			D_DEBUG(DB_MD, DF_DB": stale caller term: "DF_X64" < "DF_X64"\n", DP_DB(db),
 				caller_term, term);
 			rc = -DER_STALE;
-			goto err_compacted_cv;
+			goto err_commit_cv;
 		} else if (caller_term > term) {
 			D_DEBUG(DB_MD, DF_DB": updating term: "DF_X64" -> "DF_X64"\n", DP_DB(db),
 				term, caller_term);
 			d_iov_set(&value, &caller_term, sizeof(caller_term));
 			rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_term, &value);
 			if (rc != 0)
-				goto err_compacted_cv;
+				goto err_commit_cv;
 		}
 	}
 
 	rc = rdb_raft_open_lc(db);
 	if (rc != 0)
-		goto err_compacted_cv;
+		goto err_commit_cv;
 
 	return 0;
 
+err_commit_cv:
+	if (rdb_raft_checkpoint_enabled(db))
+		ABT_cond_free(&db->d_commit_cv);
+err_checkpoint_cv:
+	if (rdb_raft_checkpoint_enabled(db))
+		ABT_cond_free(&db->d_checkpoint_cv);
 err_compacted_cv:
 	ABT_cond_free(&db->d_compacted_cv);
 err_compact_cv:
@@ -2588,6 +2749,10 @@ rdb_raft_close(struct rdb *db)
 {
 	D_ASSERT(db->d_raft == NULL);
 	rdb_raft_close_lc(db);
+	if (rdb_raft_checkpoint_enabled(db)) {
+		ABT_cond_free(&db->d_commit_cv);
+		ABT_cond_free(&db->d_checkpoint_cv);
+	}
 	ABT_cond_free(&db->d_compacted_cv);
 	ABT_cond_free(&db->d_compact_cv);
 	ABT_cond_free(&db->d_replies_cv);
@@ -2694,6 +2859,12 @@ rdb_raft_start(struct rdb *db)
 			    &db->d_compactd);
 	if (rc != 0)
 		goto err_callbackd;
+	if (rdb_raft_checkpoint_enabled(db)) {
+		rc = dss_ult_create(rdb_checkpointd, db, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ,
+				    &db->d_checkpointd);
+		if (rc != 0)
+			goto err_compactd;
+	}
 
 	D_DEBUG(DB_MD,
 		DF_DB": raft started: election_timeout=%dms request_timeout=%dms "
@@ -2702,6 +2873,11 @@ rdb_raft_start(struct rdb *db)
 		db->d_ae_max_size);
 	return 0;
 
+err_compactd:
+	db->d_stop = true;
+	ABT_cond_broadcast(db->d_compact_cv);
+	rc = ABT_thread_free(&db->d_compactd);
+	D_ASSERTF(rc == 0, "free rdb_compactd: " DF_RC "\n", DP_RC(rc));
 err_callbackd:
 	db->d_stop = true;
 	ABT_cond_broadcast(db->d_events_cv);
@@ -2741,6 +2917,8 @@ rdb_raft_stop(struct rdb *db)
 	ABT_cond_broadcast(db->d_applied_cv);
 	ABT_cond_broadcast(db->d_events_cv);
 	ABT_cond_broadcast(db->d_compact_cv);
+	if (rdb_raft_checkpoint_enabled(db))
+		ABT_cond_broadcast(db->d_checkpoint_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	ABT_mutex_lock(db->d_mutex);
@@ -2762,6 +2940,8 @@ rdb_raft_stop(struct rdb *db)
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
+	rc = ABT_thread_free(&db->d_checkpointd);
+	D_ASSERTF(rc == 0, "free rdb_checkpointd: " DF_RC "\n", DP_RC(rc));
 	rc = ABT_thread_free(&db->d_compactd);
 	D_ASSERTF(rc == 0, "free rdb_compactd: "DF_RC"\n", DP_RC(rc));
 	rc = ABT_thread_free(&db->d_callbackd);

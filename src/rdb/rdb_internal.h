@@ -48,6 +48,14 @@ rdb_to_storage(struct rdb *db)
 	return (struct rdb_storage *)db;
 }
 
+struct rdb_chkpt_record {
+	uint32_t dcr_init : 1, dcr_enabled : 1, dcr_waiting : 1, dcr_needed : 1, dcr_idle : 1;
+	uint32_t dcr_thresh;
+	uint64_t dcr_commit_id;
+	uint64_t dcr_wait_id;
+	struct umem_store *dcr_store;
+};
+
 /* multi-ULT locking in struct rdb:
  *  d_mutex: for RPC mgmt and ref count:
  *    d_requests, d_replies/cv, d_ref/cv
@@ -78,6 +86,7 @@ struct rdb {
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
 	struct rdb_lc_record	d_slc_record;	/* of d_slc */
+	struct rdb_chkpt_record d_chkpt_record; /* Checkpoint information */
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
@@ -91,9 +100,12 @@ struct rdb {
 	uint64_t		d_compact_thres;/* of compactable entries */
 	ABT_cond		d_compact_cv;	/* for triggering base updates */
 	ABT_cond		d_compacted_cv;	/* for d_lc_record.dlr_aggregated updates */
+	ABT_cond                d_checkpoint_cv; /* for triggering checkpointing */
+	ABT_cond                d_commit_cv;     /* for waking active checkpoint */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
 	ABT_thread		d_callbackd;
+	ABT_thread              d_checkpointd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
 	size_t			d_ae_max_size;

@@ -470,8 +470,7 @@ vos_pool_checkpoint(daos_handle_t poh)
 	int                            rc;
 	uint64_t                       purge_size = 0;
 	struct umem_cache_chkpt_stats  stats;
-	struct vos_chkpt_metrics      *chkpt_metrics;
-
+	struct vos_chkpt_metrics      *chkpt_metrics = NULL;
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
@@ -479,9 +478,11 @@ vos_pool_checkpoint(daos_handle_t poh)
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
 
-	chkpt_metrics = &pool->vp_metrics->vp_chkpt_metrics;
+	if (pool->vp_metrics != NULL)
+		chkpt_metrics = &pool->vp_metrics->vp_chkpt_metrics;
 
-	d_tm_mark_duration_start(chkpt_metrics->vcm_duration, D_TM_CLOCK_REALTIME);
+	if (chkpt_metrics != NULL)
+		d_tm_mark_duration_start(chkpt_metrics->vcm_duration, D_TM_CLOCK_REALTIME);
 
 	bio_wal_query(store->stor_priv, &wal_info);
 	tx_id = wal_info.wi_commit_id;
@@ -490,8 +491,8 @@ vos_pool_checkpoint(daos_handle_t poh)
 		return 0;
 	}
 
-	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
-	       DP_UUID(pool->vp_id), tx_id);
+	D_DEBUG(DB_MD, "Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
+		DP_UUID(pool->vp_id), tx_id);
 
 	rc = bio_meta_clear_empty(store->stor_priv);
 	if (rc)
@@ -508,15 +509,18 @@ vos_pool_checkpoint(daos_handle_t poh)
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
-	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
-	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
+	D_DEBUG(DB_MD,
+		"Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
+		DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
 
-	d_tm_mark_duration_end(chkpt_metrics->vcm_duration);
-	if (!rc) {
-		d_tm_set_gauge(chkpt_metrics->vcm_dirty_pages, stats.uccs_nr_pages);
-		d_tm_set_gauge(chkpt_metrics->vcm_dirty_chunks, stats.uccs_nr_dchunks);
-		d_tm_set_gauge(chkpt_metrics->vcm_iovs_copied, stats.uccs_nr_iovs);
-		d_tm_set_gauge(chkpt_metrics->vcm_wal_purged, purge_size);
+	if (chkpt_metrics != NULL) {
+		d_tm_mark_duration_end(chkpt_metrics->vcm_duration);
+		if (!rc) {
+			d_tm_set_gauge(chkpt_metrics->vcm_dirty_pages, stats.uccs_nr_pages);
+			d_tm_set_gauge(chkpt_metrics->vcm_dirty_chunks, stats.uccs_nr_dchunks);
+			d_tm_set_gauge(chkpt_metrics->vcm_iovs_copied, stats.uccs_nr_iovs);
+			d_tm_set_gauge(chkpt_metrics->vcm_wal_purged, purge_size);
+		}
 	}
 	return rc;
 }
