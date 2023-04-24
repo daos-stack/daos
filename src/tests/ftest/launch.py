@@ -1512,7 +1512,7 @@ class Launch():
             # Change the auto-storage extra yaml format if md_on_ssd is requested
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
-                scm_size = 100
+                args.scm_size = 100
                 max_nvme_tiers = 5
 
         self.details["storage"] = storage_info.device_dict()
