@@ -4860,16 +4860,11 @@ cont_rdb_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 int
-ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
+ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 {
 	struct cont_rdb_iter_arg	args = { 0 };
-	struct cont_svc			*svc = NULL;
 	struct rdb_tx			tx;
 	int				rc;
-
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
 
 	args.svc = svc;
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -4883,7 +4878,7 @@ ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, cont_rdb_iter_cb, &args);
 	ABT_rwlock_unlock(svc->cs_lock);
 	if (rc < 0) {
-		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 		D_GOTO(tx_end, rc);
 	}
 
@@ -4894,9 +4889,7 @@ tx_end:
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(pool_uuid), rc);
-	if (svc != NULL)
-		cont_svc_put_leader(svc);
+	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 
 	return rc;
 }
