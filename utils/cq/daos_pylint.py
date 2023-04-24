@@ -465,6 +465,8 @@ sys.path.append('site_scons')"""
                 self._reports.append(report)
             elif args.output_format == 'github':
                 print(args.msg_template.format(**vals))
+                if vals['category'] in ('convention', 'refactor'):
+                    vals['category'] = 'warning'
                 msg_to_github(vals)
             else:
                 print(args.msg_template.format(**vals))
