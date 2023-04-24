@@ -58,7 +58,6 @@ class EcodServerRestart(ErasureCodeIor):
         # 4.  step-5 for Restart_before_agg test
         self.log_step("Enable aggregation")
         self.pool.set_property("reclaim", "time")
-        time.sleep(20)
 
         # 5.  step-6 for Restart_before_agg test
         self.log_step("Rerun IOR")
