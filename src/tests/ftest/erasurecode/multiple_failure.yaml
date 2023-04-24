@@ -60,12 +60,12 @@ ior:
        chunk_block_transfer_sizes:
         - [32M, 512M, 2K]
   objectclass: !mux
-    EC_2P2GX:
+    EC_2P2G1:
       dfs_oclass_list:
-       - ["EC_2P2GX", 6]
-    EC_4P2GX:
+       - ["EC_2P2G1", 6]
+    EC_4P2G1:
       dfs_oclass_list:
-       - ["EC_4P2GX", 8]
-    EC_8P2GX:
+       - ["EC_4P2G1", 8]
+    EC_8P2G1:
       dfs_oclass_list:
-       - ["EC_8P2GX", 10]
+       - ["EC_8P2G1", 10]
