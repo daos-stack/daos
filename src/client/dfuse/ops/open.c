@@ -59,9 +59,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		} else if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
 			fi_out.keep_cache = 1;
 		}
-
-		if (fi_out.keep_cache)
-			oh->doh_keep_cache = true;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -110,7 +107,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
+	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
 	/* If the file was read from then set the data cache time for future use, however if the
 	 * file was written to then evict the metadata cache.

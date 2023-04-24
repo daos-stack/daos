@@ -125,13 +125,6 @@ struct dfuse_obj_hdl {
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
-	/* True if the kernel may have been told to keep the cache for this open.  This is used
-	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
-	 * here and this flag may be set on create even if the kernel flag isn't provided.
-	 * TODO: Remove this?
-	 */
-	bool                      doh_keep_cache;
-
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                      doh_writeable;
 
@@ -624,10 +617,10 @@ struct dfuse_inode_entry {
 	 */
 	d_list_t                 ie_htl;
 
-	/* Time of last kernel cache update.
-	 */
+	/* Time of last kernel cache metadata update */
 	struct timespec          ie_mcache_last_update;
 
+	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec          ie_dcache_last_update;
 
 	/** written region for truncated files (i.e. ie_truncated set) */
