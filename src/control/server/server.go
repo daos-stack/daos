@@ -40,10 +40,10 @@ import (
 // non-exported package-scope function variable for mocking in unit tests
 var osSetenv = os.Setenv
 
-func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, ass ...config.EngineAffinityFn) error {
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
 	processFabricProvider(cfg)
 
-	if err := cfg.SetEngineAffinities(log, ass...); err != nil {
+	if err := cfg.SetEngineAffinities(log, affSrcs...); err != nil {
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
