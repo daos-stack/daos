@@ -43,15 +43,15 @@ extra:
 plugins:
   - search
   - mike:
-        version_selector: true
+      version_selector: true
 
 markdown_extensions:
   - admonition
   - footnotes
   - tables
   - toc:
-        permalink: true
-        toc_depth: 4
+      permalink: true
+      toc_depth: 4
 
 # Page tree
 nav:
