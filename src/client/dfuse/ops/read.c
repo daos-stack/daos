@@ -76,8 +76,6 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 		oh->doh_linear_read_eof = true;
 	}
 
-	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested", position, position + len - 1);
-
 	/* At this point there is a buffer of known length that contains the data, and a read
 	 * request.
 	 * If the attempted read is bigger than the data then it will be truncated.
@@ -94,7 +92,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 				position + reply_len - 1, position + reply_len, position + len - 1);
 	}
 
-	DFUSE_REPLY_BUF(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
+	DFUSE_REPLY_BUFQ(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
 	return true;
 }
 

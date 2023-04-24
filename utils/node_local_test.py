@@ -22,6 +22,7 @@ import pprint
 import stat
 import errno
 import argparse
+import random
 import threading
 import functools
 import traceback
@@ -1871,6 +1872,14 @@ class PosixTests():
         with open(join(dfuse.dir, 'file2'), 'w') as fd:
             fd.write('testing')
 
+        raw_data0 = ''.join(random.choices(['d', 'a', 'o', 's'], k=1024 * 1024))  # nosec
+        with open(join(dfuse.dir, 'file3'), 'w') as fd:
+            fd.write(raw_data0)
+
+        raw_data1 = ''.join(random.choices(['d', 'a', 'o', 's'], k=(1024 * 1024) - 1))  # nosec
+        with open(join(dfuse.dir, 'file4'), 'w') as fd:
+            fd.write(raw_data1)
+
         if dfuse.stop():
             self.fatal_errors = True
 
@@ -1886,12 +1895,22 @@ class PosixTests():
         with open(join(dfuse.dir, 'file2'), 'r') as fd:
             data2 = fd.read(2)
 
+        with open(join(dfuse.dir, 'file3'), 'r') as fd:
+            data3 = fd.read()
+
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data4 = fd.read()
+            data5 = fd.read()
+
         if dfuse.stop():
             self.fatal_errors = True
         print(data0)
         assert data0 == 'test'
         assert data1 == 'test'
         assert data2 == 'te'
+        assert raw_data0 == data3
+        assert raw_data1 == data4
+        assert len(data5) == 0
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
