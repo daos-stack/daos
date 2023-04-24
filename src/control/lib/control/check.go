@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -440,47 +440,93 @@ func (r *SystemCheckReport) Resolution() string {
 
 type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
 
+type CheckTime struct {
+	StartTime time.Time     `json:"-"`
+	Remaining time.Duration `json:"-"`
+	StopTime  time.Time     `json:"-"`
+}
+
+func (t *CheckTime) SetStartTime(in uint64) {
+	t.StartTime = time.Unix(int64(in), 0)
+}
+
+func (t *CheckTime) SetRemaining(in uint64) {
+	t.Remaining = time.Duration(in) * time.Second
+}
+
+func (t *CheckTime) SetStopTime(in uint64) {
+	t.StopTime = time.Unix(int64(in), 0)
+}
+
+func (t *CheckTime) StopString() string {
+	if t == nil || t.StopTime.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf("stopped: %s (%s)", common.FormatTime(t.StopTime), t.StopTime.Sub(t.StartTime))
+}
+
+func (t *CheckTime) String() string {
+	if t == nil || t.StartTime.IsZero() {
+		return ""
+	}
+
+	var remOrStopped string
+	if t.Remaining > 0 {
+		remOrStopped = fmt.Sprintf(", remaining: %s", t.Remaining)
+	} else if !t.StopTime.IsZero() {
+		remOrStopped = fmt.Sprintf(", %s", t.StopString())
+	}
+	return fmt.Sprintf("started: %s%s", common.FormatTime(t.StartTime), remOrStopped)
+}
+
+func (t *CheckTime) MarshalJSON() ([]byte, error) {
+	fmtTime := func(t time.Time) string {
+		if t.IsZero() {
+			return ""
+		}
+		return common.FormatTime(t)
+	}
+	type toJSON CheckTime
+	return json.Marshal(&struct {
+		*toJSON
+		StartTime string  `json:"started,omitempty"`
+		Remaining float64 `json:"remaining,omitempty"`
+		StopTime  string  `json:"stopped,omitempty"`
+	}{
+		toJSON:    (*toJSON)(t),
+		StartTime: fmtTime(t.StartTime),
+		Remaining: t.Remaining.Seconds(),
+		StopTime:  fmtTime(t.StopTime),
+	})
+}
+
 type SystemCheckPoolInfo struct {
-	RawRankInfo rawRankMap    `json:"-"`
-	UUID        string        `json:"uuid"`
-	Label       string        `json:"label"`
-	Status      string        `json:"status"`
-	Phase       string        `json:"phase"`
-	StartTime   time.Time     `json:"-"`
-	Remaining   time.Duration `json:"-"`
-	Elapsed     time.Duration `json:"-"`
+	RawRankInfo rawRankMap `json:"-"`
+	UUID        string     `json:"uuid"`
+	Label       string     `json:"label,omitempty"`
+	Status      string     `json:"status"`
+	Phase       string     `json:"phase"`
+	Time        CheckTime  `json:"time"`
+}
+
+func (p *SystemCheckPoolInfo) String() string {
+	timeStr := p.Time.String()
+	if timeStr != "" {
+		timeStr = ", " + timeStr
+	}
+	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
+		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 	type toJSON SystemCheckPoolInfo
 	return json.Marshal(&struct {
 		*toJSON
-		RankCount int     `json:"rank_count"`
-		StartTime string  `json:"start_time"`
-		Remaining float64 `json:"remaining"`
-		Elapsed   float64 `json:"elapsed"`
+		RankCount int `json:"rank_count"`
 	}{
 		toJSON:    (*toJSON)(p),
 		RankCount: len(p.RawRankInfo),
-		StartTime: common.FormatTime(p.StartTime),
-		Remaining: p.Remaining.Seconds(),
-		Elapsed:   p.Elapsed.Seconds(),
 	})
-}
-
-func (p *SystemCheckPoolInfo) String() string {
-	var remOrElapsed string
-	if p.Elapsed > 0 {
-		remOrElapsed = fmt.Sprintf(" elapsed: %s", p.Elapsed)
-	} else if p.Remaining > 0 {
-		remOrElapsed = fmt.Sprintf(" remaining: %s", p.Remaining)
-	}
-	timeStr := ""
-	if !p.StartTime.IsZero() {
-		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remOrElapsed)
-	}
-	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
-		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) Unchecked() bool {
@@ -494,16 +540,6 @@ func getQueryPoolRank(pool *mgmtpb.CheckQueryPool) ranklist.Rank {
 	return ranklist.Rank(pool.Targets[0].Rank)
 }
 
-func roe(f string, status chkpb.CheckPoolStatus, val uint64) time.Duration {
-	if f == "r" && status != chkpb.CheckPoolStatus_CPS_CHECKING {
-		return 0
-	}
-	if f == "e" && status == chkpb.CheckPoolStatus_CPS_CHECKING {
-		return 0
-	}
-	return time.Duration(val) * time.Second
-}
-
 func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckPoolInfo {
 	pools := make(map[string]*SystemCheckPoolInfo)
 
@@ -514,11 +550,16 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 				UUID:        pbPool.Uuid,
 				// For the moment, ignore potential differences in these details
 				// across multiple ranks.
-				Status:    pbPool.Status.String(),
-				Phase:     pbPool.Phase.String(),
-				StartTime: time.Unix(int64(pbPool.Time.StartTime), 0),
-				Remaining: roe("r", pbPool.Status, pbPool.Time.MiscTime),
-				Elapsed:   roe("e", pbPool.Status, pbPool.Time.MiscTime),
+				Status: pbPool.Status.String(),
+				Phase:  pbPool.Phase.String(),
+			}
+			if pbPool.Time != nil {
+				pools[pbPool.Uuid].Time.SetStartTime(pbPool.Time.StartTime)
+				if pbPool.Status == chkpb.CheckPoolStatus_CPS_CHECKING {
+					pools[pbPool.Uuid].Time.SetRemaining(pbPool.Time.MiscTime)
+				} else if pbPool.Time.MiscTime > 0 {
+					pools[pbPool.Uuid].Time.SetStopTime(pbPool.Time.MiscTime)
+				}
 			}
 		}
 		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
@@ -530,21 +571,10 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
-	StartTime time.Time            `json:"start_time"`
+	Time      CheckTime            `json:"time"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
-}
-
-func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
-	type toJSON SystemCheckQueryResp
-	return json.Marshal(struct {
-		StartTime string `json:"start_time"`
-		*toJSON
-	}{
-		StartTime: common.FormatTime(r.StartTime),
-		toJSON:    (*toJSON)(r),
-	})
 }
 
 // SystemCheckQuery queries the system checker status.
@@ -571,8 +601,15 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	resp := &SystemCheckQueryResp{
 		Status:    SystemCheckStatus(pbResp.GetInsStatus()),
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
-		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
+	}
+	if pbResp.Time != nil {
+		resp.Time.SetStartTime(pbResp.Time.StartTime)
+		if pbResp.InsStatus != chkpb.CheckInstStatus_CIS_COMPLETED {
+			resp.Time.SetRemaining(pbResp.Time.MiscTime)
+		} else if pbResp.Time.MiscTime > 0 {
+			resp.Time.SetStopTime(pbResp.Time.MiscTime)
+		}
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
