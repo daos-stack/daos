@@ -76,7 +76,6 @@ func TestConfig_HasEnvVar(t *testing.T) {
 }
 
 func TestConfig_GetEnvVar(t *testing.T) {
-
 	for name, tc := range map[string]struct {
 		environment []string
 		key         string
@@ -480,6 +479,20 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		"minimally-valid config should pass": {
 			cfg: validConfig(),
+		},
+		"invalid log mask in config": {
+			cfg:    validConfig().WithLogMask("DBGG"),
+			expErr: errUnknownLogLevel("DBGG"),
+		},
+		"empty log debug stream env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK="),
+		},
+		"invalid log debug stream env in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=mgmt,grogu"),
+			expErr: errUnknownLogStream("grogu"),
+		},
+		"valid log debug stream env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=REBUILD,PL,mgmt,epc"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

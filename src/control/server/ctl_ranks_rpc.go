@@ -386,8 +386,15 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		}
 
 		if req.Masks == "" {
+			svc.log.Debugf("resetting engine %d log masks to server config values", ei.Index())
 			// no need to validate here as config value already validated on start-up
 			req.Masks = svc.srvCfg.Engines[idx].LogMask
+			streams, err := svc.srvCfg.Engines[idx].ReadLogDbgStreams()
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+				continue
+			}
+			req.Streams = streams
 		}
 		if req.Masks == "" {
 			errs = append(errs, fmt.Sprintf("engine-%d: no log_mask set in engine config", ei.Index()))

@@ -17,7 +17,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const maxHelperStreamCount = 2
+const (
+	maxHelperStreamCount = 2
+	envLogDbgStreams     = "DD_MASK"
+)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
@@ -133,6 +136,15 @@ func NewConfig() *Config {
 	}
 }
 
+func (c *Config) ReadLogDbgStreams() (string, error) {
+	val, err := c.GetEnvVar(envLogDbgStreams)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
 	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
@@ -149,6 +161,15 @@ func (c *Config) Validate() error {
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {
 		return errors.Wrap(err, "validate engine log masks")
+	}
+
+	streams, err := c.ReadLogDbgStreams()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+
+	if err := ValidateLogStreams(streams); err != nil {
+		return errors.Wrap(err, "validate engine log debug streams")
 	}
 
 	return nil
@@ -262,7 +283,7 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		}
 	}
 
-	return "", errors.Errorf("Undefined environment variable %q", name)
+	return "", errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
 }
 
 // WithEnvVars applies the supplied list of environment

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,7 +18,7 @@ import (
 
 // serverCmd is the struct representing the top-level server subcommand.
 type serverCmd struct {
-	SetLogMasks serverSetLogMasksCmd `command:"set-logmasks" alias:"slm" description:"Set log masks for a set of facilities to a given level. Setting will be applied to all running DAOS I/O Engines present in the configured dmg hostlist."`
+	SetLogMasks serverSetLogMasksCmd `command:"set-logmasks" alias:"slm" description:"Set log masks for a set of facilities to a given level and optionally specify debug streams to enable. Setting will be applied to all running DAOS I/O Engines present in the configured dmg hostlist."`
 }
 
 // serverSetLogMasksCmd is the struct representing the command to set engine log
@@ -30,8 +30,9 @@ type serverSetLogMasksCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Masks string `position-args-name:"masks" description:"Set log masks for a set of facilities to a given level. The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is identical to what is expected by 'D_LOG_MASK' environment variable. If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g. a value of 'WARN' sets everything to WARN). If unset then reset engine log masks to use the 'log_mask' value set in the server config file (for each engine) at the time of DAOS system format. Supported levels are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG"`
-		Rest  []string
+		Masks   string `position-args-name:"masks" description:"Set log masks for a set of facilities to a given level. The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is identical to what is expected by 'D_LOG_MASK' environment variable. If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g. a value of 'WARN' sets everything to WARN). If unset then reset engine log masks to use the 'log_mask' value set in the server config file (for each engine) at the time of DAOS system format. Supported levels are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG"`
+		Streams string `position-args-name:"streams" description:"Employ finer grained control over debug streams. Mask bits are set as the first argument passed in D_DEBUG(mask, ...) and this input string (DD_MASK) can be set to enable different debug streams. The expected syntax is a comma separated list of stream identifiers and If not set will default to enabling all debug streams. Accepted DAOS Debug Streams are md,pl,mgmt,epc,df,rebuild,daos_default and Common Debug Streams (GURT) are any,trace,mem,net,io"`
+		Rest    []string
 	} `positional-args:"yes"`
 }
 
@@ -42,12 +43,13 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 	}()
 
 	if len(cmd.Args.Rest) > 0 {
-		return errors.Errorf("expected 0-1 positional args but got %d",
-			len(cmd.Args.Rest)+1)
+		return errors.Errorf("expected 0-2 positional args but got %d",
+			len(cmd.Args.Rest)+2)
 	}
 
 	req := &control.SetEngineLogMasksReq{
-		Masks: cmd.Args.Masks,
+		Masks:   cmd.Args.Masks,
+		Streams: cmd.Args.Streams,
 	}
 	req.SetHostList(cmd.getHostList())
 

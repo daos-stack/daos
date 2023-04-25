@@ -16,6 +16,7 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 message SetLogMasksReq {
 	string sys = 1; // DAOS system name
 	string masks = 2; // set log masks for a set of facilities to a given level
+	string streams = 3; // enable specific set of debug streams to log
 }
 
 // SetEngineLogMasksResp returns results of attempts to set engine log masks.

@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-func TestValidateLogMasks(t *testing.T) {
+func Test_ValidateLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		masks  string
 		expErr error
@@ -66,6 +66,45 @@ func TestValidateLogMasks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := ValidateLogMasks(tc.masks)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func Test_ValidateLogStreams(t *testing.T) {
+	for name, tc := range map[string]struct {
+		streams string
+		expErr  error
+	}{
+		"empty": {},
+		"single stream": {
+			streams: "NET",
+		},
+		"multiple streams": {
+			streams: "ANY,TRACE",
+		},
+		"unknown stream": {
+			streams: "NET,WARNING",
+			expErr:  errors.New("unknown"),
+		},
+		"mixed caae": {
+			streams: "NET,io,rebuild",
+		},
+		"multiple streams; with space": {
+			streams: "MD PL",
+			expErr:  errors.New("illegal characters"),
+		},
+		"multiple streams; bad chars": {
+			streams: "mgmt,DF,!=",
+			expErr:  errors.New("illegal characters"),
+		},
+		"too long": {
+			streams: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			expErr:  errors.New("exceeds maximum length (1024>1023)"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := ValidateLogStreams(tc.streams)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

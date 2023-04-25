@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,9 +9,12 @@ package engine
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 const (
@@ -48,22 +51,35 @@ const (
 	logMasksStrAssignOp  = "="
 )
 
-var logMasksValidLevels = []string{
+var validLogLevels = []string{
 	"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
 }
 
-func isValidLevel(level string) bool {
-	for _, l := range logMasksValidLevels {
-		if strings.ToUpper(level) == l {
-			return true
-		}
-	}
-
-	return false
+func isLogLevelValid(name string) bool {
+	return common.Includes(validLogLevels, strings.ToUpper(name))
 }
 
 func errUnknownLogLevel(level string) error {
-	return errors.Errorf("unknown log level %q want one of %v", level, logMasksValidLevels)
+	return errors.Errorf("unknown log level %q want one of %v", level,
+		validLogLevels)
+}
+
+func checkStrChars(in string) error {
+	if !utf8.ValidString(in) {
+		return errors.New("input is not valid UTF-8")
+	}
+	if len(in) > logMasksStrMaxLen {
+		return errors.Errorf("string exceeds maximum length (%d>%d)",
+			len(in), logMasksStrMaxLen)
+	}
+
+	re := regexp.MustCompile(`^([a-zA-Z,=]+)$`)
+	matches := re.FindStringSubmatch(in)
+	if matches == nil {
+		return errors.Errorf("string has illegal characters: %q", in)
+	}
+
+	return nil
 }
 
 // ValidateLogMasks provides validation for log-masks string specifier.
@@ -74,20 +90,13 @@ func ValidateLogMasks(masks string) error {
 	if masks == "" {
 		return nil
 	}
-	if len(masks) > logMasksStrMaxLen {
-		return errors.Errorf("log masks string exceeds maximum length (%d>%d)",
-			len(masks), logMasksStrMaxLen)
-	}
-
-	re := regexp.MustCompile(`^([a-zA-Z,=]+)$`)
-	matches := re.FindStringSubmatch(masks)
-	if matches == nil {
-		return errors.Errorf("log masks has illegal characters: %q", masks)
+	if err := checkStrChars(masks); err != nil {
+		return errors.Wrap(err, "log masks")
 	}
 
 	for idx, tok := range strings.Split(masks, logMasksStrAssignSep) {
 		if idx == 0 && !strings.Contains(tok, logMasksStrAssignOp) {
-			if !isValidLevel(tok) {
+			if !isLogLevelValid(tok) {
 				return errUnknownLogLevel(tok)
 			}
 			continue // first specifier can exclude facility "PREFIX="
@@ -98,8 +107,43 @@ func ValidateLogMasks(masks string) error {
 			return errors.Errorf("illegal log mask assignment: want PREFIX=LEVEL got %q",
 				tok)
 		}
-		if !isValidLevel(facLevel[1]) {
+		if !isLogLevelValid(facLevel[1]) {
 			return errUnknownLogLevel(facLevel[1])
+		}
+	}
+
+	return nil
+}
+
+var validLogStreams = []string{
+	"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "DAOS_DEFAULT", // DAOS Debug Streams
+	"ANY", "TRACE", "MEM", "NET", "IO", // GURT Debug Streams
+}
+
+func isLogStreamValid(name string) bool {
+	return common.Includes(validLogStreams, strings.ToUpper(name))
+}
+
+func errUnknownLogStream(stream string) error {
+	return errors.Errorf("unknown log debug stream %q want one of %v", stream,
+		validLogStreams)
+}
+
+// ValidateLogStreams provides validation for the stream names provided in the log-masks debug
+// streams string input specifier.
+//
+// The input string should look like: STREAM1,STREAM2,...
+func ValidateLogStreams(streams string) error {
+	if streams == "" {
+		return nil
+	}
+	if err := checkStrChars(streams); err != nil {
+		return errors.Wrap(err, "debug streams")
+	}
+
+	for _, tok := range strings.Split(streams, logMasksStrAssignSep) {
+		if !isLogStreamValid(tok) {
+			return errUnknownLogStream(tok)
 		}
 	}
 

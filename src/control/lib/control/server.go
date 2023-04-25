@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,7 +22,8 @@ import (
 // request.
 type SetEngineLogMasksReq struct {
 	unaryRequest
-	Masks string `json:"masks"`
+	Masks   string `json:"masks"`
+	Streams string `json:"streams"`
 }
 
 // SetEngineLogMasksResp contains the results of a set engine log level
@@ -38,6 +39,9 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		return nil, errors.New("nil request")
 	}
 	if err := engine.ValidateLogMasks(req.Masks); err != nil {
+		return nil, err
+	}
+	if err := engine.ValidateLogStreams(req.Streams); err != nil {
 		return nil, err
 	}
 

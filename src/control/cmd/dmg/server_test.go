@@ -35,10 +35,19 @@ func TestServerCommands(t *testing.T) {
 			errors.New("unknown flag"),
 		},
 		{
+			"Set log masks with debug streams (DD_MASK)",
+			"server set-logmasks ERR,mgmt=DEBUG MGMT,IO",
+			printRequest(t, &control.SetEngineLogMasksReq{
+				Masks:   "ERR,mgmt=DEBUG",
+				Streams: "MGMT,IO",
+			}),
+			nil,
+		},
+		{
 			"Set log masks with too many args",
-			"server set-logmasks masks ERR,mgmt=DEBUG DEBUG",
+			"server set-logmasks ERR,mgmt=DEBUG MGMT,IO DEBUG",
 			"",
-			errors.New("expected 0-1 positional args but got 3"),
+			errors.New("expected 0-2 positional args but got 3"),
 		},
 	})
 }
