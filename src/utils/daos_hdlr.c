@@ -992,9 +992,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* create the destination directory if it does not exist. Assume root always exists */
 	if (strcmp(dst_path, "/") != 0) {
 		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-		if (rc == EEXIST) {
+		if (rc != 0 && rc != EEXIST) {
 			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-		} else if (rc != 0) {
 			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 	}
@@ -1005,9 +1004,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 		/* walk source directory */
 		rc = file_readdir(ap, src_file_dfs, src_dir, &entry);
 		if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_DER(ap, rc, "Cannot read directory");
-			D_GOTO(out, rc);
+			DH_PERROR_SYS(ap, rc, "Cannot read directory");
+			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 
 		/* end of stream when entry is NULL and rc == 0 */
