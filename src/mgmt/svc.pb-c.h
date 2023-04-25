@@ -209,14 +209,10 @@ struct  _Mgmt__GetAttachInfoReq
    * Return Rank URIs for all ranks.
    */
   protobuf_c_boolean all_ranks;
-  /*
-   * Refresh cache
-   */
-  protobuf_c_boolean refresh;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__ClientNetHint

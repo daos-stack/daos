@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,7 +72,6 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		aic       *attachInfoCache
 		cache     *mgmtpb.GetAttachInfoResp
-		refresh   bool
 		expCached bool
 		expRemote bool
 		remoteErr bool
@@ -97,13 +96,6 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 			expRemote: true,
 			remoteErr: true,
 			expErr:    errors.New("no soup for you"),
-		},
-		"refresh": {
-			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
-			cache:     srvResp,
-			refresh:   true,
-			expRemote: true,
-			expCached: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -130,7 +122,7 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 				return srvResp, nil
 			}
 
-			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, tc.refresh, getFn)
+			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, getFn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -372,7 +372,6 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name,
 				true /* all_ranks */,
-				false /* refresh */,
 				&crt_net_cfg_info,
 				&crt_net_cfg_resp);
 	if (opts.assert_on_error)
@@ -422,7 +421,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = dc_get_attach_info(name, true /* all_ranks */, false /* refresh */,
+	rc = dc_get_attach_info(name, true /* all_ranks */,
 				&crt_net_cfg_info, &crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);

@@ -34,12 +34,11 @@ type systemCmd struct {
 
 type systemQueryCmd struct {
 	daosCmd
-	Refresh bool `long:"refresh" short:"r" description:"try to refresh the agent cache"`
 }
 
 func (cmd *systemQueryCmd) Execute(_ []string) error {
 	var cSysInfo *C.struct_daos_sys_info
-	rc := C.daos_mgmt_get_sys_info(nil, C.bool(cmd.Refresh), &cSysInfo)
+	rc := C.daos_mgmt_get_sys_info(nil, &cSysInfo)
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "querying DAOS system information")
 	}

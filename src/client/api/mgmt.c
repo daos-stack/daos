@@ -69,9 +69,9 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 }
 
 int
-daos_mgmt_get_sys_info(const char *sys, bool refresh, struct daos_sys_info **info)
+daos_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info)
 {
-	return dc_mgmt_get_sys_info(sys, refresh, info);
+	return dc_mgmt_get_sys_info(sys, info);
 }
 
 void

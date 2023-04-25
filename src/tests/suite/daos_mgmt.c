@@ -401,13 +401,12 @@ static void
 get_sys_info_test(void **state)
 {
 	struct daos_sys_info	*info = NULL;
-	struct daos_sys_info	*cached_info = NULL;
 	char			*old_agent_path;
 	uint32_t		i;
 	int			rc;
 
 	print_message("SUBTEST: alloc with NULL output\n");
-	rc = daos_mgmt_get_sys_info("something", false, NULL);
+	rc = daos_mgmt_get_sys_info("something", NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	print_message("SUBTEST: free with NULL input\n");
@@ -416,7 +415,7 @@ get_sys_info_test(void **state)
 	print_message("SUBTEST: bad agent socket\n");
 	old_agent_path = dc_agent_sockpath;
 	dc_agent_sockpath = "/fake/path/not/real";
-	rc = daos_mgmt_get_sys_info(NULL, true, &info);
+	rc = daos_mgmt_get_sys_info(NULL, &info);
 
 	/* restore the global variable before checking rc */
 	dc_agent_sockpath = old_agent_path;
@@ -424,7 +423,7 @@ get_sys_info_test(void **state)
 	assert_null(info);
 
 	print_message("SUBTEST: success\n");
-	rc = daos_mgmt_get_sys_info(NULL, true, &info);
+	rc = daos_mgmt_get_sys_info(NULL, &info);
 	assert_rc_equal(rc, 0);
 	assert_non_null(info);
 
@@ -438,18 +437,7 @@ get_sys_info_test(void **state)
 		print_message("rank %u, uri: %s\n", info->dsi_ranks[i].dru_rank,
 			      info->dsi_ranks[i].dru_uri);
 
-
-	print_message("SUBTEST: cached\n");
-	rc = daos_mgmt_get_sys_info(NULL, false, &cached_info);
-	assert_rc_equal(rc, 0);
-	assert_non_null(cached_info);
-
-	assert_string_equal(info->dsi_system_name, cached_info->dsi_system_name);
-	assert_string_equal(info->dsi_fabric_provider, cached_info->dsi_fabric_provider);
-	assert_int_equal(info->dsi_nr_ranks, cached_info->dsi_nr_ranks);
-
 	daos_mgmt_put_sys_info(info);
-	daos_mgmt_put_sys_info(cached_info);
 }
 
 static const struct CMUnitTest tests[] = {

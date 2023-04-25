@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -99,11 +98,9 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		cacheDisabled     bool
-		refresh           bool
-		freshnessInterval time.Duration
-		rpcResps          []*control.HostResponse
-		expResult         []attachInfoResult
+		cacheDisabled bool
+		rpcResps      []*control.HostResponse
+		expResult     []attachInfoResult
 	}{
 		"error": {
 			rpcResps: []*control.HostResponse{
@@ -180,7 +177,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
-		"cached": {
+		"cache": {
 			rpcResps: hostResps(testResps),
 			expResult: []attachInfoResult{
 				{
@@ -191,37 +188,6 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 				{
 					resp: hintResp(testResps[0]),
-				},
-			},
-		},
-		"fresh cache": {
-			refresh:  true,
-			rpcResps: hostResps(testResps),
-			expResult: []attachInfoResult{
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[0]),
-				},
-			},
-		},
-		"cache gets stale": {
-			refresh:           true,
-			rpcResps:          hostResps(testResps),
-			freshnessInterval: time.Microsecond,
-			expResult: []attachInfoResult{
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[1]),
-				},
-				{
-					resp: hintResp(testResps[2]),
 				},
 			},
 		},
@@ -248,13 +214,8 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				numaGetter: &mockNUMAProvider{},
 			}
 
-			if tc.freshnessInterval != 0 {
-				mod.attachInfo.freshnessInterval = tc.freshnessInterval
-			}
-
 			reqBytes, err := proto.Marshal(&mgmtpb.GetAttachInfoReq{
-				Sys:     sysName,
-				Refresh: tc.refresh,
+				Sys: sysName,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -280,10 +241,6 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 				if diff := cmp.Diff(exp.resp, &resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
-				}
-
-				if tc.freshnessInterval != 0 {
-					time.Sleep(tc.freshnessInterval)
 				}
 			}
 		})
@@ -338,7 +295,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(context.Background(), 0, sysName, false)
+			_, err := mod.getAttachInfo(context.Background(), 0, sysName)
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}

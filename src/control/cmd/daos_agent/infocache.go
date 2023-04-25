@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,6 @@ package main
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -21,11 +20,10 @@ import (
 )
 
 const (
-	invalidIndex             = -1
-	verbsProvider            = "ofi+verbs"
-	defaultNetworkDevice     = "lo"
-	defaultDomain            = "lo"
-	defaultFreshnessInterval = time.Minute
+	invalidIndex         = -1
+	verbsProvider        = "ofi+verbs"
+	defaultNetworkDevice = "lo"
+	defaultDomain        = "lo"
 )
 
 // NotCachedErr is the error returned when trying to fetch data that is not cached.
@@ -33,20 +31,17 @@ var NotCachedErr = errors.New("not cached")
 
 func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
 	return &attachInfoCache{
-		log:               log,
-		enabled:           atm.NewBool(enabled),
-		freshnessInterval: defaultFreshnessInterval,
+		log:     log,
+		enabled: atm.NewBool(enabled),
 	}
 }
 
 type attachInfoCache struct {
 	mutex sync.Mutex
 
-	log               logging.Logger
-	enabled           atm.Bool
-	initialized       atm.Bool
-	freshnessInterval time.Duration
-	lastRefresh       time.Time
+	log         logging.Logger
+	enabled     atm.Bool
+	initialized atm.Bool
 
 	// cached response from remote server
 	attachInfo *mgmtpb.GetAttachInfoResp
@@ -73,11 +68,11 @@ type getAttachInfoFn func(ctx context.Context, numaNode int, sys string) (*mgmtp
 
 // Get is responsible for returning a GetAttachInfo response, either from the cache or from
 // the remote server if the cache is disabled.
-func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, refresh bool, getRemote getAttachInfoFn) (*mgmtpb.GetAttachInfoResp, error) {
+func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, getRemote getAttachInfoFn) (*mgmtpb.GetAttachInfoResp, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.isEnabled() && c.isCached() && (!refresh || c.isFresh()) {
+	if c.isEnabled() && c.isCached() {
 		return c.getAttachInfoResp()
 	}
 
@@ -93,13 +88,7 @@ func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, ref
 	c.attachInfo = attachInfo
 	c.initialized.SetTrue()
 
-	c.lastRefresh = time.Now()
-
 	return c.getAttachInfoResp()
-}
-
-func (c *attachInfoCache) isFresh() bool {
-	return time.Since(c.lastRefresh) < c.freshnessInterval
 }
 
 func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
