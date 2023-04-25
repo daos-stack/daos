@@ -230,8 +230,12 @@
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
 ## reserved when calculating RAM-disk sizes for all engines.
 #
-## Optional parameter that should only be set if overriding the automatically calculated value is
-## necessary.
+## Optional parameter that should only be set if the automatically calculated value is unsuitable.
+## In situations when a host is running applications alongside DAOS that use a significant amount
+## of RAM resulting in MemAvailable value being too low to support the calculated RAM-disk size
+## increasing the value will reduce the calculate size. Alternatively in situations where total
+## RAM is low, reducing the value may prevent problems where RAM-disk size calculated is below the
+## minimum of 4gib.
 #
 ## default: 6
 #system_ram_reserved: 5
