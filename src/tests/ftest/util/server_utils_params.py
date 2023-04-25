@@ -827,12 +827,8 @@ class StorageTierYamlParameters(YamlParameters):
         self.bdev_number = BasicParameter(None, position=7)
         self.bdev_size = BasicParameter(None, position=8)
 
-        # Explicit storage tier roles for metadata on SSD; implicit roles used if not specified
-        # This list can contain one or more of the following options:
-        # - "data" SSDs will be used to store actual data
-        # - "index" SSDs will be used to store the VOS index
-        # - "wal" SSDs will be used to store the write-ahead-log
-        self.roles = BasicParameter(None, position=8)
+        # Additional 'class: bdev' options when storage tier 0 is 'class: ram'
+        self.bdev_roles = BasicParameter(None, position=9)
 
     @property
     def using_dcpm(self):

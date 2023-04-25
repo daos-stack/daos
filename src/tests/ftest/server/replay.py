@@ -402,8 +402,8 @@ class ReplayTests(TestWithServers):
         self.log_step('Write data to the container (ior)')
         ior = self.write_data(container, ppn)
 
-        self.log_step('Waiting for check pointing to complete (sleep {})'.format(frequency))
-        time.sleep(frequency)
+        self.log_step('Waiting for check pointing to complete (sleep {})'.format(frequency * 2))
+        time.sleep(frequency * 2)
 
         self.stop_engines()
         self.restart_engines()
