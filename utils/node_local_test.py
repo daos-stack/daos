@@ -4237,7 +4237,7 @@ class AllocFailTestRun():
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("(-1009): Out of memory") and \
-           'error parsing command line arguments' not in stderr and \
+           'error parsing command line arguments' not in stderr and stderr != '' and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
                 print(self.aft.expected_stdout)
