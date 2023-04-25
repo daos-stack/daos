@@ -371,17 +371,16 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_cb *dtc;
 
 	D_ASSERT(dtp->dtp_sched != NULL);
-	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
-
-	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a callback for a completed task\n");
-		return -DER_NO_PERM;
-	}
 
 	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
-	if (dtc == NULL) {
-		D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+	if (dtc == NULL)
 		return -DER_NOMEM;
+
+	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
+	if (dtp->dtp_completed) {
+		D_ERROR("Can't add a callback for a completed task\n");
+		D_FREE(dtc);
+		return -DER_NO_PERM;
 	}
 
 	dtc->dtc_arg_size = arg_size;
@@ -393,7 +392,6 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 		d_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
 	else
 		d_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
-
 	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 	return 0;
 }
@@ -865,23 +863,24 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	D_ASSERT(task != dep);
 
+	D_ALLOC_PTR(tlink);
+	if (tlink == NULL)
+		return -DER_NOMEM;
+
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 	if (dtp->dtp_completed) {
 		D_ERROR("Can't add a dependency for a completed task (%p)\n", task);
+		D_FREE(tlink);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (dep_dtp->dtp_completed)
+	if (dep_dtp->dtp_completed) {
+		D_FREE(tlink);
 		return 0;
+	}
 
 	diff_sched = dtp->dtp_sched != dep_dtp->dtp_sched;
-
-	D_ALLOC_PTR(tlink);
-	if (tlink == NULL) {
-		D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
-		return -DER_NOMEM;
-	}
 
 	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
