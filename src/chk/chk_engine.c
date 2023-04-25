@@ -936,12 +936,7 @@ chk_engine_cont_list_reduce_internal(struct chk_cont_list_aggregator *aggregator
 static int
 chk_engine_cont_list_remote_cb(void *args, uint32_t rank, int result, void *data, uint32_t nr)
 {
-	int	rc;
-
-	rc = chk_engine_cont_list_reduce_internal(args, data, nr);
-	chk_fini_conts(data, rank);
-
-	return rc;
+	return chk_engine_cont_list_reduce_internal(args, data, nr);
 }
 
 static int
