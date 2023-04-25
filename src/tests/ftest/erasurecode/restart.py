@@ -49,6 +49,16 @@ class EcodServerRestart(ErasureCodeIor):
         self.log.info("pool free space after IOR write: %s", free_space_after_ior)
         self.assertTrue(free_space_after_ior < initial_free_space, "IOR run was not successful.")
 
+        # 5.  step-6 for Restart_before_agg test
+        self.log_step("Rerun IOR")
+        self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
+        init_total_free_space = self.pool.get_total_free_space(refresh=True)
+        pool_info = self.pool.get_pool_daos_space()
+        init_scm_free_space = pool_info["s_free"][0]
+        init_nvme_free_space = pool_info["s_free"][1]
+        self.log.info("After aggregation started: total_free: %s, scm_free: %s, nvme_free: %s",
+                      init_total_free_space, init_scm_free_space, init_nvme_free_space)
+
         if agg_check == "Restart_before_agg":
             # step-4 for Restart_before_agg test
             self.log_step("Shutdown the servers and restart")
@@ -58,16 +68,6 @@ class EcodServerRestart(ErasureCodeIor):
         # 4.  step-5 for Restart_before_agg test
         self.log_step("Enable aggregation")
         self.pool.set_property("reclaim", "time")
-
-        # 5.  step-6 for Restart_before_agg test
-        self.log_step("Rerun IOR")
-        self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
-        init_total_free_space = self.pool.get_total_free_space(refresh=True)
-        pool_info = self.pool.get_pool_daos_space()
-        init_scm_free_space = pool_info["s_free"][0]
-        init_nvme_free_space = pool_info["s_free"][1]
-        self.log.info("After aggregation started: total_free: %s, scm_free: %s, nvme_free: %s",
-                      init_total_free_space, init_scm_free_space, init_nvme_free_space)
 
         # 6.  step-7 for Restart_before_agg test
         self.log_step("Verify aggregation triggered, scm free space move to nvme")
