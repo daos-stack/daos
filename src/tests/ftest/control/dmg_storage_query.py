@@ -12,6 +12,7 @@ from control_test_base import ControlTestBase
 from dmg_utils import get_storage_query_pool_info, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str, dict_to_str
+from storage_utils import get_tier_roles
 
 
 class DmgStorageQuery(ControlTestBase):
@@ -52,15 +53,7 @@ class DmgStorageQuery(ControlTestBase):
                 if device['roles']:
                     # Use predefined roles
                     continue
-                if device['tier'] == 1:
-                    # Roles of 1st bdev storage tier of 1 tier is wal,data,meta; of 2+ tiers is wal
-                    device['roles'] = 'wal,data,meta' if bdev_tiers == 1 else 'wal'
-                elif device['tier'] == 2:
-                    # Roles of 2nd bdev storage tier of 2 tiers is data,meta; of 2+ tiers is meta
-                    device['roles'] = 'data,meta' if bdev_tiers == 2 else 'meta'
-                else:
-                    # Roles of additional bdev storage tiers is data
-                    device['roles'] = 'data'
+                device['roles'] = ','.join(get_tier_roles(device['tier'], bdev_tiers + 1))
 
         self.log.info('Detected NVMe devices in config')
         for bdev in bdev_info:
