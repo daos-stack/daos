@@ -1152,12 +1152,8 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 {
 	mode_t	base_mask;
 
-	/** Root can access everything */
-	if (uid == 0)
-		return 0;
-
 	if (mode == 0)
-		return EPERM;
+		return EACCES;
 
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
@@ -1174,17 +1170,17 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 	/** Execute check */
 	if (X_OK == (mask & X_OK))
 		if (0 == (mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Write check */
 	if (W_OK == (mask & W_OK))
 		if (0 == (mode & (S_IWUSR | S_IWGRP | S_IWOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Read check */
 	if (R_OK == (mask & R_OK))
 		if (0 == (mode & (S_IRUSR | S_IRGRP | S_IROTH)))
-			return EPERM;
+			return EACCES;
 
 	/** TODO - check ACL, attributes (immutable, append) etc. */
 	return 0;
