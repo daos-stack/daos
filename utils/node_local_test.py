@@ -4413,7 +4413,7 @@ def test_dfuse_start(server, conf, wf):
     test_cmd.wf = wf
     test_cmd.skip_daos_init = False
     test_cmd.check_daos_stderr = True
-    test_cmd.check_post_stdout = False
+    test_cmd.check_post_stdout = False  # Checked.
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
