@@ -670,10 +670,7 @@ tse_task_post_process(tse_task_t *task)
 			 * it is completed when they completed in this code
 			 * block.
 			 */
-			/** release lock for CB */
-			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
 			done = tse_task_complete_callback(task_tmp);
-			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
 
 			/*
 			 * task reinserted itself in scheduler by
@@ -866,10 +863,10 @@ tse_task_complete(tse_task_t *task, int ret)
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
-
-	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
