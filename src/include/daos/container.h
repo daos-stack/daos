@@ -86,6 +86,8 @@ struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
 struct cont_props dc_cont_hdl2props(daos_handle_t coh);
 int dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl);
 int dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf);
+int dc_cont_hdl2globalver(daos_handle_t coh, uint32_t *ver);
+int dc_cont_oid2bid(daos_handle_t coh, daos_obj_id_t oid, uint32_t *bid);
 
 int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,
@@ -110,6 +112,9 @@ int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
+int dc_cont_snap_oit_oid_get(tse_task_t *task);
+int dc_cont_snap_oit_create(tse_task_t *task);
+int dc_cont_snap_oit_destroy(tse_task_t *task);
 
 static inline bool
 dc_cont_open_flags_valid(uint64_t flags)
