@@ -4060,7 +4060,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
-			D_ERROR("daos_obj_open() Failed: %d (%s)\n", rc, strerror(rc));
+			D_ERROR("daos_obj_open() Failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
