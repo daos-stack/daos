@@ -834,7 +834,7 @@ class StorageTierYamlParameters(YamlParameters):
         # - "data" SSDs will be used to store actual data
         # - "index" SSDs will be used to store the VOS index
         # - "wal" SSDs will be used to store the write-ahead-log
-        self.roles = BasicParameter(None, position=8)
+        self.bdev_roles = BasicParameter(None, position=8)
 
     @property
     def using_dcpm(self):
