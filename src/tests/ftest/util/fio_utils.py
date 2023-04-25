@@ -73,7 +73,7 @@ class FioCommand(ExecutableCommand):
         """Get the host(s) on which to remotely run the fio command via run().
 
         Returns:
-            list: remote host(s) on which the fio command will run.
+            NodeSet: remote host(s) on which the fio command will run.
 
         """
         return self._hosts
@@ -86,12 +86,14 @@ class FioCommand(ExecutableCommand):
 
         Args:
             value (NodeSet): remote host(s) on which to run the fio command
+
+        Raises:
+            TypeError: if value is not a NodeSet
+
         """
-        if isinstance(value, NodeSet):
-            self._hosts = value.copy()
-        else:
-            self.log.error("Invalid fio host list: %s (%s)", value, type(value))
-            self._hosts = None
+        if not isinstance(value, NodeSet):
+            raise TypeError("Invalid fio host list: {} ({})".format(value, type(value)))
+        self._hosts = value.copy()
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -171,7 +173,8 @@ class FioCommand(ExecutableCommand):
         if not self._hosts:
             raise CommandFailure('No hosts specified for fio command')
 
-        raise_exception = raise_exception or self.exit_status_exception
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
 
         # Run fio remotely
         result = run_remote(self.log, self._hosts, self.with_exports, timeout=None)
