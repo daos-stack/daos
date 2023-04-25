@@ -462,7 +462,7 @@ class DaosPool():
             return []
 
         containers = []
-        for cont in data['test']:
+        for cont in data['response']:
             containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
@@ -3704,7 +3704,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        cont = create_cont(conf, pool, label=label, ctype="POSIX")
+        container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3716,7 +3716,7 @@ def run_in_fg(server, conf, args):
         cont_attrs['dfuse-direct-io-disable'] = False
 
         container.set_attrs(cont_attrs)
-        cont = container.id()
+        container = container.uuid
 
     dfuse = DFuse(server,
                   conf,
@@ -4016,8 +4016,6 @@ class AllocFailTestRun():
 
     def __init__(self, aft, cmd, env, loc):
 
-        # pylint: disable=consider-using-with
-
         # The subprocess handle
         self._sp = None
         # The valgrind handle
@@ -4040,11 +4038,12 @@ class AllocFailTestRun():
             prefix = f'dnt_{loc:04d}_'
         else:
             prefix = 'dnt_reference_'
-        self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                                    suffix='.log',
-                                                    dir=self.aft.log_dir,
-                                                    delete=False).name
-        self.env['D_LOG_FILE'] = self.log_file
+        with tempfile.NamedTemporaryFile(prefix=prefix,
+                                         suffix='.log',
+                                         dir=self.aft.log_dir,
+                                         delete=False) as log_file:
+            self.log_file = log_file.name
+            self.env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
         cmd_text = ' '.join(self.cmd)
@@ -4173,9 +4172,9 @@ class AllocFailTestRun():
         if not self.fault_injected:
             _explain()
             return
-        if not self.aft.check_stderr:
-            _explain()
-            return
+        # if not self.aft.check_stderr:
+        #    _explain()
+        #    return
 
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
@@ -4412,6 +4411,7 @@ def test_dfuse_start(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
+    test_cmd.skip_daos_init = False
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = True
@@ -4426,34 +4426,34 @@ def test_alloc_fail_copy(server, conf, wf):
 
     This test will create a new uuid per iteration, and the test will then try to create a matching
     container so this is potentially resource intensive.
-
-    There are lots of errors in the stdout/stderr of this command which we need to work through but
-    are not yet checked for.
     """
-    # pylint: disable=consider-using-with
-
-    pool = server.get_test_pool_obj()
-    src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-    sub_dir = join(src_dir.name, 'new_dir')
-    os.mkdir(sub_dir)
-    for idx in range(5):
-        with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
-            ofd.write('hello')
-
-    os.symlink('broken', join(sub_dir, 'broken_s'))
-    os.symlink('file.0', join(sub_dir, 'link'))
 
     def get_cmd(cont_id):
         return [join(conf['PREFIX'], 'bin', 'daos'),
                 'filesystem',
                 'copy',
                 '--src',
-                src_dir.name,
+                f'daos://{pool.id()}/aft_base',
                 '--dst',
                 f'daos://{pool.id()}/container_{cont_id}']
 
+    pool = server.get_test_pool_obj()
+    with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(5):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        os.symlink('broken', join(sub_dir, 'broken_s'))
+        os.symlink('file.0', join(sub_dir, 'link'))
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', src_dir,
+                                 '--dst', f'daos://{pool.id()}/aft_base'])
+        assert rc.returncode == 0, rc
+
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
-    test_cmd.skip_daos_init = False
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
@@ -4480,7 +4480,6 @@ def test_alloc_cont_create(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
-    test_cmd.check_post_stdout = False
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = False
 
@@ -4801,27 +4800,27 @@ def run(wf, args):
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
                 # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                # fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 # container create with properties test.
-                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 

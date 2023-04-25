@@ -1648,7 +1648,7 @@ dm_connect(struct cmd_args_s *ap,
 		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "failed to open source container\n");
+			DH_PERROR_DER(ap, rc, "failed to open source containerz\n");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
