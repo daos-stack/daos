@@ -1958,9 +1958,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 		attr = &local;
 
 	if (attr->da_props) {
-		merged_props = daos_prop_merge(attr->da_props, label_prop);
-		if (merged_props == NULL)
-			D_GOTO(out_prop, rc = ENOMEM);
+		rc = daos_prop_merge2(attr->da_props, label_prop, &merged_props);
+		if (rc != 0)
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
 		orig = attr->da_props;
 		attr->da_props = merged_props;
 	} else {
@@ -4060,7 +4060,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
-			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+			D_ERROR("daos_obj_open() Failed: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 

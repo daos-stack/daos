@@ -1654,7 +1654,6 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1840,7 +1839,6 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "dfs_mount on destination failed");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1868,11 +1866,21 @@ dm_connect(struct cmd_args_s *ap,
 	D_GOTO(out, rc);
 err:
 	if (daos_handle_is_valid(ca->dst_coh)) {
+		if (dst_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(dst_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount destination container");
+		}
 		rc2 = daos_cont_close(ca->dst_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close destination container");
 	}
 	if (daos_handle_is_valid(ca->src_coh)) {
+		if (src_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(src_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount source container");
+		}
 		rc2 = daos_cont_close(ca->src_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close source container");
