@@ -92,7 +92,7 @@ class FioCommand(ExecutableCommand):
 
         """
         if not isinstance(value, NodeSet):
-            raise TypeError("Invalid fio host list: {} ({})".format(value, type(value)))
+            raise TypeError("Invalid fio host NodeSet: {} ({})".format(value, type(value)))
         self._hosts = value.copy()
 
     def get_params(self, test):
