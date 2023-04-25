@@ -1465,10 +1465,9 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	rc = daos_cont_get_acl(coh, &prop_acl, NULL);
 	if (rc == 0) {
 		/* ACL will be appended to the end */
-		props_merged = daos_prop_merge(props, prop_acl);
-		if (props_merged == NULL) {
-			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Failed set container ACL");
+		rc = daos_prop_merge2(props, prop_acl, &props_merged);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Failed to set container ACL");
 			D_GOTO(out, rc);
 		}
 		daos_prop_free(props);

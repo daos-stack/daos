@@ -641,6 +641,17 @@ daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	_new_prop	New properties - may override old entries
+ *
+ */
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **_new_prop);
+
+/**
  * Search and return a property entry of type \a type in the property list
  * \a prop
  * Return NULL if not found.
