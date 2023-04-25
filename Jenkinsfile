@@ -945,6 +945,33 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye on EL 8')
+                stage('Unit Test Bullseye bdev on EL 8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPostEx(ignore_failure: true,
+                                           ['covc_test_bdev_logs/', 'covc_vm_test/**'])
+                        }
+                    }
+                } // stage('Unit test Bullseye bdev on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
                         beforeAgent true

@@ -26,6 +26,9 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
    $(cat "$mydir/test_post_always_node.sh")"
 
 case $STAGE_NAME in
+    *Bullseye bdev*)
+	test_log_dir="covc_test_bdev_logs"
+	;;
     *Bullseye*)
 	test_log_dir="covc_test_logs"
 	;;
