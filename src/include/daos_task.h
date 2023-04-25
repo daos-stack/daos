@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,6 +120,8 @@ typedef enum {
 
 	DAOS_OPC_POOL_FILTER_CONT,
 	DAOS_OPC_OBJ_KEY2ANCHOR,
+	DAOS_OPC_CONT_SNAP_OIT_CREATE,
+	DAOS_OPC_CONT_SNAP_OIT_DESTROY,
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -518,6 +520,34 @@ typedef struct {
 	/** Epoch range of snapshots to destroy. */
 	daos_epoch_range_t	epr;
 } daos_cont_destroy_snap_t;
+
+/** Container snapshot oit oid get args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/* Epoch of snapshot for getting oit oid */
+	daos_epoch_t		 epoch;
+	/* Returned OIT OID for the epoch snapshot */
+	daos_obj_id_t		*oid;
+} daos_cont_snap_oit_oid_get_t;
+
+/** Container snapshot oit create args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/** epoch of persistent snapshot taken. */
+	daos_epoch_t		 epoch;
+	/** Optional null terminated name for snapshot. */
+	char			*name;
+} daos_cont_snap_oit_create_t;
+
+/** Container snapshot oit destroy args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** epoch of persistent snapshot. */
+	daos_epoch_t		epoch;
+} daos_cont_snap_oit_destroy_t;
 
 /** Transaction Open args */
 typedef struct {

@@ -85,6 +85,7 @@ struct dss_xstream {
 	struct stack_pool	*dx_sp;
 #endif
 	bool			dx_progress_started;	/* Network poll started */
+	int                     dx_tag;                 /** tag for xstream */
 };
 
 /** Engine module's metrics */

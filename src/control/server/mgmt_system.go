@@ -160,7 +160,7 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 
 const (
 	groupUpdateInterval = 500 * time.Millisecond
-	batchJoinInterval   = 250 * time.Millisecond
+	batchLoopInterval   = 250 * time.Millisecond
 )
 
 type (
@@ -179,20 +179,16 @@ type (
 	joinReqChan chan *batchJoinRequest
 )
 
-func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
-	svc.log.Debug("starting joinLoop")
-	go svc.joinLoop(ctx)
-}
-
 func (svc *mgmtSvc) joinLoop(parent context.Context) {
 	var joinReqs []*batchJoinRequest
 	var groupUpdateNeeded bool
 
-	joinTimer := time.NewTicker(batchJoinInterval)
+	joinTimer := time.NewTicker(batchLoopInterval)
 	defer joinTimer.Stop()
 	groupUpdateTimer := time.NewTicker(groupUpdateInterval)
 	defer groupUpdateTimer.Stop()
 
+	svc.log.Debug("starting joinLoop")
 	for {
 		select {
 		case <-parent.Done():

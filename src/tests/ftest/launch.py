@@ -465,16 +465,23 @@ class TestInfo():
         "client_users",
     ]
 
-    def __init__(self, test_file, order):
+    def __init__(self, test_file, order, yaml_extension=None):
         """Initialize a TestInfo object.
 
         Args:
             test_file (str): the test python file
             order (int): order in which this test is executed
+            yaml_extension (str, optional): if defined and a test yaml file exists with this
+                extension, the yaml file will be used in place of the default test yaml file.
         """
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
+        if yaml_extension:
+            custom_yaml = ".".join(
+                [os.path.splitext(self.test_file)[0], str(yaml_extension), "yaml"])
+            if os.path.exists(custom_yaml):
+                self.yaml_file = custom_yaml
         parts = self.test_file.split(os.path.sep)[1:]
         self.python_file = parts.pop()
         self.directory = os.path.join(*parts)
@@ -863,7 +870,7 @@ class Launch():
 
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
-            self.list_tests(args.tags)
+            self.list_tests(args.tags, args.yaml_extension)
         except RunException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1364,7 +1371,7 @@ class Launch():
             os.environ["PYTHONPATH"] = python_path
         logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
-    def list_tests(self, tags):
+    def list_tests(self, tags, yaml_extension=None):
         """List the test files matching the tags.
 
         Populates the self.tests list and defines the self.tag_filters list to use when running
@@ -1372,6 +1379,8 @@ class Launch():
 
         Args:
             tags (list): a list of tags or test file names
+            yaml_extension (str, optional): optional test yaml file extension to use when creating
+                the TestInfo object.
 
         Raises:
             RunException: if there is a problem listing tests
@@ -1412,7 +1421,7 @@ class Launch():
         output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
-            self.tests.append(TestInfo(test_file, index + 1))
+            self.tests.append(TestInfo(test_file, index + 1, yaml_extension))
             logger.info("  %s", self.tests[-1])
 
     @staticmethod
@@ -1475,7 +1484,6 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
-        scm_size = 16
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1507,7 +1515,8 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
+        self._add_auto_storage_yaml(
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1528,7 +1537,8 @@ class Launch():
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
+                               max_nvme_tiers):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1536,6 +1546,7 @@ class Launch():
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
             scm_size (int): scm_size to use with ram storage tiers
+            scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
 
         Raises:
@@ -1561,12 +1572,13 @@ class Launch():
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
                     engine_storage_yaml[engines], str(test))
-                test.extra_yaml.append(engine_storage_yaml[engines])
+                # Allow extra yaml files to be to override the generated storage yaml
+                test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -2995,10 +3007,6 @@ def main():
         action="store_true",
         help="archive host log files in the avocado job-results directory")
     parser.add_argument(
-        "-c", "--clean",
-        action="store_true",
-        help="remove daos log files from the test hosts prior to the test")
-    parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
         help="disable stopping DAOS servers and clients between running tests")
@@ -3097,6 +3105,21 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
+        "--scm_size",
+        action="store",
+        default=16,
+        type=int,
+        help="the scm_size value to use in each server engine tier 0 ram storage config when "
+             "generating an automatic storage config (test yaml includes 'storage: auto').")
+    parser.add_argument(
+        "--scm_mount",
+        action="store",
+        default="/mnt/daos",
+        type=str,
+        help="the scm_mount base path to use in each server engine tier 0 storage config when "
+             "generating an automatic storage config (test yaml includes 'storage: auto'). The "
+             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.")
+    parser.add_argument(
         "-ss", "--slurm_setup",
         action="store_true",
         help="setup any slurm partitions required by the tests")
@@ -3146,15 +3169,19 @@ def main():
         help="directory in which to write the modified yaml files. A temporary "
              "directory - which only exists for the duration of the launch.py "
              "command - is used by default.")
+    parser.add_argument(
+        "-ye", "--yaml_extension",
+        action="store",
+        default=None,
+        help="extension used to run custom test yaml files. If a test yaml file "
+             "exists with the specified extension - e.g. dtx/basic.custom.yaml "
+             "for --yaml_extension=custom - this file will be used instead of the "
+             "standard test yaml file.")
     args = parser.parse_args()
-
-    # Setup the Launch object
-    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
-        args.clean = True
         args.include_localhost = True
         args.jenkinslog = True
         args.process_cores = True
@@ -3164,6 +3191,9 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
+
+    # Setup the Launch object
+    launch = Launch(args.name, args.mode)
 
     # Perform the steps defined by the arguments specified
     try:

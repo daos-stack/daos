@@ -478,15 +478,16 @@ func (db *mockdb) ResignLeadership(error) error {
 
 func TestServer_Harness_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mics         []*MockInstanceConfig
-		method       drpc.Method
-		body         proto.Message
-		notStarted   bool
-		notLeader    bool
-		resignCause  error
-		expShutdown  bool
-		expNotLeader bool
-		expErr       error
+		mics           []*MockInstanceConfig
+		method         drpc.Method
+		body           proto.Message
+		notStarted     bool
+		notLeader      bool
+		resignCause    error
+		expShutdown    bool
+		expNotLeader   bool
+		expFailHandler bool
+		expErr         error
 	}{
 		"success": {
 			mics: []*MockInstanceConfig{
@@ -517,7 +518,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: errors.New("whoops"),
 				},
 			},
-			expErr: errors.New("whoops"),
+			expErr:         errors.New("whoops"),
+			expFailHandler: true,
 		},
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
@@ -542,7 +544,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					Ready: atm.NewBool(true),
 				},
 			},
-			expErr: errors.New("whoops"),
+			expErr:         errors.New("whoops"),
+			expFailHandler: true,
 		},
 		"none available": {
 			mics: []*MockInstanceConfig{
@@ -555,8 +558,18 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: FaultDataPlaneNotStarted,
 				},
 			},
-			expNotLeader: true,
-			expErr:       FaultDataPlaneNotStarted,
+			expNotLeader:   true,
+			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"context canceled": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: context.Canceled,
+				},
+			},
+			expErr: context.Canceled,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -569,6 +582,11 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+
+			var drpcFailureInvoked atm.Bool
+			h.OnDrpcFailure(func(_ context.Context, err error) {
+				drpcFailureInvoked.SetTrue()
+			})
 
 			ctx, cancel := context.WithCancel(context.Background())
 			db := &mockdb{
@@ -604,6 +622,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
+			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
 		})
 	}
 }
