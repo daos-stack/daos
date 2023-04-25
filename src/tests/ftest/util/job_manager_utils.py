@@ -649,7 +649,8 @@ class Systemctl(JobManager):
                 values indicating which hosts yielded the return code.
 
         """
-        raise_exception = raise_exception or self.exit_status_exception
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
 
         # Start the daos_server.service
         self.service_enable()
@@ -1205,7 +1206,8 @@ class Clush(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        raise_exception = raise_exception or self.exit_status_exception
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
 
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
         self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)

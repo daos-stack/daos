@@ -101,7 +101,8 @@ class DaosRacerCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         """
-        raise_exception = raise_exception or self.exit_status_exception
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
 
         # Run daos_racer on the specified host
         self.log.info(
