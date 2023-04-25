@@ -1150,7 +1150,7 @@ test_tx_reserve_publish_cancel(void **state)
 	int			 rc;
 	struct umem_rsrvd_act	*rsrvd_act;
 	umem_off_t		 umoff;
-	char			*rsrv_ptr1, *rsrv_ptr2;
+	char			*rsrv_ptr1, *rsrv_ptr2, *rsrv_ptr3, *rsrv_ptr4;
 	char			*data = "Test Program test_tx_xadd_ptr";
 	char			 local_buf[980];
 	uint64_t		 initial_mem_used, cur_mem_used;
@@ -1220,13 +1220,25 @@ test_tx_reserve_publish_cancel(void **state)
 	rc = umem_tx_add_ptr(umm, rsrv_ptr1, 128);
 	assert_int_equal(rc, 0);
 	strcpy(rsrv_ptr1, "header");
-	umem_cancel(umm, rsrvd_act);
+	rc = umem_tx_add_ptr(umm, rsrv_ptr2, 128);
+	assert_int_equal(rc, 0);
+	strcpy(rsrv_ptr2, "leader");
 	rc = umem_tx_abort(umm, 1);
 	assert_false(rc == 0);
+	assert_int_equal(memcmp(rsrv_ptr1, local_buf, 980), 0);
+	assert_int_equal(memcmp(rsrv_ptr2, local_buf, 128), 0);
+	umem_cancel(umm, rsrvd_act);
 	validate_persist_activity(1, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
-	assert_int_equal(memcmp(rsrv_ptr1, local_buf, 980), 0);
+	umoff = umem_atomic_alloc(umm, 980, UMEM_TYPE_ANY);
+	assert_false(UMOFF_IS_NULL(umoff));
+	rsrv_ptr3 = umem_off2ptr(umm, umoff);
+	assert_ptr_equal(rsrv_ptr1, rsrv_ptr3);
+	umoff = umem_atomic_alloc(umm, 128, UMEM_TYPE_ANY);
+	assert_false(UMOFF_IS_NULL(umoff));
+	rsrv_ptr4 = umem_off2ptr(umm, umoff);
+	assert_ptr_equal(rsrv_ptr2, rsrv_ptr4);
 	umem_rsrvd_act_free(&rsrvd_act);
 
 	/* reserve - atomic_copy - cancel */
@@ -1312,13 +1324,7 @@ test_tx_dfree_publish_cancel(void **state)
 	umem_defer_free(umm, umoff2, rsrvd_act);
 
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
-	snap_persist_activity();
-	rc = umem_tx_begin(umm, NULL);
-	assert_int_equal(rc, 0);
 	umem_cancel(umm, rsrvd_act);
-	rc = umem_tx_abort(umm, 1);
-	assert_false(rc == 0);
-	validate_persist_activity(1, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
 	umem_rsrvd_act_free(&rsrvd_act);

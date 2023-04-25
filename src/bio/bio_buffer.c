@@ -1188,11 +1188,14 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 					   page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					   page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					   rw_completion, biod);
-		else
+		else {
 			spdk_blob_io_read(blob, channel, payload,
 					  page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					  page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					  rw_completion, biod);
+			if (DAOS_ON_VALGRIND)
+				VALGRIND_MAKE_MEM_DEFINED(payload, rw_cnt * BIO_DMA_PAGE_SZ);
+		}
 
 		pg_cnt -= rw_cnt;
 		pg_idx += rw_cnt;
