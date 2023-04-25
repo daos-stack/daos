@@ -20,6 +20,10 @@
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 			     struct rdb **dbp);
+static int
+rdb_chkptd_start(struct rdb *db);
+static void
+rdb_chkptd_stop(struct rdb *db);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
@@ -274,9 +278,13 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 		goto err_raft_mutex;
 	}
 
-	rc = rdb_kvs_cache_create(&db->d_kvss);
+	rc = rdb_chkptd_start(db);
 	if (rc != 0)
 		goto err_ref_cv;
+
+	rc = rdb_kvs_cache_create(&db->d_kvss);
+	if (rc != 0)
+		goto err_chkptd;
 
 	/* metadata vos pool management: reserved memory:
 	 * vos sets aside a portion of a pool for system activity:
@@ -323,6 +331,8 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 
 err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
+err_chkptd:
+	rdb_chkptd_stop(db);
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_raft_mutex:
@@ -464,6 +474,7 @@ rdb_close(struct rdb_storage *storage)
 
 	D_ASSERTF(db->d_ref == 1, "d_ref %d == 1\n", db->d_ref);
 	rdb_raft_close(db);
+	rdb_chkptd_stop(db);
 	vos_cont_close(db->d_mc);
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
@@ -743,4 +754,220 @@ int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
 	return rdb_raft_get_ranks(db, ranksp);
+}
+
+/** Implementation of the RDB pool checkpoint ULT. The ULT
+ *  is only active if DAOS is using MD on SSD.
+ */
+static void
+rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	if (wait_id == 0) {
+		/** Special case, checkpoint needs to yield to allow progress */
+		ABT_thread_yield();
+		return;
+	}
+
+	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
+		goto out;
+
+	ABT_mutex_lock(db->d_chkpt_mutex);
+	dcr->dcr_waiting = 1;
+	dcr->dcr_wait_id = wait_id;
+	ABT_cond_wait(db->d_commit_cv, db->d_chkpt_mutex);
+	ABT_mutex_unlock(db->d_chkpt_mutex);
+
+out:
+	*commit_id = dcr->dcr_commit_id;
+}
+
+static void
+rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t total_blocks)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	if (!dcr->dcr_init) {
+		/** Set threshold to 50% of blocks */
+		dcr->dcr_thresh = total_blocks >> 1;
+	}
+
+	dcr->dcr_commit_id = commit_id;
+
+	if (dcr->dcr_idle) {
+		if (used_blocks >= dcr->dcr_thresh) {
+			dcr->dcr_needed = 1;
+			dcr->dcr_idle   = 0;
+			D_DEBUG(DB_MD,
+				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
+				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
+			ABT_cond_broadcast(db->d_chkpt_cv);
+		}
+		return;
+	}
+
+	if (!dcr->dcr_waiting)
+		return;
+
+	/** Checkpoint ULT is waiting for a commit, check if we can wake it up */
+	if (store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
+		dcr->dcr_waiting = 0;
+		D_DEBUG(DB_MD,
+			DF_DB ": waking checkpoint on commit commit_id=" DF_X64 ", wait_id=" DF_X64
+			      "\n",
+			DP_DB(db), commit_id, dcr->dcr_wait_id);
+		ABT_cond_broadcast(db->d_commit_cv);
+	}
+}
+
+static bool
+rdb_chkpt_enabled(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+
+	if (dcr->dcr_init)
+		return dcr->dcr_enabled == 1;
+
+	if (!vos_pool_needs_checkpoint(db->d_pool)) {
+		D_DEBUG(DB_MD, DF_DB ": checkpointing is disabled for rdb replica\n", DP_DB(db));
+		dcr->dcr_init    = 1;
+		dcr->dcr_enabled = 0;
+		return false;
+	}
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointing is enabled for rdb replica\n", DP_DB(db));
+	vos_pool_checkpoint_init(db->d_pool, rdb_chkpt_update, rdb_chkpt_wait, db, &dcr->dcr_store);
+
+	dcr->dcr_enabled = 1;
+	dcr->dcr_init    = 1;
+
+	return true;
+}
+
+static void
+rdb_chkpt_fini(struct rdb *db)
+{
+	vos_pool_checkpoint_fini(db->d_pool);
+}
+
+static int
+rdb_chkpt(struct rdb *db)
+{
+	D_DEBUG(DB_MD, DF_DB ": starting checkpoint\n", DP_DB(db));
+	return vos_pool_checkpoint(db->d_pool);
+}
+
+/* Daemon ULT for checkpointing to metadata blob (MD on SSD only) */
+static void
+rdb_chkptd(void *arg)
+{
+	struct rdb *db = arg;
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
+	for (;;) {
+		bool stop;
+		int  rc;
+
+		ABT_mutex_lock(db->d_chkpt_mutex);
+		for (;;) {
+			stop = db->d_stop;
+			if (db->d_chkpt_record.dcr_needed)
+				break;
+			if (stop)
+				break;
+			db->d_chkpt_record.dcr_idle = 1;
+			sched_cond_wait(db->d_chkpt_cv, db->d_chkpt_mutex);
+		}
+		ABT_mutex_unlock(db->d_chkpt_mutex);
+		if (stop)
+			break;
+		rc = rdb_chkpt(db);
+		if (rc != 0) {
+			D_ERROR(DF_DB ": failed to checkpoint: rc=" DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
+			break;
+		}
+		db->d_chkpt_record.dcr_needed = 0;
+	}
+	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
+	rdb_chkpt_fini(db);
+}
+
+static void
+rdb_chkptd_stop(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+	int                      rc;
+
+	switch (dcr->dcr_state) {
+	default:
+		D_ASSERTF(0, "Invalid state %d\n", dcr->dcr_state);
+	case CHKPT_NONE:
+		return;
+	case CHKPT_ULT:
+		dcr->dcr_stop = 1;
+		ABT_cond_broadcast(db->d_chkpt_cv);
+		rc = ABT_thread_free(&db->d_chkptd);
+		D_ASSERTF(rc == 0, "free rdb_chkptd: rc=%d\n", rc);
+		/** Fall through */
+	case CHKPT_COMMIT_CV:
+		ABT_cond_free(&db->d_commit_cv);
+		/** Fall through */
+	case CHKPT_MAIN_CV:
+		ABT_cond_free(&db->d_chkpt_cv);
+		/** Fall through */
+	case CHKPT_MUTEX:
+		ABT_mutex_free(&db->d_chkpt_mutex);
+		/** Fall through */
+	}
+
+	dcr->dcr_state = CHKPT_NONE;
+}
+
+static int
+rdb_chkptd_start(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+	int                      rc;
+
+	if (!rdb_chkpt_enabled(db))
+		return 0;
+
+	rc = ABT_mutex_create(&db->d_chkpt_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint mutex: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_MUTEX;
+
+	rc = ABT_cond_create(&db->d_chkpt_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint main CV: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_MAIN_CV;
+
+	rc = ABT_cond_create(&db->d_commit_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint commit CV: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_COMMIT_CV;
+
+	rc = dss_ult_create(rdb_chkptd, db, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &db->d_chkptd);
+	if (rc != 0) {
+		D_ERROR(DF_DB ": failed to start chkptd ULT: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_ULT;
+
+	return 0;
+error:
+	rdb_chkptd_stop(db);
+	return rc;
 }
