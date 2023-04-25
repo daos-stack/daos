@@ -52,18 +52,20 @@ def DDHHMMSS_format(seconds):
             "%H:%M:%S", time.gmtime(seconds % 86400)))
 
 
-def add_pools(self, pool_names):
+def add_pools(self, pool_names, ranks=None):
     """Create a list of pools that the various tests use for storage.
 
     Args:
         self (obj): soak obj
-        pool_names: list of pool namespaces from yaml file
+        pool_names (list): list of pool namespaces from yaml file
                     /run/<test_params>/poollist/*
+        ranks (list):  ranks to include in pool
     """
+    target_ranks = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(namespace=path, connect=False))
+        self.pool.append(self.get_pool(namespace=path, connect=False, target_ranks=target_ranks))
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
@@ -275,10 +277,10 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
     destination = self.outputsoak_dir
     if logging:
         for result in results:
-            host = result["hosts"]
-            log_name = name + "-" + str(host)
-            self.log.info("Logging %s output to %s", command, log_name)
-            write_logfile(result["data"], log_name, destination)
+            for host in result["hosts"]:
+                log_name = name + "-" + str(host)
+                self.log.info("Logging %s output to %s", command, log_name)
+                write_logfile(result["data"], log_name, destination)
     return results
 
 
@@ -350,7 +352,7 @@ def get_harassers(harasser):
     """Create a valid harasser list from the yaml job harassers.
 
     Args:
-        harassers (list): harasser jobs from yaml.
+        harasser (str): harasser job from yaml.
 
     Returns:
         harasserlist (list): Ordered list of harassers to execute
@@ -516,7 +518,55 @@ def launch_vmd_identify_check(self, name, results, args):
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_exclude_reintegrate_extend(self, pool, name, results, args):
+def launch_extend(self, pool, name, results, args):
+    """Execute dmg extend ranks.
+
+    Args:
+        self (obj): soak obj
+        pool (obj): TestPool obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    status = False
+    params = {}
+    ranks = None
+    selected_host = None
+
+    # pool was created with self.hostlist_servers[:-1]
+    selected_host = self.hostlist_servers[-1]
+    ranks = self.server_managers[0].get_host_ranks(selected_host)
+
+    # init the status dictionary
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": selected_host, "ranks": ranks}}
+    self.log.info(
+        "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+    try:
+        pool.extend(ranks)
+        status = True
+    except TestFail as error:
+        self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
+        status = False
+    if status:
+        status = wait_for_pool_rebuild(self, pool, name)
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": selected_host, "ranks": ranks}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
+def launch_exclude_reintegrate(self, pool, name, results, args):
     """Launch the dmg cmd to exclude a rank in a pool.
 
     Args:
@@ -558,27 +608,19 @@ def launch_exclude_reintegrate_extend(self, pool, name, results, args):
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
-    elif name in ["REINTEGRATE", "EXTEND"]:
+    elif name == "REINTEGRATE":
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
             tgt_idx = self.harasser_args["EXCLUDE"]["tgt_idx"]
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
-            if name == "REINTEGRATE":
-                try:
-                    pool.reintegrate(rank, tgt_idx=tgt_idx)
-                    status = True
-                except TestFail as error:
-                    self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
-                    status = False
-            else:
-                try:
-                    pool.extend(rank)
-                    status = True
-                except TestFail as error:
-                    self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
-                    status = False
-            if status and name == "REINTEGRATE":
+            try:
+                pool.reintegrate(rank, tgt_idx=tgt_idx)
+                status = True
+            except TestFail as error:
+                self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
+                status = False
+            if status:
                 status = wait_for_pool_rebuild(self, pool, name)
         else:
             self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",

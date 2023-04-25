@@ -23,7 +23,7 @@ from host_utils import get_local_host
 import slurm_utils
 from run_utils import run_remote
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
-    launch_snapshot, launch_exclude_reintegrate_extend, \
+    launch_snapshot, launch_exclude_reintegrate, launch_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
@@ -194,12 +194,13 @@ class SoakTestBase(TestWithServers):
             self.log.info("<<ERRORS: %s >>\n", error)
         return errors
 
-    def launch_harasser(self, harasser, pool):
+    def launch_harasser(self, harasser, pool, ranks=None):
         """Launch any harasser tests if defined in yaml.
 
         Args:
             harasser (str): harasser to launch
             pool (list): list of TestPool obj
+            ranks (list): server ranks
 
         Returns:
             status_msg(str): pass/fail status message
@@ -218,19 +219,19 @@ class SoakTestBase(TestWithServers):
             params = (self, self.pool[0], name)
             job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "exclude":
-            method = launch_exclude_reintegrate_extend
+            method = launch_exclude_reintegrate
             name = "EXCLUDE"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "reintegrate":
-            method = launch_exclude_reintegrate_extend
+            method = launch_exclude_reintegrate
             name = "REINTEGRATE"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "extend":
-            method = launch_exclude_reintegrate_extend
+            method = launch_extend
             name = "EXTEND"
-            params = (self, pool[1], name, results, args)
+            params = (self, pool[1], ranks, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-stop":
             method = launch_server_stop_start
@@ -591,8 +592,7 @@ class SoakTestBase(TestWithServers):
                 result = run_command(cmd, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak directory {} was not removed>>".format(
-                        log_dir)) from error
+                    "<<FAILED: Soak directory {} was not removed>>".format(log_dir)) from error
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time
@@ -606,12 +606,6 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 DDHHMMSS_format(self.end_time - time.time()))
-            if not single_test_pool:
-                # Create pool for jobs
-                add_pools(self, ["pool_jobs"])
-                self.log.info(
-                    "Current pools: %s",
-                    " ".join([pool.uuid for pool in self.pool]))
             # Initialize harassers
             if run_harasser:
                 if not harasserlist:
@@ -620,6 +614,15 @@ class SoakTestBase(TestWithServers):
                 self.harasser_args = {}
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
+            if not single_test_pool and "extend" in [self.harassers, self.offline_harassers]:
+                ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
+                add_pools(self, ["pool_jobs"], ranks)
+            elif not single_test_pool:
+                add_pools(self, ["pool_jobs"])
+            elif single_test_pool and "extend" in [self.harassers, self.offline_harassers]:
+                raise SoakTestError(
+                    "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
+            self.log.info("Current pools: %s", " ".join([pool.uuid for pool in self.pool]))
             try:
                 self.execute_jobs(job_list, self.pool[1])
             except SoakTestError as error:

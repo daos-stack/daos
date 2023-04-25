@@ -70,6 +70,7 @@ container_reserved:
 soak_harassers:
   name: soak_harassers
   # harasser test timeout in hours
+  single_test_pool: false
   test_timeout:
     test_soak_harassers: 12
   # maximum timeout for a single job in test in minutes
@@ -82,12 +83,12 @@ soak_harassers:
     # - snapshot
     # - exclude_reintegrate
     - exclude_reintegrate-offline
-    # - exclude_extend
-    # - exclude_extend-offline
     # - server-stop_server-start
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate
     - server-stop_server-reintegrate-offline
+    # - extend-pool
+    # - extend-pool-offline
     # - vmd-identify-check
     # - vmd-identify-check-offline
   harasser_to: 600
