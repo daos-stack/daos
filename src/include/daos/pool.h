@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,7 +46,7 @@
 #define DAOS_PO_QUERY_PROP_SVC_REDUN_FAC	(1ULL << (PROP_BIT_START + 18))
 #define DAOS_PO_QUERY_PROP_OBJ_VERSION		(1ULL << (PROP_BIT_START + 19))
 #define DAOS_PO_QUERY_PROP_PERF_DOMAIN		(1ULL << (PROP_BIT_START + 20))
-#define DAOS_PO_QUERY_PROP_BIT_END		35
+#define DAOS_PO_QUERY_PROP_BIT_END		36
 
 #define DAOS_PO_QUERY_PROP_ALL									\
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |				\
