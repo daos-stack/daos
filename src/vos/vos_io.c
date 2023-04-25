@@ -1745,6 +1745,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
+	daos_size_t		 gsize;
 	int			 i;
 	int			 rc = 0;
 
@@ -1759,6 +1760,14 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			return rc;
 		}
 		flags |= SUBTR_EVT;
+	} else if (ioc->ic_ec && iod->iod_recxs != NULL) {
+		/* For EC single value update, iod->iod_recxs is reused to pass the single value
+		 * global size. VOS_EC_SINGV_UPDATE_SKIP is for a special case that with multiple
+		 * akeys to avoid short single value be updated to unnecessary data shards.
+		 */
+		gsize = (uintptr_t)iod->iod_recxs;
+		if (gsize == VOS_EC_SINGV_UPDATE_SKIP)
+			return rc;
 	}
 
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
@@ -1814,8 +1823,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		uint64_t	gsize = iod->iod_size;
-
+		gsize = iod->iod_size;
 		/* See obj_singv_ec_rw_filter. */
 		if (ioc->ic_ec && iod->iod_recxs != NULL)
 			gsize = (uintptr_t)iod->iod_recxs;

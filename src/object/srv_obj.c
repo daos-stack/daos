@@ -1003,7 +1003,18 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 				reentry = true;
 			} else {
 				D_ASSERT(!reentry);
-				iod->iod_recxs = (void *)iod->iod_size;
+				/* VOS_EC_SINGV_UPDATE_SKIP for the case for example update 2 akeys
+				 * singv in one IO, first long singv distributed to all shards,
+				 * second short singv only stored on one data shard and all parity
+				 * shard, should skip the second update on some data shards.
+				 */
+				if (nr > 1 && tgt_off != OBJ_EC_SHORT_SINGV_IDX &&
+				    is_ec_data_shard_by_tgt_off(tgt_off, oca) &&
+				    iod->iod_size <=
+				    OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca)))
+					iod->iod_recxs = (void *)VOS_EC_SINGV_UPDATE_SKIP;
+				else
+					iod->iod_recxs = (void *)iod->iod_size;
 			}
 		} else {
 			D_ASSERT(iod->iod_recxs == NULL);
@@ -1713,7 +1724,7 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 	uint32_t		local_tgt;
 	uint32_t		oiod_nr;
 	int			i;
-	int 			idx = 0;
+	int			idx = 0;
 	int			rc = 0;
 
 	oiod_nr = iod_array->oia_oiod_nr;

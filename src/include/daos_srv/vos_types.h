@@ -573,4 +573,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_VEA,
 };
 
+/* skip the single value update flag */
+#define VOS_EC_SINGV_UPDATE_SKIP	((daos_size_t)-1)
+
 #endif /* __VOS_TYPES_H__ */
