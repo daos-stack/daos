@@ -1648,7 +1648,7 @@ dm_connect(struct cmd_args_s *ap,
 		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "failed to open source containerz\n");
+			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
@@ -1995,6 +1995,8 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			strncpy(path, "/", path_len);
 		else
 			strncpy(path, dattr.da_rel_path, path_len);
+	} else if (rc == ENOMEM) {
+		D_GOTO(out, rc);
 	} else {
 		/* If basename does not exist yet then duns_resolve_path will fail even if
 		 * dirname is a UNS path

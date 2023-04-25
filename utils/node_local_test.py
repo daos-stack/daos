@@ -4191,7 +4191,7 @@ class AllocFailTestRun():
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 f"Unable to check stderr because of exit code '{rc}'",
-                                mtype='Unrecognised error')
+                                mtype='Crash preventing check')
                 _explain()
                 return
 
@@ -4223,8 +4223,8 @@ class AllocFailTestRun():
 
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                f"Unexpected stderr '{line}'",
-                                mtype='Unrecognised error')
+                                f"Malformed stderr '{line}'",
+                                mtype='Malformed stderr')
             _explain()
             return
 
@@ -4236,8 +4236,9 @@ class AllocFailTestRun():
                                 mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("(-1009): Out of memory") and \
-           'error parsing command line arguments' not in stderr and stderr != '' and \
+        if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
+            not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
+           'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
                 print(self.aft.expected_stdout)
