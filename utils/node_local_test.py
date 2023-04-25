@@ -4228,7 +4228,7 @@ class AllocFailTestRun():
             _explain()
             return
 
-        if self.returncode == 0:
+        if self.returncode == 0 and self.aft.check_post_stdout:
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
@@ -4426,6 +4426,8 @@ def test_alloc_fail_copy(server, conf, wf):
 
     This test will create a new uuid per iteration, and the test will then try to create a matching
     container so this is potentially resource intensive.
+
+    Create an initial container to copy from so this is testing reading as well as writing
     """
 
     def get_cmd(cont_id):
