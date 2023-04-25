@@ -525,9 +525,9 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		 coh;
-	/* Epoch of snapshot for getting oit oid */
+	/** Epoch of snapshot for getting oit oid */
 	daos_epoch_t		 epoch;
-	/* Returned OIT OID for the epoch snapshot */
+	/** Returned OIT OID for the epoch snapshot */
 	daos_obj_id_t		*oid;
 } daos_cont_snap_oit_oid_get_t;
 
