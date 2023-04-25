@@ -2,7 +2,8 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 6
-timeout: 5000
+#timeout: 5000
+timeout: 480
 server_config:
   name: daos_server
   engines_per_host: 1
