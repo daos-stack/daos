@@ -22,7 +22,7 @@ pushd "$TMP_DIR"
 set +e
 
 sudo --preserve-env=VIRTUAL_ENV,PATH ./node_local_test.py \
-    --no-root --memcheck no --system-ram-reserved 16 --server-debug WARN "$@"
+    --no-root --memcheck no --system-ram-reserved 32 --server-debug WARN "$@"
 
 RC=$?
 set -e
