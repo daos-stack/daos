@@ -1880,6 +1880,7 @@ struct cont_snap_args {
 	uint64_t	 snap_epoch;
 	uint64_t	 snap_opts;
 	int		 snap_count;
+	daos_obj_id_t	 oit_oid;
 	uint64_t	*snapshots;
 };
 
@@ -1995,12 +1996,13 @@ cont_snap_notify_one(void *vin)
 
 	if (args->snap_opts & DAOS_SNAP_OPT_OIT) {
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
-					    args->snap_epoch);
+					    args->snap_epoch, args->oit_oid);
 		if (rc)
 			goto out_cont;
 	}
 
-	cont->sc_aggregation_max = d_hlc_get();
+	if (args->snap_opts & DAOS_SNAP_OPT_CR)
+		cont->sc_aggregation_max = d_hlc_get();
 out_cont:
 	ds_cont_child_put(cont);
 	return rc;
@@ -2021,6 +2023,7 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	uuid_copy(args.coh_uuid, in->tsi_coh_uuid);
 	args.snap_epoch = in->tsi_epoch;
 	args.snap_opts = in->tsi_opts;
+	args.oit_oid = in->tsi_oit_oid;
 
 	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
 	if (out->tso_rc != 0)
@@ -2409,7 +2412,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
 			    min_eph <= ec_eph->ce_last_eph) {
-				if (min_eph < ec_eph->ce_last_eph)
+				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
 						DP_UUID(ec_eph->ce_cont_uuid));

@@ -299,14 +299,18 @@ func TestControl_FormatACL(t *testing.T) {
 		"multiple verbose": {
 			acl: &AccessControlList{
 				Entries: []string{
-					"A::OWNER@:rw",
+					"A::OWNER@:rwcdtTaAo",
 					"A:G:GROUP@:rw",
 					"A:G:readers@:r",
 				},
 			},
-			expStr: "# Entries:\n# Allow::Owner:Read/Write\nA::OWNER@:rw\n" +
-				"# Allow:Group:Owner-Group:Read/Write\nA:G:GROUP@:rw\n" +
-				"# Allow:Group:readers@:Read\nA:G:readers@:r\n",
+			expStr: "# Entries:\n" +
+				"# Allow::Owner:Read/Write/Create-Cont/Destroy-Cont/Get-Prop/Set-Prop/Get-ACL/Set-ACL/Set-Owner\n" +
+				"A::OWNER@:rwcdtTaAo\n" +
+				"# Allow:Group:Owner-Group:Read/Write\n" +
+				"A:G:GROUP@:rw\n" +
+				"# Allow:Group:readers@:Read\n" +
+				"A:G:readers@:r\n",
 			verbose: true,
 		},
 		"with owner user": {

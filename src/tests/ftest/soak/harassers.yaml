@@ -70,7 +70,8 @@ container_reserved:
 soak_harassers:
   name: soak_harassers
   # harasser test timeout in hours
-  test_timeout: 12
+  test_timeout:
+    test_soak_harassers: 12
   # maximum timeout for a single job in test in minutes
   joblist:
     - ior_harasser
