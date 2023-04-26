@@ -542,10 +542,9 @@ class SoakTestBase(TestWithServers):
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
-        test_to = self.params.get("test_timeout", test_param + "*")
+        test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
-        single_test_pool = self.params.get(
-            "single_test_pool", test_param + "*", True)
+        single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)

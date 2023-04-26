@@ -12,7 +12,6 @@ import enum
 
 # pylint: disable-next=relative-beyond-top-level
 from . import pydaos_shim
-
 from . import DAOS_MAGIC
 from . import PyDError
 from . import DaosClient
@@ -22,6 +21,15 @@ ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
+
+
+def _get_object_id(cid):
+    """ Get the existing DAOS object class ID based on name.  """
+
+    # Default to OC_UNKNOWN (0), which will automatically select an object class.
+    if cid == "0":
+        return 0
+    return ObjClassID[cid].value
 
 
 class DObjNotFound(Exception):
@@ -108,12 +116,15 @@ class DCont():
     def __getitem__(self, name):
         return self.get(name)
 
-    def dict(self, name, v: dict = None):
+    def dict(self, name, v: dict = None, cid="0"):
         """ Create new DDict object """
+
+        # Get the existing class ID based on class name given. Default to 0
+        objId = _get_object_id(cid)
 
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                pydaos_shim.PYDAOS_DICT)
+                                                objId, pydaos_shim.PYDAOS_DICT)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS dict", ret)
 
@@ -125,13 +136,16 @@ class DCont():
 
         return dd
 
-    def array(self, name, v: list = None):
+    def array(self, name, v: list = None, cid="0"):
         # pylint: disable=unused-argument
         """ Create new DArray object """
 
+        # Get the existing class ID based on class name given. Default to 0
+        objId = _get_object_id(cid)
+
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                pydaos_shim.PYDAOS_ARRAY)
+                                                objId, pydaos_shim.PYDAOS_ARRAY)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS array", ret)
 
@@ -181,7 +195,6 @@ class _DObj():
 class DDictIter():
     # pylint: disable=too-few-public-methods
     """ Iterator class for DDict """
-
     def __init__(self, ddict):
         self._dc = DaosClient()
         self._entries = []

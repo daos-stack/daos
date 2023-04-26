@@ -3,11 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import os
 import pwd
 import grp
+
 import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -43,7 +42,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,pool
-        :avocado: tags=pool_acl,sec_acl,test_daos_pool_acl_enforcement
+        :avocado: tags=DaosRunPoolSecurityTest,pool_acl,sec_acl,test_daos_pool_acl_enforcement
         """
         user_uid = os.geteuid()
         user_gid = os.getegid()
