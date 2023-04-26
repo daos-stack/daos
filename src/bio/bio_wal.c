@@ -7,9 +7,6 @@
 
 #include "bio_wal.h"
 
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
-
 #define BIO_META_MAGIC		(0xbc202210)
 #define BIO_META_VERSION	1
 
@@ -1672,7 +1669,7 @@ bio_wal_replay(struct bio_meta_context *mc,
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc, ret;
-	uint64_t		 total_blk = 0;
+	uint64_t		 total_bytes = 0;
 	struct d_tm_node_t      *wal_et;
 	struct d_tm_node_t      *wal_sz;
 	uint64_t                 s_us, e_us;
@@ -1741,7 +1738,7 @@ load_wal:
 		tight_loop++;
 		nr_replayed++;
 		blk_off += blk_desc.bd_blks;
-		total_blk += blk_off;
+		total_bytes += (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
 
 		/* Bump last committed tx ID in WAL super info */
 		if (wal_id_cmp(si, tx_id, si->si_commit_id) > 0) {
@@ -1797,15 +1794,15 @@ out:
 		e_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
 		uuid_unparse_lower(mc->mc_wal->bic_pool_id, pool);
 		ret = d_tm_add_metric(&wal_sz, D_TM_GAUGE, "WAL replay size", "bytes",
-				     "pool/%s/tgt_%d/wal_replay/size", pool, trg);
+				      "pool/%s/tgt_%d/wal_replay/size", pool, trg);
 		if (ret)
 			D_WARN("Failed to create WAL size replay telemetry: "DF_RC"\n", DP_RC(ret));
 		ret = d_tm_add_metric(&wal_et, D_TM_GAUGE, "WAL replay time", "us",
-				     "pool/%s/tgt_%d/wal_replay/time", pool, trg);
+				      "pool/%s/tgt_%d/wal_replay/time", pool, trg);
 		if (ret)
 			D_WARN("Failed to create WAL replay ET telemetry: "DF_RC"\n", DP_RC(ret));
 		if (wal_sz)
-			d_tm_set_gauge(wal_sz, total_blk * blk_bytes);
+			d_tm_set_gauge(wal_sz, total_bytes);
 		if (wal_et)
 			d_tm_set_gauge(wal_et, e_us - s_us);
 
