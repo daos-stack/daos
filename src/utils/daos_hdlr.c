@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	unsigned long		inconsistent = 0;
 	uint32_t		oids_nr;
 	int			rc, i;
+	int			rc2;
 
 	/* Create a snapshot with OIT */
 	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
@@ -151,9 +152,16 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	}
 
 out_close:
-	daos_oit_close(oit, NULL);
+	rc2 = daos_cont_snap_oit_destroy(ap->cont, oit, NULL);
+	if (rc == 0)
+		rc = rc2;
+	rc2 = daos_oit_close(oit, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_snap:
-	cont_destroy_snap_hdlr(ap);
+	rc2 = cont_destroy_snap_hdlr(ap);
+	if (rc == 0)
+		rc = rc2;
 out:
 	return rc;
 }
@@ -194,43 +202,6 @@ cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	return rc;
-}
-
-int
-cont_set_prop_hdlr(struct cmd_args_s *ap)
-{
-	int			 rc;
-	struct daos_prop_entry	*entry;
-	uint32_t		 i;
-
-	if (ap->props == NULL || ap->props->dpp_nr == 0) {
-		fprintf(ap->errstream,
-			"at least one property must be requested\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
-	/* Validate the properties are supported for set */
-	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &ap->props->dpp_entries[i];
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
-		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
-			fprintf(ap->errstream,
-				"property not supported for set\n");
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-	}
-
-	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to set properties for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	D_PRINT("Properties were successfully set\n");
-
-err_out:
 	return rc;
 }
 
@@ -2678,6 +2649,9 @@ err_dst:
 		DH_PERROR_DER(ap, rc2, "Failed to close source object");
 	}
 out_oit:
+	rc2 = daos_cont_snap_oit_destroy(ca->src_coh, toh, NULL);
+	if (rc2 != 0)
+		DH_PERROR_DER(ap, rc2, "Failed to destroy oit");
 	rc2 = daos_oit_close(toh, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to close object iterator");
@@ -2703,35 +2677,6 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
-	return rc;
-}
-
-static int
-print_acl(struct cmd_args_s *ap, FILE *outstream, daos_prop_t *acl_prop,
-	  bool verbose)
-{
-	int			rc = 0;
-	struct daos_prop_entry	*entry = {0};
-	struct daos_acl		*acl = NULL;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
-	if (entry != NULL)
-		acl = entry->dpe_val_ptr;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner: %s\n", entry->dpe_str);
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner-Group: %s\n", entry->dpe_str);
-
-	rc = daos_acl_to_stream(outstream, acl, verbose);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to print ACL: %s (%d)\n",
-			d_errstr(rc), rc);
-	}
-
 	return rc;
 }
 
@@ -2824,173 +2769,5 @@ parse_err:
 out:
 	D_FREE(line);
 	fclose(instream);
-	return rc;
-}
-
-int
-cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
-{
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	daos_prop_t	*prop_out;
-
-	if (!ap->aclfile) {
-		fprintf(ap->errstream,
-			"Parameter --acl-file is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = parse_acl_file(ap, ap->aclfile, &acl);
-	if (rc != 0)
-		return rc;
-
-	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to overwrite ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"overwrite appeared to succeed, but failed to fetch ACL"
-			" for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_update_acl_hdlr(struct cmd_args_s *ap)
-{
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	struct daos_ace	*ace = NULL;
-	daos_prop_t	*prop_out;
-
-	/* need one or the other, not both */
-	if (!ap->aclfile == !ap->entry) {
-		fprintf(ap->errstream,
-			"either parameter --acl-file or --entry is required\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->aclfile) {
-		rc = parse_acl_file(ap, ap->aclfile, &acl);
-		if (rc != 0)
-			return rc;
-	} else {
-		rc = daos_ace_from_str(ap->entry, &ace);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"failed to parse entry: %s (%d)\n",
-				d_errdesc(rc), rc);
-			return rc;
-		}
-
-		acl = daos_acl_create(&ace, 1);
-		daos_ace_free(ace);
-		if (acl == NULL) {
-			rc = -DER_NOMEM;
-			fprintf(ap->errstream,
-				"failed to make ACL from entry: %s "
-				"(%d)\n", d_errdesc(rc), rc);
-			return rc;
-		}
-	}
-
-	rc = daos_cont_update_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to update ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"update appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_delete_acl_hdlr(struct cmd_args_s *ap)
-{
-	int				rc;
-	enum daos_acl_principal_type	type;
-	char				*name;
-	daos_prop_t			*prop_out;
-
-	if (!ap->principal) {
-		fprintf(ap->errstream,
-			"parameter --principal is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"unable to parse principal string '%s': %s"
-			"(%d)\n", ap->principal, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
-	D_FREE(name);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to delete ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"delete appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_set_owner_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (!ap->user && !ap->group) {
-		fprintf(ap->errstream,
-			"parameter --user or --group is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to set owner for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully updated owner for container\n");
 	return rc;
 }

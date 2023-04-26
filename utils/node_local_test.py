@@ -3704,7 +3704,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        cont = create_cont(conf, pool, label=label, ctype="POSIX")
+        container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3716,7 +3716,7 @@ def run_in_fg(server, conf, args):
         cont_attrs['dfuse-direct-io-disable'] = False
 
         container.set_attrs(cont_attrs)
-        cont = container.id()
+        container = container.uuid
 
     dfuse = DFuse(server,
                   conf,
@@ -4183,6 +4183,19 @@ class AllocFailTestRun():
         # These checks will report an error against the line of code that introduced the "leak"
         # which may well only have a loose correlation to where the error was reported.
         if self.aft.check_daos_stderr:
+
+            # The go code will report a stacktrace in some cases on segfault or double-free
+            # and these will obviously not be the expected output but are obviously an error,
+            # to avoid filling the results with lots of warnings about stderr just include one
+            # to say the check is disabled.
+            if rc in (-6, -11):
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                f"Unable to check stderr because of exit code '{rc}'",
+                                mtype='Unrecognised error')
+                _explain()
+                return
+
             stderr = self.stderr.decode('utf-8').rstrip()
             for line in stderr.splitlines():
 
