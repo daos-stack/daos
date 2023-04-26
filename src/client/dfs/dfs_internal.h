@@ -101,6 +101,10 @@ dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name);
 void
 dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
 
+/** query mode of a dfs object */
+mode_t
+dfs_obj_mode(dfs_t *dfs, dfs_obj_t *obj);
+
 #if defined(__cplusplus)
 }
 #endif

@@ -2234,6 +2234,16 @@ class PosixTests():
         ret = pil4dfs_cmd(self.dfuse, ['rm', file3])
         assert ret.returncode == 0
 
+        # rm a dir with a file and a symlink
+        file4 = join(self.dfuse.dir, 'dir1/file4')
+        ret = pil4dfs_cmd(self.dfuse, ['touch', file4])
+        assert ret.returncode == 0
+        link1 = join(self.dfuse.dir, 'dir1/link1');
+        ret = pil4dfs_cmd(self.dfuse, ['ln', '-s', file4, link1])
+        assert ret.returncode == 0
+        ret = pil4dfs_cmd(self.dfuse, ['rm', '-Rf', dir1])
+        assert ret.returncode == 0
+
     @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""

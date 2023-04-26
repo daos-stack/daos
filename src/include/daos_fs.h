@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1030,13 +1030,11 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  *			which means operation will be on root object.
  * \param[in]	mode	New permission access modes. For now, we don't support
  *			the sticky bit, setuid, and setgid.
- * \param[in]	flag	flag is constructed by a bitwise-inclusive OR of
- *			flags. Handling 0 and AT_SYMLINK_NOFOLLOW currently.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag);
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
 
 /**
  * Change owner and group. Since uid and gid are not enforced

@@ -1152,12 +1152,8 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 {
 	mode_t	base_mask;
 
-	/** Root can access everything */
-	if (uid == 0)
-		return 0;
-
 	if (mode == 0)
-		return EPERM;
+		return EACCES;
 
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
@@ -1174,17 +1170,17 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 	/** Execute check */
 	if (X_OK == (mask & X_OK))
 		if (0 == (mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Write check */
 	if (W_OK == (mask & W_OK))
 		if (0 == (mode & (S_IWUSR | S_IWGRP | S_IWOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Read check */
 	if (R_OK == (mask & R_OK))
 		if (0 == (mode & (S_IRUSR | S_IRGRP | S_IROTH)))
-			return EPERM;
+			return EACCES;
 
 	/** TODO - check ACL, attributes (immutable, append) etc. */
 	return 0;
@@ -4958,7 +4954,7 @@ out:
 }
 
 int
-dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, const int flag)
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -5014,12 +5010,9 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, const in
 
 	if (!exists)
 		return ENOENT;
-	if (!S_ISLNK(entry.mode) && flag & O_NOFOLLOW) {
-		return ENOTSUP;
-	}
 
 	/** resolve symlink */
-	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
+	if (S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
 
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
@@ -5085,7 +5078,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, const in
 	}
 
 out:
-	if (S_ISLNK(entry.mode) && !(flag & O_NOFOLLOW)) {
+	if (S_ISLNK(entry.mode)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
 	}
@@ -6399,3 +6392,13 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 	rc = daos_obj_key2anchor(obj->oh, DAOS_TX_NONE, &dkey, NULL, anchor, NULL);
 	return daos_der2errno(rc);
 }
+
+mode_t
+dfs_obj_mode(dfs_t *dfs, dfs_obj_t *obj)
+{
+	if (obj == NULL)
+		return dfs->root.mode;
+	else
+		return obj->mode;
+}
+

@@ -330,7 +330,7 @@ dfs_test_lookup(void **state)
 	assert_int_equal(rc, 0);
 
 	/** try chmod to a dir, should fail */
-	rc = dfs_chmod(dfs_mt, NULL, filename_file1, S_IFDIR, 0);
+	rc = dfs_chmod(dfs_mt, NULL, filename_file1, S_IFDIR);
 	assert_int_equal(rc, EINVAL);
 
 	rc = dfs_release(obj);
@@ -355,11 +355,11 @@ dfs_test_lookup(void **state)
 	assert_int_equal(rc, 0);
 
 	/** try chmod to a symlink, should fail (since chmod resolves link) */
-	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK, 0);
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
 	assert_int_equal(rc, EINVAL);
 
 	/** chmod + IXUSR to dir1 */
-	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, create_mode | S_IXUSR, 0);
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, create_mode | S_IXUSR);
 	assert_int_equal(rc, 0);
 
 	/** verify mode */
@@ -1046,9 +1046,9 @@ dfs_test_rename(void **state)
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR, 0);
+	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
-	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR, 0);
+	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);

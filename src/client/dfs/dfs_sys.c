@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -694,7 +694,7 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_chmod(dfs_sys->dfs, sys_path.parent, sys_path.name, mode, 0);
+	rc = dfs_chmod(dfs_sys->dfs, sys_path.parent, sys_path.name, mode);
 
 	sys_path_free(dfs_sys, &sys_path);
 
