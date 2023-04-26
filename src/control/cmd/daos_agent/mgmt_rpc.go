@@ -137,6 +137,8 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		mod.log.Errorf("%s: unable to get NUMA node: %s", client, err)
 		return nil, err
 	}
+	mod.log.Tracef("%s: detected numa %d", client, numaNode)
+
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
 	switch {
 	case fault.IsFaultCode(err, code.ServerWrongSystem):

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -484,7 +484,7 @@ func (s *Provider) ibStateToNetDevState(stateStr string) hardware.NetDevState {
 	stateSubstrs := strings.Split(string(stateStr), ": ")
 	stateNum, err := strconv.Atoi(stateSubstrs[0])
 	if err != nil {
-		s.log.Tracef("unable to parse IB state %q: %s", stateStr, err.Error())
+		s.log.Noticef("unable to parse IB state %q: %s", stateStr, err.Error())
 		return hardware.NetDevStateUnknown
 	}
 
