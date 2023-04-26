@@ -489,7 +489,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.subprocess = True
 
         self.log.info("Running MDTEST")
-        self.execute_mdtest()
+        self.execute_mdtest(display_space=False)
         if stop_rank_s:
             time.sleep(stop_rank_s)
             self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])

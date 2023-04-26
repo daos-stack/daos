@@ -1213,6 +1213,18 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 	}
 
+	/* Create the oit oids index KVS. */
+	attr.dsa_class = RDB_KVS_GENERIC;
+	attr.dsa_order = 16;
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+			""DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
+
 out_kvs:
 	rdb_path_fini(&kvs);
 out:
@@ -1537,6 +1549,11 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out_prop;
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+
+	/* Destroy oit oids index KVS. */
+	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
+	if (rc != 0)
+		goto out_prop;
 
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
@@ -1965,9 +1982,19 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, st
 	if (rc != 0)
 		D_GOTO(err_hdls, rc);
 
+	/* c_oit_oids */
+	rc = rdb_path_clone(&p->c_prop, &p->c_oit_oids);
+	if (rc != 0)
+		D_GOTO(err_hdls, rc);
+	rc = rdb_path_push(&p->c_oit_oids, &ds_cont_prop_oit_oids);
+	if (rc != 0)
+		D_GOTO(err_oit_oids, rc);
+
 	*cont = p;
 	return 0;
 
+err_oit_oids:
+	rdb_path_fini(&p->c_oit_oids);
 err_hdls:
 	rdb_path_fini(&p->c_hdls);
 err_user:
@@ -2019,6 +2046,7 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 void
 cont_put(struct cont *cont)
 {
+	rdb_path_fini(&cont->c_oit_oids);
 	rdb_path_fini(&cont->c_hdls);
 	rdb_path_fini(&cont->c_user);
 	rdb_path_fini(&cont->c_snaps);
@@ -2161,7 +2189,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 * Need props to check for pool redundancy requirements and access
 	 * control.
 	 */
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
@@ -3571,7 +3599,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Read all props for prop IV update */
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old, true);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read prop for cont, rc=%d\n",
 			DP_UUID(cont->c_uuid), rc);
@@ -4511,6 +4539,21 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	}
 
+	if (from_global_ver < 2) {
+		struct rdb_kvs_attr	attr;
+
+		/* Create the oit oids index KVS. */
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+				""DF_RC"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+			goto out;
+		}
+	}
+
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
@@ -4731,7 +4774,7 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 	}
 
 	pool = svc->cs_pool;
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to read prop for cont, rc=%d\n",
 			DP_CONT(pool_uuid, cont_uuid), rc);
@@ -4817,16 +4860,11 @@ cont_rdb_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 int
-ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
+ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 {
 	struct cont_rdb_iter_arg	args = { 0 };
-	struct cont_svc			*svc = NULL;
 	struct rdb_tx			tx;
 	int				rc;
-
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
 
 	args.svc = svc;
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -4840,7 +4878,7 @@ ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, cont_rdb_iter_cb, &args);
 	ABT_rwlock_unlock(svc->cs_lock);
 	if (rc < 0) {
-		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 		D_GOTO(tx_end, rc);
 	}
 
@@ -4851,9 +4889,7 @@ tx_end:
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(pool_uuid), rc);
-	if (svc != NULL)
-		cont_svc_put_leader(svc);
+	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 
 	return rc;
 }
@@ -4905,6 +4941,14 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *c
 	case CONT_ACL_DELETE:
 		*update_mtime = true;
 		return ds_cont_acl_delete(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_OID_GET:
+		return ds_cont_snap_oit_oid_get(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_CREATE:
+		*update_mtime = true;
+		return ds_cont_snap_oit_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_OIT_DESTROY:
+		*update_mtime = true;
+		return ds_cont_snap_oit_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}
@@ -5007,7 +5051,7 @@ ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc)
 		D_ERROR(DF_CONT": prop read failed:"DF_RC"\n",
 			DP_CONT(svc->cs_pool_uuid, cont_uuid), DP_RC(rc));
@@ -5152,6 +5196,9 @@ cont_cli_opc_name(crt_opcode_t opc)
 	case CONT_ACL_DELETE:		return "ACL_DELETE";
 	case CONT_OPEN_BYLABEL:		return "OPEN_BYLABEL";
 	case CONT_DESTROY_BYLABEL:	return "DESTROY_BYLABEL";
+	case CONT_SNAP_OIT_OID_GET:	return "SNAP_OIT_OID_GET";
+	case CONT_SNAP_OIT_CREATE:	return "SNAP_OIT_CREATE";
+	case CONT_SNAP_OIT_DESTROY:	return "SNAP_OIT_DESTROY";
 	default:			return "?";
 	}
 }

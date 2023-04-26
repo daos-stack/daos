@@ -44,11 +44,12 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def execute_mdtest(self, out_queue=None):
+    def execute_mdtest(self, out_queue=None, display_space=True):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
+            display_space (bool, optional): Whether to display the pool space. Defaults to True.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -66,7 +67,7 @@ class MdtestBase(DfuseTestBase):
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes, out_queue=out_queue)
+                        self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
             return
