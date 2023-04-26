@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -45,7 +46,7 @@ type leaderQueryCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
@@ -65,8 +66,8 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	cmd.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
@@ -98,7 +99,7 @@ type systemQueryCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	rankListCmd
 	Verbose bool `long:"verbose" short:"v" description:"Display more member details"`
 }
@@ -121,8 +122,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var out, outErr strings.Builder
@@ -157,7 +158,7 @@ type systemStopCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	rankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
@@ -182,8 +183,8 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var out, outErr strings.Builder
@@ -202,7 +203,7 @@ type baseExcludeCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	rankListCmd
 }
 
@@ -223,8 +224,8 @@ func (cmd *baseExcludeCmd) execute(clear bool) error {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	updated := ranklist.NewRankSet()
@@ -261,7 +262,7 @@ type systemStartCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	rankListCmd
 }
 
@@ -283,8 +284,8 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var out, outErr strings.Builder
@@ -303,7 +304,7 @@ type systemCleanupCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Machine string `positional-arg-name:"<Machine to cleanup>"`
@@ -327,8 +328,8 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	var out, outErr strings.Builder
@@ -351,7 +352,7 @@ type systemSetAttrCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Attrs ui.SetPropertiesFlag `positional-arg-name:"system attributes to set (key:val[,key:val...])" required:"1"`
@@ -365,8 +366,8 @@ func (cmd *systemSetAttrCmd) Execute(_ []string) error {
 	}
 
 	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -382,7 +383,7 @@ type systemGetAttrCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to get (key[,key...])"`
@@ -417,8 +418,8 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.SystemGetAttr(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -437,7 +438,7 @@ type systemDelAttrCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to delete (key[,key...])" required:"1"`
@@ -454,8 +455,8 @@ func (cmd *systemDelAttrCmd) Execute(_ []string) error {
 	}
 
 	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -516,7 +517,7 @@ type systemSetPropCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Props systemSetPropsFlag `positional-arg-name:"system properties to set (key:val[,key:val...])" required:"1"`
@@ -530,8 +531,8 @@ func (cmd *systemSetPropCmd) Execute(_ []string) error {
 	}
 
 	err := control.SystemSetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -588,7 +589,7 @@ type systemGetPropCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Props systemGetPropsFlag `positional-arg-name:"system properties to get (key[,key...])"`
@@ -623,8 +624,8 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.SystemGetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp.Properties, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp.Properties, err)
 	}
 
 	if err != nil {

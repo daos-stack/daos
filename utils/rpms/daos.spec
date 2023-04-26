@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.108
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -217,6 +217,7 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: golang >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -557,6 +558,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.108-2
+- Install golang >= 1.18 as a daos-client-tests dependency
+
 * Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.108-1
 - Switch version to 2.3.108
 
