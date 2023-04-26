@@ -194,7 +194,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
 		double timeout;
 
-		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+		if (dfuse_mcache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
 			D_GOTO(done, 0);
 		}
