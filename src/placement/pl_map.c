@@ -222,7 +222,8 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 /* Returns whether or not a given layout contains the specified rank */
 bool
 pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard,
+		       bool ignore_rebuild_shard)
 {
 	struct pool_target *target;
 	int i;
@@ -231,9 +232,10 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 	D_ASSERT(layout != NULL);
 
 	for (i = 0; i < layout->ol_nr; i++) {
-		if (layout->ol_shards[i].po_rebuilding ||
-		    layout->ol_shards[i].po_reintegrating ||
-		    layout->ol_shards[i].po_target == -1)
+		if ((!ignore_rebuild_shard &&
+		     (layout->ol_shards[i].po_rebuilding ||
+		      layout->ol_shards[i].po_reintegrating)) ||
+		     layout->ol_shards[i].po_target == -1)
 			continue;
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
