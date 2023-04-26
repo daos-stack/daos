@@ -3138,7 +3138,7 @@ def main():
     parser.add_argument(
         "--scm_size",
         action="store",
-        default="0",
+        default=0,
         type=int,
         help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
              "config when generating an automatic storage config (test yaml includes 'storage: "
