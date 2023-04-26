@@ -60,8 +60,8 @@ gRPC over mutually-authenticated TLS using their respective component
 certificates. DAOS verifies the certificate chain, as well as the Common Name
 (CN) in the certificate, to authenticate the component's identity.
 
-The `admin` component certificate serves as the only authentication mechanism for
-the `dmg` administrative tool.
+The `admin` component certificate serves as the only authentication and authorization
+mechanism for the `dmg` administrative tool.
 With the `admin` certificate's private key and the `dmg` executable, a user has
 full administrative access to the DAOS system.
 
