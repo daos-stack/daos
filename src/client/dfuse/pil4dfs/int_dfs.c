@@ -3972,7 +3972,7 @@ dup(int oldfd)
 		if (idx >= 0) {
 			fd_dup2_list[idx].fd_src  = fd;
 			fd_dup2_list[idx].fd_dest = oldfd;
-			atomic_fetch_add_relaxed(&(file_list[oldfd - FD_FILE_BASE]->ref_count), 1);
+			atomic_fetch_add_relaxed(&file_list[oldfd - FD_FILE_BASE]->ref_count, 1);
 			num_fd_dup2ed++;
 			return fd;
 		} else {
