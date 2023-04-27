@@ -30,15 +30,16 @@ type configCmd struct {
 }
 
 type configGenCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-	AccessPoints   string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines      int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	SCMOnly        bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
-	NetClass       string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider    string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
-	UseTmpfsSCM    bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
-	SkipPrep       bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
+	cmdutil.LogCmd  `json:"-"`
+	helperLogCmd    `json:"-"`
+	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
+	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
+	NetProvider     string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
+	SkipPrep        bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
 type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
@@ -148,13 +149,14 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
 	req := control.ConfGenerateReq{
-		Log:          cmd.Logger,
-		NrEngines:    cmd.NrEngines,
-		SCMOnly:      cmd.SCMOnly,
-		NetClass:     ndc,
-		NetProvider:  cmd.NetProvider,
-		AccessPoints: accessPoints,
-		UseTmpfsSCM:  cmd.UseTmpfsSCM,
+		Log:             cmd.Logger,
+		NrEngines:       cmd.NrEngines,
+		SCMOnly:         cmd.SCMOnly,
+		NetClass:        ndc,
+		NetProvider:     cmd.NetProvider,
+		AccessPoints:    accessPoints,
+		UseTmpfsSCM:     cmd.UseTmpfsSCM,
+		ExtMetadataPath: cmd.ExtMetadataPath,
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 

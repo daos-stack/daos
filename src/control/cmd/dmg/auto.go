@@ -31,12 +31,13 @@ type configGenCmd struct {
 	hostListCmd
 	jsonOutputCmd
 
-	AccessPoints string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	SCMOnly      bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
-	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
-	UseTmpfsSCM  bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
+	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
+	NetProvider     string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
@@ -56,13 +57,14 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 
 	req := control.ConfGenerateRemoteReq{
 		ConfGenerateReq: control.ConfGenerateReq{
-			Log:          cmd.Logger,
-			NrEngines:    cmd.NrEngines,
-			SCMOnly:      cmd.SCMOnly,
-			NetClass:     ndc,
-			NetProvider:  cmd.NetProvider,
-			AccessPoints: accessPoints,
-			UseTmpfsSCM:  cmd.UseTmpfsSCM,
+			Log:             cmd.Logger,
+			NrEngines:       cmd.NrEngines,
+			SCMOnly:         cmd.SCMOnly,
+			NetClass:        ndc,
+			NetProvider:     cmd.NetProvider,
+			AccessPoints:    accessPoints,
+			UseTmpfsSCM:     cmd.UseTmpfsSCM,
+			ExtMetadataPath: cmd.ExtMetadataPath,
 		},
 		Client: cmd.ctlInvoker,
 	}

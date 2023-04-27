@@ -147,6 +147,13 @@ var (
 		code.BdevConfigControlMetadataNoRoles,
 		"using a control_metadata path requires md-on-ssd bdev tier roles",
 		"assign 'bdev_roles' to bdev tiers in the engine storage section of the config")
+
+	// FaultBdevConfigRolesNoControlMetadata indicates a fault when control_metadata path
+	// has not been specified in server config file but MD-on-SSD has been enabled.
+	FaultBdevConfigRolesNoControlMetadata = storageFault(
+		code.BdevConfigRolesNoControlMetadata,
+		"a control_metadata path is required when md-on-ssd bdev tier roles are specified",
+		"assign 'path' in 'control_metadata' storage section of the config to use MD-on-SSD")
 )
 
 // FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned

@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -1454,15 +1455,20 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 	defHpSizeKb := 2048
 	exmplEngineCfg0 := MockEngineCfg(0, 0, 1, 2)
 	exmplEngineCfg1 := MockEngineCfg(1, 3, 4, 5)
+	metadataMountPath := "/mnt/daos_md"
+	controlMetadata := storage.ControlMetadata{
+		Path: metadataMountPath,
+	}
 
 	for name, tc := range map[string]struct {
-		accessPoints []string // list of access point host/ip addresses
-		ecs          []*engine.Config
-		hpSize       int
-		memTotal     int
-		threadCounts *threadCounts  // numa to cpu mappings
-		expCfg       *config.Server // expected config generated
-		expErr       error
+		accessPoints    []string // list of access point host/ip addresses
+		extMetadataPath string
+		ecs             []*engine.Config
+		hpSize          int
+		memTotal        int
+		threadCounts    *threadCounts  // numa to cpu mappings
+		expCfg          *config.Server // expected config generated
+		expErr          error
 	}{
 		"no engines": {
 			expErr: errors.New("expected non-zero"),
@@ -1519,8 +1525,19 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			hpSize: defHpSizeKb,
 			expErr: config.FaultConfigBadControlPort,
 		},
-		"dual engine tmpfs; no hugepage size": {
+		"dual engine tmpfs; no control metadata path": {
 			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: (52 * humanize.GiByte) / humanize.KiByte,
+			expErr:   storage.FaultBdevConfigRolesNoControlMetadata,
+		},
+		"dual engine tmpfs; no hugepage size": {
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
 			ecs: []*engine.Config{
 				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
@@ -1529,7 +1546,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			expErr:   errors.New("invalid system hugepage size"),
 		},
 		"dual engine tmpfs; no mem": {
-			threadCounts: &threadCounts{16, 0},
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
 			ecs: []*engine.Config{
 				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
@@ -1538,7 +1556,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			expErr: errors.New("requires nonzero total mem"),
 		},
 		"dual engine tmpfs; low mem": {
-			threadCounts: &threadCounts{16, 0},
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
 			ecs: []*engine.Config{
 				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
@@ -1548,7 +1567,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			expErr:   errors.New("insufficient ram"),
 		},
 		"dual engine tmpfs; high mem": {
-			threadCounts: &threadCounts{16, 0},
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
 			ecs: []*engine.Config{
 				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
@@ -1560,15 +1580,26 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
 						mockBdevTier(0, 0).WithBdevDeviceRoles(4),
 						mockBdevTier(0, 1, 2).WithBdevDeviceRoles(3)).
-						WithHelperStreamCount(0),
+						WithHelperStreamCount(0).
+						WithStorageControlMetadataPath(metadataMountPath).
+						WithStorageConfigOutputPath(
+							filepath.Join(controlMetadata.EngineDirectory(0),
+								storage.BdevOutConfName),
+						),
 					MockEngineCfgTmpfs(1, 5, /* tmpfs size in gib */
 						mockBdevTier(1, 3).WithBdevDeviceRoles(4),
 						mockBdevTier(1, 4, 5).WithBdevDeviceRoles(3)).
-						WithHelperStreamCount(0),
+						WithHelperStreamCount(0).
+						WithStorageControlMetadataPath(metadataMountPath).
+						WithStorageConfigOutputPath(
+							filepath.Join(controlMetadata.EngineDirectory(1),
+								storage.BdevOutConfName),
+						),
 				}).
 				// 16+1 (MD-on-SSD) targets * 2 engines * 512 pages
 				WithNrHugepages(17 * 2 * 512).
-				WithAccessPoints("hostX:10002"),
+				WithAccessPoints("hostX:10002").
+				WithControlMetadata(controlMetadata),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1587,7 +1618,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				MemTotalKiB:     tc.memTotal,
 			}
 
-			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, mi, tc.threadCounts)
+			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.extMetadataPath, tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1605,7 +1636,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
 			if diff := cmp.Diff(tc.expCfg, getCfg, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected engine configs (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
