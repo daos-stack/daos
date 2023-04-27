@@ -73,7 +73,7 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("pool", "autotest"), pool=pool)
 
-    def container_create(self, pool, sys_name=None, cont=None, path=None, cont_type=None,
+    def container_create(self, pool, sys_name=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
                          properties=None, acl_file=None, label=None):
         # pylint: disable=too-many-arguments
@@ -83,7 +83,6 @@ class DaosCommand(DaosCommandBase):
             pool (str): pool UUID or label in which to create the container
             sys_name (str, optional):  DAOS system name context for servers.
                 Defaults to None.
-            cont (str, optional): UUID or label. Defaults to None.
             path (str, optional): container namespace path. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
@@ -112,7 +111,7 @@ class DaosCommand(DaosCommandBase):
         else:
             properties = 'rd_lvl:1'
         return self._get_json_result(
-            ("container", "create"), pool=pool, sys_name=sys_name, cont=cont, path=path,
+            ("container", "create"), pool=pool, sys_name=sys_name, path=path,
             type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
 
