@@ -3704,7 +3704,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        cont = create_cont(conf, pool, label=label, ctype="POSIX")
+        container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3716,7 +3716,7 @@ def run_in_fg(server, conf, args):
         cont_attrs['dfuse-direct-io-disable'] = False
 
         container.set_attrs(cont_attrs)
-        cont = container.id()
+        container = container.uuid
 
     dfuse = DFuse(server,
                   conf,
@@ -3991,6 +3991,79 @@ def test_pydaos_kv(server, conf):
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
+
+def test_pydaos_kv_obj_class(server, conf):
+    """Test the predefined object class works with KV"""
+
+    with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
+                                     suffix='.log',
+                                     delete=False) as tmp_file:
+        log_name = tmp_file.name
+        os.environ['D_LOG_FILE'] = log_name
+
+    daos = import_daos(server, conf)
+
+    pool = server.get_test_pool_obj()
+
+    cont = create_cont(conf, pool, ctype="PYTHON", label='pydaos_cont')
+
+    container = daos.DCont(pool.label, cont.label)
+    failed = False
+    # Write kv1 dictionary with OC_S2 object type
+    kv1 = container.dict('object1', {"Monday": "1"}, "OC_S2")
+    if len(kv1) != 1:
+        failed = True
+        print(f'Expected length of kv object is 1 but got {len(kv1)}')
+
+    # Write kv2 dictionary without any object type,
+    # so in this case we have 4 targets so default object type should be S4
+    kv2 = container.dict('object2', {"Monday": "1", "Tuesday": "2"})
+    if len(kv2) != 2:
+        failed = True
+        print(f'Expected length of kv object is 2 but got {len(kv2)}')
+
+    # Run a command to list the objects
+    cmd = ['cont', 'list-objects', pool.label, cont.label]
+    print('list the objects from container')
+    rc = run_daos_cmd(conf, cmd, use_json=True)
+
+    data = rc.json
+    assert data['status'] == 0, rc
+    assert data['error'] is None, rc
+    assert data['response'] is not None, rc
+
+    # Run a command to get the object layout
+    print('query the object layout')
+    actual_obj_layout = []
+    for obj in data['response']:
+        cmd = ['object', 'query', pool.label, cont.label, obj]
+        rc = run_daos_cmd(conf, cmd, use_json=True)
+
+        query_data = rc.json
+        assert query_data['status'] == 0, rc
+        assert query_data['error'] is None, rc
+        assert query_data['response'] is not None, rc
+        actual_obj_layout.append(query_data['response']['class'])
+
+    # Verify the object has the correct layout used during kv dictionary creation.
+    expected_obj_layout = ['S2', 'S4']
+    for obj in expected_obj_layout:
+        if obj not in actual_obj_layout:
+            failed = True
+            print(f'Expected obj {obj} not found in all {actual_obj_layout}')
+
+    if failed:
+        conf.wf.add_test_case('pydaos kv object test', failure='test failed')
+    else:
+        conf.wf.add_test_case('pydaos kv object test')
+
+    # pylint: disable=protected-access
+    del kv1
+    del kv2
+    del container
+    daos._cleanup()
+    log_test(conf, log_name)
+
 # Fault injection testing.
 #
 # This runs two different commands under fault injection, although it allows
@@ -4183,6 +4256,19 @@ class AllocFailTestRun():
         # These checks will report an error against the line of code that introduced the "leak"
         # which may well only have a loose correlation to where the error was reported.
         if self.aft.check_daos_stderr:
+
+            # The go code will report a stacktrace in some cases on segfault or double-free
+            # and these will obviously not be the expected output but are obviously an error,
+            # to avoid filling the results with lots of warnings about stderr just include one
+            # to say the check is disabled.
+            if rc in (-6, -11):
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                f"Unable to check stderr because of exit code '{rc}'",
+                                mtype='Unrecognised error')
+                _explain()
+                return
+
             stderr = self.stderr.decode('utf-8').rstrip()
             for line in stderr.splitlines():
 
@@ -4742,6 +4828,7 @@ def run(wf, args):
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
                 test_pydaos_kv(server, conf)
+                test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(set_server_fi(server))
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))

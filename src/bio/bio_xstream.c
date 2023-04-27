@@ -1276,7 +1276,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
 
 		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-			bio_fini_health_monitoring(ctxt->bxc_blobstore);
+			bio_fini_health_monitoring(ctxt);
 
 		ctxt->bxc_blobstore = NULL;
 	}
