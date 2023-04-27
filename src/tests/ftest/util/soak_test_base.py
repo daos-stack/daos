@@ -62,6 +62,8 @@ class SoakTestBase(TestWithServers):
         self.dfuse = []
         self.harasser_args = None
         self.harasser_loop_time = None
+        self.harassers = []
+        self.offline_harassers = []
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
