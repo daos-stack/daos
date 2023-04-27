@@ -256,14 +256,14 @@ set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
 	entry->generation = 1;
 	entry->ino        = entry->attr.st_ino;
 
-	if ((atomic_load_relaxed(&ie->ie_il_count)) != 0)
-		return;
-	entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
-
 	if (S_ISDIR(ie->ie_stat.st_mode))
 		entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
 	else
 		entry->entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+
+	if ((atomic_load_relaxed(&ie->ie_il_count)) != 0)
+		return;
+	entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 }
 
 static inline void
@@ -416,7 +416,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
 					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
 
-			/* TODO: Set times here */
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
 				struct dfuse_inode_entry *ie;
