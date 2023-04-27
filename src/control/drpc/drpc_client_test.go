@@ -85,7 +85,7 @@ func TestClient_Connect_Success(t *testing.T) {
 	client := newTestClientConnection(dialer, nil)
 	client.sequence = 10
 
-	err := client.Connect(context.Background())
+	err := client.Connect(test.Context(t))
 
 	test.AssertTrue(t, err == nil, "Expected no error")
 	test.AssertTrue(t, client.IsConnected(), "Should be connected")
@@ -102,7 +102,7 @@ func TestClient_Connect_Error(t *testing.T) {
 	dialer.SetError("mock dialer failure")
 	client := newTestClientConnection(dialer, nil)
 
-	err := client.Connect(context.Background())
+	err := client.Connect(test.Context(t))
 
 	test.CmpErr(t, dialer.OutputErr, err)
 	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
@@ -113,7 +113,7 @@ func TestClient_Connect_ContextCanceled(t *testing.T) {
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(test.Context(t))
 	cancel()
 	err := client.Connect(ctx)
 
@@ -127,7 +127,7 @@ func TestClient_Connect_AlreadyConnected(t *testing.T) {
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, originalConn)
 
-	err := client.Connect(context.Background())
+	err := client.Connect(test.Context(t))
 
 	test.AssertTrue(t, err == nil, "Expected no error")
 	test.AssertEqual(t, client.conn, originalConn,
