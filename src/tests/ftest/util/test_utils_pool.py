@@ -584,7 +584,7 @@ class TestPool(TestDaosApiBase):
         """Extend the pool to additional ranks.
 
         Args:
-            ranks (list): a list daos server ranks (int) to exclude
+            ranks (str): comma separate list of daos server ranks (int) to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.

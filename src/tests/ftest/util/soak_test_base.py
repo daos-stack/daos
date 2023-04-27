@@ -194,7 +194,7 @@ class SoakTestBase(TestWithServers):
             self.log.info("<<ERRORS: %s >>\n", error)
         return errors
 
-    def launch_harasser(self, harasser, pool, ranks=None):
+    def launch_harasser(self, harasser, pool):
         """Launch any harasser tests if defined in yaml.
 
         Args:
@@ -228,10 +228,10 @@ class SoakTestBase(TestWithServers):
             name = "REINTEGRATE"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
-        elif harasser == "extend":
+        elif harasser == "extend-pool":
             method = launch_extend
             name = "EXTEND"
-            params = (self, pool[1], ranks, name, results, args)
+            params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-stop":
             method = launch_server_stop_start
@@ -614,7 +614,7 @@ class SoakTestBase(TestWithServers):
                 self.harasser_args = {}
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
-            if not single_test_pool and "extend" in [self.harassers, self.offline_harassers]:
+            if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:

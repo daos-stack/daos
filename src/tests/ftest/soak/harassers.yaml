@@ -41,8 +41,12 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
+  rebuild_timeout: 240
+  pool_query_timeout: 120
 pool_reserved:
   size: 10%
+  rebuild_timeout: 240
+  pool_query_timeout: 120
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on

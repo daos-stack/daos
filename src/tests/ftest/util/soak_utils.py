@@ -61,11 +61,11 @@ def add_pools(self, pool_names, ranks=None):
                     /run/<test_params>/poollist/*
         ranks (list):  ranks to include in pool
     """
-    target_ranks = ranks if ranks else None
+    target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(namespace=path, connect=False, target_ranks=target_ranks))
+        self.pool.append(self.get_pool(namespace=path, connect=False, target_list=target_list))
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
@@ -535,7 +535,7 @@ def launch_extend(self, pool, name, results, args):
 
     # pool was created with self.hostlist_servers[:-1]
     selected_host = self.hostlist_servers[-1]
-    ranks = self.server_managers[0].get_host_ranks(selected_host)
+    ranklist = self.server_managers[0].get_host_ranks(selected_host)
 
     # init the status dictionary
     params = {"name": name,
@@ -543,6 +543,7 @@ def launch_extend(self, pool, name, results, args):
               "vars": {"host": selected_host, "ranks": ranks}}
     self.log.info(
         "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+    ranks = ",".join(str(rank) for rank in ranklist)
     try:
         pool.extend(ranks)
         status = True
