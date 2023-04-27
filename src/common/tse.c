@@ -518,7 +518,7 @@ tse_task_complete_callback(tse_task_t *task)
 	D_INIT_LIST_HEAD(&comp_cb_list);
 	/* just grab lock to get list */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	d_list_splice_init(&dsp->dsp_complete_list, &comp_cb_list);
+	d_list_splice_init(&dtp->dtp_comp_cb_list, &comp_cb_list);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	d_list_for_each_entry_safe(dtc, tmp, &comp_cb_list, dtc_list) {
