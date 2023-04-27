@@ -503,16 +503,25 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_sched_private *dsp = dtp->dtp_sched;
 	uint32_t		 gen, new_gen;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+	d_list_t		comp_cb_list;
 
 	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
 	 * re-init the task that may be completed immediately.
 	 */
 	tse_task_addref(task);
 
-	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
+	/* pick CBs from complete_list */
+	D_INIT_LIST_HEAD(&comp_cb_list);
+	/* just grab lock to get list */
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	d_list_splice_init(&dsp->dsp_complete_list, &comp_cb_list);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	d_list_for_each_entry_safe(dtc, tmp, &comp_cb_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
@@ -670,7 +679,10 @@ tse_task_post_process(tse_task_t *task)
 			 * it is completed when they completed in this code
 			 * block.
 			 */
+			/** release lock for CB */
+			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
 			done = tse_task_complete_callback(task_tmp);
+			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
 
 			/*
 			 * task reinserted itself in scheduler by
@@ -863,10 +875,10 @@ tse_task_complete(tse_task_t *task, int ret)
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
-	D_MUTEX_LOCK(&dsp->dsp_lock);
-
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
