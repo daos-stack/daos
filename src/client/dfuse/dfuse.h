@@ -187,7 +187,13 @@ struct dfuse_readdir_hdl {
 	/* Count of how many directory handles are using this handle */
 	ATOMIC uint32_t            drh_ref;
 
-	bool                       dre_caching;
+	/* Set to true if this handle is caching and potentially shared.  Immutable. */
+	bool                       drh_caching;
+
+	/* Starts at true and set to false if a directory is modified when open.  Prevents new
+	 * readers from sharing the handle
+	 */
+	bool                       drh_valid;
 };
 
 /* Drop a readdir handle from a open directory handle.

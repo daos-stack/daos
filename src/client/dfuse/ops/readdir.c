@@ -41,6 +41,11 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
+	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	if (ie->ie_rd_hdl)
+		ie->ie_rd_hdl->drh_valid = false;
+	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+
 	dfuse_cache_evict(ie);
 }
 
@@ -293,7 +298,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
-	if (oh->doh_ie->ie_rd_hdl) {
+	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
@@ -306,8 +311,8 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 
 		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
-		if (oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
-			oh->doh_rd->dre_caching = true;
+		if (oh->doh_ie->ie_rd_hdl == NULL && oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
+			oh->doh_rd->drh_caching = true;
 			/* Time will be set on close if appropriate
 			 * dfuse_dcache_set_time(oh->doh_ie);
 			 */
@@ -539,7 +544,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
-		if (oh->doh_rd->dre_caching) {
+		if (oh->doh_rd->drh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
@@ -624,7 +629,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			daos_size_t                 attr_len;
 			struct dfuse_readdir_c     *drc = NULL;
 
-			if (hdl->dre_caching) {
+			if (hdl->drh_caching) {
 				D_ALLOC_PTR(drc);
 				if (drc == NULL) {
 					D_GOTO(reply, rc = ENOMEM);
