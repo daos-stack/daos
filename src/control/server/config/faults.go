@@ -106,6 +106,11 @@ var (
 		"using a control_metadata device requires a path to use as the mount point",
 		"add a valid 'path' to the 'control_metadata' section of the config",
 	)
+	FaultConfigEngineBdevRolesMismatch = serverConfigFault(
+		code.ServerConfigEngineBdevRolesMismatch,
+		"md-on-ssd bdev roles have been set in some but not all engine configs",
+		"set bdev roles on all engines or remove all bdev role assignments in config",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {

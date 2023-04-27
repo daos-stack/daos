@@ -102,6 +102,7 @@ const (
 	BdevConfigMultiTierWithoutRoles
 	BdevConfigBadNrTiersWithRoles
 	BdevConfigControlMetadataNoRoles
+	BdevConfigRolesNoControlMetadata
 )
 
 // DAOS system fault codes
@@ -186,6 +187,7 @@ const (
 	ServerConfigRamdiskUnderMinMem
 	ServerConfigRamdiskOverMaxMem
 	ServerConfigScmDiffClass
+	ServerConfigEngineBdevRolesMismatch
 )
 
 // SPDK library bindings codes

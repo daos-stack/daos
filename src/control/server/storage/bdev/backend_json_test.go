@@ -254,6 +254,12 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
 
+			if tc.devRoles != 0 {
+				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{
+					Path: "/opt/daos_md",
+				}
+			}
+
 			gotValidateErr := engineConfig.Validate() // populate output path
 			test.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {

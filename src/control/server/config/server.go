@@ -729,6 +729,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 		}
 
 		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+
 			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
 			if seenIn, exists := seenValues[mountConfig]; exists {
 				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
