@@ -557,7 +557,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open");                                             \
+		DFUSE_TRA_DEBUG(oh, "Returning open, keep_cache %d", (_fi)->keep_cache);           \
 		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \
@@ -725,21 +725,21 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 void
 dfuse_mcache_set_time(struct dfuse_inode_entry *ie);
 
-/* Set the cache as invalid */
+/* Set the metadata cache as invalid */
 void
 dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 
-/* Check the cache setting against a given timeout, and return time left */
+/* Check the metadata cache setting against a given timeout, and return time left */
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 /* Data caching functions */
 
-/* Mark the cache as up-to-date from now */
+/* Mark the data cache as up-to-date from now */
 void
 dfuse_dcache_set_time(struct dfuse_inode_entry *ie);
 
-/* Set the cache as invalid */
+/* Set the data cache as invalid */
 void
 dfuse_dcache_evict(struct dfuse_inode_entry *ie);
 
