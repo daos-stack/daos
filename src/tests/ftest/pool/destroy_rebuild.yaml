@@ -21,7 +21,14 @@ pool:
   control_method: dmg
   pool_query_timeout: 30
 testparams:
-  rank_to_kill:
-    - "0"
-    - "1"
-    - "4"
+  rank_to_kill: !mux
+    kill_124:
+      - "2"
+      - "1"
+      - "4"
+    kill_01:
+      - "0"
+      - "1"
+    kill_14:
+      - "4"
+      - "1"
