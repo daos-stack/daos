@@ -619,7 +619,7 @@ class SoakTestBase(TestWithServers):
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
                 add_pools(self, ["pool_jobs"])
-            elif single_test_pool and "extend" in [self.harassers, self.offline_harassers]:
+            elif single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 raise SoakTestError(
                     "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
             self.log.info("Current pools: %s", " ".join([pool.uuid for pool in self.pool]))
