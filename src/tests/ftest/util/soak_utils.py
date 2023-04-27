@@ -117,8 +117,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         dst = os.path.split(file)
         dst_name = dst[-1]
         dst_path = dst[0]
-        src_file = "daos://{}/{}/{}".format(
-            pool.uuid, container.uuid, dst_name)
+        src_file = "daos://{}/{}/{}".format(pool.uuid, container.uuid, dst_name)
         fscopy_cmd.set_params(src=src_file, dst=dst_path)
         fscopy_cmd.run()
 
