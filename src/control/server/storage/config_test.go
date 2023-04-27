@@ -1132,3 +1132,138 @@ storage:
 		})
 	}
 }
+
+func TestStorage_Config_Validate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg                 Config
+		expConfigOutputPath string
+		expVosEnv           string
+		expErr              error
+	}{
+		"tiers fail validation": {
+			expErr: errors.New("no storage tiers"),
+		},
+		"roles configured but no control_metadata": {
+			cfg: Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+					NewTierConfig().
+						WithTier(1).
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:80:00.0").
+						WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
+					NewTierConfig().
+						WithTier(2).
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+						WithBdevDeviceRoles(BdevRoleData),
+				},
+			},
+			expErr: FaultBdevConfigRolesNoControlMetadata,
+		},
+		"no roles configured but control_metadata path specified": {
+			cfg: Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/",
+				},
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+					NewTierConfig().
+						WithTier(1).
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:80:00.0"),
+				},
+			},
+			expErr: FaultBdevConfigControlMetadataNoRoles,
+		},
+		"roles configured with control_metadata path": {
+			cfg: Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/",
+				},
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+					NewTierConfig().
+						WithTier(1).
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:80:00.0").
+						WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
+					NewTierConfig().
+						WithTier(2).
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+						WithBdevDeviceRoles(BdevRoleData),
+				},
+			},
+			expVosEnv:           "NVME",
+			expConfigOutputPath: "/daos_control/engine0/daos_nvme.conf",
+		},
+		"no bdevs with control_metadata path": {
+			cfg: Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/",
+				},
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+				},
+			},
+		},
+		"no bdevs without control_metadata path": {
+			cfg: Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+				},
+			},
+		},
+		"roles configured with control_metadata path and emulated nvme": {
+			cfg: Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/",
+				},
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+					NewTierConfig().
+						WithTier(1).
+						WithStorageClass("file").
+						WithBdevDeviceList("/tmp/daos0.aio").
+						WithBdevFileSize(16).
+						WithBdevDeviceRoles(BdevRoleAll),
+				},
+			},
+			expVosEnv:           "AIO",
+			expConfigOutputPath: "/daos_control/engine0/daos_nvme.conf",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expVosEnv, tc.cfg.VosEnv); diff != "" {
+				t.Fatalf("unexpected VosEnv (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expConfigOutputPath, tc.cfg.ConfigOutputPath); diff != "" {
+				t.Fatalf("unexpected ConfigOutputPath (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

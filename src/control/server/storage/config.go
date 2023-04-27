@@ -1106,6 +1106,9 @@ func (c *Config) Validate() error {
 		}
 		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
 	} else {
+		if c.Tiers.HasBdevRoleMeta() {
+			return FaultBdevConfigRolesNoControlMetadata
+		}
 		nvmeConfigRoot = c.Tiers.ScmConfigs()[0].Scm.MountPoint
 	}
 	c.ConfigOutputPath = filepath.Join(nvmeConfigRoot, BdevOutConfName)
