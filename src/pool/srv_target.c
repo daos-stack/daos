@@ -717,12 +717,14 @@ static int
 ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
+	uuid_t			anonym_uuid;
 
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
 	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
 						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
