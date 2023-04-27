@@ -18,7 +18,7 @@ import (
 )
 
 type rankURI struct {
-	Rank int    `json:"rank"`
+	Rank uint32 `json:"rank"`
 	URI  string `json:"uri"`
 }
 
@@ -51,7 +51,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 
 	for _, cRank := range unsafe.Slice(cSysInfo.dsi_ranks, int(cSysInfo.dsi_nr_ranks)) {
 		sysInfo.RankURIs = append(sysInfo.RankURIs, &rankURI{
-			Rank: int(cRank.dru_rank),
+			Rank: uint32(cRank.dru_rank),
 			URI:  C.GoString(cRank.dru_uri),
 		})
 	}
