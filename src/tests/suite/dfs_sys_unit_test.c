@@ -272,11 +272,11 @@ dfs_sys_test_access_chmod(void **state)
 
 	/** file1 does not have perms */
 	rc = dfs_sys_access(dfs_sys_mt, file1, R_OK | W_OK, 0);
-	assert_int_equal(rc, EPERM);
+	assert_int_equal(rc, EACCES);
 
 	/** link1 to file1 does not have perms */
 	rc = dfs_sys_access(dfs_sys_mt, sym1, R_OK | W_OK, 0);
-	assert_int_equal(rc, EPERM);
+	assert_int_equal(rc, EACCES);
 
 	/** link1 itself does have perms */
 	rc = dfs_sys_access(dfs_sys_mt, sym1, R_OK | W_OK, O_NOFOLLOW);

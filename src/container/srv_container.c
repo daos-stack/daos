@@ -1892,13 +1892,15 @@ static int
 cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 {
 	struct sched_req_attr	attr;
+	uuid_t			anonym_uuid;
 
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
 	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &svc->cs_pool_uuid);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
 	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
 	if (svc->cs_ec_leader_ephs_req == NULL) {
 		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
@@ -4860,16 +4862,11 @@ cont_rdb_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 int
-ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
+ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 {
 	struct cont_rdb_iter_arg	args = { 0 };
-	struct cont_svc			*svc = NULL;
 	struct rdb_tx			tx;
 	int				rc;
-
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
 
 	args.svc = svc;
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -4883,7 +4880,7 @@ ds_cont_rdb_iterate(uuid_t pool_uuid, cont_rdb_iter_cb_t iter_cb, void *cb_arg)
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, cont_rdb_iter_cb, &args);
 	ABT_rwlock_unlock(svc->cs_lock);
 	if (rc < 0) {
-		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID" iterate error: %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 		D_GOTO(tx_end, rc);
 	}
 
@@ -4894,9 +4891,7 @@ tx_end:
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(pool_uuid), rc);
-	if (svc != NULL)
-		cont_svc_put_leader(svc);
+	D_DEBUG(DB_MD, DF_UUID" container iter: rc %d\n", DP_UUID(svc->cs_pool_uuid), rc);
 
 	return rc;
 }
