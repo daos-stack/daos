@@ -107,6 +107,7 @@ struct bio_meta_context {
 	struct bio_io_context	*mc_wal;	/* WAL blob I/O context */
 	struct meta_header	 mc_meta_hdr;	/* Meta blob header */
 	struct wal_super_info	 mc_wal_info;	/* WAL blob super information */
+	struct bio_wal_rp_stats	*mc_wr_stats;	/* WAL replay stats */
 	struct hash_ft		*mc_csum_algo;
 	void			*mc_csum_ctx;
 };

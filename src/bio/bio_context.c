@@ -974,6 +974,18 @@ free_mem:
 	return rc;
 }
 
+void
+bio_wal_set_metrics(struct bio_meta_context *mc, void *metrics)
+{
+	if (mc->mc_wal != NULL) {
+		struct bio_wal_rp_stats *wrs = mc->mc_wr_stats;
+
+		D_ASSERT(wrs == NULL);
+		D_ALLOC_PTR_NZ(mc->mc_wr_stats);
+		mc->mc_wr_stats->wrs_metrics = metrics;
+	}
+}
+
 int
 bio_blob_close(struct bio_io_context *ctxt, bool async)
 {
@@ -1073,6 +1085,7 @@ int bio_mc_close(struct bio_meta_context *bio_mc)
 		rc1 = bio_ioctxt_close(bio_mc->mc_wal);
 		if (rc1 && !rc)
 			rc = rc1;
+		D_FREE(bio_mc->mc_wr_stats);
 	}
 	if (bio_mc->mc_meta) {
 		meta_close(bio_mc);

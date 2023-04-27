@@ -199,6 +199,16 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
 	if (rc)
 		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_rpl_sz, D_TM_GAUGE, "WAL replay size",
+			     "bytes", "dmabuff/wal_replay_size/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL replay size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_rpl_tm, D_TM_GAUGE, "WAL replay time",
+			     "us", "dmabuff/wal_replay_time/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL replay time telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 struct bio_dma_buffer *

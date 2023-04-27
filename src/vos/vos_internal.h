@@ -207,11 +207,20 @@ struct vos_space_metrics {
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
+/* VOS Pool metrics for vos file rehydration */
+struct vos_rh_metrics {
+	struct d_tm_node_t	*vrh_size;		/* WAL replay size */
+	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
+	struct d_tm_node_t	*vrh_count;		/* Total replay count */
+	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
+};
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
 	struct vos_space_metrics vp_space_metrics;
-	struct vos_chkpt_metrics   vp_chkpt_metrics;
+	struct vos_chkpt_metrics vp_chkpt_metrics;
+	struct vos_rh_metrics	 vp_rh_metrics;
 	/* TODO: add more metrics for VOS */
 };
 

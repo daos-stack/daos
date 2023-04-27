@@ -1054,6 +1054,28 @@ struct bio_wal_info {
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 
+/* WAL replay stats */
+struct bio_wal_rp_stats {
+	void		*wrs_metrics;	/* pointer to module metrics */
+	uint64_t	wrs_tm;		/* rehydration time */
+	uint64_t	wrs_sz;		/* bytes replayed */
+	uint64_t	wrs_entries;	/* replayed entries count */
+};
+
+/*
+ * bio_wal_replay function overloaded with
+ *
+ * \param[in]	stats	WAL replay statistics
+ */
+int bio_wal_replay_stats(struct bio_meta_context *mc, struct bio_wal_rp_stats **stats,
+			 int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *data),
+			 void *arg);
+
+/*
+ * Set WAL replay metrics
+ */
+void bio_wal_set_metrics(struct bio_meta_context *mc, void *metrics);
+
 /*
  * Check if the meta blob is empty, paired with bio_meta_clear_empty() for avoid
  * loading a newly created meta blob.
