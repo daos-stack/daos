@@ -42,8 +42,10 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
-	if (ie->ie_rd_hdl)
+	if (ie->ie_rd_hdl) {
+		DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
 		ie->ie_rd_hdl->drh_valid = false;
+	}
 	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	dfuse_cache_evict(ie);
@@ -120,6 +122,7 @@ _handle_init(struct dfuse_cont *dfc)
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
+	hdl->drh_valid = true;
 	return hdl;
 }
 
@@ -313,10 +316,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 
 		if (oh->doh_ie->ie_rd_hdl == NULL && oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
 			oh->doh_rd->drh_caching = true;
-			/* Time will be set on close if appropriate
-			 * dfuse_dcache_set_time(oh->doh_ie);
-			 */
-			oh->doh_ie->ie_rd_hdl = oh->doh_rd;
+			oh->doh_ie->ie_rd_hdl   = oh->doh_rd;
 		}
 	}
 	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
