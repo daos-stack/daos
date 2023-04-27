@@ -559,7 +559,18 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open");                                             \
+		DFUSE_TRA_DEBUG(oh, "Returning open, keep_cache %d", (_fi)->keep_cache);           \
+		__rc = fuse_reply_open(req, _fi);                                                  \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(oh, "Returning open, use_cache %d keep_cache %d",                  \
+				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
 		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \

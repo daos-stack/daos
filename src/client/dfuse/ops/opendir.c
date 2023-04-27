@@ -31,15 +31,14 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
 
-		/* TODO: dcache needs a timeout input. */
-		if (dfuse_mcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout, NULL))
+		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
 			fi_out.keep_cache = 1;
 	}
 #endif
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);

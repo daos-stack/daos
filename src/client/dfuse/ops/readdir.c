@@ -294,7 +294,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
 	if (oh->doh_ie->ie_rd_hdl &&
-	    dfuse_cache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout, NULL)) {
+	    dfuse_dcache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout)) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
@@ -309,7 +309,9 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 
 		if (oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
 			oh->doh_rd->dre_caching = true;
-			dfuse_cache_set_time(oh->doh_ie);
+			/* Time will be set on close if appropriate
+			 * dfuse_dcache_set_time(oh->doh_ie);
+			 */
 			oh->doh_ie->ie_rd_hdl = oh->doh_rd;
 		}
 	}
