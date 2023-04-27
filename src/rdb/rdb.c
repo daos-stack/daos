@@ -867,24 +867,23 @@ static void
 rdb_chkptd(void *arg)
 {
 	struct rdb *db = arg;
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
 
 	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
 	for (;;) {
-		bool stop;
 		int  rc;
 
 		ABT_mutex_lock(db->d_chkpt_mutex);
 		for (;;) {
-			stop = db->d_stop;
 			if (db->d_chkpt_record.dcr_needed)
 				break;
-			if (stop)
+			if (dcr->dcr_stop)
 				break;
-			db->d_chkpt_record.dcr_idle = 1;
+			dcr->dcr_idle = 1;
 			sched_cond_wait(db->d_chkpt_cv, db->d_chkpt_mutex);
 		}
 		ABT_mutex_unlock(db->d_chkpt_mutex);
-		if (stop)
+		if (dcr->dcr_stop)
 			break;
 		rc = rdb_chkpt(db);
 		if (rc != 0) {
@@ -910,10 +909,12 @@ rdb_chkptd_stop(struct rdb *db)
 	case CHKPT_NONE:
 		return;
 	case CHKPT_ULT:
+		D_DEBUG(DB_MD, DF_DB ": Stopping chkptd ULT\n", DP_DB(db));
 		dcr->dcr_stop = 1;
 		ABT_cond_broadcast(db->d_chkpt_cv);
 		rc = ABT_thread_free(&db->d_chkptd);
 		D_ASSERTF(rc == 0, "free rdb_chkptd: rc=%d\n", rc);
+		D_DEBUG(DB_MD, DF_DB ": Stopped chkptd ULT\n", DP_DB(db));
 		/** Fall through */
 	case CHKPT_COMMIT_CV:
 		ABT_cond_free(&db->d_commit_cv);
