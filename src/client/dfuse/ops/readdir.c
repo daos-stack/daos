@@ -293,8 +293,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
-	if (oh->doh_ie->ie_rd_hdl &&
-	    dfuse_dcache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout)) {
+	if (oh->doh_ie->ie_rd_hdl) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
@@ -417,9 +416,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
 					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
 
-			DFUSE_TRA_DEBUG(oh, "drc %p prev %p next %p", drc, drc->drc_list.prev,
-					drc->drc_list.next);
-
+			/* TODO: Set times here */
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
 				struct dfuse_inode_entry *ie;
