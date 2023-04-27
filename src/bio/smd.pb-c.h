@@ -95,11 +95,10 @@ struct  _Ctl__BioHealthReq
 {
   ProtobufCMessage base;
   char *dev_uuid;
-  char *tgt_id;
 };
 #define CTL__BIO_HEALTH_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string }
 
 
 /*
