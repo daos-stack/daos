@@ -200,7 +200,6 @@ class SoakTestBase(TestWithServers):
         Args:
             harasser (str): harasser to launch
             pool (list): list of TestPool obj
-            ranks (list): server ranks
 
         Returns:
             status_msg(str): pass/fail status message
