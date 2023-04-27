@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
 message BioHealthReq {
 	string dev_uuid = 1;
-	string tgt_id = 2;
 }
 
 // BioHealthResp mirrors nvme_health_stats structure.
