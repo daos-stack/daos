@@ -3125,9 +3125,9 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	return 0;
 }
 
-bool is_pool_map_adding(struct pool_map *map, uint32_t version)
+bool is_pool_map_adding(struct pool_map *map)
 {
-	return map->po_in_ver != (uint32_t)(-1) && version >= map->po_in_ver;
+	return map->po_in_ver != (uint32_t)(-1);
 }
 
 int
