@@ -866,10 +866,13 @@ rdb_chkpt(struct rdb *db)
 static void
 rdb_chkptd(void *arg)
 {
+	struct timespec          last;
+	struct timespec          deadline;
 	struct rdb *db = arg;
 	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
 
 	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
+	clock_gettime(CLOCK_REALTIME, &last);
 	for (;;) {
 		int  rc;
 
@@ -877,10 +880,14 @@ rdb_chkptd(void *arg)
 		for (;;) {
 			if (db->d_chkpt_record.dcr_needed)
 				break;
+			clock_gettime(CLOCK_REALTIME, &deadline);
+			if (deadline.tv_sec >= last.tv_sec + 10)
+				break;
 			if (dcr->dcr_stop)
 				break;
+			deadline.tv_sec += 10;
 			dcr->dcr_idle = 1;
-			sched_cond_wait(db->d_chkpt_cv, db->d_chkpt_mutex);
+			ABT_cond_timedwait(db->d_chkpt_cv, db->d_chkpt_mutex, &deadline);
 		}
 		ABT_mutex_unlock(db->d_chkpt_mutex);
 		if (dcr->dcr_stop)
@@ -892,6 +899,7 @@ rdb_chkptd(void *arg)
 			break;
 		}
 		db->d_chkpt_record.dcr_needed = 0;
+		clock_gettime(CLOCK_REALTIME, &last);
 	}
 	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
 	rdb_chkpt_fini(db);
