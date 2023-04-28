@@ -31,7 +31,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_ior,ior_hard
-        :avocado: tags=test_ec_ior_hard_online_rebuild
+        :avocado: tags=EcodIorHardRebuild,test_ec_ior_hard_online_rebuild
         """
         # Remove the extra container created by ErasureCodeIor.setUp() via the
         # IorTestBase.update_ior_cmd_with_pool() method.

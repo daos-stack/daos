@@ -7,6 +7,7 @@ import random
 import threading
 import time
 
+from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from dmg_utils import get_storage_query_device_info, get_dmg_response
@@ -30,6 +31,7 @@ class DiskFailureTest(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/*')
         self.daos_command = self.get_daos_command()
 
+    @fail_on(CommandFailure)
     def verify_disk_failure(self, num_pool):
         """Run IOR and create disk failures while IO is happening.
 
@@ -39,7 +41,7 @@ class DiskFailureTest(OSAUtils):
         pool = {}
 
         # Get the device information.
-        device_info = get_storage_query_device_info(self, self.dmg_command)
+        device_info = get_storage_query_device_info(self.dmg_command)
 
         self.log.info("Device information")
         self.log.info("==================")
@@ -70,8 +72,7 @@ class DiskFailureTest(OSAUtils):
             original_hostlist = self.dmg_command.hostlist
             try:
                 self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
-                get_dmg_response(
-                    self, self.dmg_command.storage_set_faulty, uuid=evict_device["uuid"])
+                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=evict_device["uuid"])
             except CommandFailure:
                 self.fail("Error evicting target {}".format(evict_device["uuid"]))
             finally:
@@ -87,8 +88,10 @@ class DiskFailureTest(OSAUtils):
             try:
                 self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
                 get_dmg_response(
-                    self, self.dmg_command.storage_replace_nvme,
-                    old_uuid=evict_device["uuid"], new_uuid=evict_device["uuid"])
+                    self.dmg_command.storage_replace_nvme, old_uuid=evict_device["uuid"],
+                    new_uuid=evict_device["uuid"])
+            except CommandFailure as error:
+                self.fail(str(error))
             finally:
                 self.dmg_command.hostlist = original_hostlist
             time.sleep(10)
@@ -127,6 +130,7 @@ class DiskFailureTest(OSAUtils):
         """
         self.verify_disk_failure(1)
 
+    @fail_on(CommandFailure)
     def test_disk_fault_to_normal(self):
         """Jira ID: DAOS-11284
         Test a disk inducing faults and resetting is back to normal state.
@@ -136,7 +140,7 @@ class DiskFailureTest(OSAUtils):
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """
-        device_info = get_storage_query_device_info(self, self.dmg_command)
+        device_info = get_storage_query_device_info(self.dmg_command)
         for index, device in enumerate(device_info):
             host = device["hosts"].split(":")[0]
             self.log.info("Device %s on host %s:", index, host)
@@ -145,8 +149,7 @@ class DiskFailureTest(OSAUtils):
             try:
                 self.dmg_command.hostlist = NodeSet(host)
                 # Set the device as faulty
-                get_dmg_response(
-                    self, self.dmg_command.storage_set_faulty, uuid=device["uuid"])
+                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=device["uuid"])
                 # Replace the device with same uuid.
                 passed = False
                 for _ in range(10):
@@ -158,5 +161,7 @@ class DiskFailureTest(OSAUtils):
                     time.sleep(5)
                 if not passed:
                     self.fail('Replacing faulty device did not pass after 10 retries')
+            except CommandFailure as error:
+                self.fail(str(error))
             finally:
                 self.dmg_command.hostlist = self.server_managers[0].hosts
