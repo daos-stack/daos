@@ -1,12 +1,11 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 import os
 import re
-import sys
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -14,7 +13,7 @@ from command_utils_base import FormattedParameter, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand
 from dmg_utils import get_dmg_response
 from exception_utils import CommandFailure
-from general_utils import get_display_size, human_to_bytes
+from general_utils import get_display_size
 
 
 class ServerFailed(Exception):
