@@ -20,11 +20,10 @@ pool:
   scm_size: 134217728
   control_method: dmg
   pool_query_timeout: 30
-testparams:
-  rank_to_kill: !mux
-    kill_124:
-      - [1, 2, 4]
-    kill_01:
-      - [0, 1]
-    kill_14:
-      - [1, 4]
+testparams: !mux
+  kill_124:
+    rank_to_kill: "1, 2, 4"
+  kill_01:
+    rank_to_kill: "0, 1"
+  kill_14:
+    rank_to_kill: "1, 4"
