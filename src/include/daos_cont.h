@@ -705,6 +705,30 @@ int
 daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids,
 		    uint64_t *perms);
 
+/**
+ * Create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	epoch of snapshot
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
+			  daos_event_t *ev);
+
+/**
+ * Destroy object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_snap_oit_destroy(daos_handle_t coh, daos_handle_t oh, daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */

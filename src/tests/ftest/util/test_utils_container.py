@@ -339,16 +339,19 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, uuid=None, con_in=None, acl_file=None):
+    def create(self, con_in=None, acl_file=None):
         """Create a container.
 
         Args:
-            uuid (str, optional): container uuid. Defaults to None.
             con_in (optional): to be defined. Defaults to None.
             acl_file (str, optional): path of the ACL file. Defaults to None.
 
         Raises:
             DaosTestError: if params are invalid
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+            None: if control_method is API
 
         """
         self.destroy()
@@ -357,6 +360,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "Creating a container with pool handle %s",
                 self.pool.pool.handle.value)
         self.container = DaosContainer(self.pool.context)
+        result = None
 
         if self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
@@ -365,8 +369,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
             # Create a container with the API method
             kwargs = {"poh": self.pool.pool.handle}
-            if uuid is not None:
-                kwargs["con_uuid"] = uuid
 
             # Refer daos_api for setting input params for DaosContainer.
             cop = self.input_params.get_con_create_params()
@@ -396,7 +398,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             kwargs = {
                 "pool": self.pool.identifier,
                 "sys_name": self.pool.name.value,
-                "cont": uuid,
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
@@ -410,7 +411,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
             self._log_method("daos.container_create", kwargs)
             try:
-                uuid = self.daos.container_create(**kwargs)["response"]["container_uuid"]
+                result = self.daos.container_create(**kwargs)
+                if result["status"] != 0:
+                    # The command failed but no exception was raised, so let the caller handle
+                    return result
+                uuid = result["response"]["container_uuid"]
             except KeyError as error:
                 raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
@@ -422,6 +427,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.uuid = self.container.get_uuid_str()
         if not self.silent.value:
             self.log.info("  Created container %s", str(self))
+
+        return result
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
