@@ -386,7 +386,7 @@ pool_create_and_destroy_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	print_message("success\n");
 
 	print_message("destroying pool synchronously ... ");
