@@ -1413,7 +1413,7 @@ bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
 
 	put_bio_blobstore(bxb, ctxt);
 	if (is_bbs_owner(ctxt, bbs))
-		bio_fini_health_monitoring(bbs);
+		bio_fini_health_monitoring(ctxt, bbs);
 }
 
 /*
@@ -1444,12 +1444,18 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			spdk_bs_free_io_channel(bxb->bxb_io_channel);
 			bxb->bxb_io_channel = NULL;
 		}
+
+		/*
+		 * Clear bxc_xs_blobstore[st] before bio_blobstore_free() to prevent the health
+		 * monitor from issuing health data collecting request, see cb_arg2dev_health().
+		 */
+		ctxt->bxc_xs_blobstores[st] = NULL;
+
 		if (bxb->bxb_blobstore != NULL) {
 			bio_blobstore_free(bxb, ctxt);
 			bxb->bxb_blobstore = NULL;
 		}
 		D_FREE(bxb);
-		ctxt->bxc_xs_blobstores[st] = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
