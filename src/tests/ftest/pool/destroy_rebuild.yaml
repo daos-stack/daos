@@ -22,8 +22,8 @@ pool:
   pool_query_timeout: 30
 testparams: !mux
   kill_124:
-    rank_to_kill: "1, 2, 4"
+    rank_to_kill: "1 2 4"
   kill_01:
-    rank_to_kill: "0, 1"
+    rank_to_kill: "0 1"
   kill_14:
-    rank_to_kill: "1, 4"
+    rank_to_kill: "1 4"
