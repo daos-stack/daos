@@ -6,6 +6,7 @@
 
 """This provides consistency checking for CaRT log files."""
 
+import pprint
 import re
 import sys
 import time
@@ -203,10 +204,50 @@ class HwmCounter():
         self.__val -= val
 
 
-class DirHandle():
+class DLogEntity(dict):
+    """A log entity from DAOS logging"""
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, line):
+        self.quiet = False
+        self.logging_functions = set()
+        self.deleted = False
+        self.children = []
+        self['type'] = self.name()
+
+    def mark_line(self, line):
+        """Record a line"""
+        self.logging_functions.add(line.function)
+        self['functions'] = self.logging_functions
+
+    def stats(self):
+        """Return some description about this entity"""
+        fns = ','.join(sorted(self.logging_functions))
+        return '  functions used: {}, {} children'.format(fns, len(self.children))
+
+    def delete(self):
+        """Mark an item as deleted"""
+        self.quiet = True
+        self.deleted = True
+
+    def add_child(self, child):
+        """Add a child object"""
+        self.children.append(child)
+        if 'children' not in self:
+            self['children'] = []
+
+        self['children'].append(child)
+
+    def name(self):
+        """Return a name for this type"""
+        return type(self).__name__
+
+
+class DirHandle(DLogEntity):
     """Directory handle"""
 
     def __init__(self, line):
+        super().__init__(line)
         self.desc = line.descriptor
         self.parent = line.parent
         self.readdir_count = 0
@@ -236,10 +277,11 @@ class DirHandle():
             self.entries += int(line.get_field(4))
 
 
-class ReaddirHandle():
+class ReaddirHandle(DLogEntity):
     """Readdir handle"""
 
     def __init__(self, line):
+        super().__init__(line)
         self.line = line
         self.parent = line.parent
         self.max_ref = 1
@@ -258,17 +300,72 @@ class ReaddirHandle():
             return
 
 
-class InodeHandle():
+class InodeHandle(DLogEntity):
     """Inode handle"""
 
     def __init__(self, line):
+        super().__init__(line)
         self.line = line
         self.dentry = None
+        self.parent = line.parent
+        self.getattr_calls = 0
+        self.size = 0
 
     def __str__(self):
         if self.dentry is None:
-            return ''
-        return "inode: {} name '{}'".format(self.line.descriptor, self.dentry)
+            return 'inode, no dentry'
+        return "inode: {} name '{}' getattr {} size {}".format(self.line.descriptor, self.dentry,
+                                                               self.getattr_calls, self.size)
+
+    def add_line(self, line):
+        """Record a line for the handle"""
+        if self.dentry is not None:
+            if line.function == 'dfuse_cb_getattr':
+                self.getattr_calls += 1
+                self.size = int(line.get_field(9))
+                return
+            return
+
+        if line.get_field(2) == 'file':
+            self.dentry = line.get_field(3)[1:-1]
+            self['name'] = self.dentry
+            return
+
+
+class FileHandle(DLogEntity):
+    """File handle"""
+
+    def __init__(self, line):
+        super().__init__(line)
+        self.line = line
+        self.parent = line.parent
+        self.ioctl_count = 0
+
+    def __str__(self):
+        return 'file handle'
+
+    def add_line(self, line):
+        """Record a line for the handle"""
+        if line.function == 'dfuse_cb_ioctl':
+            if line.get_field(2) == 'Returning':
+                self.ioctl_count += 1
+            return
+        print(line.get_msg())
+
+
+class RootInodeHandle(DLogEntity):
+    """Inode handle"""
+
+    def __init__(self, line):
+        super().__init__(line)
+        self.line = line
+        self.dentry = None
+        self.parent = line.parent
+
+    def __str__(self):
+        if self.dentry is None:
+            return 'Root inode, no dentry'
+        return "Root inode: {} name '{}'".format(self.line.descriptor, self.dentry)
 
     def add_line(self, line):
         """Record a line for the handle"""
@@ -279,8 +376,14 @@ class InodeHandle():
             self.dentry = line.get_field(3)[1:-1]
 
 
-class NullHandle():
+class NullHandle(DLogEntity):
     """Handle that doesn't do anything"""
+
+    def __init__(self, line, dname):
+        super().__init__(line)
+        self.quiet = True
+        self.dname = dname
+        self['type'] = dname
 
     # pylint: disable=too-few-public-methods
     def add_line(self, _line):
@@ -289,39 +392,47 @@ class NullHandle():
     def ___str__(self):
         return ''
 
+    def name(self):
+        """Override the name function"""
+        return self.dname
+
+
+class RootHandle(DLogEntity):
+    """Root of everything"""
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, line):
+        super().__init__(line)
+        self.line = line
+        self.parent = None
+
+    def add_line(self, _line):
+        """Record a line for the handle"""
+
+    def __str__(self):
+        return 'root'
+
 
 class ReaddirTracer():
     """Parse readdir logs"""
 
     def __init__(self):
         self.all_handles = {}
-        self._nl = NullHandle()
-
+        self.root = None
         self._reports = []
 
     def report(self):
         """Print some data"""
         print('Readdir report is')
         print('\n'.join(self._reports))
+        print('Root is:')
+        print(self.root)
+        pprint.PrettyPrinter(indent=2, sort_dicts=False, compact=True).pprint(self.root)
 
     def add_line(self, line):
         """Parse a new line"""
-        if not line.trace:
-            if line.is_free():
-                addr = line.get_field(5).rstrip('.')
-                if addr in self.all_handles:
-                    handle = self.all_handles[addr]
-                    if not isinstance(handle, (InodeHandle, NullHandle)):
-                        parent = self.all_handles[handle.parent]
-                        self._reports.append(str(parent))
-                        self._reports.append(str(handle))
-                    del self.all_handles[addr]
-            return
-
-        if line.descriptor in self.all_handles:
-            self.all_handles[line.descriptor].add_line(line)
-
-        else:
+        def new_desc():
+            """Create a new object"""
             if line.get_field(2) == 'Registered':
                 dtype = line.get_field(4)
                 if not dtype.endswith("'"):
@@ -329,21 +440,49 @@ class ReaddirTracer():
                 dtype = dtype.strip("'")
 
                 if dtype == 'inode':
-                    self.all_handles[line.descriptor] = InodeHandle(line)
-                    return
+                    return InodeHandle(line)
                 if dtype == 'readdir':
-                    new_handle = ReaddirHandle(line)
-                    self.all_handles[line.descriptor] = new_handle
-                    return
+                    return ReaddirHandle(line)
                 if dtype == 'open handle':
                     if line.filename.endswith('opendir.c'):
-                        new_handle = DirHandle(line)
-                        self.all_handles[line.descriptor] = new_handle
-                    else:
-                        self.all_handles[line.descriptor] = self._nl
-                    return
-            else:
-                self.all_handles[line.descriptor] = self._nl
+                        return DirHandle(line)
+                    return FileHandle(line)
+                if dtype == 'root_inode':
+                    return RootInodeHandle(line)
+                if line.get_field(6) == 'root':
+                    self.root = RootHandle(line)
+                    return self.root
+                return NullHandle(line, dtype)
+            return NullHandle(line, 'unknown')
+
+        if not line.trace and line.is_free:
+            addr = line.get_field(5).rstrip('.')
+            if addr not in self.all_handles:
+                return
+            handle = self.all_handles[addr]
+            if not isinstance(handle, (NullHandle)):
+                print(handle.parent)
+                if handle.parent in self.all_handles:
+                    parent = self.all_handles[handle.parent]
+                    if not parent.quiet:
+                        self._reports.append(str(parent))
+                self._reports.append(str(handle))
+                self._reports.append(handle.stats())
+            handle.delete()
+            del self.all_handles[addr]
+            return
+
+        if not line.trace:
+            return
+
+        if line.descriptor in self.all_handles:
+            self.all_handles[line.descriptor].add_line(line)
+            self.all_handles[line.descriptor].mark_line(line)
+            return
+        handle = new_desc()
+        self.all_handles[line.descriptor] = handle
+        if not isinstance(handle, RootHandle):
+            self.all_handles[line.parent].add_child(handle)
 
 
 class LogTest():
