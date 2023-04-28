@@ -1640,7 +1640,7 @@ dm_connect(struct cmd_args_s *ap,
 		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
-			D_GOTO(out, rc);
+			D_GOTO(err, rc);
 		}
 		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
 				    src_cont_info, NULL);
@@ -1689,12 +1689,12 @@ dm_connect(struct cmd_args_s *ap,
 			rc = dm_cont_get_all_props(ap, ca->src_coh, &props, false,  true, false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 			rc = dm_serialize_cont_md(ap, ca, props, ap->preserve_props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 		/* if DAOS -> DAOS copy container properties from src to dst */
@@ -1710,7 +1710,7 @@ dm_connect(struct cmd_args_s *ap,
 							   true, false, true);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 			ca->cont_layout = props->dpp_entries[1].dpe_val;
 		}
@@ -1766,7 +1766,7 @@ dm_connect(struct cmd_args_s *ap,
 			rc = dm_deserialize_cont_md(ap, ca, ap->preserve_props, &props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to deserialize metadata");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 
@@ -2130,8 +2130,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, num);
-	if (rc != 0)
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
+	}
 
 	if (dst_file_dfs.type == POSIX)
 		ap->fs_copy_posix = true;

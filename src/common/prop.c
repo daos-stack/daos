@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -330,7 +330,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
-		struct daos_co_status	co_status;
+		struct daos_co_status co_status;
+		int                   rc;
 
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
@@ -367,7 +368,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
-			if (daos_acl_validate(acl_ptr) != 0)
+			/* This can fail with out of memory errors */
+			rc = daos_acl_validate(acl_ptr);
+			if (rc == -DER_NOMEM)
+				rc = daos_acl_validate(acl_ptr);
+			if (rc != 0)
 				return false;
 			break;
 		case DAOS_PROP_PO_SPACE_RB:

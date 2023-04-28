@@ -690,10 +690,9 @@ validate_aces(struct daos_acl *acl)
 	};
 
 	last_type = -1;
-	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
-			8, NULL, &ops, &found);
+	rc        = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 8, NULL, &ops, &found);
 	if (rc != 0) {
-		D_ERROR("Failed to create hash table, rc="DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to create hash table, rc=" DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
