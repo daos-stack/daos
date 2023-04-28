@@ -117,12 +117,11 @@ query_registered_module(const char *module_name);
  *
  * \param[in]	addr		The address of the entry of original function.
  *				We will change it to a jmp instruction.
- * \param[in]	page_size	The size of one page in current system.
  *
  * \return			The number of bytes we need to change permission with mprotect().
  */
 static size_t
-determine_mem_block_size(const void *addr, const unsigned long int page_size);
+determine_mem_block_size(const void *addr);
 
 /**
  * Determine the full paths of libraries, ld.so, libc.so, and libpthread.so, etc.

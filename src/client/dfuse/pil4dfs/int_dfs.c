@@ -499,6 +499,7 @@ discover_daos_mount(void)
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
+	char *pt_end    = NULL;
 
 	/* Find the list of dfuse from /proc/mounts */
 	discover_dfuse();
@@ -531,7 +532,11 @@ discover_daos_mount(void)
 		return;
 	}
 
-	strncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH);
+	pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH);
+	if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= DFS_MAX_PATH) {
+		printf("dfs_list[num_dfs].fs_root[] is not large enough.\nQuit\n");
+		exit(1);
+	}
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
 	dfs_list[num_dfs].dfs_dir_hash = NULL;
@@ -546,6 +551,7 @@ discover_dfuse(void)
 	FILE          *fp;
 	const char     mnt_type_fuse[] = "fuse.daos";
 	struct mntent *fs_entry;
+	char          *pt_end;
 
 	num_dfs = 0;
 
@@ -561,7 +567,12 @@ discover_dfuse(void)
 			dfs_list[num_dfs].len_fs_root  = strlen(fs_entry->mnt_dir);
 			dfs_list[num_dfs].inited       = 0;
 			dfs_list[num_dfs].pool         = NULL;
-			strncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir, DFS_MAX_PATH);
+			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
+					 DFS_MAX_PATH);
+			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= DFS_MAX_PATH) {
+				printf("dfs_list[num_dfs].fs_root[] is not large enough.\nQuit\n");
+				exit(1);
+			}
 			num_dfs++;
 		}
 	}
@@ -709,7 +720,7 @@ static int
 parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *item_name,
 	   char *parent_dir, char full_path[], struct dfs_mt **dfs_mt)
 {
-	char   full_path_loc[DFS_MAX_PATH + 4];
+	char   full_path_loc[DFS_MAX_PATH];
 	int    pos, len;
 	mode_t mode;
 	bool   with_daos_prefix;
@@ -717,6 +728,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
 	int    idx_dfs, rc;
+	char  *pt_end = NULL;
 
 	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
 	if (with_daos_prefix) {
@@ -732,12 +744,20 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	if (strncmp(szInput, ".", 2) == 0) {
-		strcpy(full_path_loc, cur_dir);
+		pt_end = stpncpy(full_path_loc, cur_dir, DFS_MAX_PATH);
+		if ((long int)(pt_end - full_path_loc) >= DFS_MAX_PATH) {
+			printf("full_path_loc[] is not large enough.\nQuit\n");
+			exit(1);
+		}
 	} else if (szInput[0] == '/') {
-		strcpy(full_path_loc, szInput);
+		pt_end = stpncpy(full_path_loc, szInput, DFS_MAX_PATH);
+		if ((long int)(pt_end - full_path_loc) >= DFS_MAX_PATH) {
+			printf("full_path_loc[] is not large enough.\nQuit\n");
+			exit(1);
+		}
 	} else {
 		/* relative path */
-		len = snprintf(full_path_loc, DFS_MAX_PATH + 1, "%s/%s", cur_dir, szInput);
+		len = snprintf(full_path_loc, DFS_MAX_PATH, "%s/%s", cur_dir, szInput);
 		if (len >= DFS_MAX_PATH) {
 			printf("The length of path is too long.\n");
 			exit(1);
@@ -754,10 +774,16 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 	if (idx_dfs >= 0) {
 		if (!daos_inited) {
-			pthread_mutex_lock(&lock_init);
-			daos_init();
+			rc = pthread_mutex_lock(&lock_init);
+			D_ASSERT(rc == 0);
+			rc = daos_init();
+			if (rc) {
+				printf("daos_init failed, rc: "DF_RC"\nQuit\n", DP_RC(rc));
+				exit(1);
+			}
 			daos_inited = true;
-			pthread_mutex_unlock(&lock_init);
+			rc = pthread_mutex_unlock(&lock_init);
+			D_ASSERT(rc == 0);
 		}
 
 		*dfs_mt = &dfs_list[idx_dfs];
@@ -949,11 +975,12 @@ init_fd_list(void)
 static int
 find_next_available_fd(struct file_obj *obj)
 {
-	int i, idx = -1;
-	struct file_obj *new_obj;
+	int i, idx = -1, rc;
+	struct file_obj *new_obj = NULL;
+	bool allocated = false;
 
 	if (obj == NULL) {
-		new_obj = (struct file_obj *)malloc(sizeof(struct file_obj));
+		D_ALLOC(new_obj, sizeof(struct file_obj));
 		if (new_obj == NULL) {
 			errno = ENOMEM;
 			return (-1);
@@ -961,13 +988,18 @@ find_next_available_fd(struct file_obj *obj)
 		new_obj->file      = NULL;
 		new_obj->idx_mmap  = -1;
 		new_obj->ref_count = 0;
+		allocated          = true;
 	} else {
 		new_obj = obj;
 	}
 
-	pthread_mutex_lock(&lock_fd);
+	rc = pthread_mutex_lock(&lock_fd);
+	D_ASSERT(rc == 0);
 	if (next_free_fd < 0) {
-		pthread_mutex_unlock(&lock_fd);
+		rc = pthread_mutex_unlock(&lock_fd);
+		D_ASSERT(rc == 0);
+		if (allocated)
+			D_FREE(new_obj);
 		return next_free_fd;
 	}
 	idx = next_free_fd;
@@ -990,10 +1022,11 @@ find_next_available_fd(struct file_obj *obj)
 		printf("WARNING> All space for file_list are used.\n");
 
 	num_fd++;
-	pthread_mutex_unlock(&lock_fd);
+	rc = pthread_mutex_unlock(&lock_fd);
+	D_ASSERT(rc == 0);
 
-	if (idx < 0 && obj == NULL)
-		free(new_obj);
+	if (idx < 0 && allocated)
+		D_FREE(new_obj);
 
 	return idx;
 }
@@ -1001,8 +1034,9 @@ find_next_available_fd(struct file_obj *obj)
 static int
 find_next_available_dirfd(struct dir_obj *obj)
 {
-	int i, idx = -1;
+	int i, idx = -1, rc;
 	struct dir_obj *new_obj;
+	bool allocated = false;
 
 	if (obj == NULL) {
 		D_ALLOC(new_obj, sizeof(struct dir_obj));
@@ -1012,13 +1046,18 @@ find_next_available_dirfd(struct dir_obj *obj)
 		}
 		new_obj->dir       = NULL;
 		new_obj->ref_count = 0;
+		allocated          = true;
 	} else {
 		new_obj            = obj;
 	}
 
-	pthread_mutex_lock(&lock_dirfd);
+	rc = pthread_mutex_lock(&lock_dirfd);
+	D_ASSERT(rc == 0);
 	if (next_free_dirfd < 0) {
-		pthread_mutex_unlock(&lock_dirfd);
+		rc = pthread_mutex_unlock(&lock_dirfd);
+		D_ASSERT(rc == 0);
+		if (allocated)
+			D_FREE(new_obj);
 		return next_free_dirfd;
 	}
 	idx = next_free_dirfd;
@@ -1042,9 +1081,10 @@ find_next_available_dirfd(struct dir_obj *obj)
 		printf("WARNING> All space for dir_list are used.\n");
 
 	num_dirfd++;
-	pthread_mutex_unlock(&lock_dirfd);
+	rc = pthread_mutex_unlock(&lock_dirfd);
+	D_ASSERT(rc == 0);
 
-	if (idx < 0 && obj == NULL)
+	if (idx < 0 && allocated)
 		D_FREE(new_obj);
 
 	return idx;
@@ -1053,11 +1093,13 @@ find_next_available_dirfd(struct dir_obj *obj)
 static int
 find_next_available_map(void)
 {
-	int i, idx = -1;
+	int i, idx = -1, rc;
 
-	pthread_mutex_lock(&lock_mmap);
+	rc = pthread_mutex_lock(&lock_mmap);
+	D_ASSERT(rc == 0);
 	if (next_free_map < 0) {
-		pthread_mutex_unlock(&lock_mmap);
+		rc = pthread_mutex_unlock(&lock_mmap);
+		D_ASSERT(rc == 0);
 		return next_free_map;
 	}
 	idx = next_free_map;
@@ -1076,7 +1118,8 @@ find_next_available_map(void)
 		printf("WARNING> All space for mmap_list are used.\n");
 
 	num_map++;
-	pthread_mutex_unlock(&lock_mmap);
+	rc = pthread_mutex_unlock(&lock_mmap);
+	D_ASSERT(rc == 0);
 
 	return idx;
 }
@@ -1088,11 +1131,13 @@ free_fd(int idx)
 	int              i, rc;
 	struct file_obj *saved_obj = NULL;
 
-	pthread_mutex_lock(&lock_fd);
+	rc = pthread_mutex_lock(&lock_fd);
+	D_ASSERT(rc == 0);
 	if (file_list[idx]->idx_mmap >= 0 && file_list[idx]->idx_mmap < MAX_MMAP_BLOCK) {
 		/* file_list[idx].idx_mmap >= MAX_MMAP_BLOCK means fd needs closed after munmap()*/
 		file_list[idx]->idx_mmap += MAX_MMAP_BLOCK;
-		pthread_mutex_unlock(&lock_fd);
+		rc = pthread_mutex_unlock(&lock_fd);
+		D_ASSERT(rc == 0);
 		return;
 	}
 
@@ -1114,7 +1159,8 @@ free_fd(int idx)
 	}
 
 	num_fd--;
-	pthread_mutex_unlock(&lock_fd);
+	rc = pthread_mutex_unlock(&lock_fd);
+	D_ASSERT(rc == 0);
 
 	if (saved_obj) {
 		rc = dfs_release(saved_obj->file);
@@ -1131,7 +1177,8 @@ free_dirfd(int idx)
 	int             i, rc;
 	struct dir_obj *saved_obj = NULL;
 
-	pthread_mutex_lock(&lock_dirfd);
+	rc = pthread_mutex_lock(&lock_dirfd);
+	D_ASSERT(rc == 0);
 
 	dir_list[idx]->ref_count--;
 	if (dir_list[idx]->ref_count == 0)
@@ -1151,7 +1198,8 @@ free_dirfd(int idx)
 	}
 
 	num_dirfd--;
-	pthread_mutex_unlock(&lock_dirfd);
+	rc = pthread_mutex_unlock(&lock_dirfd);
+	D_ASSERT(rc == 0);
 
 	if (saved_obj) {
 		/* free memory for path and ents. */
@@ -1169,9 +1217,10 @@ free_dirfd(int idx)
 static void
 free_map(int idx)
 {
-	int i;
+	int i, rc;
 
-	pthread_mutex_lock(&lock_mmap);
+	rc = pthread_mutex_lock(&lock_mmap);
+	D_ASSERT(rc == 0);
 	mmap_list[idx].addr = NULL;
 	/* Need to call free_fd(). */
 	if (file_list[mmap_list[idx].fd - FD_FILE_BASE]->idx_mmap >= MAX_MMAP_BLOCK)
@@ -1191,7 +1240,8 @@ free_map(int idx)
 	}
 
 	num_map--;
-	pthread_mutex_unlock(&lock_mmap);
+	rc = pthread_mutex_unlock(&lock_mmap);
+	D_ASSERT(rc == 0);
 }
 
 static inline int
@@ -1377,6 +1427,7 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 		snprintf(path_fd_dir, 32, "/proc/self/fd/%d", dirfd);
 		bytes_read = readlink(path_fd_dir, full_path, DFS_MAX_PATH);
 		if (bytes_read >= DFS_MAX_PATH) {
+			full_path[DFS_MAX_PATH - 1] = 0;
 			printf("Error in check_path_with_dirfd(). path %s is too long.\nQuit\n",
 			       full_path);
 			exit(1);
@@ -1390,6 +1441,7 @@ check_path_with_dirfd(int dirfd, char *full_path, const char *rel_path)
 			printf("Error: path is too long! len_str = %d\nQuit\n", len_str);
 			exit(1);
 		}
+		full_path[len_str + (int)bytes_read] = 0;
 	}
 
 	return query_dfs_mount(full_path);
@@ -1409,6 +1461,10 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 
+	if (pathname == NULL) {
+		errno = EFAULT;
+		return (-1);
+	}
 	if (oflags & O_CREAT) {
 		va_list arg;
 
@@ -2334,6 +2390,10 @@ __openat_2(int dirfd, const char *path, int oflags)
 	int  idx_dfs;
 	char full_path[DFS_MAX_PATH];
 
+	if (path == NULL) {
+		errno = EFAULT;
+		return (-1);
+	}
 	if (next_openat_2 == NULL) {
 		next_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
 		assert(next_openat_2 != NULL);
@@ -2774,21 +2834,11 @@ rename(const char *old_name, const char *new_name)
 			parent_dir_old, NULL, &dfs_mt1);
 	if (rc)
 		return (-1);
-	if (is_target_path1 && parent_old == NULL) {
-		printf("rename(): Failed to lookup parent of %s\n", old_name);
-		errno = ENOTDIR;
-		return (-1);
-	}
 
 	rc = parse_path(new_name, &is_target_path2, &parent_new, item_name_new,
 			parent_dir_new, NULL, &dfs_mt2);
 	if (rc)
 		return (-1);
-	if (is_target_path2 && parent_new == NULL) {
-		printf("rename(): Failed to lookup parent of %s\n", new_name);
-		errno = ENOTDIR;
-		return (-1);
-	}
 
 	if (is_target_path1 == 0 && is_target_path2 == 0)
 		return next_rename(old_name, new_name);
@@ -3277,6 +3327,8 @@ chdir(const char *path)
 int
 fchdir(int dirfd)
 {
+	char *pt_end = NULL;
+
 	if (next_fchdir == NULL) {
 		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
 		assert(next_fchdir != NULL);
@@ -3287,7 +3339,11 @@ fchdir(int dirfd)
 	if (dirfd < FD_DIR_BASE)
 		return next_fchdir(dirfd);
 
-	strcpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path);
+	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH);
+	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH) {
+		printf("cur_dir[] is not large enough.\nQuit\n");
+		exit(1);
+	}
 	return 0;
 }
 
@@ -3828,7 +3884,7 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_save, fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
+	int     fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
 	va_list arg;
 
 	switch (cmd) {
@@ -3849,7 +3905,6 @@ new_fcntl(int fd, int cmd, ...)
 		va_end(arg);
 
 		fd_Directed = Get_Fd_Redirected(fd);
-		fd_save     = fd_Directed;
 
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
@@ -3867,24 +3922,20 @@ new_fcntl(int fd, int cmd, ...)
 		if (fd_dup2ed_Dest >= FD_FILE_BASE) {
 			if (cmd == F_SETFD)
 				return 0;
-			else if (cmd == F_GETFL)
-				return file_list[fd_dup2ed_Dest - FD_FILE_BASE]->open_flag;
 		}
 
-		if (fd_Directed >= FD_DIR_BASE) {
-			fd_Directed -= FD_DIR_BASE;
-			OrgFunc = 0;
-		} else if (fd_Directed >= FD_FILE_BASE) {
-			fd_Directed -= FD_FILE_BASE;
+		if (fd_Directed >= FD_FILE_BASE) {
 			OrgFunc = 0;
 		}
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
-			if (fd_save >= FD_DIR_BASE) {
-				Next_Dirfd = find_next_available_dirfd(dir_list[fd_Directed]);
+			if (fd_Directed >= FD_DIR_BASE) {
+				Next_Dirfd = find_next_available_dirfd(
+						dir_list[fd_Directed - FD_DIR_BASE]);
 				return (Next_Dirfd + FD_DIR_BASE);
-			} else if (fd_save >= FD_FILE_BASE) {
-				Next_fd = find_next_available_fd(file_list[fd_Directed]);
+			} else if (fd_Directed >= FD_FILE_BASE) {
+				Next_fd = find_next_available_fd(
+						file_list[fd_Directed - FD_FILE_BASE]);
 				return (Next_fd + FD_FILE_BASE);
 			}
 		} else if ((cmd == F_GETFD) || (cmd == F_SETFD)) {
@@ -3907,9 +3958,6 @@ new_fcntl(int fd, int cmd, ...)
 		param = va_arg(arg, int);
 		va_end(arg);
 
-		fd_Directed = Get_Fd_Redirected(fd);
-		fd_save     = fd_Directed;
-
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
 
@@ -3917,8 +3965,6 @@ new_fcntl(int fd, int cmd, ...)
 	default:
 		return libc_fcntl(fd, cmd);
 	}
-
-	return libc_fcntl(fd, cmd);
 }
 
 int
@@ -4174,10 +4220,12 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	if (rc < 0)
 		return (void *)(-1);
 	if (!segv_handler_inited) {
-		pthread_mutex_lock(&lock_mmap);
+		rc = pthread_mutex_lock(&lock_mmap);
+		D_ASSERT(rc == 0);
 		register_handler(SIGSEGV, &old_segv);
 		segv_handler_inited = true;
-		pthread_mutex_unlock(&lock_mmap);
+		rc = pthread_mutex_unlock(&lock_mmap);
+		D_ASSERT(rc == 0);
 	}
 	return addr_ret;
 }
@@ -4361,6 +4409,7 @@ static void
 update_cwd(void)
 {
 	char *cwd = NULL;
+	char *pt_end = NULL;
 
 	cwd = get_current_dir_name();
 
@@ -4368,7 +4417,11 @@ update_cwd(void)
 		printf("Fail to get CWD with get_current_dir_name().\nQuit\n");
 		exit(1);
 	} else {
-		strcpy(cur_dir, cwd);
+		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH);
+		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH) {
+			printf("cur_dir[] is not large enough.\nQuit\n");
+			exit(1);
+		}
 		free(cwd);
 	}
 }
@@ -4611,13 +4664,19 @@ print_summary(void)
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
+	int rc;
+
 	close_all_duped_fd();
 	finalize_dfs();
 
-	pthread_mutex_destroy(&lock_init);
-	pthread_mutex_destroy(&lock_dirfd);
-	pthread_mutex_destroy(&lock_fd);
-	pthread_mutex_destroy(&lock_mmap);
+	rc = pthread_mutex_destroy(&lock_init);
+	D_ASSERT(rc == 0);
+	rc = pthread_mutex_destroy(&lock_dirfd);
+	D_ASSERT(rc == 0);
+	rc = pthread_mutex_destroy(&lock_fd);
+	D_ASSERT(rc == 0);
+	rc = pthread_mutex_destroy(&lock_mmap);
+	D_ASSERT(rc == 0);
 
 	uninstall_hook();
 }
@@ -4631,13 +4690,13 @@ init_dfs(int idx)
 	rc =
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh, NULL, NULL);
 	if (rc != 0) {
-		printf("Failed to connect pool: %s\nQuit\n", strerror(rc));
+		printf("Failed to connect pool: "DF_RC"\nQuit\n", DP_RC(rc));
 		exit(1);
 	}
 	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
 			    NULL, NULL);
 	if (rc != 0) {
-		printf("Failed to open container: %s\nQuit\n", strerror(rc));
+		printf("Failed to open container: "DF_RC"\nQuit\n", DP_RC(rc));
 		exit(1);
 	}
 	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
@@ -4648,7 +4707,7 @@ init_dfs(int idx)
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
-		printf("Failed to create hash table: %s\nQuit\n", strerror(rc));
+		printf("Failed to create hash table: "DF_RC"\nQuit\n", DP_RC(rc));
 		exit(1);
 	}
 }

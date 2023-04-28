@@ -50,6 +50,8 @@ static int                        num_module;
 static int                        num_patch_blk, is_uninstalled;
 static int                        get_module_maps_inited;
 
+static size_t                     page_size, mask;
+
 static struct module_patch_info_t module_list[MAX_MODULE];
 
 /* The flag whethere libc.so is found or not. */
@@ -86,9 +88,9 @@ static char     lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char     path_ld[512] = "";
-static char    *path_libc;
-static char    *path_libpthread;
+static char     path_ld[MAX_LEN_PATH_NAME] = "";
+static char     path_libc[MAX_LEN_PATH_NAME] = "";
+static char     path_libpthread[MAX_LEN_PATH_NAME] = "";
 
 #define MAP_SIZE_SMALL (232144)
 
@@ -122,6 +124,7 @@ determine_lib_path(void)
 		printf("Error to read /proc/self/maps\nQuit\n");
 		exit(1);
 	}
+	read_buff_map[MAP_SIZE_SMALL - 1] = '\0';
 
 	pPos = strstr(read_buff_map, "/ld-2.");
 	if (pPos == NULL) {
@@ -146,11 +149,15 @@ determine_lib_path(void)
 			break;
 		}
 	}
-	if (pEnd == NULL) {
+	if (pStart == NULL) {
 		printf("Fail to determine the starting position of libc path.\nQuit\n");
 		exit(1);
 	}
 
+	if ((long int)(pEnd - pStart) >= MAX_LEN_PATH_NAME) {
+		printf("The length of path_ld is too long!\nQuit\n");
+		exit(1);
+	}
 	memcpy(path_ld, pStart, pEnd - pStart);
 	path_ld[pEnd - pStart] = 0;
 	memcpy(lib_ver_str, pPos + 4, pEnd - 3 - (pPos + 4));
@@ -159,14 +166,15 @@ determine_lib_path(void)
 	lib_dir_str[pPos - pStart] = 0;
 
 	free(read_buff_map);
-	rc = asprintf(&path_libc, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
-	if (rc < 0) {
-		printf("Failed to allocate memory for path_libc.\n");
+	rc = snprintf(path_libc, MAX_LEN_PATH_NAME, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
+	if (rc >= MAX_LEN_PATH_NAME) {
+		printf("The length of path_libc is too long!\nQuit\n");
 		exit(1);
 	}
-	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
-	if (rc < 0) {
-		printf("Failed to allocate memory for path_libpthread.\n");
+	rc = snprintf(path_libpthread, MAX_LEN_PATH_NAME, "%s/libpthread-%s.so",
+		      lib_dir_str, lib_ver_str);
+	if (rc >= MAX_LEN_PATH_NAME) {
+		printf("The length of path_libpthread is too long!\nQuit\n");
 		exit(1);
 	}
 }
@@ -187,7 +195,7 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 		void *func_addr_list[], long int func_len_list[], const long int img_base_addr,
 		const int num_func)
 {
-	int         fd, i, j, k;
+	int         fd, i, j, k, rc;
 	struct stat file_stat;
 	void       *map_start;
 	Elf64_Ehdr *header;
@@ -197,7 +205,11 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 	int         num_sym = 0, sym_rec_size = 0, sym_offset, rec_addr;
 	char       *sym_name;
 
-	stat(lib_path, &file_stat);
+	rc = stat(lib_path, &file_stat);
+	if (rc == -1) {
+		printf("Fail to query stat of file %s. %s\nQuit\n", lib_path, strerror(errno));
+		exit(1);
+	}
 
 	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
@@ -218,6 +230,10 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 		if ((sections[i].sh_type == SHT_DYNSYM) || (sections[i].sh_type == SHT_SYMTAB)) {
 			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size   = sections[i].sh_entsize;
+			if (sections[i].sh_entsize == 0) {
+				printf("Error: Unexpected entry size.\nQuit\n");
+				exit(1);
+			}
 			num_sym        = sections[i].sh_size / sections[i].sh_entsize;
 
 			/* tricky here!!! */
@@ -262,13 +278,9 @@ uninstall_hook(void)
 	void                *pbaseOrg;
 	size_t               MemSize_Modify;
 	struct trampoline_t *tramp_list;
-	unsigned long int    page_size, mask;
 
 	if (found_libc == 0 || is_uninstalled == 1)
 		return;
-
-	page_size = sysconf(_SC_PAGESIZE);
-	mask      = ~(page_size - 1);
 
 	for (iBlk = 0; iBlk < num_patch_blk; iBlk++) {
 		tramp_list = (struct trampoline_t *)(patch_blk_list[iBlk].patch_addr);
@@ -277,7 +289,7 @@ uninstall_hook(void)
 			/* fast mod */
 			pbaseOrg = (void *)((long int)(tramp_list[iFunc].addr_org_func) & mask);
 			MemSize_Modify = determine_mem_block_size(
-			    (const void *)(tramp_list[iFunc].addr_org_func), page_size);
+			    (const void *)(tramp_list[iFunc].addr_org_func));
 
 			if (pbaseOrg == NULL)
 				continue;
@@ -571,12 +583,11 @@ allocate_memory_block_for_patches(void)
  * determine_mem_block_size - Determine we need to change the permission of one or two pages
  * for a given address.
  *   @addr: The address of the entry of original function. We will change it to a jmp instruction.
- *   @page_size: The size of one page in current system.
  * Returns:
  *   The number of bytes we need to change permission with mprotect().
  */
 static size_t
-determine_mem_block_size(const void *addr, const unsigned long int page_size)
+determine_mem_block_size(const void *addr)
 {
 	unsigned long int res, addr_code;
 
@@ -611,13 +622,18 @@ install_hook(void)
 	csh                  handle;
 	cs_insn             *insn = NULL;
 	size_t               num_inst, idx_inst;
-	unsigned long int    page_size, mask;
 	struct trampoline_t *tramp_list;
+	long                 rc;
 
 	if (found_libc == 0)
 		return 0;
 
-	page_size = sysconf(_SC_PAGESIZE);
+	rc = sysconf(_SC_PAGESIZE);
+	if (rc == -1) {
+		printf("Failed to query page size. %s\nQuit\n", strerror(errno));
+		exit(1);
+	}
+	page_size = (size_t)rc;
 	mask      = ~(page_size - 1);
 
 	query_all_org_func_addr();
@@ -753,7 +769,7 @@ install_hook(void)
 			    (void *)((long int)(tramp_list[nFunc_InBlk].addr_org_func) & mask);
 
 			MemSize_Modify = determine_mem_block_size(
-			    (void *)(tramp_list[nFunc_InBlk].addr_org_func), page_size);
+			    (void *)(tramp_list[nFunc_InBlk].addr_org_func));
 			if (mprotect(pbaseOrg, MemSize_Modify,
 				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
 				printf("Error in executing mprotect(). %s\n",
@@ -790,9 +806,6 @@ install_hook(void)
 	}
 
 	cs_close(&handle);
-
-	free(path_libc);
-	free(path_libpthread);
 
 	return num_hook_installed;
 }
@@ -894,8 +907,8 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	num_hook++;
 
 	if (num_hook > MAX_PATCH) {
-		printf("Error> num_hook > MAX_PATCH\nQuit\n");
-		return REGISTER_TOO_MANY_HOOKS;
+		printf("Error> num_hook > MAX_PATCH. MAX_PATCH needs to be increased.\nQuit\n");
+		exit(1);
 	}
 
 	return REGISTER_SUCCESS;
