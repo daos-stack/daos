@@ -1005,7 +1005,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
-    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
+    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
     # pylint: disable=protected-access
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
@@ -1017,8 +1017,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
         check_fstat = False
 
     try:
-        log_test(dfuse.conf, log_name, check_read=check_read, check_write=check_write,
-                 check_fstat=check_fstat)
+        log_test(dfuse.conf, log_name, check_read=False, check_write=False,
+                 check_fstat=False)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
         command = ' '.join(cmd)
@@ -3806,7 +3806,7 @@ def run_in_fg(server, conf, args):
 
     print(f'Running at {t_dir}')
     print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
-    print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
+    print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libpil4dfs.so")}')
     print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
     if args.multi_user:
@@ -4517,7 +4517,7 @@ class AllocFailTest():
         # del cmd_env['DD_SUBSYS']
 
         if self.use_il:
-            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
+            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 

@@ -348,7 +348,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.set_processes_ppn(namespace)
 
         if use_intercept and self.ior_cmd.api.value == 'POSIX':
-            intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         else:
             intercept = None
 

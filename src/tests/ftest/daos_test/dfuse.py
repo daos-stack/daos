@@ -88,7 +88,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
         daos_test_env = cmocka_utils.get_cmocka_env()
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:
-            daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
             daos_test_env['D_LOG_FILE'] = get_log_file('daos-il.log')
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'

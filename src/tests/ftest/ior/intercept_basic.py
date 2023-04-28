@@ -30,7 +30,7 @@ class IorInterceptBasic(IorInterceptTestBase):
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
         :avocado: tags=IorInterceptBasic,test_ior_intercept
         """
-        self.run_il_perf_check('libioil.so')
+        self.run_il_perf_check('libpil4dfs.so')
 
     def test_ior_intercept_pil4dfs(self):
         """Jira ID: DAOS-12142.
