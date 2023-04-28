@@ -701,7 +701,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
@@ -921,7 +921,7 @@ io_rewritten_array_with_mixed_size(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* choose random object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -2662,7 +2662,7 @@ tx_discard(void **state)
 	/** Write three timestamps to same set of d-key and a-keys. */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 
 		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
@@ -2689,11 +2689,11 @@ tx_discard(void **state)
 		if (t == 1) {
 			print_message("aborting transaction %d.\n", t);
 			rc = daos_tx_abort(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		} else {
 			print_message("committing transaction %d.\n", t);
 			rc = daos_tx_commit(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		}
 		par_barrier(PAR_COMM_WORLD);
 	}
@@ -2729,7 +2729,7 @@ tx_discard(void **state)
 			D_FREE(rec_verify);
 		}
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	/** Close and reopen the container and the obj. */
@@ -2841,7 +2841,7 @@ tx_commit(void **state)
 	/** Write at 3 different txs to same set of d-key and a-keys. */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
@@ -2893,14 +2893,14 @@ tx_commit(void **state)
 		if (t != 2) {
 			print_message("committing transaction %d\n", t);
 			rc = daos_tx_commit(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		} else {
 			print_message("aborting transaction %d\n", t);
 			rc = daos_tx_abort(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		}
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		par_barrier(PAR_COMM_WORLD);
 	}
 
@@ -2920,7 +2920,7 @@ tx_commit(void **state)
 
 			rc = enumerate_akey(DAOS_TX_NONE, dkey, &n, &kd,
 					    &anchor, buf, sizeof(buf), &req);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			found += n;
 		}
 		assert_int_equal(found, nakeys);
@@ -3538,7 +3538,7 @@ blob_unmap_trigger(void **state)
 	 */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 
 		for (i = 0; i < nvme_recs; i++) {
 			sprintf(akey, "blob_unmap_akey%d", i);
@@ -3559,9 +3559,9 @@ blob_unmap_trigger(void **state)
 	/* Discard the NVMe records (Discard second tx) */
 	print_message("Discarding second transaction\n");
 	rc = daos_tx_abort(th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	rc = daos_tx_close(th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3573,7 +3573,7 @@ blob_unmap_trigger(void **state)
 	sprintf(akey, "blob_unmap akey%d", nvme_recs);
 	print_message("insert dkey:'%s', akey:'%s'\n", dkey, akey);
 	rc = daos_tx_open(arg->coh, &th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, th[1], &req);
 	/* Verify record was inserted */
 	memset(fetch_buf, 0, IO_SIZE_NVME);
@@ -3584,7 +3584,7 @@ blob_unmap_trigger(void **state)
 
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	D_FREE(enum_buf);
@@ -4903,7 +4903,7 @@ oit_list_filter(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* Alloc and set buffer to be a string*/
 	D_ALLOC(ow_buf, size);

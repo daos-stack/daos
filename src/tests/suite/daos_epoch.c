@@ -11,7 +11,7 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 
-#define MUST(rc)	assert_int_equal(rc, 0)
+#define MUST(rc)        assert_success(rc)
 #define VAL_FMT		"VALUE-%lu"
 #define REC_MAX_LEN	32
 
@@ -326,10 +326,10 @@ test_snapshots(void **argp)
 	epr.epr_hi = epr.epr_lo = 42;
 	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
 	if (arg->async) {
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
 	} else {
-		assert_int_equal(rc, -DER_NONEXIST);
+		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
 	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
