@@ -56,4 +56,4 @@ class DestroyRebuild(TestWithServers):
 
         self.log.info("Test Passed")
         self.get_dmg_command().system_start(ranks)
-        self.server_managers[0].update_expected_states(",".join(ranks), ["joined"])
+        self.server_managers[0].update_expected_states(ranks, ["joined"])
