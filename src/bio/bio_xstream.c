@@ -33,7 +33,7 @@
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
-#define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream max chunks, 256MB */
+#define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
@@ -242,7 +242,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
-	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MIN;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
