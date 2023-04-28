@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+import time
 
 from apricot import TestWithServers
 
@@ -23,14 +24,18 @@ class ReplayTests(TestWithServers):
     :avocado: recursive
     """
 
-    def create_container(self, details=None):
+    def create_container(self, details=None, **pool_params):
         """Create a pool and container.
+
+        Args:
+            details (str, optional): additional log_step messaging
+            pool_params (dict, optional): named arguments to add_pool()
 
         Returns:
             TestContainer: the created container with a reference to the created pool
         """
         self.log_step(join(' ', 'Creating a pool (dmg pool create)', '-', details))
-        pool = add_pool(self)
+        pool = add_pool(self, **pool_params)
         self.log_step(join(' ', 'Creating a container (daos container create)', '-', details))
         return self.get_container(pool)
 
@@ -328,7 +333,7 @@ class ReplayTests(TestWithServers):
         self.log_step('Test passed')
 
     def test_replay_no_check_pointing(self):
-        """Verify data access after engine restart w/ WAL replay + w/o check pointing.
+        """Verify data access after engine restart w/ WAL replay + w/o check pointing (DAOS-13013).
 
         Steps:
             0) Start 3 DAOS servers with 1 engine on each server
@@ -365,6 +370,43 @@ class ReplayTests(TestWithServers):
         response = container.pool.get_prop(name='checkpoint')['response']
         if response[0]['value'] != 'disabled':
             self.fail('Pool check pointing not disabled after engine restart')
+
+        self.log_step('Verifying data previously written to the container (ior)')
+        self.read_data(ior, container, ppn)
+        self.log_step('Test passed')
+
+    def test_replay_check_pointing(self):
+        """Verify data access after engine restart w/ WAL replay + w/ check pointing (DAOS-13012).
+
+        Steps:
+            0) Start 3 DAOS servers with 1 engine on each server
+            1) Create a single pool and container
+            2) Determine the check pointing interval
+            3) Run ior w/ DFS to populate the container with small amount of data
+            4) After ior has completed, wait for the check pointing to complete
+            5) Shutdown every engine cleanly (dmg system stop)
+            6) Restart each engine (dmg system start)
+            7) Verify the previously written data matches with an ior read
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server,replay
+        :avocado: tags=ReplayTests,test_replay_check_pointing
+        """
+        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
+        frequency = 5
+        container = self.create_container(
+            properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+        self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
+
+        self.log_step('Write data to the container (ior)')
+        ior = self.write_data(container, ppn)
+
+        self.log_step('Waiting for check pointing to complete (sleep {})'.format(frequency * 2))
+        time.sleep(frequency * 2)
+
+        self.stop_engines()
+        self.restart_engines()
 
         self.log_step('Verifying data previously written to the container (ior)')
         self.read_data(ior, container, ppn)

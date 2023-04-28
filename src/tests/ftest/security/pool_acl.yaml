@@ -14,11 +14,10 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 1
-pool:
-  control_method: dmg
+          scm_size: 4
 # Uncomment following to force the use of certificates
 # regardless of the launch.py --insecure setting.
+# pool:
 #   transport_config:
 #     allow_insecure: False
 # agent_config:
@@ -27,6 +26,8 @@ pool:
 # dmg:
 #   transport_config:
 #     allow_insecure: False
+container:
+  control_method: daos
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

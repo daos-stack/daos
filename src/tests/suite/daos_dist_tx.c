@@ -14,7 +14,7 @@
 #include "daos_iotest.h"
 #include <daos/dtx.h>
 
-#define MUST(rc)		assert_int_equal(rc, 0)
+#define MUST(rc)                assert_success(rc)
 #define	DTX_TEST_SUB_REQS	32
 #define DTX_IO_SMALL		32
 #define DTX_NC_CNT		10
@@ -1683,11 +1683,10 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort,
 			 *  the other is -DER_TX_UNCERTAIN.
 			 */
 			if (rc == 0) {
-				assert_int_equal(reqs[i].result,
-						 -DER_TX_UNCERTAIN);
+				assert_rc_equal(reqs[i].result, -DER_TX_UNCERTAIN);
 			} else {
-				assert_int_equal(rc, -DER_TX_UNCERTAIN);
-				assert_int_equal(reqs[i].result, 0);
+				assert_rc_equal(rc, -DER_TX_UNCERTAIN);
+				assert_success(reqs[i].result);
 			}
 
 			ioreq_fini(&reqs[i]);

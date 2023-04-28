@@ -699,10 +699,10 @@ obj_tx_abort(int errnum, int user)
 void
 dav_tx_abort(int errnum)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	DAV_DBG("");
 	obj_tx_abort(errnum, 1);
-	PMEMOBJ_API_END();
+	DAV_API_END();
 }
 
 /*
@@ -728,7 +728,7 @@ tx_post_commit(struct tx *tx)
 void
 dav_tx_commit(void)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -764,7 +764,7 @@ dav_tx_commit(void)
 
 	/* ONCOMMIT */
 	obj_tx_callback(tx);
-	PMEMOBJ_API_END();
+	DAV_API_END();
 }
 
 /*
@@ -849,7 +849,7 @@ vg_verify_initialized(dav_obj_t *pop, const struct tx_range_def *def)
 		return;
 
 	VALGRIND_DO_DISABLE_ERROR_REPORTING;
-	char *start = (char *)pop + def->offset;
+	char *start = OBJ_OFF_TO_PTR(pop, def->offset);
 	char *uninit = (char *)VALGRIND_CHECK_MEM_IS_DEFINED(start, def->size);
 
 	if (uninit) {
@@ -1115,7 +1115,7 @@ dav_tx_add_common(struct tx *tx, struct tx_range_def *args)
 int
 dav_tx_add_range_direct(const void *ptr, size_t size)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -1129,7 +1129,7 @@ dav_tx_add_range_direct(const void *ptr, size_t size)
 	if (!OBJ_PTR_FROM_POOL(tx->pop, ptr)) {
 		ERR("object outside of pool");
 		ret = obj_tx_fail_err(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
@@ -1141,7 +1141,7 @@ dav_tx_add_range_direct(const void *ptr, size_t size)
 
 	ret = dav_tx_add_common(tx, &args);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ret;
 }
 
@@ -1153,7 +1153,7 @@ int
 dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 {
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -1168,14 +1168,14 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 		ERR("unknown flags 0x%" PRIx64, flags
 			& ~DAV_XADD_VALID_FLAGS);
 		ret = obj_tx_fail_err(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
 	if (!OBJ_PTR_FROM_POOL(tx->pop, ptr)) {
 		ERR("object outside of pool");
 		ret = obj_tx_fail_err(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
@@ -1188,7 +1188,7 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 
 	ret = dav_tx_add_common(tx, &args);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ret;
 }
 
@@ -1198,7 +1198,7 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 int
 dav_tx_add_range(uint64_t hoff, size_t size)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -1218,7 +1218,7 @@ dav_tx_add_range(uint64_t hoff, size_t size)
 
 	ret = dav_tx_add_common(tx, &args);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ret;
 }
 
@@ -1228,7 +1228,7 @@ dav_tx_add_range(uint64_t hoff, size_t size)
 int
 dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -1242,7 +1242,7 @@ dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 		ERR("unknown flags 0x%" PRIx64, flags
 			& ~DAV_XADD_VALID_FLAGS);
 		ret = obj_tx_fail_err(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
@@ -1256,7 +1256,7 @@ dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 
 	ret = dav_tx_add_common(tx, &args);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ret;
 }
 
@@ -1268,7 +1268,7 @@ dav_tx_alloc(size_t size, uint64_t type_num)
 {
 	uint64_t off;
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
@@ -1279,14 +1279,14 @@ dav_tx_alloc(size_t size, uint64_t type_num)
 	if (size == 0) {
 		ERR("allocation with size 0");
 		off = obj_tx_fail_null(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return off;
 	}
 
 	off = tx_alloc_common(tx, size, (type_num_t)type_num,
 			constructor_tx_alloc, ALLOC_ARGS(flags));
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return off;
 }
 
@@ -1306,18 +1306,18 @@ dav_tx_zalloc(size_t size, uint64_t type_num)
 
 	flags |= tx_abort_on_failure_flag(tx);
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	if (size == 0) {
 		ERR("allocation with size 0");
 		off = obj_tx_fail_null(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return off;
 	}
 
 	off = tx_alloc_common(tx, size, (type_num_t)type_num,
 			constructor_tx_alloc, ALLOC_ARGS(flags));
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return off;
 }
 
@@ -1335,12 +1335,12 @@ dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 
 	flags |= tx_abort_on_failure_flag(tx);
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 
 	if (size == 0) {
 		ERR("allocation with size 0");
 		off = obj_tx_fail_null(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return off;
 	}
 
@@ -1348,14 +1348,14 @@ dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 		ERR("unknown flags 0x%" PRIx64, flags
 			& ~(DAV_TX_XALLOC_VALID_FLAGS));
 		off = obj_tx_fail_null(EINVAL, flags);
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return off;
 	}
 
 	off = tx_alloc_common(tx, size, (type_num_t)type_num,
 			constructor_tx_alloc, ALLOC_ARGS(flags));
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return off;
 }
 
@@ -1386,7 +1386,7 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 	ASSERT(pop != NULL);
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 
 	struct dav_action *action;
 	uint64_t roff = palloc_get_realoffset(pop->do_heap, off);
@@ -1441,7 +1441,7 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 				VALGRIND_REMOVE_FROM_TX(ptr, usize);
 				palloc_cancel(pop->do_heap, action, 1);
 				VEC_ERASE_BY_PTR(&tx->actions, action);
-				PMEMOBJ_API_END();
+				DAV_API_END();
 				return 0;
 			}
 		}
@@ -1452,13 +1452,13 @@ out:
 	if (action == NULL) {
 		int ret = obj_tx_fail_err(errno, flags);
 
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
 	palloc_defer_free(pop->do_heap, off, action);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return 0;
 }
 
@@ -1494,17 +1494,17 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 		pop, act, size,
 		(unsigned long long)type_num);
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
 		return 0;
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return 0;
 	}
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return act->heap.offset;
 }
 
@@ -1526,13 +1526,13 @@ dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act)
 int
 dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	struct operation_context *ctx = pmalloc_operation_hold(pop);
 
 	size_t entries_size = actvcnt * sizeof(struct ulog_entry_val);
 
 	if (operation_reserve(ctx, entries_size) != 0) {
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return -1;
 	}
 
@@ -1540,7 +1540,7 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 
 	pmalloc_operation_release(pop);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return 0;
 }
 #endif
@@ -1552,9 +1552,9 @@ void
 dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
 	DAV_DBG("actvcnt=%zu", actvcnt);
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	palloc_cancel(pop->do_heap, actv, actvcnt);
-	PMEMOBJ_API_END();
+	DAV_API_END();
 }
 
 
@@ -1575,12 +1575,12 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 
 	flags |= tx_abort_on_failure_flag(tx);
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 
 	if (tx_action_reserve(tx, actvcnt) != 0) {
 		ret = obj_tx_fail_err(ENOMEM, flags);
 
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return ret;
 	}
 
@@ -1595,7 +1595,7 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 		}
 	}
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return 0;
 }
 
@@ -1700,18 +1700,18 @@ dav_root(dav_obj_t *pop, size_t size)
 {
 	DAV_DBG("pop %p size %zu", pop, size);
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	if (size > DAV_MAX_ALLOC_SIZE) {
 		ERR("requested size too large");
 		errno = ENOMEM;
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return 0;
 	}
 
 	if (size == 0 && pop->do_phdr->dp_root_offset == 0) {
 		ERR("requested size cannot equals zero");
 		errno = EINVAL;
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return 0;
 	}
 
@@ -1721,13 +1721,13 @@ dav_root(dav_obj_t *pop, size_t size)
 	if (size > pop->do_phdr->dp_root_size &&
 			obj_alloc_root(pop, size)) {
 		ERR("dav_root failed");
-		PMEMOBJ_API_END();
+		DAV_API_END();
 		return 0;
 	}
 
 	/* REVISIT END */
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return pop->do_phdr->dp_root_offset;
 }
 
@@ -1815,11 +1815,11 @@ dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
 		return -1;
 	}
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	int ret = obj_alloc_construct(pop, offp, size, type_num,
 			0, constructor, arg);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ret;
 }
 
@@ -1836,7 +1836,7 @@ dav_free(dav_obj_t *pop, uint64_t off)
 	if (off == 0)
 		return;
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 
 	ASSERTne(pop, NULL);
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
@@ -1848,7 +1848,7 @@ dav_free(dav_obj_t *pop, uint64_t off)
 			0, 0, 0, 0, ctx);
 
 	lw_tx_end(pop, NULL);
-	PMEMOBJ_API_END();
+	DAV_API_END();
 }
 
 /*
@@ -1861,13 +1861,13 @@ dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src,
 	DAV_DBG("pop %p dest %p src %p len %zu", pop, dest, src, len);
 	D_ASSERT((dav_tx_stage() == DAV_TX_STAGE_NONE));
 
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	lw_tx_begin(pop);
 
 	void *ptr = mo_wal_memcpy(&pop->p_ops, dest, src, len, 0);
 
 	lw_tx_end(pop, NULL);
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ptr;
 }
 
@@ -1879,12 +1879,12 @@ dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
 			   size_t len)
 {
 	DAV_DBG("pop %p dest %p src %p len %zu", pop, dest, src, len);
-	PMEMOBJ_API_START();
+	DAV_API_START();
 	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
 		return 0;
 
 	void *ptr = mo_wal_memcpy(&pop->p_ops, dest, src, len, 0);
 
-	PMEMOBJ_API_END();
+	DAV_API_END();
 	return ptr;
 }

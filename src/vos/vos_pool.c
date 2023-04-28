@@ -1459,10 +1459,8 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	uuid_copy(ukey.uuid, pool_id);
 	rc = pool_lookup(&ukey, &pool);
 	if (rc) {
+		D_ASSERT(rc == -DER_NONEXIST);
 		return rc;
-	} else if (pool->vp_dying) {
-		vos_pool_decref(pool);
-		return -DER_NONEXIST;
 	}
 
 	D_ASSERT(pool != NULL);

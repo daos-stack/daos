@@ -203,8 +203,6 @@ memblock_header_compact_write(const struct memory_block *m,
 	 * This code needs to be revisited when valgrind macros are
 	 * enabled within DAV.
 	 */
-	if (DAOS_ON_VALGRIND)
-		memset(&padded, 0, sizeof(padded));
 	padded.hdr.size = size | ((uint64_t)flags << ALLOC_HDR_SIZE_SHIFT);
 	padded.hdr.extra = extra;
 

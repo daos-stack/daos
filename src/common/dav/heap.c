@@ -1578,7 +1578,7 @@ heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 		heap_get_procs() : (unsigned)Default_arenas_max;
 
 	if (heap_arenas_init(&h->arenas) != 0) {
-		err = errno;
+		err = ENOMEM;
 		goto error_arenas_malloc;
 	}
 
@@ -1603,7 +1603,7 @@ heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 
 	for (unsigned i = 0; i < narenas_default; ++i) {
 		if (VEC_PUSH_BACK(&h->arenas.vec, heap_arena_new(heap, 1))) {
-			err = errno;
+			err = ENOMEM;
 			goto error_vec_reserve;
 		}
 	}

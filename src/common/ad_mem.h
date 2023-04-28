@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,6 +72,9 @@ enum ad_grp_flags {
 	/** sparse group, allocated address are stored in a array */
 	GRP_FL_SPARSE		= (1 << 1),
 };
+
+#define GRP_UNIT_SZ_MAX		(1U << 20)
+#define GRP_UNIT_NR_MAX		(1U << 20)
 
 /** Durable format of group (128 bytes) */
 struct ad_group_df {
