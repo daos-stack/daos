@@ -230,8 +230,6 @@ int main(int argc, char **argv)
 
 
 				rc = crt_req_send(rpc, rpc_handle_reply, &sem);
-				DBG_PRINT("[RPCID: 0x%lx] Freeing buffer %d\n", rpcid, repeat);
-				rc = crt_bulk_free(bulk_hdl);
 				D_ASSERTF(rc == 0, "crt_bulk_free() failed; rc: %d\n", rc);
 
 
