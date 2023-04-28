@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,7 @@
 #include <daos_kv.h>
 #include <daos_uns.h>
 
-#define PY_SHIM_MAGIC_NUMBER 0x7A89
+#define PY_SHIM_MAGIC_NUMBER 0x7A8A
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /** Durable format of entries in the root kv */
@@ -358,13 +358,14 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	struct open_handle	*hdl;
 	char			*name;
 	unsigned int		otype;
+	daos_oclass_id_t	cid;
 	struct pydaos_df	entry;
 	daos_obj_id_t		oid = {0, };
 	enum daos_otype_t	type;
 	int			rc;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ksi", &hdl, &name, &otype);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ksii", &hdl, &name, &cid, &otype);
 
 	/** Allocate OID for new object */
 	if (hdl->alloc.hi >= MAX_OID_HI) {
@@ -390,7 +391,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 		type = DAOS_OT_KV_HASHED;
 	else /** PYDAOS_ARRAY */
 		type = DAOS_OT_ARRAY;
-	rc = daos_obj_generate_oid(hdl->coh, &oid, type, 0, 0, 0);
+	rc = daos_obj_generate_oid(hdl->coh, &oid, type, cid, 0, 0);
 	if (rc)
 		goto out;
 
