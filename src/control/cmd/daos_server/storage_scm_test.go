@@ -143,7 +143,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 					State: storage.ScmNoModules,
 				},
 			},
-			expErr: storage.FaultScmNoModules,
+			expErr: storage.FaultScmNoPMem,
 		},
 		"prepare fails": {
 			prepErr: errors.New("fail"),
@@ -392,7 +392,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 					State: storage.ScmNoModules,
 				},
 			},
-			expErr: storage.FaultScmNoModules,
+			expErr: storage.FaultScmNoPMem,
 		},
 		"no regions": {
 			prepResp: &storage.ScmPrepareResponse{

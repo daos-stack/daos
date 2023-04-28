@@ -92,9 +92,9 @@ func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault 
 }
 
 var (
-	// FaultScmNoModules represents an error where no PMem modules exist.
-	FaultScmNoModules = storageFault(
-		code.ScmNoModules,
+	// FaultScmNoPMem represents an error where no PMem modules exist.
+	FaultScmNoPMem = storageFault(
+		code.ScmNoPMem,
 		"No PMem modules exist on storage server", "Install PMem modules and retry command")
 
 	// FaultBdevConfigMultiTiersWithDCPM creates a Fault when multiple bdev tiers are specified

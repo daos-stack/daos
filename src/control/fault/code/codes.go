@@ -75,7 +75,7 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
-	ScmNoModules
+	ScmNoPMem
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
