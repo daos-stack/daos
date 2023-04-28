@@ -8,176 +8,224 @@ package main
 
 import (
 	"context"
-	"sync"
+	"time"
 
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/cache"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// NotCachedErr is the error returned when trying to fetch data that is not cached.
-var NotCachedErr = errors.New("not cached")
+const (
+	attachInfoKey = "GetAttachInfo"
+	fabricKey     = "NUMAFabric"
+)
 
-func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
-	return &attachInfoCache{
-		log:     log,
-		enabled: atm.NewBool(enabled),
-	}
-}
+type getAttachInfoFn func(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error)
+type fabricScanFn func(ctx context.Context, providers ...string) (*hardware.FabricInterfaceSet, error)
 
-type attachInfoCache struct {
-	mutex sync.Mutex
-
-	log         logging.Logger
-	enabled     atm.Bool
-	initialized atm.Bool
-
-	// cached response from remote server
-	attachInfo *mgmtpb.GetAttachInfoResp
-}
-
-func (c *attachInfoCache) isCached() bool {
-	return c.initialized.IsTrue()
-}
-
-func (c *attachInfoCache) isEnabled() bool {
-	return c.enabled.IsTrue()
-}
-
-func (c *attachInfoCache) getAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
-	if !c.isCached() {
-		return nil, NotCachedErr
+// NewInfoCache creates a new InfoCache with appropriate parameters set.
+func NewInfoCache(log logging.Logger, cfg *Config) *InfoCache {
+	ic := &InfoCache{
+		log:          log,
+		ignoreIfaces: cfg.ExcludeFabricIfaces,
 	}
 
-	aiCopy := proto.Clone(c.attachInfo)
-	return aiCopy.(*mgmtpb.GetAttachInfoResp), nil
-}
-
-type getAttachInfoFn func(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error)
-
-// Get is responsible for returning a GetAttachInfo response, either from the cache or from
-// the remote server if the cache is disabled.
-func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, getRemote getAttachInfoFn) (*mgmtpb.GetAttachInfoResp, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.isEnabled() && c.isCached() {
-		return c.getAttachInfoResp()
+	if cfg.DisableCache {
+		return ic
 	}
 
-	attachInfo, err := getRemote(ctx, numaNode, sys)
+	ic.refreshInterval = cfg.CacheRefreshInterval()
+	ic.EnableAttachInfoCache(ic.refreshInterval)
+
+	if len(cfg.FabricInterfaces) > 0 {
+		nf := NUMAFabricFromConfig(log, cfg.FabricInterfaces)
+		ic.EnableStaticFabricCache(nf)
+	} else {
+		ic.EnableFabricCache(ic.refreshInterval)
+	}
+
+	return ic
+}
+
+// InfoCache is a cache for the results of expensive operations needed by the agent.
+type InfoCache struct {
+	log           logging.Logger
+	cache         cache.ItemCache
+	getAttachInfo getAttachInfoFn
+	fabricScan    fabricScanFn
+
+	sys             string
+	refreshInterval time.Duration
+	providers       common.StringSet
+	ignoreIfaces    common.StringSet
+}
+
+// AddProvider adds a fabric provider to the scan list.
+func (c *InfoCache) AddProvider(prov string) {
+	if c == nil || prov == "" {
+		return
+	}
+	if c.providers == nil {
+		c.providers = common.NewStringSet()
+	}
+	c.providers.Add(prov)
+}
+
+// IsAttachInfoEnabled checks whether the GetAttachInfo cache is enabled.
+func (c *InfoCache) IsAttachInfoCacheEnabled() bool {
+	if c == nil {
+		return false
+	}
+	return c.cache.Has(attachInfoKey)
+}
+
+// DisableAttachInfoCache fully disables the attach info cache.
+func (c *InfoCache) DisableAttachInfoCache() {
+	if c == nil {
+		return
+	}
+	c.cache.Delete(attachInfoKey)
+}
+
+// EnableAttachInfoCache enables a refreshable GetAttachInfo cache.
+func (c *InfoCache) EnableAttachInfoCache(refreshInterval time.Duration) {
+	if c == nil {
+		return
+	}
+	c.cache.Set(attachInfoKey, cache.NewFetchableItem(refreshInterval, c.fetchAttachInfoData))
+}
+
+func (c *InfoCache) fetchAttachInfoData(ctx context.Context) (cache.Data, error) {
+	return c.getAttachInfoRemote(ctx, c.sys)
+}
+
+func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
+	if c.getAttachInfo == nil {
+		c.getAttachInfo = control.GetAttachInfo
+	}
+
+	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
+	// cache can serve future "pbReq.AllRanks == true" requests.
+	req := new(control.GetAttachInfoReq)
+	req.SetSystem(sys)
+	req.AllRanks = true
+	resp, err := c.getAttachInfo(ctx, control.DefaultClient(), req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "GetAttachInfo %+v", req)
+	}
+
+	if resp.ClientNetHint.Provider == "" {
+		return nil, errors.New("GetAttachInfo response contained no provider")
+	}
+	return resp, nil
+}
+
+// IsFabricCacheEnabled checks whether the NUMAFabric cache is enabled.
+func (c *InfoCache) IsFabricCacheEnabled() bool {
+	if c == nil {
+		return false
+	}
+	return c.cache.Has(fabricKey)
+}
+
+// DisableFabricCache fully disables the fabric device cache.
+func (c *InfoCache) DisableFabricCache() {
+	if c == nil {
+		return
+	}
+	c.cache.Delete(fabricKey)
+}
+
+// EnableFabricCache enables a refreshable local fabric cache.
+func (c *InfoCache) EnableFabricCache(refreshInterval time.Duration) {
+	if c == nil {
+		return
+	}
+	c.cache.Set(fabricKey, cache.NewFetchableItem(refreshInterval, c.fetchFabricData))
+}
+
+func (c *InfoCache) fetchFabricData(ctx context.Context) (cache.Data, error) {
+	return c.scanFabric(ctx, c.providers.ToSlice()...)
+}
+
+func (c *InfoCache) scanFabric(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+	if c.fabricScan == nil {
+		c.fabricScan = func(ctx context.Context, provs ...string) (*hardware.FabricInterfaceSet, error) {
+			scanner := hwprov.DefaultFabricScanner(c.log)
+			return scanner.Scan(ctx, provs...)
+		}
+	}
+	fis, err := c.fabricScan(ctx, providers...)
+	if err != nil {
+		return nil, errors.Wrap(err, "scanning fabric")
+	}
+
+	return NUMAFabricFromScan(ctx, c.log, fis).WithIgnoredDevices(c.ignoreIfaces), nil
+}
+
+// EnableStaticFabricCache sets up a fabric cache based on a static value that cannot be refreshed.
+func (c *InfoCache) EnableStaticFabricCache(nf *NUMAFabric) {
+	c.cache.Set(fabricKey, cache.NewItem(nf))
+}
+
+// GetAttachInfo fetches the attach info from the cache, and refreshes if necessary.
+func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
+	if c == nil {
+		return nil, errors.New("InfoCache is nil")
+	}
+	if !c.IsAttachInfoCacheEnabled() {
+		return c.getAttachInfoRemote(ctx, sys)
+	}
+
+	c.sys = sys
+	data, err := c.cache.Get(ctx, attachInfoKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "getting attach info from cache")
+	}
+
+	resp, ok := data.(*control.GetAttachInfoResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected attach info data type %T", data)
+	}
+
+	return resp, nil
+}
+
+// GetFabricDevice returns an appropriate fabric device from the cache based on the requested parameters,
+// and refreshes the cache if necessary.
+func (c *InfoCache) GetFabricDevice(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+	nf, err := c.getNUMAFabric(ctx, provider)
 	if err != nil {
 		return nil, err
 	}
 
-	if !c.isEnabled() {
-		return attachInfo, nil
-	}
-
-	c.attachInfo = attachInfo
-	c.initialized.SetTrue()
-
-	return c.getAttachInfoResp()
+	return nf.GetDevice(numaNode, netDevClass, provider)
 }
 
-func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
-	return &localFabricCache{
-		log:             log,
-		localNUMAFabric: newNUMAFabric(log),
-		enabled:         atm.NewBool(enabled),
+func (c *InfoCache) getNUMAFabric(ctx context.Context, provider string) (*NUMAFabric, error) {
+	if !c.IsFabricCacheEnabled() {
+		return c.scanFabric(ctx, provider)
 	}
+
+	data, err := c.cache.Get(ctx, fabricKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "getting fabric devices from cache")
+	}
+
+	nf, ok := data.(*NUMAFabric)
+	if !ok {
+		return nil, errors.Errorf("unexpected fabric cache data type %T", data)
+	}
+
+	return nf, nil
 }
 
-type localFabricCache struct {
-	mutex sync.RWMutex
-
-	log         logging.Logger
-	enabled     atm.Bool
-	initialized atm.Bool
-	cfg         *Config
-
-	// cached fabric interfaces organized by NUMA affinity
-	localNUMAFabric *NUMAFabric
-}
-
-// WithConfig adds a config file for the cache to use.
-func (c *localFabricCache) WithConfig(cfg *Config) *localFabricCache {
-	c.cfg = cfg
-	return c
-}
-
-// IsEnabled reports whether the cache is enabled.
-func (c *localFabricCache) IsEnabled() bool {
-	if c == nil {
-		return false
-	}
-
-	return c.enabled.IsTrue()
-}
-
-// IsCached reports whether there is data in the cache.
-func (c *localFabricCache) IsCached() bool {
-	if c == nil {
-		return false
-	}
-
-	return c.initialized.IsTrue()
-}
-
-// Cache caches the results of a fabric scan locally.
-func (c *localFabricCache) CacheScan(ctx context.Context, scan *hardware.FabricInterfaceSet) {
-	if c == nil {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	scanResult := NUMAFabricFromScan(ctx, c.log, scan)
-	c.setCache(scanResult)
-}
-
-// Cache initializes the cache with a specific NUMAFabric.
-func (c *localFabricCache) Cache(ctx context.Context, nf *NUMAFabric) {
-	if c == nil || nf == nil {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.setCache(nf)
-}
-
-func (c *localFabricCache) setCache(nf *NUMAFabric) {
-	if !c.IsEnabled() {
-		return
-	}
-
-	if c.cfg == nil {
-		c.localNUMAFabric = nf
-	} else {
-		c.localNUMAFabric = nf.WithIgnoredDevices(c.cfg.ExcludeFabricIfaces)
-	}
-
-	c.initialized.SetTrue()
-}
-
-// GetDevices fetches an appropriate fabric device from the cache.
-func (c *localFabricCache) GetDevice(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
-	if c == nil {
-		return nil, NotCachedErr
-	}
-
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	if !c.IsCached() {
-		return nil, NotCachedErr
-	}
-	return c.localNUMAFabric.GetDevice(numaNode, netDevClass, provider)
+// Refresh forces any enabled, refreshable caches to re-fetch their content immediately.
+func (c *InfoCache) Refresh(ctx context.Context) error {
+	return c.cache.Refresh(ctx)
 }

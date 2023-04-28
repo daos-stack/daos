@@ -72,16 +72,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
-	aicEnabled := !cmd.attachInfoCacheDisabled()
-	if !aicEnabled {
-		cmd.Debug("GetAttachInfo agent caching has been disabled")
-	}
-
-	ficEnabled := !cmd.fabricCacheDisabled()
-	if !ficEnabled {
-		cmd.Debug("Local fabric interface caching has been disabled")
-	}
-
 	hwprovInitStart := time.Now()
 	hwprovFini, err := hwprov.Init(cmd.Logger)
 	if err != nil {
@@ -90,20 +80,23 @@ func (cmd *startCmd) Execute(_ []string) error {
 	defer hwprovFini()
 	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
 
+	cacheStart := time.Now()
+	cache := NewInfoCache(cmd.Logger, cmd.cfg)
+	if cmd.attachInfoCacheDisabled() {
+		cache.DisableAttachInfoCache()
+		cmd.Debug("GetAttachInfo agent caching has been disabled")
+	}
+
+	if cmd.fabricCacheDisabled() {
+		cache.DisableFabricCache()
+		cmd.Debug("Local fabric interface caching has been disabled")
+	}
+	cmd.Debugf("created cache: %s", time.Since(cacheStart))
+
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
-
-	fabricCacheStart := time.Now()
-	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
-	if len(cmd.cfg.FabricInterfaces) > 0 {
-		// Cache is required to use user-defined fabric interfaces
-		fabricCache.enabled.SetTrue()
-		nf := NUMAFabricFromConfig(cmd.Logger, cmd.cfg.FabricInterfaces)
-		fabricCache.Cache(ctx, nf)
-	}
-	cmd.Debugf("created fabric cache: %s", time.Since(fabricCacheStart))
 
 	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
@@ -111,8 +104,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		log:            cmd.Logger,
 		sys:            cmd.cfg.SystemName,
 		ctlInvoker:     cmd.ctlInvoker,
-		attachInfo:     newAttachInfoCache(cmd.Logger, aicEnabled),
-		fabricInfo:     fabricCache,
+		cache:          cache,
 		numaGetter:     hwprov.DefaultProcessNUMAProvider(cmd.Logger),
 		fabricScanner:  hwprov.DefaultFabricScanner(cmd.Logger),
 		devClassGetter: hwprov.DefaultNetDevClassProvider(cmd.Logger),

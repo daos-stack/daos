@@ -74,6 +74,12 @@
 ## default: false
 #disable_caching: true
 
+## Automatically refresh the agent's caches on a regular interval defined in
+## minutes.
+#
+## default: 0 (automatic refresh disabled)
+#cache_refresh_interval: 30
+
 ## Ignore a subset of fabric interfaces when selecting an interface for client
 ## applications.
 #

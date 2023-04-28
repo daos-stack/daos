@@ -8,6 +8,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -43,6 +44,7 @@ runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
 disable_caching: true
+cache_refresh_interval: 30
 disable_auto_evict: true
 transport_config:
   allow_insecure: true
@@ -121,14 +123,15 @@ transport_config:
 		"all options": {
 			path: optCfg,
 			expResult: &Config{
-				SystemName:       "shire",
-				AccessPoints:     []string{"one:10001", "two:10001"},
-				ControlPort:      4242,
-				RuntimeDir:       "/tmp/runtime",
-				LogFile:          "/home/frodo/logfile",
-				LogLevel:         common.ControlLogLevelDebug,
-				DisableCache:     true,
-				DisableAutoEvict: true,
+				SystemName:                  "shire",
+				AccessPoints:                []string{"one:10001", "two:10001"},
+				ControlPort:                 4242,
+				RuntimeDir:                  "/tmp/runtime",
+				LogFile:                     "/home/frodo/logfile",
+				LogLevel:                    common.ControlLogLevelDebug,
+				DisableCache:                true,
+				CacheRefreshIntervalMinutes: 30,
+				DisableAutoEvict:            true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -172,6 +175,30 @@ transport_config:
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(security.CertificateConfig{})); diff != "" {
 				t.Fatalf("(want-, got+):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestAgent_Config_CacheRefreshInterval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfgInterval uint
+		expResult   time.Duration
+	}{
+		"zero": {},
+		"5 min": {
+			cfgInterval: 5,
+			expResult:   5 * time.Minute,
+		},
+		"1 hour": {
+			cfgInterval: 60,
+			expResult:   time.Hour,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				CacheRefreshIntervalMinutes: tc.cfgInterval,
+			}
+			test.AssertEqual(t, tc.expResult, cfg.CacheRefreshInterval(), "")
 		})
 	}
 }

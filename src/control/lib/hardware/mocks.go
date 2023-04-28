@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
@@ -103,7 +104,7 @@ func (n *NUMANode) WithBlockDevices(devices []*BlockDevice) *NUMANode {
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{
-		TopologyProvider: &MockTopologyProvider{},
+		TopologyProvider: &MockTopologyProvider{GetTopoReturn: &Topology{}},
 		FabricInterfaceProviders: []FabricInterfaceProvider{
 			&MockFabricInterfaceProvider{},
 		},
@@ -190,14 +191,19 @@ func (m *MockNetDevClassProvider) GetNetDevClass(in string) (NetDevClass, error)
 	return result.NDC, result.Err
 }
 
-type mockFabricInterfaceSetBuilder struct {
-	buildPartCalled int
-	buildPartReturn error
+// MockFabricInterfaceSetBuilder is a FabricInterfaceSetBuilder for testing.
+type MockFabricInterfaceSetBuilder struct {
+	BuildPartCalled    int
+	BuildPartUpdateFis func(*FabricInterfaceSet)
+	BuildPartReturn    error
 }
 
-func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricInterfaceSet) error {
-	m.buildPartCalled++
-	return m.buildPartReturn
+func (m *MockFabricInterfaceSetBuilder) BuildPart(_ context.Context, fis *FabricInterfaceSet) error {
+	m.BuildPartCalled++
+	if m.BuildPartUpdateFis != nil {
+		m.BuildPartUpdateFis(fis)
+	}
+	return m.BuildPartReturn
 }
 
 // MockNetDevStateResult is a structure for injecting results into MockNetDevStateProvider.
@@ -224,4 +230,35 @@ func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, err
 		idx = len(m.GetStateReturn) - 1
 	}
 	return m.GetStateReturn[idx].State, m.GetStateReturn[idx].Err
+}
+
+// MockFabricScannerConfig provides parameters for constructing a mock fabric scanner.
+type MockFabricScannerConfig struct {
+	ScanResult *FabricInterfaceSet
+}
+
+// MockFabricScanner generates a mock FabricScanner for testing.
+func MockFabricScanner(log logging.Logger, cfg *MockFabricScannerConfig) *FabricScanner {
+	config := GetMockFabricScannerConfig()
+	providers := make([]string, 0)
+	fiList := make([]*FabricInterface, 0)
+	for _, fi := range cfg.ScanResult.byName {
+		providers = append(providers, fi.Providers.byName.keys()...)
+		fiList = append(fiList, fi)
+	}
+	builders := []FabricInterfaceSetBuilder{
+		&MockFabricInterfaceSetBuilder{
+			BuildPartUpdateFis: func(fis *FabricInterfaceSet) {
+				for _, fi := range fiList {
+					fis.Update(fi)
+				}
+			},
+		},
+	}
+	return &FabricScanner{
+		log:       log,
+		config:    config,
+		builders:  builders,
+		providers: common.NewStringSet(providers...),
+	}
 }
