@@ -138,7 +138,7 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			goto out;
 		}
-#ifdef DAOS_RELEASE_BUILD
+#ifdef DAOS_BUILD_RELEASE
 		if (enable_rpc_srv) {
 			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
 			D_GOTO(out, rc = -DER_INVAL);
@@ -1276,7 +1276,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
 
 		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-			bio_fini_health_monitoring(ctxt->bxc_blobstore);
+			bio_fini_health_monitoring(ctxt);
 
 		ctxt->bxc_blobstore = NULL;
 	}
