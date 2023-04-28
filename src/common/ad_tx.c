@@ -156,7 +156,7 @@ ad_tls_cache_init(void)
 	for (i = 0; i < TLS_ACT_NUM; i++) {
 		D_ALLOC_PTR(act);
 		if (act == NULL)
-			return;
+			goto failed;
 		act->it_act.ac_opc = UMEM_ACT_NOOP;
 		D_INIT_LIST_HEAD(&act->it_link);
 		tls_act_put(act);
@@ -165,7 +165,7 @@ ad_tls_cache_init(void)
 	for (i = 0; i < TLS_TX_NUM; i++) {
 		D_ALLOC_PTR(item);
 		if (item == NULL)
-			return;
+			goto failed;
 		D_INIT_LIST_HEAD(&item->ti_link);
 		tls_utx_put(&item->ti_utx);
 	}
@@ -173,12 +173,15 @@ ad_tls_cache_init(void)
 	for (i = 0; i < TLS_ACT_COPY_NUM; i++) {
 		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[TSL_ACT_COPY_SZ]));
 		if (act == NULL)
-			return;
+			goto failed;
 		act->it_act.ac_opc = UMEM_ACT_COPY;
 		act->it_act.ac_copy.size = TSL_ACT_COPY_SZ;
 		D_INIT_LIST_HEAD(&act->it_link);
 		tls_act_put(act);
 	}
+	return;
+failed:
+	ad_tls_cache_fini();
 }
 
 void

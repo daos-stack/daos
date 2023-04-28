@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -873,7 +873,7 @@ adt_tx_perf_2(void **state)
 
 		count += op_per_tx;
 		if (i > 0) {
-			k = rand() % count;
+			k = d_rand() % count;
 			rc = ad_tx_free(&tx, addrs[k]);
 			assert_rc_equal(rc, 0);
 			addrs[k] = addrs[--count];
