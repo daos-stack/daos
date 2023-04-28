@@ -8,23 +8,16 @@
 #ifndef __DAOS_COMMON_VALGRIND_INTERNAL_H
 #define __DAOS_COMMON_VALGRIND_INTERNAL_H 1
 
-/* REVISIT: VALGRIND support not enabled for now. */
-#if 0 /* DAOS_ON_VALGRIND */
+#ifdef D_HAS_VALGRIND
 #if !defined(_WIN32) && !defined(__FreeBSD__) && !defined(__riscv)
-#ifndef VALGRIND_ENABLED
-#define VALGRIND_ENABLED 1
-#endif
-#endif
-#endif
-
-#if VALGRIND_ENABLED
-#define VG_PMEMCHECK_ENABLED 1
+#define VG_TXINFO_ENABLED 1
 #define VG_HELGRIND_ENABLED 1
 #define VG_MEMCHECK_ENABLED 1
 #define VG_DRD_ENABLED 1
 #endif
+#endif
 
-#if VG_PMEMCHECK_ENABLED || VG_HELGRIND_ENABLED || VG_MEMCHECK_ENABLED || \
+#if VG_TXINFO_ENABLED || VG_HELGRIND_ENABLED || VG_MEMCHECK_ENABLED || \
 	VG_DRD_ENABLED
 #define ANY_VG_TOOL_ENABLED 1
 #else
@@ -129,205 +122,64 @@ extern unsigned _On_drd_or_hg;
 
 #endif
 
-#if VG_PMEMCHECK_ENABLED
+#if VG_TXINFO_ENABLED
 
-extern unsigned _On_pmemcheck;
-#define On_pmemcheck __builtin_expect(_On_pmemcheck, 0)
+extern int _Vg_txinfo_emit;
+#define VG_txinfo_emit __builtin_expect(_Vg_txinfo_emit, 0)
 
-extern int _Pmreorder_emit;
-#define Pmreorder_emit __builtin_expect(_Pmreorder_emit, 0)
-
-void util_emit_log(const char *lib, const char *func, int order);
-
-static inline void
-pobj_emit_log(const char *func, int order)
-{
-	util_emit_log("libdaos_common_pmem.so", func, order);
-}
-
-#include "valgrind/pmemcheck.h"
-#define VALGRIND_REGISTER_PMEM_MAPPING(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_REGISTER_PMEM_MAPPING((addr), (len));\
-} while (0)
-
-#define VALGRIND_REGISTER_PMEM_FILE(desc, base_addr, size, offset) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_REGISTER_PMEM_FILE((desc), (base_addr), (size), \
-		(offset));\
-} while (0)
-
-#define VALGRIND_REMOVE_PMEM_MAPPING(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_REMOVE_PMEM_MAPPING((addr), (len));\
-} while (0)
-
-#define VALGRIND_CHECK_IS_PMEM_MAPPING(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_CHECK_IS_PMEM_MAPPING((addr), (len));\
-} while (0)
-
-#define VALGRIND_PRINT_PMEM_MAPPINGS do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_PRINT_PMEM_MAPPINGS;\
-} while (0)
-
-#define VALGRIND_DO_FLUSH(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_DO_FLUSH((addr), (len));\
-} while (0)
-
-#define VALGRIND_DO_FENCE do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_DO_FENCE;\
-} while (0)
-
-#define VALGRIND_DO_PERSIST(addr, len) do {\
-	if (On_pmemcheck) {\
-		VALGRIND_PMC_DO_FLUSH((addr), (len));\
-		VALGRIND_PMC_DO_FENCE;\
-	} \
-} while (0)
+void util_emit_log(const char *func, int order);
 
 #define VALGRIND_SET_CLEAN(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_SET_CLEAN(addr, len);\
+	(void)(addr);\
+	(void)(len);\
 } while (0)
 
-#define VALGRIND_WRITE_STATS do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_WRITE_STATS;\
-} while (0)
+#define VALGRIND_START_TX do {} while (0)
 
-#define VALGRIND_EMIT_LOG(emit_log) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_EMIT_LOG((emit_log));\
-} while (0)
-
-#define VALGRIND_START_TX do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_START_TX;\
-} while (0)
-
-#define VALGRIND_START_TX_N(txn) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_START_TX_N(txn);\
-} while (0)
-
-#define VALGRIND_END_TX do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_END_TX;\
-} while (0)
-
-#define VALGRIND_END_TX_N(txn) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_END_TX_N(txn);\
-} while (0)
+#define VALGRIND_END_TX do {} while (0)
 
 #define VALGRIND_ADD_TO_TX(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_ADD_TO_TX(addr, len);\
-} while (0)
-
-#define VALGRIND_ADD_TO_TX_N(txn, addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_ADD_TO_TX_N(txn, addr, len);\
+	(void) (addr);\
+	(void) (len);\
 } while (0)
 
 #define VALGRIND_REMOVE_FROM_TX(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_REMOVE_FROM_TX(addr, len);\
-} while (0)
-
-#define VALGRIND_REMOVE_FROM_TX_N(txn, addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_REMOVE_FROM_TX_N(txn, addr, len);\
+	(void) (addr);\
+	(void) (len);\
 } while (0)
 
 #define VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(addr, len) do {\
-	if (On_pmemcheck)\
-		VALGRIND_PMC_ADD_TO_GLOBAL_TX_IGNORE(addr, len);\
+	(void) (addr);\
+	(void) (len);\
 } while (0)
 
 /*
  * Logs library and function name with proper suffix
- * to pmemcheck store log file.
+ * to VG log file.
  */
-#define PMEMOBJ_API_START() do {\
-	if (Pmreorder_emit)\
-		pobj_emit_log(__func__, 0);\
+#define DAV_API_START() do {\
+	if (VG_txinfo_emit)\
+		VALGRIND_PRINTF("%s BEGIN\n", __func__);\
 } while (0)
-#define PMEMOBJ_API_END() do {\
-	if (Pmreorder_emit)\
-		pobj_emit_log(__func__, 1);\
-} while (0)
-
-#else /* VG_PMEMCHECK_ENABLED */
-
-#define On_pmemcheck (0)
-#define Pmreorder_emit (0)
-
-#define VALGRIND_REGISTER_PMEM_MAPPING(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
+#define DAV_API_END() do {\
+	if (VG_txinfo_emit)\
+		VALGRIND_PRINTF("%s END\n", __func__);\
 } while (0)
 
-#define VALGRIND_REGISTER_PMEM_FILE(desc, base_addr, size, offset) do {\
-	(void) (desc);\
-	(void) (base_addr);\
-	(void) (size);\
-	(void) (offset);\
-} while (0)
+#else /* VG_TXINFO_ENABLED */
 
-#define VALGRIND_REMOVE_PMEM_MAPPING(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
-
-#define VALGRIND_CHECK_IS_PMEM_MAPPING(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
-
-#define VALGRIND_PRINT_PMEM_MAPPINGS do {} while (0)
-
-#define VALGRIND_DO_FLUSH(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
-
-#define VALGRIND_DO_FENCE do {} while (0)
-
-#define VALGRIND_DO_PERSIST(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
+#define VG_txinfo_emit (0)
 
 #define VALGRIND_SET_CLEAN(addr, len) do {\
 	(void) (addr);\
 	(void) (len);\
 } while (0)
 
-#define VALGRIND_WRITE_STATS do {} while (0)
-
-#define VALGRIND_EMIT_LOG(emit_log)\
-	((void) (emit_log))
-
 #define VALGRIND_START_TX do {} while (0)
-
-#define VALGRIND_START_TX_N(txn) ((void) (txn))
 
 #define VALGRIND_END_TX do {} while (0)
 
-#define VALGRIND_END_TX_N(txn) ((void) (txn))
-
 #define VALGRIND_ADD_TO_TX(addr, len) do {\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
-
-#define VALGRIND_ADD_TO_TX_N(txn, addr, len) do {\
-	(void) (txn);\
 	(void) (addr);\
 	(void) (len);\
 } while (0)
@@ -337,22 +189,16 @@ pobj_emit_log(const char *func, int order)
 	(void) (len);\
 } while (0)
 
-#define VALGRIND_REMOVE_FROM_TX_N(txn, addr, len) do {\
-	(void) (txn);\
-	(void) (addr);\
-	(void) (len);\
-} while (0)
-
 #define VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(addr, len) do {\
 	(void) (addr);\
 	(void) (len);\
 } while (0)
 
-#define PMEMOBJ_API_START() do {} while (0)
+#define DAV_API_START() do {} while (0)
 
-#define PMEMOBJ_API_END() do {} while (0)
+#define DAV_API_END() do {} while (0)
 
-#endif /* VG_PMEMCHECK_ENABLED */
+#endif /* VG_TXINFO_ENABLED */
 
 #if VG_MEMCHECK_ENABLED
 
@@ -389,11 +235,6 @@ extern unsigned _On_memcheck;
 #define VALGRIND_DO_MEMPOOL_FREE(heap, addr) do {\
 	if (On_memcheck)\
 		VALGRIND_MEMPOOL_FREE(heap, addr);\
-} while (0)
-
-#define VALGRIND_DO_MEMPOOL_CHANGE(heap, addrA, addrB, size) do {\
-	if (On_memcheck)\
-		VALGRIND_MEMPOOL_CHANGE(heap, addrA, addrB, size);\
 } while (0)
 
 #define VALGRIND_DO_MAKE_MEM_DEFINED(addr, len) do {\
@@ -434,11 +275,6 @@ extern unsigned _On_memcheck;
 
 #define VALGRIND_DO_MEMPOOL_FREE(heap, addr)\
 	do { (void) (heap); (void) (addr); } while (0)
-
-#define VALGRIND_DO_MEMPOOL_CHANGE(heap, addrA, addrB, size)\
-	do {\
-		(void) (heap); (void) (addrA); (void) (addrB); (void) (size);\
-	} while (0)
 
 #define VALGRIND_DO_MAKE_MEM_DEFINED(addr, len)\
 	do { (void) (addr); (void) (len); } while (0)
