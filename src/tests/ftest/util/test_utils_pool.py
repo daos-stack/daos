@@ -659,11 +659,23 @@ class TestPool(TestDaosApiBase):
                 self.identifier, self.pool_query_timeout.value)
             end_time = time() + self.pool_query_timeout.value
 
+        if self.set_logmasks.value is True:
+            self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
         while True:
             try:
-                return self.dmg.pool_query(self.identifier, show_enabled, show_disabled)
+                data = self.dmg.pool_query(self.identifier, show_enabled, show_disabled)
+                pquery_res = self.dmg.result
+                if self.set_logmasks.value is True:
+                    self.dmg.server_set_logmasks(raise_exception=False)
+
+                # dmg exit status needs to be that of pool query not set-logmasks
+                self.dmg.result = pquery_res
+                return data
 
             except CommandFailure as error:
+                if self.set_logmasks.value is True:
+                    self.dmg.server_set_logmasks(raise_exception=False)
                 if end_time is None:
                     raise
 
