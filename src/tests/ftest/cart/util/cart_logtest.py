@@ -282,6 +282,7 @@ class InodeHandle():
 class NullHandle():
     """Handle that doesn't do anything"""
 
+    # pylint: disable=too-few-public-methods
     def add_line(self, _line):
         """Record a line for the handle"""
 
