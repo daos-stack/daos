@@ -578,7 +578,7 @@ class SoakTestBase(TestWithServers):
             add_pools(self, ["pool_jobs"])
             self.log.info(
                 "Current pools: %s",
-                " ".join([pool.uuid for pool in self.pool]))
+                " ".join([pool.identifier for pool in self.pool]))
 
         # cleanup soak log directories before test on all nodes
         result = run_remote(self.log, self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
@@ -623,14 +623,14 @@ class SoakTestBase(TestWithServers):
             elif single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 raise SoakTestError(
                     "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
-            self.log.info("Current pools: %s", " ".join([pool.uuid for pool in self.pool]))
+            self.log.info("Current pools: %s", " ".join([pool.identifier for pool in self.pool]))
             try:
                 self.execute_jobs(job_list, self.pool[1])
             except SoakTestError as error:
                 self.fail(error)
             # Check space after jobs done
             for pool in self.pool:
-                self.dmg_command.pool_query(pool.uuid)
+                self.dmg_command.pool_query(pool.identifier)
             # Cleanup any dfuse mounts before destroying containers
             cleanup_dfuse(self)
             self.soak_errors.extend(self.destroy_containers(self.container))
@@ -641,7 +641,7 @@ class SoakTestBase(TestWithServers):
                 self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
-                " ".join([pool.uuid for pool in self.pool]))
+                " ".join([pool.identifier for pool in self.pool]))
             # Gather metrics data after jobs complete
             run_metrics_check(self)
             # Fail if the pool/containers did not clean up correctly
