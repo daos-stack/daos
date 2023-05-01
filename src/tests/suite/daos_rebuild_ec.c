@@ -95,7 +95,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	ioreq_fini(&req);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 }
 
 #define CELL_SIZE	DAOS_EC_CELL_DEF
@@ -282,7 +282,7 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	daos_prop_free(props);
 
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
@@ -571,7 +571,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
 	daos_prop_free(attr.da_props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
 	D_ALLOC(buf, buf_size);
@@ -592,9 +592,9 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* partial stripe update */
 	D_ALLOC(small_buf, small_buf_size);
@@ -612,10 +612,10 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 
 		offset = (i + 20) * 4 * CELL_SIZE;
 		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		offset += CELL_SIZE - 10;
 		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	dfs_obj2id(obj, &oid);
@@ -631,7 +631,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 		d_iov_set(&iov, buf, buf_size);
 		memset(buf, 0, buf_size);
 		rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		assert_int_equal(fetch_size, buf_size);
 		assert_memory_equal(buf, vbuf, buf_size);
 		for (i = 0; i < 30; i++) {
@@ -641,7 +641,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 			offset = (i + 20) * 4 * CELL_SIZE;
 			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
 				      &fetch_size, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			assert_int_equal(fetch_size, small_buf_size);
 			assert_memory_equal(small_buf, small_vbuf,
 					    small_buf_size);
@@ -650,18 +650,18 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
 				      &fetch_size, NULL);
 			assert_int_equal(fetch_size, small_buf_size);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			assert_memory_equal(small_buf, small_vbuf,
 					    small_buf_size);
 		}
 	}
 
 	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	D_FREE(buf);
 	rc = dfs_umount(dfs_mt);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
@@ -981,7 +981,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 
 		epr.epr_hi = epr.epr_lo = snap_epoch[i];
 		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	reintegrate_single_pool_rank(arg, rank, false);
