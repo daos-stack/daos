@@ -992,7 +992,7 @@ io_obj_cache_test(void **state)
 
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
 	assert_rc_equal(rc, 0);
-	/** Should be prevented because object olready held for discard */
+	/** Should be prevented because object already held for discard */
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
 	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 	/** Should prevent simultaneous hold for create as well */
