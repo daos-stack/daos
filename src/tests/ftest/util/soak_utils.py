@@ -522,7 +522,7 @@ def launch_extend(self, pool, name, results, args):
 
     Args:
         self (obj): soak obj
-        pool (obj): TestPool obj
+        pool (TestPool): TestPool obj
         name (str): name of dmg subcommand
         results (queue): multiprocessing queue
         args (queue): multiprocessing queue
