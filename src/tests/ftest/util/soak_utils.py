@@ -483,7 +483,7 @@ def launch_vmd_identify_check(self, name, results, args):
     """
     status = True
     failing_vmd = []
-    device_info = get_storage_query_device_info(self, self.dmg_command)
+    device_info = get_storage_query_device_info(self.dmg_command)
     uuid_list = [device['uuid'] for device in device_info]
     # limit the number of leds to blink to 1024
     if len(uuid_list) > 1024:
