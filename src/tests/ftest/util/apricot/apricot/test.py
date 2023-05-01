@@ -707,7 +707,9 @@ class TestWithServers(TestWithoutServers):
         # Access points to use by default when starting servers and agents
         #  - for 1 or 2 servers use 1 access point
         #  - for 3 or more servers use 3 access points
-        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        access_points_qty = self.params.get(
+            "access_points_qty", "/run/setup/*", default_access_points_qty)
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
