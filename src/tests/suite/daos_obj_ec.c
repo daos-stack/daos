@@ -1062,7 +1062,7 @@ ec_full_stripe_snapshot(void **state)
 		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
 					       stripe_size, DAOS_FORCE_EC_AGG);
 		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	ioreq_fini(&req);
@@ -1129,7 +1129,7 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 					       DAOS_FORCE_EC_AGG);
 		epr.epr_hi = epr.epr_lo = snap_epoch[i];
 		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	free(data);
