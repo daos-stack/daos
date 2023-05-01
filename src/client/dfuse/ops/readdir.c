@@ -304,7 +304,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
-		DFUSE_TRA_INFO(oh, "Sharing readdir handle with existing reader");
+		DFUSE_TRA_INFO(oh, "Sharing readdir handle %p with existing readers", oh->doh_rd);
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
@@ -355,11 +355,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		oh->doh_kreaddir_started = true;
 	}
 
-	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
-			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_INFO(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
+		       hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
-	DFUSE_TRA_DEBUG(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
-			oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_INFO(oh, "Offsets requested %#lx directory %#lx buf %p", offset,
+		       oh->doh_rd_offset, reply_buff);
 
 	/* If the offset is unexpected for this directory handle then seek, first ensuring the
 	 * readdir handle is unique.
@@ -418,8 +418,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		while (nextp != (void *)&hdl->drh_cache_list) {
 			drc = container_of(nextp, struct dfuse_readdir_c, drc_list);
 
-			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
-					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
+			DFUSE_TRA_INFO(oh, "%p adding offset %#lx next %#lx bo %zi %p '%s'", drc,
+				       drc->drc_offset, drc->drc_next_offset, buff_offset,
+				       drc->drc_rlink, drc->drc_name);
 
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
@@ -433,10 +434,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 							  ie_htl);
 				} else {
 					char          out[DUNS_MAX_XATTR_LEN];
-					char         *outp = &out[0];
-					daos_size_t   attr_len;
-					struct stat   stbuf = {0};
-					dfs_obj_t    *obj;
+					char         *outp     = &out[0];
+					daos_size_t   attr_len = DUNS_MAX_XATTR_LEN;
+					struct stat   stbuf    = {0};
+					dfs_obj_t    *obj      = NULL;
 					d_list_t     *rlink;
 					daos_obj_id_t oid;
 
@@ -444,11 +445,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					 * a readdir call but is being read by a readdirplus
 					 * call so the extra data needs to be loaded by the
 					 * second reader, not the first.
-					 *
-					 * It seems fuse always does the first read with readdirplus
-					 * and then subsequent ones without so for now I've not been
-					 * able to trigger this code.
 					 */
+
+					DFUSE_TRA_ERROR(oh, "Unexpected code %#lx %zi", next_offset,
+							buff_offset);
 
 					rc = dfs_lookupx(
 					    oh->doh_dfs, oh->doh_ie->ie_obj, drc->drc_name,
@@ -626,7 +626,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			size_t                      written;
 			char                        out[DUNS_MAX_XATTR_LEN];
 			char                       *outp = &out[0];
-			daos_size_t                 attr_len;
+			daos_size_t                 attr_len = DUNS_MAX_XATTR_LEN;
 			struct dfuse_readdir_c     *drc = NULL;
 
 			if (hdl->drh_caching) {
@@ -639,12 +639,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				drc->drc_next_offset = dre->dre_next_offset;
 			}
 
-			attr_len = DUNS_MAX_XATTR_LEN;
 			D_ASSERT(dre->dre_offset != 0);
 
 			hdl->drh_dre_index += 1;
 
-			DFUSE_TRA_DEBUG(oh, "Checking offset %#lx next %#lx '%s'", dre->dre_offset,
+			DFUSE_TRA_DEBUG(hdl, "Checking offset %#lx next %#lx '%s'", dre->dre_offset,
 					dre->dre_next_offset, dre->dre_name);
 
 			if (plus)
@@ -798,7 +797,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		  "Multiple readdir per inode");
 
 	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
-	 * so reply early in this case.
+	 * reply early in this case.
 	 */
 	if (offset == READDIR_EOD) {
 		oh->doh_kreaddir_finished = true;
@@ -808,7 +807,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		D_GOTO(out, rc = 0);
 	}
 
-	D_ALLOC(reply_buff, size);
+	/* Alignment is important for the buffer, the packing function will align up so a badly
+	 * allocated buffer will need to be padded at the start, to avoid that then align here.
+	 * TODO: This could be part of the readdir handle to avoid frequent allocations for a page
+	 * which is passed between kernel and userspace.
+	 */
+	D_ALIGNED_ALLOC(reply_buff, size, size);
 	if (reply_buff == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
