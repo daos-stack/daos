@@ -872,7 +872,11 @@ rdb_chkptd(void *arg)
 	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
 
 	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
-	clock_gettime(CLOCK_REALTIME, &last);
+	/** ABT_cond_timedwait uses CLOCK_REALTIME internally so we have to use it but using
+	 *  COARSE version should be fine.  CLOCK_MONOTONIC might be completely different
+	 *  because it's not affected by system changes.
+	 */
+	clock_gettime(CLOCK_REALTIME_COARSE, &last);
 	for (;;) {
 		int  rc;
 
@@ -880,7 +884,7 @@ rdb_chkptd(void *arg)
 		for (;;) {
 			if (db->d_chkpt_record.dcr_needed)
 				break;
-			clock_gettime(CLOCK_REALTIME, &deadline);
+			clock_gettime(CLOCK_REALTIME_COARSE, &deadline);
 			if (deadline.tv_sec >= last.tv_sec + 10)
 				break;
 			if (dcr->dcr_stop)
@@ -899,7 +903,7 @@ rdb_chkptd(void *arg)
 			break;
 		}
 		db->d_chkpt_record.dcr_needed = 0;
-		clock_gettime(CLOCK_REALTIME, &last);
+		clock_gettime(CLOCK_REALTIME_COARSE, &last);
 	}
 	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
 	rdb_chkpt_fini(db);
