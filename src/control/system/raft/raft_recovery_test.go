@@ -87,8 +87,7 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := test.Context(t)
 
 	if err := db.Start(ctx); err != nil {
 		t.Fatal(err)

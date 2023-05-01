@@ -46,7 +46,7 @@ func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
 	socket.ReadOutputError = errors.New("mock read error")
 	s := NewSession(socket, NewModuleService(log))
 
-	err := s.ProcessIncomingMessage(context.Background())
+	err := s.ProcessIncomingMessage(test.Context(t))
 
 	test.CmpErr(t, socket.ReadOutputError, err)
 }
@@ -59,7 +59,7 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 	socket.WriteOutputError = errors.New("mock write error")
 	s := NewSession(socket, NewModuleService(log))
 
-	err := s.ProcessIncomingMessage(context.Background())
+	err := s.ProcessIncomingMessage(test.Context(t))
 
 	test.CmpErr(t, socket.WriteOutputError, err)
 }
@@ -87,7 +87,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 
 	s := NewSession(socket, svc)
 
-	if err = s.ProcessIncomingMessage(context.Background()); err != nil {
+	if err = s.ProcessIncomingMessage(test.Context(t)); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(log, path, testFileMode)
 
-	err := dss.Start(context.Background())
+	err := dss.Start(test.Context(t))
 
 	test.CmpErr(t, errors.New("unlink"), err)
 }
@@ -187,7 +187,7 @@ func TestServer_Start_CantListen(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(log, path, testFileMode)
 
-	err := dss.Start(context.Background())
+	err := dss.Start(test.Context(t))
 
 	test.CmpErr(t, errors.New("listen"), err)
 }
@@ -221,7 +221,7 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
-	dss.Listen(context.Background()) // should return instantly
+	dss.Listen(test.Context(t)) // should return instantly
 
 	test.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
 }
@@ -235,7 +235,7 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
-	dss.Listen(context.Background()) // will return when error is sent
+	dss.Listen(test.Context(t)) // will return when error is sent
 
 	test.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
 		"should have returned after listener errored")
@@ -253,7 +253,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 	session := NewSession(conn, dss.service)
 	dss.sessions[conn] = session
 
-	dss.listenSession(context.Background(), session) // will return when error is sent
+	dss.listenSession(test.Context(t), session) // will return when error is sent
 
 	test.AssertEqual(t, conn.ReadCallCount, 1,
 		"should have only hit the error once")
@@ -267,7 +267,7 @@ func TestServer_Shutdown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	ctx, shutdown := context.WithCancel(test.Context(t))
 
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	lis := newCtxMockListener(ctx)
@@ -304,7 +304,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	mod := newTestModule(0)
 	dss.RegisterRPCModule(mod)
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	ctx, shutdown := context.WithCancel(test.Context(t))
 	defer shutdown()
 
 	// Stand up a server loop
@@ -322,7 +322,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	call := &Call{
 		Module: int32(mod.ID()),
 	}
-	resp, err := client.SendMsg(context.TODO(), call)
+	resp, err := client.SendMsg(test.Context(t), call)
 	if err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}

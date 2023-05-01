@@ -164,7 +164,7 @@ func TestClient_SendMsg_NilInput(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
-	response, err := client.SendMsg(context.TODO(), nil)
+	response, err := client.SendMsg(test.Context(t), nil)
 
 	test.AssertTrue(t, response == nil, "Expected no response")
 	test.ExpectError(t, err, "invalid dRPC call", "Expect error on nil input")
@@ -211,7 +211,7 @@ func TestClient_SendMsg_Success(t *testing.T) {
 	conn.SetReadOutputBytesToResponse(t, expectedResp)
 	expectedRespBytes := conn.ReadOutputBytes
 
-	response, err := client.SendMsg(context.TODO(), call)
+	response, err := client.SendMsg(test.Context(t), call)
 
 	test.AssertTrue(t, err == nil, "Expected no error")
 	if response == nil {
@@ -237,7 +237,7 @@ func TestClient_SendMsg_Success(t *testing.T) {
 func TestClient_SendMsg_NotConnected(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), nil)
 
-	response, err := client.SendMsg(context.TODO(), newTestCall())
+	response, err := client.SendMsg(test.Context(t), newTestCall())
 
 	test.AssertTrue(t, response == nil, "Expected no response")
 	test.ExpectError(t, err, "dRPC not connected",
@@ -251,7 +251,7 @@ func TestClient_SendMsg_WriteError(t *testing.T) {
 	call := newTestCall()
 	conn.WriteOutputError = errors.New("mock write failure")
 
-	response, err := client.SendMsg(context.TODO(), call)
+	response, err := client.SendMsg(test.Context(t), call)
 
 	test.AssertTrue(t, response == nil, "Expected no response")
 	conn.WithLock(func(conn *mockConn) {
@@ -266,7 +266,7 @@ func TestClient_SendMsg_WriteErrorOnContextCancel(t *testing.T) {
 	call := newTestCall()
 	conn.WriteOutputError = errors.New("mock write failure")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(test.Context(t))
 	cancel()
 	response, err := client.SendMsg(ctx, call)
 
@@ -284,7 +284,7 @@ func TestClient_SendMsg_ReadError(t *testing.T) {
 	conn.ReadOutputNumBytes = 0
 	conn.ReadOutputError = errors.New("mock read failure")
 
-	response, err := client.SendMsg(context.TODO(), call)
+	response, err := client.SendMsg(test.Context(t), call)
 
 	test.AssertTrue(t, response == nil, "Expected no response")
 	conn.WithLock(func(conn *mockConn) {
@@ -302,7 +302,7 @@ func TestClient_SendMsg_ReadErrorOnContextCancel(t *testing.T) {
 	conn.ReadOutputNumBytes = 0
 	conn.ReadOutputError = errors.New("mock read failure")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(test.Context(t))
 	cancel()
 	response, err := client.SendMsg(ctx, call)
 
@@ -324,7 +324,7 @@ func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 	}
 	conn.ReadOutputNumBytes = len(conn.ReadOutputBytes)
 
-	response, err := client.SendMsg(context.TODO(), call)
+	response, err := client.SendMsg(test.Context(t), call)
 
 	expectedErr := errors.New("failed to unmarshal dRPC response")
 	test.AssertTrue(t, response == nil, "Expected no response")

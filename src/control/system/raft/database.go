@@ -493,7 +493,10 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 			runOnLeadershipLost()
 
-			db.shutdownErrCh <- db.ShutdownRaft()
+			select {
+			case <-parent.Done():
+			case db.shutdownErrCh <- db.ShutdownRaft():
+			}
 			close(db.shutdownErrCh)
 			return
 		case isLeader := <-db.raftLeaderNotifyCh:
