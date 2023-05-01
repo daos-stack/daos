@@ -17,7 +17,6 @@ import sys
 
 from ClusterShell.NodeSet import NodeSet
 
-from util.general_utils import join
 from util.logger_utils import get_console_handler
 from util.package_utils import install_packages, remove_packages
 from util.run_utils import get_clush_command, run_remote, command_as_user
@@ -180,7 +179,7 @@ class SlurmSetup():
 
         # Update nodes to the idle state
         command = command_as_user(
-            join(' ', f'scontrol update nodename={str(self.nodes)} state=idle'), self.root)
+            f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
             self._display_debug(self.control, '/var/log/slurmctld.log', self.SLURM_CONF)
@@ -208,10 +207,10 @@ class SlurmSetup():
                 script_file.write('exit 0\n')
         except IOError as error:
             self.log.debug('Error writing %s - verifying file existence:', script)
-            run_remote(self.log, self.control, join(' ', 'ls', '-al', script))
+            run_remote(self.log, self.control, f'ls -al {script}')
             raise SlurmSetupException(f'Error writing slurm epilog script {script}') from error
 
-        command = command_as_user(self.root, join(' ', 'chmod', '755', script))
+        command = command_as_user(self.root, f'chmod 755 {script}')
         if not run_remote(self.log, self.control, command).passed:
             raise SlurmSetupException(f'Error setting slurm epilog script {script} permissions')
 
@@ -227,7 +226,7 @@ class SlurmSetup():
             SlurmSetupException: if there is an error copying the file on any host
         """
         self.log(f'Copying the {source} file to {destination} on {str(nodes)}')
-        command = command_as_user(self.root, join(' ', 'cp', source, destination))
+        command = command_as_user(self.root, f'cp {source} {destination}')
         result = run_remote(self.log, nodes, command)
         if not result.passed:
             raise SlurmSetupException(
@@ -245,12 +244,12 @@ class SlurmSetup():
             self.SLURM_CONF, self.all_nodes)
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
-            command = join(' ', 'grep', control_keyword, self.SLURM_CONF)
+            command = f'grep {control_keyword} {self.SLURM_CONF}'
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
-                command = join(
-                    ' ', 'sed', '-i', '-e', '\'s/', control_keyword, '=linux0/', control_keyword,
-                    '=', str(self.control), '/g\'', self.SLURM_CONF)
+                command = (
+                    f'sed -i -e \'s/{control_keyword}=linux0/{control_keyword}={str(self.control)}'
+                    f'/g\' {self.SLURM_CONF}')
                 mod_results = run_remote(self.log, results.passed_hosts, command)
                 if mod_results.failed_hosts:
                     raise SlurmSetupException(
@@ -312,7 +311,7 @@ class SlurmSetup():
             RemoteCommandResult: the result from the echo | tee command
         """
         tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
-        return run_remote(self.log, self.all_nodes, join(' | ', echo_command, tee_command))
+        return run_remote(self.log, self.all_nodes, f'{echo_command} | {tee_command}')
 
     def _update_file(self, nodes, file, permission, user):
         """Update file permissions and ownership.
@@ -393,7 +392,7 @@ class SlurmSetup():
         """
         self.log.debug('Restarting %s on %s', service, nodes)
         for action in ('restart', 'enable'):
-            command = command_as_user(join(' ', 'systemctl', action, service), self.root)
+            command = command_as_user(f'systemctl {action} {service}', self.root)
             result = run_remote(self.log, self.all_nodes, command)
             if not result.passed:
                 self._display_debug(result.failed_hosts, debug_log, debug_config)

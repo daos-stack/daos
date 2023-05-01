@@ -774,19 +774,6 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def join(joiner, *args):
-    """Join one or more objects together with a specified string.
-
-    Args:
-        joiner (str): string to use to join the other objects
-        *args: the objects to join. Any non-None object will be passed to str().
-
-    Returns:
-        str: a string containing all the objects joined by the joiner string
-    """
-    return joiner.join(filter(None, map(str, args)))
-
-
 def list_to_str(value, joiner=","):
     """Convert a list to a string by joining its items.
 
@@ -798,7 +785,7 @@ def list_to_str(value, joiner=","):
         str: a string of each list entry joined by the joiner string
 
     """
-    return join(joiner, *value)
+    return joiner.join(map(str, value))
 
 
 def dict_to_list(value, joiner="="):
