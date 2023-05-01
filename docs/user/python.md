@@ -74,6 +74,21 @@ stadium
 2
 ```
 
+User can pass the predefined object class id during dict() method call.
+This is optional and it can be RP or EC or S and has to satisfy the rf property of container.
+By default, it will be OC_UNKNOWN (0) object class to `daos_obj_generate_oid()`
+It will allow DAOS to automatically select an object class based on the container properties.
+
+
+```
+>>> dd_oid = dcont.dict("stadium_2024", {"France" : "Stade de France"}, "OC_RP_2G1")
+>>> print(dd_oid)
+stadium_2024
+>>> print(len(dd_oid))
+1
+>>>
+```
+
 This creates a new persistent object named "stadium" and initializes it with two
 key-value pairs.
 

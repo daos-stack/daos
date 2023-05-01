@@ -35,6 +35,10 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	int i;
 	int rc = 0;
 
+	/* Increase pre_pool_ver to make sure the rebuild caused by this
+	 * exclude/kill to be waited in the following rebuild_pool_wait().
+	 */
+	args[0]->rebuild_pre_pool_ver++;
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, args[0]->pool.alive_svc,
@@ -1034,7 +1038,7 @@ rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 	while (!rc && (*new_arg)->setup_state != flag)
 		rc = test_setup_next_step((void **)new_arg, NULL, NULL, props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	daos_prop_free(props);
 
 	(*new_arg)->index = old_arg->index;
@@ -1192,7 +1196,7 @@ rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint3
 	props->dpp_entries[0].dpe_val = rf;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	daos_prop_free(props);
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
 		arg->obj_class = dt_obj_class;

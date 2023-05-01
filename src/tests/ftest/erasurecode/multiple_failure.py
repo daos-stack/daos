@@ -44,7 +44,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=test_ec_multiple_rank_failure
+        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_rank_failure
         """
         # Kill Two server ranks
         self.rank_to_kill = [self.server_count - 1, self.server_count - 3]
@@ -61,7 +61,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=test_ec_multiple_targets_on_same_rank
+        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_targets_on_same_rank
         """
         # Kill Two targets 2,4 from same rank 2
         self.pool_exclude[2] = "2,4"
@@ -78,7 +78,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=test_ec_multiple_targets_on_diff_ranks
+        :avocado: tags=EcodOnlineMultFail,test_ec_multiple_targets_on_diff_ranks
         """
         # Kill Two targets from different ranks
         self.pool_exclude[2] = "2"
@@ -96,7 +96,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=test_ec_single_target_rank_failure
+        :avocado: tags=EcodOnlineMultFail,test_ec_single_target_rank_failure
         """
         # Kill One server rank
         self.rank_to_kill = [self.server_count - 1]
