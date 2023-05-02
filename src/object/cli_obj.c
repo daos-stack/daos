@@ -216,7 +216,6 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	struct dc_pool		*pool;
 	struct pl_map		*map;
 	uint32_t		old;
-	uint32_t		rebuild_ver;
 	int			i;
 	int			rc;
 
@@ -229,11 +228,10 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rebuild_ver = pool->dp_rebuild_version;
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
-			  rebuild_ver, NULL, &layout);
+			  NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
@@ -426,6 +424,20 @@ dc_obj_get_grp_size(daos_handle_t oh, int *grp_size)
 }
 
 int
+dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*oid = obj->cob_md.omd_id;
+	obj_decref(obj);
+	return 0;
+}
+
+int
 obj_get_grp_nr(struct dc_object *obj)
 {
 	return obj->cob_grp_nr;
@@ -613,7 +625,8 @@ unlock:
 }
 
 static int
-obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned int map_ver)
+obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, uint64_t dkey_hash,
+			  unsigned int map_ver)
 {
 	struct pl_obj_shard	*shard;
 	struct daos_oclass_attr	*oca;
@@ -658,7 +671,7 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * obj_get_grp_size(obj);
-	replica_idx = (obj->cob_md.omd_id.lo + grp_idx) % grp_size;
+	replica_idx = (dkey_hash + grp_idx) % grp_size;
 	for (i = 0, pos = -1; i < grp_size;
 	     i++, replica_idx = (replica_idx + 1) % obj_get_grp_size(obj)) {
 		int off = start + replica_idx;
@@ -702,7 +715,7 @@ obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		return obj_ec_leader_select(obj, grp_idx, cond_modify, map_ver, dkey_hash,
 					    bit_map);
 
-	return obj_replica_leader_select(obj, grp_idx, map_ver);
+	return obj_replica_leader_select(obj, grp_idx, dkey_hash, map_ver);
 }
 
 /* If the client has been asked to fetch (list/query) from leader replica,
@@ -1623,8 +1636,10 @@ dc_obj_retry_delay(struct obj_auxi_args *obj_auxi, int err)
 {
 	uint32_t	delay = 0;
 
-	/* Randomly delay 5 - 36 us if it is not the first retry for -DER_INPROGRESS case. */
-	if (err == -DER_INPROGRESS) {
+	/* Randomly delay 5 - 36 us if it is not the first retry for
+	 * -DER_INPROGRESS && -DER_UPDATE_AGAIN case.
+	 **/
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		obj_auxi->inprogress_cnt++;
 		if (obj_auxi->inprogress_cnt > 1) {
 			delay = (d_rand() & ((1 << 5) - 1)) + 5;
@@ -5297,7 +5312,7 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		rc = obj->cob_shards_nr - 1;
 	else if (to_leader)
-		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+		rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 	else
 		rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 							   obj_auxi->failed_tgt_list);
@@ -6273,7 +6288,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		*bitmaps = NULL;
 		*shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6492,7 +6507,7 @@ dc_obj_key2anchor(tse_task_t *task)
 	} else {
 		shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6893,7 +6908,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
 			int leader;
 
-			leader = obj_grp_leader_get(obj, i, obj_auxi->dkey_hash,
+			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
 						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
 				if (obj_is_ec(obj) &&

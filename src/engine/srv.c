@@ -372,7 +372,7 @@ dss_srv_handler(void *arg)
 		goto signal;
 
 	/* initialize xstream-local storage */
-	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
+	dtc = dss_tls_init(dx->dx_tag, dx->dx_xs_id, dx->dx_tgt_id);
 	if (dtc == NULL) {
 		D_ERROR("failed to initialize TLS\n");
 		goto signal;
@@ -643,13 +643,14 @@ dss_xstream_free(struct dss_xstream *dx)
  * Start one xstream.
  *
  * \param[in] cpus	the cpuset to bind the xstream
+ * \param[in] tag	The tag for the xstream
  * \param[in] xs_id	the xs_id of xstream (start from 0)
  *
  * \retval	= 0 if starting succeeds.
  * \retval	negative errno if starting fails.
  */
 static int
-dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
+dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 {
 	struct dss_xstream	*dx;
 	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
@@ -692,6 +693,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 			(xs_offset == 1);	/* first offload XS */
 	}
 
+	dx->dx_tag      = tag;
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
@@ -880,7 +882,7 @@ dss_xstream_is_busy(void)
 }
 
 static int
-dss_start_xs_id(int xs_id)
+dss_start_xs_id(int tag, int xs_id)
 {
 	hwloc_obj_t	obj;
 	int		rc;
@@ -936,7 +938,7 @@ dss_start_xs_id(int xs_id)
 		}
 	}
 
-	rc = dss_start_one_xstream(obj->cpuset, xs_id);
+	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
 	if (rc)
 		return rc;
 
@@ -949,6 +951,7 @@ dss_xstreams_init(void)
 	char	*env;
 	int	rc = 0;
 	int	i, xs_id;
+	int      tags;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
@@ -999,18 +1002,20 @@ dss_xstreams_init(void)
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
+	tags                  = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	/* start system service XS */
 	for (i = 0; i < dss_sys_xs_nr; i++) {
 		xs_id = i;
-		rc = dss_start_xs_id(xs_id);
+		rc    = dss_start_xs_id(tags, xs_id);
 		if (rc)
 			D_GOTO(out, rc);
+		tags &= ~DAOS_RDB_TAG;
 	}
 
 	/* start main IO service XS */
 	for (i = 0; i < dss_tgt_nr; i++) {
 		xs_id = DSS_MAIN_XS_ID(i);
-		rc = dss_start_xs_id(xs_id);
+		rc    = dss_start_xs_id(DAOS_SERVER_TAG, xs_id);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -1020,7 +1025,7 @@ dss_xstreams_init(void)
 		if (dss_helper_pool) {
 			for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
 				xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
-				rc = dss_start_xs_id(xs_id);
+				rc    = dss_start_xs_id(DAOS_OFF_TAG, xs_id);
 				if (rc)
 					D_GOTO(out, rc);
 			}
@@ -1034,7 +1039,7 @@ dss_xstreams_init(void)
 				for (j = 0; j < dss_tgt_offload_xs_nr /
 						dss_tgt_nr; j++) {
 					xs_id = DSS_MAIN_XS_ID(i) + j + 1;
-					rc = dss_start_xs_id(xs_id);
+					rc    = dss_start_xs_id(DAOS_OFF_TAG, xs_id);
 					if (rc)
 						D_GOTO(out, rc);
 				}
@@ -1053,7 +1058,7 @@ out:
  */
 
 static void *
-dss_srv_tls_init(int xs_id, int tgt_id)
+dss_srv_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct dss_module_info *info;
 
@@ -1063,7 +1068,7 @@ dss_srv_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-dss_srv_tls_fini(void *data)
+dss_srv_tls_fini(int tags, void *data)
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
@@ -1278,7 +1283,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, -1);
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG, 0, -1);
 	if (!xstream_data.xd_dtc) {
 		D_ERROR("Not enough DRAM to initialize XS local storage.\n");
 		D_GOTO(failed, rc = -DER_NOMEM);

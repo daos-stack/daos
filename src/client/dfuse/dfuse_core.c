@@ -914,39 +914,39 @@ err:
 
 /* Set a timer to mark cache entry as valid */
 void
-dfuse_cache_set_time(struct dfuse_inode_entry *ie)
+dfuse_mcache_set_time(struct dfuse_inode_entry *ie)
 {
 	struct timespec now;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	ie->ie_cache_last_update = now;
+	ie->ie_mcache_last_update = now;
 }
 
 void
-dfuse_cache_evict(struct dfuse_inode_entry *ie)
+dfuse_mcache_evict(struct dfuse_inode_entry *ie)
 {
-	ie->ie_cache_last_update.tv_sec  = 0;
-	ie->ie_cache_last_update.tv_nsec = 0;
+	ie->ie_mcache_last_update.tv_sec  = 0;
+	ie->ie_mcache_last_update.tv_nsec = 0;
 }
 
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
+dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
 {
 	bool            use = false;
 	struct timespec now;
 	struct timespec left;
 	double          time_left;
 
-	if (max_age == -1)
-		return true;
+	D_ASSERT(max_age != -1);
+	D_ASSERT(max_age >= 0);
 
-	if (ie->ie_cache_last_update.tv_sec == 0)
+	if (ie->ie_mcache_last_update.tv_sec == 0)
 		return false;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
-	left.tv_sec  = now.tv_sec - ie->ie_cache_last_update.tv_sec;
-	left.tv_nsec = now.tv_nsec - ie->ie_cache_last_update.tv_nsec;
+	left.tv_sec  = now.tv_sec - ie->ie_mcache_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_mcache_last_update.tv_nsec;
 	if (left.tv_nsec < 0) {
 		left.tv_sec--;
 		left.tv_nsec += 1000000000;
@@ -962,6 +962,62 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	}
 
 	return use;
+}
+
+/* Set a timer to mark cache entry as valid */
+void
+dfuse_dcache_set_time(struct dfuse_inode_entry *ie)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	ie->ie_dcache_last_update = now;
+}
+
+void
+dfuse_dcache_evict(struct dfuse_inode_entry *ie)
+{
+	ie->ie_dcache_last_update.tv_sec  = 0;
+	ie->ie_dcache_last_update.tv_nsec = 0;
+}
+
+bool
+dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          time_left;
+
+	if (max_age == -1)
+		return true;
+
+	if (ie->ie_dcache_last_update.tv_sec == 0)
+		return false;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	left.tv_sec  = now.tv_sec - ie->ie_dcache_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_dcache_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0) {
+		use = true;
+
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use");
+	}
+
+	return use;
+}
+
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie)
+{
+	dfuse_mcache_evict(ie);
+	dfuse_dcache_evict(ie);
 }
 
 int

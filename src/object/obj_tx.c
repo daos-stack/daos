@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2946,22 +2946,28 @@ dc_tx_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int result)
 }
 
 static int
-dc_tx_check_update(uint64_t flags, int result)
+dc_tx_check_update(tse_task_t *task, uint64_t flags)
 {
+	int result = task->dt_result;
+
 	if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_DKEY_INSERT)) {
 		if (result == 0)
-			return -DER_EXIST;
+			D_GOTO(out, result = -DER_EXIST);
 
 		if (result != -DER_NONEXIST)
-			return result;
+			D_GOTO(out, result);
 
-		return 0;
+		D_GOTO(out, result = 0);
 	}
 
 	if (flags & (DAOS_COND_AKEY_UPDATE | DAOS_COND_DKEY_UPDATE) && result != 0)
-		return result;
+		D_GOTO(out, result);
 
-	return 0;
+	result = 0;
+
+out:
+	task->dt_result = result;
+	return result;
 }
 
 static int
@@ -2974,7 +2980,7 @@ dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
 	D_ASSERT(args->tmp_iods != NULL);
 	D_ASSERT(args->tmp_iod_nr == 1);
 
-	task->dt_result = dc_tx_check_update(args->tmp_iods->iod_flags, task->dt_result);
+	dc_tx_check_update(task, args->tmp_iods->iod_flags);
 
 	daos_iov_free(&args->tmp_iods->iod_name);
 	D_FREE(args->tmp_iods);
@@ -3024,7 +3030,7 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 
 	switch (args->opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		rc = dc_tx_check_update(args->flags, task->dt_result);
+		rc = dc_tx_check_update(task, args->flags);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -3550,6 +3556,7 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	daos_tx_commit_t		*cmt_args;
 	tse_task_t			*cmt_task = NULL;
 	int				 rc = 0;
+	bool				 tx_need_close = true;
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
@@ -3574,6 +3581,8 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	rc = dc_task_depend(task, 1, &cmt_task);
 	if (rc != 0) {
 		D_ERROR("Fail to add dep for TX convert task on commit: "DF_RC"\n", DP_RC(rc));
+		/* dc_tx_convert will close tx */
+		tx_need_close = false;
 		goto out;
 	}
 
@@ -3586,7 +3595,8 @@ out:
 
 	/* Explicitly complete the original task. */
 	tse_task_complete(task, rc);
-	dc_tx_close_internal(tx);
+	if (tx_need_close)
+		dc_tx_close_internal(tx);
 
 	return rc;
 }
@@ -3625,11 +3635,13 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 		rc = dc_tx_convert_post(tx, task, opc, rc);
 
 out:
-	if (tx != NULL)
+	if (tx != NULL) {
 		/* -1 for above dc_tx_addref(). */
 		dc_tx_decref(tx);
-	else
+	} else {
 		tse_task_complete(task, rc);
+		obj_decref(obj);
+	}
 
 	return rc;
 }

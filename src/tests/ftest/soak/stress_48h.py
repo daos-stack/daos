@@ -23,7 +23,37 @@ class SoakStress(SoakTestBase):
         :avocado: tags=manual
         :avocado: tags=hw,24
         :avocado: tags=soak,soak_stress
-        :avocado: tags=soak_stress_48h,test_soak_stress_48h
+        :avocado: tags=SoakStress,test_soak_stress_48h
+        """
+        test_param = "/run/soak_stress/"
+        self.run_soak(test_param)
+
+    def test_soak_stress_24h(self):
+        """Run soak test for 24hours on performance cluster.
+
+        Test Description: This will create a slurm batch jobs that run
+        various jobs defined in the soak yaml
+        This test will run soak_stress for 24 hours.
+
+        :avocado: tags=manual
+        :avocado: tags=hw,24
+        :avocado: tags=soak,soak_stress
+        :avocado: tags=SoakStress,test_soak_stress_24h
+        """
+        test_param = "/run/soak_stress/"
+        self.run_soak(test_param)
+
+    def test_soak_stress_12h(self):
+        """Run soak test for 12hours on performance cluster.
+
+        Test Description: This will create a slurm batch jobs that run
+        various jobs defined in the soak yaml
+        This test will run soak_stress for 12 hours.
+
+        :avocado: tags=manual
+        :avocado: tags=hw,24
+        :avocado: tags=soak,soak_stress
+        :avocado: tags=SoakStress,test_soak_stress_12h
         """
         test_param = "/run/soak_stress/"
         self.run_soak(test_param)
