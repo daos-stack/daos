@@ -9,6 +9,7 @@ package drpc
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,7 @@ func newTestModule(ID ModuleID) *mockModule {
 
 // mockConn is a mock of the net.Conn interface
 type mockConn struct {
+	sync.Mutex
 	ReadCallCount       int
 	ReadInputBytes      []byte
 	ReadOutputNumBytes  int
@@ -52,6 +54,8 @@ type mockConn struct {
 }
 
 func (m *mockConn) Read(b []byte) (n int, err error) {
+	m.Lock()
+	defer m.Unlock()
 	m.ReadCallCount++
 	m.ReadInputBytes = b
 	copy(b, m.ReadOutputBytes)
@@ -59,14 +63,25 @@ func (m *mockConn) Read(b []byte) (n int, err error) {
 }
 
 func (m *mockConn) Write(b []byte) (n int, err error) {
+	m.Lock()
+	defer m.Unlock()
 	m.WriteCallCount++
 	m.WriteInputBytes = b
 	return m.WriteOutputNumBytes, m.WriteOutputError
 }
 
 func (m *mockConn) Close() error {
+	m.Lock()
+	defer m.Unlock()
 	m.CloseCallCount++
 	return m.CloseOutputError
+}
+
+// WithLock can be used to safely read or write the mockConn's fields in a closure.
+func (m *mockConn) WithLock(f func(m *mockConn)) {
+	m.Lock()
+	defer m.Unlock()
+	f(m)
 }
 
 // TODO: implement other net.Conn methods

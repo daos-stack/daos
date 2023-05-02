@@ -42,6 +42,7 @@ type containerCmd struct {
 	Stat        containerStatCmd        `command:"stat" description:"get container statistics"`
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
+	Evict       containerEvictCmd       `command:"evict" description:"Evict open handles on a container"`
 
 	ListAttributes  containerListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
 	DeleteAttribute containerDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
@@ -281,71 +282,18 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer disconnectPool()
 
-	ap.c_op = C.CONT_CREATE
-
-	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group.String())
-		defer freeString(ap.group)
-	}
-	if cmd.ACLFile != "" {
-		ap.aclfile = C.CString(cmd.ACLFile)
-		defer freeString(ap.aclfile)
-	}
-
-	ap._type = cmd.Type.Type
-	switch ap._type {
-	case C.DAOS_PROP_CO_LAYOUT_POSIX:
-		// POSIX containers have extra attributes
-		if cmd.ChunkSize.Set {
-			ap.chunk_size = cmd.ChunkSize.Size
-		}
-		if cmd.ObjectClass.Set {
-			ap.oclass = cmd.ObjectClass.Class
-		}
-		if cmd.DirObjectClass.Set {
-			ap.dir_oclass = cmd.DirObjectClass.Class
-		}
-		if cmd.FileObjectClass.Set {
-			ap.file_oclass = cmd.FileObjectClass.Class
-		}
-		if cmd.Mode.Set {
-			ap.mode = cmd.Mode.Mode
-		}
-		if cmd.CHints != "" {
-			ap.hints = C.CString(cmd.CHints)
-			defer freeString(ap.hints)
-		}
-	}
-
-	var rc C.int
+	var contID string
 	if cmd.Path != "" {
-		ap.path = C.CString(cmd.Path)
-		defer freeString(ap.path)
-		rc = C.cont_create_uns_hdlr(ap)
+		contID, err = cmd.contCreateUNS()
 	} else {
-		rc = C.cont_create_hdlr(ap)
+		contID, err = cmd.contCreate()
 	}
-	if err := daosError(rc); err != nil {
-		return errors.Wrap(err, "failed to create container")
-	}
-
-	cmd.contUUID, err = uuidFromC(ap.c_uuid)
 	if err != nil {
 		return err
 	}
 
-	var co_id string
-	if cmd.contUUID == uuid.Nil {
-		cmd.contLabel = C.GoString(&ap.cont_str[0])
-		co_id = cmd.contLabel
-	} else {
-		co_id = cmd.contUUID.String()
-	}
-
-	cmd.Debugf("created container: %s", co_id)
-
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
-		return errors.Wrapf(err, "failed to open new container %s", co_id)
+		return errors.Wrapf(err, "failed to open new container %s", contID)
 	}
 	defer cmd.closeContainer()
 
@@ -353,11 +301,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	ci, err = cmd.queryContainer()
 	if err != nil {
 		if errors.Cause(err) != daos.NoPermission {
-			return errors.Wrapf(err, "failed to query new container %s", co_id)
+			return errors.Wrapf(err, "failed to query new container %s", contID)
 		}
 
 		// Special case for creating a container without permission to query it.
-		cmd.Errorf("container %s was created, but query failed", co_id)
+		cmd.Errorf("container %s was created, but query failed", contID)
 
 		ci = new(containerInfo)
 		ci.PoolUUID = &cmd.poolUUID
@@ -377,6 +325,199 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	cmd.Info(bld.String())
 
 	return nil
+}
+
+func (cmd *containerCreateCmd) contCreate() (string, error) {
+	props, cleanupProps, err := cmd.getCreateProps()
+	if err != nil {
+		return "", err
+	}
+	defer cleanupProps()
+
+	var rc C.int
+	var contUUID C.uuid_t
+	if cmd.Type.Type == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		var attr C.dfs_attr_t
+
+		// POSIX containers have extra attributes
+		if cmd.ChunkSize.Set {
+			attr.da_chunk_size = cmd.ChunkSize.Size
+		}
+		if cmd.ObjectClass.Set {
+			attr.da_oclass_id = cmd.ObjectClass.Class
+		}
+		if cmd.DirObjectClass.Set {
+			attr.da_dir_oclass_id = cmd.DirObjectClass.Class
+		}
+		if cmd.FileObjectClass.Set {
+			attr.da_file_oclass_id = cmd.FileObjectClass.Class
+		}
+		if cmd.Mode.Set {
+			attr.da_mode = cmd.Mode.Mode
+		}
+		if cmd.CHints != "" {
+			hint := C.CString(cmd.CHints)
+			defer freeString(hint)
+			C.strncpy(&attr.da_hints[0], hint, C.DAOS_CONT_HINT_MAX_LEN-1)
+		}
+		attr.da_props = props
+
+		dfsErrno := C.dfs_cont_create(cmd.cPoolHandle, &contUUID, &attr, nil, nil)
+		rc = C.daos_errno2der(dfsErrno)
+	} else {
+		rc = C.daos_cont_create(cmd.cPoolHandle, &contUUID, props, nil)
+	}
+	if err := daosError(rc); err != nil {
+		return "", errors.Wrap(err, "failed to create container")
+	}
+
+	cmd.contUUID, err = uuidFromC(contUUID)
+	if err != nil {
+		return "", err
+	}
+
+	var contID string
+	if cmd.contUUID == uuid.Nil {
+		contID = cmd.contLabel
+	} else {
+		contID = cmd.contUUID.String()
+	}
+
+	cmd.Infof("Successfully created container %s", contID)
+	return contID, nil
+}
+
+func (cmd *containerCreateCmd) contCreateUNS() (string, error) {
+	var dattr C.struct_duns_attr_t
+
+	props, cleanupProps, err := cmd.getCreateProps()
+	if err != nil {
+		return "", err
+	}
+	defer cleanupProps()
+	dattr.da_props = props
+
+	if !cmd.Type.Set {
+		return "", errors.New("container type is required for UNS")
+	}
+	dattr.da_type = cmd.Type.Type
+
+	if cmd.poolUUID != uuid.Nil {
+		poolUUIDStr := C.CString(cmd.poolUUID.String())
+		defer freeString(poolUUIDStr)
+		C.uuid_parse(poolUUIDStr, &dattr.da_puuid[0])
+	}
+	if cmd.contUUID != uuid.Nil {
+		contUUIDStr := C.CString(cmd.contUUID.String())
+		defer freeString(contUUIDStr)
+		C.uuid_parse(contUUIDStr, &dattr.da_cuuid[0])
+	}
+
+	if cmd.ChunkSize.Set {
+		dattr.da_chunk_size = cmd.ChunkSize.Size
+	}
+	if cmd.ObjectClass.Set {
+		dattr.da_oclass_id = cmd.ObjectClass.Class
+	}
+	if cmd.DirObjectClass.Set {
+		dattr.da_dir_oclass_id = cmd.DirObjectClass.Class
+	}
+	if cmd.FileObjectClass.Set {
+		dattr.da_file_oclass_id = cmd.FileObjectClass.Class
+	}
+	if cmd.CHints != "" {
+		hint := C.CString(cmd.CHints)
+		defer freeString(hint)
+		C.strncpy(&dattr.da_hints[0], hint, C.DAOS_CONT_HINT_MAX_LEN-1)
+	}
+
+	cPath := C.CString(cmd.Path)
+	defer freeString(cPath)
+
+	dunsErrno := C.duns_create_path(cmd.cPoolHandle, cPath, &dattr)
+	rc := C.daos_errno2der(dunsErrno)
+	if err := daosError(rc); err != nil {
+		return "", errors.Wrapf(err, "duns_create_path() failed")
+	}
+
+	contID := C.GoString(&dattr.da_cont[0])
+	cmd.contUUID, err = uuid.Parse(contID)
+	if err != nil {
+		cmd.contLabel = contID
+	}
+	cmd.Infof("Successfully created container %s type %s", contID, cmd.Type.String())
+	return contID, nil
+}
+
+func (cmd *containerCreateCmd) getCreateProps() (*C.daos_prop_t, func(), error) {
+	var numEntries int
+	if cmd.Properties.props != nil {
+		numEntries = int(cmd.Properties.props.dpp_nr)
+	}
+
+	if cmd.ACLFile != "" {
+		numEntries++
+	}
+
+	if cmd.Group != "" {
+		numEntries++
+	}
+
+	hasType := func() bool {
+		return cmd.Type.Set && cmd.Type.Type != C.DAOS_PROP_CO_LAYOUT_POSIX &&
+			cmd.Type.Type != C.DAOS_PROP_CO_LAYOUT_UNKNOWN
+	}
+	if hasType() {
+		numEntries++
+	}
+
+	if numEntries == 0 {
+		return nil, func() {}, nil
+	}
+
+	props, entries, err := allocProps(numEntries)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var propIdx int
+	if cmd.Properties.props != nil {
+		for _, oldEntry := range unsafe.Slice(cmd.Properties.props.dpp_entries, cmd.Properties.props.dpp_nr) {
+			rc := C.daos_prop_entry_copy(&oldEntry, &entries[propIdx])
+			if err := daosError(rc); err != nil {
+				C.daos_prop_free(props)
+				return nil, nil, errors.Wrap(err, "failed to copy container properties")
+			}
+			propIdx++
+		}
+	}
+
+	if cmd.ACLFile != "" {
+		// The ACL becomes part of the daos_prop_t and will be freed with that structure
+		cACL, _, err := aclFileToC(cmd.ACLFile)
+		if err != nil {
+			C.daos_prop_free(props)
+			return nil, nil, err
+		}
+		entries[propIdx].dpe_type = C.DAOS_PROP_CO_ACL
+		C.set_dpe_val_ptr(&entries[propIdx], unsafe.Pointer(cACL))
+		propIdx++
+	}
+
+	if cmd.Group != "" {
+		// The group string becomes part of the daos_prop_t and will be freed with that structure
+		entries[propIdx].dpe_type = C.DAOS_PROP_CO_OWNER_GROUP
+		C.set_dpe_str(&entries[propIdx], C.CString(cmd.Group.String()))
+		propIdx++
+	}
+
+	if hasType() {
+		entries[propIdx].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+		C.set_dpe_val(&entries[propIdx], C.ulong(cmd.Type.Type))
+		propIdx++
+	}
+	props.dpp_nr = C.uint32_t(numEntries)
+	return props, func() { C.daos_prop_free(props) }, nil
 }
 
 type existingContainerCmd struct {
@@ -730,6 +871,10 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to open OIT for container %s", cmd.ContainerID())
 	}
 	defer func() {
+		rc = C.daos_cont_snap_oit_destroy(ap.cont, oit, nil)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to destroy OIT in cleanup: %v", err)
+		}
 		rc = C.daos_oit_close(oit, nil)
 		if err := daosError(rc); err != nil {
 			cmd.Errorf("failed to close OIT in cleanup: %v", err)
@@ -1280,6 +1425,7 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 		if err := cmd.Args.Props.UnmarshalFlag(args[len(args)-1]); err != nil {
 			return err
 		}
+		defer cmd.Args.Props.Cleanup()
 	}
 	if len(cmd.PropsFlag.ParsedProps) > 0 {
 		if len(cmd.Args.Props.ParsedProps) > 0 {
@@ -1297,19 +1443,19 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	ap.props = cmd.Args.Props.props
-
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rc := C.cont_set_prop_hdlr(ap)
+	rc := C.daos_cont_set_prop(ap.cont, cmd.Args.Props.props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Errorf("failed to set properties on container %s",
+		return errors.Wrapf(err, "failed to set properties on container %s",
 			cmd.ContainerID())
 	}
+
+	cmd.Info("Properties were successfully set")
 
 	return nil
 }
@@ -1439,6 +1585,35 @@ func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
 			"failed to link container %s in the namespace",
 			cmd.ContainerID())
 	}
+
+	return nil
+}
+
+type containerEvictCmd struct {
+	existingContainerCmd
+
+	All bool `long:"all" short:"a" description:"evict all handles from all users"`
+}
+
+func (cmd *containerEvictCmd) Execute(_ []string) (err error) {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	var co_flags C.uint
+	if cmd.All {
+		co_flags = C.DAOS_COO_EVICT_ALL | C.DAOS_COO_EX
+	} else {
+		co_flags = C.DAOS_COO_EVICT | C.DAOS_COO_RO
+	}
+
+	cleanup, err := cmd.resolveAndConnect(co_flags, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	return nil
 }

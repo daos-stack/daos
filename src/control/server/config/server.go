@@ -547,7 +547,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		}
 
 		if cfg.NrHugepages < minHugePages {
-			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
+			log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
+				"if this is not intentional update the 'nr_hugepages' config "+
+				"parameter or remove and it will be automatically calculated",
+				cfg.NrHugepages, minHugePages)
 		}
 	}
 
