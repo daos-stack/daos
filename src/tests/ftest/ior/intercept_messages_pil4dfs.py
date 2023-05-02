@@ -36,7 +36,7 @@ class IorInterceptMessagesPil4dfs(IorTestBase):
         :avocado: tags=IorInterceptMessages,test_ior_intercept_messages_pil4dfs
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-        self.ior_cmd.env['IL_LOG'] = "true"
+        self.ior_cmd.env['D_IL_REPORT'] = "true"
 
         out = self.run_ior_with_pool(intercept=intercept, fail_on_warning=False)
         stderr = out.stderr.decode("utf-8")

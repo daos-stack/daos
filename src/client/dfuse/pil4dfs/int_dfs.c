@@ -2284,6 +2284,7 @@ opendir(const char *path)
 	}
 	mode = dfs_obj_mode(dfs_mt->dfs, dir_obj);
 	if ((S_IRUSR & mode) == 0) {
+		dfs_release(dir_obj);
 		errno = EACCES;
 		return NULL;
 	}
@@ -3924,9 +3925,8 @@ new_fcntl(int fd, int cmd, ...)
 				return 0;
 		}
 
-		if (fd_Directed >= FD_FILE_BASE) {
+		if (fd_Directed >= FD_FILE_BASE)
 			OrgFunc = 0;
-		}
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_Directed >= FD_DIR_BASE) {
@@ -4623,7 +4623,7 @@ init_myhook(void)
 
 	hook_enabled = 1;
 
-	env_log = getenv("IL_LOG");
+	env_log = getenv("D_IL_REPORT");
 	if (env_log) {
 		if (strcmp(env_log, "1") == 0 || strcmp(env_log, "true") == 0 ||
 		    strcmp(env_log, "TRUE") == 0)
@@ -4661,12 +4661,36 @@ print_summary(void)
 	fflush(stderr);
 }
 
+static void
+close_all_fd(void)
+{
+	int i;
+
+	for (i = 0; i < next_free_fd; i++) {
+		if (file_list[i])
+			free_fd(i);
+	}
+}
+
+static void
+close_all_dirfd(void)
+{
+	int i;
+
+	for (i = 0; i < next_free_dirfd; i++) {
+		if (dir_list[i])
+			free_dirfd(i);
+	}
+}
+
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
 	int rc;
 
 	close_all_duped_fd();
+	close_all_fd();
+	close_all_dirfd();
 	finalize_dfs();
 
 	rc = pthread_mutex_destroy(&lock_init);
