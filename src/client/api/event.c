@@ -1146,10 +1146,12 @@ out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 
-	memset(ev, 0xc, sizeof(*ev));
-	ev->ev_error = -DER_UNKNOWN;
 #ifdef D_HAS_VALGRIND
-	VALGRIND_MAKE_MEM_UNDEFINED(ev, sizeof(*ev));
+	{
+		int er = ev->ev_error;
+		VALGRIND_MAKE_MEM_UNDEFINED(ev, sizeof(*ev));
+		ev->ev_error = er;
+	}
 #endif
 	return rc;
 }
