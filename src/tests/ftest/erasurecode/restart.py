@@ -21,19 +21,19 @@ class EcodServerRestart(TestWithServers):
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.percent = self.params.get("size", '/run/ior/data_percentage/*')
+        self.percent = self.params.get("size", "/run/ior/data_percentage/*")
         engine_count = self.server_managers[0].get_config_value("engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
 
     def verify_aggreation(self, expected_free_space):
-        """Verify aggrgation by checking pool free space is greater than expected.
+        """Verify aggregation by checking pool free space is greater than expected.
 
         Args:
             expected_free_space (int): expected free space after aggregation.
         """
         self.log.info("Waiting for aggregation to complete..")
-        if not wait_for_result(
-            self.log, self.check_free_space, 150, delay=5, expected_free=expected_free_space):
+        if not wait_for_result(self.log, self.check_free_space, 150, delay=5,
+                               expected_free=expected_free_space):
             self.fail("#aggregation completion not detected.")
 
     def check_free_space(self, expected_free):
@@ -58,10 +58,10 @@ class EcodServerRestart(TestWithServers):
                        after. Default to None.
         """
         # 1.
-        ior_w_flags = self.params.get("flags", '/run/ior/iorflags/*')
-        ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        block_transfer_sizes = self.params.get("block_transfer_sizes", '/run/ior/*')[0]
-        obj_class =  self.params.get("dfs_oclass_list", '/run/ior/objectclass/*')
+        ior_w_flags = self.params.get("flags", "/run/ior/iorflags/*")
+        ior_read_flags = self.params.get("read_flags", "/run/ior/iorflags/*")
+        block_transfer_sizes = self.params.get("block_transfer_sizes", "/run/ior/*")[0]
+        obj_class = self.params.get("dfs_oclass_list", "/run/ior/objectclass/*")
         self.log_step("Create pool and containers")
         self.pool = self.get_pool()
         containers = []
@@ -74,7 +74,7 @@ class EcodServerRestart(TestWithServers):
             containers.append(
                 self.get_container(
                     self.pool, daos_command=self.get_daos_command(), oclass=oclass[0],
-                    properties="rd_fac:{}".format(ec_object['parity'])))
+                    properties="rd_fac:{}".format(ec_object["parity"])))
 
         # 2.
         self.log_step("Disable aggregation")
@@ -90,35 +90,35 @@ class EcodServerRestart(TestWithServers):
         job_manager = get_job_manager(self, subprocess=None, timeout=120)
         for oclass, container in zip(obj_class, containers):
             ior_kwargs = {
-                 "test": self,
-                 "manager": job_manager,
-                 "log": "ior_write_container_test_{}.log".format(oclass[0]),
-                 "hosts": self.hostlist_clients,
-                 "path": self.workdir,
-                 "slots": None,
-                 "group": self.server_group,
-                 "pool": self.pool,
-                 "container": container,
-                 "processes": self.params.get("np", "/run/ior/client_processes/*"),
-                 "ppn": self.params.get("ppn", "/run/ior/client_processes/*", default=2),
-                 "intercept": None,
-                 "plugin_path": None,
-                 "dfuse": None,
-                 "display_space": True,
-                 "fail_on_warning": False,
-                 "namespace": "/run/ior/*",
-                 "ior_params": {
-                     "dfs_oclass": oclass[0],
-                     "dfs_dir_oclass": oclass[0],
-                     "flags": ior_w_flags,
-                     "transfer_size": block_transfer_sizes[1],
-                     "block_size": block_transfer_sizes[0]
-                 }
+                "test": self,
+                "manager": job_manager,
+                "log": "ior_write_container_test_{}.log".format(oclass[0]),
+                "hosts": self.hostlist_clients,
+                "path": self.workdir,
+                "slots": None,
+                "group": self.server_group,
+                "pool": self.pool,
+                "container": container,
+                "processes": self.params.get("np", "/run/ior/client_processes/*"),
+                "ppn": self.params.get("ppn", "/run/ior/client_processes/*", default=2),
+                "intercept": None,
+                "plugin_path": None,
+                "dfuse": None,
+                "display_space": True,
+                "fail_on_warning": False,
+                "namespace": "/run/ior/*",
+                "ior_params": {
+                    "dfs_oclass": oclass[0],
+                    "dfs_dir_oclass": oclass[0],
+                    "flags": ior_w_flags,
+                    "transfer_size": block_transfer_sizes[1],
+                    "block_size": block_transfer_sizes[0]
+                }
             }
             try:
-                result = run_ior(**ior_kwargs)
+                run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail('#IOR write failed')
+                self.fail("#IOR write failed, {}".format(error))
 
         # 5.
         self.log_step("Check for free space after IOR write all EC object data to container")
@@ -132,11 +132,11 @@ class EcodServerRestart(TestWithServers):
         # 6.
         self.log_step("Run IOR write again with the same data to each container")
         for container in containers:
-            ior_kwargs['container'] = container
+            ior_kwargs["container"] = container
             try:
-                result = run_ior(**ior_kwargs)
+                run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail("#IOR write failed")
+                self.fail("#IOR write failed, {}".format(error))
         free_space_after_second_ior = self.pool.get_total_free_space(refresh=True)
         space_used_by_2nd_ior = free_space_after_ior - free_space_after_second_ior
         self.log.info("=After 2nd IOR write with same data, pool free space: %s",
@@ -145,8 +145,8 @@ class EcodServerRestart(TestWithServers):
         self.log.info("=Space used by 2nd IOR: %s", space_used_by_2nd_ior)
 
         # 7.
-        self.log_step("Verify the free space after 2nd IOR is less at least twice the size of "
-            "space used by 1st IOR from the initial free space")
+        self.log_step("Verify the free space after 2nd IOR is less at least twice the size of ",
+                      "space used by 1st IOR from the initial free space")
         self.assertLessEqual(
             free_space_after_second_ior, (initial_free_space - space_used_by_ior * 2),
             "Pool free space has not been reduced by double after dual ior writes")
@@ -175,13 +175,13 @@ class EcodServerRestart(TestWithServers):
 
         # 12.
         self.log_step("Verify data after aggregation (ior read)")
-        ior_kwargs["ior_params"]['flags'] = ior_read_flags
+        ior_kwargs["ior_params"]["flags"] = ior_read_flags
         for container in containers:
-            ior_kwargs['container'] = container
+            ior_kwargs["container"] = container
             try:
-                result = run_ior(**ior_kwargs)
+                run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail("#IOR read verification failed")
+                self.fail("#IOR read verification failed, {}".format(error))
 
         self.log_step("Test passed")
 
