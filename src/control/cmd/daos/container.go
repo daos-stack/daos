@@ -42,6 +42,7 @@ type containerCmd struct {
 	Stat        containerStatCmd        `command:"stat" description:"get container statistics"`
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
+	Evict       containerEvictCmd       `command:"evict" description:"Evict open handles on a container"`
 
 	ListAttributes  containerListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
 	DeleteAttribute containerDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
@@ -1444,6 +1445,35 @@ func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
 			"failed to link container %s in the namespace",
 			cmd.ContainerID())
 	}
+
+	return nil
+}
+
+type containerEvictCmd struct {
+	existingContainerCmd
+
+	All bool `long:"all" short:"a" description:"evict all handles from all users"`
+}
+
+func (cmd *containerEvictCmd) Execute(_ []string) (err error) {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	var co_flags C.uint
+	if cmd.All {
+		co_flags = C.DAOS_COO_EVICT_ALL | C.DAOS_COO_EX
+	} else {
+		co_flags = C.DAOS_COO_EVICT | C.DAOS_COO_RO
+	}
+
+	cleanup, err := cmd.resolveAndConnect(co_flags, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	return nil
 }
