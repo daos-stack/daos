@@ -1053,6 +1053,9 @@ class Launch():
         path = os.environ.get("PATH")
         os.environ["COVFILE"] = BULLSEYE_FILE
 
+        os.environ["UCX_LOG_LEVEL"] = "trace"
+        os.environ["D_LOG_STDERR_IN_LOG"] = "1"
+
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
             self._set_interface_environment(servers, clients)
