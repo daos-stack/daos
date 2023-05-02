@@ -192,8 +192,8 @@ To install and configure Prometheus on the local machine:
 dmg telemetry config [-i <install-dir>]
 ```
 
-If no `install-dir` is provided, DMG will attempt to install Prometheus in the
-first writable directory found in the user's `PATH`.
+DMG will install Prometheus in the directory given with option -i `install-dir`.
+Prometheus install path needs to be add to the default system $PATH environment if required.
 
 The Prometheus configuration file will be populated based on the DAOS server
 list in your `dmg` configuration file. The Prometheus configuration will be
