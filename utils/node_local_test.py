@@ -4694,7 +4694,8 @@ def test_fi_get_prop(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
     test_cmd.wf = wf
-    test_cmd.check_stderr = False
+    test_cmd.check_stderr = True
+    test_cmd.check_post_stdout = False  # Checked.
 
     rc = test_cmd.launch()
     container.destroy()
