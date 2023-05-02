@@ -1347,16 +1347,20 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(["version"])
 
-    def check_enable(self, pool=None):
+    def check_enable(self, pool=None, stop=True):
         """Call dmg check enable.
 
         Args:
             pool (str): Pool label or UUID. Defaults to None.
+            stop (bool): Stop the system first before enabling checker. Defaults to True.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
 
         """
+        if stop:
+            self.system_stop(force=True)
+
         return self._get_json_result(("check", "enable"), pool=pool)
 
     def check_start(self, pool=None, dry_run=False, reset=False, failout=None, auto=None,
@@ -1393,17 +1397,23 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("check", "query"), pool=pool)
 
-    def check_disable(self, pool=None):
+    def check_disable(self, pool=None, start=True):
         """Call dmg check disable.
 
         Args:
             pool (str): Pool label or UUID. Defaults to None.
+            start (bool): Start the system after disabling checker. Defaults to True.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_json_result(("check", "disable"), pool=pool)
+        res = self._get_json_result(("check", "disable"), pool=pool)
+
+        if start:
+            self.system_start()
+
+        return res
 
     def faults_mgmt_svc_pool(self, pool, checker_report_class):
         """Call dmg faults mgmt-svc pool <pool> <checker_report_class>

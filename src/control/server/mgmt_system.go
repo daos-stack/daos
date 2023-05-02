@@ -823,12 +823,16 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 		}
 	}
 
+	stopRequired := false
+	if stateMask&system.MemberStateStopped != 0 {
+		stopRequired = true
+	}
 	if invalidMembers.Count() > 0 {
 		states := make([]string, len(requiredStates))
 		for i, state := range requiredStates {
 			states[i] = state.String()
 		}
-		return checker.FaultIncorrectMemberStates(invalidMembers.String(), strings.Join(states, "|"))
+		return checker.FaultIncorrectMemberStates(stopRequired, invalidMembers.String(), strings.Join(states, "|"))
 	}
 
 	return nil
