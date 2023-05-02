@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -436,6 +436,125 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 			defer flagTestFini()
 
 			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestFlags_FsCheckFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		expFlag *FsCheckFlag
+		expErr  error
+	}{
+		"unset": {
+			expErr: errors.New("empty filesystem check flags"),
+		},
+		"invalid": {
+			arg:    "unlink",
+			expErr: errors.New("unknown filesystem check flags: \"unlink\""),
+		},
+		"valid1": {
+			arg: "print",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 1,
+			},
+		},
+		"valid2": {
+			arg: "remove",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 2,
+			},
+		},
+		"valid3": {
+			arg: "print,remove",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 3,
+			},
+		},
+		"valid4": {
+			arg: "relink",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 4,
+			},
+		},
+		"valid5": {
+			arg: "print,relink",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 5,
+			},
+		},
+		"valid8": {
+			arg: "verify",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 8,
+			},
+		},
+		"valid9": {
+			arg: "print,verify",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 9,
+			},
+		},
+		"valid11": {
+			arg: "print,verify,remove",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 11,
+			},
+		},
+		"valid13": {
+			arg: "print,verify,relink",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 13,
+			},
+		},
+		"valid16": {
+			arg: "evict",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 16,
+			},
+		},
+		"valid29": {
+			arg: "print,verify,relink,evict",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 29,
+			},
+		},
+		"untrimmed, upper case": {
+			arg: "print, VeRiFy,relink",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 13,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := FsCheckFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			flagTestFini, err := flagTestInit()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer flagTestFini()
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
