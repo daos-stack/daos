@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,7 +41,7 @@ type telemConfigCmd struct {
 	baseCmd
 	cfgCmd
 	jsonOutputCmd
-	InstallDir string `long:"install-dir" short:"i" description:"Install directory for telemetry binary"`
+	InstallDir string `long:"install-dir" short:"i" required:"1" description:"Install directory for telemetry binary"`
 	System     string `long:"system" short:"s" default:"prometheus" description:"Telemetry system to configure"`
 }
 
@@ -120,21 +120,6 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 	return outFile, err
 }
 
-func (cmd *telemConfigCmd) findInstallPath() (string, error) {
-	if cmd.InstallDir != "" {
-		return cmd.InstallDir, nil
-	}
-
-	path := os.Getenv("PATH")
-	for _, dir := range filepath.SplitList(path) {
-		if err := unix.Access(dir, unix.W_OK); err == nil {
-			return dir, nil
-		}
-	}
-
-	return "", errors.New("unable to find writable $PATH entry")
-}
-
 func (cmd *telemConfigCmd) extractFile(rdr *tar.Reader, dest string, mode os.FileMode) error {
 	outFile, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, mode)
 	if err != nil {
@@ -155,11 +140,6 @@ type installInfo struct {
 }
 
 func (cmd *telemConfigCmd) installPrometheus(cfgPath string) (*installInfo, error) {
-	iPath, err := cmd.findInstallPath()
-	if err != nil {
-		return nil, err
-	}
-
 	gzFile, err := cmd.fetchAsset("prometheus/prometheus", "linux-amd64")
 	if err != nil {
 		return nil, err
@@ -185,7 +165,7 @@ func (cmd *telemConfigCmd) installPrometheus(cfgPath string) (*installInfo, erro
 		}
 		switch filepath.Base(hdr.Name) {
 		case "prometheus":
-			info.binPath = path.Join(iPath, "prometheus")
+			info.binPath = path.Join(cmd.InstallDir, "prometheus")
 			if err := cmd.extractFile(tarRdr, info.binPath, 0755); err != nil {
 				return nil, err
 			}
@@ -243,6 +223,11 @@ func (cmd *telemConfigCmd) loadPromCfg(cfgPath string) (*promCfg, error) {
 }
 
 func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
+	if err := unix.Access(cmd.InstallDir, unix.W_OK); err != nil {
+		return nil, errors.Wrapf(err,
+			"Install folder %s does not have write permission", cmd.InstallDir)
+	}
+
 	user, err := user.Current()
 	if err != nil {
 		return nil, err

@@ -203,6 +203,7 @@ class TestPool(TestDaosApiBase):
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.pool_query_delay = BasicParameter(None)
         self.acl_file = BasicParameter(None)
         self.label = BasicParameter(None, "TestPool")
         self.label_generator = label_generator
@@ -673,6 +674,12 @@ class TestPool(TestDaosApiBase):
                         "response. This timeout can be adjusted via the 'pool/pool_query_timeout' "
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
+
+                if self.pool_query_delay:
+                    self.log.info(
+                        "Waiting %s seconds before issuing next dmg pool query",
+                        self.pool_query_delay)
+                    sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
     def query_targets(self, *args, **kwargs):
