@@ -676,7 +676,8 @@ def launch_server_stop_start(self, pools, name, results, args):
                     pool.drain(rank)
                 except TestFail as error:
                     self.log.error(
-                        "<<<FAILED:dmg pool {} drain failed".format(pool.identifier), exc_info=error)
+                        "<<<FAILED:dmg pool {} drain failed".format(
+                            pool.identifier), exc_info=error)
                     status = False
                 drain_status &= status
                 if drain_status:
@@ -1310,7 +1311,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if "mpich" in mpi_module:
             # Pass pool and container information to the commands
             env = EnvironmentVariables()
-            env["DAOS_UNS_PREFIX"] = format_path(pool,self.container[-1])
+            env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             env["D_LOG_FILE_APPEND_PID"] = "1"
             mpirun_cmd.assign_environment(env, True)
         mpirun_cmd.assign_processes(nodesperjob * ppn)
