@@ -3976,8 +3976,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
-	if (obj == NULL)
+	if (obj == NULL) {
+		D_FREE(entry.value);
 		return ENOMEM;
+	}
 
 	strncpy(obj->name, name, len + 1);
 	oid_cp(&obj->parent_oid, parent->oid);
