@@ -307,10 +307,11 @@ G
 	if (server)
 		setenv("UCX_IB_FORK_INIT", "n", 1);
 
-	setenv("UCX_SOCKADDR_TLS_PRIORITY", "rdmacm", 1);
+	//setenv("UCX_SOCKADDR_TLS_PRIORITY", "rdmacm", 1);
 	setenv("HG_LOG_LEVEL", "warning", 1);
+	setenv("UCX_LOG_LEVEL", "diag", 1);
 	setenv("HG_LOG_SUBSYS", "na", 1);
-	//setenv("D_LOG_STDERR_IN_LOG", "1", 1);
+	setenv("D_LOG_STDERR_IN_LOG", "1", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
