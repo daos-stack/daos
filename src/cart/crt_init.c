@@ -307,7 +307,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (server)
 		setenv("UCX_IB_FORK_INIT", "n", 1);
 
-	//setenv("UCX_SOCKADDR_TLS_PRIORITY", "rdmacm", 1);
+	setenv("UCX_WARN_UNUSED_ENV_VARS", "n", 1);
+	setenv("UCX_SOCKADDR_TLS_PRIORITY", "rdmacm", 1);
 	setenv("HG_LOG_LEVEL", "warning", 1);
 	setenv("UCX_LOG_LEVEL", "diag", 1);
 	setenv("HG_LOG_SUBSYS", "na", 1);
