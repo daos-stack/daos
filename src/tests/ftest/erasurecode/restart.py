@@ -145,8 +145,9 @@ class EcodServerRestart(TestWithServers):
         self.log.info("=Space used by 2nd IOR: %s", space_used_by_2nd_ior)
 
         # 7.
-        self.log_step("Verify the free space after 2nd IOR is less at least twice the size of ",
-                      "space used by 1st IOR from the initial free space")
+        self.log_step(
+            "Verify the free space after 2nd IOR is less at least twice the size of "
+            "space used by 1st IOR from the initial free space")
         self.assertLessEqual(
             free_space_after_second_ior, (initial_free_space - space_used_by_ior * 2),
             "Pool free space has not been reduced by double after dual ior writes")
