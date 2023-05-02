@@ -14,7 +14,7 @@ elif [[ "$distro" = *8 ]]; then
 fi
 pkgs="gotestsum openmpi$OPENMPI_VER                \
       hwloc-devel argobots                         \
-      fuse3-libs fuse3 att                         \
+      fuse3-libs fuse3 attr                        \
       boost-python3$PY_MINOR_VER-devel             \
       libisa-l-devel libpmem                       \
       libpmemobj protobuf-c                        \
