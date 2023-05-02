@@ -108,17 +108,13 @@ struct dfuse_readdir_entry {
  * read callback.  Read requests then take the lock to ensure the dfs read is complete and reply
  * directly with the data in the buffer.
  *
- * This works up to the buffer size minus one, the pre-read tries to read the expected file size
- * plus one so if the file size has changed then dfuse will detect this and back off to regular
- * read.
+ * This works up to the buffer size, the pre-read tries to read the expected file size is smaller
+ * then dfuse will detect this and back off to regular read, however it will not detect if the
+ * file has grown in size.
  *
  * A dfuse_event is hung off this new descriptor and these come from the same pool as regular reads,
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
- *
- * TODO: The current issue with pread is that DFuse keeps a single cache time per inode and this
- * is used for both data and metadata.  For this feature to work the inode cache needs to be valid
- * and the data cache needs to be empty.
  */
 struct dfuse_read_ahead {
 	pthread_mutex_t     dra_lock;

@@ -221,8 +221,9 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 		oh->doh_readahead->dra_ev = NULL;
 	}
 
-	/* If the length is not as expected then the stat size was incorrect so do not use this
-	 * read and fallback into the normal read case.
+	/* If the length is not as expected then the file has been modified since the last stat so
+	 * discard this cache and use regular reads.  Note that this will only detect files which
+	 * have shrunk in size, not grown.
 	 */
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);
@@ -250,11 +251,7 @@ dfuse_pre_read(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	/* Request a read one byte bigger than the expected file size, this way we should see
-	 * a truncated read and through that will be able to detect if the file has been
-	 * modified
-	 */
-	ev->de_iov.iov_len   = len + 1;
+	ev->de_iov.iov_len   = len;
 	ev->de_req           = 0;
 	ev->de_sgl.sg_nr     = 1;
 	ev->de_oh            = oh;
