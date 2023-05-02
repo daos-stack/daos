@@ -623,8 +623,8 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.
 // As the response contains controller references which may be shared elsewhere, copy them to avoid
-// accessing the same references in multiple code paths.
-func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
+// accessing the same references in multiple code paths and return a new BdevScanResponse objecst.
+func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) (*BdevScanResponse, error) {
 	oldCtrlrRefs := resp.Controllers
 	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
 
@@ -637,7 +637,7 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 		if addr.IsVMDBackingAddress() {
 			vmdAddr, err := addr.BackingToVMDAddress()
 			if err != nil {
-				return errors.Wrap(err, "converting pci address of vmd backing device")
+				return nil, errors.Wrap(err, "convert pci address of vmd backing device")
 			}
 			// If addr is a VMD backing address, use the VMD endpoint instead as that is the
 			// address that will be in the config.
@@ -651,9 +651,11 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
 		}
 	}
-	resp.Controllers = newCtrlrRefs
 
-	return nil
+	return &BdevScanResponse{
+		Controllers: newCtrlrRefs,
+		VMDEnabled:  resp.VMDEnabled,
+	}, nil
 }
 
 type BdevForwarder struct {
