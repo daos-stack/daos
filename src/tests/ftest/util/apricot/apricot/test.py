@@ -710,6 +710,8 @@ class TestWithServers(TestWithoutServers):
         default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
         access_points_qty = self.params.get(
             "access_points_qty", "/run/setup/*", default_access_points_qty)
+        if access_points_qty < 1 or access_points_qty > len(self.hostlist_servers):
+            self.fail("Invalid access points node quantity")
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
