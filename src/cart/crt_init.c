@@ -269,7 +269,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
 	timeout = 0;
-G
+
 	if (opt && opt->cio_crt_timeout != 0)
 		timeout = opt->cio_crt_timeout;
 	else
