@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
 message BioHealthReq {
 	string dev_uuid = 1;
-	string tgt_id = 2;
 }
 
 // BioHealthResp mirrors nvme_health_stats structure.
@@ -126,7 +125,6 @@ message SmdQueryReq {
 	bool include_bio_health = 3;	// Indicate query should include BIO health for devices
 	string uuid = 4;		// Constrain query to this UUID (pool or device)
 	uint32 rank = 5;		// Restrict response to only include info about this rank
-	string target = 6;		// Restrict response to only include info about this VOS target
 }
 
 message SmdQueryResp {
