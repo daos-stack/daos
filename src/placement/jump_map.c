@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1094,7 +1094,6 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	 * to be added to the layout. But this is only needed for update.
 	 */
 	if (unlikely(is_extending || is_adding_new) && !(mode & DAOS_OO_RO)) {
-		/* Needed to check if domains are being added to pool map */
 		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
 			is_extending ? "yes" : "no");

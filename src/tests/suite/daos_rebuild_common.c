@@ -35,6 +35,10 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	int i;
 	int rc = 0;
 
+	/* Increase pre_pool_ver to make sure the rebuild caused by this
+	 * exclude/kill to be waited in the following rebuild_pool_wait().
+	 */
+	args[0]->rebuild_pre_pool_ver++;
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, args[0]->pool.alive_svc,
@@ -109,8 +113,8 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		int *tgts, int rank_nr, bool kill,
 		enum REBUILD_TEST_OP_TYPE op_type)
 {
-	int   i;
-	int   rc;
+	int	i;
+	int	rc;
 
 	for (i = 0; i < args_cnt; i++) {
 		daos_pool_info_t	pool_info;
@@ -129,19 +133,44 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_pre_cb)
 			args[i]->rebuild_pre_cb(args[i]);
 
-	MPI_Barrier(MPI_COMM_WORLD);
 	/** include or exclude the target from the pool */
-	if (args[0]->myrank == 0) {
-		for (i = 0; i < rank_nr; i++) {
+	if (op_type == RB_OP_TYPE_FAIL) {
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (args[0]->myrank == 0) {
+			for (i = 0; i < rank_nr; i++)
+				rebuild_exclude_tgt(args, args_cnt, ranks[i],
+						    tgts ? tgts[i] : -1, kill);
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		for (i = 0; i < args_cnt; i++)
+			if (args[i]->rebuild_cb)
+				args[i]->rebuild_cb(args[i]);
+
+		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
+			test_rebuild_wait(args, args_cnt);
+
+		MPI_Barrier(MPI_COMM_WORLD);
+		for (i = 0; i < args_cnt; i++) {
+			if (args[i]->rebuild_post_cb)
+				args[i]->rebuild_post_cb(args[i]);
+		}
+		return;
+
+	}
+
+	for (i = 0; i < rank_nr; i++) {
+		int j;
+
+		/* No concurrent drain/extend/reintegration are allowed, so
+		 * it has to reintegrate/extend one by one.
+		 */
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (args[0]->myrank == 0) {
 			switch (op_type) {
-			case RB_OP_TYPE_FAIL:
-				rebuild_exclude_tgt(args, args_cnt,
-						ranks[i], tgts ? tgts[i] : -1,
-						kill);
-				break;
 			case RB_OP_TYPE_REINT:
 				rebuild_reint_tgt(args, args_cnt, ranks[i],
-						tgts ? tgts[i] : -1);
+						  tgts ? tgts[i] : -1);
 				break;
 			case RB_OP_TYPE_ADD:
 				rebuild_extend_tgt(args, args_cnt, ranks[i],
@@ -160,22 +189,22 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 				 */
 				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
+			default:
+				break;
 			}
 		}
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
+		for (j = 0; j < args_cnt; j++)
+			if (args[j]->rebuild_cb)
+				args[j]->rebuild_cb(args[j]);
 
-	for (i = 0; i < args_cnt; i++)
-		if (args[i]->rebuild_cb)
-			args[i]->rebuild_cb(args[i]);
+		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
+			test_rebuild_wait(args, args_cnt);
 
-	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
-		test_rebuild_wait(args, args_cnt);
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++) {
-		if (args[i]->rebuild_post_cb)
-			args[i]->rebuild_post_cb(args[i]);
+		for (j = 0; j < args_cnt; j++) {
+			if (args[j]->rebuild_post_cb)
+				args[j]->rebuild_post_cb(args[j]);
+		}
 	}
 }
 

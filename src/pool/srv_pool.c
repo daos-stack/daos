@@ -5069,6 +5069,21 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		DP_UUID(svc->ps_uuid), opc, exclude_rank, tgts->pti_number,
 		tgt_addrs == NULL ? 0 : tgt_addrs->pta_number);
 
+	/* Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	* updating the pool map during rebuild, which might screw the object layout.
+	*/
+	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
+		uint32_t rebuild_ver;
+
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc, DER_BUSY);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+	}
+
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		goto out;
