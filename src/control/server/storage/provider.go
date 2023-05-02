@@ -594,75 +594,83 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierScanResult, err error) {
-	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
-	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
+type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
 
-	// A config with SCM and no block devices is valid.
-	if len(bdevCfgs) == 0 {
-		return
+func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cache *BdevScanResponse, scan scanFn) ([]BdevTierScanResult, error) {
+	if cfg == nil {
+		return nil, errors.New("nil storage config")
+	}
+	if cfg.Tiers == nil {
+		return nil, errors.New("nil storage config tiers")
 	}
 
-	for ti, cfg := range bdevCfgs {
-		if cfg.Class != ClassNvme {
-			continue
-		}
-		if cfg.Bdev.DeviceList.Len() == 0 {
-			continue
-		}
+	bdevs := cfg.GetBdevs()
+	if bdevs.Len() == 0 {
+		return nil, errors.New("scanBdevTiers should not be called if no bdevs in config")
+	}
 
-		p.RLock()
+	var bsr BdevScanResponse
+	if direct {
 		req := BdevScanRequest{
-			DeviceList:  cfg.Bdev.DeviceList,
-			BypassCache: direct,
-			VMDEnabled:  p.vmdEnabled,
+			DeviceList: bdevs,
+			VMDEnabled: vmdEnabled,
 		}
-
-		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
-		p.RUnlock()
+		resp, err := scan(req)
 		if err != nil {
 			return nil, err
 		}
-
-		p.log.Debugf("storage provider for engine %d: scan tier-%d, bdevs %v, direct %v",
-			p.engineIndex, ti, req.DeviceList, req.BypassCache)
-
-		result := BdevTierScanResult{
-			Tier:   cfg.Tier,
-			Result: bsr,
+		bsr = *resp
+	} else {
+		if cache == nil {
+			cache = &BdevScanResponse{}
 		}
-		results = append(results, result)
+		log.Debugf("using controllers from cache %q", cache.Controllers)
+		bsr = *cache
+	}
+	log.Debugf("bdevs in cfg: %s, scanned: %+v (direct=%v)", bdevs, bsr, direct)
+
+	bdevCfgs := cfg.Tiers.BdevConfigs()
+	results := make([]BdevTierScanResult, 0, len(bdevCfgs))
+	resultBdevs := 0
+	for _, bc := range bdevCfgs {
+		if bc.Bdev.DeviceList.Len() == 0 {
+			continue
+		}
+		fbsr, err := filterBdevScanResponse(bc.Bdev.DeviceList, &bsr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "filter scan cache for tier-%d", bc.Tier)
+		}
+		resultBdevs += len(fbsr.Controllers)
+		results = append(results, BdevTierScanResult{
+			Tier: bc.Tier, Result: fbsr,
+		})
 	}
 
-	return
+	if resultBdevs != bdevs.Len() {
+		log.Errorf("Unexpected scan results, wanted %d controllers got %d", bdevs.Len(),
+			resultBdevs)
+	}
+
+	return results, nil
 }
 
 // ScanBdevTiers scans all Bdev tiers in the provider's engine storage configuration.
 // If direct is set to true, bypass cache to retrieve up-to-date details.
 func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
-	return p.scanBdevTiers(direct, p.bdev.Scan)
+	p.RLock()
+	defer p.RUnlock()
+
+	return scanBdevTiers(p.log, p.vmdEnabled, direct, p.engineStorage, &p.bdevCache, p.bdev.Scan)
 }
 
-type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
-
-func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
-	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
-		log.Debugf("returning bdev storage provider scan cache: %+v", req)
-		return cachedResp, nil
-	}
-
-	log.Debugf("calling bdev storage provider scan: %+v", req)
-	return scan(req)
-}
-
-// ScanBdevs either calls into bdev storage provider to scan SSDs or returns cached results
-// if BypassCache is set to false in the request.
+// ScanBdevs calls into bdev storage provider to scan SSDs, always bypassing cache.
+// Function should not be called when engines have been started and SSDs have been claimed by SPDK.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()
 
 	req.VMDEnabled = p.vmdEnabled
-	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
+	return p.bdev.Scan(req)
 }
 
 func (p *Provider) GetBdevCache() BdevScanResponse {
@@ -679,13 +687,14 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 
 	// Enumerate scan results and filter out any controllers not specified in provider's engine
 	// storage config.
-	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp); err != nil {
+	fResp, err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp)
+	if err != nil {
 		return errors.Wrap(err, "filtering scan response before caching")
 	}
 
 	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
-		resp.Controllers)
-	p.bdevCache = resp
+		fResp.Controllers)
+	p.bdevCache = *fResp
 	p.vmdEnabled = resp.VMDEnabled
 
 	return nil
