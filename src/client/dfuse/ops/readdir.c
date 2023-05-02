@@ -89,7 +89,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
 	if (rc) {
-		DFUSE_TRA_ERROR(oh, "dfs_iterate() returned %d", rc);
+		DFUSE_TRA_ERROR(oh, "dfs_iterate() returned %d: %s", rc, strerror(rc));
 		return rc;
 	}
 
@@ -241,7 +241,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
 			if (rc != 0)
-				DFUSE_TRA_ERROR(inode, "dfs_update_parent() failed %d", rc);
+				DFUSE_TRA_DEBUG(inode, "dfs_update_parent() failed %d", rc);
 		}
 		inode->ie_parent = ie->ie_parent;
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
@@ -277,7 +277,6 @@ set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
 static inline void
 dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 {
-	DFUSE_TRA_DEBUG(hdl, "Resetting anchor");
 	memset(&hdl->drh_anchor, 0, sizeof(hdl->drh_anchor));
 	memset(hdl->drh_dre, 0, sizeof(*hdl->drh_dre) * READDIR_MAX_COUNT);
 	hdl->drh_dre_index      = 0;
@@ -304,7 +303,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
-		DFUSE_TRA_INFO(oh, "Sharing readdir handle %p with existing readers", oh->doh_rd);
+		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle %p with existing readers", oh->doh_rd);
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
@@ -355,11 +354,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		oh->doh_kreaddir_started = true;
 	}
 
-	DFUSE_TRA_INFO(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
-		       hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
+			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
-	DFUSE_TRA_INFO(oh, "Offsets requested %#lx directory %#lx buf %p", offset,
-		       oh->doh_rd_offset, reply_buff);
+	DFUSE_TRA_DEBUG(oh, "Offsets requested %#lx directory %#lx", offset, oh->doh_rd_offset);
 
 	/* If the offset is unexpected for this directory handle then seek, first ensuring the
 	 * readdir handle is unique.
@@ -418,9 +416,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		while (nextp != (void *)&hdl->drh_cache_list) {
 			drc = container_of(nextp, struct dfuse_readdir_c, drc_list);
 
-			DFUSE_TRA_INFO(oh, "%p adding offset %#lx next %#lx bo %zi %p '%s'", drc,
-				       drc->drc_offset, drc->drc_next_offset, buff_offset,
-				       drc->drc_rlink, drc->drc_name);
+			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
+					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
 
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
@@ -446,9 +443,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					 * call so the extra data needs to be loaded by the
 					 * second reader, not the first.
 					 */
-
-					DFUSE_TRA_ERROR(oh, "Unexpected code %#lx %zi", next_offset,
-							buff_offset);
 
 					rc = dfs_lookupx(
 					    oh->doh_dfs, oh->doh_ie->ie_obj, drc->drc_name,
@@ -625,9 +619,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			dfs_obj_t                  *obj;
 			size_t                      written;
 			char                        out[DUNS_MAX_XATTR_LEN];
-			char                       *outp = &out[0];
+			char                       *outp     = &out[0];
 			daos_size_t                 attr_len = DUNS_MAX_XATTR_LEN;
-			struct dfuse_readdir_c     *drc = NULL;
+			struct dfuse_readdir_c     *drc      = NULL;
 
 			if (hdl->drh_caching) {
 				D_ALLOC_PTR(drc);

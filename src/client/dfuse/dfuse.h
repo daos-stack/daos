@@ -37,7 +37,7 @@ struct dfuse_info {
 	bool                 di_wb_cache;
 
 	/* Per process spinlock
-	 * This is only used to lock readdir against closedir where they share a readdir handle,
+	 * This is used to lock readdir against closedir where they share a readdir handle,
 	 * so this could be per inode however that's lots of additional memory and the locking
 	 * is only needed for minimal list management so isn't locked often or for long.
 	 */
