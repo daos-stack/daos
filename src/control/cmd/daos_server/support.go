@@ -9,6 +9,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/support"
@@ -51,7 +52,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_server_logs"
+		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 
@@ -84,6 +85,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return err
 		}
 
+		// FIXME: DAOS-13290 Workaround for files held open
 		for i := 1; i < 3; i++ {
 			os.RemoveAll(cmd.TargetFolder)
 		}

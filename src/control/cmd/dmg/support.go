@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -162,7 +163,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	// Default TargetFolder location where logs will be copied.
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_server_logs"
+		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {

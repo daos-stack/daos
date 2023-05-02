@@ -664,7 +664,7 @@ func TestSupport_copyServerConfig(t *testing.T) {
 		"Copy server file which is not available": {
 			createFile:   false,
 			targetFolder: targetTestDir,
-			config:       mockSocketDir + config.ConfigOut,
+			config:       mockSocketDir + config.ConfigOut + "notavailable",
 			expErr:       errors.New("no such file or directory"),
 		},
 		"Copy to Invalid folder": {
@@ -831,56 +831,59 @@ fault_cb: ""
 hyperthreads: false
 `
 
+	MockZeroEngineServerConfig := `port: 10001
+transport_config:
+  allow_insecure: false
+  client_cert_dir: /etc/daos/certs/clients
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/server.crt
+  key: /etc/daos/certs/server.key
+`
+
 	validConfig := test.CreateTestFile(t, targetTestDir, MockValidServerConfig)
 	invalidConfig := test.CreateTestFile(t, targetTestDir, MockInvalidServerConfig)
+	zeroEngineConfig := test.CreateTestFile(t, targetTestDir, MockZeroEngineServerConfig)
 	collLogParams := CollectLogsParams{}
 
 	for name, tc := range map[string]struct {
-		createFile   bool
 		logCmd       string
 		targetFolder string
 		config       string
 		expErr       error
 	}{
 		"Copy Server Logs": {
-			createFile:   false,
 			targetFolder: targetTestDir,
 			config:       validConfig,
 			logCmd:       "EngineLog",
 			expErr:       nil,
 		},
 		"Copy Control Logs": {
-			createFile:   false,
 			targetFolder: targetTestDir,
 			config:       validConfig,
 			logCmd:       "ControlLog",
 			expErr:       nil,
 		},
 		"Copy Helper Logs": {
-			createFile:   false,
 			targetFolder: targetTestDir,
 			config:       validConfig,
 			logCmd:       "HelperLog",
 			expErr:       nil,
 		},
 		"Copy Invalid Control Logs": {
-			createFile:   false,
 			targetFolder: targetTestDir,
 			config:       invalidConfig,
 			logCmd:       "ControlLog",
 			expErr:       errors.New("no such file or directory"),
 		},
 		"Copy Invalid Helper Logs": {
-			createFile:   false,
 			targetFolder: targetTestDir,
 			config:       invalidConfig,
 			logCmd:       "HelperLog",
 			expErr:       errors.New("no such file or directory"),
 		},
 		"Copy Server Logs with invalid config": {
-			createFile:   false,
 			targetFolder: targetTestDir,
-			config:       "",
+			config:       zeroEngineConfig,
 			logCmd:       "EngineLog",
 			expErr:       errors.New("Engine count is 0 from server config"),
 		},

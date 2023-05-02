@@ -349,23 +349,18 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	}
 
 	cmd := strings.Join([]string{
-		"'rsync",
+		"rsync",
 		"-av",
 		"--blocking-io",
 		targetLocation,
-		opts[0].TargetHost + ":" + opts[0].TargetFolder,
-		"'"}, " ")
+		opts[0].TargetHost + ":" + opts[0].TargetFolder},
+		" ")
 
-	rsyncCmd := exec.Command("sh", "-c", cmd)
-	var stdout, stderr bytes.Buffer
-	rsyncCmd.Stdout = &stdout
-	rsyncCmd.Stderr = &stderr
-	err = rsyncCmd.Run()
-	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
-		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
+		return errors.Wrapf(err, "Error running command %s %s", cmd, string(out))
 	}
-	log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
+	log.Infof("rsyncCmd:= %s stdout:\n%s\n\n", cmd, string(out))
 
 	return nil
 }
@@ -549,7 +544,13 @@ func collectDmgCmd(log logging.Logger, opts ...CollectLogsParams) error {
 
 // Copy server config file.
 func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
-	cfgPath, err := getServerConf(log, opts...)
+	var cfgPath string
+
+	if opts[0].Config != "" {
+		cfgPath = opts[0].Config
+	} else {
+		cfgPath, _ = getServerConf(log)
+	}
 
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
@@ -596,6 +597,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
+		log.Infof(" SAMIR serverConfig.Engines %s", serverConfig.Engines)
 		if len(serverConfig.Engines) == 0 {
 			return errors.New("Engine count is 0 from server config")
 		}
