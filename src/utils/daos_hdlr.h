@@ -196,8 +196,6 @@ int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
 int fs_relink_root_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
-int cont_create_hdlr(struct cmd_args_s *ap);
-int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
 
