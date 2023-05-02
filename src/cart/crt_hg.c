@@ -1371,7 +1371,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			  hg_ret);
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
-		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -DER_PROTO : -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 	return rc;
