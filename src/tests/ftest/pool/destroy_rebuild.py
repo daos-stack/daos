@@ -46,7 +46,7 @@ class DestroyRebuild(TestWithServers):
             "pi_ndisabled": 0,
         }
         self.assertTrue(
-            .pool.check_pool_info(**checks),
+            pool.check_pool_info(**checks),
             "Invalid pool information detected prior to rebuild")
 
         # 3.
