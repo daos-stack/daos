@@ -3,13 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import general_utils
-from ec_utils import ErasureCodeIor
+from apricot import TestWithServers
+from ec_utils import get_data_parity_number
+from exception_utils import CommandFailure
+from general_utils import wait_for_result
+from ior_utils import run_ior
+from job_manager_utils import get_job_manager
 
 
-class EcodServerRestart(ErasureCodeIor):
-    # pylint: disable=too-many-ancestors
+class EcodServerRestart(TestWithServers):
     """
     Test Class Description: To validate Erasure code object data after restarting all servers.
 
@@ -20,26 +22,30 @@ class EcodServerRestart(ErasureCodeIor):
         """Set up for test case."""
         super().setUp()
         self.percent = self.params.get("size", '/run/ior/data_percentage/*')
+        engine_count = self.server_managers[0].get_config_value("engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
 
     def verify_aggreation(self, expected_free_space):
-        """Verify aggrgation by checking pool free space is expected.
+        """Verify aggrgation by checking pool free space is greater than expected.
 
         Args:
             expected_free_space (int): expected free space after aggregation.
         """
-        self.log.info("Waiting for aggregation to complete")
+        self.log.info("Waiting for aggregation to complete..")
         if not wait_for_result(
-            self.log, check_free_space_equals, 150, delay=5, expected=expected_free_space):
+            self.log, self.check_free_space, 150, delay=5, expected_free=expected_free_space):
             self.fail("#aggregation completion not detected.")
 
-    def check_free_space_equals(self, expected):
+    def check_free_space(self, expected_free):
         """Check for pool free space.
 
-        return:
-            bool: if the result was of pool free space match the expected.
-        """
-        return expected == self.pool.get_total_free_space(refresh=True)
+        Args:
+            expected_free (int): expected free space to check.
 
+        Returns:
+            bool: if the result was of pool free space equal to or greater than the expected free.
+        """
+        return expected_free <= self.pool.get_total_free_space(refresh=True)
 
     def execution(self, agg_check=None):
         """Execute test.
@@ -49,46 +55,77 @@ class EcodServerRestart(ErasureCodeIor):
 
         Args:
             agg_check: When to check Aggregation status.Either before restarting all the servers or
-                       after.Default is None so not to check aggregation, but wait for 20 seconds
-                       and restart the servers.
+                       after. Default to None.
         """
         # 1.
-        aggr_threshold = self.params.get("aggregation_threshold", '/run/ior/*', default=300)
+        ior_w_flags = self.params.get("flags", '/run/ior/iorflags/*')
+        ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        block_transfer_sizes = self.params.get("block_transfer_sizes", '/run/ior/*')[0]
+        obj_class =  self.params.get("dfs_oclass_list", '/run/ior/objectclass/*')
         self.log_step("Create pool and containers")
+        self.pool = self.get_pool()
         containers = []
-        for oclass in self.obj_class:
-            for sizes in self.ior_chu_trs_blk_size:
-                # Skip the object type if server count does not meet the minimum EC object
-                # server count
-                if oclass[1] > self.server_count:
-                    continue
-                ec_object = get_data_parity_number(self.log, oclass)
-                containers.append(
-                    self.get_container(
-                        self.pool, daos_command=self.get_daos_command(), oclass=oclass,
-                        properties="rd_fac:{}".format(ec_object['parity'])))
+        for oclass in obj_class:
+            # Skip the object type if server count does not meet the minimum EC object
+            # server count
+            if oclass[1] > self.server_count:
+                continue
+            ec_object = get_data_parity_number(self.log, oclass[0])
+            containers.append(
+                self.get_container(
+                    self.pool, daos_command=self.get_daos_command(), oclass=oclass[0],
+                    properties="rd_fac:{}".format(ec_object['parity'])))
 
         # 2.
         self.log_step("Disable aggregation")
         self.pool.set_property("reclaim", "disabled")
 
         # 3.
-        self.log_step("Get initial pool free space (dmg pool query)")
+        self.log_step("Get initial pool free space from dmg pool query")
         initial_free_space = self.pool.get_total_free_space(refresh=True)
+        self.log.info("=Initial pool free space: %s", initial_free_space)
 
         # 4.
         self.log_step("Run IOR write all EC object data to container")
-        for container in containers:
-            ior_kwargs['container'] = container
+        job_manager = get_job_manager(self, subprocess=None, timeout=120)
+        for oclass, container in zip(obj_class, containers):
+            ior_kwargs = {
+                 "test": self,
+                 "manager": job_manager,
+                 "log": "ior_write_container_test_{}.log".format(oclass[0]),
+                 "hosts": self.hostlist_clients,
+                 "path": self.workdir,
+                 "slots": None,
+                 "group": self.server_group,
+                 "pool": self.pool,
+                 "container": container,
+                 "processes": self.params.get("np", "/run/ior/client_processes/*"),
+                 "ppn": self.params.get("ppn", "/run/ior/client_processes/*", default=2),
+                 "intercept": None,
+                 "plugin_path": None,
+                 "dfuse": None,
+                 "display_space": True,
+                 "fail_on_warning": False,
+                 "namespace": "/run/ior/*",
+                 "ior_params": {
+                     "dfs_oclass": oclass[0],
+                     "dfs_dir_oclass": oclass[0],
+                     "flags": ior_w_flags,
+                     "transfer_size": block_transfer_sizes[1],
+                     "block_size": block_transfer_sizes[0]
+                 }
+            }
             try:
                 result = run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail('ior failed')
+                self.fail('#IOR write failed')
 
         # 5.
         self.log_step("Check for free space after IOR write all EC object data to container")
         free_space_after_ior = self.pool.get_total_free_space(refresh=True)
-        self.log.info("pool free space after IOR write: %s", free_space_after_ior)
+        space_used_by_ior = initial_free_space - free_space_after_ior
+        self.log.info("=After 1st IOR write, pool free space: %s", free_space_after_ior)
+        self.log.info("=Space used by 1st IOR: %s", space_used_by_ior)
         self.assertLess(free_space_after_ior, initial_free_space,
                         "Pool free space has not been reduced by IOR writes")
 
@@ -99,12 +136,17 @@ class EcodServerRestart(ErasureCodeIor):
             try:
                 result = run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail('ior failed')
+                self.fail("#IOR write failed")
         free_space_after_second_ior = self.pool.get_total_free_space(refresh=True)
+        space_used_by_2nd_ior = free_space_after_ior - free_space_after_second_ior
+        self.log.info("=After 2nd IOR write with same data, pool free space: %s",
+                      free_space_after_second_ior)
+        self.log.info("=Space used by 1st IOR: %s", space_used_by_ior)
+        self.log.info("=Space used by 2nd IOR: %s", space_used_by_2nd_ior)
 
         # 7.
-        self.log_step("Verify the free space after second ior is less at least twice the size of"
-                      " space_used_by_ior from initial_free_space")
+        self.log_step("Verify the free space after 2nd IOR is less at least twice the size of "
+            "space used by 1st IOR from the initial free space")
         self.assertLessEqual(
             free_space_after_second_ior, (initial_free_space - space_used_by_ior * 2),
             "Pool free space has not been reduced by double after dual ior writes")
@@ -115,7 +157,7 @@ class EcodServerRestart(ErasureCodeIor):
 
         if agg_check == "Restart_after_agg":
             # setp-9 for Restart_after_agg
-            self.log_step("Verify aggregation is complete before engine restart")
+            self.log_step("Verify aggregation is completed before engine restart")
             self.verify_aggreation(free_space_after_ior)
 
         # 9.
@@ -128,18 +170,18 @@ class EcodServerRestart(ErasureCodeIor):
 
         # 11.
         if agg_check == "Restart_before_agg":
-            self.log_step("Verify aggregation is complete after engine restart")
+            self.log_step("Verify aggregation is completed after engine restart")
             self.verify_aggreation(free_space_after_ior)
 
         # 12.
         self.log_step("Verify data after aggregation (ior read)")
-        ior_kwargs['flags'] = ior_read_flags
+        ior_kwargs["ior_params"]['flags'] = ior_read_flags
         for container in containers:
             ior_kwargs['container'] = container
             try:
                 result = run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail('ior failed')
+                self.fail("#IOR read verification failed")
 
         self.log_step("Test passed")
 
@@ -153,14 +195,19 @@ class EcodServerRestart(ErasureCodeIor):
                     Read and verify all IOR data.
 
         Test steps:
-            1. Create pool
+            1. Create pool and containers
             2. Disable aggregation
-            3. Run IOR write all EC object data to container
-            4. Shutdown the servers and restart
-            5. Enable aggregation
-            6. Rerun IOR write
-            7. Verify aggregation triggered, scm free space move to nvme
-            8. run IOR read to verify data
+            3. Get initial pool free space (dmg pool query)
+            4. Run IOR write all EC object data to container
+            5. Check for free space after IOR write all EC object data to container
+            6. Run IOR write again with the same data to each container
+            7. Verify the free space after 2nd IOR is less at least twice the size of space used by
+               1st IOR from the initial free space
+            8. Enable aggregation
+            9. Stop the engines (dmg system stop)
+            10. Restart the engines (dmg system start)
+            11. Verify aggregation is completed after engine restart
+            12. Verify data after aggregation (ior read)
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -179,14 +226,19 @@ class EcodServerRestart(ErasureCodeIor):
                 start. Read and verify all IOR data.
 
         Test steps:
-            1. Create pool
+            1. Create pool and containers
             2. Disable aggregation
-            3. Run IOR write all EC object data to container
-            4. Enable aggregation
-            5. Rerun IOR write
-            6. Verify aggregation triggered, scm free space move to nvme
-            7. Shutdown the servers and restart
-            8. run IOR read to verify data
+            3. Get initial pool free space (dmg pool query)
+            4. Run IOR write all EC object data to container
+            5. Check for free space after IOR write all EC object data to container
+            6. Run IOR write again with the same data to each container
+            7. Verify the free space after 2nd IOR is less at least twice the size of space used by
+               1st IOR from the initial free space
+            8. Enable aggregation
+            9. Verify aggregation is completed before engine restart
+            10. Stop the engines (dmg system stop)
+            11. Restart the engines (dmg system start)
+            12. Verify data after aggregation (ior read)
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large

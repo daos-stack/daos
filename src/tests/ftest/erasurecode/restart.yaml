@@ -26,8 +26,8 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  size: 5%
-  svcn: 1
+  size: 70%
+  svcn: 3
   control_method: dmg
   pool_query_timeout: 30
 container:
@@ -42,10 +42,10 @@ ior:
     flags: "-w -W -F -k -G 1 -vv"
     read_flags: "-r -R -F -k -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
-  chunk_block_transfer_sizes:
-    # [ChunkSize, BlocksSize, TransferSize]
-    - [32M, AUTO, AUTO]
+  repetitions: 5
+  block_transfer_sizes:
+    # [BlocksSize, TransferSize]
+    - [5000000, 4000]
   objectclass:
     dfs_oclass_list:
       #- [EC_Object_Class, Minimum number of servers]
@@ -56,4 +56,3 @@ ior:
       - ["EC_8P2GX", 10]
   data_percentage:
     size: 1
-  aggregation_threshold: 300
