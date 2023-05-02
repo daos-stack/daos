@@ -22,7 +22,7 @@ pool:
   scm_size: 134217728
   control_method: dmg
   pool_query_timeout: 30
-  svcn: 4
+  svcn: 6
 testparams:
   rank_to_kill:
     - 0
