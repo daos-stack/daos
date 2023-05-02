@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
+from general_utils import list_to_str
 
 
 class DestroyRebuild(TestWithServers):
