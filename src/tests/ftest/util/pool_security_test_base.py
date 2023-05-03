@@ -305,10 +305,10 @@ class PoolSecurityTestBase(TestWithServers):
             user_type, user_name, perm_type, permission)
         result = self.update_container_acl(
             secTestBase.acl_entry(user_type, user_name, permission))
-#        if result.stderr_text:
-#            self.fail(
-#                "##setup_container_acl_and_permission, fail on "
-#                "update_container_acl, expected Pass, but Failed.")
+        if result.stderr_text:
+            self.fail(
+                "##setup_container_acl_and_permission, fail on "
+                "update_container_acl, expected Pass, but Failed.")
 
     def verify_pool_readwrite(self, pool, action, expect='Pass'):
         """Verify client is able to perform read or write on a pool.
@@ -512,8 +512,8 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.pool.dmg.result)
-#        if "ERR" in self.pool.dmg.result.stderr_text:
-#            self.fail("##(4)Unable to parse pool uuid and svc.")
+        if "ERR" in self.pool.dmg.result.stderr_text:
+            self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list
         #    dmg pool get-acl <pool name>
