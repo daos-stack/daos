@@ -34,7 +34,7 @@ class EcodServerRestart(TestWithServers):
         self.log.info("Waiting for aggregation to complete..")
         if not wait_for_result(self.log, self.check_free_space, 180, delay=5,
                                expected_free=expected_free_space):
-            self.fail("#aggregation completion not detected.")
+            self.fail("aggregation completion not detected.")
 
     def check_free_space(self, expected_free):
         """Check for pool free space.
@@ -121,7 +121,7 @@ class EcodServerRestart(TestWithServers):
             try:
                 run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail("#IOR write failed, {}".format(error))
+                self.fail("IOR write failed, {}".format(error))
 
         # 5.
         self.log_step("Check for free space after IOR write all EC object data to container")
@@ -139,7 +139,7 @@ class EcodServerRestart(TestWithServers):
             try:
                 run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail("#IOR write failed, {}".format(error))
+                self.fail("IOR write failed, {}".format(error))
         free_space_after_second_ior = self.pool.get_total_free_space(refresh=True)
         space_used_by_2nd_ior = free_space_after_ior - free_space_after_second_ior
         self.log.info("=After 2nd IOR write with same data, pool free space: %s",
@@ -155,25 +155,31 @@ class EcodServerRestart(TestWithServers):
             free_space_after_second_ior, (initial_free_space - space_used_by_ior * 2),
             "Pool free space has not been reduced by double after dual ior writes")
 
-        # 8.
-        self.log_step("Enable aggregation")
-        self.pool.set_property("reclaim", "time")
-
         if agg_check == "Restart_after_agg":
+            # setp-8 for Restart_after_agg
+            self.log_step("Enable aggregation")
+            self.pool.set_property("reclaim", "time")
+
             # setp-9 for Restart_after_agg
             self.log_step("Verify aggregation is completed before engine restart")
             self.verify_aggreation(free_space_after_ior)
 
-        # 9.
+        # 8.
         self.log_step("Stop the engines (dmg system stop)")
+        # setp-10 for Restart_after_agg
         self.get_dmg_command().system_stop(True)
 
-        # 10.
+        # 9.
         self.log_step("Restart the engines (dmg system start)")
+        # setp-11 for Restart_after_agg
         self.get_dmg_command().system_start()
 
-        # 11.
         if agg_check == "Restart_before_agg":
+            # 10.
+            self.log_step("Enable aggregation")
+            self.pool.set_property("reclaim", "time")
+
+            # 11.
             self.log_step("Verify aggregation is completed after engine restart")
             self.verify_aggreation(free_space_after_ior)
 
@@ -185,7 +191,7 @@ class EcodServerRestart(TestWithServers):
             try:
                 run_ior(**ior_kwargs)
             except CommandFailure as error:
-                self.fail("#IOR read verification failed, {}".format(error))
+                self.fail("IOR read verification failed, {}".format(error))
 
         self.log_step("Test passed")
 
@@ -207,9 +213,9 @@ class EcodServerRestart(TestWithServers):
             6. Run IOR write again with the same data to each container
             7. Verify the free space after 2nd IOR is less at least twice the size of space used by
                1st IOR from the initial free space
-            8. Enable aggregation
-            9. Stop the engines (dmg system stop)
-            10. Restart the engines (dmg system start)
+            8. Stop the engines (dmg system stop)
+            9. Restart the engines (dmg system start)
+            10. Enable aggregation
             11. Verify aggregation is completed after engine restart
             12. Verify data after aggregation (ior read)
 
