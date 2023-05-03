@@ -974,8 +974,8 @@ rdb_chkptd_start(struct rdb *db)
 
 	rc = dss_ult_create(rdb_chkptd, db, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &db->d_chkptd);
 	if (rc != 0) {
-		D_ERROR(DF_DB ": failed to start chkptd ULT: %d\n", DP_DB(db), rc);
-		D_GOTO(error, rc = dss_abterr2der(rc));
+		D_ERROR(DF_DB ": failed to start chkptd ULT: " DF_RC "\n", DP_DB(db), DP_RC(rc));
+		goto error;
 	}
 	dcr->dcr_state = CHKPT_ULT;
 
