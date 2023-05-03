@@ -26,7 +26,7 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  size: 70%
+  size: 10%
   svcn: 3
   control_method: dmg
   pool_query_timeout: 30
@@ -45,7 +45,7 @@ ior:
   repetitions: 5
   block_transfer_sizes:
     # [BlocksSize, TransferSize]
-    - [5000000, 4000]
+    - [50000000, 400000]
   objectclass:
     dfs_oclass_list:
       #- [EC_Object_Class, Minimum number of servers]

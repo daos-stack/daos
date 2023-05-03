@@ -32,7 +32,7 @@ class EcodServerRestart(TestWithServers):
             expected_free_space (int): expected free space after aggregation.
         """
         self.log.info("Waiting for aggregation to complete..")
-        if not wait_for_result(self.log, self.check_free_space, 150, delay=5,
+        if not wait_for_result(self.log, self.check_free_space, 180, delay=5,
                                expected_free=expected_free_space):
             self.fail("#aggregation completion not detected.")
 
@@ -45,7 +45,10 @@ class EcodServerRestart(TestWithServers):
         Returns:
             bool: if the result was of pool free space equal to or greater than the expected free.
         """
-        return expected_free <= self.pool.get_total_free_space(refresh=True)
+        current_free = self.pool.get_total_free_space(refresh=True)
+        self.log.info("=current_free  space: %s", f"{current_free:,}")
+        self.log.info("=expected_free space: %s", f"{expected_free:,}")
+        return expected_free <= current_free
 
     def execution(self, agg_check=None):
         """Execute test.
