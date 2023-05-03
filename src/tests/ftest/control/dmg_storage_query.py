@@ -45,15 +45,15 @@ class DmgStorageQuery(ControlTestBase):
                     for item, device in enumerate(tier.bdev_list.value):
                         bdev_info.append(
                             {'bdev': device,
-                             'bdev_roles': tier.bdev_roles.value,
+                             'roles': tier.bdev_roles.value,
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
         if md_on_ssd:
             for device in bdev_info:
-                if device['bdev_roles']:
+                if device['roles']:
                     # Use predefined roles
                     continue
-                device['bdev_roles'] = ','.join(get_tier_roles(device['tier'], bdev_tiers + 1))
+                device['roles'] = ','.join(get_tier_roles(device['tier'], bdev_tiers + 1))
 
         self.log.info('Detected NVMe devices in config')
         for bdev in bdev_info:
@@ -115,7 +115,7 @@ class DmgStorageQuery(ControlTestBase):
                 bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
                     *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
                 if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
-                    for key in ('tgt_ids', 'bdev_roles'):
+                    for key in ('tgt_ids', 'roles'):
                         messages.append(
                             '{}:   detected={}, expected={}'.format(key, device[key], bdev[key]))
                         if device[key] != bdev[key]:
