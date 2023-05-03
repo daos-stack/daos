@@ -56,6 +56,10 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return err
 	}
 
+	system := cmd.cfg.SystemName
+	if resp.System != "" {
+		system = resp.System
+	}
 	/**
 	 * cart/crt_group.c:crt_group_config_save()
 	 *
@@ -78,7 +82,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	 * ========================
 	 */
 	ew := txtfmt.NewErrWriter(out)
-	fmt.Fprintf(ew, "name %s\n", cmd.cfg.SystemName)
+	fmt.Fprintf(ew, "name %s\n", system)
 	fmt.Fprintf(ew, "size %d\n", len(resp.ServiceRanks))
 	fmt.Fprintln(ew, "all")
 	for _, psr := range resp.ServiceRanks {
