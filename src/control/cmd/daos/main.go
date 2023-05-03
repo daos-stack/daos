@@ -108,6 +108,7 @@ type cliOptions struct {
 	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
 	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
 	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
+	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
 	Version    versionCmd     `command:"version" description:"print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
