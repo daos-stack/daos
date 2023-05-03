@@ -38,6 +38,9 @@ class DaosAgentSupportCollectLogTest(SupportTestBase):
             target_folder=self.target_folder,
             archive=True)
 
+        # Add a tearDown method to cleanup the logs
+        self.register_cleanup(self.cleanup_support_log, log_dir=self.target_folder)
+
         if not result.passed:
             self.fail("Failed to run daos_agent support collect-log command")
 
@@ -46,6 +49,3 @@ class DaosAgentSupportCollectLogTest(SupportTestBase):
 
         # Verify the custom log file collected on each clients.
         self.verify_custom_log_data()
-
-        # Clean up the log file created during test execution
-        self.cleanup_support_log(self.target_folder)

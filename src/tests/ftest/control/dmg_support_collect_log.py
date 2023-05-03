@@ -32,11 +32,12 @@ class DmgSupportCollectLogTest(SupportTestBase):
         # Run dmg support collect-log with --extra-logs-dir,
         # copy logs to folder with command option --target-folder
         # Enable archive mode.
-        result = self.dmg.support_collect_log(extra_logs_dir=self.custom_log_dir,
-                                              target_folder=self.target_folder,
-                                              archive=True)
-        status = result["status"]
-        self.assertEqual(status, 0, "bad return status from dmg support collect-log")
+        self.dmg.support_collect_log(extra_logs_dir=self.custom_log_dir,
+                                     target_folder=self.target_folder,
+                                     archive=True)
+
+        # Add a tearDown method to cleanup the logs
+        self.register_cleanup(self.cleanup_support_log, log_dir=self.target_folder)
 
         # Extract the collected tar.gz file
         self.extract_logs(self.target_folder + ".tar.gz")
@@ -46,6 +47,3 @@ class DmgSupportCollectLogTest(SupportTestBase):
 
         # Verify the custom log file collected.
         self.verify_custom_log_data()
-
-        # Clean up the log file created during test execution
-        self.cleanup_support_log(self.target_folder)

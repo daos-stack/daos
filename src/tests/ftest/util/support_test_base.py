@@ -117,14 +117,18 @@ class SupportTestBase(ControlTestBase):
         Args:
             log_dir (str): Name of the log directory to be removed
 
-        Raises:
-            Test Failure: If unable to run any command.
+        Returns:
+            list: a list of any errors detected when deleting the logs
 
         """
+        error_list = []
         # Remove the log and extract directory
         folders = [log_dir, self.extract_dir]
         for folder in folders:
             delete_cmd = "sudo rm -rf {}*".format(folder)
             result = run_remote(self.log, self.log_hosts, delete_cmd)
             if not result.passed:
-                self.fail("Failed to delete the folder {} with result:{}".format(folder, result))
+                error_list.append(
+                    "Failed to delete folder {} with result:{}".format(folder, result))
+
+        return error_list

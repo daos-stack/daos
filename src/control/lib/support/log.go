@@ -597,7 +597,6 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 
 	switch opts[0].LogCmd {
 	case "EngineLog":
-		log.Infof(" SAMIR serverConfig.Engines %s", serverConfig.Engines)
 		if len(serverConfig.Engines) == 0 {
 			return errors.New("Engine count is 0 from server config")
 		}
