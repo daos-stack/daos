@@ -272,6 +272,8 @@ enum {
 	VOS_OF_SKIP_FETCH		= (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
 	VOS_OF_EC			= (1 << 19),
+	/** Update from rebuild */
+	VOS_OF_REBUILD			= (1 << 20),
 };
 
 enum {

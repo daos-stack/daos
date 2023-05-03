@@ -6,9 +6,9 @@
 
 import os
 import time
-import general_utils
 
 from dfuse_test_base import DfuseTestBase
+from run_utils import run_remote
 
 
 class DaosBuild(DfuseTestBase):
@@ -119,47 +119,44 @@ class DaosBuild(DfuseTestBase):
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
-        daos_cmd = self.get_daos_command()
-
         cont_attrs = {}
 
         # How long to cache things for, if caching is enabled.  Set to longer than test run-time.
         cache_time = '2d'
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
-        build_time = 10
+        build_time = 60
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            build_time = 60
         elif cache_mode == 'writethrough':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            if intercept:
+                build_time *= 6
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            if intercept:
-                build_time = 360
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
-            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
-            build_time = 60 * 2
-            cont_attrs['dfuse-data-cache'] = True
+            build_time *= 2
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time = 60 * 5
+            build_time *= 5
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -169,8 +166,7 @@ class DaosBuild(DfuseTestBase):
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
-        daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
-                                     attrs=cont_attrs)
+        self.container.set_attr(attrs=cont_attrs)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
@@ -215,38 +211,26 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 timeout = build_time * 60
             start = time.time()
-            ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
-                                              timeout=timeout, expect_rc=0)
+            result = run_remote(
+                self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
-            self.log.info('Completed in %d:%02d (%d%% of timeout)',
-                          minutes, seconds, elapsed / timeout * 100)
-            assert len(ret_code) == 1
-
-            cmd_ret = ret_code[0]
-            for (key, value) in cmd_ret.items():
-                if key == 'stdout':
-                    continue
-                self.log.info('%s:%s', key, value)
-
-            for line in cmd_ret['stdout']:
-                self.log.info(line)
-
-            if cmd_ret['exit_status'] == 0:
+            self.log.info('Command %s completed in %d:%02d (%d%% of timeout)',
+                          command, minutes, seconds, elapsed / timeout * 100)
+            if result.passed:
                 continue
 
+            self.log.info('Failure detected - debug information:')
             fail_type = 'Failure to build'
-
-            if cmd_ret['interrupted']:
+            if result.timeout:
                 self.log.info('Command timed out')
-                general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
+                run_remote(self.log, self.hostlist_clients, 'ps auwx', timeout=30)
                 fail_type = 'Timeout building'
 
             self.log.error('BuildDaos Test Failed')
-
             if cmd.startswith('scons'):
-                general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
-                                       timeout=30)
+                run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
+                           timeout=30)
             if intercept:
                 self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
             else:

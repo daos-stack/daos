@@ -194,15 +194,13 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  * Establish the indexed committed DTX table in DRAM.
  *
  * \param coh	[IN]		Container open handle.
- * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
- *				contains committed DTX entries to be handled.
  *
  * \return	Zero on success, need further re-index.
  *		Positive, re-index is completed.
  *		Negative value if error.
  */
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+vos_dtx_cmt_reindex(daos_handle_t coh);
 
 /**
  * Cleanup local DTX when local modification failed.
@@ -803,6 +801,15 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
+ * Renew the epoch for the update handle.
+ *
+ * \param ioh	[IN]	The I/O handle for update.
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -1172,6 +1179,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_RESET_GC,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
+	/** Set space reserve ratio for rebuild */
+	VOS_PO_CTL_SET_SPACE_RB,
 };
 
 /**

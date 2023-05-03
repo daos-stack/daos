@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -262,7 +262,7 @@ func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
 		if IsConnErr(err) {
-			return errMSConnectionFailure
+			return errors.Wrap(errMSConnectionFailure, err.Error())
 		}
 		return err
 	}

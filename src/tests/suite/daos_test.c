@@ -192,7 +192,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS 1-D Array test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_array_test(rank, size);
+			nr_failed += run_daos_array_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		case 'K':
 			daos_test_print(rank, "\n\n=================");

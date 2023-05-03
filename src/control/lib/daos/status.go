@@ -152,4 +152,6 @@ const (
 	ControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
 	// NoCert indicates that one or more configured certificates could not be accessed.
 	NoCert Status = -C.DER_NO_CERT
+	// BadCert indicates that an invalid certificate was detected.
+	BadCert Status = -C.DER_BAD_CERT
 )

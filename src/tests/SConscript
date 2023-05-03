@@ -70,6 +70,15 @@ def build_tests(prereqs, env):
     # ftest
     SConscript('ftest/SConscript')
 
+    # rpc tests
+    SConscript('rpc/SConscript')
+
+    # daos middleware consistency corruption tool for testing
+    libs_client += ['dfs']
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+    daos_mw = denv.d_program('daos_mw_fi', 'daos_mw_fi.c', LIBS=libs_client, RPATH='$PREFIX/lib64')
+    denv.Install('$PREFIX/lib/daos/TESTING/tests', daos_mw)
+
 
 def scons():
     """Execute build"""

@@ -61,7 +61,7 @@ func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
 	if err != nil {
 		m.log.Error(err.Error())
 		// something is wrong with the cert config
-		return m.credRespWithStatus(daos.InvalidInput)
+		return m.credRespWithStatus(daos.BadCert)
 	}
 
 	cred, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)

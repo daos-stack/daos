@@ -7,11 +7,14 @@ import time
 import os
 import threading
 
+from ClusterShell.NodeSet import NodeSet
+
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, stop_processes
+from general_utils import report_errors
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import stop_processes
 
 
 class ServerRankFailure(IorTestBase):
@@ -90,11 +93,13 @@ class ServerRankFailure(IorTestBase):
             engine_kill_host (str): Hostname to kill engine.
         """
         pattern = self.server_managers[0].manager.job.command_regex
-        result = stop_processes(hosts=[engine_kill_host], pattern=pattern)
-        if 0 in result and len(result) == 1:
-            self.log.info("No remote daos_engine process killed!")
+        detected, running = stop_processes(self.log, NodeSet(engine_kill_host), pattern)
+        if not detected:
+            self.log.info("No daos_engine process killed on %s!", engine_kill_host)
+        elif running:
+            self.log.info("Unable to kill daos_engine processes on %s!", running)
         else:
-            self.log.info("daos_engine in %s killed", engine_kill_host)
+            self.log.info("daos_engine processes on %s killed", detected)
 
     def verify_ior_worked(self, ior_results, job_num, errors):
         """Verify that the IOR worked.
@@ -199,7 +204,7 @@ class ServerRankFailure(IorTestBase):
             self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 11. Verify that the container Health is HEALTHY.
-        if not self.container.verify_health(expected_health="HEALTHY"):
+        if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after server restart!")
 
         # 12. Run IOR and verify that it works.
@@ -331,7 +336,7 @@ class ServerRankFailure(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after killing engine on rank 1!")
 
         # 8. Create a new container on the pool and run IOR.

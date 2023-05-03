@@ -42,7 +42,6 @@ d_slab_init(struct d_slab *slab, void *arg)
 	D_TRACE_DEBUG(DB_ANY, slab, "Creating a data slab manager");
 
 	slab->slab_init = true;
-	slab->slab_arg  = arg;
 	return -DER_SUCCESS;
 }
 
@@ -200,7 +199,7 @@ create(struct d_slab_type *type)
 
 	type->st_init_count++;
 	if (type->st_reg.sr_init)
-		type->st_reg.sr_init(ptr, type->st_slab->slab_arg);
+		type->st_reg.sr_init(ptr, type->st_arg);
 
 	if (type->st_reg.sr_reset) {
 		if (!type->st_reg.sr_reset(ptr)) {
@@ -244,7 +243,7 @@ create_many(struct d_slab_type *type)
 
 /* Register a data type */
 int
-d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type **_type)
+d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, void *arg, struct d_slab_type **_type)
 {
 	struct d_slab_type *type;
 	int                 rc;
@@ -270,6 +269,7 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type 
 
 	type->st_count = 0;
 	type->st_reg   = *reg;
+	type->st_arg   = arg;
 
 	create_many(type);
 	create_many(type);
@@ -358,7 +358,6 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->st_reg.sr_offset;
 
-	D_TRACE_DOWN(DB_ANY, ptr);
 	D_MUTEX_LOCK(&type->st_lock);
 	type->st_pending_count++;
 	d_list_add_tail(entry, &type->st_pending_list);

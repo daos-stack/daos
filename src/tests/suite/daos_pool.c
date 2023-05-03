@@ -550,14 +550,12 @@ pool_properties(void **state)
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
-		print_message("label verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("label verification filed.\n");
 	}
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
-		print_message("space_rb verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("space_rb verification filed.\n");
 	}
 #endif
 	/* not set properties should get default value */
@@ -565,20 +563,17 @@ pool_properties(void **state)
 	if (entry == NULL ||
 	    entry->dpe_val != (DAOS_SELF_HEAL_AUTO_EXCLUDE |
 			       DAOS_SELF_HEAL_AUTO_REBUILD)) {
-		print_message("self-heal verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("self-heal verification filed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
 	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_LAZY) {
-		print_message("reclaim verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("reclaim verification filed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
 	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
-		print_message("ACL prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("ACL prop verification failed.\n");
 	}
 
 	/* default owner should be effective uid */
@@ -588,8 +583,7 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, expected_owner,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner prop verification failed.\n");
 	}
 
 	/* default owner-group should be effective gid */
@@ -599,8 +593,7 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, expected_group,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner-group prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner-group prop verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
@@ -609,14 +602,12 @@ pool_properties(void **state)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
 	if (entry == NULL) {
-		print_message("scrubber frequency verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("scrubber frequency verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_THRESH);
 	if (entry == NULL) {
-		print_message("scrubber threshold verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("scrubber threshold verification failed.\n");
 	}
 
 	if (arg->myrank == 0)
@@ -2074,6 +2065,7 @@ static int
 pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
 }
 

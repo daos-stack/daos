@@ -195,7 +195,9 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 	resp := &storage.BdevPrepareResponse{}
 
 	if req.CleanHugePagesOnly {
-		// Remove hugepages created by an inactive SPDK process.
+		// Remove hugepages that were created by a no-longer-active SPDK process. Note that
+		// when running prepare, it's unlikely that any SPDK processes are active as this
+		// is performed prior to starting engines.
 		nrRemoved, err := hpClean(sb.log, hugePageDir)
 		if err != nil {
 			return resp, errors.Wrapf(err, "clean spdk hugepages")

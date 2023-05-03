@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,6 +66,7 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
@@ -123,8 +124,6 @@ struct ds_cont_child {
 	struct btr_root		 sc_dtx_cos_btr;
 	/* The global list for committable DTXs. */
 	d_list_t		 sc_dtx_cos_list;
-	/* The pool map version for the latest DTX resync on the container. */
-	uint32_t		 sc_dtx_resync_ver;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -187,7 +186,6 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -256,4 +254,7 @@ int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
+typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
+int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
+int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

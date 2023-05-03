@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -847,9 +847,16 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
+
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1002,9 +1009,15 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 
 update_iv_cache:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);

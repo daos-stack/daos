@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,6 +130,38 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
+		"certificate fault": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: &fault.Fault{
+						Code: code.SecurityInvalidCert,
+					},
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					resp: &mgmtpb.GetAttachInfoResp{
+						Status: int32(daos.BadCert),
+					},
+				},
+			},
+		},
+		"connection fault": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: &fault.Fault{
+						Code: code.ClientConnectionRefused,
+					},
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					resp: &mgmtpb.GetAttachInfoResp{
+						Status: int32(daos.Unreachable),
+					},
+				},
+			},
+		},
 		"cache disabled": {
 			cacheDisabled: true,
 			rpcResps:      hostResps(testResps),
@@ -145,7 +177,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
-		"cached": {
+		"cache": {
 			rpcResps: hostResps(testResps),
 			expResult: []attachInfoResult{
 				{

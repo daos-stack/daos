@@ -413,7 +413,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 

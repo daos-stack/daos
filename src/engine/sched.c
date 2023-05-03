@@ -552,7 +552,7 @@ sched_info_init(struct dss_xstream *dx)
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("Create sched pool hash failed. "DF_RC".\n", DP_RC(rc));
+		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1056,13 +1056,14 @@ process_pool_cb(d_list_t *rlink, void *arg)
 
 	/* Update stats window no matter if any pending ULT or not */
 	sw_window_update(&spi->spi_stats_window);
+	/* check_space_pressure() can't be skipped, otherwise, destroyed pool won't be detected */
+	press = check_space_pressure(dx, spi);
 	if (spi->spi_req_cnt == 0)
 		return 0;
 
 	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
 		kick[i] = pool2req_cnt(spi, i);
 
-	press = check_space_pressure(dx, spi);
 	pr = &pressure_gauge[press];
 
 	if (press == SCHED_SPACE_PRESS_NONE)

@@ -44,7 +44,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: %s\n", d_errstr(rc));
+	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -113,7 +113,7 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 }
 
 static void *
-obj_tls_init(int xs_id, int tgt_id)
+obj_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct obj_tls	*tls;
 	uint32_t	opc;
@@ -188,7 +188,7 @@ obj_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-obj_tls_fini(void *data)
+obj_tls_fini(int tags, void *data)
 {
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;

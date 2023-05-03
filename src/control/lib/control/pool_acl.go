@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,7 +48,7 @@ func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq)
 	pgar := &PoolGetACLResp{
 		ACL: &AccessControlList{},
 	}
-	return pgar, convertMSResponse(ur, pgar.ACL)
+	return pgar, convertMSResponse(ur, pgar)
 }
 
 // PoolOverwriteACLReq contains the input parameters for PoolOverwriteACL
@@ -73,9 +73,9 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 	}
 
 	pbReq := &mgmtpb.ModifyACLReq{
-		Sys: req.getSystem(rpcClient),
-		Id:  req.ID,
-		ACL: req.ACL.Entries,
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, pbReq)
@@ -90,7 +90,7 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 	poar := &PoolOverwriteACLResp{
 		ACL: &AccessControlList{},
 	}
-	return poar, convertMSResponse(ur, poar.ACL)
+	return poar, convertMSResponse(ur, poar)
 
 }
 
@@ -116,9 +116,9 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 	}
 
 	pbReq := &mgmtpb.ModifyACLReq{
-		Sys: req.getSystem(rpcClient),
-		Id:  req.ID,
-		ACL: req.ACL.Entries,
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, pbReq)
@@ -133,7 +133,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 	puar := &PoolUpdateACLResp{
 		ACL: &AccessControlList{},
 	}
-	return puar, convertMSResponse(ur, puar.ACL)
+	return puar, convertMSResponse(ur, puar)
 }
 
 // PoolDeleteACLReq contains the input parameters for PoolDeleteACL.
@@ -175,5 +175,5 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 	pdar := &PoolDeleteACLResp{
 		ACL: &AccessControlList{},
 	}
-	return pdar, convertMSResponse(ur, pdar.ACL)
+	return pdar, convertMSResponse(ur, pdar)
 }

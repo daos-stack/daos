@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@ enum fs_op {
 	FS_RESET_ATTR,
 	FS_RESET_CHUNK_SIZE,
 	FS_RESET_OCLASS,
+	FS_CHECK,
 };
 
 enum cont_op {
@@ -185,26 +186,18 @@ int dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t 
 			  bool get_oid, bool get_label, bool get_roots);
 int dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh);
 
-/* filesystem operations */
+/* DAOS filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);
 int fs_dfs_hdlr(struct cmd_args_s *ap);
 int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
+int fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
+int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
+int fs_relink_root_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
-int cont_create_hdlr(struct cmd_args_s *ap);
-int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap);
-int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
-int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
-int cont_update_acl_hdlr(struct cmd_args_s *ap);
-int cont_delete_acl_hdlr(struct cmd_args_s *ap);
-int cont_set_owner_hdlr(struct cmd_args_s *ap);
-int cont_rollback_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -213,7 +206,5 @@ int cont_rollback_hdlr(struct cmd_args_s *ap);
  * int cont_stat_hdlr()
  * int cont_rollback_hdlr()
  */
-
-int obj_query_hdlr(struct cmd_args_s *ap);
 
 #endif /* __DAOS_HDLR_H__ */

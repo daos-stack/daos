@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -311,7 +311,17 @@ agg_clear_extents(struct ec_agg_entry *entry)
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
-	D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	if (entry->ae_cur_stripe.as_extent_cnt > 0) {
+		D_ERROR(DF_UOID" extent cnt %u\n", DP_UOID(entry->ae_oid),
+			entry->ae_cur_stripe.as_extent_cnt);
+		d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
+				      ae_link) {
+			D_ERROR("recx "DF_RECX" eph "DF_X64"\n", DP_RECX(extent->ae_recx),
+				extent->ae_epoch);
+		}
+
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	}
 	entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	entry->ae_cur_stripe.as_stripe_fill = 0;
 	entry->ae_cur_stripe.as_has_holes = carry_is_hole ? true : false;
@@ -961,8 +971,8 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, DF_UOID
-			 " fetch parity from peer shard %d, "DF_RC".\n",
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
 			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
 		if (rc)
 			goto out;
@@ -2313,7 +2323,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
-	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, -1, NULL,
+	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
 out:

@@ -14,7 +14,6 @@ from job_manager_utils import get_job_manager
 
 
 class DaosCoreTestDfuse(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
 
     :avocado: recursive
@@ -38,8 +37,6 @@ class DaosCoreTestDfuse(DfuseTestBase):
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
-
-        daos_cmd = self.get_daos_command()
 
         cont_attrs = OrderedDict()
 
@@ -76,8 +73,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         if use_dfuse:
-            daos_cmd.container_set_attrs(pool=self.pool.uuid, cont=self.container.uuid,
-                                         attrs=cont_attrs)
+            self.container.set_attr(attrs=cont_attrs)
 
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 

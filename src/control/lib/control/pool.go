@@ -40,7 +40,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
+	DefaultPoolTimeout = 5 * time.Minute
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -134,12 +134,19 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
+	var acl []string
+	if pcr.ACL != nil {
+		acl = pcr.ACL.Entries
+	}
+
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
+		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
 		Properties: props,
+		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
 	})
 }
@@ -227,7 +234,7 @@ type (
 		poolRequest
 		User       string
 		UserGroup  string
-		ACL        *AccessControlList
+		ACL        *AccessControlList `json:"-"`
 		NumSvcReps uint32
 		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
@@ -1289,8 +1296,8 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
-	// Check if DAOS system is ready. If it's not, we should fail the Pool create.
-	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true}); err != nil {
+	// Verify that the DAOS system is ready before attempting to query storage.
+	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
 		return 0, 0, err
 	}
 

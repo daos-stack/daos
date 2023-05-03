@@ -12,6 +12,7 @@
 #include <daos/placement.h>
 #include <daos.h>
 
+#define PLT_LAYOUT_VERSION	1
 void
 print_layout(struct pl_obj_layout *layout);
 

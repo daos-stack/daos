@@ -765,7 +765,7 @@ that contains the bio_addr.
 
 ## Metadata Overhead
 
-There is a tool available to estimate the metadata overhead. It is described on the <a href="https://github.com/daos-stack/daos/blob/master/src/client/storage_estimator/README.md">storage estimator</a> section.
+There is a tool available to estimate the metadata overhead. It is described on the <a href="https://github.com/daos-stack/daos/blob/master/src/vos/storage_estimator/README.md">storage estimator</a> section.
 
 <a id="81"></a>
 
