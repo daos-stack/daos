@@ -85,6 +85,7 @@ class YamlUpdater():
         ("job_manager_timeout", "_timeout", int),
         ("pattern_timeout", "_timeout", int),
         ("pool_query_timeout", "_timeout", int),
+        ("pool_query_delay", "_timeout", int),
         ("rebuild_timeout", "_timeout", int),
         ("srv_timeout", "_timeout", int),
         ("storage_prepare_timeout", "_timeout", int),
