@@ -421,7 +421,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 16388, // 2 extra huge pages requested per engine
+				HugepageCount: 16388, // 2 extra huge pages requested per engine
 				HugeNodes:     "0",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -441,7 +441,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 16388, // 2 extra huge pages requested per engine
+				HugepageCount: 16388, // 2 extra huge pages requested per engine
 				HugeNodes:     "1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -460,7 +460,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194, // 2 extra huge pages requested per engine
+				HugepageCount: 8194, // 2 extra huge pages requested per engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -486,7 +486,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			// mem_size engine parameter reflects lower "free" value
 			expMemSize:      16382, // (16382 hugepages free / 2 engines) * 2mib size
-			expHugePageSize: 2,
+			expHugepageSize: 2,
 			// No error returned, notice logged only, engine-side mem threshold
 			// validation instead.
 			expNotice: true,
@@ -574,7 +574,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194, // hugepages per engine plus 2 extra
+				HugepageCount: 8194, // hugepages per engine plus 2 extra
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
@@ -600,7 +600,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8196, // hugepages plus 2 extra per engine
+				HugepageCount: 8196, // hugepages plus 2 extra per engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),

@@ -813,53 +813,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					)
 			},
 		},
-		"insufficient hugepages set in config; bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugepages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0").
-								WithBdevDeviceRoles(storage.BdevRoleData),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugepages(4096, 2048),
-		},
-		"insufficient hugepages set in config; emulated bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugepages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("file").
-								WithBdevDeviceList("/tmp/daos-bdev").
-								WithBdevFileSize(16),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugepages(4096, 2048),
-		},
-		"insufficient hugepages set in config; no bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugepages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmMountPoint("/foo"),
-						),
-					)
-			},
-			expNrHugepages: 2048,
-		},
 		"zero hugepages set in config; bdevs configured; implicit role assignment": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().

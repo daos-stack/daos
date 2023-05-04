@@ -319,12 +319,12 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		// Request a few more hugepages than actually required for each NUMA node
 		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
+		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
 
 		// Extra pages to be allocated per engine but take into account the page count
 		// will be issued on each NUMA node.
-		extraPages := (extraHugePages * len(srv.cfg.Engines)) / len(numaNodes)
-		prepReq.HugePageCount += extraPages
+		extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
+		prepReq.HugepageCount += extraPages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
@@ -473,14 +473,14 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
 			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
 			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
-			mi.HugePagesFree)
-		engine.setMemSize(memSizeFreeMiB)
+			mi.HugepagesFree)
+		ei.setMemSize(memSizeFreeMiB)
 	} else {
-		engine.setMemSize(memSizeReqMiB)
+		ei.setMemSize(memSizeReqMiB)
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
-	engine.setHugePageSz(pageSizeMiB)
+	ei.setHugepageSz(pageSizeMiB)
 
 	return nil
 }
