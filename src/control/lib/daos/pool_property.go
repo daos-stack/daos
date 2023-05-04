@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -299,7 +299,7 @@ func PoolProperties() PoolPropertyMap {
 		"perf_domain": {
 			Property: PoolProperty{
 				Number:      PoolPropertyPerfDomain,
-				Description: "pool perfomance domain",
+				Description: "pool performance domain",
 			},
 			values: map[string]uint64{
 				"root":   PoolPerfDomainRoot,
