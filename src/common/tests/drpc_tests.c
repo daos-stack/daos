@@ -228,7 +228,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	ctx->sequence = 10; /* arbitrary but nonzero */
 	call->sequence = 0;
 
-	drpc_call(ctx, 0, call, &resp);
+	assert_rc_equal(drpc_call(ctx, 0, call, &resp), 0);
 
 	/* drpc_call updated call seq number and incremented ctx seq num */
 	assert_int_equal(ctx->sequence, call->sequence + 1);
