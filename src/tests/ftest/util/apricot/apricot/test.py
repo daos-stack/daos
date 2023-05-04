@@ -75,6 +75,22 @@ class Test(avocadoTest):
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
+        # Support unique test case timeout values.  These test case specific
+        # timeouts are read from the test yaml using the test case method name
+        # as the key, e.g.:
+        #   timeouts:
+        #     test_quick: 120
+        #     test_long: 1200
+        self.timeouts = self.params.get(self.test_id, "/run/timeouts/*")
+
+        # If not specified, set a default timeout of 1 minute.
+        # Tests that require a longer timeout should set a "timeout: <int>"
+        # entry in their yaml file.  All tests should have a timeout defined.
+        if (not self.timeout) and (not self.timeouts):
+            self.timeout = 60
+        elif self.timeouts:
+            self.timeout = self.timeouts
+
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
         # descending order. Spaces can optionally be used between units and
@@ -98,21 +114,6 @@ class Test(avocadoTest):
                 if dhms[index] is not None:
                     self.timeout += multiplier * int(dhms[index])
 
-        # Support unique test case timeout values.  These test case specific
-        # timeouts are read from the test yaml using the test case method name
-        # as the key, e.g.:
-        #   timeouts:
-        #     test_quick: 120
-        #     test_long: 1200
-        self.timeouts = self.params.get(self.test_id, "/run/timeouts/*")
-
-        # If not specified, set a default timeout of 1 minute.
-        # Tests that require a longer timeout should set a "timeout: <int>"
-        # entry in their yaml file.  All tests should have a timeout defined.
-        if (not self.timeout) and (not self.timeouts):
-            self.timeout = 60
-        elif self.timeouts:
-            self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
         # Set the job_id to the unique sub directory name of the test-results sub directory
@@ -706,7 +707,11 @@ class TestWithServers(TestWithoutServers):
         # Access points to use by default when starting servers and agents
         #  - for 1 or 2 servers use 1 access point
         #  - for 3 or more servers use 3 access points
-        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        access_points_qty = self.params.get(
+            "access_points_qty", "/run/setup/*", default_access_points_qty)
+        if access_points_qty < 1 or access_points_qty > len(self.hostlist_servers):
+            self.fail("Invalid access points node quantity")
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
@@ -1674,7 +1679,9 @@ class TestWithServers(TestWithoutServers):
             DaosCommand: a new DaosCommand object
 
         """
-        return DaosCommand(self.bin)
+        daos_command = DaosCommand(self.bin)
+        daos_command.get_params(self)
+        return daos_command
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.

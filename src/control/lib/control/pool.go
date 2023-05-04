@@ -40,7 +40,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
+	DefaultPoolTimeout = 5 * time.Minute
 )
 
 // checkUUID is a helper function for validating that the supplied

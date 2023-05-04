@@ -16,3 +16,10 @@ A discussion forum for technical questions and support
 for DAOS in Google Cloud is available in the
 [DAOS on Google Cloud](https://daos-stack.slack.com/archives/C03GLTLHA59)
 Slack channel.
+
+## DAOS in IBM Cloud VPC
+
+DAOS is available in IBM Cloud VPC.
+
+To learn more about DAOS in IBM Cloud VPC, please refer to the
+[IBM blog post](https://www.ibm.com/cloud/blog/daos-on-ibm-cloud-vpc).

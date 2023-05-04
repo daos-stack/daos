@@ -19,23 +19,6 @@ import (
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"per-server metadata target health query",
-			"storage query target-health -r 0 -t 1",
-			printRequest(t, &control.SmdQueryReq{
-				Rank:             ranklist.Rank(0),
-				OmitPools:        true,
-				IncludeBioHealth: true,
-				Target:           "1",
-			}),
-			nil,
-		},
-		{
-			"per-server metadata target health query (missing flags)",
-			"storage query target-health",
-			printRequest(t, &control.SmdQueryReq{}),
-			errors.New("required flags"),
-		},
-		{
 			"per-server metadata device health query",
 			"storage query device-health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
