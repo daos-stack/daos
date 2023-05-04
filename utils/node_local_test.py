@@ -2217,9 +2217,10 @@ class PosixTests():
             expected_keys.remove(key)
             print(f'xattr is {key}:{value}')
 
-        rc = subprocess.run(['getfattr', '-n', 'user.daos', self.dfuse.dir], check=False)
-        print(rc)
-        assert rc.returncode == 0, rc
+        # Leave this out for now to avoid adding attr as a new rpm dependency.
+        # rc = subprocess.run(['getfattr', '-n', 'user.daos', self.dfuse.dir], check=False)
+        # print(rc)
+        # assert rc.returncode == 0, rc
 
         assert len(expected_keys) == 0, 'Expected key not found'
 
