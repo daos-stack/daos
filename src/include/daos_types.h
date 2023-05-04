@@ -230,8 +230,10 @@ typedef struct {
  * Corresponding rank and URI for a DAOS engine
  */
 struct daos_rank_uri {
-	uint32_t	 dru_rank; /** DAOS engine rank */
-	char		*dru_uri; /** URI associated with rank */
+	/** DAOS engine rank */
+	uint32_t	 dru_rank;
+	/** URI associated with rank */
+	char		*dru_uri;
 };
 
 /**
@@ -242,8 +244,10 @@ struct daos_sys_info {
 	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
 	/** fabric provider in use by this system */
 	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint32_t		 dsi_nr_ranks; /** length of ranks array */
-	struct daos_rank_uri	*dsi_ranks; /** ranks and their client-accessible URIs */
+	/** length of ranks array */
+	uint32_t		 dsi_nr_ranks;
+	/** ranks and their client-accessible URIs */
+	struct daos_rank_uri	*dsi_ranks;
 };
 
 /** max pool/cont attr size */
