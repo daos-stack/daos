@@ -299,13 +299,13 @@ func PoolProperties() PoolPropertyMap {
 		"perf_domain": {
 			Property: PoolProperty{
 				Number:      PoolPropertyPerfDomain,
-				Description: "Pool performance domain",
-				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					if !PerfDomainIsValid(s) {
-						return nil, errors.Errorf("invalid perf domain %q", s)
-					}
-					return &PoolPropertyValue{s}, nil
-				},
+				Description: "pool perfomance domain",
+			},
+			values: map[string]uint64{
+				"root":   PoolPerfDomainRoot,
+				"node":   PoolPerfDomainNode,
+				"target": PoolPerfDomainTarget,
+				"rank":   PoolPerfDomainRank,
 			},
 		},
 		"svc_rf": {

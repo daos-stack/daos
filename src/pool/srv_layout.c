@@ -111,7 +111,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val	= DS_POOL_OBJ_VERSION,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_PERF_DOMAIN,
-		.dpe_str	= DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
+		.dpe_val	= DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
 	},
 };
 

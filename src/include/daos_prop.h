@@ -175,7 +175,7 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
 /**
  * default performance domain is root
  */
-#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT "root"
+#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT	PO_COMP_TP_ROOT
 
 /**
  * Number of pool property types

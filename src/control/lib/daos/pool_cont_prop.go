@@ -16,6 +16,7 @@ import (
 #include <daos_prop.h>
 #include <daos_pool.h>
 #include <daos/object.h>
+#include <daos/pool_map.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
 #include <daos_srv/control.h>
@@ -256,4 +257,11 @@ const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
 	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)
+
+const (
+	PoolPerfDomainRoot   = C.PO_COMP_TP_ROOT
+	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
+	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
+	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
 )
