@@ -29,8 +29,6 @@ struct obj_remote_cb_arg {
 	crt_rpc_t			*parent_req;
 	struct dtx_leader_handle	*dlh;
 	int				idx;
-	void				*cpd_reqs;
-	void				*cpd_desc;
 	void				*cpd_head;
 	void				*cpd_dcsr;
 	void				*cpd_dcde;
@@ -280,8 +278,6 @@ do_shard_cpd_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 
 	arg->comp_cb(arg->dlh, arg->idx, rc);
 	crt_req_decref(arg->parent_req);
-	D_FREE(arg->cpd_reqs);
-	D_FREE(arg->cpd_desc);
 	D_FREE(arg->cpd_head);
 	D_FREE(arg->cpd_dcsr);
 	D_FREE(arg->cpd_dcde);
@@ -294,84 +290,6 @@ shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 	do_shard_cpd_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
-static int
-ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde_parent,
-		      struct daos_cpd_sub_req *dcsr_parent, int total,
-		      struct daos_cpd_disp_ent **p_dcde, struct daos_cpd_sub_req **p_dcsr)
-{
-	struct daos_cpd_disp_ent	*dcde = NULL;
-	struct daos_cpd_sub_req		*dcsr = NULL;
-	struct daos_cpd_req_idx		*dcri_child;
-	struct daos_cpd_req_idx		*dcri_parent;
-	uint32_t			 idx;
-	int				 count;
-	int				 prev = -1;
-	int				 cur = 0;
-	int				 rc = 0;
-	int				 i;
-
-	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
-	/*
-	 * "dcde->dcde_reqs[m].dcri_req_idx" may be equal to "dcde->dcde_reqs[n].dcri_req_idx".
-	 * So there will be at most 'count' sub requests for the given target.
-	 */
-	D_ALLOC_ARRAY(dcsr, count);
-	if (dcsr == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ALLOC(dcde, sizeof(*dcde) +
-		sizeof(struct daos_cpd_req_idx) * count);
-	if (dcde == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	dcde->dcde_reqs = (struct daos_cpd_req_idx *)(dcde + 1);
-	dcde->dcde_read_cnt = dcde_parent->dcde_read_cnt;
-	dcde->dcde_write_cnt = dcde_parent->dcde_write_cnt;
-
-	for (i = 0; i < count; i++) {
-		dcri_child = &dcde->dcde_reqs[i];
-		dcri_parent = &dcde_parent->dcde_reqs[i];
-		idx = dcri_parent->dcri_req_idx;
-		D_ASSERT(idx < total);
-
-		dcri_child->dcri_shard_off = dcri_parent->dcri_shard_off;
-		dcri_child->dcri_shard_id = dcri_parent->dcri_shard_id;
-		dcri_child->dcri_padding = dcri_parent->dcri_padding;
-
-		if (idx == prev &&
-		    (dcsr_parent[idx].dcsr_opc != DCSO_UPDATE ||
-		     dcsr_parent[idx].dcsr_update.dcu_ec_split_req == NULL)) {
-			D_ASSERT(cur >= 1);
-
-			dcri_child->dcri_req_idx = cur - 1;
-			continue;
-		}
-
-		/*
-		 * Only copy the top level data structure for daos_cpd_sub_req. Some DRAM
-		 * area pointed via the pointer inside daos_cpd_sub_req are shared between
-		 * 'dcsr' and 'dcsr_parent'. Because we hold the parent RPC's reference,
-		 * then related DRAM area will not be freed until the callback for forwarded
-		 * RPC is handled.
-		 */
-		memcpy(&dcsr[cur], &dcsr_parent[idx], sizeof(dcsr[cur]));
-		dcri_child->dcri_req_idx = cur;
-		prev = idx;
-		cur++;
-	}
-
-out:
-	if (rc != 0) {
-		D_FREE(dcde);
-		D_FREE(dcsr);
-	} else {
-		*p_dcde = dcde;
-		*p_dcsr = dcsr;
-	}
-
-	return rc < 0 ? rc : cur;
-}
-
 /* Dispatch CPD RPC and handle sub requests remotely */
 int
 ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
@@ -380,10 +298,6 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	struct ds_obj_exec_arg		*exec_arg = arg;
 	struct daos_cpd_args		*dca = exec_arg->args;
 	struct daos_cpd_sub_head	*dcsh;
-	struct daos_cpd_disp_ent	*dcde_parent = NULL;
-	struct daos_cpd_disp_ent	*dcde = NULL;
-	struct daos_cpd_sub_req		*dcsr_parent = NULL;
-	struct daos_cpd_sub_req		*dcsr = NULL;
 	struct obj_cpd_in		*oci;
 	struct obj_cpd_in		*oci_parent;
 	struct obj_remote_cb_arg	*remote_arg = NULL;
@@ -395,7 +309,6 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	struct daos_cpd_sg		*head_dcs = NULL;
 	struct daos_cpd_sg		*dcsr_dcs = NULL;
 	struct daos_cpd_sg		*dcde_dcs = NULL;
-	int				 total;
 	int				 rc = 0;
 
 	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
@@ -454,49 +367,52 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	oci->oci_disp_tgts.ca_count = 0;
 
 	/* It is safe to share the head with parent since we are holding reference on parent RPC. */
-	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-	head_dcs->dcs_type = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
+	dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);
+	head_dcs->dcs_type_base = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
 	head_dcs->dcs_nr = 1;
-	if (head_dcs->dcs_type == DCST_BULK_HEAD)
+	if (head_dcs->dcs_type_base == DCST_BULK_HEAD)
 		head_dcs->dcs_buf = ds_obj_cpd_get_head_bulk(dca->dca_rpc, dca->dca_idx);
 	else
 		head_dcs->dcs_buf = dcsh;
 	oci->oci_sub_heads.ca_arrays = head_dcs;
 	oci->oci_sub_heads.ca_count = 1;
 
-	dcsr_parent = ds_obj_cpd_get_dcsr(dca->dca_rpc, dca->dca_idx);
-	total = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
+	dcsr_dcs->dcs_type_base = ds_obj_cpd_get_reqs_type(dca->dca_rpc, dca->dca_idx);
+	if (dcsr_dcs->dcs_type_base != DCST_BULK_REQ) {
+		if (unlikely(dcsr_dcs->dcs_type_base != DCST_REQ_CLI)) {
+			D_ERROR("Unknown CPD RPC sub requests dispatch type %u\n",
+				dcsr_dcs->dcs_type_base);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 
-	/* IDX[0] is for leader. */
-	dcde_parent = ds_obj_cpd_get_dcde(dca->dca_rpc, dca->dca_idx, idx + 1);
-	if (dcde_parent == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	if (shard_tgt->st_flags & DTF_REASSEMBLE_REQ) {
-		rc = ds_obj_cpd_clone_reqs(shard_tgt, dcde_parent, dcsr_parent,
-					   total, &dcde, &dcsr);
-		if (rc < 0)
-			D_GOTO(out, rc);
-
-		remote_arg->cpd_reqs = dcsr;
-		remote_arg->cpd_desc = dcde;
+		dcsr_dcs->dcs_type_base = DCST_REQ_SRV;
+		dcsr_dcs->dcs_buf = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	} else {
-		remote_arg->cpd_reqs = NULL;
-		remote_arg->cpd_desc = NULL;
-		dcsr = dcsr_parent;
-		dcde = dcde_parent;
-		rc = total;
+		dcsr_dcs->dcs_buf = ds_obj_cpd_get_reqs_bulk(dca->dca_rpc, dca->dca_idx);
 	}
-
-	dcsr_dcs->dcs_type = DCST_REQ_SRV;
-	dcsr_dcs->dcs_nr = rc;
-	dcsr_dcs->dcs_buf = dcsr;
+	dcsr_dcs->dcs_nr = ds_obj_cpd_get_reqs_cnt(dca->dca_rpc, dca->dca_idx);
 	oci->oci_sub_reqs.ca_arrays = dcsr_dcs;
 	oci->oci_sub_reqs.ca_count = 1;
 
-	dcde_dcs->dcs_type = DCST_DISP;
-	dcde_dcs->dcs_nr = 1;
-	dcde_dcs->dcs_buf = dcde;
+	dcde_dcs->dcs_type_base = ds_obj_cpd_get_ents_type(dca->dca_rpc, dca->dca_idx);
+	if (dcde_dcs->dcs_type_base != DCST_BULK_ENT) {
+		if (unlikely(dcde_dcs->dcs_type_base != DCST_ENT)) {
+			D_ERROR("Unknown CPD RPC dispatch ent type %u\n", dcde_dcs->dcs_type_base);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		dcde_dcs->dcs_dcde_idx = 0;
+		dcde_dcs->dcs_nr = 1;
+		/* IDX[0] is for leader. */
+		dcde_dcs->dcs_buf = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, idx + 1);
+		if (dcde_dcs->dcs_buf == NULL)
+			D_GOTO(out, rc = -DER_INVAL);
+	} else {
+		/* IDX[0] is for leader. */
+		dcde_dcs->dcs_dcde_idx = idx + 1;
+		dcde_dcs->dcs_nr = ds_obj_cpd_get_ents_cnt(dca->dca_rpc, dca->dca_idx);
+		dcde_dcs->dcs_buf = ds_obj_cpd_get_ents_bulk(dca->dca_rpc, dca->dca_idx);
+	}
 	oci->oci_disp_ents.ca_arrays = dcde_dcs;
 	oci->oci_disp_ents.ca_count = 1;
 
@@ -525,11 +441,6 @@ out:
 		crt_req_decref(parent_req);
 		D_FREE(remote_arg);
 	}
-
-	if (dcsr != dcsr_parent)
-		D_FREE(dcsr);
-	if (dcde != dcde_parent)
-		D_FREE(dcde);
 
 	D_FREE(head_dcs);
 	D_FREE(dcsr_dcs);
