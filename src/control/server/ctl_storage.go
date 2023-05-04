@@ -209,9 +209,11 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, nsps []*ctl.Scm
 			if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
 				continue
 			}
+
 			md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
 
-			engineCfg, err := cs.getEngineCfg(mp.GetPath())
+			// FIXME DAOS-12750: Fixme better handle errors in this loop
+			engineCfg, err := cs.getEngineCfgFromNsp(nsp)
 			if err != nil {
 				return nil, err
 			}
