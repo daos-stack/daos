@@ -47,7 +47,8 @@ dc_cont_init(void)
 		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
 				       NULL, DAOS_CONT_MODULE);
 	} else {
-		D_ASSERT(0);
+		D_ERROR("%d version cont RPC not supported.\n", dc_cont_proto_version);
+		rc = -DER_PROTO;
 	}
 	if (rc != 0)
 		D_ERROR("failed to register %d version cont RPCs: "DF_RC"\n",

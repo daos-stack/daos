@@ -53,7 +53,8 @@ dc_pool_init(void)
 		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
-		D_ASSERT(0);
+		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
+		rc = -DER_PROTO;
 	}
 
 	if (rc)

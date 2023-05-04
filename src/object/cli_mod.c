@@ -48,7 +48,8 @@ dc_obj_init(void)
 		rc = daos_rpc_register(&obj_proto_fmt_1, OBJ_PROTO_CLI_COUNT, NULL,
 				       DAOS_OBJ_MODULE);
 	} else {
-		D_ASSERT(0);
+		D_ERROR("%d version object RPC not supported.\n", dc_obj_proto_version);
+		rc = -DER_PROTO;
 	}
 
 	if (rc) {
