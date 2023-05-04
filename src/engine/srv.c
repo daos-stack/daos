@@ -1211,11 +1211,15 @@ dss_sys_db_fini(void)
 int
 dss_srv_fini(bool force)
 {
+	int rc;
+
 	switch (xstream_data.xd_init_step) {
 	default:
 		D_ASSERT(0);
 	case XD_INIT_DRPC:
-		drpc_listener_fini();
+		rc = drpc_listener_fini();
+		if (rc != 0)
+			D_ERROR("failed to finalize dRPC listener: "DF_RC"\n", DP_RC(rc));
 		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);

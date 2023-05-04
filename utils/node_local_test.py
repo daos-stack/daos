@@ -463,7 +463,7 @@ class DaosPool():
             return []
 
         containers = []
-        for cont in data['test']:
+        for cont in data['response']:
             containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
@@ -1064,14 +1064,17 @@ class ValgrindHelper():
                                          suffix='.memcheck', delete=False) as log_file:
             self._xml_file = log_file.name
 
-        cmd = ['valgrind', '--fair-sched=yes']
+        cmd = ['valgrind',
+               f'--xml-file={self._xml_file}',
+               '--xml=yes',
+               '--fair-sched=yes',
+               '--gen-suppressions=all',
+               '--error-exitcode=42']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
             cmd.append('--leak-check=no')
-
-        cmd.append('--gen-suppressions=all')
 
         src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
         if os.path.exists(src_suppression_file):
@@ -1079,9 +1082,6 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
-        cmd.append('--error-exitcode=42')
-
-        cmd.extend(['--xml=yes', f'--xml-file={self._xml_file}'])
         return cmd
 
     def convert_xml(self):
@@ -1895,8 +1895,27 @@ class PosixTests():
             self.fatal_errors = True
 
     @needs_dfuse
+    def test_readdir_basic(self):
+        """Basic readdir test.
+
+        Call readdir on a empty directory, then populate it and call it again
+        """
+        dir_name = tempfile.mkdtemp(dir=self.dfuse.dir)
+        files = os.listdir(dir_name)
+        assert len(files) == 0
+
+        count = 40
+
+        for idx in range(count):
+            with open(join(dir_name, f'file_{idx}'), 'w'):
+                pass
+
+        files = os.listdir(dir_name)
+        assert len(files) == count
+
+    @needs_dfuse
     def test_readdir_30(self):
-        """Test reading a directory with 25 entries"""
+        """Test reading a directory with 30 entries"""
         self.readdir_test(30)
 
     def readdir_test(self, count, test_all=False):
@@ -1967,7 +1986,44 @@ class PosixTests():
         """
         test_dir = join(self.dfuse.dir, 'test_dir')
         os.mkdir(test_dir)
-        count = 30
+        count = 140
+        src_files = set()
+        for idx in range(count):
+            fname = f'file_{idx}'
+            src_files.add(fname)
+            with open(join(test_dir, fname), 'w'):
+                pass
+
+        files = []
+        files2 = []
+        with os.scandir(test_dir) as entries:
+            with os.scandir(test_dir) as second:
+                files2.append(next(second).name)
+                for entry in entries:
+                    files.append(entry.name)
+                    assert len(files) < count + 2
+                for entry in second:
+                    files2.append(entry.name)
+                    assert len(files2) < count + 2
+
+        print('Reads are from list 2, 1, 1, 2.')
+        print(files)
+        print(files2)
+        assert files == files2, 'inconsistent file names'
+        assert len(files) == count, 'incoorect file count'
+        assert set(files) == src_files, 'incorrect file names'
+
+    @needs_dfuse
+    def test_readdir_cache_short(self):
+        """Run a parallel readdir test.
+
+        This differs from readdir_hard in that the directory is smaller so dfuse will return
+        it in one go.  The memory management in dfuse is different in this case so add another
+        test for memory leaks.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 5
         for idx in range(count):
             with open(join(test_dir, f'file_{idx}'), 'w'):
                 pass
@@ -1982,6 +2038,7 @@ class PosixTests():
                 for entry in second:
                     files2.append(entry.name)
 
+        print('Reads are from list 2, 1, 1, 2.')
         print(files)
         print(files2)
         assert files == files2
@@ -3061,8 +3118,8 @@ class PosixTests():
 
         side_dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
-        dfuse.start()
-        side_dfuse.start(v_hint='side')
+        dfuse.start(v_hint='perms')
+        side_dfuse.start(v_hint='perms_side')
 
         test_file = join(dfuse.dir, 'test-file')
         side_test_file = join(side_dfuse.dir, 'test-file')
@@ -4186,9 +4243,10 @@ def run_in_fg(server, conf, args):
     try:
         if args.launch_cmd:
             start = time.time()
-            # Set the agent path.
+            # Set the PATH and agent dir.
             agent_env = os.environ.copy()
             agent_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+            agent_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{agent_env["PATH"]}'
             rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir, env=agent_env)
             elapsed = time.time() - start
             dfuse.stop()
