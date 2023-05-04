@@ -370,7 +370,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	if (hdl->alloc.hi >= MAX_OID_HI) {
 		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed "DF_RC"\n", DP_RC(rc));
+			D_ERROR("daos_cont_alloc_oids() failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 		if (hdl->alloc.lo == 0)
@@ -505,7 +505,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 
 			rc = daos_oit_mark(oit, entry.oid, &marker, NULL);
 			if (rc) {
-				D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
 				goto out;
 			}
 		}
@@ -606,7 +606,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	rc = daos_oit_mark(oit, roots->cr_oids[0], &marker, NULL);
 	if (rc) {
-		D_ERROR("Failed to mark OID for Root KV in OIT: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
