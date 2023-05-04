@@ -607,12 +607,6 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 ddhhmmss_format(self.end_time - time.time()))
-            if not single_test_pool:
-                # Create pool for jobs
-                add_pools(self, ["pool_jobs"])
-                self.log.info(
-                    "Current pools: %s",
-                    " ".join([pool.uuid for pool in self.pool]))
             # Initialize harassers
             if run_harasser:
                 if not harasserlist:
