@@ -52,19 +52,21 @@ def DDHHMMSS_format(seconds):
             "%H:%M:%S", time.gmtime(seconds % 86400)))
 
 
-def add_pools(self, pool_names):
+def add_pools(self, pool_names, ranks=None):
     """Create a list of pools that the various tests use for storage.
 
     Args:
         self (obj): soak obj
-        pool_names: list of pool namespaces from yaml file
+        pool_names (list): list of pool namespaces from yaml file
                     /run/<test_params>/poollist/*
+        ranks (list, optional):  ranks to include in pool. Defaults to None
     """
+    target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(namespace=path, connect=False))
-        self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
+        self.pool.append(self.get_pool(namespace=path, connect=False, target_list=target_list))
+        self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 
 def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/container/*"):
@@ -107,7 +109,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         with open(file, 'w') as src_file:
             src_file.write(str(os.urandom(num_bytes)))
             src_file.close()
-        dst_file = "daos://{}/{}".format(pool.uuid, container.uuid)
+        dst_file = format_path(pool, container)
         fscopy_cmd.set_params(src=file, dst=dst_file)
         fscopy_cmd.run()
     # reads file_name from container and writes to file
@@ -115,8 +117,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         dst = os.path.split(file)
         dst_name = dst[-1]
         dst_path = dst[0]
-        src_file = "daos://{}/{}/{}".format(
-            pool.uuid, container.uuid, dst_name)
+        src_file = format_path(pool, container, dst_name)
         fscopy_cmd.set_params(src=src_file, dst=dst_path)
         fscopy_cmd.run()
 
@@ -275,10 +276,10 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
     destination = self.outputsoak_dir
     if logging:
         for result in results:
-            host = result["hosts"]
-            log_name = name + "-" + str(host)
-            self.log.info("Logging %s output to %s", command, log_name)
-            write_logfile(result["data"], log_name, destination)
+            for host in result["hosts"]:
+                log_name = name + "-" + str(host)
+                self.log.info("Logging %s output to %s", command, log_name)
+                write_logfile(result["data"], log_name, destination)
     return results
 
 
@@ -350,7 +351,7 @@ def get_harassers(harasser):
     """Create a valid harasser list from the yaml job harassers.
 
     Args:
-        harassers (list): harasser jobs from yaml.
+        harasser (str): harasser job from yaml.
 
     Returns:
         harasserlist (list): Ordered list of harassers to execute
@@ -376,7 +377,7 @@ def wait_for_pool_rebuild(self, pool, name):
         name (str): name of soak harasser
     """
     rebuild_status = False
-    self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
+    self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -516,6 +517,55 @@ def launch_vmd_identify_check(self, name, results, args):
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
+def launch_extend(self, pool, name, results, args):
+    """Execute dmg extend ranks.
+
+    Args:
+        self (obj): soak obj
+        pool (TestPool): TestPool obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    status = False
+    params = {}
+    ranks = None
+    selected_host = None
+
+    # pool was created with self.hostlist_servers[:-1]
+    selected_host = self.hostlist_servers[-1]
+    ranklist = self.server_managers[0].get_host_ranks(selected_host)
+
+    # init the status dictionary
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": selected_host, "ranks": ranks}}
+    self.log.info(
+        "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+    ranks = ",".join(str(rank) for rank in ranklist)
+    try:
+        pool.extend(ranks)
+        status = True
+    except TestFail as error:
+        self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
+        status = False
+    if status:
+        status = wait_for_pool_rebuild(self, pool, name)
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": selected_host, "ranks": ranks}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
 def launch_exclude_reintegrate(self, pool, name, results, args):
     """Launch the dmg cmd to exclude a rank in a pool.
 
@@ -626,11 +676,12 @@ def launch_server_stop_start(self, pools, name, results, args):
                     pool.drain(rank)
                 except TestFail as error:
                     self.log.error(
-                        "<<<FAILED:dmg pool {} drain failed".format(pool.uuid), exc_info=error)
+                        "<<<FAILED:dmg pool {} drain failed".format(
+                            pool.identifier), exc_info=error)
                     status = False
                 drain_status &= status
                 if drain_status:
-                    drain_status &= wait_for_pool_rebuild(self, pool, name)
+                    drain_status &= wait_for_pool_rebuild(self, pool, "DRAIN")
                     status = drain_status
                 else:
                     status = False
@@ -677,7 +728,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     "<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
             for pool in pools:
-                self.dmg_command.pool_query(pool.uuid)
+                self.dmg_command.pool_query(pool.identifier)
             if status:
                 # Wait ~ 30 sec before issuing the reintegrate
                 time.sleep(30)
@@ -690,7 +741,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     except TestFail as error:
                         self.log.error(
                             "<<<FAILED:dmg pool {} reintegrate failed".format(
-                                pool.uuid), exc_info=error)
+                                pool.identifier), exc_info=error)
                         status = False
                     reintegrate_status &= status
                     if reintegrate_status:
@@ -767,7 +818,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     unique = get_random_string(5, self.used)
     self.used.append(unique)
     mount_dir = dfuse.mount_dir.value + unique
-    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.uuid)
+    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
     dfuse_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
@@ -906,7 +957,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     else:
                         container = cont
                     ior_cmd.set_daos_params(
-                        self.server_group, pool, container.uuid)
+                        self.server_group, pool, container.identifier)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec.replace("/", "_"), api, b_size, t_size,
                         file_oclass, nodesperjob * ppn, nodesperjob, ppn)
@@ -971,9 +1022,9 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             add_containers(self, pool, file_oclass, dir_oclass)
             macsio = MacsioCommand()
             macsio.namespace = macsio_params
-            macsio.daos_pool = pool.uuid
+            macsio.daos_pool = pool.identifier
             macsio.daos_svcl = list_to_str(pool.svc_ranks)
-            macsio.daos_cont = self.container[-1].uuid
+            macsio.daos_cont = self.container[-1].identifier
             macsio.get_params(self)
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
@@ -1069,7 +1120,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         add_containers(self, pool, file_oclass, dir_oclass)
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
-                            self.container[-1].uuid)
+                            self.container[-1].identifier)
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
                             file_oclass, nodesperjob * ppn, nodesperjob,
@@ -1260,7 +1311,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if "mpich" in mpi_module:
             # Pass pool and container information to the commands
             env = EnvironmentVariables()
-            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool.uuid, self.container[-1].uuid)
+            env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             env["D_LOG_FILE_APPEND_PID"] = "1"
             mpirun_cmd.assign_environment(env, True)
         mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1310,8 +1361,8 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         dcp_cmd = DcpCommand(hosts=None, tmp=None)
         dcp_cmd.namespace = os.path.join(os.sep, "run", job_spec, "dcp")
         dcp_cmd.get_params(self)
-        dst_file = f"daos://{pool.label.value}/{cont_2.uuid}"
-        src_file = f"daos://{pool.label.value}/{cont_1.uuid}"
+        dst_file = format_path(pool, cont_2)
+        src_file = format_path(pool, cont_1)
         dcp_cmd.set_params(src=src_file, dst=dst_file)
         env_vars = {
             "D_LOG_FILE": os.path.join(self.soaktest_dir, self.test_name + "_"
@@ -1355,10 +1406,10 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = ["set +e",
                     "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
-                    "daos pool query {} ".format(self.pool[1].uuid),
-                    "daos pool query {} ".format(self.pool[0].uuid)]
-    append_cmds = ["daos pool query {} ".format(self.pool[1].uuid),
-                   "daos pool query {} ".format(self.pool[0].uuid),
+                    "daos pool query {} ".format(self.pool[1].identifier),
+                    "daos pool query {} ".format(self.pool[0].identifier)]
+    append_cmds = ["daos pool query {} ".format(self.pool[1].identifier),
+                   "daos pool query {} ".format(self.pool[0].identifier),
                    "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
