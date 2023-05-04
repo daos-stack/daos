@@ -4614,8 +4614,6 @@ pool_upgrade_one_prop(struct rdb_tx *tx, struct pool_svc *svc, bool *need_commit
 
 	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, value);
 	if (rc && rc != -DER_NONEXIST) {
-		if (rc)
-			return rc;
 		return rc;
 	} else if (rc == -DER_NONEXIST) {
 		rc = rdb_tx_update(tx, &svc->ps_root, prop_iov, value);
