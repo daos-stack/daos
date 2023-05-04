@@ -230,8 +230,8 @@ typedef struct {
  * Corresponding rank and URI for a DAOS engine
  */
 struct daos_rank_uri {
-	uint32_t	 dru_rank;
-	char		*dru_uri;
+	uint32_t	 dru_rank; /** DAOS engine rank */
+	char		*dru_uri; /** URI associated with rank */
 };
 
 /**
