@@ -8,12 +8,13 @@
  *
  * rdb: Raft Integration
  *
- * Each replica employs four daemon ULTs:
+ * Each replica employs four or five daemon ULTs:
  *
  *   ~ rdb_timerd(): Call raft_periodic() periodically.
  *   ~ rdb_recvd(): Process RPC replies received.
  *   ~ rdb_callbackd(): Invoke user dc_step_{up,down} callbacks.
  *   ~ rdb_compactd(): Compact polled entries by calling rdb_lc_aggregate().
+ *   ~ rdb_checkpointd(): Checkpoint RDB pool (MD on SSD only).
  *
  * rdb uses its own last applied index, which always equal to the last
  * committed index, instead of using raft's version.

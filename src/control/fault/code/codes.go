@@ -134,7 +134,6 @@ const (
 	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugepageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -172,7 +171,6 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
-	ServerConfigInsufficientHugepages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate

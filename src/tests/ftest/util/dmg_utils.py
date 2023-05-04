@@ -371,22 +371,6 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("storage", "query", "device-health"), uuid=uuid)
 
-    def storage_query_target_health(self, rank, tgtid):
-        """Get the result of the 'dmg storage query target-health' command.
-
-        Args:
-            rank (int): Rank hosting target.
-            tgtid (int): Target index to query.
-
-        Raises:
-            CommandFailure: if the dmg storage query target-health command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        return self._get_json_result(("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
-
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
 

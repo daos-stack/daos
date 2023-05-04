@@ -319,8 +319,12 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		// Request a few more hugepages than actually required for each NUMA node
 		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
-		prepReq.HugepageCount += extraHugepages
+		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
+
+		// Extra pages to be allocated per engine but take into account the page count
+		// will be issued on each NUMA node.
+		extraPages := (extraHugePages * len(srv.cfg.Engines)) / len(numaNodes)
+		prepReq.HugePageCount += extraPages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
@@ -460,17 +464,23 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
 
-	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
+	// set mem_size engine parameter to free value. Otherwise set to requested value.
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
 		pageSizeMiB, *mi)
 	if memSizeFreeMiB < memSizeReqMiB {
-		return FaultInsufficientFreeHugepageMem(int(eIdx), memSizeReqMiB, memSizeFreeMiB,
-			nrPagesRequired, mi.HugepagesFree)
+		srv.log.Noticef("The amount of hugepage memory allocated for engine %d does not "+
+			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
+			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
+			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
+			mi.HugePagesFree)
+		engine.setMemSize(memSizeFreeMiB)
+	} else {
+		engine.setMemSize(memSizeReqMiB)
 	}
 
-	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	ei.setMemSize(memSizeReqMiB)
-	ei.setHugepageSz(pageSizeMiB)
+	// Set hugepage_size (MiB) values based on hugepage info.
+	engine.setHugePageSz(pageSizeMiB)
 
 	return nil
 }

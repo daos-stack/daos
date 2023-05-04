@@ -31,9 +31,9 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
-#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
+#define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
+#define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
@@ -264,18 +264,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		return 0;
 	}
 
-	/*
-	 * Hugepages are not enough to sustain average I/O workload
-	 * (~1GB per xstream).
-	 */
-	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
-			mem_size, (mem_size / tgt_nr));
-		rc = -DER_INVAL;
-		goto free_cond;
-	}
-
 	if (nvme_conf && strlen(nvme_conf) > 0) {
 		fd = open(nvme_conf, O_RDONLY, 0600);
 		if (fd < 0)
@@ -287,6 +275,11 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	D_ASSERT(hugepage_size > 0);
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	if (bio_chk_cnt_max < DAOS_DMA_CHUNK_CNT_MIN) {
+		D_ERROR("%uMB hugepages are not enough for %u targets (256MB per target)\n",
+			mem_size, tgt_nr);
+		return -DER_INVAL;
+	}
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
 

@@ -226,18 +226,6 @@ func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
 	)
 }
 
-// FaultConfigInsufficientHugepages creates a fault for the scenario where the
-// number of configured huge pages is less than required.
-func FaultConfigInsufficientHugepages(min, req int) *fault.Fault {
-	return serverConfigFault(
-		code.ServerConfigInsufficientHugepages,
-		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)",
-			req, min),
-		"remove the 'nr_hugepages' parameter so it can be automatically set or update "+
-			"it to a higher value in the config file",
-	)
-}
-
 // FaultConfigRamdiskOverMaxMem indicates that the tmpfs size requested in config is larger than
 // maximum allowed.
 func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *fault.Fault {

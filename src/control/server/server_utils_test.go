@@ -307,6 +307,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		expMemChkErr    error
 		expMemSize      int
 		expHugepageSize int
+		expNotice       bool
 	}{
 		"vfio disabled; non-root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -420,7 +421,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386, // 2 extra huge pages requested
+				HugePageCount: 16388, // 2 extra huge pages requested per engine
 				HugeNodes:     "0",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -428,8 +429,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
+			// Not balanced across NUMA nodes so notice logged
+			expNotice: true,
 		},
 		"2 engines both numa 1; hugepage alloc only on numa 1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -438,15 +441,17 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 16386,
+				HugePageCount: 16388, // 2 extra huge pages requested per engine
 				HugeNodes:     "1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 				EnableVMD: true,
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
+			// Not balanced across NUMA nodes so notice logged
+			expNotice: true,
 		},
 		"2 engines; hugepage alloc across numa 0,1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -455,14 +460,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194, // 2 extra huge pages requested per-engine
+				HugePageCount: 8194, // 2 extra huge pages requested per engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 				EnableVMD: true,
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
 		},
 		"2 engines; hugepage alloc across numa 0,1; insufficient free": {
@@ -472,14 +477,19 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 8191,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 8194, // 2 extra huge pages requested per engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 				EnableVMD: true,
 			},
-			expMemChkErr: errors.New("0: want 16 GiB (8192 hugepages), got 16 GiB (8191"),
+			// mem_size engine parameter reflects lower "free" value
+			expMemSize:      16382, // (16382 hugepages free / 2 engines) * 2mib size
+			expHugePageSize: 2,
+			// No error returned, notice logged only, engine-side mem threshold
+			// validation instead.
+			expNotice: true,
 		},
 		"2 engines; scm only; nr_hugepages unset": {
 			hugepagesFree: 128,
@@ -527,7 +537,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				ResetErr: errors.New("backed prep reset failed"),
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 8194, // hugepages per engine plus 2 extra
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
@@ -535,7 +545,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
 		},
 		// VMD not enabled in prepare request.
@@ -547,13 +557,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugepageCount: 8194, // hugepages per engine plus 2 extra
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
 		},
 		// VMD not enabled in prepare request.
@@ -564,11 +574,11 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 8194,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194,
+				HugePageCount: 8194, // hugepages per engine plus 2 extra
 				HugeNodes:     "0",
 				TargetUser:    username,
 			},
-			expMemSize:      16384,
+			expMemSize:      16384, // 8192 hugepages * 2mib size
 			expHugepageSize: 2,
 		},
 		"4 engines; hugepage alloc across numa 0,1": {
@@ -590,7 +600,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugepagesFree: 16384,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 8194, // 2 extra huge pages requested per-engine
+				HugePageCount: 8196, // hugepages plus 2 extra per engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
 				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),
@@ -624,7 +634,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
+			cfg := config.DefaultServer().
+				WithFabricProvider("ofi+verbs").
+				WithAccessPoints("foo", "bar", "baz") // Suppress redundancy NOTICE log msg
 			if tc.srvCfgExtra != nil {
 				cfg = tc.srvCfgExtra(cfg)
 			}
@@ -727,6 +739,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				"unexpected memory size")
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
+			txtMod := ""
+			if !tc.expNotice {
+				txtMod = "not "
+			}
+			msg := fmt.Sprintf("expected NOTICE level message to %shave been logged",
+				txtMod)
+			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
+				msg)
 		})
 	}
 }

@@ -490,7 +490,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.NrHugepages < minHugepages {
-		return FaultConfigInsufficientHugepages(minHugepages, cfg.NrHugepages)
+		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
+			"if this is not intentional update the 'nr_hugepages' config "+
+			"parameter or remove and it will be automatically calculated",
+			cfg.NrHugepages, minHugepages)
 	}
 
 	return nil
