@@ -72,7 +72,7 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: 'pr daily_regression',
+               defaultValue: 'always_passes',
                description: 'Test-tag to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
                defaultValue: 'auto_md_on_ssd',
