@@ -707,7 +707,11 @@ class TestWithServers(TestWithoutServers):
         # Access points to use by default when starting servers and agents
         #  - for 1 or 2 servers use 1 access point
         #  - for 3 or more servers use 3 access points
-        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        access_points_qty = self.params.get(
+            "access_points_qty", "/run/setup/*", default_access_points_qty)
+        if access_points_qty < 1 or access_points_qty > len(self.hostlist_servers):
+            self.fail("Invalid access points node quantity")
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
@@ -1675,7 +1679,9 @@ class TestWithServers(TestWithoutServers):
             DaosCommand: a new DaosCommand object
 
         """
-        return DaosCommand(self.bin)
+        daos_command = DaosCommand(self.bin)
+        daos_command.get_params(self)
+        return daos_command
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
