@@ -3373,6 +3373,8 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_t			co_hdl_uuid;
 	struct ds_pool		*pool = NULL;
 	unsigned int		i;
+	uint32_t		rebuild_ver;
+	uint32_t		rebuild_gen;
 	int			rc;
 
 	migrate_in = crt_req_get(rpc);
@@ -3413,6 +3415,13 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 			rc = -DER_AGAIN;
 		}
 		D_GOTO(out, rc);
+	}
+
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver, NULL, &rebuild_gen);
+	if (rebuild_ver == 0 || rebuild_gen != migrate_in->om_generation) {
+		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
+			DP_UUID(migrate_in->om_pool_uuid));
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 	}
 
 	/* Check if the pool tls exists */
