@@ -730,6 +730,7 @@ crt_hg_init(void)
 		env = getenv("HG_LOG_LEVEL");
 		if (!env)
 			HG_Set_log_level("warning");
+		HG_Set_log_subsys("hg,na");
 	}
 
 	/* import HG log */
@@ -1423,8 +1424,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
-		/* TODO: Fix this, DER_PROTO is not the same as HG_PROTOCOL_ERROR */
-		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -DER_PROTO : -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 	return rc;

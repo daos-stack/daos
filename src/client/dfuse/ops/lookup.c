@@ -126,14 +126,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	 * already known inode for while the interception library is already in use so check
 	 * this and disable caching in this case.
 	 */
-	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
-		if (S_ISDIR(ie->ie_stat.st_mode))
-			entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
-		else
-			entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
 
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0)
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
-	}
 
 	ie->ie_stat = entry.attr;
 
@@ -143,7 +142,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		 */
 		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
 			fi_out->keep_cache = 1;
-		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+		} else if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
 			fi_out->keep_cache = 1;
 		}
 

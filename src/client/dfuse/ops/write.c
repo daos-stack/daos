@@ -41,9 +41,10 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
 
+	/* Evict the metadata cache here so the lookup doesn't return stale size/time info */
 	if (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0) {
 		if (atomic_fetch_add_relaxed(&oh->doh_ie->ie_open_write_count, 1) == 0) {
-			dfuse_cache_evict(oh->doh_ie);
+			dfuse_mcache_evict(oh->doh_ie);
 		}
 	}
 

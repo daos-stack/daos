@@ -654,7 +654,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *iod)
 	return 0;
 }
 
-static int
+int
 crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				 struct daos_cpd_sub_req *dcsr, bool with_oid)
 {
@@ -711,8 +711,6 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				if (dcu->dcu_ec_tgts == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
-
-			dcu->dcu_ec_split_req = NULL;
 		}
 
 		rc = crt_proc_struct_dcs_csum_info(proc, proc_op,
@@ -939,7 +937,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 
-	switch (dcs->dcs_type) {
+	switch (dcs->dcs_type_base) {
 	case DCST_HEAD: {
 		struct daos_cpd_sub_head *dcsh;
 
@@ -975,7 +973,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 			with_oid = true;
 		} else {
 			dcsr = dcs->dcs_buf;
-			if (dcs->dcs_type == DCST_REQ_SRV)
+			if (dcs->dcs_type_base == DCST_REQ_SRV)
 				with_oid = true;
 			else
 				with_oid = false;
@@ -991,7 +989,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		break;
 	}
-	case DCST_DISP: {
+	case DCST_ENT: {
 		struct daos_cpd_disp_ent	*dcde;
 
 		if (DECODING(proc_op)) {
@@ -1036,7 +1034,8 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		break;
 	}
 	case DCST_BULK_HEAD:
-	case DCST_BULK_DISP:
+	case DCST_BULK_REQ:
+	case DCST_BULK_ENT:
 	case DCST_BULK_TGT: {
 		struct daos_cpd_bulk	*dcb;
 
@@ -1051,7 +1050,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		rc = crt_proc_struct_daos_cpd_bulk(proc, proc_op, dcb,
-						   dcs->dcs_type == DCST_BULK_HEAD ? true : false);
+						   dcs->dcs_type_base == DCST_BULK_HEAD);
 		if (unlikely(rc))
 			D_GOTO(out, rc);
 

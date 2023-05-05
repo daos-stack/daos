@@ -43,15 +43,15 @@ extra:
 plugins:
   - search
   - mike:
-    version_selector: true
+      version_selector: true
 
 markdown_extensions:
   - admonition
   - footnotes
   - tables
   - toc:
-    permalink: true
-    toc_depth: 4
+      permalink: true
+      toc_depth: 4
 
 # Page tree
 nav:
@@ -103,6 +103,7 @@ nav:
       - 'Workflow': 'user/workflow.md'
       - 'Container Management': 'user/container.md'
       - 'File System': 'user/filesystem.md'
+      - 'Block Device': 'user/blockdev.md'
       - 'MPI-IO Support': 'user/mpi-io.md'
       - 'HDF5 Support': 'user/hdf5.md'
       - 'Python Support': 'user/python.md'

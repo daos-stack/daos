@@ -291,7 +291,10 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
-        log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+        if timeout is None:
+            log.debug("Running on %s without a timeout: %s", hosts, timeout, command)
+        else:
+            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
