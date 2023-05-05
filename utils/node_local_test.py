@@ -2008,6 +2008,9 @@ class PosixTests():
         assert files == files2, 'inconsistent file names'
         assert len(files) == count, 'incoorect file count'
         assert set(files) == src_files, 'incorrect file names'
+        # Finally remove the test dir, this should cause dfuse to forget everything therefore
+        # be able to verify reference counting.
+        shutil.rmtree(test_dir)
 
     @needs_dfuse
     def test_readdir_cache_short(self):

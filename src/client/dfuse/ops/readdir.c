@@ -112,13 +112,23 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 
 /* Create a readdir handle */
 static struct dfuse_readdir_hdl *
-_handle_init(struct dfuse_cont *dfc)
+_handle_init(struct dfuse_cont *dfc, size_t size)
 {
 	struct dfuse_readdir_hdl *hdl;
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
 		return NULL;
+
+	/* Alignment is important for the buffer, the packing function will align up so a badly
+	 * allocated buffer will need to be padded at the start, to avoid that then align here.
+	 */
+	D_ALIGNED_ALLOC(hdl->drh_buff, size, size);
+	if (hdl->drh_buff == NULL) {
+		D_FREE(hdl);
+		return NULL;
+	}
+	hdl->drh_buff_size = size;
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
@@ -135,7 +145,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	uint32_t                  oldref;
 	off_t                     expected_offset = 2;
 
-	DFUSE_TRA_INFO(oh, "Dropping ref on %p", oh->doh_rd);
+	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
 	if (!oh->doh_rd)
 		return;
@@ -150,11 +160,11 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
-		DFUSE_TRA_INFO(hdl, "Ref was %d", oldref);
+		DFUSE_TRA_DEBUG(hdl, "Ref was %d", oldref);
 		D_GOTO(unlock, 0);
 	}
 
-	DFUSE_TRA_INFO(hdl, "Ref was 1, freeing");
+	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
 
 	/* Check for common */
 	if (hdl == oh->doh_ie->ie_rd_hdl)
@@ -166,9 +176,10 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 			 drc->drc_next_offset == READDIR_EOD);
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
-			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+			d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
 	}
+	D_FREE(hdl->drh_buff);
 	D_FREE(hdl);
 unlock:
 	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
@@ -293,7 +304,8 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
  * protect this section with a spinlock.
  */
 static int
-ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh,
+		 size_t buff_size)
 {
 	if (oh->doh_rd != NULL)
 		return 0;
@@ -305,7 +317,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle %p with existing readers", oh->doh_rd);
 	} else {
-		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs, buff_size);
 		if (oh->doh_rd == NULL) {
 			D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
 			return ENOMEM;
@@ -326,22 +338,27 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 #define FAD  fuse_add_direntry
 
 int
-dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
-		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
+dfuse_do_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t *out_size, off_t offset,
+		 bool plus)
 {
-	off_t                     buff_offset = 0;
-	int                       added       = 0;
-	int                       rc          = 0;
-	bool                      large_fetch = true;
-	bool                      to_seek     = false;
-	struct dfuse_readdir_hdl *hdl;
-	size_t                    size = *out_size;
+	struct dfuse_projection_info *fs_handle   = fuse_req_userdata(req);
+	off_t                         buff_offset = 0;
+	int                           added       = 0;
+	int                           rc          = 0;
+	bool                          large_fetch = true;
+	bool                          to_seek     = false;
+	size_t                        size        = *out_size;
+	struct dfuse_readdir_hdl     *hdl;
 
-	rc = ensure_rd_handle(fs_handle, oh);
+	rc = ensure_rd_handle(fs_handle, oh, size);
 	if (rc != 0)
 		return rc;
 
 	hdl = oh->doh_rd;
+
+	/* The kernel always uses a 4k buffer here but just in case check to avoid any issues */
+	if (size != hdl->drh_buff_size)
+		return EIO;
 
 	/* Keep track of if this call is part of a series of calls, one start-to-end directory reads
 	 * will populate the kernel cache.  This lets us estimate when the kernel cache was
@@ -480,13 +497,13 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 				set_entry_params(&entry, ie);
 
-				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
+				written = FADP(req, &hdl->drh_buff[buff_offset], size - buff_offset,
 					       drc->drc_name, &entry, drc->drc_next_offset);
 				if (written > size - buff_offset)
 					d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
 
 			} else {
-				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
+				written = FAD(req, &hdl->drh_buff[buff_offset], size - buff_offset,
 					      drc->drc_name, &drc->drc_stbuf, drc->drc_next_offset);
 			}
 
@@ -533,15 +550,15 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	if (to_seek) {
 		uint32_t num;
 
-		DFUSE_TRA_INFO(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
 
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
-			DFUSE_TRA_INFO(oh, "Switching to private handle");
+			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
-			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs, size);
 			if (oh->doh_rd == NULL)
 				D_GOTO(out_reset, rc = ENOMEM);
 			hdl = oh->doh_rd;
@@ -690,7 +707,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 				set_entry_params(&entry, ie);
 
-				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
+				written = FADP(req, &hdl->drh_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
 				if (written > size - buff_offset) {
 					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -700,7 +717,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			} else {
 				dfs_release(obj);
 
-				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
+				written = FAD(req, &hdl->drh_buff[buff_offset], size - buff_offset,
 					      dre->dre_name, &stbuf, dre->dre_next_offset);
 
 				if (drc) {
@@ -780,9 +797,8 @@ out_reset:
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle  = fuse_req_userdata(req);
-	char                         *reply_buff = NULL;
-	int                           rc         = EIO;
+	char *reply_buff = NULL;
+	int   rc         = EIO;
 
 	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
 		  "Multiple readdir per handle");
@@ -801,17 +817,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		D_GOTO(out, rc = 0);
 	}
 
-	/* Alignment is important for the buffer, the packing function will align up so a badly
-	 * allocated buffer will need to be padded at the start, to avoid that then align here.
-	 * TODO: This could be part of the readdir handle to avoid frequent allocations for a page
-	 * which is passed between kernel and userspace.
-	 */
-	D_ALIGNED_ALLOC(reply_buff, size, size);
-	if (reply_buff == NULL)
-		D_GOTO(out, rc = ENOMEM);
+	rc = dfuse_do_readdir(req, oh, &size, offset, plus);
 
-	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &size, offset, plus);
-
+	reply_buff = oh->doh_rd->drh_buff;
 out:
 	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
@@ -820,6 +828,4 @@ out:
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	else
 		DFUSE_REPLY_BUF(oh, req, reply_buff, size);
-
-	D_FREE(reply_buff);
 }

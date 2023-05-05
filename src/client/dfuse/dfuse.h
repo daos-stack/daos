@@ -172,6 +172,9 @@ struct dfuse_readdir_hdl {
 	/** an anchor to track listing in readdir */
 	daos_anchor_t              drh_anchor;
 
+	char                      *drh_buff;
+	size_t                     drh_buff_size;
+
 	/** Array of entries returned by dfs but not reported to kernel */
 	struct dfuse_readdir_entry drh_dre[READDIR_MAX_COUNT];
 	/** Current index into doh_dre array */
