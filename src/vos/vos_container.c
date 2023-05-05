@@ -197,6 +197,9 @@ cont_free_internal(struct vos_container *cont)
 			vea_hint_unload(cont->vc_hint_ctxt[i]);
 	}
 
+	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
+	d_tm_dec_gauge(vos_tls_get()->vtl_committed, cont->vc_dtx_committed_count);
+
 	D_FREE(cont);
 }
 

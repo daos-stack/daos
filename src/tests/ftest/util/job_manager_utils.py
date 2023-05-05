@@ -427,6 +427,7 @@ class Mpirun(JobManager):
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.bind_to = FormattedParameter("--bind-to {}", None)
+        self.map_by = FormattedParameter("--map-by {}", None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
