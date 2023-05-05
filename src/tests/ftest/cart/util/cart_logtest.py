@@ -216,6 +216,7 @@ class LogTest():
         self.hide_fi_calls = False
         self.fi_triggered = False
         self.fi_location = None
+        self.skip_suffixes = []
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
@@ -418,11 +419,16 @@ class LogTest():
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
                         # like assert should trigger a failure.
-                        if line.level < cart_logparse.LOG_LEVELS['ERR']:
-                            show_line(line, 'HIGH', 'error in strict mode')
-                        else:
-                            show_line(line, 'NORMAL', 'warning in strict mode')
-                        warnings_mode = True
+                        show_this = True
+                        for ignores in self.skip_suffixes:
+                            if line.get_msg().endswith(ignores):
+                                show_this = False
+                        if show_this:
+                            if line.level < cart_logparse.LOG_LEVELS['ERR']:
+                                show_line(line, 'HIGH', 'error in strict mode')
+                            else:
+                                show_line(line, 'NORMAL', 'warning in strict mode')
+                            warnings_mode = True
             if line.trace:
                 trace_lines += 1
                 if not have_debug and line.level > cart_logparse.LOG_LEVELS['INFO']:

@@ -1309,7 +1309,7 @@ class DFuse():
         if self._sp:
             self.stop()
 
-    def stop(self):
+    def stop(self, ignore_einval=False):
         """Stop a previously started dfuse instance"""
         fatal_errors = False
         if not self._sp:
@@ -1338,7 +1338,7 @@ class DFuse():
             fatal_errors = True
             run_leak_test = False
         self._sp = None
-        log_test(self.conf, self.log_file, show_memleaks=run_leak_test)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test, ignore_einval=ignore_einval)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -3541,7 +3541,7 @@ class PosixTests():
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
-        if dfuse.stop():
+        if dfuse.stop(ignore_einval=True):
             self.fatal_errors = True
 
         # fix corrupted entries
@@ -3946,6 +3946,7 @@ def log_test(conf,
              quiet=False,
              skip_fi=False,
              leak_wf=None,
+             ignore_einval=False,
              check_read=False,
              check_write=False,
              check_fstat=False):
@@ -3981,6 +3982,9 @@ def log_test(conf,
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
     lto.hide_fi_calls = skip_fi
+
+    if ignore_einval:
+        lto.skip_suffixes.append(': 22 (Invalid argument)')
 
     try:
         lto.check_log_file(abort_on_warning=True,

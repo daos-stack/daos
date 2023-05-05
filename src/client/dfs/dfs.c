@@ -3859,7 +3859,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
 						NULL);
 				if (rc) {
-					D_ERROR("Failed to stat entry %s: %d (%s)\n",
+					D_ERROR("Failed to stat entry '%s': %d (%s)\n",
 						dirs[key_nr].d_name, rc, strerror(rc));
 					D_GOTO(out, rc);
 				}
