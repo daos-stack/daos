@@ -252,8 +252,25 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 		clusterPerTarget uint64 // Number of usable SPDK clusters for each target
 		devices          []*ctl.SmdDevice
 	}
-
 	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
+	addDeviceToAdjust := func(dev *ctl.SmdDevice, rank uint32, dataClusterCount uint64) {
+		if devicesToAdjust[rank] == nil {
+			devicesToAdjust[rank] = &deviceSizeStat{
+				clusterPerTarget: math.MaxUint64,
+			}
+		}
+		devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
+		targetCount := uint64(len(dev.GetTgtIds()))
+		clusterPerTarget := dataClusterCount / targetCount
+		c.log.Debugf("SMD device %s (rank %d, ctrlr %s) added to the list of device to adjust",
+			dev.GetUuid(), rank, dev.GetTrAddr())
+		if clusterPerTarget < devicesToAdjust[rank].clusterPerTarget {
+			c.log.Debugf("Updating number of clusters per target of rank %d: old=%d new=%d",
+				rank, devicesToAdjust[rank].clusterPerTarget, clusterPerTarget)
+			devicesToAdjust[rank].clusterPerTarget = clusterPerTarget
+		}
+	}
+
 	for _, ctlr := range resp.GetCtrlrs() {
 		engineCfg, err := c.getEngineCfgFromNvmeCtl(ctlr)
 		if err != nil {
@@ -276,6 +293,8 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
 				c.log.Noticef("SMD device %s (rank %d,  ctlr %s) not usable: missing storage info",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
+				dev.AvailBytes = 0
+				dev.UsableBytes = 0
 				continue
 			}
 
@@ -302,29 +321,23 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 			dataClusterCount := dev.GetAvailBytes() / clusterSize
 			if dev.GetRoleBits() == 0 {
-				if devicesToAdjust[rank] == nil {
-					devicesToAdjust[rank] = &deviceSizeStat{
-						clusterPerTarget: math.MaxUint64,
-					}
-				}
-				devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
-				targetCount := uint64(len(dev.GetTgtIds()))
-				clusterPerTarget := dataClusterCount / targetCount
-				if clusterPerTarget < devicesToAdjust[rank].clusterPerTarget {
-					devicesToAdjust[rank].clusterPerTarget = clusterPerTarget
-				}
-				c.log.Debugf("No meta-data stored on SMD device %s (rank %d, ctrlr %s): dataClusterCount=%d, clusterPerTarget=%d",
-					dev.GetUuid(), rank, dev.GetTrAddr(), dataClusterCount, clusterPerTarget)
+				c.log.Debugf("No meta-data stored on SMD device %s (rank %d, ctrlr %s)",
+					dev.GetUuid(), rank, dev.GetTrAddr())
+				addDeviceToAdjust(dev, rank, dataClusterCount)
 				continue
+			}
+
+			getMdClusterCount := func(mdBytes uint64, targetNb uint64) uint64 {
+				mdClusterCount := mdBytes / clusterSize
+				if mdBytes%clusterSize != 0 {
+					mdClusterCount += 1
+				}
+				return mdClusterCount * targetNb
 			}
 
 			engineTargetNb := uint64(engineCfg.TargetCount)
 			if (dev.GetRoleBits() & storage.BdevRoleMeta) != 0 {
-				metadataClusterCount := dev.GetMetaSize() / clusterSize
-				if dev.GetMetaSize()%clusterSize != 0 {
-					metadataClusterCount += 1
-				}
-				metadataClusterCount *= engineTargetNb
+				metadataClusterCount := getMdClusterCount(dev.GetMetaSize(), engineTargetNb)
 				c.log.Debugf("Removing %d Metadata clusters from the usable size of the SMD device %s (rank %d, ctrlr %s): ",
 					metadataClusterCount, dev.GetUuid(), rank, dev.GetTrAddr())
 				if metadataClusterCount >= dataClusterCount {
@@ -337,11 +350,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			}
 
 			if (dev.GetRoleBits() & storage.BdevRoleWAL) != 0 {
-				metaWalClusterCount := dev.GetMetaWalSize() / clusterSize
-				if dev.GetMetaWalSize()%clusterSize != 0 {
-					metaWalClusterCount += 1
-				}
-				metaWalClusterCount *= engineTargetNb
+				metaWalClusterCount := getMdClusterCount(dev.GetMetaWalSize(), engineTargetNb)
 				c.log.Debugf("Removing %d Metadata WAL clusters from the usable size of the SMD device %s (rank %d, ctrlr %s): ",
 					metaWalClusterCount, dev.GetUuid(), rank, dev.GetTrAddr())
 				if metaWalClusterCount >= dataClusterCount {
@@ -355,10 +364,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 			rdbSize := dev.GetRdbSize()
 			if rdbSize > 0 && (dev.GetRoleBits()&storage.BdevRoleMeta) != 0 {
-				rdbClusterCount := rdbSize / clusterSize
-				if rdbSize%clusterSize != 0 {
-					rdbClusterCount += 1
-				}
+				rdbClusterCount := getMdClusterCount(rdbSize, 1)
 				c.log.Debugf("Removing %d RDB clusters the usable size of the SMD device %s (rank %d, ctrlr %s)",
 					rdbClusterCount, dev.GetUuid(), rank, dev.GetTrAddr())
 				if rdbClusterCount >= dataClusterCount {
@@ -371,10 +377,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			}
 
 			if rdbSize > 0 && (dev.GetRoleBits()&storage.BdevRoleWAL) != 0 {
-				rdbWalClusterCount := dev.GetRdbWalSize() / clusterSize
-				if dev.GetRdbWalSize()%clusterSize != 0 {
-					rdbWalClusterCount += 1
-				}
+				rdbWalClusterCount := getMdClusterCount(dev.GetRdbWalSize(), 1)
 				c.log.Debugf("Removing %d RDB WAL clusters from the usable size of the SMD device %s (rank %d, ctrlr %s)",
 					rdbWalClusterCount, dev.GetUuid(), rank, dev.GetTrAddr())
 				if rdbWalClusterCount >= dataClusterCount {
@@ -386,19 +389,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				dataClusterCount -= rdbWalClusterCount
 			}
 
-			if devicesToAdjust[rank] == nil {
-				devicesToAdjust[rank] = &deviceSizeStat{
-					clusterPerTarget: math.MaxUint64,
-				}
-			}
-			devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
-			targetCount := uint64(len(dev.GetTgtIds()))
-			clusterPerTarget := dataClusterCount / targetCount
-			c.log.Debugf("Meta-data stored on SMD device %s (rank %d, ctrlr %s): dataClusterCount=%d, clusterPerTarget=%d",
-				dev.GetUuid(), rank, dev.GetTrAddr(), dataClusterCount, clusterPerTarget)
-			if clusterPerTarget < devicesToAdjust[rank].clusterPerTarget {
-				devicesToAdjust[rank].clusterPerTarget = clusterPerTarget
-			}
+			addDeviceToAdjust(dev, rank, dataClusterCount)
 		}
 	}
 
