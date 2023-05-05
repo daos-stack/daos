@@ -36,7 +36,7 @@ class AggregationChecksum(IorTestBase):
             Run IOR again this time to read back the data with read verify
             option enabled.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,checksum,ior
         :avocado: tags=aggregationchecksum,test_aggregationchecksum
         """
@@ -58,7 +58,7 @@ class AggregationChecksum(IorTestBase):
         # Now wait until aggregation moves all the data written by ior
         # to nvme
         counter = 1
-        transfered_data = (nvme_size_before_aggregation - self.get_nvme_free_space())
+        transfered_data = nvme_size_before_aggregation - self.get_nvme_free_space()
         while transfered_data < int(self.ior_cmd.block_size.value):
             # try to wait for 4 x 60 secs for aggregation to be completed or
             # else exit the test with a failure.
@@ -69,7 +69,7 @@ class AggregationChecksum(IorTestBase):
                               self.get_nvme_free_space())
                 self.fail("Failing test: Aggregation taking too long")
             time.sleep(60)
-            transfered_data = (nvme_size_before_aggregation - self.get_nvme_free_space())
+            transfered_data = nvme_size_before_aggregation - self.get_nvme_free_space()
             counter += 1
 
         # once entire file is aggregated to nvme, read back with verification
