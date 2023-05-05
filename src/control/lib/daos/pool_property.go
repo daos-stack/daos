@@ -299,7 +299,7 @@ func PoolProperties() PoolPropertyMap {
 		"perf_domain": {
 			Property: PoolProperty{
 				Number:      PoolPropertyPerfDomain,
-				Description: "pool performance domain",
+				Description: "Pool performance domain",
 			},
 			values: map[string]uint64{
 				"root":   PoolPerfDomainRoot,

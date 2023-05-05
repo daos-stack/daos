@@ -1119,7 +1119,7 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("perf_domain", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"bar"},
+							Value:  &mgmtpb.PoolProperty_Numval{255},
 						},
 						{
 							Number: propWithVal("scrub", "").Number,
@@ -1152,7 +1152,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
-				propWithVal("perf_domain", "bar"),
+				propWithVal("perf_domain", "root"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
