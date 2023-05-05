@@ -1147,9 +1147,9 @@ int d_log_setlogmask(int facility, int mask)
  * if the "PREFIX=" part is omitted, then the level applies to all defined
  * facilities (e.g. d_log_setmasks("WARN") sets everything to WARN).
  */
-int d_log_setmasks(char *mstr, int mlen0)
+int d_log_setmasks(const char *mstr, int mlen0)
 {
-	char *m, *current, *fac, *pri;
+	const char *m, *current, *fac, *pri;
 	int          mlen, facno, length, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
 	int log_flags;
