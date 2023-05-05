@@ -6387,7 +6387,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		daos_dti_gen(&obj_auxi->l_args.la_dti, true /* zero */);
 	}
 
-	D_DEBUG(DB_IO, "list opc %d "DF_OID" dkey "DF_U64" shard %u/%u\n", opc,
+	D_DEBUG(DB_IO, "list opc %d "DF_OID" dkey "DF_U64" shard %u/%u.\n", opc,
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash, shard, shard_cnt);
 
 	rc = obj_req_fanout(obj, obj_auxi, map_ver, &epoch,
