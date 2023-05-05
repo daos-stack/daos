@@ -1055,6 +1055,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 	atomic_init(&fs_handle->dpi_ino_next, 2);
 	atomic_init(&fs_handle->dpi_eqt_idx, 0);
 
+	D_SPIN_INIT(&dfuse_info->di_lock, 0);
+
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
@@ -1084,6 +1086,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 	return rc;
 
 err_eq:
+	D_SPIN_DESTROY(&dfuse_info->di_lock);
+
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 		int              rc2;
@@ -1287,8 +1291,8 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
-	ie->ie_dfs = dfs;
-	ie->ie_root = true;
+	ie->ie_dfs    = dfs;
+	ie->ie_root   = true;
 	ie->ie_parent = 1;
 	dfuse_ie_init(ie);
 
@@ -1533,6 +1537,8 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 	int rc = -DER_SUCCESS;
 	int rc2;
 	int i;
+
+	D_SPIN_DESTROY(&fs_handle->dpi_info->di_lock);
 
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];

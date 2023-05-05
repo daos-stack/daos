@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
+from general_utils import list_to_str
 
 
 class DestroyRebuild(TestWithServers):
@@ -15,11 +16,8 @@ class DestroyRebuild(TestWithServers):
     :avocado: recursive
     """
 
-    # also remove the commented line form yaml file for rank 0
-    CANCEL_FOR_TICKET = [["DAOS-4891", "rank_to_kill", "[0]"]]
-
     def test_destroy_while_rebuilding(self):
-        """Jira ID: DAOS-xxxx.
+        """Jira ID: DAOS-7100.
 
         Test Description:
             Create a pool across multiple servers. After excluding one of the
@@ -37,26 +35,35 @@ class DestroyRebuild(TestWithServers):
         targets = self.server_managers[0].get_config_value("targets")
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
-        # Create a pool
-        self.add_pool()
+        # 1.
+        self.log_step("Create a pool")
+        pool = self.get_pool()
 
-        # Verify the pool information before starting rebuild
+        # 2.
+        self.log_step("Verify the pool information before starting rebuild")
         checks = {
             "pi_nnodes": len(self.hostlist_servers),
             "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
-            self.pool.check_pool_info(**checks),
+            pool.check_pool_info(**checks),
             "Invalid pool information detected prior to rebuild")
 
-        # Start rebuild
+        # 3.
+        self.log_step("Start rebuild, system stop")
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
-        self.pool.wait_for_rebuild_to_start()
+        pool.wait_for_rebuild_to_start()
 
-        # Destroy the pool while rebuild is active
-        self.pool.destroy()
+        # 4.
+        self.log_step("Destroy the pool while rebuild is active")
+        pool.destroy()
 
+        # 5.
+        self.log_step("System start")
+        self.get_dmg_command().system_start(list_to_str(value=ranks))
+
+        # 6.
+        self.log_step("Check restarted server in join state")
+        self.server_managers[0].update_expected_states(ranks, ["joined"])
         self.log.info("Test Passed")
-        self.get_dmg_command().system_start(",".join(ranks))
-        self.server_managers[0].update_expected_states(",".join(ranks), ["joined"])

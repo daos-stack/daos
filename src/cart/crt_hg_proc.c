@@ -26,6 +26,29 @@
 		return 0;                                                                          \
 	}
 
+static inline int
+crt_proc_op2hg(crt_proc_op_t crt_op, hg_proc_op_t *hg_op)
+{
+	int	rc = 0;
+
+	switch (crt_op) {
+	case CRT_PROC_ENCODE:
+		*hg_op = HG_ENCODE;
+		break;
+	case CRT_PROC_DECODE:
+		*hg_op = HG_DECODE;
+		break;
+	case CRT_PROC_FREE:
+		*hg_op = HG_FREE;
+		break;
+	default:
+		rc = -DER_INVAL;
+		break;
+	}
+
+	return rc;
+}
+
 int
 crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 {
@@ -671,4 +694,76 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	rc = crt_proc_output(rpc_priv, proc);
 out:
 	return crt_der_2_hgret(rc);
+}
+
+int
+crt_proc_create(crt_context_t crt_ctx, void *buf, size_t buf_size,
+		crt_proc_op_t proc_op, crt_proc_t *proc)
+{
+	struct crt_context	*ctx = crt_ctx;
+	hg_proc_t		 hg_proc;
+	hg_return_t		 hg_ret;
+	hg_proc_op_t		 hg_op = 0;
+	int			 rc = 0;
+
+	rc = crt_proc_op2hg(proc_op, &hg_op);
+	D_ASSERT(rc == 0);
+
+	hg_ret = hg_proc_create_set(ctx->cc_hg_ctx.chc_hgcla, buf, buf_size,
+				    hg_op, HG_NOHASH, &hg_proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Failed to create CaRT proc: %d\n", hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
+	} else {
+		*proc = (crt_proc_t)hg_proc;
+	}
+
+	return rc;
+}
+
+int
+crt_proc_destroy(crt_proc_t proc)
+{
+	hg_proc_t	hg_proc = (hg_proc_t)proc;
+	hg_return_t	hg_ret;
+	int		rc = 0;
+
+	hg_ret = hg_proc_free(hg_proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Failed to destroy CaRT proc: %d\n", hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
+	}
+
+	return rc;
+}
+
+int
+crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_op)
+{
+	hg_proc_t	hg_proc = (hg_proc_t)proc;
+	hg_return_t	hg_ret;
+	hg_proc_op_t	hg_op = 0;
+	int		rc = 0;
+
+	rc = crt_proc_op2hg(proc_op, &hg_op);
+	D_ASSERT(rc == 0);
+
+	hg_ret = hg_proc_reset(hg_proc, buf, buf_size, hg_op);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Failed to reset CaRT proc to op %d: %d\n", proc_op, hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
+	}
+
+	return rc;
+}
+
+size_t
+crp_proc_get_size_used(crt_proc_t proc)
+{
+	hg_proc_t	hg_proc = (hg_proc_t)proc;
+	hg_size_t	hg_size;
+
+	hg_size = hg_proc_get_size_used(hg_proc);
+
+	return (size_t)hg_size;
 }
