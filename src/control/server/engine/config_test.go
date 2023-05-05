@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -493,6 +493,13 @@ func TestConfig_Validation(t *testing.T) {
 		},
 		"valid log debug stream env in config": {
 			cfg: validConfig().WithEnvVars("DD_MASK=REBUILD,PL,mgmt,epc"),
+		},
+		"valid all log debug streams in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=all"),
+		},
+		"invalid all and other log debug streams in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=all,PL"),
+			expErr: errAllWithOtherLogStream,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

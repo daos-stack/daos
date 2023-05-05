@@ -115,10 +115,14 @@ func ValidateLogMasks(masks string) error {
 	return nil
 }
 
-var validLogStreams = []string{
-	"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "DAOS_DEFAULT", // DAOS Debug Streams
-	"ANY", "TRACE", "MEM", "NET", "IO", // GURT Debug Streams
-}
+var (
+	validLogStreams = []string{
+		"ALL",                                                      // Select all debug streams
+		"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "DAOS_DEFAULT", // DAOS debug streams
+		"ANY", "TRACE", "MEM", "NET", "IO", // GURT debug streams
+	}
+	errAllWithOtherLogStream = errors.New("all stream identifier cannot be used with any other")
+)
 
 func isLogStreamValid(name string) bool {
 	return common.Includes(validLogStreams, strings.ToUpper(name))
@@ -141,9 +145,13 @@ func ValidateLogStreams(streams string) error {
 		return errors.Wrap(err, "debug streams")
 	}
 
-	for _, tok := range strings.Split(streams, logMasksStrAssignSep) {
+	tokens := strings.Split(streams, logMasksStrAssignSep)
+	for _, tok := range tokens {
 		if !isLogStreamValid(tok) {
 			return errUnknownLogStream(tok)
+		}
+		if strings.ToUpper(tok) == "ALL" && len(tokens) != 1 {
+			return errAllWithOtherLogStream
 		}
 	}
 
