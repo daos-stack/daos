@@ -104,7 +104,7 @@ class TestDaosApiBase(ObjectWithParameters):
 
         Args:
             method (object): method to call
-            kwargs (dict): keyworded arguments for the method
+            kwargs (dict): named arguments for the method
         """
         if self.cb_handler:
             kwargs["cb_func"] = self.cb_handler.callback
