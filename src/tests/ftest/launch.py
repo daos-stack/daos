@@ -26,8 +26,6 @@ from ClusterShell.NodeSet import NodeSet
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
-# pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -35,15 +33,16 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException, \
-    stop_processes   # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException,      \
+    stop_processes                                                            # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
-from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
-    get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
-    YamlException    # noqa: E402
-from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
+from user_utils import get_chown_command, groupadd, useradd, userdel,         \
+    get_group_id, get_user_groups                                             # noqa: E402
+from yaml_utils import get_test_category, get_yaml_data, YamlUpdater,         \
+    YamlException                                                             # noqa: E402
+from data_utils import list_unique, list_flatten, dict_extract_values         # noqa: E402
+from core_file import CoreFileProcessing, CoreFileException                   # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -618,6 +617,7 @@ class Launch():
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
         self.slurm_add_partition = False
+        self.core_file_processing = None
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -914,14 +914,6 @@ class Launch():
             message = "Issue detected setting up the fuse configuration"
             self._warn_test(setup_result, "Setup", message, sys.exc_info())
 
-        # Get the core file pattern information
-        try:
-            core_files = self._get_core_file_pattern(
-                args.test_servers, args.test_clients, args.process_cores)
-        except LaunchException:
-            message = "Error obtaining the core file pattern information"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
         setup_result.end()
@@ -929,7 +921,7 @@ class Launch():
         # Determine if bullseye code coverage collection is enabled
         logger.debug("Checking for bullseye code coverage configuration")
         # pylint: disable=unsupported-binary-operation
-        self.bullseye_hosts = args.test_servers | get_local_host()
+        self.bullseye_hosts = args.test_servers | self.local_host
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
             logger.info(
@@ -950,7 +942,7 @@ class Launch():
         # Execute the tests
         status = self.run_tests(
             args.sparse, args.failfast, not args.disable_stop_daos, args.archive, args.rename,
-            args.jenkinslog, core_files, args.logs_threshold, args.user_create)
+            args.jenkinslog, args.process_cores, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1000,7 +992,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = str(get_local_host())
+        self.details["launch host"] = str(self.local_host)
 
     def _create_log_dir(self):
         """Create the log directory and rename it if it already exists.
@@ -1718,53 +1710,6 @@ class Launch():
             if not run_remote(logger, hosts, command.format(config)).passed:
                 raise LaunchException(f"Failed to setup {config}")
 
-    def _get_core_file_pattern(self, servers, clients, process_cores):
-        """Get the core file pattern information from the hosts if collecting core files.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-            process_cores (bool): whether or not to collect core files after the tests complete
-
-        Raises:
-            LaunchException: if there was an error obtaining the core file pattern information
-
-        Returns:
-            dict: a dictionary containing the path and pattern for the core files per NodeSet
-
-        """
-        core_files = {}
-        if not process_cores:
-            logger.debug("Not collecting core files")
-            return core_files
-
-        # Determine the core file pattern being used by the hosts
-        all_hosts = servers | clients
-        all_hosts |= self.local_host
-        command = "cat /proc/sys/kernel/core_pattern"
-        result = run_remote(logger, all_hosts, command)
-
-        # Verify all the hosts have the same core file pattern
-        if not result.passed:
-            raise LaunchException("Error obtaining the core file pattern")
-
-        # Get the path and pattern information from the core pattern
-        for data in result.output:
-            hosts = str(data.hosts)
-            try:
-                info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError) as error:
-                raise LaunchException(
-                    "Error obtaining the core file pattern and directory") from error
-            if not info[0]:
-                raise LaunchException("Error obtaining the core file pattern directory")
-            core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
-            logger.info(
-                "Collecting any '%s' core files written to %s on %s",
-                core_files[hosts]["pattern"], core_files[hosts]["path"], hosts)
-
-        return core_files
-
     def run_tests(self, sparse, fail_fast, stop_daos, archive, rename, jenkinslog, core_files,
                   threshold, user_create):
         # pylint: disable=too-many-arguments
@@ -2152,7 +2097,8 @@ class Launch():
             else:
                 logger.debug("No avocado crash files found in %s", crash_dir)
 
-    def process(self, test, repeat, stop_daos, archive, rename, jenkinslog, core_files, threshold):
+    def process(self, test, repeat, stop_daos, archive, rename, jenkinslog, process_cores,
+                threshold):
         """Process the test results.
 
         This may include (depending upon argument values):
@@ -2169,7 +2115,7 @@ class Launch():
             archive (bool): whether or not to collect remote files generated by the test
             rename (bool): whether or not to rename the default avocado job-results directory names
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
-            core_files (dict): location and pattern defining where core files may be written
+            process_cores (bool): whether to process core files after test is run
             threshold (str): optional upper size limit for test log files
 
         Returns:
@@ -2250,16 +2196,33 @@ class Launch():
                 "depth": 1,
                 "timeout": 900,
             }
-            for index, hosts in enumerate(core_files):
-                remote_files[f"core files {index + 1}/{len(core_files)}"] = {
-                    "source": core_files[hosts]["path"],
-                    "destination": os.path.join(
-                        self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
-                    "pattern": core_files[hosts]["pattern"],
-                    "hosts": NodeSet(hosts),
-                    "depth": 1,
-                    "timeout": 1800,
-                }
+
+            # Get the core file pattern information
+            if process_cores:
+                try:
+                    self.core_file_processing = CoreFileProcessing(logger)
+                    core_files = self.core_file_processing.get_core_file_pattern(
+                        # pylint: disable=unsupported-binary-operation
+                        test.host_info.all_hosts | self.local_host,
+                        self.result.tests[-1].time_start)
+                except CoreFileException:
+                    message = "Error obtaining the core file pattern information"
+                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                    return_code |= 256
+                    core_files = {}
+                for index, hosts in enumerate(core_files):
+                    remote_files[f"core files {index + 1}/{len(core_files)}"] = {
+                        "source": core_files[hosts]["path"],
+                        "destination": os.path.join(
+                            self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
+                        "pattern": core_files[hosts]["pattern"],
+                        "hosts": NodeSet(hosts),
+                        "depth": 1,
+                        "timeout": 1800,
+                    }
+            else:
+                logger.debug("Not collecting core files")
+
             for summary, data in remote_files.items():
                 if not data["hosts"]:
                     continue
@@ -2285,7 +2248,7 @@ class Launch():
         """
         service = "daos_agent.service"
         # pylint: disable=unsupported-binary-operation
-        hosts = test.host_info.clients.hosts | get_local_host()
+        hosts = test.host_info.clients.hosts | self.local_host
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2527,7 +2490,8 @@ class Launch():
 
         if test and "core files" in summary:
             # Process the core files
-            return_code |= self._process_core_files(os.path.split(destination)[0], test)
+            return_code |= self._process_core_files(os.path.split(destination)[0] + os.path.sep,
+                                                    test)
 
         return return_code
 
@@ -2721,6 +2685,7 @@ class Launch():
         # destination directory plus the name of the host from which the files originated. Finally
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
+        rcopy_dest += os.path.sep
         if source == os.path.join(os.sep, "etc", "daos"):
             # Use a temporary sub-directory in a directory where the user has permissions
             tmp_copy_dir = os.path.join(
@@ -2776,10 +2741,11 @@ class Launch():
             int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
-        core_file_processing = CoreFileProcessing(logger)
         try:
-            corefiles_processed = core_file_processing.process_core_files(test_job_results, True,
-                                                                          test=str(test))
+            corefiles_processed = self.core_file_processing.process_core_files(
+                test_job_results,
+                True,
+                test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
@@ -2791,7 +2757,7 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+        if self.core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
             logger.debug(
                 "Skipping checking core file detection for %s as it is not supported on this OS",
                 str(test))
