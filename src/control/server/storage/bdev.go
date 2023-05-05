@@ -37,6 +37,8 @@ const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
 	sysXSTgtID     = 1024
+	// Minimum amount of hugepage memory (in bytes) needed for each target.
+	memHugepageMinPerTarget = 1 << 30 // 1GiB
 )
 
 // JSON config file constants.
@@ -453,9 +455,9 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount      int
+		HugepageCount      int
 		HugeNodes          string
-		CleanHugePagesOnly bool
+		CleanHugepagesOnly bool
 		PCIAllowList       string
 		PCIBlockList       string
 		TargetUser         string
@@ -466,7 +468,7 @@ type (
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		NrHugePagesRemoved uint
+		NrHugepagesRemoved uint
 		VMDPrepared        bool
 	}
 
@@ -791,4 +793,20 @@ func (f *NVMeFirmwareForwarder) UpdateFirmware(req NVMeFirmwareUpdateRequest) (*
 	}
 
 	return res, nil
+}
+
+// CalcMinHugepages returns the minimum number of hugepages that should be
+// requested for the given number of targets.
+func CalcMinHugepages(hugepageSizeKb int, numTargets int) (int, error) {
+	if numTargets < 1 {
+		return 0, errors.New("numTargets must be > 0")
+	}
+
+	hugepageSizeBytes := hugepageSizeKb * humanize.KiByte // KiB to B
+	if hugepageSizeBytes == 0 {
+		return 0, errors.New("invalid system hugepage size")
+	}
+	minHugeMem := memHugepageMinPerTarget * numTargets
+
+	return minHugeMem / hugepageSizeBytes, nil
 }

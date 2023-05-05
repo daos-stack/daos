@@ -202,6 +202,9 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary.
+#
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. Note that each target requires 1 GiB of hugepage space.
 ## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
@@ -221,6 +224,21 @@
 #
 ## default: false
 #disable_hugepages: false
+#
+#
+## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
+## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
+## reserved when calculating RAM-disk sizes for all engines.
+#
+## Optional parameter that should only be set if the automatically calculated value is unsuitable.
+## In situations when a host is running applications alongside DAOS that use a significant amount
+## of RAM resulting in MemAvailable value being too low to support the calculated RAM-disk size
+## increasing the value will reduce the calculate size. Alternatively in situations where total
+## RAM is low, reducing the value may prevent problems where RAM-disk size calculated is below the
+## minimum of 4gib.
+#
+## default: 6
+#system_ram_reserved: 5
 #
 #
 ## Set specific debug mask for daos_server (control plane).
@@ -362,18 +380,19 @@
 #    scm_mount: /mnt/daos/1
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
 #    class: ram
 #
-#    # When class is set to ram, tmpfs will be used to emulate SCM.
-#    # The size of ram is specified by scm_size in GB units.
-#    scm_size: 16
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to ram, tmpfs will be mounted with hugepage
 #    # support, if the kernel supports it. If this is not desirable,
@@ -535,18 +554,24 @@
 #    scm_mount: /mnt/daos/2
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
-#    class: dcpm
+#    class: ram
+#
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to dcpm, scm_list is the list of device paths for
 #    # PMem namespaces (currently only one per engine supported).
-#    scm_list: [/dev/pmem1]
+#    #class: dcpm
+#    #scm_list: [/dev/pmem1]
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine

@@ -12,6 +12,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -133,6 +134,15 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmDiffClass,
+		fmt.Sprintf("the SCM class in I/O Engine %d is different from I/O Engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
+	)
+}
+
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
@@ -213,6 +223,20 @@ func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
 		code.ServerConfigNrHugepagesOutOfRange,
 		fmt.Sprintf("number of hugepages specified (%d) is out of range (0 - %d)", req, max),
 		fmt.Sprintf("specify a nr_hugepages value between 0 and %d", max),
+	)
+}
+
+// FaultConfigRamdiskOverMaxMem indicates that the tmpfs size requested in config is larger than
+// maximum allowed.
+func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigRamdiskOverMaxMem,
+		fmt.Sprintf("configured scm tmpfs size %s is larger than the maximum (%s) that "+
+			"total system memory (RAM) will allow", humanize.IBytes(confSize),
+			humanize.IBytes(ramSize)),
+		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
+			"or manually set to a value between %s and %s in the config file",
+			humanize.IBytes(memRamdiskMin), humanize.IBytes(ramSize)),
 	)
 }
 

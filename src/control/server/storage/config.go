@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
@@ -497,11 +498,16 @@ func (sc *ScmConfig) Validate(class Class) error {
 			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
-		if sc.RamdiskSize == 0 {
-			return errors.New("scm_size may not be unset or 0 when scm_class is ram")
-		}
 		if len(sc.DeviceList) > 0 {
 			return errors.New("scm_list may not be set when scm_class is ram")
+		}
+		// Note: RAM-disk size can be auto-sized so allow if zero.
+		if sc.RamdiskSize != 0 {
+			confScmSize := uint64(humanize.GiByte * sc.RamdiskSize)
+			if confScmSize < MinRamdiskMem {
+				// Ramdisk size requested in config is less than minimum allowed.
+				return FaultConfigRamdiskUnderMinMem(confScmSize, MinRamdiskMem)
+			}
 		}
 	}
 
@@ -764,7 +770,7 @@ func (obs OptionBits) toString(optStr2Flag optFlagMap) string {
 // fromStrings generates bitset referenced by the function receiver from the option names provided.
 func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error {
 	if obs == nil {
-		return errors.New("fromStrings() called on nil OptionBits")
+		return errors.New("called on nil OptionBits")
 	}
 
 	*obs = 0

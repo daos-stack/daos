@@ -247,6 +247,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					cfg,
 				).
 				WithStorageEnableHotplug(tc.enableHotplug).
+				WithTargetCount(8).
 				WithPinnedNumaNode(0).
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)

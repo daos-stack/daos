@@ -37,43 +37,26 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
-	return func(l logging.Logger, e *engine.Config) (uint, error) {
-		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
-		if err != nil {
-			return 0, err
-		}
-		return fi.NUMANode, nil
-	}
-}
+// non-exported package-scope function variable for mocking in unit tests
+var osSetenv = os.Setenv
 
-func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
 	processFabricProvider(cfg)
 
-	mi, err := common.GetMemInfo()
-	if err != nil {
-		return errors.Wrapf(err, "retrieve hugepage info")
-	}
-
-	affinitySources := []config.EngineAffinityFn{
-		// TODO: Add pmem as the primary source of NUMA affinity, if available,
-		// then fall back to other sources as necessary.
-		genFiAffFn(fis),
-	}
-	if err := cfg.SetEngineAffinities(log, affinitySources...); err != nil {
+	if err := cfg.SetEngineAffinities(log, affSrcs...); err != nil {
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	if err := cfg.Validate(log, mi.HugePageSizeKb); err != nil {
+	if err := cfg.Validate(log); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	lookupNetIF := func(name string) (netInterface, error) {
-		iface, err := net.InterfaceByName(name)
-		if err != nil {
-			return nil, errors.Wrapf(err, "unable to retrieve interface %q", name)
-		}
-		return iface, nil
+	if err := cfg.SetNrHugepages(log, mi); err != nil {
+		return err
+	}
+
+	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+		return err
 	}
 
 	for _, ec := range cfg.Engines {
@@ -88,7 +71,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 
 	cfg.SaveActiveConfig(log)
 
-	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
+	if err := setDaosHelperEnvs(cfg, osSetenv); err != nil {
 		return err
 	}
 
@@ -455,7 +438,7 @@ func (srv *server) registerEvents() {
 	})
 }
 
-func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
+func (srv *server) start(ctx context.Context) error {
 	defer srv.logDuration(track("time server was listening"))
 
 	go func() {
@@ -468,15 +451,6 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
-
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		srv.log.Debugf("Caught signal: %s", sig)
-
-		shutdown()
-	}()
 
 	drpcSetupReq := &drpcServerSetupReq{
 		log:     srv.log,
@@ -522,6 +496,25 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 	return nil
 }
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+func lookupIF(name string) (netInterface, error) {
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return nil, errors.Wrapf(err,
+			"unable to retrieve interface %q", name)
+	}
+	return iface, nil
+}
+
 // Start is the entry point for a daos_server instance.
 func Start(log logging.Logger, cfg *config.Server) error {
 	if err := common.CheckDupeProcess(); err != nil {
@@ -545,13 +538,17 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(ctx, cfg.Fabric.Provider)
+	fis, err := scanner.Scan(ctx, cfg.Fabric.Provider)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	err = processConfig(log, cfg, fiSet)
+	mi, err := common.GetMemInfo()
 	if err != nil {
+		return errors.Wrapf(err, "retrieve system memory info")
+	}
+
+	if err = processConfig(log, cfg, fis, mi, lookupIF, genFiAffFn(fis)); err != nil {
 		return err
 	}
 
@@ -571,7 +568,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	if srv.netDevClass, err = getFabricNetDevClass(cfg, fiSet); err != nil {
+	if srv.netDevClass, err = getFabricNetDevClass(cfg, fis); err != nil {
 		return err
 	}
 
@@ -593,5 +590,13 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	srv.registerEvents()
 
-	return srv.start(ctx, shutdown)
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		srv.log.Debugf("Caught signal: %s", sig)
+		shutdown()
+	}()
+
+	return srv.start(ctx)
 }

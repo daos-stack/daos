@@ -21,6 +21,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/common"
+	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -289,10 +291,16 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 }
 
 // MockMemInfo returns a mock MemInfo result.
-func MockMemInfo(t *testing.T) *ctlpb.MemInfo {
-	return &ctlpb.MemInfo{
-		HugepageSizeKb: 2048,
-		MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
+func MockMemInfo() *common.MemInfo {
+	return &common.MemInfo{
+		HugepagesTotal:  1024,
+		HugepagesFree:   512,
+		HugepagesRsvd:   64,
+		HugepagesSurp:   32,
+		HugepageSizeKiB: 2048,
+		MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
+		MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
+		MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
 	}
 }
 
@@ -300,7 +308,7 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
 		Nvme:    &ctlpb.ScanNvmeResp{},
 		Scm:     &ctlpb.ScanScmResp{},
-		MemInfo: MockMemInfo(t),
+		MemInfo: commonpb.MockPBMemInfo(),
 	}
 	nvmeControllers := storage.NvmeControllers{
 		storage.MockNvmeController(),
@@ -482,7 +490,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	case "noHugepageSz":
 		ssr.MemInfo.HugepageSizeKb = 0
 	case "noMemTotal":
-		ssr.MemInfo.MemTotal = 0
+		ssr.MemInfo.MemTotalKb = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)

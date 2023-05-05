@@ -535,6 +535,7 @@ class DaosServer():
         self.max_stop_time = 30
         self.stop_sleep_time = 0.5
         self.engines = conf.args.engine_count
+        self.sys_ram_rsvd = conf.args.system_ram_reserved
         # pylint: disable=consider-using-with
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
@@ -720,9 +721,10 @@ class DaosServer():
         for (key, value) in server_env.items():
             scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
+        if self.sys_ram_rsvd is not None:
+            scyaml['system_ram_reserved'] = self.sys_ram_rsvd
+
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['storage'][0]['scm_size'] = int(
-            ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
         # Leave some cores for dfuse, and start the daos server after these.
         if self.dfuse_cores:
@@ -5448,6 +5450,7 @@ def main():
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')

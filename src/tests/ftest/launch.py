@@ -1512,7 +1512,6 @@ class Launch():
             # Change the auto-storage extra yaml format if md_on_ssd is requested
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
-                args.scm_size = 100
                 max_nvme_tiers = 5
 
         self.details["storage"] = storage_info.device_dict()
@@ -3125,13 +3124,6 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "--scm_size",
-        action="store",
-        default=16,
-        type=int,
-        help="the scm_size value to use in each server engine tier 0 ram storage config when "
-             "generating an automatic storage config (test yaml includes 'storage: auto').")
-    parser.add_argument(
         "--scm_mount",
         action="store",
         default="/mnt/daos",
@@ -3143,6 +3135,14 @@ def main():
         "-ss", "--slurm_setup",
         action="store_true",
         help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "--scm_size",
+        action="store",
+        default=0,
+        type=int,
+        help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
+             "config when generating an automatic storage config (test yaml includes 'storage: "
+             "auto'). Set value to '0' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",

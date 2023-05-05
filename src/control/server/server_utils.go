@@ -37,9 +37,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-// extraHugePages is the number of extra hugepages to request beyond the minimum required, often
-// one or two are not reported as available.
-const extraHugePages = 2
+const (
+	// extraHugepages is the number of extra hugepages to request beyond the minimum required,
+	// often one or two are not reported as available.
+	extraHugepages = 2
+
+	// memCheckThreshold is the percentage of configured RAM-disk size that needs to be met by
+	// available memory in order to start the engines.
+	memCheckThreshold = 90
+
+	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
+	// SPDK memory requirements when performing a NVMe device scan.
+	scanMinHugepageCount = 128
+)
 
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
@@ -47,6 +57,10 @@ type netListenFn func(string, string) (net.Listener, error)
 // ipLookupFn defines the function signature for a helper that can
 // be used to resolve a host address to a list of IP addresses.
 type ipLookupFn func(string) ([]net.IP, error)
+
+// ifLookupFn defines the function signature for a helper that can be used to resolve a fabric
+// interface name to an object of a type that implements the netInterface interface.
+type ifLookupFn func(string) (netInterface, error)
 
 // resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
 // If the hostname resolves to multiple addresses, the first one is returned.
@@ -83,8 +97,6 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
-
-const scanMinHugePageCount = 128
 
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	var bdevCfgs storage.TierConfigs
@@ -307,29 +319,29 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		// Request a few more hugepages than actually required for each NUMA node
 		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
+		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
 
 		// Extra pages to be allocated per engine but take into account the page count
 		// will be issued on each NUMA node.
-		extraPages := (extraHugePages * len(srv.cfg.Engines)) / len(numaNodes)
-		prepReq.HugePageCount += extraPages
+		extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
+		prepReq.HugepageCount += extraPages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
-			prepReq.HugePageCount, numaNodes)
+			prepReq.HugepageCount, numaNodes)
 	} else {
 		if srv.cfg.NrHugepages == 0 {
 			// If nr_hugepages is unset then set minimum needed for scanning in prepare
 			// request.
-			prepReq.HugePageCount = scanMinHugePageCount
+			prepReq.HugepageCount = scanMinHugepageCount
 		} else {
 			// If nr_hugepages has been set manually but no bdevs in config then
 			// allocate on numa node 0 (for example if a bigger number of hugepages are
 			// required in discovery mode for an unusually large number of SSDs).
-			prepReq.HugePageCount = srv.cfg.NrHugepages
+			prepReq.HugepageCount = srv.cfg.NrHugepages
 		}
 
-		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugePageCount)
+		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugepageCount)
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
@@ -395,9 +407,6 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 	bdevCache := engine.storage.GetBdevCache()
 	newNrBdevs := len(bdevCache.Controllers)
 
-	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",
-		*lastEngineIdx, *lastBdevCount, eIdx, newNrBdevs)
-
 	// Update last recorded counters if this is the first update or if the number of bdevs is
 	// unchanged. If bdev count differs between engines, return fault.
 	switch {
@@ -437,29 +446,23 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetMemInfoFn) error {
-	engine.RLock()
-	ec := engine.runner.GetConfig()
-	ei := ec.Index
+func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+	ei.RLock()
+	ec := ei.runner.GetConfig()
+	eIdx := ec.Index
 
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
-		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
-		engine.RUnlock()
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
+		ei.RUnlock()
 		return nil
 	}
-	engine.RUnlock()
-
-	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	mi, err := getMemInfo()
-	if err != nil {
-		return err
-	}
+	ei.RUnlock()
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMiB := mi.HugePageSizeKb / humanize.KiByte // kib to mib
+	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
-	memSizeFreeMiB := mi.HugePagesFree * pageSizeMiB
+	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
 
 	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
 	// set mem_size engine parameter to free value. Otherwise set to requested value.
@@ -470,21 +473,21 @@ func updateMemValues(srv *server, engine *EngineInstance, getMemInfo common.GetM
 			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
 			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
 			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
-			mi.HugePagesFree)
-		engine.setMemSize(memSizeFreeMiB)
+			mi.HugepagesFree)
+		ei.setMemSize(memSizeFreeMiB)
 	} else {
-		engine.setMemSize(memSizeReqMiB)
+		ei.setMemSize(memSizeReqMiB)
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
-	engine.setHugePageSz(pageSizeMiB)
+	ei.setHugepageSz(pageSizeMiB)
 
 	return nil
 }
 
-func cleanEngineHugePages(srv *server) error {
+func cleanEngineHugepages(srv *server) error {
 	req := storage.BdevPrepareRequest{
-		CleanHugePagesOnly: true,
+		CleanHugepagesOnly: true,
 	}
 
 	msg := "cleanup hugepages via bdev backend"
@@ -494,7 +497,48 @@ func cleanEngineHugePages(srv *server) error {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+
+	return nil
+}
+
+// Provide some confidence that engines will have enough memory to run without OOM failures by
+// ensuring reported available memory (of type RAM) is enough to cover at least 90% of the
+// combined total memory of all engine RAM-disk sizes set in the storage config.
+//
+// Note that check is to be performed after hugepages have been allocated, as such the available
+// memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
+// available) so don't need to take into account hugepage allowances during calculation.
+func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+	sc, err := ei.storage.GetScmConfig()
+	if err != nil {
+		return err
+	}
+
+	if sc.Class != storage.ClassRam {
+		return nil // no ramdisk to check
+	}
+
+	memAvailBytes := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	confSizeBytes := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
+	nrEngines := uint64(len(srv.cfg.Engines))
+	memRequired := ((confSizeBytes * nrEngines) / 100) * uint64(memCheckThreshold)
+
+	msg := fmt.Sprintf("checking MemAvailable (%s) covers at least %d%% of total configured "+
+		"ram-disk memory (%s required to cover %d engines with size %s)",
+		humanize.IBytes(memAvailBytes), memCheckThreshold, humanize.IBytes(memRequired),
+		nrEngines, humanize.IBytes(confSizeBytes))
+
+	if memAvailBytes < memRequired {
+		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
+
+		return &ErrServerExit{
+			ErrInner: storage.FaultRamdiskLowMem("Available", confSizeBytes,
+				memRequired, memAvailBytes),
+		}
+	}
+
+	srv.log.Debugf("%s: check successful!", msg)
 
 	return nil
 }
@@ -521,13 +565,27 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
 		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugePages(srv); err != nil {
+		if err := cleanEngineHugepages(srv); err != nil {
 			srv.log.Errorf(err.Error())
 		}
 
+		// Retrieve up-to-date meminfo to check resource availability.
+		mi, err := common.GetMemInfo()
+		if err != nil {
+			return err
+		}
+
 		// Update engine memory related config parameters before starting.
-		return errors.Wrap(updateMemValues(srv, engine, common.GetMemInfo),
-			"updating engine memory parameters")
+		if err := updateHugeMemValues(srv, engine, mi); err != nil {
+			return errors.Wrap(err, "updating engine memory parameters")
+		}
+
+		// Check available RAM is sufficient before starting engines.
+		if err := checkMemAvailable(srv, engine, mi); err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 
@@ -737,7 +795,7 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 	return cliSrx, nil
 }
 
-func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+func checkFabricInterface(name string, lookup ifLookupFn) error {
 	if name == "" {
 		return errors.New("no name provided")
 	}

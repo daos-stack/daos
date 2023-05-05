@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -391,7 +391,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil && !req.CleanHugePagesOnly {
+	if err == nil && resp != nil && !req.CleanHugepagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err

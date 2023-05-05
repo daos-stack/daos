@@ -130,6 +130,8 @@ class DaosServerYamlParameters(YamlParameters):
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
+        self.system_ram_reserved = BasicParameter(None)
+
         # Defines the number of single engine config parameters to define in
         # the yaml file
         self.engines_per_host = BasicParameter(None, 0)
