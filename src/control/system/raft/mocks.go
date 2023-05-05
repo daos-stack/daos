@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/raft"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -105,7 +106,9 @@ func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftServi
 // MockDatabaseWithAddr is similar to MockDatabase but allows a custom
 // replica address to be supplied.
 func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *Database {
-	dbCfg := &DatabaseConfig{}
+	dbCfg := &DatabaseConfig{
+		SystemName: build.DefaultSystemName,
+	}
 	if addr != nil {
 		dbCfg.Replicas = append(dbCfg.Replicas, addr)
 	}
