@@ -6705,7 +6705,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 	rc = daos_cont_open(poh, cont, co_flags, &coh, NULL, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_cont_open() failed: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 

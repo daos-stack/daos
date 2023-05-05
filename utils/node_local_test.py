@@ -1424,6 +1424,7 @@ def run_daos_cmd(conf,
                  show_stdout=False,
                  valgrind=True,
                  log_check=True,
+                 ignore_busy=False,
                  use_json=False,
                  cwd=None):
     """Run a DAOS command
@@ -1483,7 +1484,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, ignore_busy=ignore_busy)
     valgrind_hdl.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -3532,7 +3533,7 @@ class PosixTests():
         # fix corrupted entries while dfuse is running - should fail
         cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
                '--type', '--chunk-size', '1048576']
-        rc = run_daos_cmd(self.conf, cmd)
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -3947,10 +3948,13 @@ def log_test(conf,
              skip_fi=False,
              leak_wf=None,
              ignore_einval=False,
+             ignore_busy=False,
              check_read=False,
              check_write=False,
              check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
+    # pylint: disable=too-many-arguments
+
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
 
@@ -3985,6 +3989,9 @@ def log_test(conf,
 
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
+
+    if ignore_busy:
+        lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
     try:
         lto.check_log_file(abort_on_warning=True,
