@@ -29,6 +29,7 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
+import shutil
 import xattr
 import junit_xml
 import tabulate
@@ -463,7 +464,7 @@ class DaosPool():
             return []
 
         containers = []
-        for cont in data['test']:
+        for cont in data['response']:
             containers.append(DaosCont(cont['uuid'], cont['label'], pool=self))
         return containers
 
@@ -1060,14 +1061,17 @@ class ValgrindHelper():
                                          suffix='.memcheck', delete=False) as log_file:
             self._xml_file = log_file.name
 
-        cmd = ['valgrind', '--fair-sched=yes']
+        cmd = ['valgrind',
+               f'--xml-file={self._xml_file}',
+               '--xml=yes',
+               '--fair-sched=yes',
+               '--gen-suppressions=all',
+               '--error-exitcode=42']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
             cmd.append('--leak-check=no')
-
-        cmd.append('--gen-suppressions=all')
 
         src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
         if os.path.exists(src_suppression_file):
@@ -1075,9 +1079,6 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
-        cmd.append('--error-exitcode=42')
-
-        cmd.extend(['--xml=yes', f'--xml-file={self._xml_file}'])
         return cmd
 
     def convert_xml(self):
@@ -1100,7 +1101,7 @@ class DFuse():
     instance_num = 0
 
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False,):
+                 caching=True, wbcache=True, multi_user=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1122,7 +1123,7 @@ class DFuse():
         self.use_valgrind = True
         self._sp = None
         self.log_flush = False
-
+        self.log_mask = None
         self.log_file = None
 
         self.valgrind = None
@@ -1161,6 +1162,8 @@ class DFuse():
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
+        if self.log_mask:
+            my_env['D_LOG_MASK'] = self.log_mask
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
@@ -1366,6 +1369,7 @@ def run_daos_cmd(conf,
                  valgrind=True,
                  log_check=True,
                  use_json=False,
+                 log_mask=None,
                  cwd=None):
     """Run a DAOS command
 
@@ -1409,6 +1413,8 @@ def run_daos_cmd(conf,
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
+    if log_mask:
+        cmd_env['D_LOG_MASK'] = log_mask
     rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         env=cmd_env, check=False, cwd=cwd)
 
@@ -1949,8 +1955,27 @@ class PosixTests():
             self.fatal_errors = True
 
     @needs_dfuse
+    def test_readdir_basic(self):
+        """Basic readdir test.
+
+        Call readdir on a empty directory, then populate it and call it again
+        """
+        dir_name = tempfile.mkdtemp(dir=self.dfuse.dir)
+        files = os.listdir(dir_name)
+        assert len(files) == 0
+
+        count = 40
+
+        for idx in range(count):
+            with open(join(dir_name, f'file_{idx}'), 'w'):
+                pass
+
+        files = os.listdir(dir_name)
+        assert len(files) == count
+
+    @needs_dfuse
     def test_readdir_30(self):
-        """Test reading a directory with 25 entries"""
+        """Test reading a directory with 30 entries"""
         self.readdir_test(30)
 
     def readdir_test(self, count, test_all=False):
@@ -2021,7 +2046,44 @@ class PosixTests():
         """
         test_dir = join(self.dfuse.dir, 'test_dir')
         os.mkdir(test_dir)
-        count = 30
+        count = 140
+        src_files = set()
+        for idx in range(count):
+            fname = f'file_{idx}'
+            src_files.add(fname)
+            with open(join(test_dir, fname), 'w'):
+                pass
+
+        files = []
+        files2 = []
+        with os.scandir(test_dir) as entries:
+            with os.scandir(test_dir) as second:
+                files2.append(next(second).name)
+                for entry in entries:
+                    files.append(entry.name)
+                    assert len(files) < count + 2
+                for entry in second:
+                    files2.append(entry.name)
+                    assert len(files2) < count + 2
+
+        print('Reads are from list 2, 1, 1, 2.')
+        print(files)
+        print(files2)
+        assert files == files2, 'inconsistent file names'
+        assert len(files) == count, 'incoorect file count'
+        assert set(files) == src_files, 'incorrect file names'
+
+    @needs_dfuse
+    def test_readdir_cache_short(self):
+        """Run a parallel readdir test.
+
+        This differs from readdir_hard in that the directory is smaller so dfuse will return
+        it in one go.  The memory management in dfuse is different in this case so add another
+        test for memory leaks.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 5
         for idx in range(count):
             with open(join(test_dir, f'file_{idx}'), 'w'):
                 pass
@@ -2036,6 +2098,7 @@ class PosixTests():
                 for entry in second:
                     files2.append(entry.name)
 
+        print('Reads are from list 2, 1, 1, 2.')
         print(files)
         print(files2)
         assert files == files2
@@ -3115,8 +3178,8 @@ class PosixTests():
 
         side_dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
 
-        dfuse.start()
-        side_dfuse.start(v_hint='side')
+        dfuse.start(v_hint='perms')
+        side_dfuse.start(v_hint='perms_side')
 
         test_file = join(dfuse.dir, 'test-file')
         side_test_file = join(side_dfuse.dir, 'test-file')
@@ -3176,6 +3239,438 @@ class PosixTests():
             self.fatal_errors = True
 
         if side_dfuse.stop():
+            self.fatal_errors = True
+
+    def test_daos_fs_check(self):
+        """Test DAOS FS Checker"""
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
+        dirname = join(path, 'test_dir')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f1')
+        with open(fname, 'w') as fd:
+            fd.write('test1')
+
+        dirname = join(path, 'test_dir/1d1/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f2')
+        with open(fname, 'w') as fd:
+            fd.write('test2')
+        dirname = join(path, 'test_dir/1d2/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f3')
+        with open(fname, 'w') as fd:
+            fd.write('test3')
+        dirname = join(path, 'test_dir/1d3/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f4')
+        with open(fname, 'w') as fd:
+            fd.write('test4')
+
+        dirname = join(path, 'test_dir/1d1/2d1/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f5')
+        with open(fname, 'w') as fd:
+            fd.write('test5')
+        dirname = join(path, 'test_dir/1d1/2d2/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f6')
+        with open(fname, 'w') as fd:
+            fd.write('test6')
+        dirname = join(path, 'test_dir/1d1/2d3/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f7')
+        with open(fname, 'w') as fd:
+            fd.write('test7')
+
+        dirname = join(path, 'test_dir/1d2/2d4/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f8')
+        with open(fname, 'w') as fd:
+            fd.write('test8')
+        dirname = join(path, 'test_dir/1d2/2d5/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f9')
+        with open(fname, 'w') as fd:
+            fd.write('test9')
+        dirname = join(path, 'test_dir/1d2/2d6/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f10')
+        with open(fname, 'w') as fd:
+            fd.write('test10')
+
+        dirname = join(path, 'test_dir/1d3/2d7/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f11')
+        with open(fname, 'w') as fd:
+            fd.write('test11')
+        dirname = join(path, 'test_dir/1d3/2d8/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f12')
+        with open(fname, 'w') as fd:
+            fd.write('test12')
+        dirname = join(path, 'test_dir/1d3/2d9/')
+        os.mkdir(dirname)
+        fname = join(dirname, 'f13')
+        with open(fname, 'w') as fd:
+            fd.write('test13')
+
+        dirname2 = join(path, 'test_dir2')
+        dirname = join(path, 'test_dir')
+        shutil.copytree(dirname, dirname2)
+
+        # punch a few directories and files
+        daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
+        cmd_env = get_base_env()
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        dir1 = join(path, 'test_dir/')
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 4:
+            raise NLTestFail('Wrong number of entries')
+
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir/1d1/"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 3:
+            raise NLTestFail('Wrong number of entries')
+
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+        assert rc.returncode == 0
+
+        # run the checker while dfuse is still mounted (should fail - EX open)
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
+               'lf1']
+        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        print(rc)
+        assert rc.returncode != 0
+        output = rc.stderr.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'ERROR: daos: failed fs check: errno 16 (Device or resource busy)':
+            raise NLTestFail('daos fs check should fail with EBUSY')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # fs check with relink should find the 2 leaked directories.
+        # Everything under them should be relinked but not reported as leaked.
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink',
+               '--dir-name', 'lf1']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 2':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # run again to check nothing is detected
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
+
+        dir1 = join(path, 'lost+found/lf1/')
+        dir_list = os.listdir(dir1)
+        nr_entries = len(dir_list)
+        if nr_entries != 2:
+            raise NLTestFail('Wrong number of entries')
+        nr_entries = 0
+        file_nr = 0
+        dir_nr = 0
+        for entry in dir_list:
+            if os.path.isdir(os.path.join(dir1, entry)):
+                nr_entries += 1
+                for root, dirs, files in os.walk(os.path.join(dir1, entry)):
+                    for name in files:
+                        print(os.path.join(root, name))
+                        file_nr += 1
+                    for name in dirs:
+                        print(os.path.join(root, name))
+                        dir_nr += 1
+        if nr_entries != 2:
+            raise NLTestFail('Wrong number of leaked directory OIDS')
+        if file_nr != 13:
+            raise NLTestFail('Wrong number of sub-files in lost+found')
+        if dir_nr != 11:
+            raise NLTestFail('Wrong number of sub-directories in lost+found')
+
+        # punch the test_dir2 object.
+        # this makes test_dir2 an empty dir (leaking everything under it)
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_obj", "/test_dir2"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+        assert rc.returncode == 0
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # fs check with relink should find 3 leaked dirs and 1 leaked file that were directly under
+        # test_dir2. Everything under those leaked dirs are relinked but not reported as leaked.
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink',
+               '--dir-name', 'lf2']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 4':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # run again to check nothing is detected
+        cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print,relink']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+            raise NLTestFail('Wrong number of Leaked OIDs')
+
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_check_test')
+        path = dfuse.dir
+
+        dir2 = join(path, 'lost+found/lf2/')
+        dir_list = os.listdir(dir2)
+        nr_entries = len(dir_list)
+        if nr_entries != 4:
+            raise NLTestFail('Wrong number of entries')
+        file_nr = 0
+        dir_nr = 0
+        for root, dirs, files in os.walk(dir2):
+            for name in files:
+                print(os.path.join(root, name))
+                file_nr += 1
+            for name in dirs:
+                print(os.path.join(root, name))
+                dir_nr += 1
+        if file_nr != 13:
+            raise NLTestFail('Wrong number of sub-files in lost+found')
+        if dir_nr != 12:
+            raise NLTestFail('Wrong number of sub-directories in lost+found')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_daos_fs_fix(self):
+        """Test DAOS FS Fix Tool"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_fix_test')
+        path = dfuse.dir
+        dirname = join(path, 'test_dir')
+        os.mkdir(dirname)
+
+        fname1 = join(dirname, 'f1')
+        with open(fname1, 'w') as fd:
+            fd.write('test1')
+        fname2 = join(dirname, 'f2')
+        with open(fname2, 'w') as fd:
+            fd.write('test2')
+
+        dirname1 = join(path, 'test_dir/1d1/')
+        os.mkdir(dirname1)
+        fname3 = join(dirname1, 'f3')
+        with open(fname3, 'w') as fd:
+            fd.write('test3')
+        dirname2 = join(path, 'test_dir/1d2/')
+        os.mkdir(dirname2)
+        fname4 = join(dirname2, 'f4')
+        with open(fname4, 'w') as fd:
+            fd.write('test4')
+
+        # start corrupting things
+        daos_mw_fi = join(self.conf['PREFIX'], 'lib/daos/TESTING/tests/', 'daos_mw_fi')
+        cmd_env = get_base_env()
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/f1"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d1/f3"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+        cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d2"]
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=dfuse.dir)
+        assert rc.returncode == 0
+
+        # try to read from corrupted entries. all should fail
+        try:
+            with open(fname1, 'r'):
+                assert False
+        except OSError as error:
+            assert error.errno == errno.EINVAL
+
+        try:
+            with open(fname3, 'r'):
+                assert False
+        except OSError as error:
+            assert error.errno == errno.EINVAL
+
+        try:
+            dir_list = os.listdir(dirname2)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.EINVAL
+
+        # fix corrupted entries while dfuse is running - should fail
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
+               '--type', '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        print(rc)
+        assert rc.returncode != 0
+        output = rc.stderr.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+            raise NLTestFail('daos fs fix-entry /test_dir/f1')
+
+        # stop dfuse
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # fix corrupted entries
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
+               '--type', '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Adjusting chunk size of /test_dir/f1 to 1048576':
+            raise NLTestFail('daos fs fix-entry /test_dir/f1')
+
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path',
+               '/test_dir/1d1/f3', '--type', '--chunk-size', '1048576']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Adjusting chunk size of /test_dir/1d1/f3 to 1048576':
+            raise NLTestFail('daos fs fix-entry /test_dir/1d1/f3')
+
+        cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path',
+               '/test_dir/1d2', '--type']
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        output = rc.stdout.decode('utf-8')
+        line = output.splitlines()
+        if line[-1] != 'Setting entry type to S_IFDIR':
+            raise NLTestFail('daos fs fix-entry /test_dir/1d2')
+
+        # remount dfuse
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.log_mask = 'CRIT'
+        dfuse.start(v_hint='fs_fix_test')
+        path = dfuse.dir
+        dirname = join(path, 'test_dir')
+        dirname1 = join(path, 'test_dir/1d1/')
+        fname1 = join(dirname, 'f1')
+        fname3 = join(dirname1, 'f3')
+        dirname2 = join(path, 'test_dir/1d2/')
+
+        # Check entries after fixing
+        cmd = ['fs', 'get-attr', '--path', fname1]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(f'rc is {rc}')
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, None, '1048576')
+        with open(fname1, 'rb') as fd:
+            data = fd.read()
+            data = data.decode('utf-8-sig').strip()
+            if data != 'test1':
+                raise NLTestFail('/test_dir/f1 data is corrupted')
+
+        cmd = ['fs', 'get-attr', '--path', fname3]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(f'rc is {rc}')
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, None, '1048576')
+        with open(fname3, 'rb') as fd:
+            data = fd.read()
+            data = data.decode('utf-8-sig').strip()
+            if data != 'test3':
+                raise NLTestFail('/test_dir/1d1/f3 data is corrupted')
+
+        dir_list = os.listdir(dirname2)
+        nr_entries = len(dir_list)
+        if nr_entries != 1:
+            raise NLTestFail('Wrong number of entries')
+
+        if dfuse.stop():
             self.fatal_errors = True
 
 
@@ -3808,9 +4303,10 @@ def run_in_fg(server, conf, args):
     try:
         if args.launch_cmd:
             start = time.time()
-            # Set the agent path.
+            # Set the PATH and agent dir.
             agent_env = os.environ.copy()
             agent_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+            agent_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{agent_env["PATH"]}'
             rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir, env=agent_env)
             elapsed = time.time() - start
             dfuse.stop()
@@ -4004,7 +4500,7 @@ def test_pydaos_kv(server, conf):
 
     pool = server.get_test_pool_obj()
 
-    cont = create_cont(conf, pool, ctype="PYTHON")
+    cont = create_cont(conf, pool, ctype="PYTHON", label="PYDAOS_NLT")
 
     container = daos.DCont(pool.uuid, cont.uuid)
 
@@ -4051,6 +4547,7 @@ def test_pydaos_kv(server, conf):
     kv = container.get('my_test_kv')
     kv = None
     container = None
+    daos.check(pool.label, "PYDAOS_NLT")
     # pylint: disable=protected-access
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
