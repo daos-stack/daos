@@ -333,8 +333,13 @@ handle_incoming_call(struct drpc *session_ctx)
 
 	/* Incoming message was garbage */
 	if (rc == -DER_PROTO) {
+		int tmp_rc;
+
 		resp->status = DRPC__STATUS__FAILED_UNMARSHAL_CALL;
-		drpc_send_response(session_ctx, resp);
+		tmp_rc = drpc_send_response(session_ctx, resp);
+		if (tmp_rc != 0)
+			D_ERROR("unable to send response to bad incoming dRPC: "DF_RC"\n",
+				DP_RC(tmp_rc));
 		drpc_response_free(resp);
 		return rc;
 	}
