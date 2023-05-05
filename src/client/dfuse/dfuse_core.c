@@ -1036,7 +1036,7 @@ dfuse_fs_init(struct dfuse_info *fs_handle)
 	atomic_init(&fs_handle->di_ino_next, 2);
 	atomic_init(&fs_handle->di_eqt_idx, 0);
 
-	D_SPIN_INIT(&dfuse_info->di_lock, 0);
+	D_SPIN_INIT(&fs_handle->di_lock, 0);
 
 	for (i = 0; i < fs_handle->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->di_eqt[i];
@@ -1066,7 +1066,7 @@ dfuse_fs_init(struct dfuse_info *fs_handle)
 	return rc;
 
 err_eq:
-	D_SPIN_DESTROY(&dfuse_info->di_lock);
+	D_SPIN_DESTROY(&fs_handle->di_lock);
 
 	for (i = 0; i < fs_handle->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->di_eqt[i];
@@ -1515,7 +1515,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 	int rc2;
 	int i;
 
-	D_SPIN_DESTROY(&fs_handle->dpi_info->di_lock);
+	D_SPIN_DESTROY(&dfuse_info->di_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
