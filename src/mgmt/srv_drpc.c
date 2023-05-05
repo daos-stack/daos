@@ -115,11 +115,16 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	/* Response status is populated with SUCCESS (0) on init */
+	/** Response status is populated with SUCCESS (0) on init */
 	ctl__set_log_masks_resp__init(&resp);
 
-	/* This assumes req->masks is a null terminated string */
-	d_log_setmasks(req->masks, -1);
+	/**
+	 * Assuming req->masks and req->streams are null terminated strings, update engine log
+	 * masks and debug stream mask.
+	 */
+	d_log_sync_mask_ex(req->masks, req->streams);
+
+	/** Check settings have persisted */
 	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
 	D_INFO("Received request to set log masks '%s', masks are now %s\n",
 		req->masks, retbuf);
