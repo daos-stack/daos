@@ -1046,6 +1046,7 @@ class DaosServer():
             self.conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
             self.conf.valgrind_errors = True
             rc.returncode = 0
+        assert rc.returncode == 0, rc
 
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
@@ -3339,7 +3340,7 @@ class PosixTests():
         # run the checker while dfuse is still mounted (should fail - EX open)
         cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
                'lf1']
-        rc = run_daos_cmd(self.conf, cmd)
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
