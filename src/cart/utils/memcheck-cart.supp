@@ -462,10 +462,6 @@
    fun:malloc
    fun:hg_dlog_mkcount32
    ...
-   fun:NA_Initialize_opt
-   ...
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
 }
 {
    FI leak 9
