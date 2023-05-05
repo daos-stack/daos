@@ -467,8 +467,7 @@ def launch_snapshot(self, pool, name):
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
-    self.log.info(
-        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
 def launch_vmd_identify_check(self, name, results, args):
@@ -513,8 +512,7 @@ def launch_vmd_identify_check(self, name, results, args):
     args.put(self.harasser_args)
     self.log.info("Harasser results: %s", self.harasser_results)
     self.log.info("Harasser args: %s", self.harasser_args)
-    self.log.info(
-        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
 def launch_extend(self, pool, name, results, args):
@@ -562,8 +560,7 @@ def launch_extend(self, pool, name, results, args):
     args.put(self.harasser_args)
     self.log.info("Harasser results: %s", self.harasser_results)
     self.log.info("Harasser args: %s", self.harasser_args)
-    self.log.info(
-        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
 def launch_exclude_reintegrate(self, pool, name, results, args):
@@ -583,8 +580,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     if name == "EXCLUDE":
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
         engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
-        exclude_servers = (
-            len(self.hostlist_servers) * int(engine_count)) - 1
+        exclude_servers = (len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
         rank = random.randint(0, exclude_servers)  # nosec
 
@@ -598,8 +594,8 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         params = {"name": name,
                   "status": status,
                   "vars": {"rank": rank, "tgt_idx": tgt_idx}}
-        self.log.info("<<<PASS %s: %s started on rank %s at %s >>>\n",
-                      self.loop, name, rank, time.ctime())
+        self.log.info(
+            "<<<PASS %s: %s started on rank %s at %s >>>\n", self.loop, name, rank, time.ctime())
         try:
             pool.exclude(rank, tgt_idx=tgt_idx)
             status = True
@@ -612,8 +608,8 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
             tgt_idx = self.harasser_args["EXCLUDE"]["tgt_idx"]
-            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
-                          self.loop, name, rank, time.ctime())
+            self.log.info(
+                "<<<PASS %s: %s started on rank %s at %s>>>\n", self.loop, name, rank, time.ctime())
             try:
                 pool.reintegrate(rank, tgt_idx=tgt_idx)
                 status = True
@@ -623,8 +619,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             if status:
                 status = wait_for_pool_rebuild(self, pool, name)
         else:
-            self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",
-                           self.loop, name)
+            self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>", self.loop, name)
             status = False
     params = {"name": name,
               "status": status,
@@ -637,8 +632,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     args.put(self.harasser_args)
     self.log.info("Harasser results: %s", self.harasser_results)
     self.log.info("Harasser args: %s", self.harasser_args)
-    self.log.info(
-        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
 def launch_server_stop_start(self, pools, name, results, args):
@@ -701,31 +695,27 @@ def launch_server_stop_start(self, pools, name, results, args):
     elif name == "SVR_START":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
-            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
-                          self.loop, name, rank, time.ctime())
+            self.log.info(
+                "<<<PASS %s: %s started on rank %s at %s>>>\n", self.loop, name, rank, time.ctime())
             try:
                 self.dmg_command.system_start(ranks=rank)
                 status = True
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg system start failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
         else:
-            self.log.error(
-                "<<<PASS %s: %s failed due to SVR_STOP failure >>>",
-                self.loop, name)
+            self.log.error("<<<PASS %s: %s failed due to SVR_STOP failure >>>", self.loop, name)
             status = False
     elif name == "SVR_REINTEGRATE":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
-            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
-                          self.loop, name, rank, time.ctime())
+            self.log.info(
+                "<<<PASS %s: %s started on rank %s at %s>>>\n", self.loop, name, rank, time.ctime())
             try:
                 self.dmg_command.system_start(ranks=rank)
                 status = True
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg system start failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
             for pool in pools:
                 self.dmg_command.pool_query(pool.identifier)
@@ -912,24 +902,11 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
+        if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+            continue
         for b_size in bsize_list:
             for t_size in tsize_list:
                 for file_oclass, dir_oclass in oclass_list:
-                    # Cancel for ticket DAOS-6095
-                    if (api in ["HDF5-VOL", "HDF5", "POSIX"]
-                            and t_size == "4k"
-                            and file_oclass in ["RP_2G1", 'RP_2GX']):
-                        self.add_cancel_ticket(
-                            "DAOS-6095",
-                            "IOR -a {} with -t {} and -o {}".format(
-                                api, t_size, file_oclass))
-                        continue
-                    # Cancel for ticket DAOS-6308
-                    if api == "MPIIO" and file_oclass == "RP_2GX":
-                        self.add_cancel_ticket(
-                            "DAOS-6308",
-                            "IOR -a {} with -o {}".format(api, file_oclass))
-                        continue
                     if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
                         continue
                     ior_cmd = IorCommand()
@@ -938,26 +915,26 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     ior_cmd.max_duration.update(ior_timeout)
                     if api == "HDF5-VOL":
                         ior_cmd.api.update("HDF5")
+                    elif api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                        ior_cmd.api.update("POSIX")
                     else:
                         ior_cmd.api.update(api)
                     ior_cmd.block_size.update(b_size)
                     ior_cmd.transfer_size.update(t_size)
-                    if (api in ["HDF5-VOL", "POSIX"]):
+                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                         ior_cmd.dfs_oclass.update(None)
                         ior_cmd.dfs_dir_oclass.update(None)
                     else:
                         ior_cmd.dfs_oclass.update(file_oclass)
                         ior_cmd.dfs_dir_oclass.update(dir_oclass)
                     if ior_cmd.api.value == "DFS":
-                        ior_cmd.test_file.update(
-                            os.path.join("/", "testfile"))
+                        ior_cmd.test_file.update(os.path.join("/", "testfile"))
                     if not cont:
                         add_containers(self, pool, file_oclass, dir_oclass)
                         container = self.container[-1]
                     else:
                         container = cont
-                    ior_cmd.set_daos_params(
-                        self.server_group, pool, container.identifier)
+                    ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec.replace("/", "_"), api, b_size, t_size,
                         file_oclass, nodesperjob * ppn, nodesperjob, ppn)
@@ -968,7 +945,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     env["D_LOG_FILE_APPEND_PID"] = "1"
                     sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
-                    if api in ["HDF5-VOL", "POSIX"]:
+                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
                             self, pool, container, name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
@@ -976,6 +953,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                             os.path.join(dfuse.mount_dir.value, "testfile"))
                     mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
                     mpirun_cmd.get_params(self)
+                    if api == "POSIX-LIBPIL4DFS":
+                        env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+                        env["IL_LOG"] = "1"
+                    if api == "POSIX-LIBIOIL":
+                        env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                        env["D_IL_REPORT"] = "1"
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
                         vol = True
@@ -986,11 +969,10 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     mpirun_cmd.ppn.update(ppn)
                     sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
-                    if api in ["HDF5-VOL", "POSIX"]:
+                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                         sbatch_cmds.extend(stop_dfuse(dfuse, vol))
                     commands.append([sbatch_cmds, log_name])
-                    self.log.info(
-                        "<<IOR {} cmdlines>>:".format(api))
+                    self.log.info("<<IOR {} cmdlines>>:".format(api))
                     for cmd in sbatch_cmds:
                         self.log.info("%s", cmd)
     return commands
@@ -1099,7 +1081,9 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         "num_of_files_dirs", mdtest_params)
     # update mdtest cmdline for each additional mdtest obj
     for api in api_list:
-        if api in ["POSIX"] and ppn > 16:
+        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"] and ppn > 16:
+            continue
+        if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
             continue
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
@@ -1109,7 +1093,10 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd = MdtestCommand()
                         mdtest_cmd.namespace = mdtest_params
                         mdtest_cmd.get_params(self)
-                        mdtest_cmd.api.update(api)
+                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                            mdtest_cmd.api.update("POSIX")
+                        else:
+                            mdtest_cmd.api.update(api)
                         mdtest_cmd.write_bytes.update(write_bytes)
                         mdtest_cmd.read_bytes.update(read_bytes)
                         mdtest_cmd.depth.update(depth)
@@ -1133,12 +1120,18 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         sbatch_cmds = [
                             "module purge", "module load {}".format(self.mpi_module)]
                         # include dfuse cmdlines
-
-                        if api in ["POSIX"]:
+                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                             dfuse, dfuse_start_cmdlist = start_dfuse(
                                 self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                             sbatch_cmds.extend(dfuse_start_cmdlist)
                             mdtest_cmd.test_dir.update(dfuse.mount_dir.value)
+                            if self.enable_il and api == "POSIX-LIBPIL4DFS":
+                                env["LD_PRELOAD"] = os.path.join(
+                                    self.prefix, 'lib64', 'libpil4dfs.so')
+                                env["IL_LOG"] = "1"
+                            if self.enable_il and api == "POSIX-LIBIOIL":
+                                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                                env["D_IL_REPORT"] = "1"
                         mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.get_params(self)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1146,11 +1139,10 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
-                        if api in ["POSIX"]:
+                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                             sbatch_cmds.extend(stop_dfuse(dfuse))
                         commands.append([sbatch_cmds, log_name])
-                        self.log.info(
-                            "<<MDTEST {} cmdlines>>:".format(api))
+                        self.log.info("<<MDTEST {} cmdlines>>:".format(api))
                         for cmd in sbatch_cmds:
                             self.log.info("%s", cmd)
     return commands
@@ -1202,12 +1194,13 @@ def create_fio_cmdline(self, job_spec, pool):
         self (obj): soak obj
         job_spec (str): fio job in yaml to run
         pool (obj):   TestPool obj
-        ppn(int): number of tasks to run on each node
 
     Returns:
         cmd(list): list of cmdlines
 
     """
+    # pylint: disable=too-many-nested-blocks
+
     commands = []
     fio_namespace = os.path.join(os.sep, "run", job_spec, "*")
     fio_soak_namespace = os.path.join(os.sep, "run", job_spec, "soak", "*")
@@ -1216,6 +1209,7 @@ def create_fio_cmdline(self, job_spec, pool):
     size_list = self.params.get("size", fio_soak_namespace)
     rw_list = self.params.get("rw", fio_soak_namespace)
     oclass_list = self.params.get("oclass", fio_soak_namespace)
+    api_list = self.params.get("api", fio_namespace)
     # Get the parameters for Fio
     fio_cmd = FioCommand()
     fio_cmd.namespace = fio_namespace
@@ -1225,44 +1219,52 @@ def create_fio_cmdline(self, job_spec, pool):
         for size in size_list:
             for rw in rw_list:
                 for file_oclass, dir_oclass in oclass_list:
-                    # update fio params
-                    fio_cmd.update(
-                        "global", "blocksize", blocksize,
-                        "fio --name=global --blocksize")
-                    fio_cmd.update(
-                        "global", "size", size,
-                        "fio --name=global --size")
-                    fio_cmd.update(
-                        "global", "rw", rw,
-                        "fio --name=global --rw")
-                    cmds = []
-                    # add srun start dfuse cmds if api is POSIX
-                    if fio_cmd.api.value == "POSIX":
-                        # Connect to the pool, create container
-                        # and then start dfuse
+                    for api in api_list:
+                        if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+                            continue
+                        # update fio params
+                        fio_cmd.update(
+                            "global", "blocksize", blocksize,
+                            "fio --name=global --blocksize")
+                        fio_cmd.update(
+                            "global", "size", size,
+                            "fio --name=global --size")
+                        fio_cmd.update(
+                            "global", "rw", rw,
+                            "fio --name=global --rw")
+                        cmds = []
+                        # add start dfuse cmds; api is always POSIX
+                        fio_cmd.api.update("POSIX")
+                        # Connect to the pool, create container and then start dfuse
                         add_containers(self, pool, file_oclass, dir_oclass)
                         self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
-                        log_name = "{}_{}_{}_{}_{}".format(
-                            job_spec, blocksize, size, rw, file_oclass)
+                        log_name = "{}_{}_{}_{}_{}_{}".format(
+                            job_spec, api, blocksize, size, rw, file_oclass)
                         dfuse, cmds = start_dfuse(
                             self, pool, self.container[-1], name=log_name, job_spec=job_spec)
-                    # Update the FIO cmdline
-                    fio_cmd.update(
-                        "global", "directory",
-                        dfuse.mount_dir.value,
-                        "fio --name=global --directory")
-                    # add fio cmdline
-                    cmds.append("cd {};".format(dfuse.mount_dir.value))
-                    cmds.append(str(fio_cmd))
-                    cmds.append("status=$?")
-                    cmds.append("cd -")
-                    # If posix, add the srun dfuse stop cmds
-                    if fio_cmd.api.value == "POSIX":
+                        # Update the FIO cmdline
+                        fio_cmd.update(
+                            "global", "directory",
+                            dfuse.mount_dir.value,
+                            "fio --name=global --directory")
+                        # add fio cmdline
+                        cmds.append("cd {};".format(dfuse.mount_dir.value))
+                        if self.enable_il and api == "POSIX-LIBPIL4DFS":
+                            cmds.append("export LD_PRELOAD={}".format(
+                                os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')))
+                            cmds.append("export IL_LOG=1")
+                        if self.enable_il and api == "POSIX-LIBIOIL":
+                            cmds.append("export LD_PRELOAD={}".format(
+                                os.path.join(self.prefix, 'lib64', 'libioil.so')))
+                            cmds.append("export IL_LOG=1")
+                        cmds.append(str(fio_cmd))
+                        cmds.append("status=$?")
+                        cmds.append("cd -")
                         cmds.extend(stop_dfuse(dfuse))
-                    commands.append([cmds, log_name])
-                    self.log.info("<<Fio cmdlines>>:")
-                    for cmd in cmds:
-                        self.log.info("%s", cmd)
+                        commands.append([cmds, log_name])
+                        self.log.info("<<Fio cmdlines>>:")
+                        for cmd in cmds:
+                            self.log.info("%s", cmd)
     return commands
 
 
@@ -1286,52 +1288,59 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
-    posix = self.params.get("posix", app_params, default=False)
+    api_list = self.params.get("api", app_params, default=["DFS"])
     if app_cmd is None:
-        self.log.info(
-            "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
+        self.log.info(f"<<{job_spec} command line not specified in yaml; job will not be run>>")
         return commands
-
     oclass_list = self.params.get("oclass", app_params)
     for file_oclass, dir_oclass in oclass_list:
-        add_containers(self, pool, file_oclass, dir_oclass)
-        sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
-        log_name = "{}_{}_{}_{}_{}".format(
-            job_spec, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
-        # include dfuse cmdlines
-        if posix:
-            dfuse, dfuse_start_cmdlist = start_dfuse(
-                self, pool, self.container[-1], name=log_name, job_spec=job_spec)
-            sbatch_cmds.extend(dfuse_start_cmdlist)
-        # allow apps that use an mpi other than default (self.mpi_module)
-        if mpi_module != self.mpi_module:
-            sbatch_cmds.append("module load {}".format(mpi_module))
-        mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
-        mpirun_cmd.get_params(self)
-        if "mpich" in mpi_module:
-            # Pass pool and container information to the commands
-            env = EnvironmentVariables()
-            env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
-            env["D_LOG_FILE_APPEND_PID"] = "1"
-            mpirun_cmd.assign_environment(env, True)
-        mpirun_cmd.assign_processes(nodesperjob * ppn)
-        mpirun_cmd.ppn.update(ppn)
-        if posix:
-            mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
-        cmdline = "{}".format(str(mpirun_cmd))
-        sbatch_cmds.append(str(cmdline))
-        sbatch_cmds.append("status=$?")
-        if posix:
+        for api in api_list:
+            if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+                continue
+            add_containers(self, pool, file_oclass, dir_oclass)
+            sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
+            log_name = "{}_{}_{}_{}_{}_{}".format(
+                job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
+            # include dfuse cmdlines
+            if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+                dfuse, dfuse_start_cmdlist = start_dfuse(
+                    self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+                sbatch_cmds.extend(dfuse_start_cmdlist)
+            # allow apps that use an mpi other than default (self.mpi_module)
             if mpi_module != self.mpi_module:
-                sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
-            sbatch_cmds.extend(stop_dfuse(dfuse))
-        commands.append([sbatch_cmds, log_name])
-        self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
-        for cmd in sbatch_cmds:
-            self.log.info("%s", cmd)
-        if mpi_module != self.mpi_module:
-            mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
+                sbatch_cmds.append("module load {}".format(mpi_module))
+            mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
+            if "mpich" in mpi_module:
+                # Pass pool and container information to the commands
+                env = EnvironmentVariables()
+                env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
+                env["D_LOG_FILE_APPEND_PID"] = "1"
+                if self.enable_il and api == "POSIX-LIBPIL4DFS":
+                    env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+                    env["IL_LOG"] = "1"
+                if self.enable_il and api == "POSIX-LIBIOIL":
+                    env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                    env["D_IL_REPORT"] = "1"
+                mpirun_cmd.assign_environment(env, True)
+            mpirun_cmd.assign_processes(nodesperjob * ppn)
+            mpirun_cmd.ppn.update(ppn)
+            if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+                mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
+            cmdline = "{}".format(str(mpirun_cmd))
+            sbatch_cmds.append(str(cmdline))
+            sbatch_cmds.append("status=$?")
+            if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+                if mpi_module != self.mpi_module:
+                    sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
+                sbatch_cmds.extend(stop_dfuse(dfuse))
+            commands.append([sbatch_cmds, log_name])
+            self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
+            for cmd in sbatch_cmds:
+                self.log.info("%s", cmd)
+            if mpi_module != self.mpi_module:
+                mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
+                mpirun_cmd.get_params(self)
     return commands
 
 

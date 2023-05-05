@@ -73,6 +73,7 @@ class SoakTestBase(TestWithServers):
         self.sudo_cmd = None
         self.slurm_exclude_servers = True
         self.control = get_local_host()
+        self.enable_il = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -553,6 +554,7 @@ class SoakTestBase(TestWithServers):
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
+        self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
         self.sudo_cmd = "sudo" if enable_sudo else ""
         if harassers:
             run_harasser = True
