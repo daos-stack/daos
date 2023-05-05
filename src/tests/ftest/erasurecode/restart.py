@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from ec_utils import get_data_parity_number
 from exception_utils import CommandFailure
 from general_utils import wait_for_result
 from ior_utils import run_ior
