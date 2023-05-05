@@ -2066,7 +2066,7 @@ mount:
 					break;
 			}
 			if (rc) {
-				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+				D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 				D_GOTO(err, rc);
 			}
 		} else {
@@ -2081,7 +2081,7 @@ mount:
 		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
-			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+			D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
@@ -4128,8 +4128,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		break;
 	default:
-		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Invalid entry type (not a dir, file, symlink): %d (%s)\n", rc,
+			strerror(rc));
+		D_GOTO(err_obj, rc);
 	}
 
 	if (mode)
