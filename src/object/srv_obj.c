@@ -4023,6 +4023,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	struct bio_desc			**biods = NULL;
 	struct obj_bulk_args		 *bulks = NULL;
 	daos_iod_t			local_iods[LOCAL_STACK_NUM] = { {0} };
+	uint32_t			local_iod_nrs[LOCAL_STACK_NUM] = { 0 };
 	struct dcs_iod_csums		local_csums[LOCAL_STACK_NUM] = { {0} };
 	struct dcs_csum_info		local_csum_info[LOCAL_STACK_NUM] = { 0 };
 	uint64_t			local_offs[LOCAL_STACK_NUM] = { 0 };
@@ -4033,6 +4034,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	uint8_t				*local_p_skips[LOCAL_STACK_NUM] = { 0 };
 	uint8_t				**pskips = NULL;
 	daos_iod_t			**piods = NULL;
+	uint32_t			*piod_nrs = NULL;
 	struct dcs_iod_csums		**pcsums = NULL;
 	uint64_t			**poffs = NULL;
 	struct dcs_csum_info		*pcsum_info = NULL;
@@ -4082,17 +4084,19 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	dcri += dcde->dcde_read_cnt;
 	if (dcde->dcde_write_cnt > LOCAL_STACK_NUM) {
 		D_ALLOC_ARRAY(piods, dcde->dcde_write_cnt);
+		D_ALLOC_ARRAY(piod_nrs, dcde->dcde_write_cnt);
 		D_ALLOC_ARRAY(pcsums, dcde->dcde_write_cnt);
 		D_ALLOC_ARRAY(poffs, dcde->dcde_write_cnt);
 		D_ALLOC_ARRAY(pcsum_info, dcde->dcde_write_cnt);
 		D_ALLOC_ARRAY(pskips, dcde->dcde_write_cnt);
-		if (piods == NULL || pcsums == NULL || poffs == NULL || pcsum_info == NULL ||
-		    pskips == NULL)
+		if (piods == NULL || piod_nrs == NULL || pcsums == NULL || poffs == NULL ||
+		    pcsum_info == NULL || pskips == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	} else {
 		piods = local_p_iods;
 		pcsums = local_p_csums;
 		poffs = local_p_offs;
+		piod_nrs = local_iod_nrs;
 		pcsum_info = local_csum_info;
 		pskips = local_p_skips;
 		for (i = 0; i < dcde->dcde_write_cnt; i++) {
@@ -4129,10 +4133,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		if (rc)
 			D_GOTO(out, rc);
 
-		rc = obj_get_iods_offs(dcsr->dcsr_oid, &dcu->dcu_iod_array,
-				       &ioc->ioc_oca, dcsr->dcsr_dkey_hash,
-				       ioc->ioc_layout_ver, &piods[i],
-				       &poffs[i], &pskips[i], &pcsums[i], &pcsum_info[i], NULL);
+		rc = obj_get_iods_offs(dcsr->dcsr_oid, &dcu->dcu_iod_array, &ioc->ioc_oca,
+				       dcsr->dcsr_dkey_hash, ioc->ioc_layout_ver, &piods[i],
+				       &poffs[i], &pskips[i], &pcsums[i], &pcsum_info[i],
+				       &piod_nrs[i]);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -4165,7 +4169,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 								 dcsr->dcsr_oid.id_shard);
 			obj_singv_ec_rw_filter(dcsr->dcsr_oid, &ioc->ioc_oca, tgt_off,
 					       piods[i], poffs[i], dcsh->dcsh_epoch.oe_value,
-					       dcu->dcu_flags, dcsr->dcsr_nr, true, false, NULL);
+					       dcu->dcu_flags, piod_nrs[i], true, false, NULL);
 		} else {
 			piods[i] = dcu->dcu_iod_array.oia_iods;
 			pcsums[i] = dcu->dcu_iod_array.oia_iod_csums;
@@ -4184,7 +4188,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		rc = vos_update_begin(ioc->ioc_vos_coh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
 				update_flags, &dcsr->dcsr_dkey,
-				dcsr->dcsr_nr, piods[i], pcsums[i],
+				piod_nrs[i], piods[i], pcsums[i],
 				ioc->ioc_coc->sc_props.dcp_dedup_size,
 				&iohs[i], dth);
 		if (rc != 0)
@@ -4211,7 +4215,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET, dcu->dcu_flags & ORF_BULK_BIND,
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
-					       dcsr->dcsr_nr, &bulks[i], ioc->ioc_coh);
+					       piod_nrs[i], &bulks[i], ioc->ioc_coh);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -4222,6 +4226,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rma++;
 		} else if (dcu->dcu_sgls != NULL) {
+			/* no akey skip for non-bulk case (only with one data target) */
+			D_ASSERTF(piod_nrs[i] == dcsr->dcsr_nr,
+				  "piod_nrs[%d] %d, dcsr->dcsr_nr %d\n",
+				  i, piod_nrs[i], dcsr->dcsr_nr);
 			rc = bio_iod_copy(biods[i], dcu->dcu_sgls,
 					  dcsr->dcsr_nr);
 			if (rc != 0) {
@@ -4277,7 +4285,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		}
 
 		rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub, piods[i], pcsums[i], biods[i],
-					 ioc->ioc_coc->sc_csummer, dcsr->dcsr_nr);
+					 ioc->ioc_coc->sc_csummer, piod_nrs[i]);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
 				obj_log_csum_err();
@@ -4454,6 +4462,8 @@ out:
 
 	if (piods != local_p_iods && piods != NULL)
 		D_FREE(piods);
+	if (piod_nrs != local_iod_nrs && piod_nrs != NULL)
+		D_FREE(piod_nrs);
 	if (poffs != local_p_offs && poffs != NULL)
 		D_FREE(poffs);
 	if (pskips != local_p_skips && pskips != NULL)
