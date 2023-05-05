@@ -38,6 +38,7 @@ struct fd_entry {
 	int               fd_status;
 	bool              fd_fstat;
 
+	ATOMIC uint32_t   fd_written;
 	/* Used for streaming I/O only */
 	bool              fd_eof;
 	int               fd_err;

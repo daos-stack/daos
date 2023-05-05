@@ -18,6 +18,12 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	d_iov_t     iov = {};
 	d_sg_list_t sgl = {};
 	int         rc;
+	uint32_t    zero = 0;
+	uint32_t    one  = 1;
+
+	if (atomic_compare_exchange(&entry->fd_written, zero, one)) {
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "First write at %zi", position);
+	}
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
 

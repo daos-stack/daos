@@ -41,21 +41,21 @@ struct ioil_pool {
 };
 
 struct ioil_global {
-	pthread_mutex_t	iog_lock;
-	d_list_t	iog_pools_head;
+	pthread_mutex_t iog_lock;
+	d_list_t        iog_pools_head;
 	pid_t           iog_init_tid;
-	bool		iog_initialized;
-	bool		iog_no_daos;
-	bool		iog_daos_init;
+	bool            iog_initialized;
+	bool            iog_no_daos;
+	bool            iog_daos_init;
 
-	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+	bool            iog_show_summary; /**< Should a summary be shown at teardown */
 
-	unsigned	iog_report_count;	/**< Number of operations that should be logged */
+	unsigned        iog_report_count; /**< Number of operations that should be logged */
 
-	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
-	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
-	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
+	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
+	ATOMIC uint64_t iog_read_count;  /**< Number of read operations intercepted */
+	ATOMIC uint64_t iog_write_count; /**< Number of write operations intercepted */
+	ATOMIC uint64_t iog_fstat_count; /**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
