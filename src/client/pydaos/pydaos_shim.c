@@ -446,6 +446,273 @@ __shim_handle__cont_close(PyObject *self, PyObject *args)
 	return PyInt_FromLong(rc);
 }
 
+#define ITER_NR		96
+
+static int
+oit_mark(daos_handle_t oh, daos_handle_t oit)
+{
+	char			*buf = NULL;
+	daos_anchor_t		anchor = {0};
+	daos_key_desc_t		kds[ITER_NR];
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iov;
+	daos_size_t		buf_size = ITER_NR * 256;
+	struct pydaos_df	entry;
+	size_t			size = sizeof(entry);
+	d_iov_t			marker;
+	bool			mark_data = true;
+	int			rc = 0;
+
+	D_ALLOC(buf, buf_size);
+	if (buf == NULL)
+		goto out;
+
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	d_iov_set(&sg_iov, buf, buf_size);
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	nr = ITER_NR, i;
+		void		*ptr;
+
+		memset(buf, 0, buf_size);
+		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc)
+			goto out;
+		if (nr == 0)
+			continue;
+
+		for (ptr = buf, i = 0; i < nr; i++) {
+			char *key;
+
+			D_ALLOC(key, kds[i].kd_key_len + 1);
+			if (key == NULL) {
+				rc = -DER_NOMEM;
+				goto out;
+			}
+
+			memcpy(key, ptr, kds[i].kd_key_len);
+			key[kds[i].kd_key_len + 1] = '\0';
+			ptr += kds[i].kd_key_len;
+
+			rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, key, &size, &entry,
+					 NULL);
+			D_FREE(key);
+			if (rc)
+				goto out;
+
+			rc = daos_oit_mark(oit, entry.oid, &marker, NULL);
+			if (rc) {
+				D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
+				goto out;
+			}
+		}
+	}
+
+out:
+	D_FREE(buf);
+	return rc;
+}
+
+static PyObject *
+cont_check(int ret, char *pool, char *cont, int flags)
+{
+	daos_handle_t			coh = {0};
+	daos_handle_t			poh = {0};
+	daos_handle_t			oh = {0};
+	daos_handle_t			oit = {0};
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
+	struct daos_prop_co_roots	*roots;
+	daos_epoch_t			snap_epoch = 0;
+	daos_anchor_t			anchor = {0};
+	uint32_t			nr_entries = ITER_NR, i;
+	daos_obj_id_t			oids[ITER_NR] = {0};
+	daos_epoch_range_t		epr;
+	d_iov_t				marker;
+	bool				mark_data = true;
+	int				rc, rc2;
+
+	if (ret != DER_SUCCESS) {
+		rc = ret;
+		goto out;
+	}
+
+	/** Connect to pool */
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	if (rc)
+		goto out;
+
+	/** Open container. TODO - need exclusive open when available */
+	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	if (rc)
+		goto out;
+
+	/** create snapshot for OIT */
+	rc = daos_cont_create_snap_opt(coh, &snap_epoch, NULL, DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc)
+		goto out;
+
+	/** Open OIT table */
+	rc = daos_oit_open(coh, snap_epoch, &oit, NULL);
+	if (rc)
+		goto out;
+
+	/** Retrieve container properties via cont_query() */
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc)
+		goto out;
+
+	/** Verify that this is a python container */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
+		D_ERROR("Container is not a python container\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/** Fetch root object ID */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL) {
+		D_ERROR("Invalid entry in properties for root object ID\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
+		D_ERROR("Invalid root object ID in properties\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	roots->cr_oids[0].hi |= (uint64_t)DAOS_OT_KV_HASHED << OID_FMT_TYPE_SHIFT;
+	/** Open root object */
+	rc = daos_kv_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		goto out;
+
+	/** Mark the root */
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	rc = daos_oit_mark(oit, roots->cr_oids[0], &marker, NULL);
+	if (rc) {
+		D_ERROR("Failed to mark OID for Root KV in OIT: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	/** iterate through the root KV and mark oids seen in the pydaos namespace */
+	rc = oit_mark(oh, oit);
+	if (rc)
+		goto out;
+
+	/** list all unmarked oids and relink them in the root KV */
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = ITER_NR;
+		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
+		if (rc)
+			goto out;
+
+		for (i = 0; i < nr_entries; i++) {
+			struct pydaos_df	dentry = {0};
+			char			oid_name[42];
+			size_t			len;
+			enum daos_otype_t	type = daos_obj_id2type(oids[i]);
+
+			/** Insert leaked oid back in root with oid as the name */
+			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+			D_ASSERT(len < 42);
+			dentry.oid = oids[i];
+
+			if (type == DAOS_OT_KV_HASHED) {
+				printf("Adding leaked Dictionary back as: %s\n", oid_name);
+				dentry.otype = PYDAOS_DICT;
+			} else {
+				printf("Adding leaked Array back as: %s\n", oid_name);
+				dentry.otype = PYDAOS_ARRAY;
+			}
+
+			rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, oid_name,
+					 sizeof(dentry), &dentry, NULL);
+			if (rc)
+				goto out;
+		}
+	}
+
+out:
+	if (prop)
+		daos_prop_free(prop);
+	if (daos_handle_is_valid(oh)) {
+		rc2 = daos_kv_close(oh, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
+	if (daos_handle_is_valid(oit)) {
+		rc2 = daos_oit_close(oit, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
+	if (snap_epoch) {
+		epr.epr_hi = epr.epr_lo = snap_epoch;
+		rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
+	if (daos_handle_is_valid(coh)) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
+	if (daos_handle_is_valid(poh)) {
+		rc2 = daos_pool_disconnect(poh, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
+
+	return PyInt_FromLong(rc);
+}
+
+static PyObject *
+__shim_handle__cont_check(PyObject *self, PyObject *args)
+{
+	char	*pool;
+	char	*cont;
+	int	 flags;
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &pool, &cont, &flags);
+
+	return cont_check(0, pool, cont, flags);
+}
+
+static PyObject *
+__shim_handle__cont_check_by_path(PyObject *self, PyObject *args)
+{
+	const char		*path;
+	PyObject		*obj;
+	int			 flags;
+	struct duns_attr_t	 attr = {0};
+	int			 rc;
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
+
+	rc = duns_resolve_path(path, &attr);
+	if (rc)
+		goto out;
+
+out:
+	obj = cont_check(rc, attr.da_pool, attr.da_cont, flags);
+	duns_destroy_attr(&attr);
+	return obj;
+}
+
 /**
  * Implementation of baseline object functions
  */
@@ -1158,6 +1425,8 @@ static PyMethodDef daosMethods[] = {
 	EXPORT_PYTHON_METHOD(cont_get),
 	EXPORT_PYTHON_METHOD(cont_newobj),
 	EXPORT_PYTHON_METHOD(cont_close),
+	EXPORT_PYTHON_METHOD(cont_check),
+	EXPORT_PYTHON_METHOD(cont_check_by_path),
 
 	/** KV operations */
 	EXPORT_PYTHON_METHOD(kv_open),

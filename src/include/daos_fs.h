@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,7 +29,8 @@ extern "C" {
 #define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
-
+/** Default chunk size for files (arrays) */
+#define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Maximum xattr name */
 #define DFS_MAX_XATTR_NAME	255
 /** Maximum xattr value */
@@ -674,8 +675,7 @@ dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 /**
  * User callback defined for dfs_readdir_size.
  */
-typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *arg);
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[], void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
@@ -873,8 +873,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
-		       daos_size_t csize);
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
@@ -1134,6 +1133,39 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
+
+
+enum {
+	/** print the leaked OIDS */
+	DFS_CHECK_PRINT		= (1 << 0),
+	/** remove / punch the leaked objects */
+	DFS_CHECK_REMOVE	= (1 << 1),
+	/** relink the leaked oids under "/lost+found" */
+	DFS_CHECK_RELINK	= (1 << 2),
+	/** verify data consistency of each oid in the container (note that this will be slow) */
+	DFS_CHECK_VERIFY	= (1 << 3),
+	/** Evict all open container handles to ensure exclusive open works for the checker */
+	DFS_CHECK_EVICT_ALL	= (1 << 4),
+};
+
+/**
+ * Scan the DFS namespace and check if there are any leaked objects. Depending on the flag passed,
+ * either remove those leaked objects to reclaim space, add those object to "Lost+Found" directory,
+ * or just print the oids to stdout.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Flags to indicate what to do with leaked objects:
+ *			punch, link to l+f, or print to stdout.
+ * \param[in]	name	Optional directory name to be created under lost+found where all oids are
+ *			stored. If NULL is specified, a directory will be created with a name
+ *			corresponding to the current timestamp with the format "%Y-%m-%d-%H:%M:%S".
+ *			If the DFS_CHECK_LINK_LF is not set, this is ignored.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }

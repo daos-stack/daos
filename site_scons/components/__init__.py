@@ -186,27 +186,31 @@ def define_mercury(reqs):
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
-                     '-DMERCURY_USE_CHECKSUMS=OFF',
-                     '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX',
-                     '-DCMAKE_CXX_FLAGS="-std=c++11"',
-                     '-DBUILD_EXAMPLES=OFF',
-                     '-DMERCURY_USE_BOOST_PP=ON',
-                     '-DBUILD_TESTING=OFF',
-                     '-DNA_USE_OFI=ON',
-                     '-DBUILD_DOCUMENTATION=OFF',
-                     '-DBUILD_SHARED_LIBS=ON',
-                     '-DNA_USE_UCX=ON',
+                     '-DBUILD_SHARED_LIBS:BOOL=ON',
+                     '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
+                     '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
+                     '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
+                     '-DBUILD_DOCUMENTATION:BOOL=OFF',
+                     '-DBUILD_EXAMPLES:BOOL=OFF',
+                     '-DBUILD_TESTING:BOOL=ON',
+                     '-DBUILD_TESTING_PERF:BOOL=ON',
+                     '-DBUILD_TESTING_UNIT:BOOL=OFF',
+                     '-DMERCURY_USE_BOOST_PP:BOOL=ON',
+                     '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
+                     '-DNA_USE_SM:BOOL=ON',
+                     '-DNA_USE_OFI:BOOL=ON',
+                     '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
 
     if reqs.target_type == 'debug':
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG=ON')
+        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
     else:
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
+        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     mercury_build.extend(check(reqs,
                                'ofi',
-                               ['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
-                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'],
+                               ['-DOFI_INCLUDE_DIR:PATH=$OFI_PREFIX/include',
+                                '-DOFI_LIBRARY:FILEPATH=$OFI_PREFIX/lib/libfabric.so'],
                                []))
 
     reqs.define('mercury',
