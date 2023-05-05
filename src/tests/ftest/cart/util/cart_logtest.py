@@ -310,8 +310,8 @@ class LogTest():
             for cpid in client_pids:
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
-    # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
+        # pylint: disable=too-many-branches,too-many-nested-blocks
         """Check a pid from a single log file for consistency"""
         # Dict of active descriptors.
         active_desc = OrderedDict()
@@ -582,7 +582,6 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-# pylint: enable=too-many-branches,too-many-nested-blocks
 
 
 class RpcReporting():

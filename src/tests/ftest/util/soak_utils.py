@@ -10,6 +10,10 @@ import time
 import random
 import threading
 import re
+
+from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosSnapshot, DaosApiError
+
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from mdtest_utils import MdtestCommand
@@ -25,8 +29,6 @@ from command_utils_base import EnvironmentVariables
 import slurm_utils
 from run_utils import run_remote
 from test_utils_container import TestContainer
-from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
 from oclass_utils import extract_redundancy_factor
 from duns_utils import format_path
@@ -34,7 +36,7 @@ from duns_utils import format_path
 H_LOCK = threading.Lock()
 
 
-def DDHHMMSS_format(seconds):
+def ddhhmmss_format(seconds):
     """Convert seconds into  #days:HH:MM:SS format.
 
     Args:
@@ -1223,7 +1225,7 @@ def create_fio_cmdline(self, job_spec, pool):
     fio_cmd.aux_path.update(self.test_dir, "aux_path")
     for blocksize in bs_list:
         for size in size_list:
-            for rw in rw_list:
+            for rw_val in rw_list:
                 for file_oclass, dir_oclass in oclass_list:
                     # update fio params
                     fio_cmd.update(
@@ -1233,7 +1235,7 @@ def create_fio_cmdline(self, job_spec, pool):
                         "global", "size", size,
                         "fio --name=global --size")
                     fio_cmd.update(
-                        "global", "rw", rw,
+                        "global", "rw", rw_val,
                         "fio --name=global --rw")
                     cmds = []
                     # add srun start dfuse cmds if api is POSIX
@@ -1243,7 +1245,7 @@ def create_fio_cmdline(self, job_spec, pool):
                         add_containers(self, pool, file_oclass, dir_oclass)
                         self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
                         log_name = "{}_{}_{}_{}_{}".format(
-                            job_spec, blocksize, size, rw, file_oclass)
+                            job_spec, blocksize, size, rw_val, file_oclass)
                         dfuse, cmds = start_dfuse(
                             self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                     # Update the FIO cmdline
