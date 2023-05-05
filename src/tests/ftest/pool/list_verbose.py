@@ -244,7 +244,6 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=pool
         :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
         """
-        self.maxDiff = None
         self.pool = []
 
         # 1. Create first pool with a given SCM and NVMe size.
@@ -305,7 +304,6 @@ class ListVerboseTest(IorTestBase):
             list: Errors.
 
         """
-        self.maxDiff = None
 
         # 1. Create a pool of 80GB.
         self.pool = []

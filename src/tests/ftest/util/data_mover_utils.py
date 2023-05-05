@@ -125,6 +125,7 @@ class DcpCommand(MfuCommandBase):
 
         # dcp options
 
+        # pylint: disable=wrong-spelling-in-comment
         # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
         # New versions use bufsize instead of blocksize

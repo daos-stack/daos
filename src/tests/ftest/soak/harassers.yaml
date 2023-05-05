@@ -41,8 +41,12 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
+  rebuild_timeout: 240
+  pool_query_timeout: 120
 pool_reserved:
   size: 10%
+  rebuild_timeout: 240
+  pool_query_timeout: 120
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -70,6 +74,7 @@ container_reserved:
 soak_harassers:
   name: soak_harassers
   # harasser test timeout in hours
+  single_test_pool: false
   test_timeout:
     test_soak_harassers: 12
   # maximum timeout for a single job in test in minutes
@@ -86,6 +91,8 @@ soak_harassers:
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate
     - server-stop_server-reintegrate-offline
+    # - extend-pool
+    # - extend-pool-offline
     # - vmd-identify-check
     # - vmd-identify-check-offline
   harasser_to: 600
