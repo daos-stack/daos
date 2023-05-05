@@ -975,6 +975,10 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, cont);
 	}
 
+	/* DAOS_COO_RO_MDSTATS introduced since 2.4 */
+	if (dc_cont_proto_version == 6)
+		cont->dc_capas &= ~DAOS_COO_RO_MDSTATS;
+
 	D_DEBUG(DB_MD, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool->dp_pool), args->cont ? : "<compat>",
 		DP_UUID(cont->dc_cont_hdl), args->flags);
