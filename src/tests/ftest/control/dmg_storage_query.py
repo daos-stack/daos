@@ -45,7 +45,7 @@ class DmgStorageQuery(ControlTestBase):
                     for item, device in enumerate(tier.bdev_list.value):
                         bdev_info.append(
                             {'bdev': device,
-                             'roles': tier.bdev_roles.value,
+                             'roles': ','.join(tier.bdev_roles.value or []),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
         if md_on_ssd:
