@@ -126,6 +126,14 @@ var (
 		"bdev tier roles have been specified on some but not all bdev tiers in config",
 		"set MD-on-SSD roles on all bdev tiers in server config file and restart daos_server")
 
+	// FaultBdevConfigRolesWalDataNoMeta indicates an invalid configuration where WAL and Data
+	// roles are specified on a bdev tier but not Meta.
+	FaultBdevConfigRolesWalDataNoMeta = storageFault(
+		code.BdevConfigRolesWalDataNoMeta,
+		"WAL and Data roles have been specified on a bdev tier without Meta role",
+		"set MD-on-SSD roles on all bdev tiers in server config file but avoid the "+
+			"unsupported WAL+Data combination and restart daos_server")
+
 	// FaultBdevConfigMultiTiersWithoutRoles indicates a Fault when multiple bdev tiers exist but no roles
 	// are specified.
 	FaultBdevConfigMultiTiersWithoutRoles = storageFault(

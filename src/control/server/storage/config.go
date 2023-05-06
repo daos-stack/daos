@@ -380,13 +380,22 @@ func (tcs TierConfigs) validateBdevRoles() error {
 		}
 
 		bits := roles.OptionBits
-		if (bits & BdevRoleWAL) != 0 {
+		hasWAL := (bits & BdevRoleWAL) != 0
+		hasMeta := (bits & BdevRoleMeta) != 0
+		hasData := (bits & BdevRoleData) != 0
+
+		// Disallow having both wal and data only on a tier.
+		if hasWAL && hasData && !hasMeta {
+			return FaultBdevConfigRolesWalDataNoMeta
+		}
+
+		if hasWAL {
 			wal++
 		}
-		if (bits & BdevRoleMeta) != 0 {
+		if hasMeta {
 			meta++
 		}
-		if (bits & BdevRoleData) != 0 {
+		if hasData {
 			data++
 		}
 	}

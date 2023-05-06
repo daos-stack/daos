@@ -103,6 +103,7 @@ const (
 	BdevConfigBadNrTiersWithRoles
 	BdevConfigControlMetadataNoRoles
 	BdevConfigRolesNoControlMetadata
+	BdevConfigRolesWalDataNoMeta
 )
 
 // DAOS system fault codes

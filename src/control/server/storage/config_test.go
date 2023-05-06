@@ -603,6 +603,23 @@ storage:
   bdev_roles: [meta,wal,data]`,
 			expValidateErr: FaultBdevConfigRolesWithDCPM,
 		},
+		"roles specified; ram scm tier; illegal wal+data combination": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_roles: [meta]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [wal,data]`,
+			expValidateErr: FaultBdevConfigRolesWalDataNoMeta,
+		},
 		"roles specified; ram scm tier; duplicate wal roles": {
 			input: `
 storage:
@@ -613,11 +630,11 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [meta,wal]
+  bdev_roles: [meta,wal,data]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [wal,data]`,
+  bdev_roles: [wal]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 2, 1),
 		},
 		"roles specified; ram scm tier; duplicate meta roles": {
@@ -630,11 +647,11 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [meta,wal]
+  bdev_roles: [meta,wal,data]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [meta,data]`,
+  bdev_roles: [meta]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Meta", 2, 1),
 		},
 		"roles specified; ram scm tier; duplicate data roles": {
@@ -647,11 +664,11 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [data,wal]
+  bdev_roles: [data,wal,meta]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [meta,data]`,
+  bdev_roles: [data]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Data", 2, 1),
 		},
 		"roles specified; ram scm tier; missing data role": {
