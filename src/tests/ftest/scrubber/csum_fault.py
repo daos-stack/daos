@@ -19,9 +19,9 @@ class TestWithScrubberFault(TestWithScrubber):
             1. Create checksum faults and see
             whether scrubber finds them.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_csum_fault
+        :avocado: tags=TestWithScrubberFault,test_scrubber_csum_fault
 
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
