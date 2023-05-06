@@ -267,7 +267,7 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 		print_message("It can not create the pool with %d ranks"
 			      " probably due to not enough ranks %d\n",
 			      number, rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
