@@ -528,7 +528,7 @@ class StorageInfo():
         return controllers
 
     def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=0,
-                           scm_mount='/mnt/daos', max_nvme_tiers=1):
+                           scm_mount='/mnt/daos', max_nvme_tiers=1, control_metadata=None):
         """Generate a storage test yaml sub-section.
 
         Args:
@@ -538,6 +538,8 @@ class StorageInfo():
             scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 0 (auto).
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of nvme storage tiers. Defaults to 1.
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD. Defaults to None.
 
         Raises:
             StorageException: if an invalid storage type was specified
@@ -597,7 +599,10 @@ class StorageInfo():
                     bdev_list[engine][tier].append(f'"{device}"')
             self._log.debug('  NVMe/VMD bdev_list:      %s', bdev_list)
 
-        lines = ['server_config:', '  engines:']
+        lines = ['server_config:']
+        if control_metadata:
+            lines.append(f'  control_metadata: {control_metadata}')
+        lines.append('  engines:')
         for engine in range(engines):
             lines.append(f'    {str(engine)}:')
             lines.append('      storage:')
