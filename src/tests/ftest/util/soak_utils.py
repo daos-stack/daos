@@ -915,7 +915,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                     ior_cmd.max_duration.update(ior_timeout)
                     if api == "HDF5-VOL":
                         ior_cmd.api.update("HDF5")
-                    elif api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                    elif api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                         ior_cmd.api.update("POSIX")
                     else:
                         ior_cmd.api.update(api)
@@ -1209,7 +1209,7 @@ def create_fio_cmdline(self, job_spec, pool):
     size_list = self.params.get("size", fio_soak_namespace)
     rw_list = self.params.get("rw", fio_soak_namespace)
     oclass_list = self.params.get("oclass", fio_soak_namespace)
-    api_list = self.params.get("api", fio_namespace)
+    api_list = self.params.get("api", fio_namespace, default=["POSIX"])
     # Get the parameters for Fio
     fio_cmd = FioCommand()
     fio_cmd.namespace = fio_namespace
