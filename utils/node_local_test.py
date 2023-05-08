@@ -1048,7 +1048,7 @@ def pil4dfs_cmd(dfuse, cmd):
         log_test(dfuse.conf, log_name, check_read=False, check_write=False,
                  check_fstat=False, check_summary=True)
         assert ret.returncode == 0
-    except NLTestFail as error:
+    except NLTestFail:
         command = ' '.join(cmd)
         print(f"ERROR: functions intercepted are not found in command '{command}'")
         ret.returncode = 1
