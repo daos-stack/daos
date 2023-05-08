@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -192,11 +193,14 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 
 		// Build slice of controllers in all tiers.
 		tierCtrlrs := make([]storage.NvmeController, 0)
+		msg := fmt.Sprintf("NVMe tiers for engine-%d:", ei.Index())
 		for _, tsr := range tsrs {
+			msg += fmt.Sprintf("\n\tTier-%d: %s", tsr.Tier, tsr.Result.Controllers)
 			for _, c := range tsr.Result.Controllers {
 				tierCtrlrs = append(tierCtrlrs, *c)
 			}
 		}
+		cs.log.Info(msg)
 
 		// If the engine is not running or we aren't interested in temporal
 		// statistics for the bdev devices then continue to next engine.
