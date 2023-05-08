@@ -522,7 +522,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	 */
 	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank,
 					      mytarget, oid.id_shard,
-					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? true : false);
+					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
 	if (still_needed && new_layout_ver <= oid.id_layout_ver)
 		return 0;
