@@ -1038,16 +1038,16 @@ def pil4dfs_cmd(dfuse, cmd):
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
-    my_env['D_IL_REPORT'] = 'true'
+    my_env['D_IL_REPORT'] = '1'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
     ret = subprocess.run(cmd, stderr=subprocess.PIPE, env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
 
+    assert ret.returncode == 0
     try:
         log_test(dfuse.conf, log_name, check_read=False, check_write=False,
                  check_fstat=False, check_summary=True)
-        assert ret.returncode == 0
     except NLTestFail:
         command = ' '.join(cmd)
         print(f"ERROR: functions intercepted are not found in command '{command}'")
@@ -4071,9 +4071,9 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if check_summary:
-        log_file = open(filename, "r")
-        data = log_file.read()
-        log_file.close()
+        data = ""
+        with open(filename, "r") as log_file:
+            data = log_file.read()
         search = re.findall(r'\[op_sum\ ]  \d+', data)
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')
