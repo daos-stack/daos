@@ -1037,12 +1037,16 @@ def pil4dfs_cmd(dfuse, cmd):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
+    # pylint: disable=protected-access
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '1'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
-    ret = subprocess.run(cmd, stderr=subprocess.PIPE, env=my_env, check=False)
+    ret = subprocess.run(cmd, env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
+
+    if os.path.exists(log_name):
+        print(f'DBG> log file {log_name} exists.')
 
     assert ret.returncode == 0
     try:
@@ -4072,8 +4076,13 @@ def log_test(conf,
 
     if check_summary:
         data = ""
-        with open(filename, "r") as log_file:
-            data = log_file.read()
+        try:
+            with open(filename, "r") as log_file:
+                data = log_file.read()
+        except OSError as error:
+            if error.errno == errno.ENOENT:
+                print(f'DBG> log file {filename} does not exist.')
+                raise NLTestFail('Failed to open log file.')
         search = re.findall(r'\[op_sum\ ]  \d+', data)
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')

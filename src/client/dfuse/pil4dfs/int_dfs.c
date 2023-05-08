@@ -747,7 +747,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char  *rel_path = NULL;
 	int    idx_dfs, rc;
 	char  *pt_end = NULL;
-	char   full_path_parse[DFS_MAX_PATH];
+	char   full_path_parse[DFS_MAX_PATH + 4];
 
 	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
 	if (with_daos_prefix) {
@@ -763,25 +763,25 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	if (strncmp(szInput, ".", 2) == 0) {
-		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH - 1);
+		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH);
 		len = (int)(pt_end - full_path_parse);
-		if (len >= DFS_MAX_PATH - 1) {
+		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
 				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else if (szInput[0] == '/') {
-		pt_end = stpncpy(full_path_parse, szInput, DFS_MAX_PATH - 1);
+		pt_end = stpncpy(full_path_parse, szInput, DFS_MAX_PATH);
 		len = (int)(pt_end - full_path_parse);
-		if (len >= DFS_MAX_PATH - 1) {
+		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
 				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else {
 		/* relative path */
-		len = snprintf(full_path_parse, DFS_MAX_PATH - 1, "%s/%s", cur_dir, szInput);
-		if (len >= DFS_MAX_PATH - 1) {
+		len = snprintf(full_path_parse, DFS_MAX_PATH, "%s/%s", cur_dir, szInput);
+		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
 				D_ERROR("The length of path is too long.\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
