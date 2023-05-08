@@ -5,8 +5,9 @@
 '''
 import ctypes
 
-from apricot import TestWithServers
 from pydaos.raw import daos_cref, DaosApiError, conversion, DaosContPropEnum
+
+from apricot import TestWithServers
 from test_utils_container import TestContainer
 
 

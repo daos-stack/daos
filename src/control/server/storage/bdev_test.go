@@ -241,14 +241,14 @@ func Test_filterBdevScanResponse(t *testing.T) {
 			if err := bdl.fromStrings(tc.addrs); err != nil {
 				t.Fatal(err)
 			}
-			gotErr := filterBdevScanResponse(bdl, tc.scanResp)
+			gotResp, gotErr := filterBdevScanResponse(bdl, tc.scanResp)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
 			expAddrStr := strings.Join(tc.expAddrs, ", ")
-			if diff := cmp.Diff(expAddrStr, tc.scanResp.Controllers.String()); diff != "" {
+			if diff := cmp.Diff(expAddrStr, gotResp.Controllers.String()); diff != "" {
 				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
 			}
 		})

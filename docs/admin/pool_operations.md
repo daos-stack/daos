@@ -215,6 +215,23 @@ Pool-destroy command succeeded
 
 The pool's UUID can be used instead of the pool label.
 
+To destroy a pool which has active connections (open pool handles will be evicted before pool is
+destroyed):
+
+```bash
+$ dmg pool destroy tank --force
+Pool-destroy command succeeded
+```
+
+To destroy a pool despite the existence of associated containers:
+
+```bash
+$ dmg pool destroy tank --recursive
+Pool-destroy command succeeded
+```
+
+Without the --recursive flag, destroy will fail if containers exist in the pool.
+
 ### Querying a Pool
 
 The pool query operation retrieves information (i.e., the number of targets,

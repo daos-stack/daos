@@ -141,6 +141,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
 
 class IorCommand(SubProcessCommand):
     # pylint: disable=too-many-instance-attributes
+    # pylint: disable=wrong-spelling-in-docstring
     """Defines a object for executing an IOR command.
 
     Example:
@@ -168,6 +169,7 @@ class IorCommand(SubProcessCommand):
         # Flags
         self.flags = FormattedParameter("{}")
 
+        # pylint: disable=wrong-spelling-in-comment
         # Optional arguments
         #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task

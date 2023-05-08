@@ -1,16 +1,16 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import time
 import random
+
+from pydaos.raw import DaosApiError
+
 from apricot import TestWithServers
 from thread_manager import ThreadManager
 from command_utils_base import CommandFailure
-from pydaos.raw import DaosApiError
 
 
 class PoolManagementRace(TestWithServers):
@@ -90,7 +90,7 @@ class PoolManagementRace(TestWithServers):
             4. Launch all the threads with number of test loops.
             5. Check for failure from thread_manager
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=pool,boundary_test
         :avocado: tags=pool_mgmt_race,test_pool_management_race
         Args:
