@@ -23,7 +23,7 @@ and elastic storage to optimize performance and cost.
 
 DAOS supports multiple application interfaces including a parallel filesystem,
 Hadoop/Spark connector, TensorFlow-IO, native Python dictionary bindings, HDF5,
-MPI-IO and more to come.
+MPI-IO and more to come
 
 ## License
 
