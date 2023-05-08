@@ -529,19 +529,19 @@ discover_daos_mount(void)
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		printf("waring> DAOS_MOUNT_POINT is too long. It is ignored.");
+		printf("warning> DAOS_MOUNT_POINT is too long. It is ignored.");
 		return;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		printf("waring> DAOS_POOL is not set.\n");
+		printf("warning> DAOS_POOL is not set.\n");
 		return;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		printf("waring> DAOS_CONTAINER is not set.\n");
+		printf("warning> DAOS_CONTAINER is not set.\n");
 		return;
 	}
 

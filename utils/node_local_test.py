@@ -1036,6 +1036,7 @@ def pil4dfs_cmd(dfuse, cmd):
     prefix = f'dnt_dfuse_pil4dfs_{get_inc_id()}_'
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
+    my_env['D_LOG_FILE'] = log_name
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = 'true'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
@@ -1049,7 +1050,7 @@ def pil4dfs_cmd(dfuse, cmd):
         assert ret.returncode == 0
     except NLTestFail as error:
         command = ' '.join(cmd)
-        print(f"ERROR: command '{command}' did not log via {error.function}")
+        print(f"ERROR: functions intercepted are not found in command '{command}'")
         ret.returncode = 1
 
     return ret
@@ -4076,10 +4077,9 @@ def log_test(conf,
         search = re.findall(r'\[op_sum\ ]  \d+', data)
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')
-        else:
-            num_op = int(search[0][9:])
-            if num_op == 0:
-                raise NLTestFail('op_sum is zero. Unexpected.')
+        num_op = int(search[0][9:])
+        if num_op == 0:
+            raise NLTestFail('op_sum is zero. Unexpected.')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
