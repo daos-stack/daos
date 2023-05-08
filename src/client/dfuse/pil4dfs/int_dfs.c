@@ -4668,7 +4668,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	}
 #elif defined(__aarch64__)
 	/* #define ESR_ELx_CM (UL(1) << 8) */
-	if (context->uc_mcontext.__reserved[0x219] & 1 == 0) {
+	if ((context->uc_mcontext.__reserved[0x219] & 1) == 0) {
 		/* Fault is not from executing instruction */
 		/* #define ESR_ELx_WNR (UL(1) << 6) */
 		if (context->uc_mcontext.__reserved[0x218] & 0x40) {
