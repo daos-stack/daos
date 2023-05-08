@@ -13,7 +13,7 @@ server_config:
       nr_xs_helpers: 0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=rebuild
+        - DD_MASK=rebuild,mgmt,md
       storage:
         0:
           class: ram
