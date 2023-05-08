@@ -113,8 +113,6 @@ struct bio_dma_stats {
 	struct d_tm_node_t	*bds_wal_sz;
 	struct d_tm_node_t	*bds_wal_qd;
 	struct d_tm_node_t	*bds_wal_waiters;
-	struct d_tm_node_t	*bds_wal_rpl_sz;
-	struct d_tm_node_t	*bds_wal_rpl_tm;
 };
 
 /*

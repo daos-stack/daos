@@ -334,7 +334,7 @@ wal_ut_single(void **state)
 	fake_tx = (struct ut_fake_tx *)&tx->utx_private;
 	fake_tx->ft_act_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_one, tx);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_one, tx);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(fake_tx->ft_act_nr, fake_tx->ft_act_idx);
 
@@ -385,7 +385,7 @@ wal_ut_many_acts(void **state)
 	fake_tx = (struct ut_fake_tx *)&tx->utx_private;
 	fake_tx->ft_act_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_one, tx);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_one, tx);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(fake_tx->ft_act_nr, fake_tx->ft_act_idx);
 
@@ -434,7 +434,7 @@ wal_ut_large_payload(void **state)
 	/* Reset act index before replay */
 	fake_tx->ft_act_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_one, tx);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_one, tx);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(fake_tx->ft_act_nr, fake_tx->ft_act_idx);
 
@@ -573,7 +573,7 @@ wal_ut_multi(void **state)
 	txa->ta_replay_nr = txa->ta_tx_nr;
 	txa->ta_tx_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 
@@ -638,7 +638,7 @@ wal_ut_checkpoint(void **state)
 	txa->ta_replay_nr = tx_nr - ckp_idx - 1;
 	txa->ta_tx_idx = ckp_idx + 1;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 
@@ -727,7 +727,7 @@ wal_ut_wrap(void **state)
 	txa->ta_replay_nr = tx_nr;
 	txa->ta_tx_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 
@@ -770,7 +770,7 @@ wal_ut_wrap_many(void **state)
 	txa->ta_replay_nr = tx_nr;
 	txa->ta_tx_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 
@@ -836,7 +836,7 @@ wal_ut_holes(void **state)
 	txa->ta_replay_nr = 0;
 	txa->ta_tx_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 
@@ -858,7 +858,7 @@ wal_ut_holes(void **state)
 	txa->ta_replay_nr = 1;
 	txa->ta_tx_idx = 0;
 
-	rc = bio_wal_replay(args->bua_mc, ut_replay_multi, txa);
+	rc = bio_wal_replay(args->bua_mc, NULL, ut_replay_multi, txa);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(txa->ta_replayed_nr, txa->ta_replay_nr);
 

@@ -125,6 +125,7 @@ struct umem_store {
 	uint32_t		 stor_hdr_blks;
 	/** private data passing between layers */
 	void			*stor_priv;
+	void			*stor_stats;
 	void                    *vos_priv;
 	/** Cache for this store */
 	struct umem_cache       *cache;

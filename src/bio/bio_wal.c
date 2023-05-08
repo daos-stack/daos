@@ -1655,7 +1655,7 @@ unmap_wal(struct bio_meta_context *mc, uint64_t unmap_start, uint64_t unmap_end,
 }
 
 int
-bio_wal_replay(struct bio_meta_context *mc,
+bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
@@ -1672,8 +1672,6 @@ bio_wal_replay(struct bio_meta_context *mc,
 	uint64_t		 total_bytes = 0, rpl_entries = 0;
 	uint64_t		 s_us, e_us;
 	struct timespec		 tms;
-	struct bio_xs_context	*xs_ctxt = mc->mc_wal->bic_xs_ctxt;
-	struct bio_dma_stats	*stats = &xs_ctxt->bxc_dma_buf->bdb_stats;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
@@ -1688,8 +1686,11 @@ bio_wal_replay(struct bio_meta_context *mc,
 	tx_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
 	start_id = tx_id;
 
-	clock_gettime(CLOCK_REALTIME, &tms);
-	s_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
+	/* upper layer (VOS) rehydration metrics if any */
+	if (wrs != NULL) {
+		clock_gettime(CLOCK_REALTIME, &tms);
+		s_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
+	}
 
 load_wal:
 	tight_loop = 0;
@@ -1736,9 +1737,12 @@ load_wal:
 		tight_loop++;
 		nr_replayed++;
 		blk_off += blk_desc.bd_blks;
+
 		/* replay metrics */
-		total_bytes += (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
-		rpl_entries += hdr->th_tot_ents;
+		if (wrs != NULL) {
+			total_bytes += (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
+			rpl_entries += hdr->th_tot_ents;
+		}
 
 		/* Bump last committed tx ID in WAL super info */
 		if (wal_id_cmp(si, tx_id, si->si_commit_id) > 0) {
@@ -1759,8 +1763,6 @@ load_wal:
 	}
 out:
 	if (rc >= 0) {
-		struct bio_wal_rp_stats *wrs = mc->mc_wr_stats;
-
 		D_DEBUG(DB_IO, "Replayed %u WAL transactions\n", nr_replayed);
 		D_ASSERT(si->si_commit_blks == 0 || wal_id_cmp(si, tx_id, si->si_commit_id) > 0);
 		si->si_unused_id = wal_next_id(si, si->si_commit_id, si->si_commit_blks);
@@ -1791,13 +1793,10 @@ out:
 		if (rc)
 			D_ERROR("Unmap after replay failed. "DF_RC"\n", DP_RC(rc));
 
-		/* per-engine replay metrics */
-		clock_gettime(CLOCK_REALTIME, &tms);
-		e_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
-		d_tm_set_gauge(stats->bds_wal_rpl_tm, e_us - s_us);
-		d_tm_set_gauge(stats->bds_wal_rpl_sz, total_bytes);
-		/* upper layer (VOS) rehydration metrics if any */
+		/* upper layer (VOS) rehydration metrics */
 		if (wrs != NULL) {
+			clock_gettime(CLOCK_REALTIME, &tms);
+			e_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
 			wrs->wrs_tm = e_us - s_us;
 			wrs->wrs_sz = total_bytes;
 			wrs->wrs_entries = rpl_entries;
@@ -1809,23 +1808,6 @@ out:
 	D_FREE(dbuf);
 	D_FREE(act);
 	D_FREE(buf);
-	return rc;
-}
-
-int
-bio_wal_replay_stats(struct bio_meta_context *mc, struct bio_wal_rp_stats **wrsp,
-		     int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
-		     void *arg)
-{
-	int rc = bio_wal_replay(mc, replay_cb, arg);
-
-	/* Return WAL replay metrics */
-	if (rc >= 0) {
-		struct bio_wal_rp_stats *wrs = mc->mc_wr_stats;
-
-		if (wrs)
-			*wrsp = wrs;
-	}
 	return rc;
 }
 

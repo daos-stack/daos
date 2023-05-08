@@ -338,20 +338,21 @@ vos_wal_replay(struct umem_store *store,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
-	struct bio_wal_rp_stats *wrs = NULL;
+	struct bio_wal_rp_stats wrs;
 	int rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	rc = bio_wal_replay_stats(store->stor_priv, &wrs, replay_cb, arg);
+	rc = bio_wal_replay(store->stor_priv,
+			    (store->stor_stats != NULL)? &wrs : NULL,
+			    replay_cb, arg);
 
 	/* VOS file rehydration metrics */
-	if (wrs != NULL) {
-		struct vos_rh_metrics	*vrm = wrs->wrs_metrics;
+	if (store->stor_stats != NULL && rc >= 0) {
+		struct vos_rh_metrics *vrm = store->stor_stats;
 
-		D_ASSERT(vrm != NULL);
-		d_tm_set_gauge(vrm->vrh_size, wrs->wrs_sz);
-		d_tm_set_gauge(vrm->vrh_time, wrs->wrs_tm);
-		d_tm_set_gauge(vrm->vrh_entries, wrs->wrs_entries);
+		d_tm_set_gauge(vrm->vrh_size, wrs.wrs_sz);
+		d_tm_set_gauge(vrm->vrh_time, wrs.wrs_tm);
+		d_tm_set_gauge(vrm->vrh_entries, wrs.wrs_entries);
 		d_tm_inc_counter(vrm->vrh_count, 1);
 	}
 	return rc;
@@ -660,12 +661,10 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		return rc;
 	}
 
-	/* Set VOS file rehydration metrics */
-	if (metrics != NULL)
-		bio_wal_set_metrics(mc, metrics);
 	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
+	store.stor_stats = metrics;
 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
