@@ -161,46 +161,34 @@ bio_health_query(void *arg)
 }
 
 int
-ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
-			char *tgt)
+ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid)
 {
 	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
 	int			 tgt_id;
 	int			 rc = 0;
 
-	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
-		/* Either dev uuid or tgt id needs to be specified for query */
-		D_ERROR("Neither dev_uuid or tgt_id specified for BIO query\n");
+	if (uuid_is_null(dev_uuid)) {
+		D_ERROR("dev_uuid is required for BIO query\n");
 		return -DER_INVAL;
 	}
 
 	/*
 	 * Query per-server metadata (SMD) to get either target ID(s) for given
-	 * device or alternatively the device mapped to a given target.
+	 * device.
 	 */
-	if (!uuid_is_null(dev_uuid)) {
-		rc = smd_dev_get_by_id(dev_uuid, &dev_info);
-		if (rc != 0) {
-			D_ERROR("Device UUID:"DF_UUID" not found\n",
-				DP_UUID(dev_uuid));
-			return rc;
-		}
-		if (dev_info->sdi_tgts == NULL) {
-			D_ERROR("No targets mapped to device\n");
-			rc = -DER_NONEXIST;
-			goto out;
-		}
-	} else {
-		tgt_id = atoi(tgt);
-		rc = smd_dev_get_by_tgt(tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
-		if (rc != 0) {
-			D_ERROR("Tgt_id:%d not found\n", tgt_id);
-			return rc;
-		}
-		uuid_copy(dev_uuid, dev_info->sdi_id);
+	rc = smd_dev_get_by_id(dev_uuid, &dev_info);
+	if (rc != 0) {
+		D_ERROR("Device UUID:"DF_UUID" not found\n",
+			DP_UUID(dev_uuid));
+		return rc;
 	}
-	/* Default tgt_id is the first mapped tgt */
+	if (dev_info->sdi_tgts == NULL) {
+		D_ERROR("No targets mapped to device\n");
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+	/* Use the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
 
 	D_DEBUG(DB_MGMT, "Querying BIO Health Data for dev:"DF_UUID"\n",

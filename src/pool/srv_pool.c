@@ -4614,8 +4614,6 @@ pool_upgrade_one_prop(struct rdb_tx *tx, struct pool_svc *svc, bool *need_commit
 
 	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, value);
 	if (rc && rc != -DER_NONEXIST) {
-		if (rc)
-			return rc;
 		return rc;
 	} else if (rc == -DER_NONEXIST) {
 		rc = rdb_tx_update(tx, &svc->ps_root, prop_iov, value);
@@ -5918,7 +5916,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * updating the pool map during rebuild, which might screw the object layout.
 	 */
 	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
-		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver);
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver, NULL, NULL);
 		if (rebuild_ver != 0) {
 			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
 				" so current opc %d can not be done: %d\n",

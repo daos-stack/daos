@@ -61,7 +61,7 @@ type Engine interface {
 	IsReady() bool
 	LocalState() system.MemberState
 	RemoveSuperblock() error
-	Run(context.Context, bool)
+	Run(context.Context, bool, chan error)
 	SetupRank(context.Context, ranklist.Rank) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
@@ -236,16 +236,17 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
+	fatalErrChan := make(chan error, 1)
 	for _, ei := range h.Instances() {
-		ei.Run(ctx, cfg.RecreateSuperblocks)
+		ei.Run(ctx, cfg.RecreateSuperblocks, fatalErrChan)
 	}
 
-	h.OnDrpcFailure(func(_ context.Context, err error) {
+	h.OnDrpcFailure(func(_ context.Context, errIn error) {
 		if !db.IsLeader() {
 			return
 		}
 
-		switch errors.Cause(err) {
+		switch errors.Cause(errIn) {
 		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			break
 		default:
@@ -257,15 +258,20 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		// If we cannot service a dRPC request on this node,
 		// we should resign as leader in order to force a new
 		// leader election.
-		if err := db.ResignLeadership(err); err != nil {
+		if err := db.ResignLeadership(errIn); err != nil {
 			h.log.Errorf("failed to resign leadership after dRPC failure: %s", err)
 		}
 	})
 
-	<-ctx.Done()
+	var err error
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case err = <-fatalErrChan:
+	}
 	h.log.Debug("shutting down harness")
 
-	return ctx.Err()
+	return err
 }
 
 // readyRanks returns rank assignment of configured harness instances that are

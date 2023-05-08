@@ -463,7 +463,7 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 
 	prepReq := storage.BdevPrepareRequest{
 		// zero as hugepages already allocated on start-up
-		HugePageCount: 0,
+		HugepageCount: 0,
 		TargetUser:    cu.Username,
 		PCIAllowList:  req.PciAddr,
 		Reset_:        false,

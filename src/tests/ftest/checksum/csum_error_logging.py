@@ -4,8 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from avocado import fail_on
+
 from daos_core_base import DaosCoreBase
 from dmg_utils import get_dmg_smd_info
+from exception_utils import CommandFailure
 from general_utils import get_log_file
 
 
@@ -19,6 +22,7 @@ class CsumErrorLog(DaosCoreBase):
     """
     # pylint: disable=too-many-instance-attributes
 
+    @fail_on(CommandFailure)
     def get_checksum_error_value(self, dmg, device_id):
         """Get checksum error value from dmg storage_query_device_health.
 
@@ -29,7 +33,7 @@ class CsumErrorLog(DaosCoreBase):
         Returns:
             int: the number of checksum errors on the device
         """
-        info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=device_id)
+        info = get_dmg_smd_info(dmg.storage_query_device_health, 'devices', uuid=device_id)
         for devices in info.values():
             for device in devices:
                 try:
@@ -40,6 +44,7 @@ class CsumErrorLog(DaosCoreBase):
                         'Error parsing dmg storage query device-health output: {}'.format(error))
         return 0
 
+    @fail_on(CommandFailure)
     def test_csum_error_logging(self):
         """Jira ID: DAOS-3927
 
@@ -53,16 +58,22 @@ class CsumErrorLog(DaosCoreBase):
         """
         dmg = self.get_dmg_command()
         dmg.hostlist = self.hostlist_servers[0]
-        host_devices = get_dmg_smd_info(self, dmg.storage_query_list_devices, 'devices')
+        host_devices = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices')
         for host, devices in host_devices.items():
             for device in devices:
                 if 'tgt_ids' not in device or 'uuid' not in device:
                     self.fail(
                         'Missing uuid and/or tgt_ids info from dmg storage query list devices')
+                if 'role_bits' not in device:
+                    self.fail(
+                        'Missing role bits info from dmg storage query list devices')
                 self.log.info(
                     "Host %s device: uuid=%s, targets=%s", host, device['uuid'], device['tgt_ids'])
                 if not device['tgt_ids']:
                     self.log.info('Skipping device without targets on %s', device['uuid'])
+                    continue
+                if not int(device['role_bits']) & 1:
+                    self.log.info('Skipping device without data on %s', device['uuid'])
                     continue
                 if not device['uuid']:
                     self.fail("Device uuid undefined")

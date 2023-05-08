@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -188,6 +188,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -216,28 +217,9 @@ func TestConfig_ScmValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("ram").
-						WithScmRamdiskSize(1).
+						WithScmRamdiskSize(storage.MinRamdiskMem).
 						WithScmMountPoint("test"),
 				),
-		},
-		"ramdisk missing scm_size": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("ram").
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
-		},
-		"ramdisk scm_size: 0": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("ram").
-						WithScmRamdiskSize(0).
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
 		},
 		"ramdisk with scm_list": {
 			cfg: baseValidConfig().
@@ -308,6 +290,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
 			).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -317,9 +300,18 @@ func TestConfig_BdevValidation(t *testing.T) {
 		expCls          storage.Class
 		expEmptyCfgPath bool
 	}{
-		"unknown class": {
+		"nvme class; no scm": {
 			cfg: baseValidConfig().
 				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				),
+			expErr: errors.New("missing scm storage tier"),
+		},
+		"unknown class": {
+			cfg: baseValidConfig().
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvmed"),
 				),
@@ -327,7 +319,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme"),
 				),
@@ -335,7 +327,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
@@ -343,7 +335,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; duplicate pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
@@ -352,7 +344,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"nvme class; bad pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
@@ -361,7 +353,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"kdev class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("kdev"),
 				),
@@ -369,7 +361,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"kdev class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("kdev").
 						WithBdevDeviceList("/dev/sda"),
@@ -378,7 +370,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; no size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevDeviceList("bdev1"),
@@ -387,7 +379,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; negative size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevDeviceList("bdev1").
@@ -397,7 +389,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevFileSize(10),
@@ -406,7 +398,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("file").
 						WithBdevFileSize(10).
@@ -416,7 +408,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"mix of emulated and non-emulated device classes": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
 						WithBdevDeviceList(test.MockPCIAddr(1)),
@@ -460,9 +452,10 @@ func TestConfig_Validation(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
+					WithScmRamdiskSize(storage.MinRamdiskMem).
 					WithScmMountPoint("/foo/bar"),
 			).
+			WithTargetCount(8).
 			WithPinnedNumaNode(0)
 	}
 
@@ -472,11 +465,15 @@ func TestConfig_Validation(t *testing.T) {
 	}{
 		"empty config should fail": {
 			cfg:    MockConfig(),
-			expErr: errors.New("provider not set"),
+			expErr: errors.New("target count must be nonzero"),
 		},
 		"config with pinned_numa_node and nonzero first_core should fail": {
 			cfg:    validConfig().WithPinnedNumaNode(1).WithServiceThreadCore(1),
 			expErr: errors.New("cannot specify both"),
+		},
+		"config with zero target count should fail": {
+			cfg:    validConfig().WithTargetCount(0),
+			expErr: errors.New("target count must be nonzero"),
 		},
 		"minimally-valid config should pass": {
 			cfg: validConfig(),
@@ -575,7 +572,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
-		WithHugePageSize(hugepageSz).
+		WithHugepageSize(hugepageSz).
 		WithSrxDisabled(true)
 
 	cfg.Index = uint32(index)

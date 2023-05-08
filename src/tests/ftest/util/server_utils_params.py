@@ -130,6 +130,8 @@ class DaosServerYamlParameters(YamlParameters):
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
+        self.system_ram_reserved = BasicParameter(None)
+
         # Defines the number of single engine config parameters to define in
         # the yaml file
         self.engines_per_host = BasicParameter(None, 0)
@@ -827,12 +829,8 @@ class StorageTierYamlParameters(YamlParameters):
         self.bdev_number = BasicParameter(None, position=7)
         self.bdev_size = BasicParameter(None, position=8)
 
-        # Explicit storage tier roles for metadata on SSD; implicit roles used if not specified
-        # This list can contain one or more of the following options:
-        # - "data" SSDs will be used to store actual data
-        # - "index" SSDs will be used to store the VOS index
-        # - "wal" SSDs will be used to store the write-ahead-log
-        self.roles = BasicParameter(None, position=8)
+        # Additional 'class: bdev' options when storage tier 0 is 'class: ram'
+        self.bdev_roles = BasicParameter(None, position=9)
 
     @property
     def using_dcpm(self):

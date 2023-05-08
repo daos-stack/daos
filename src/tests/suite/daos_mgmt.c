@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
 
 #include <daos_mgmt.h>
 #include <daos_event.h>
+#include <daos/agent.h>
 
 /** create/destroy pool on all tgts */
 static void
@@ -386,7 +387,7 @@ pool_create_and_destroy_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	print_message("success\n");
 
 	print_message("destroying pool synchronously ... ");
@@ -394,6 +395,49 @@ pool_create_and_destroy_retry(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
+}
+
+static void
+get_sys_info_test(void **state)
+{
+	struct daos_sys_info	*info = NULL;
+	char			*old_agent_path;
+	uint32_t		i;
+	int			rc;
+
+	print_message("SUBTEST: alloc with NULL output\n");
+	rc = daos_mgmt_get_sys_info("something", NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: free with NULL input\n");
+	daos_mgmt_put_sys_info(NULL); /* ensure it doesn't crash */
+
+	print_message("SUBTEST: bad agent socket\n");
+	old_agent_path = dc_agent_sockpath;
+	dc_agent_sockpath = "/fake/path/not/real";
+	rc = daos_mgmt_get_sys_info(NULL, &info);
+
+	/* restore the global variable before checking rc */
+	dc_agent_sockpath = old_agent_path;
+	assert_rc_equal(rc, -DER_AGENT_COMM);
+	assert_null(info);
+
+	print_message("SUBTEST: success\n");
+	rc = daos_mgmt_get_sys_info(NULL, &info);
+	assert_rc_equal(rc, 0);
+	assert_non_null(info);
+
+	assert_int_not_equal(strnlen(info->dsi_system_name, DAOS_SYS_INFO_STRING_MAX), 0);
+	print_message("system name: %s\n", info->dsi_system_name);
+	assert_int_not_equal(strnlen(info->dsi_fabric_provider, DAOS_SYS_INFO_STRING_MAX), 0);
+	print_message("provider: %s\n", info->dsi_fabric_provider);
+	assert_non_null(info->dsi_ranks);
+	print_message("number of ranks: %d\n", info->dsi_nr_ranks);
+	for (i = 0; i < info->dsi_nr_ranks; i++)
+		print_message("rank %u, uri: %s\n", info->dsi_ranks[i].dru_rank,
+			      info->dsi_ranks[i].dru_uri);
+
+	daos_mgmt_put_sys_info(info);
 }
 
 static const struct CMUnitTest tests[] = {
@@ -406,7 +450,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT4: list-pools with multiple pools in sys",
 	  list_pools_test, setup_manypools, teardown_pools},
 	{ "MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors",
-	  pool_create_and_destroy_retry, async_disable, test_case_teardown}
+	  pool_create_and_destroy_retry, async_disable, test_case_teardown},
+	{ "MGMT6: daos_mgmt_get_sys_info",
+	  get_sys_info_test, async_disable, test_case_teardown},
 };
 
 static int

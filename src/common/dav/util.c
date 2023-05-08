@@ -38,60 +38,10 @@ unsigned _On_drd_or_hg;
 unsigned _On_memcheck;
 #endif
 
-#if VG_PMEMCHECK_ENABLED
-/* Initialized to true if the process is running inside Valgrind pmemcheck. */
-unsigned _On_pmemcheck;
-
-/* true if pmreorder instrumentation has to be enabled */
-int _Pmreorder_emit;
-
-#define LIB_LOG_LEN 20
-#define FUNC_LOG_LEN 50
-#define SUFFIX_LEN 7
-/*
- * util_emit_log -- emits lib and func name with appropriate suffix
- * to pmemcheck store log file
- */
-void
-util_emit_log(const char *lib, const char *func, int order)
-{
-	char lib_name[LIB_LOG_LEN];
-	char func_name[FUNC_LOG_LEN];
-	char suffix[SUFFIX_LEN];
-	size_t lib_len = strlen(lib);
-	size_t func_len = strlen(func);
-
-	if (order == 0)
-		strcpy(suffix, ".BEGIN");
-	else
-		strcpy(suffix, ".END");
-
-	size_t suffix_len = strlen(suffix);
-
-	if (lib_len + suffix_len + 1 > LIB_LOG_LEN) {
-		VALGRIND_EMIT_LOG("Library name is too long");
-		return;
-	}
-
-	if (func_len + suffix_len + 1 > FUNC_LOG_LEN) {
-		VALGRIND_EMIT_LOG("Function name is too long");
-		return;
-	}
-
-	strcpy(lib_name, lib);
-	strcat(lib_name, suffix);
-	strcpy(func_name, func);
-	strcat(func_name, suffix);
-
-	if (order == 0) {
-		VALGRIND_EMIT_LOG(func_name);
-		VALGRIND_EMIT_LOG(lib_name);
-	} else {
-		VALGRIND_EMIT_LOG(lib_name);
-		VALGRIND_EMIT_LOG(func_name);
-	}
-}
-#endif /* VG_PMEMCHECK_ENABLED */
+#if VG_TXINFO_ENABLED
+/* true if DAV API and TX-related messages has to be enabled in Valgrind log. */
+int _Vg_txinfo_emit;
+#endif /* VG_TXINFO_ENABLED */
 
 /*
  * util_is_zeroed -- check if given memory range is all zero
@@ -260,23 +210,14 @@ util_init(void)
 	_On_drd_or_hg = (unsigned)(On_helgrind + On_drd);
 #endif
 
-#if VG_PMEMCHECK_ENABLED
-	if (On_valgrind) {
-		char *pmreorder_env = secure_getenv("PMREORDER_EMIT_LOG");
+#if VG_TXINFO_ENABLED
+	if (_On_valgrind) {
+		char *txinfo_env = secure_getenv("D_DAV_VG_TXINFO");
 
-		if (pmreorder_env)
-			_Pmreorder_emit = atoi(pmreorder_env);
-
-		VALGRIND_PMC_REGISTER_PMEM_MAPPING(&_On_pmemcheck,
-				sizeof(_On_pmemcheck));
-		unsigned pmc = (unsigned)VALGRIND_PMC_CHECK_IS_PMEM_MAPPING(
-				&_On_pmemcheck, sizeof(_On_pmemcheck));
-		VALGRIND_PMC_REMOVE_PMEM_MAPPING(&_On_pmemcheck,
-				sizeof(_On_pmemcheck));
-		_On_pmemcheck = pmc ? 1 : 0;
+		if (txinfo_env)
+			_Vg_txinfo_emit = atoi(txinfo_env);
 	} else {
-		_On_pmemcheck = 0;
-		_Pmreorder_emit = 0;
+		_Vg_txinfo_emit = 0;
 	}
 #endif
 }

@@ -170,11 +170,15 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	rc = heap_boot(hdl->do_heap, heap_base, heap_size,
 		&hdl->do_phdr->dp_heap_size, hdl->do_base,
 		&hdl->p_ops, hdl->do_stats, NULL);
-
 	if (rc) {
 		err = rc;
 		goto out2;
 	}
+
+#if VG_MEMCHECK_ENABLED
+	if (On_memcheck)
+		palloc_heap_vg_open(hdl->do_heap, 1);
+#endif
 
 	rc = heap_buckets_init(hdl->do_heap);
 	if (rc) {
@@ -194,6 +198,16 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		persist_dav_phdr(hdl);
 
 	lw_tx_end(hdl, NULL);
+
+#if VG_MEMCHECK_ENABLED
+	if (On_memcheck) {
+		/* mark unused part of the pool as not accessible */
+		void *end = palloc_heap_end(hdl->do_heap);
+
+		VALGRIND_DO_MAKE_MEM_NOACCESS(end,
+					      OBJ_OFF_TO_PTR(hdl, heap_size) - end);
+	}
+#endif
 	return hdl;
 
 out2:

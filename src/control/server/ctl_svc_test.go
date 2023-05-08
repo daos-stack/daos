@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,7 +49,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 			sp,
 			scm.NewProvider(log, scm.NewMockBackend(smbc), sp, mounter),
-			bdev.NewMockProvider(log, bmbc)),
+			bdev.NewMockProvider(log, bmbc), nil),
 		harness: &EngineHarness{
 			log: log,
 		},

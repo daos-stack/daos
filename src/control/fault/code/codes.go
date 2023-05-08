@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,9 +75,10 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
-	ScmNoModules
+	ScmNoPMem
 	ScmBadRegion
 	ScmInvalidPMem
+	ScmRamdiskLowMem
 )
 
 // Bdev fault codes
@@ -133,7 +134,6 @@ const (
 	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -171,12 +171,14 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
-	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
+	ServerConfigRamdiskUnderMinMem
+	ServerConfigRamdiskOverMaxMem
+	ServerConfigScmDiffClass
 )
 
 // SPDK library bindings codes

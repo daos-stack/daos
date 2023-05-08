@@ -484,8 +484,6 @@ struct daos_cpd_update {
 		d_sg_list_t		*dcu_sgls;
 		crt_bulk_t		*dcu_bulks;
 	};
-	/* Pointer to EC split req, only used on server, not pack on-wrie. */
-	struct obj_ec_split_req		*dcu_ec_split_req;
 };
 
 struct daos_cpd_punch {
@@ -569,11 +567,12 @@ enum daos_cpd_sg_type {
 	DCST_HEAD	= 1,
 	DCST_REQ_CLI	= 2,
 	DCST_REQ_SRV	= 3,
-	DCST_DISP	= 4,
+	DCST_ENT	= 4,
 	DCST_TGT	= 5,
 	DCST_BULK_HEAD	= 6,
-	DCST_BULK_DISP	= 7,
-	DCST_BULK_TGT	= 8,
+	DCST_BULK_REQ	= 7,
+	DCST_BULK_ENT	= 8,
+	DCST_BULK_TGT	= 9,
 };
 
 struct daos_cpd_bulk {
@@ -597,13 +596,27 @@ struct daos_cpd_bulk {
 	d_iov_t				 dcb_iov;
 	uint32_t			 dcb_type;
 	uint32_t			 dcb_item_nr;
+	crt_proc_t			 dcb_proc;
+	struct daos_cpd_sub_req		*dcb_reqs;
 };
 
 /** Scatter/gather info for CPD RPC data structure. */
 struct daos_cpd_sg {
-	uint32_t	 dcs_type;
-	uint32_t	 dcs_nr;
-	void		*dcs_buf;
+	union {
+		uint32_t		 dcs_type;	/* See enum daos_cpd_sg_type. */
+		struct {
+			uint16_t	 dcs_type_base;
+			/* If dcs_type is DCST_BULK_ENT, then it is used to locate the
+			 * daos_cpd_disp_ent in the bulk transferred (global) dispatch
+			 * entries (dcs_buf) on non-leader. Only used on server side.
+			 *
+			 * For 2.2 or older release, it is always zero.
+			 */
+			uint16_t	 dcs_dcde_idx;
+		};
+	};
+	uint32_t			 dcs_nr;
+	void				*dcs_buf;
 };
 
 #define DAOS_ISEQ_OBJ_CPD /* input fields */				    \
@@ -669,6 +682,9 @@ void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
 uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
+
+int crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
+				     struct daos_cpd_sub_req *dcsr, bool with_oid);
 
 static inline bool
 obj_is_modification_opc(uint32_t opc)
