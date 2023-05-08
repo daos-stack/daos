@@ -545,8 +545,8 @@ discover_daos_mount(void)
 		return;
 	}
 
-	pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH);
-	if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= DFS_MAX_PATH) {
+	pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH - 1);
+	if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
 		printf("dfs_list[num_dfs].fs_root[] is not large enough.\nQuit\n");
 		return;
 	}
@@ -586,8 +586,8 @@ discover_dfuse(void)
 			dfs_list[num_dfs].inited       = 0;
 			dfs_list[num_dfs].pool         = NULL;
 			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
-					 DFS_MAX_PATH);
-			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= DFS_MAX_PATH) {
+					 DFS_MAX_PATH - 1);
+			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
 				fprintf(stderr, "Error> fs_root[] is too long.\nQuit\n");
 				exit(1);
 			}
@@ -763,25 +763,25 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	if (strncmp(szInput, ".", 2) == 0) {
-		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH);
+		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH - 1);
 		len = (int)(pt_end - full_path_parse);
-		if (len >= DFS_MAX_PATH) {
+		if (len >= DFS_MAX_PATH - 1) {
 			if (daos_inited && bLog)
 				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else if (szInput[0] == '/') {
-		pt_end = stpncpy(full_path_parse, szInput, DFS_MAX_PATH);
+		pt_end = stpncpy(full_path_parse, szInput, DFS_MAX_PATH - 1);
 		len = (int)(pt_end - full_path_parse);
-		if (len >= DFS_MAX_PATH) {
+		if (len >= DFS_MAX_PATH - 1) {
 			if (daos_inited && bLog)
 				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else {
 		/* relative path */
-		len = snprintf(full_path_parse, DFS_MAX_PATH, "%s/%s", cur_dir, szInput);
-		if (len >= DFS_MAX_PATH) {
+		len = snprintf(full_path_parse, DFS_MAX_PATH - 1, "%s/%s", cur_dir, szInput);
+		if (len >= DFS_MAX_PATH - 1) {
 			if (daos_inited && bLog)
 				D_ERROR("The length of path is too long.\n");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
@@ -1487,7 +1487,7 @@ check_path_with_dirfd(int dirfd, char *full_path_out, const char *rel_path, int 
 		} else if (bytes_read < 0) {
 			if (bLog)
 				D_ERROR("readlink() failed in check_path_with_dirfd(%d). %s",
-				       dirfd, strerror(errno));
+					dirfd, strerror(errno));
 			*error = errno;
 		}
 		len_str = snprintf(full_path_out + bytes_read, DFS_MAX_PATH - bytes_read, "/%s",
@@ -3459,8 +3459,8 @@ fchdir(int dirfd)
 	if (dirfd < FD_DIR_BASE)
 		return next_fchdir(dirfd);
 
-	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH);
-	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH) {
+	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		if (bLog)
 			D_ERROR("path is too long.");
 		errno = ENAMETOOLONG;
@@ -4566,8 +4566,8 @@ update_cwd(void)
 		fprintf(stderr, "Error> Fail to get CWD with get_current_dir_name().\nQuit\n");
 		exit(1);
 	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH) {
+		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
+		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 			fprintf(stderr, "Error> cur_dir[] is not large enough.\nQuit\n");
 			exit(1);
 		}
@@ -4939,7 +4939,7 @@ finalize_dfs(void)
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != 0) {
 			D_ERROR("error in daos_pool_disconnect() for %s\n",
-			       dfs_list[i].fs_root);
+				dfs_list[i].fs_root);
 			continue;
 		}
 	}
