@@ -69,7 +69,7 @@ class TestWithScrubber(IorTestBase):
         """
         # If pool_prop is None, don't use anything from YAML file.
         # If cont_prop is None, don't use  the information from YAML file.
-        # Use some of the default values provided in scrubber testbase file.
+        # Use some of the default values provided in scrubber test base file.
         # Testing scenario : Create a pool and container without properties
         # and update them at runtime.
         if pool_prop is None:

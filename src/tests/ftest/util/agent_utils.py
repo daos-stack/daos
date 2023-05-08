@@ -238,26 +238,29 @@ class DaosAgentManager(SubprocessManager):
         self.log.info("Agent attachinfo: %s", self.attachinfo)
 
     def get_attachinfo_file(self):
-        """Run dump-attachinfo on the daos_agent."""
+        """Run dump-attachinfo on the daos_agent.
+
+        Returns:
+            str: the attach info file path
+
+        """
         server_name = self.get_config_value("name")
 
         self.dump_attachinfo()
 
-        a = self.attachinfo
+        attach_info = self.attachinfo
 
         # Filter log messages from attachinfo content
-        L = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
-        attach_info_contents = "\n".join(L)
+        messages = [x for x in attach_info if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
+        attach_info_contents = "\n".join(messages)
         attach_info_filename = "{}.attach_info_tmp".format(server_name)
 
-        if len(L) < 4:
-            self.log.info("Malformed attachinfo file: %s",
-                          attach_info_contents)
+        if len(messages) < 4:
+            self.log.info("Malformed attachinfo file: %s", attach_info_contents)
             return None
 
         # Write an attach_info_tmp file in this directory for cart_ctl to use
-        attachinfo_file_path = os.path.join(self.outputdir,
-                                            attach_info_filename)
+        attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
 
         with open(attachinfo_file_path, 'w') as file_handle:
             file_handle.write(attach_info_contents)

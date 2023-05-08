@@ -488,8 +488,9 @@ class CommandWithParameters(ObjectWithParameters):
         """Get the path used for the command."""
         return self._path
 
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
+    @property
+    def command_with_params(self):
+        """Get the command with all of its defined parameters as a string.
 
         Returns:
             str: the command with all the defined parameters
@@ -505,6 +506,15 @@ class CommandWithParameters(ObjectWithParameters):
 
         # Return the command and its parameters
         return " ".join(command)
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        return self.command_with_params
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.

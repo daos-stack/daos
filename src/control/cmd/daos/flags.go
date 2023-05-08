@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -240,6 +240,37 @@ func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
 	C.daos_parse_ctype(cTypeStr, &f.Type)
 	if f.Type == C.DAOS_PROP_CO_LAYOUT_UNKNOWN {
 		return errors.Errorf("unknown container type %q", fv)
+	}
+
+	f.Set = true
+	return nil
+}
+
+type FsCheckFlag struct {
+	Set   bool
+	Flags C.uint64_t
+}
+
+func (f *FsCheckFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty filesystem check flags")
+	}
+
+	for _, cflag := range strings.Split(fv, ",") {
+		switch strings.TrimSpace(strings.ToLower(cflag)) {
+		case "print":
+			f.Flags |= C.DFS_CHECK_PRINT
+		case "evict":
+			f.Flags |= C.DFS_CHECK_EVICT_ALL
+		case "remove":
+			f.Flags |= C.DFS_CHECK_REMOVE
+		case "relink":
+			f.Flags |= C.DFS_CHECK_RELINK
+		case "verify":
+			f.Flags |= C.DFS_CHECK_VERIFY
+		default:
+			return errors.Errorf("unknown filesystem check flags: %q", fv)
+		}
 	}
 
 	f.Set = true

@@ -20,12 +20,13 @@ class ManagementServiceFailover(TestWithServers):
     :avocado: recursive
     """
 
+    L_QUERY_TIMER = 30
+
     def __init__(self, *args, **kwargs):
         """Initialize a ManagementServiceFailover object."""
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False
-        self.L_QUERY_TIMER = 30
 
     def get_leader(self):
         """Fetch the current system leader.
@@ -128,7 +129,7 @@ class ManagementServiceFailover(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control
-        :avocado: tags=ms_failover,test_ms_failover
+        :avocado: tags=ManagementServiceFailover,test_ms_failover
         """
         replicas = self.launch_servers()
         leader = self.verify_leader(replicas)
