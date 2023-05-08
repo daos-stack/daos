@@ -487,6 +487,8 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 			if (phase != CHK_INVAL_PHASE && phase > cbk->cb_phase)
 				cbk->cb_phase = phase;
 			cbk->cb_pool_status = status;
+			if (status == CHK__CHECK_POOL_STATUS__CPS_STOPPED)
+				ins->ci_pool_stopped = 1;
 			cbk->cb_time.ct_stop_time = time(NULL);
 			uuid_unparse_lower(uuid, uuid_str);
 			rc = chk_bk_update_pool(cbk, uuid_str);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,7 +65,8 @@ ds_chk_stop_hdlr(crt_rpc_t *rpc)
 	d_rank_t		*rank;
 	int			 rc;
 
-	rc = chk_engine_stop(csi->csi_gen, csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays);
+	rc = chk_engine_stop(csi->csi_gen, csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays,
+			     &cso->cso_flags);
 	if (rc > 0) {
 		D_ALLOC_PTR(rank);
 		if (rank == NULL) {
