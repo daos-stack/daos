@@ -22,7 +22,7 @@ from general_utils import run_command, DaosTestError
 from host_utils import get_local_host
 import slurm_utils
 from run_utils import run_remote
-from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
+from soak_utils import ddhhmmss_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, launch_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -608,7 +608,7 @@ class SoakTestBase(TestWithServers):
             start_loop_time = time.time()
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
-                DDHHMMSS_format(self.end_time - time.time()))
+                ddhhmmss_format(self.end_time - time.time()))
             # Initialize harassers
             if run_harasser:
                 if not harasserlist:
@@ -655,12 +655,12 @@ class SoakTestBase(TestWithServers):
                 break
             loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<LOOP %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
+                "<<LOOP %s completed in %s at %s>>", self.loop, ddhhmmss_format(
                     loop_time), time.ctime())
             # Initialize harasser loop time from first pass loop time
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
         self.log.info(
-            "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
+            "<<<<SOAK TOTAL TEST TIME = %s>>>>", ddhhmmss_format(
                 time.time() - self.start_time))

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,15 +31,14 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
 
-		/* TODO: dcache needs a timeout input. */
-		if (dfuse_mcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout, NULL))
+		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
 			fi_out.keep_cache = 1;
 	}
 #endif
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);
@@ -49,7 +48,8 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -69,6 +69,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	DFUSE_REPLY_ZERO(oh, req);
-	D_FREE(oh->doh_rd);
+	dfuse_dre_drop(fs_handle, oh);
 	D_FREE(oh);
 };
