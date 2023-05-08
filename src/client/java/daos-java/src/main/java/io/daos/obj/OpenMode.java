@@ -7,7 +7,6 @@
 package io.daos.obj;
 
 public enum OpenMode {
-  UNKNOWN(0),
   // shared read
   DAOS_OO_RO(1 << 1),
   // shared read & write, no cache for write
