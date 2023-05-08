@@ -169,18 +169,23 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
+Requires: capstone >= 4.0.1
 %else
 Requires: fuse3 >= 3.4.2
+Requires: capstone >= 4.0.1
 %endif
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
+Requires: libcapstone-devel >= 4.0.1
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
+Requires: capstone >= 4.0.1
 %else
 Requires: fuse < 3, fuse3-libs >= 3.4.2
+Requires: capstone >= 4.0.1
 %endif
 %endif
 %{?systemd_requires}

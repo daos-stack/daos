@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -41,7 +41,7 @@ class MdtestHard(PerformanceTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=performance,performance_mdtest,performance_mdtest_hard,performance_pil4dfs
-        :avocado: tags=MdtestHardPil4dfs,test_performance_mdtest_hard_pil4dfs_s1
+        :avocado: tags=MdtestHard,test_performance_mdtest_hard_pil4dfs_s1
         """
         self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         self.run_performance_mdtest(namespace="/run/mdtest_pil4dfs_s1/*")
@@ -52,7 +52,7 @@ class MdtestHard(PerformanceTestBase):
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=performance,performance_mdtest,performance_mdtest_hard,performance_pil4dfs
-        :avocado: tags=MdtestHardPil4dfs,test_performance_mdtest_hard_pil4dfs_ec_16p2g1
+        :avocado: tags=MdtestHard,test_performance_mdtest_hard_pil4dfs_ec_16p2g1
         """
         self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         self.run_performance_mdtest(namespace="/run/mdtest_pil4dfs_ec_16p2g1/*")

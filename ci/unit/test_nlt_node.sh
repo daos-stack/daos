@@ -24,4 +24,4 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 # ./utils/node_local_test.py --max-log-size 800MiB --dfuse-dir /localhome/jenkins/ \
 #			   --server-valgrind all
 
-./utils/node_local_test.py --max-log-size 900MiB --dfuse-dir /localhome/jenkins/ all
+./utils/node_local_test.py --max-log-size 800MiB --dfuse-dir /localhome/jenkins/ all

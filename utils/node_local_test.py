@@ -1036,22 +1036,21 @@ def pil4dfs_cmd(dfuse, cmd):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
-    my_env['D_LOG_MASK'] = 'INFO'
-    my_env['IL_LOG'] = 'true'
+    my_env['D_IL_REPORT'] = 'true'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
     ret = subprocess.run(cmd, stderr=subprocess.PIPE, env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
-    search = re.findall(r'\[op_sum\ ]  \d+', ret.stderr.decode('utf-8'))
-    if len(search) == 0:
-        print("ERROR: [op_sum ]  is NOT found in stderr.")
+
+    try:
+        log_test(dfuse.conf, log_name, check_read=False, check_write=False,
+                 check_fstat=False, check_summary=True)
+        assert ret.returncode == 0
+    except NLTestFail as error:
+        command = ' '.join(cmd)
+        print(f"ERROR: command '{command}' did not log via {error.function}")
         ret.returncode = 1
-    else:
-        num_op = int(search[0][9:])
-        print(f"DBG> num_op = {num_op}")
-        if num_op == 0:
-            print("ERROR: num_op is zero. This is unexpected.")
-            ret.returncode = 1
+
     return ret
 
 
@@ -3514,7 +3513,8 @@ def log_test(conf,
              leak_wf=None,
              check_read=False,
              check_write=False,
-             check_fstat=False):
+             check_fstat=False,
+             check_summary=False):
     """Run the log checker on filename, logging to stdout"""
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
@@ -3573,6 +3573,18 @@ def log_test(conf,
 
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
+
+    if check_summary:
+        log_file = open(filename, "r")
+        data = log_file.read()
+        log_file.close()
+        search = re.findall(r'\[op_sum\ ]  \d+', data)
+        if len(search) == 0:
+            raise NLTestFail('[op_sum ] is NOT found.')
+        else:
+            num_op = int(search[0][9:])
+            if num_op == 0:
+                raise NLTestFail('op_sum is zero. Unexpected.')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '

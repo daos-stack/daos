@@ -45,7 +45,7 @@ class IorInterceptBasic(IorInterceptTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,il,ior,ior_intercept
+        :avocado: tags=daosio,dfuse,il,ior,ior_intercept,pil4dfs
         :avocado: tags=IorInterceptBasic,test_ior_intercept_pil4dfs
         """
         self.run_il_perf_check('libpil4dfs.so')

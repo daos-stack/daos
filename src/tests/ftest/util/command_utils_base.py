@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -523,10 +523,6 @@ class CommandWithParameters(ObjectWithParameters):
             CommandWithParameters: a new CommandWithParameters object
         """
         return CommandWithParameters(self.namespace, self._command, self._path)
-
-    def command_prepend_il(self, libpath):
-        """Add LD_PRELOAD=libpath into command to enable interception library"""
-        self._command = f'LD_PRELOAD={libpath} {self._command}'
 
 
 class YamlParameters(ObjectWithParameters):
