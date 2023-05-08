@@ -31,7 +31,10 @@ type mockDialer struct {
 
 // Dial is a mock that saves off its inputs and returns the mock output in the
 // mockDialer struct
-func (m *mockDialer) dial(socketPath string) (net.Conn, error) {
+func (m *mockDialer) dial(ctx context.Context, socketPath string) (net.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	m.InputSockPath = socketPath
 	m.DialCallCount++
 	return m.OutputConn, m.OutputErr
@@ -82,7 +85,7 @@ func TestClient_Connect_Success(t *testing.T) {
 	client := newTestClientConnection(dialer, nil)
 	client.sequence = 10
 
-	err := client.Connect()
+	err := client.Connect(context.Background())
 
 	test.AssertTrue(t, err == nil, "Expected no error")
 	test.AssertTrue(t, client.IsConnected(), "Should be connected")
@@ -99,9 +102,22 @@ func TestClient_Connect_Error(t *testing.T) {
 	dialer.SetError("mock dialer failure")
 	client := newTestClientConnection(dialer, nil)
 
-	err := client.Connect()
+	err := client.Connect(context.Background())
 
 	test.CmpErr(t, dialer.OutputErr, err)
+	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
+	test.AssertTrue(t, client.conn == nil, "Expected no connection")
+}
+
+func TestClient_Connect_ContextCanceled(t *testing.T) {
+	dialer := newMockDialer()
+	client := newTestClientConnection(dialer, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := client.Connect(ctx)
+
+	test.CmpErr(t, context.Canceled, err)
 	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
 	test.AssertTrue(t, client.conn == nil, "Expected no connection")
 }
@@ -111,7 +127,7 @@ func TestClient_Connect_AlreadyConnected(t *testing.T) {
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, originalConn)
 
-	err := client.Connect()
+	err := client.Connect(context.Background())
 
 	test.AssertTrue(t, err == nil, "Expected no error")
 	test.AssertEqual(t, client.conn, originalConn,

@@ -92,7 +92,10 @@ func (c *mockDrpcClient) IsConnected() bool {
 	return c.cfg.IsConnectedBool
 }
 
-func (c *mockDrpcClient) Connect() error {
+func (c *mockDrpcClient) Connect(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return c.cfg.ConnectError
 }
 
