@@ -1062,7 +1062,7 @@ ec_full_stripe_snapshot(void **state)
 		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
 					       stripe_size, DAOS_FORCE_EC_AGG);
 		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	ioreq_fini(&req);
@@ -1129,7 +1129,7 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 					       DAOS_FORCE_EC_AGG);
 		epr.epr_hi = epr.epr_lo = snap_epoch[i];
 		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	free(data);
@@ -1670,6 +1670,12 @@ ec_cond_fetch(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
 			     NULL);
 	assert_rc_equal(rc, 0);
+
+	/** fetch with NULL sgl but iod_size is non-zero */
+	print_message("negative test - fetch with non-zero iod_size and NULL sgl\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	/** normal fetch */
 	for (i = 0; i < 2; i++)

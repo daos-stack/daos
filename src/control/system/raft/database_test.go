@@ -62,7 +62,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	memberStates := []MemberState{
 		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
 		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
+		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive, MemberStateAdminExcluded,
 	}
 
 	for i, ms := range memberStates {
@@ -104,6 +104,13 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 				if matches[i].State != ms {
 					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].State, ms)
 				}
+			}
+		},
+		"nonexcluded filter": func(t *testing.T) {
+			matches := db.filterMembers(NonExcludedMemberFilter)
+			matchLen := len(matches)
+			if matchLen != len(memberStates)-4 {
+				t.Fatalf("expected %d members to match; got %d", len(memberStates)-4, matchLen)
 			}
 		},
 	} {

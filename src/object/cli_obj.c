@@ -216,7 +216,6 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	struct dc_pool		*pool;
 	struct pl_map		*map;
 	uint32_t		old;
-	uint32_t		rebuild_ver;
 	int			i;
 	int			rc;
 
@@ -229,11 +228,10 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rebuild_ver = pool->dp_rebuild_version;
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
-			  rebuild_ver, NULL, &layout);
+			  NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
@@ -426,6 +424,20 @@ dc_obj_get_grp_size(daos_handle_t oh, int *grp_size)
 }
 
 int
+dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*oid = obj->cob_md.omd_id;
+	obj_decref(obj);
+	return 0;
+}
+
+int
 obj_get_grp_nr(struct dc_object *obj)
 {
 	return obj->cob_grp_nr;
@@ -613,7 +625,8 @@ unlock:
 }
 
 static int
-obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned int map_ver)
+obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, uint64_t dkey_hash,
+			  unsigned int map_ver)
 {
 	struct pl_obj_shard	*shard;
 	struct daos_oclass_attr	*oca;
@@ -658,7 +671,7 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * obj_get_grp_size(obj);
-	replica_idx = (obj->cob_md.omd_id.lo + grp_idx) % grp_size;
+	replica_idx = (dkey_hash + grp_idx) % grp_size;
 	for (i = 0, pos = -1; i < grp_size;
 	     i++, replica_idx = (replica_idx + 1) % obj_get_grp_size(obj)) {
 		int off = start + replica_idx;
@@ -702,7 +715,7 @@ obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		return obj_ec_leader_select(obj, grp_idx, cond_modify, map_ver, dkey_hash,
 					    bit_map);
 
-	return obj_replica_leader_select(obj, grp_idx, map_ver);
+	return obj_replica_leader_select(obj, grp_idx, dkey_hash, map_ver);
 }
 
 /* If the client has been asked to fetch (list/query) from leader replica,
@@ -1623,8 +1636,10 @@ dc_obj_retry_delay(struct obj_auxi_args *obj_auxi, int err)
 {
 	uint32_t	delay = 0;
 
-	/* Randomly delay 5 - 36 us if it is not the first retry for -DER_INPROGRESS case. */
-	if (err == -DER_INPROGRESS) {
+	/* Randomly delay 5 - 36 us if it is not the first retry for
+	 * -DER_INPROGRESS && -DER_UPDATE_AGAIN case.
+	 **/
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		obj_auxi->inprogress_cnt++;
 		if (obj_auxi->inprogress_cnt > 1) {
 			delay = (d_rand() & ((1 << 5) - 1)) + 5;
@@ -1717,9 +1732,7 @@ recov_task_abort(tse_task_t *task, void *arg)
 static int
 recov_task_cb(tse_task_t *task, void *data)
 {
-	struct obj_auxi_args	*obj_auxi = *((struct obj_auxi_args **)data);
-	daos_obj_fetch_t	*fetch_arg = dc_task_get_args(task);
-	int			 i;
+	struct obj_ec_recov_task	*recov_task = *((struct obj_ec_recov_task **)data);
 
 	if (task->dt_result != -DER_FETCH_AGAIN)
 		return 0;
@@ -1727,8 +1740,9 @@ recov_task_cb(tse_task_t *task, void *data)
 	/* For the case of EC singv overwritten, in degraded fetch data recovery possibly always
 	 * hit conflict case and need fetch again. Should update iod_size to avoid endless retry.
 	 */
-	for (i = 0; i < obj_auxi->reasb_req.orr_iod_nr; i++)
-		obj_auxi->reasb_req.orr_uiods[i].iod_size = fetch_arg->iods[i].iod_size;
+	recov_task->ert_uiod->iod_size = recov_task->ert_iod.iod_size;
+	D_DEBUG(DB_IO, "update iod_size as "DF_U64"\n", recov_task->ert_oiod->iod_size);
+
 	return 0;
 }
 
@@ -1866,8 +1880,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 
 		tse_task_list_add(sub_task, &task_list);
 
-		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &obj_auxi,
-					       sizeof(obj_auxi));
+		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &recov_task,
+					       sizeof(recov_task));
 		if (rc) {
 			D_ERROR("task %p "DF_OID" tse_task_register_comp_cb failed "DF_RC"\n",
 				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
@@ -2076,7 +2090,7 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 static int
 obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		  d_sg_list_t *sgls, bool update, bool size_fetch,
-		  bool spec_shard)
+		  bool spec_shard, bool check_exist)
 {
 	int i, j;
 	int rc;
@@ -2125,9 +2139,10 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		case DAOS_IOD_ARRAY:
 			if (sgls == NULL) {
 				/* size query or punch */
-				if (!update || iods[i].iod_size == DAOS_REC_ANY)
+				if ((iods[i].iod_size == DAOS_REC_ANY) ||
+				    (!update && check_exist))
 					continue;
-				D_ERROR("invalid update req with NULL sgl\n");
+				D_ERROR("invalid req with NULL sgl\n");
 				return -DER_INVAL;
 			}
 			if (!size_fetch &&
@@ -2358,8 +2373,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, f_args->nr,
-					       f_args->iods, f_args->sgls,
-					       false, size_fetch, spec_shard);
+					       f_args->iods, f_args->sgls, false,
+					       size_fetch, spec_shard, check_exist);
 			if (rc)
 				goto out;
 		}
@@ -2399,7 +2414,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, u_args->nr,
 					       u_args->iods, u_args->sgls, true,
-					       false, false);
+					       false, false, false);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -4573,16 +4588,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (task->dt_result == -DER_CSUM || task->dt_result == -DER_TX_UNCERTAIN ||
 		    task->dt_result == -DER_NVME_IO) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
-			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				if (task->dt_result == -DER_CSUM)
-					obj_auxi->csum_retry = 1;
-				else if (task->dt_result == -DER_TX_UNCERTAIN)
-					obj_auxi->tx_uncertain = 1;
-				else
-					obj_auxi->nvme_io_err = 1;
+			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov) {
+				/* Retry fetch on alternative shard */
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+					if (task->dt_result == -DER_CSUM)
+						obj_auxi->csum_retry = 1;
+					else if (task->dt_result == -DER_TX_UNCERTAIN)
+						obj_auxi->tx_uncertain = 1;
+					else
+						obj_auxi->nvme_io_err = 1;
+				} else if (task->dt_result != -DER_NVME_IO) {
+					/* Don't retry update for CSUM & UNCERTAIN errors */
+					obj_auxi->io_retry = 0;
+				}
 			} else {
-				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
 			}
 		}
@@ -5293,7 +5312,7 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		rc = obj->cob_shards_nr - 1;
 	else if (to_leader)
-		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+		rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 	else
 		rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 							   obj_auxi->failed_tgt_list);
@@ -6269,7 +6288,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		*bitmaps = NULL;
 		*shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6488,7 +6507,7 @@ dc_obj_key2anchor(tse_task_t *task)
 	} else {
 		shard_cnt = 1;
 		if (obj_auxi->to_leader) {
-			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+			rc = obj_replica_leader_select(obj, grp_idx, obj_auxi->dkey_hash, map_ver);
 		} else {
 			rc = obj_replica_grp_fetch_valid_shard_get(obj, grp_idx, map_ver,
 								   obj_auxi->failed_tgt_list);
@@ -6889,7 +6908,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
 			int leader;
 
-			leader = obj_grp_leader_get(obj, i, obj_auxi->dkey_hash,
+			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
 						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
 				if (obj_is_ec(obj) &&

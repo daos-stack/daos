@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,22 +15,34 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getProcPids(procDir, procName string) (pids []int, _ error) {
+func readProcName(procPath string) (string, error) {
+	data, err := os.ReadFile(procPath)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to read %q", procPath)
+	}
+	if len(data) == 0 {
+		return "", errors.Wrapf(err, "%q was empty", procPath)
+	}
+	return filepath.Base(strings.Split(string(data), "\x00")[0]), nil
+}
+
+func getProcPids(procDir, searchName string) (pids []int, _ error) {
+	if searchName == "" {
+		return nil, nil
+	}
+
 	allProcs, err := filepath.Glob(filepath.Join(procDir, "*", "cmdline"))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read process list")
 	}
 
 	for _, proc := range allProcs {
-		data, err := os.ReadFile(proc)
+		procName, err := readProcName(proc)
 		if err != nil {
 			continue
 		}
-		if len(data) == 0 {
-			continue
-		}
-		comps := strings.Split(string(data), "\x00")
-		if !(filepath.Base(comps[0]) == procName) {
+
+		if procName != searchName {
 			continue
 		}
 
@@ -50,11 +62,12 @@ func GetProcPids(procName string) ([]int, error) {
 }
 
 func getProcName(pid int, procDir string) (string, error) {
-	exe, err := os.Readlink(filepath.Join(procDir, strconv.Itoa(pid), "exe"))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to read executable path")
-	}
-	return filepath.Base(exe), nil
+	return readProcName(filepath.Join(procDir, strconv.Itoa(pid), "cmdline"))
+}
+
+// GetProcName returns the name of the process with the given pid.
+func GetProcName(pid int) (string, error) {
+	return getProcName(pid, "/proc")
 }
 
 func checkDupeProcess(pid int, procDir string) error {

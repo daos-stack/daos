@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
@@ -159,9 +160,13 @@ func (svc *mgmtSvc) FaultInjectPoolFault(parent context.Context, fault *chkpb.Fa
 			return nil, errors.Errorf("label update failed: %s", drpc.Status(resp.Status))
 		}
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE:
+		allRanks, err := svc.sysdb.MemberRanks(system.NonExcludedMemberFilter)
+		if err != nil {
+			return nil, err
+		}
 		req := &mgmtpb.PoolDestroyReq{
 			Id:       ps.PoolUUID.String(),
-			SvcRanks: ranklist.RanksToUint32(ps.Replicas),
+			SvcRanks: ranklist.RanksToUint32(allRanks),
 			Force:    true,
 		}
 		dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)

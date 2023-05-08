@@ -196,35 +196,9 @@ chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 	/* Cleanup all pending records belong to this rank. */
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
 	d_list_for_each_entry_safe(cpr, tmp, &crr->crr_pending_list, cpr_rank_link) {
-		d_iov_set(&riov, NULL, 0);
-		d_iov_set(&kiov, &cpr->cpr_seq, sizeof(cpr->cpr_seq));
-		rc1 = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
-		if (rc1 != 0) {
-			D_ASSERT(rc1 != -DER_NONEXIST);
-
-			D_ERROR(DF_LEADER" failed to remove pending rec for rank %u, seq "
-				DF_X64": "DF_RC"\n",
-				DP_LEADER(ins), crr->crr_rank, cpr->cpr_seq, DP_RC(rc1));
-
-			if (rc == 0)
-				rc = rc1;
-		} else {
-			D_ASSERT(cpr == riov.iov_buf);
-
-			ABT_mutex_lock(cpr->cpr_mutex);
-			if (cpr->cpr_busy) {
-				/*
-				 * Notify the owner who is blocked on the pending record
-				 * and will release the pending record after using it.
-				 */
-				cpr->cpr_exiting = 1;
-				ABT_cond_broadcast(cpr->cpr_cond);
-				ABT_mutex_unlock(cpr->cpr_mutex);
-			} else {
-				ABT_mutex_unlock(cpr->cpr_mutex);
-				chk_pending_destroy(cpr);
-			}
-		}
+		rc1 = chk_pending_wakeup(ins, cpr);
+		if (rc1 != 0 && rc == 0)
+			rc = rc1;
 	}
 	ABT_rwlock_unlock(ins->ci_abt_lock);
 
@@ -682,7 +656,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct ds_pool_clue		*clue;
+	struct ds_pool_clue		*clue = cpr->cpr_clue;
 	char				*strs[3];
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
@@ -729,7 +703,6 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -817,7 +790,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_pool_label = cpr->cpr_label;
+	cru.cru_pool_label = clue->pc_label;
 	cru.cru_msg = "Check leader detects orphan pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -889,7 +862,6 @@ ignore:
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -1046,7 +1018,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				goto report;
 
 			clue = cpr->cpr_clue;
-			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, cpr->cpr_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
@@ -1216,7 +1188,7 @@ ignore:
 			break;
 
 		clue = cpr->cpr_clue;
-		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, cpr->cpr_label,
 					       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 		if (result != 0) {
 			cbk->cb_statistics.cs_failed++;
@@ -1629,6 +1601,14 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			cpr = (struct chk_pool_rec *)riov.iov_buf;
 			cpr->cpr_exist_on_ms = 1;
 
+			rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
+					    clp[i].clp_label != NULL ?
+					    strlen(clp[i].clp_label) : 0);
+			if (rc != 0) {
+				cpr->cpr_skip = 1;
+				goto out;
+			}
+
 			/* No engine report shard for the pool, it is dangling pool. */
 			if (d_list_empty(&cpr->cpr_shard_list)) {
 				chk_pool_get(cpr);
@@ -1655,14 +1635,6 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			if (cpr->cpr_for_orphan) {
 				chk_pool_remove_nowait(cpr);
 				continue;
-			}
-
-			rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
-					    clp[i].clp_label != NULL ?
-					    strlen(clp[i].clp_label) : 0);
-			if (rc != 0) {
-				cpr->cpr_skip = 1;
-				goto out;
 			}
 
 			chk_pool_get(cpr);
@@ -2642,12 +2614,6 @@ chk_leader_start_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	}
 
 out:
-	/*
-	 * The check engine and the check leader are on the same rank,
-	 * release the buffer for clues. See ds_chk_start_hdlr for detail.
-	 */
-	chk_fini_clues(clues, nr, rank);
-
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle start CB with rank %u, result %d: "
 			DF_RC"\n", DP_LEADER(ins), rank, result, DP_RC(rc));
@@ -2688,7 +2654,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
@@ -2871,7 +2836,10 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_pool_rec	*cpr;
+	struct chk_pool_rec	*tmp;
 	int			 rc = 0;
+	int			 i;
 
 	if (ins->ci_starting)
 		D_GOTO(out, rc = -DER_BUSY);
@@ -2916,6 +2884,22 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 	rc = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, pool_nr, pools, chk_leader_stop_cb, ins);
 	if (rc != 0)
 		goto out;
+
+	if (pool_nr == 0) {
+		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
+			chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_STOPPED,
+					  CHK_INVAL_PHASE, &rc);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+	} else {
+		for (i = 0; i < pool_nr; i++) {
+			chk_pool_stop_one(ins, pools[i], CHK__CHECK_POOL_STATUS__CPS_STOPPED,
+					  CHK_INVAL_PHASE, &rc);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+	}
 
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING &&
 	    d_list_empty(&ins->ci_rank_list))
@@ -2986,8 +2970,6 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	int				 rc = 0;
 	int				 i;
 
-	D_ASSERTF(result == 0, "Unexpected result for query CB %d\n", result);
-
 	for (i = 0; i < nr; i++) {
 		/*
 		 * @shards is from chk_query_remote RPC reply, the buffer will be released after
@@ -3007,15 +2989,9 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 	}
 
 out:
-	/*
-	 * The check engine and the check leader are on the same rank,
-	 * release the buffer for shards. See ds_chk_query_hdlr for detail.
-	 */
-	chk_fini_shards(shards, nr);
-
 	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to handle query CB with rank %u, result %d: "
-			DF_RC"\n", DP_LEADER(cqa->cqa_ins), rank, result, DP_RC(rc));
+		D_ERROR(DF_LEADER" failed to handle query CB with result %d: "
+			DF_RC"\n", DP_LEADER(cqa->cqa_ins), result, DP_RC(rc));
 
 	return rc;
 }
@@ -3330,7 +3306,8 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 			crr = (struct chk_rank_rec *)riov.iov_buf;
 		}
 
-		rc = chk_pending_add(ins, crr != NULL ? &crr->crr_pending_list : NULL,
+		rc = chk_pending_add(ins, &pool->cpr_pending_list,
+				     crr != NULL ? &crr->crr_pending_list : NULL,
 				     *cru->cru_pool, *seq, cru->cru_rank, cru->cru_cla, &cpr);
 		if (rc != 0)
 			goto log;
@@ -3511,7 +3488,6 @@ chk_leader_pause(void)
 	struct chk_instance	*ins = chk_leader;
 
 	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 }
 

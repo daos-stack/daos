@@ -18,7 +18,6 @@ from general_utils import error_count
 
 
 class NvmeEnospace(ServerFillUp):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
     :avocado: recursive

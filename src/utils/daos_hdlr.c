@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,6 +59,9 @@ struct file_dfs {
 static int
 parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl);
 
+static int
+cont_destroy_snap_hdlr(struct cmd_args_s *ap);
+
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
@@ -77,6 +80,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	unsigned long		inconsistent = 0;
 	uint32_t		oids_nr;
 	int			rc, i;
+	int			rc2;
 
 	/* Create a snapshot with OIT */
 	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
@@ -148,136 +152,21 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	}
 
 out_close:
-	daos_oit_close(oit, NULL);
+	rc2 = daos_cont_snap_oit_destroy(ap->cont, oit, NULL);
+	if (rc == 0)
+		rc = rc2;
+	rc2 = daos_oit_close(oit, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_snap:
-	cont_destroy_snap_hdlr(ap);
+	rc2 = cont_destroy_snap_hdlr(ap);
+	if (rc == 0)
+		rc = rc2;
 out:
 	return rc;
 }
 
-/* TODO implement the following container op functions
- * all with signatures similar to this:
- * int cont_FN_hdlr(struct cmd_args_s *ap)
- *
- * int cont_stat_hdlr()
- */
-
-/* this routine can be used to list all snapshots or to map a snapshot name
- * to its epoch number.
- */
-int
-cont_list_snaps_hdlr(struct cmd_args_s *ap)
-{
-	daos_epoch_t	*epochs = NULL;
-	char		**names = NULL;
-	daos_anchor_t	anchor;
-	int		rc;
-	int		i;
-	int		snaps_count;
-	int		expected_count;
-
-	/* evaluate size for listing */
-	snaps_count = 0;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve number of snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (ap->snapname_str == NULL)
-		D_PRINT("Container's snapshots :\n");
-
-	if (!daos_anchor_is_eof(&anchor)) {
-		fprintf(ap->errstream, "too many snapshots returned\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (snaps_count == 0) {
-		D_PRINT("no snapshots\n");
-		D_GOTO(out, rc);
-	}
-
-	D_ALLOC_ARRAY(epochs, snaps_count);
-	if (epochs == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_ARRAY(names, snaps_count);
-	if (names == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	for (i = 0; i < snaps_count; i++) {
-		D_ALLOC_ARRAY(names[i], DAOS_SNAPSHOT_MAX_LEN);
-		if (names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	expected_count = snaps_count;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, epochs, names, &anchor,
-				 NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-	if (expected_count < snaps_count)
-		fprintf(ap->errstream,
-			"snapshot list has been truncated (size changed)\n");
-
-	if (ap->snapname_str == NULL && ap->epc == 0) {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			D_PRINT("0x"DF_X64" %s\n", epochs[i], names[i]);
-	} else {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			if (ap->snapname_str != NULL &&
-			    strcmp(ap->snapname_str, names[i]) == 0) {
-				ap->epc = epochs[i];
-				break;
-			} else if (ap->epc == epochs[i]) {
-				break;
-			}
-		if (i == min(expected_count, snaps_count)) {
-			if (ap->snapname_str != NULL)
-				fprintf(ap->errstream,
-					"%s not found in snapshots list\n",
-				ap->snapname_str);
-			else
-				fprintf(ap->errstream, "0x"DF_X64" not found in snapshots list\n",
-					ap->epc);
-			rc = -DER_NONEXIST;
-		}
-	}
-
-out:
-	D_FREE(epochs);
-	if (names != NULL) {
-		for (i = 0; i < snaps_count; i++)
-			D_FREE(names[i]);
-		D_FREE(names);
-	}
-
-	return rc;
-}
-
-int
-cont_create_snap_hdlr(struct cmd_args_s *ap)
-{
-	int rc;
-
-	rc = daos_cont_create_snap(ap->cont, &ap->epc, ap->snapname_str, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to create snapshot for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	fprintf(ap->outstream, "snapshot/epoch 0x"DF_X64" has been created\n", ap->epc);
-out:
-	return rc;
-}
-
-int
+static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 {
 	daos_epoch_range_t epr;
@@ -313,43 +202,6 @@ cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	return rc;
-}
-
-int
-cont_set_prop_hdlr(struct cmd_args_s *ap)
-{
-	int			 rc;
-	struct daos_prop_entry	*entry;
-	uint32_t		 i;
-
-	if (ap->props == NULL || ap->props->dpp_nr == 0) {
-		fprintf(ap->errstream,
-			"at least one property must be requested\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
-	/* Validate the properties are supported for set */
-	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &ap->props->dpp_entries[i];
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
-		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
-			fprintf(ap->errstream,
-				"property not supported for set\n");
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-	}
-
-	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to set properties for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	D_PRINT("Properties were successfully set\n");
-
-err_out:
 	return rc;
 }
 
@@ -2797,6 +2649,9 @@ err_dst:
 		DH_PERROR_DER(ap, rc2, "Failed to close source object");
 	}
 out_oit:
+	rc2 = daos_cont_snap_oit_destroy(ca->src_coh, toh, NULL);
+	if (rc2 != 0)
+		DH_PERROR_DER(ap, rc2, "Failed to destroy oit");
 	rc2 = daos_oit_close(toh, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to close object iterator");
@@ -2822,35 +2677,6 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
-	return rc;
-}
-
-static int
-print_acl(struct cmd_args_s *ap, FILE *outstream, daos_prop_t *acl_prop,
-	  bool verbose)
-{
-	int			rc = 0;
-	struct daos_prop_entry	*entry = {0};
-	struct daos_acl		*acl = NULL;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
-	if (entry != NULL)
-		acl = entry->dpe_val_ptr;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner: %s\n", entry->dpe_str);
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner-Group: %s\n", entry->dpe_str);
-
-	rc = daos_acl_to_stream(outstream, acl, verbose);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to print ACL: %s (%d)\n",
-			d_errstr(rc), rc);
-	}
-
 	return rc;
 }
 
@@ -2943,243 +2769,5 @@ parse_err:
 out:
 	D_FREE(line);
 	fclose(instream);
-	return rc;
-}
-
-int
-cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
-{
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	daos_prop_t	*prop_out;
-
-	if (!ap->aclfile) {
-		fprintf(ap->errstream,
-			"Parameter --acl-file is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = parse_acl_file(ap, ap->aclfile, &acl);
-	if (rc != 0)
-		return rc;
-
-	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to overwrite ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"overwrite appeared to succeed, but failed to fetch ACL"
-			" for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_update_acl_hdlr(struct cmd_args_s *ap)
-{
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	struct daos_ace	*ace = NULL;
-	daos_prop_t	*prop_out;
-
-	/* need one or the other, not both */
-	if (!ap->aclfile == !ap->entry) {
-		fprintf(ap->errstream,
-			"either parameter --acl-file or --entry is required\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->aclfile) {
-		rc = parse_acl_file(ap, ap->aclfile, &acl);
-		if (rc != 0)
-			return rc;
-	} else {
-		rc = daos_ace_from_str(ap->entry, &ace);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"failed to parse entry: %s (%d)\n",
-				d_errdesc(rc), rc);
-			return rc;
-		}
-
-		acl = daos_acl_create(&ace, 1);
-		daos_ace_free(ace);
-		if (acl == NULL) {
-			rc = -DER_NOMEM;
-			fprintf(ap->errstream,
-				"failed to make ACL from entry: %s "
-				"(%d)\n", d_errdesc(rc), rc);
-			return rc;
-		}
-	}
-
-	rc = daos_cont_update_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to update ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"update appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_delete_acl_hdlr(struct cmd_args_s *ap)
-{
-	int				rc;
-	enum daos_acl_principal_type	type;
-	char				*name;
-	daos_prop_t			*prop_out;
-
-	if (!ap->principal) {
-		fprintf(ap->errstream,
-			"parameter --principal is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"unable to parse principal string '%s': %s"
-			"(%d)\n", ap->principal, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
-	D_FREE(name);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to delete ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"delete appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_set_owner_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (!ap->user && !ap->group) {
-		fprintf(ap->errstream,
-			"parameter --user or --group is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to set owner for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully updated owner for container\n");
-	return rc;
-}
-
-int
-cont_rollback_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (ap->epc == 0 && ap->snapname_str == NULL) {
-		fprintf(ap->errstream,
-			"either parameter --epc or --snap is required\n");
-		return -DER_INVAL;
-	}
-	if (ap->epc != 0 && ap->snapname_str != NULL) {
-		fprintf(ap->errstream,
-			"both parameters --epc and --snap could not be specified\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->snapname_str != NULL) {
-		rc = cont_list_snaps_hdlr(ap);
-		if (rc != 0)
-			return rc;
-	}
-	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to roll back container %s to snapshot 0x"DF_X64": %s (%d)\n",
-			ap->cont_str, ap->epc, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully rollback container\n");
-	return rc;
-}
-
-int
-obj_query_hdlr(struct cmd_args_s *ap)
-{
-	struct daos_obj_layout *layout;
-	int			i;
-	int			j;
-	int			rc;
-
-	rc = daos_obj_layout_get(ap->cont, ap->oid, &layout);
-	if (rc) {
-		fprintf(ap->errstream,
-			"failed to retrieve layout for object "DF_OID
-			": %s (%d)\n", DP_OID(ap->oid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* Print the object layout */
-	fprintf(ap->outstream,
-		"oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
-		layout->ol_ver, layout->ol_nr);
-
-	for (i = 0; i < layout->ol_nr; i++) {
-		struct daos_obj_shard *shard;
-
-		shard = layout->ol_shards[i];
-		fprintf(ap->outstream, "grp: %d\n", i);
-		for (j = 0; j < shard->os_replica_nr; j++)
-			fprintf(ap->outstream, "replica %d %d\n", j,
-				shard->os_shard_loc[j].sd_rank);
-	}
-
-	daos_obj_layout_free(layout);
-
-out:
 	return rc;
 }

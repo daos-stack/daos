@@ -187,10 +187,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
 
-		/* keep_cache cannot be set here as ie is new and create might be being called
-		 * to open an existing file so the check needs to happen in reply_create()
-		 * after the hash table lookup.
-		 */
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -198,10 +194,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (dfs->dfc_direct_io_disable)
 		fi_out.direct_io = 0;
 
-	if (!fi_out.direct_io) {
+	if (!fi_out.direct_io)
 		oh->doh_caching = true;
-		oh->doh_keep_cache = true;
-	}
 
 	fi_out.fh = (uint64_t)oh;
 

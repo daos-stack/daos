@@ -512,7 +512,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	 * still includes the current rank. If not, the object can be
 	 * deleted/reclaimed because it is no longer reachable
 	 */
-	rc = pl_obj_place(map, layout_ver, md, DAOS_OO_RO, -1, NULL, &layout);
+	rc = pl_obj_place(map, layout_ver, md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		return rc;
 

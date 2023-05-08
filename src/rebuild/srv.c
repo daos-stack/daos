@@ -110,7 +110,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 }
 
 static void *
-rebuild_tls_init(int xs_id, int tgt_id)
+rebuild_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
@@ -325,7 +325,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 }
 
 static void
-rebuild_tls_fini(void *data)
+rebuild_tls_fini(int tags, void *data)
 {
 	struct rebuild_tls *tls = data;
 	struct rebuild_pool_tls *pool_tls;
@@ -477,10 +477,10 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t *upper_ver)
 
 	*upper_ver = 0;
 	rpt = rpt_lookup(pool_uuid, -1, -1);
-	if (rpt != NULL) {
+	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort)
 		*upper_ver = rpt->rt_rebuild_ver;
+	if (rpt)
 		rpt_put(rpt);
-	}
 }
 
 /* TODO: Add something about what the current operation is for output status */
@@ -506,10 +506,12 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 			 * for now.
 			 */
 			rc = ds_pool_lookup(pool_uuid, &pool);
-			if (pool == NULL || pool->sp_map_version < 2)
+			if (pool == NULL || pool->sp_map_version < 2) {
 				status->rs_state = DRS_NOT_STARTED;
-			else
+			} else {
 				status->rs_state = DRS_COMPLETED;
+				status->rs_version = ds_pool_get_version(pool);
+			}
 			if (pool != NULL)
 				ds_pool_put(pool);
 			rc = 0;
@@ -1279,7 +1281,9 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
 	if (daos_crt_network_error(error) || error == -DER_TIMEDOUT ||
-	    error == -DER_GRPVER || error == -DER_STALE) {
+	    error == -DER_GRPVER || error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE) {
+		D_DEBUG(DB_REBUILD, DF_UUID" retry with error %d\n",
+			DP_UUID(task->dst_pool_uuid), error);
 		*opc = task->dst_rebuild_op;
 		return true;
 	}

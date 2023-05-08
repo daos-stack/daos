@@ -376,6 +376,8 @@ rebuild_destroy_pool_cb(void *data)
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
 		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
 				      NULL, true);
 		if (rc) {
@@ -908,7 +910,7 @@ rebuild_multiple_tgts(void **state)
 
 	test_get_leader(arg, &leader);
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	if (arg->myrank == 0) {
 		int fail_cnt = 0;
 
@@ -1122,7 +1124,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	rebuild_io(arg, &oid, 1);
 
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* HOLD rebuild ULT */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -1185,7 +1187,7 @@ rebuild_fail_all_replicas(void **state)
 	rebuild_io(arg, &oid, 1);
 
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	for (i = 0; i < layout->ol_nr; i++) {
 		int j;
 

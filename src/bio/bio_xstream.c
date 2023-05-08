@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -138,7 +138,7 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			goto out;
 		}
-#ifdef DAOS_RELEASE_BUILD
+#ifdef DAOS_BUILD_RELEASE
 		if (enable_rpc_srv) {
 			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
 			D_GOTO(out, rc = -DER_INVAL);
@@ -185,9 +185,13 @@ struct bio_faulty_criteria	glb_criteria;
 static inline void
 set_faulty_criteria(void)
 {
-	glb_criteria.fc_enabled = false;
-	glb_criteria.fc_max_io_errs = 5;
-	glb_criteria.fc_max_csum_errs = 5;
+	glb_criteria.fc_enabled = true;
+	glb_criteria.fc_max_io_errs = 10;
+	/*
+	 * FIXME: Don't enable csum error criterion for now, otherwise, targets
+	 *	  be unexpectedly down in CSUM tests.
+	 */
+	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
 	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
 	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
@@ -1272,7 +1276,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
 
 		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-			bio_fini_health_monitoring(ctxt->bxc_blobstore);
+			bio_fini_health_monitoring(ctxt);
 
 		ctxt->bxc_blobstore = NULL;
 	}

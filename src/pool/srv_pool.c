@@ -2758,7 +2758,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			D_GOTO(out_svc, rc);
 	}
 
-	ds_rebuild_running_query(in->pci_op.pi_uuid, &out->pco_rebuild_ver);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3685,9 +3684,6 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
-
-	if (version >= 5)
-		ds_rebuild_running_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_ver);
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -5858,15 +5854,19 @@ pool_svc_rfcheck_ult(void *arg)
 
 	do {
 		/* retry until some one stop the pool svc(rc == 1) or succeed */
-		rc = ds_cont_rdb_iterate(svc->ps_uuid, cont_rf_check_cb,
+		rc = ds_cont_rdb_iterate(svc->ps_cont_svc, cont_rf_check_cb,
 					 &svc->ps_rfcheck_sched);
 		if (rc >= 0)
 			break;
-		D_ERROR(DF_UUID" check rf with %d and retry\n", DP_UUID(svc->ps_uuid), rc);
+
+		D_DEBUG(DB_MD, DF_UUID" check rf with %d and retry\n",
+			DP_UUID(svc->ps_uuid), rc);
+
 		dss_sleep(0);
 	} while (1);
 
 	sched_end(&svc->ps_rfcheck_sched);
+	D_INFO("RF check finished for "DF_UUID"\n", DP_UUID(svc->ps_uuid));
 	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
 }
 
@@ -5908,6 +5908,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
+	uint32_t		rebuild_ver = 0;
 	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
 	int			rc;
@@ -5915,6 +5916,19 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	D_DEBUG(DB_MD, DF_UUID": opc=%u exclude_rank=%d ntgts=%d ntgt_addrs=%d\n",
 		DP_UUID(svc->ps_uuid), opc, exclude_rank, tgts->pti_number,
 		tgt_addrs == NULL ? 0 : tgt_addrs->pta_number);
+
+	/* Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	 * updating the pool map during rebuild, which might screw the object layout.
+	 */
+	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc, DER_BUSY);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)

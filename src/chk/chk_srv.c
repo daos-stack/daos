@@ -20,28 +20,40 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	struct chk_start_in	*csi = crt_req_get(rpc);
 	struct chk_start_out	*cso = crt_reply_get(rpc);
 	struct ds_pool_clues	 clues = { 0 };
+	d_rank_t		*rank;
 	int			 rc;
 
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
 			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags, &clues);
+	if (rc > 0) {
+		D_ALLOC_PTR(rank);
+		if (rank == NULL) {
+			rc = -DER_NOMEM;
+			cso->cso_cmp_ranks.ca_count = 0;
+			cso->cso_cmp_ranks.ca_arrays = NULL;
+		} else {
+			*rank = dss_self_rank();
+			cso->cso_cmp_ranks.ca_count = 1;
+			cso->cso_cmp_ranks.ca_arrays = rank;
+		}
+	} else {
+		cso->cso_cmp_ranks.ca_count = 0;
+		cso->cso_cmp_ranks.ca_arrays = NULL;
+	}
 
 	cso->cso_status = rc;
-	cso->cso_rank = dss_self_rank();
 	cso->cso_clues.ca_count = clues.pcs_len;
 	cso->cso_clues.ca_arrays = clues.pcs_array;
+	cso->cso_rank_cap = cso->cso_cmp_ranks.ca_count;
+	cso->cso_clue_cap = cso->cso_clues.ca_count;
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the leader are on the same rank, we will not go through
-	 * CRT proc function that will copy the clues into related RPC reply buffer. Then
-	 * has to keep the clues for a while until the check leader completed aggregating
-	 * the result for this local engine. And then the check leader will release it.
-	 */
-	if (cso->cso_status < 0 || !chk_is_on_leader(csi->csi_gen, csi->csi_leader_rank, true))
+	if (cso->cso_status < 0)
 		ds_pool_clues_fini(&clues);
 }
 
@@ -50,12 +62,29 @@ ds_chk_stop_hdlr(crt_rpc_t *rpc)
 {
 	struct chk_stop_in	*csi = crt_req_get(rpc);
 	struct chk_stop_out	*cso = crt_reply_get(rpc);
+	d_rank_t		*rank;
 	int			 rc;
 
 	rc = chk_engine_stop(csi->csi_gen, csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays);
+	if (rc > 0) {
+		D_ALLOC_PTR(rank);
+		if (rank == NULL) {
+			rc = -DER_NOMEM;
+			cso->cso_ranks.ca_count = 0;
+			cso->cso_ranks.ca_arrays = NULL;
+		} else {
+			*rank = dss_self_rank();
+			cso->cso_ranks.ca_count = 1;
+			cso->cso_ranks.ca_arrays = rank;
+		}
+	} else {
+		cso->cso_ranks.ca_count = 0;
+		cso->cso_ranks.ca_arrays = NULL;
+	}
+
 
 	cso->cso_status = rc;
-	cso->cso_rank = dss_self_rank();
+	cso->cso_cap = cso->cso_ranks.ca_count;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check stop: "DF_RC"\n", DP_RC(rc));
@@ -74,10 +103,12 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 			      &shard_nr, &shards);
 	if (rc != 0) {
 		cqo->cqo_status = rc;
+		cqo->cqo_cap = 0;
 		cqo->cqo_shards.ca_count = 0;
 		cqo->cqo_shards.ca_arrays = NULL;
 	} else {
 		cqo->cqo_status = 0;
+		cqo->cqo_cap = shard_nr;
 		cqo->cqo_shards.ca_count = shard_nr;
 		cqo->cqo_shards.ca_arrays = shards;
 	}
@@ -86,13 +117,7 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the leader are on the same rank, we will not go through
-	 * CRT proc function that will copy the shards into related RPC reply buffer. Then
-	 * has to keep the shards for a while until the check leader completed aggregating
-	 * the result for this local engine. And then the check leader will release it.
-	 */
-	if (cqo->cqo_status < 0 || !chk_is_on_leader(cqi->cqi_gen, -1, false))
+	if (cqo->cqo_status < 0)
 		chk_query_free(shards, shard_nr);
 }
 
@@ -132,20 +157,13 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	struct chk_cont_list_in		*ccli = crt_req_get(rpc);
 	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
 	uuid_t				*conts = NULL;
-	d_rank_t			 myrank = dss_self_rank();
 	uint32_t			 count = 0;
 	int				 rc = 0;
-	bool				 remote;
-
-	if (ccli->ccli_rank != myrank)
-		remote = true;
-	else
-		remote = false;
 
 	rc = chk_engine_cont_list(ccli->ccli_gen, ccli->ccli_pool, &conts, &count);
 
 	cclo->cclo_status = rc;
-	cclo->cclo_rank = myrank;
+	cclo->cclo_cap = count;
 	cclo->cclo_conts.ca_arrays = conts;
 	cclo->cclo_conts.ca_count = count;
 
@@ -153,14 +171,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the PS leader are on the same rank, we will not go
-	 * through CRT proc function that will copy the containers' uuids into related
-	 * RPC reply buffer. Then has to keep the containers' uuids for a while until
-	 * the PS leader completed aggregating the result for the local shard. And then
-	 * the PS leader will release the buffer.
-	 */
-	if (cclo->cclo_status < 0 || remote)
+	if (cclo->cclo_status < 0)
 		D_FREE(conts);
 }
 

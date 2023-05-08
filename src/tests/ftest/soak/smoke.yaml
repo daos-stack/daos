@@ -72,7 +72,8 @@ container_reserved:
 smoke:
   name: soak_smoke
   # smoke test timeout in hours
-  test_timeout: 0.4
+  test_timeout:
+    test_soak_smoke: 0.4
   joblist:
     - ior_smoke
     - fio_smoke

@@ -65,7 +65,7 @@ extern "C" {
 	/** Try again */						\
 	ACTION(DER_AGAIN,		(DER_ERR_GURT_BASE + 13),	\
 	       Try again)						\
-	/** incompatible protocol */					\
+	/** Incompatible protocol */					\
 	ACTION(DER_PROTO,		(DER_ERR_GURT_BASE + 14),	\
 	       Incompatible protocol)					\
 	/** not initialized */						\
@@ -158,7 +158,10 @@ extern "C" {
 	/** Invalid user/group permissions.*/				\
 	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
 	       Unable to access shared memory segment due to		\
-	       incompatible user or group permissions)
+	       incompatible user or group permissions)			\
+	/** Fatal (non-retry-able) transport layer mercury error */	\
+	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
+	       Fatal transport layer mercury error)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
@@ -290,8 +293,10 @@ extern "C" {
 	       Unable to access one or more certificates)		\
 	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
 	       Invalid x509 certificate)				\
+	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45),	\
+	       VOS partial update error)				\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 45),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 46),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

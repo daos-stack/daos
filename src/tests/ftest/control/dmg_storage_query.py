@@ -13,7 +13,6 @@ from general_utils import list_to_str
 
 
 class DmgStorageQuery(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
@@ -46,6 +45,7 @@ class DmgStorageQuery(ControlTestBase):
         if errors:
             self.fail("Found {} device(s) not in the {} state".format(errors, state))
 
+    @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_devices(self):
         """
         JIRA ID: DAOS-3925
@@ -58,7 +58,7 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
         # Get the storage device information, parse and check devices info
-        device_info = get_storage_query_device_info(self, self.dmg)
+        device_info = get_storage_query_device_info(self.dmg)
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
@@ -85,7 +85,7 @@ class DmgStorageQuery(ControlTestBase):
         """
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
-        pool_info = get_storage_query_pool_info(self, self.dmg, verbose=True)
+        pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies
         errors = 0
@@ -113,7 +113,7 @@ class DmgStorageQuery(ControlTestBase):
 
         # Destroy pool and get pool information and check there is no pool
         self.pool.destroy()
-        if get_storage_query_pool_info(self, self.dmg, verbose=True):
+        if get_storage_query_pool_info(self.dmg, verbose=True):
             self.fail(
                 "Pool info detected in dmg storage query list-pools output after pool destroy")
 
@@ -130,7 +130,7 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_health
         """
         errors = []
-        device_info = get_storage_query_device_info(self, self.dmg, health=True)
+        device_info = get_storage_query_device_info(self.dmg, health=True)
         for device in device_info:
             self.log.info("Health Info for %s:", device['uuid'])
             for key in sorted(device['health']):
@@ -171,7 +171,7 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
         # Get device info and check state is NORMAL
-        device_info = get_storage_query_device_info(self, self.dmg)
+        device_info = get_storage_query_device_info(self.dmg)
         self.check_dev_state(device_info, "NORMAL")
 
         # Set device to faulty state and check that it's in FAULTY state
@@ -182,5 +182,5 @@ class DmgStorageQuery(ControlTestBase):
                 self.fail("Error setting the faulty state for {}".format(device['uuid']))
 
         # Check that devices are in FAULTY state
-        device_info = get_storage_query_device_info(self, self.dmg)
+        device_info = get_storage_query_device_info(self.dmg)
         self.check_dev_state(device_info, "EVICTED")

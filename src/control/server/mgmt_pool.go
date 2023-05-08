@@ -748,13 +748,12 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 	return resp, nil
 }
 
-// PoolEvict implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+func (svc *mgmtSvc) evictPoolConnections(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolEvict, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +763,31 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
 	}
 
+	if resp.Count > 0 {
+		svc.log.Infof("pool %s: evicted %d handle(s)", req.Id, resp.Count)
+	}
 	return resp, nil
+}
+
+// PoolEvict handles requests to evict pool handles. When a request contains
+// multiple pool handles, it will be added to a batch request and processed
+// with other handle eviction requests in order to reduce the number of dRPCs.
+func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	if len(req.Handles) == 0 {
+		// If we're not evicting a set of handles, then we shouldn't bother with trying
+		// to batch up the requests from multiple agents.
+		return svc.evictPoolConnections(ctx, req)
+	}
+
+	msg, err := svc.submitBatchRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return msg.(*mgmtpb.PoolEvictResp), nil
 }
 
 // PoolExclude implements the method defined for the Management Service.
