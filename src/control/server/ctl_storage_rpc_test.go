@@ -174,6 +174,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ctlpb.ResponseState),
 				},
+				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
 		"successful scan; missing bdev in config": {
@@ -199,6 +200,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ctlpb.ResponseState),
 				},
+				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
 		"successful scan; multiple bdev tiers in config": {
@@ -233,6 +235,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ctlpb.ResponseState),
 				},
+				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
 		"spdk scan failure": {
@@ -658,7 +661,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					Ctrlrs: proto.NvmeControllers{newCtrlrPBwBasic(1)},
 					State:  new(ctlpb.ResponseState),
 				},
-				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
 		"engine up; scan bdev basic; missing bdev in config": {
@@ -682,7 +686,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					Ctrlrs: proto.NvmeControllers{},
 					State:  new(ctlpb.ResponseState),
 				},
-				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
 		"engine up; scan bdev health": {
