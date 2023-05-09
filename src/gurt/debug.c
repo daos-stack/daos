@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -554,6 +554,8 @@ d_log_init(void)
 	char	*log_file;
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 	int	 rc;
+	char	*buffer = NULL;
+	char	*user = NULL;
 
 	log_file = getenv(D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
@@ -561,8 +563,21 @@ d_log_init(void)
 		log_file = NULL;
 	}
 
+	/* Append username to log file name */
+	if (strcmp(log_file, "/dev/null") != 0 && log_file != NULL) {
+		user = getlogin();
+		if (user != NULL) {
+			D_ASPRINTF(buffer, "%s.%s.log", log_file, user);
+			if (buffer == NULL)
+				return -DER_NOMEM;
+			log_file = buffer;
+		} else
+			D_PRINT_ERR("username is NULL, so skip and continuing.\n");
+	}
+
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
 			    NULL);
+	D_FREE(buffer);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);

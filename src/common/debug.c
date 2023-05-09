@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,6 +149,8 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
 	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
 	int	rc;
+	char	*buffer = NULL;
+	char	*user = NULL;
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -164,8 +166,21 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 		logfile = NULL;
 	}
 
+	/* Append username to log file name */
+	if (strcmp(logfile, "/dev/null") != 0 && logfile != NULL) {
+		user = getlogin();
+		if (user != NULL) {
+			D_ASPRINTF(buffer, "%s.%s.log", logfile, user);
+			if (buffer == NULL)
+				return -DER_NOMEM;
+			logfile = buffer;
+		} else
+			D_PRINT_ERR("username is NULL, so skip and continuing.\n");
+	}
+
 	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
+	D_FREE(buffer);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));

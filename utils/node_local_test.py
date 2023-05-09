@@ -29,6 +29,7 @@ import subprocess  # nosec
 import tempfile
 import pickle  # nosec
 import shutil
+import getpass
 import xattr
 import junit_xml
 import tabulate
@@ -105,7 +106,7 @@ class NLTConf():
 
     def __del__(self):
         self.flush_bz2()
-        os.rmdir(self.dfuse_parent_dir)
+        shutil.rmtree(self.dfuse_parent_dir)
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -3973,6 +3974,11 @@ def log_test(conf,
                 return "%3.1f%s%s" % (num, unit, suffix)
             num /= 1024.0
         return "%.1f%s%s" % (num, 'Yi', suffix)
+
+    # D_LOG_FILE will append the username in log file so update the default
+    # log file name of client only
+    if os.path.exists(f'{filename}.{getpass.getuser()}.log'):
+        filename = filename + '.' + getpass.getuser() + '.log'
 
     if os.path.exists(f'{filename}.old'):
         raise NLTestFail('Log file exceeded max size')
