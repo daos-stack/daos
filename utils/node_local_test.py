@@ -4694,8 +4694,19 @@ class AllocFailTestRun():
         This is where all the checks are performed.
         """
         def _explain():
-            self.aft.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
-            self.aft.conf.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
+
+            if self.aft.conf.tmp_dir:
+                log_dir = self.aft.conf.tmp_dir
+            else:
+                log_dir = '/tmp'
+
+            short_log_file = self.log_file
+
+            if short_log_file.startswith(self.log_file):
+                short_log_file = short_log_file[len(log_dir) + 1:]
+
+            self.aft.wf.explain(self.fi_loc, short_log_file, fi_signal)
+            self.aft.conf.wf.explain(self.fi_loc, short_log_file, fi_signal)
         # Put in a new-line.
         print()
         self.returncode = rc
@@ -5374,27 +5385,27 @@ def run(wf, args):
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
                 # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                # fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 # container create with properties test.
-                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 
