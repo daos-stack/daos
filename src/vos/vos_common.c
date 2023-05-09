@@ -744,6 +744,11 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
+			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+
 	return vp_metrics;
 }
 

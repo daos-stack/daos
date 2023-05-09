@@ -1669,9 +1669,8 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
-	uint64_t		 total_bytes = 0, rpl_entries = 0;
-	uint64_t		 s_us, e_us;
-	struct timespec		 tms;
+	uint64_t		 total_bytes = 0, rpl_entries = 0, total_tx = 0;
+	uint64_t		 s_us;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
@@ -1687,10 +1686,8 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	start_id = tx_id;
 
 	/* upper layer (VOS) rehydration metrics if any */
-	if (wrs != NULL) {
-		clock_gettime(CLOCK_REALTIME, &tms);
-		s_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
-	}
+	if (wrs != NULL)
+		s_us = daos_getutime();
 
 load_wal:
 	tight_loop = 0;
@@ -1742,6 +1739,7 @@ load_wal:
 		if (wrs != NULL) {
 			total_bytes += (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
 			rpl_entries += hdr->th_tot_ents;
+			total_tx++;
 		}
 
 		/* Bump last committed tx ID in WAL super info */
@@ -1795,11 +1793,10 @@ out:
 
 		/* upper layer (VOS) rehydration metrics */
 		if (wrs != NULL) {
-			clock_gettime(CLOCK_REALTIME, &tms);
-			e_us = (tms.tv_sec * 1000000) + (tms.tv_nsec / 1000);
-			wrs->wrs_tm = e_us - s_us;
+			wrs->wrs_tm = daos_getutime() - s_us;
 			wrs->wrs_sz = total_bytes;
 			wrs->wrs_entries = rpl_entries;
+			wrs->wrs_tx_cnt = total_tx;
 		}
 	} else {
 		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));

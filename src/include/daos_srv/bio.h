@@ -1007,6 +1007,7 @@ struct bio_wal_rp_stats {
 	uint64_t	wrs_tm;		/* rehydration time */
 	uint64_t	wrs_sz;		/* bytes replayed */
 	uint64_t	wrs_entries;	/* replayed entries count */
+	uint64_t	wrs_tx_cnt;	/* total transactions */
 };
 
 /*

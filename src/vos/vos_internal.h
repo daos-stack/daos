@@ -213,6 +213,7 @@ struct vos_rh_metrics {
 	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
 	struct d_tm_node_t	*vrh_count;		/* Total replay count */
 	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
+	struct d_tm_node_t	*vrh_tx_cnt;		/* Total replayed TX count */
 };
 
 struct vos_pool_metrics {
