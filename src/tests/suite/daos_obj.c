@@ -3483,6 +3483,12 @@ io_obj_key_query(void **state)
 	rc = daos_tx_close(th, NULL);
 	assert_rc_equal(rc, 0);
 
+	flags = DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -4888,10 +4894,8 @@ oit_list_filter(void **state)
 	daos_obj_id_t		*oid_list;
 	char			*ow_buf;
 	char			*fbuf;
-	d_iov_t			 marker;
-	uint64_t		 mark_data;
-	const char		dkey[] = "dkey";
-	const char		akey[] = "akey";
+	d_iov_t			marker;
+	uint64_t		mark_data;
 	daos_size_t		size = 128;
 	daos_epoch_t		snap_epoch;
 	daos_handle_t		toh;
@@ -4919,6 +4923,9 @@ oit_list_filter(void **state)
 	assert_non_null(oid_list);
 
 	for (i = 0; i < OIT_TEST_OID_NR; i++) {
+		const char		dkey[] = "dkey";
+		const char		akey[] = "akey";
+
 		oid[i] = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
 

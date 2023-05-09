@@ -225,6 +225,7 @@ type (
 	}
 
 	GetAttachInfoResp struct {
+		System        string                `json:"sys"`
 		ServiceRanks  []*PrimaryServiceRank `json:"rank_uris"`
 		MSRanks       []uint32              `json:"ms_ranks"`
 		ClientNetHint ClientNetworkHint     `json:"client_net_hint"`

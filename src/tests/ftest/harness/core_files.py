@@ -7,9 +7,9 @@ import os
 from random import choice
 from re import findall
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
+from apricot import TestWithServers
 from run_utils import run_remote, run_local, RunException
 
 

@@ -446,8 +446,8 @@ sys.path.append('site_scons')"""
             if msg.symbol in ('condition-evals-to-constant'):
                 promote_to_error = True
 
-            # All non-scons code should be clean now.
-            if scons:
+            # All scons and ftest code should be clean now.
+            if scons or ftest:
                 promote_to_error = True
 
             if promote_to_error:
@@ -547,7 +547,7 @@ def get_git_files(directory=None):
     if directory:
         cmd.append(directory)
 
-    ret = subprocess.run(cmd, check=True, capture_output=True)
+    ret = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
