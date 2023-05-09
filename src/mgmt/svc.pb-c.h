@@ -328,6 +328,10 @@ struct  _Mgmt__GetAttachInfoResp
    */
   uint64_t data_version;
   /*
+   * Name of the DAOS system
+   */
+  char *sys;
+  /*
    * Rank URIs for additional providers
    */
   size_t n_secondary_rank_uris;
@@ -340,7 +344,7 @@ struct  _Mgmt__GetAttachInfoResp
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL, 0, 0,NULL, 0,NULL }
+    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 struct  _Mgmt__PrepShutdownReq

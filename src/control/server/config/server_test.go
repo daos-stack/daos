@@ -635,65 +635,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 		},
-		"insufficient hugepages set in config; bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0"),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
-		},
-		"insufficient hugepages set in config; emulated bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("file").
-								WithBdevDeviceList("/tmp/daos-bdev").
-								WithBdevFileSize(16),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
-		},
-		"insufficient hugepages set in config; no bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-						),
-					)
-			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(2048).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
-							WithScmMountPoint("/foo"),
-					),
-				),
-		},
 		"zero hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().

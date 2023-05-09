@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -100,8 +100,9 @@ message GetAttachInfoResp {
 	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
 	ClientNetHint client_net_hint = 4; // Primary provider hint
 	uint64 data_version = 5; // Version of the system database.
-	repeated RankUri secondary_rank_uris = 6; // Rank URIs for additional providers
-	repeated ClientNetHint secondary_client_net_hints = 7; // Hints for additional providers
+	string sys = 6;			// Name of the DAOS system
+	repeated RankUri secondary_rank_uris = 7; // Rank URIs for additional providers
+	repeated ClientNetHint secondary_client_net_hints = 8; // Hints for additional providers
 }
 
 message PrepShutdownReq {

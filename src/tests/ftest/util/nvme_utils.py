@@ -7,6 +7,7 @@ import threading
 import re
 import time
 
+from avocado import fail_on
 from avocado.core.exceptions import TestFail
 
 from dmg_utils import get_storage_query_device_uuids, get_dmg_response
@@ -17,13 +18,15 @@ from job_manager_utils import get_job_manager
 from server_utils import ServerFailed
 
 
-def get_device_ids(test, dmg, servers):
+def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers.
 
     Args:
-        test (Test): avocado test class
         dmg (DmgCommand): a DmgCommand class instance.
         servers (list): list of server hosts.
+
+    Raises:
+        CommandFailure: if there is an error obtaining the NVMe Device ID
 
     Returns:
         devices (dictionary): Device UUID for servers.
@@ -33,7 +36,7 @@ def get_device_ids(test, dmg, servers):
     for host in servers:
         dmg.hostlist = host
         devices[host] = []
-        for uuid_list in get_storage_query_device_uuids(test, dmg).values():
+        for uuid_list in get_storage_query_device_uuids(dmg).values():
             devices[host].extend(uuid_list)
     return devices
 
@@ -56,10 +59,13 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     """
     dmg.hostlist = server
     kwargs['uuid'] = uuid
-    response = get_dmg_response(test, dmg.storage_set_faulty, **kwargs)
+    try:
+        response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+    except CommandFailure as error:
+        test.fail(str(error))
 
     # Add a tearDown method to reset the faulty device
-    test.register_cleanup(reset_fault_device, test=test, dmg=dmg, server=server, uuid=uuid)
+    test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
 
     if pool:
         # Wait for rebuild to start
@@ -70,11 +76,10 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     return response
 
 
-def reset_fault_device(test, dmg, server, uuid):
+def reset_fault_device(dmg, server, uuid):
     """Call dmg storage led identify to reset the device.
 
     Args:
-        test (Test): avocado test class
         dmg (DmgCommand): a DmgCommand class instance
         server (NodeSet): host on which to issue the dmg storage led identify
         uuid (str): device to reset
@@ -86,9 +91,8 @@ def reset_fault_device(test, dmg, server, uuid):
     error_list = []
     dmg.hostlist = server
     try:
-        get_dmg_response(test, dmg.storage_led_identify, reset=True, ids=uuid)
-    except TestFail as error:
-        test.log.info("#  %s", error)
+        get_dmg_response(dmg.storage_led_identify, reset=True, ids=uuid)
+    except CommandFailure as error:
         error_list.append("Error resetting device {}: {}".format(uuid, error))
     return error_list
 
@@ -219,7 +223,7 @@ class ServerFillUp(IorTestBase):
         # Get the block size based on the capacity to be filled. For example
         # If nvme_free_space is 100G and to fill 50% of capacity.
         # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space to be filled.
-        _tmp_block_size = ((free_space / 100) * self.capacity)
+        _tmp_block_size = (free_space / 100) * self.capacity
 
         # Check the IOR object type to calculate the correct block size.
         _replica = re.findall(r'_(.+?)G', self.ior_local_cmd.dfs_oclass.value)
@@ -252,10 +256,11 @@ class ServerFillUp(IorTestBase):
 
         return block_size
 
+    @fail_on(CommandFailure)
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""
         # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(self, self.dmg, self.hostlist_servers)
+        device_ids = get_device_ids(self.dmg, self.hostlist_servers)
 
         # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
         # single drive from single server
