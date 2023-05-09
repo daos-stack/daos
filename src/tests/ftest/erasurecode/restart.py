@@ -45,20 +45,26 @@ class EcodServerRestart(TestWithServers):
         Returns:
             bool: if the result was of pool free space equal to or greater than the expected free.
         """
-        current_free = self.pool.get_total_free_space(refresh=True)
-        self.log.info("=current_free  space: %s", f"{current_free:,}")
-        self.log.info("=expected_free space: %s", f"{expected_free:,}")
+        tier_stats = self.pool.get_tier_stats(refresh=True)
+        scm_free = tier_stats["scm"]["free"]
+        nvme_free = tier_stats["nvme"]["free"]
+        current_free = scm_free + nvme_free
+        self.log.info("=Current pool scm   free: %s", f"{scm_free:,}")
+        self.log.info("=Current pool nvme  free: %s", f"{nvme_free:,}")
+        self.log.info("=Current pool total free: %s", f"{current_free:,}")
+        self.log.info("=expected_free space:     %s", f"{expected_free:,}")
         return expected_free <= current_free
 
     def run_ior_containers(self, containers, ior_kwargs):
         """Run IOR on multiple containers.
 
         Args:
-            containers (dict): container dictionary, oclass(key): container(value)
+            containers (dict): container dictionary, container(key): oclass(value)
             ior_kwargs (dict): dictionary of ior arguments
         """
-        for oclass in list(containers.keys()):
-            ior_kwargs["container"] = containers[oclass]
+        for container in list(containers.keys()):
+            oclass = containers[container]
+            ior_kwargs["container"] = container
             ior_kwargs["ior_params"]["dfs_oclass"] = oclass
             ior_kwargs["ior_params"]["dfs_dir_oclass"] = oclass
             ior_kwargs["log"] = "ior_write_container_test_{}.log".format(oclass)
@@ -84,21 +90,22 @@ class EcodServerRestart(TestWithServers):
         processes = self.params.get("ppn", "/run/ior/client_processes/*", default=2)
         ppn = self.params.get("np", "/run/ior/client_processes/*")
         obj_class = self.params.get("dfs_oclass_list", "/run/ior/objectclass/*")
+        aggr_threshold = float(self.params.get("threshold", "/run/aggregation/*")[:-1])/100
         block_size = block_transfer_sizes[0]
         transfer_size = block_transfer_sizes[1]
         self.log_step("Create pool and containers")
         self.pool = self.get_pool()
         containers = {}
-
         for oclass in obj_class:
             # Skip the object type if server count does not meet the minimum EC object
             # server count
             if oclass[1] > self.server_count:
                 continue
             rd_fac = extract_redundancy_factor(oclass[0])
-            containers[oclass[0]] = self.get_container(
+            container = self.get_container(
                 self.pool, daos_command=self.get_daos_command(), oclass=oclass[0],
                 properties="rd_fac:{}".format(rd_fac))
+            containers[container] = oclass[0]
 
         # 2.
         self.log_step("Disable aggregation")
@@ -106,7 +113,12 @@ class EcodServerRestart(TestWithServers):
 
         # 3.
         self.log_step("Get initial pool free space from dmg pool query")
-        initial_free_space = self.pool.get_total_free_space(refresh=True)
+        tier_stats = self.pool.get_tier_stats(refresh=True)
+        scm_free = tier_stats["scm"]["free"]
+        nvme_free = tier_stats["nvme"]["free"]
+        initial_free_space = scm_free + nvme_free
+        self.log.info("=Initial pool scm   free space: %s", f"{scm_free:,}")
+        self.log.info("=Initial pool nvme  free space: %s", f"{nvme_free:,}")
         self.log.info("=Initial pool free space: %s", f"{initial_free_space:,}")
 
         # 4.
@@ -144,6 +156,7 @@ class EcodServerRestart(TestWithServers):
         self.log_step("Check for free space after IOR write all EC object data to container")
         free_space_after_ior = self.pool.get_total_free_space(refresh=True)
         space_used_by_ior = initial_free_space - free_space_after_ior
+        expected_free_aggr = int(free_space_after_ior - space_used_by_ior * aggr_threshold)
         self.log.info("=After 1st IOR write, pool free space: %s", f"{free_space_after_ior:,}")
         self.log.info("=Space used by 1st IOR: %s", f"{space_used_by_ior:,}")
         self.assertLess(free_space_after_ior, initial_free_space,
@@ -174,7 +187,7 @@ class EcodServerRestart(TestWithServers):
         if agg_check == "Restart_after_agg":
             # setp-9 for Restart_after_agg
             self.log_step("Verify aggregation is completed before engine restart")
-            self.verify_aggreation(free_space_after_ior)
+            self.verify_aggreation(expected_free_aggr)
 
         # 9.
         self.log_step("Stop the engines (dmg system stop)")
@@ -187,7 +200,7 @@ class EcodServerRestart(TestWithServers):
         if agg_check == "Restart_before_agg":
             # 11.
             self.log_step("Verify aggregation is completed after engine restart")
-            self.verify_aggreation(free_space_after_ior)
+            self.verify_aggreation(expected_free_aggr)
 
         # 12.
         self.log_step("Verify data after aggregation (ior read)")
@@ -214,9 +227,9 @@ class EcodServerRestart(TestWithServers):
             6. Run IOR write again with the same data to each container
             7. Verify the free space after 2nd IOR is less at least twice the size of space used by
                1st IOR from the initial free space
-            8. Stop the engines (dmg system stop)
-            9. Restart the engines (dmg system start)
-            10. Enable aggregation
+            8. Enable aggregation
+            9. Stop the engines (dmg system stop)
+            10. Restart the engines (dmg system start)
             11. Verify aggregation is completed after engine restart
             12. Verify data after aggregation (ior read)
 
