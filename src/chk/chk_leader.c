@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -597,18 +597,18 @@ report:
 
 	rc = chk_leader_report(&cru, &seq, &decision);
 
-	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(result != 0 || rc < 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects dangling pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", handle_rc %d, report_rc %d, decision %d\n",
 		 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid),
 		 act, option_nr ? "need interact" : "no interact", seq, result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -645,7 +645,7 @@ report:
 	goto report;
 
 out:
-	chk_leader_post_repair(ins, NULL, &result, true, false);
+	chk_leader_post_repair(ins, NULL, &result, rc <= 0, false);
 
 	return result;
 }
@@ -798,20 +798,20 @@ report:
 
 	rc = chk_leader_report(&cru, &seq, &decision);
 
-	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(result != 0 || rc < 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects orphan pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", advice %d, handle_rc %d, report_rc %d, decision %d\n", DP_LEADER(ins),
 		 DP_UUID(cpr->cpr_uuid), act, option_nr ? "need interact" : "no interact",
 		 seq, cpr->cpr_advice, result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		/* Skip the orphan if failed to interact with admin for further action. */
 		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -884,7 +884,7 @@ out:
 	 * to fix related inconsistency), then notify check engines to remove related
 	 * pool record and bookmark.
 	 */
-	chk_leader_post_repair(ins, cpr, &result, true, cpr->cpr_skip ? true : false);
+	chk_leader_post_repair(ins, cpr, &result, rc <= 0, cpr->cpr_skip ? true : false);
 
 	return result;
 }
@@ -1114,20 +1114,20 @@ report:
 
 	rc = chk_leader_report(&cru, &seq, &decision);
 
-	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(result != 0 || rc < 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects corrupted pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", advice %d, handle_rc %d, report_rc %d, decision %d\n", DP_LEADER(ins),
 		 DP_UUID(cpr->cpr_uuid), act, option_nr ? "need interact" : "no interact",
 		 seq, cpr->cpr_advice, result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		/* Skip the corrupted pool if failed to interact with admin for further action. */
 		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -1210,7 +1210,7 @@ out:
 	 * to fix related inconsistency), then notify check engines to remove related
 	 * pool record and bookmark.
 	 */
-	chk_leader_post_repair(ins, cpr, &result, true, cpr->cpr_skip ? true : false);
+	chk_leader_post_repair(ins, cpr, &result, rc <= 0, cpr->cpr_skip ? true : false);
 
 	return result;
 }
@@ -1459,7 +1459,7 @@ report:
 
 	rc = chk_leader_report(&cru, &seq, &decision);
 
-	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(result != 0 || rc < 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects corrupted label for pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", MS label %s, PS label %s, handle_rc %d, report_rc %d, decision %d\n",
 		 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), act,
@@ -1467,14 +1467,14 @@ report:
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
 		 clue->pc_label != NULL ? clue->pc_label : "(null)", result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_total++;
 		cbk->cb_statistics.cs_failed++;
 		/* It is unnecessary to skip the pool if failed to handle label inconsistency. */
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0) {
+	if (rc > 0 || result != 0 || option_nr == 0) {
 		if (act == CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS && label != clue->pc_label) {
 			D_FREE(cpr->cpr_label);
 			cpr->cpr_label = label;
@@ -1541,7 +1541,8 @@ out:
 	 * If decide to delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP,
 	 * then it is unnecessary to update the leader bookmark.
 	 */
-	chk_leader_post_repair(ins, cpr, &result, cpr->cpr_delay_label ? false : true, false);
+	chk_leader_post_repair(ins, cpr, &result,
+			       (rc > 0 || cpr->cpr_delay_label) ? false : true, false);
 
 	return result;
 }
@@ -3274,6 +3275,11 @@ out:
 	return rc;
 }
 
+/*
+ * \return	Positive value if interaction is interrupted, such as check stop.
+ *		Zero on success.
+ *		Negative value if error.
+ */
 int
 chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 {
@@ -3285,7 +3291,6 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	int			 rc;
-	bool			 exit = false;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3361,14 +3366,14 @@ log:
 	ABT_mutex_lock(cpr->cpr_mutex);
 
 again:
-	if (!ins->ci_sched_running || cpr->cpr_exiting) {
-		exit = true;
+	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+		*decision = cpr->cpr_action;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;
 	}
 
-	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
-		*decision = cpr->cpr_action;
+	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+		rc = 1;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;
 	}
@@ -3379,8 +3384,8 @@ again:
 
 out:
 	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
-	    (rc != 0 || exit || (cpr != NULL &&
-				 cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)))
+	    (rc != 0 || (cpr != NULL &&
+			 cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)))
 		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 
 	if ((rc != 0 || decision != NULL) && cpr != NULL)
