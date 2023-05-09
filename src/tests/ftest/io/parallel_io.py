@@ -38,8 +38,8 @@ class ParallelIo(FioBase, IorTestBase):
         """Create a TestPool object to use with ior."""
         self.pool.append(self.get_pool(connect=False))
 
-    def stat_bfree(self, path):
-        """Get stat bfree.
+    def _stat_free_blocks(self, path):
+        """Get stat free blocks.
 
         Args:
             path (str): path to get free block size of.
@@ -70,7 +70,7 @@ class ParallelIo(FioBase, IorTestBase):
         statvfs_list = []
         for _, pool in enumerate(self.pool):
             dfuse_pool_dir = str(path + "/" + pool.uuid)
-            statvfs_info = self.stat_bfree(dfuse_pool_dir)
+            statvfs_info = self._stat_free_blocks(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
             self.log.info("Statvfs List Output: %s", statvfs_list)
 

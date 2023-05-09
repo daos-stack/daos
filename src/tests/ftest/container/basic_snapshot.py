@@ -5,8 +5,9 @@
 """
 import random
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
+
+from apricot import TestWithServers
 from general_utils import get_random_bytes
 
 

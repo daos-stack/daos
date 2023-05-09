@@ -4542,11 +4542,10 @@ def test_pydaos_kv(server, conf):
     if failed:
         print("That's not good")
 
-    kv = None
-    print('Closing container and opening new one')
-    kv = container.get('my_test_kv')
-    kv = None
-    container = None
+    del kv
+    del container
+
+    print('Running PyDAOS container checker')
     daos.check(pool.label, "PYDAOS_NLT")
     # pylint: disable=protected-access
     daos._cleanup()
