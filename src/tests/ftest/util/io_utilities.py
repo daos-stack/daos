@@ -10,8 +10,9 @@ import shutil
 import tempfile
 import time
 
-from general_utils import get_random_bytes, DaosTestError
 from pydaos.raw import DaosApiError
+
+from general_utils import get_random_bytes, DaosTestError
 
 
 class DirTree():

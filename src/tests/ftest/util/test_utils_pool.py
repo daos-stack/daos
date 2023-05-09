@@ -203,6 +203,7 @@ class TestPool(TestDaosApiBase):
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.pool_query_delay = BasicParameter(None)
         self.acl_file = BasicParameter(None)
         self.label = BasicParameter(None, "TestPool")
         self.label_generator = label_generator
@@ -584,7 +585,7 @@ class TestPool(TestDaosApiBase):
         """Extend the pool to additional ranks.
 
         Args:
-            ranks (list): a list daos server ranks (int) to exclude
+            ranks (str): comma separate list of daos server ranks (int) to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -673,6 +674,12 @@ class TestPool(TestDaosApiBase):
                         "response. This timeout can be adjusted via the 'pool/pool_query_timeout' "
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
+
+                if self.pool_query_delay:
+                    self.log.info(
+                        "Waiting %s seconds before issuing next dmg pool query",
+                        self.pool_query_delay)
+                    sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
     def query_targets(self, *args, **kwargs):
@@ -1180,6 +1187,20 @@ class TestPool(TestDaosApiBase):
         """
         tier_stats = self.get_tier_stats(refresh)
         return sum(stat["free"] for stat in tier_stats.values())
+
+    def get_total_space(self, refresh=False):
+        """Get the pool total space.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Return:
+            total_space (int): pool total space.
+
+        """
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["total"] for stat in tier_stats.values())
 
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.

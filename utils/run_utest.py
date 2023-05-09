@@ -20,9 +20,6 @@ from junit_xml import TestSuite, TestCase
 import yaml
 
 
-HAS_CAPTURE = sys.version_info.major >= 3 and sys.version_info.minor >= 7
-
-
 def check_version():
     """Ensure python version is compatible"""
     if sys.version_info < (3, 6):
@@ -145,20 +142,18 @@ class ValgrindHelper():
         return cmd_prefix + cmd
 
 
-def run_cmd(cmd, capture_output=False, env=None):
+def run_cmd(cmd, output_log=None, env=None):
     """Run a command"""
-    print(f"RUNNING COMMAND {' '.join(cmd)}")
     # capture_output is only available in 3.7+
-    output = {}
-    if HAS_CAPTURE:
-        output["capture_output"] = capture_output
-    elif capture_output:
-        output["stdout"] = subprocess.PIPE
-        output["stderr"] = subprocess.PIPE
-    ret = subprocess.run(cmd, check=False, env=env, **output)
+    if output_log:
+        with open(output_log, "w", encoding="UTF-8") as output:
+            print(f"RUNNING COMMAND {' '.join(cmd)}\n    Log: {output_log}")
+            ret = subprocess.run(cmd, check=False, env=env, stdout=output,
+                                 stderr=subprocess.STDOUT)
+    else:
+        print(f"RUNNING COMMAND {' '.join(cmd)}")
+        ret = subprocess.run(cmd, check=False, env=env)
     print(f'rc is {ret.returncode}')
-    if capture_output:
-        return ret.returncode, ret.stdout, ret.stderr
     return ret.returncode
 
 
@@ -424,15 +419,6 @@ class Test():
 
         return True
 
-    def write_log(self, name, log_bytes):
-        """Write a log file"""
-        if len(log_bytes) == 0:
-            return
-
-        log_fname = os.path.join(self.log_dir(), name)
-        with open(log_fname, "wb") as log_file:
-            log_file.write(log_bytes)
-
     def run(self, base, memcheck, sudo):
         """Run the test"""
         cmd = [os.path.join(base, self.cmd[0])] + self.cmd[1:]
@@ -448,10 +434,8 @@ class Test():
             cmd = new_cmd
         self.last = cmd
 
-        retval, stdout, stderr = run_cmd(cmd, capture_output=True, env=self.env)
-
-        self.write_log("stdout.log", stdout)
-        self.write_log("stderr.log", stderr)
+        output_log = os.path.join(self.log_dir(), "output.log")
+        retval = run_cmd(cmd, output_log=output_log, env=self.env)
 
         return retval
 

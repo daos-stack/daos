@@ -82,7 +82,8 @@ faults:
 soak_faults:
   name: soak_faults
   # harasser test timeout in hours
-  test_timeout: 24
+  test_timeout:
+    test_soak_faults: 24
   joblist:
     - ior_faults
 # Commandline parameters
