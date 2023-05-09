@@ -343,8 +343,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
-		BypassCache: true, // init cache on first scan
+		DeviceList: getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
 	})
 	if err != nil {
 		err = errors.Wrap(err, "NVMe Scan Failed")
