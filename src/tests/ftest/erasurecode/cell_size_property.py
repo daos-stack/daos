@@ -48,9 +48,9 @@ class EcodCellSizeProperty(IorTestBase):
             Verify the cont ec_cell_sz property after IOR.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_ior,daos_cmd
-        :avocado: tags=ec_cell_property,test_ec_pool_property
+        :avocado: tags=EcodCellSizeProperty,ec_cell_property,test_ec_pool_property
         """
         ior_transfer_size = self.params.get("ior_transfer_size",
                                             '/run/ior/iorflags/*')
