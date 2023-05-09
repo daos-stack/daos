@@ -657,6 +657,7 @@ crt_hg_init(void)
 		env = getenv("HG_LOG_LEVEL");
 		if (!env)
 			HG_Set_log_level("warning");
+		HG_Set_log_subsys("hg,na");
 	}
 
 	/* import HG log */
