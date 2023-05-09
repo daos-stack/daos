@@ -126,8 +126,8 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/** Check settings have persisted */
 	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
-	D_INFO("Received request to set log masks '%s', masks are now %s\n",
-		req->masks, retbuf);
+	D_INFO("Received request to set log masks '%s' masks are now %s, debug streams (DD_MASK) "
+	       "set to '%s'\n", req->masks, retbuf, req->streams);
 
 	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);

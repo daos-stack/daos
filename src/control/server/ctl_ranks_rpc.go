@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,8 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -371,6 +373,24 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	return resp, nil
 }
 
+func updateSetLogMasksReq(log logging.Logger, cfg *engine.Config, req *ctlpb.SetLogMasksReq) error {
+	if req.Masks == "" {
+		req.Masks = cfg.LogMask
+	}
+	if req.Masks == "" {
+		return errors.New("no log_mask set in engine config")
+	}
+	if req.Streams == "" {
+		streams, err := cfg.ReadLogDbgStreams()
+		if err != nil {
+			return err
+		}
+		req.Streams = streams
+	}
+
+	return nil
+}
+
 // SetEngineLogMasks calls into each engine over dRPC to set loglevel at runtime.
 func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.SetLogMasksReq) (*ctlpb.SetLogMasksResp, error) {
 	if req == nil {
@@ -385,21 +405,12 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 			continue
 		}
 
-		if req.Masks == "" {
-			svc.log.Debugf("resetting engine %d log masks to server config values", ei.Index())
-			// no need to validate here as config value already validated on start-up
-			req.Masks = svc.srvCfg.Engines[idx].LogMask
-			streams, err := svc.srvCfg.Engines[idx].ReadLogDbgStreams()
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
-				continue
-			}
-			req.Streams = streams
-		}
-		if req.Masks == "" {
-			errs = append(errs, fmt.Sprintf("engine-%d: no log_mask set in engine config", ei.Index()))
+		if err := updateSetLogMasksReq(svc.log, svc.srvCfg.Engines[idx], req); err != nil {
+			errs = append(errs, errors.Wrapf(err, "engine-%d", ei.Index()).Error())
 			continue
 		}
+		svc.log.Debugf("setting engine %d log masks %q and debug streams %q", ei.Index(),
+			req.Masks, req.Streams)
 
 		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, req)
 		if err != nil {
