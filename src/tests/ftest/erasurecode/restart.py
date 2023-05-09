@@ -90,7 +90,7 @@ class EcodServerRestart(TestWithServers):
         processes = self.params.get("ppn", "/run/ior/client_processes/*", default=2)
         ppn = self.params.get("np", "/run/ior/client_processes/*")
         obj_class = self.params.get("dfs_oclass_list", "/run/ior/objectclass/*")
-        aggr_threshold = float(self.params.get("threshold", "/run/aggregation/*")[:-1])/100
+        aggr_threshold = float(self.params.get("threshold", "/run/aggregation/*")[:-1]) / 100
         block_size = block_transfer_sizes[0]
         transfer_size = block_transfer_sizes[1]
         self.log_step("Create pool and containers")
