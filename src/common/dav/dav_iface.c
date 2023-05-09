@@ -255,7 +255,7 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 		if (fd == -1)
 			return NULL;
 
-		if (ftruncate(fd, (off_t)sz) == -1) {
+		if (fallocate(fd, 0, 0, (off_t)sz) == -1) {
 			close(fd);
 			errno = ENOSPC;
 			return NULL;

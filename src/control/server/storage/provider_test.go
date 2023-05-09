@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
+var mockScmTier = NewTierConfig().WithStorageClass(ClassDcpm.String()).
+	WithScmMountPoint("/mnt/daos0").
+	WithScmDeviceList("/dev/pmem0")
+
 // defBdevCmpOpts returns a default set of cmp option suitable for this package
 func defBdevCmpOpts() []cmp.Option {
 	return []cmp.Option{
@@ -28,77 +32,211 @@ func defBdevCmpOpts() []cmp.Option {
 	}
 }
 
-func Test_scanBdevs(t *testing.T) {
+func Test_scanBdevsTiers(t *testing.T) {
 	for name, tc := range map[string]struct {
-		scanReq  BdevScanRequest
-		cache    *BdevScanResponse
-		scanResp *BdevScanResponse
-		scanErr  error
-		expMsg   string
-		expResp  *BdevScanResponse
-		expErr   error
+		direct     bool
+		vmdEnabled bool
+		cfg        *Config
+		cache      *BdevScanResponse
+		scanResp   *BdevScanResponse
+		scanErr    error
+		expResults []BdevTierScanResult
+		expErr     error
 	}{
-		"bypass cache": {
-			scanReq: BdevScanRequest{BypassCache: true},
+		"nil cfg": {
+			expErr: errors.New("nil storage config"),
+		},
+		"nil cfg tiers": {
+			cfg:    new(Config),
+			expErr: errors.New("nil storage config tiers"),
+		},
+		"no bdev configs": {
+			cfg: &Config{
+				Tiers: TierConfigs{mockScmTier},
+			},
+			expErr: errors.New("no bdevs in config"),
+		},
+		"nil scan cache": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(3)),
+				},
+			},
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: NvmeControllers{},
+					},
+				},
+			},
+		},
+		"bypass cache; missing controller": {
+			direct: true,
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(3)),
+				},
+			},
 			cache: &BdevScanResponse{
 				Controllers: MockNvmeControllers(3),
 			},
 			scanResp: &BdevScanResponse{
 				Controllers: MockNvmeControllers(2),
 			},
-			expResp: &BdevScanResponse{
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: NvmeControllers{},
+					},
+				},
+			},
+		},
+		"bypass cache": {
+			direct: true,
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2)),
+				},
+			},
+			cache: &BdevScanResponse{
 				Controllers: MockNvmeControllers(2),
+			},
+			scanResp: &BdevScanResponse{
+				Controllers: MockNvmeControllers(3),
+			},
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(2),
+						},
+					},
+				},
 			},
 		},
 		"bypass cache; scan error": {
-			scanReq: BdevScanRequest{BypassCache: true},
-			cache: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
+			direct: true,
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2)),
+				},
 			},
 			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
+				Controllers: MockNvmeControllers(3),
 			},
 			scanErr: errors.New("fail"),
 			expErr:  errors.New("fail"),
 		},
-		"ignore nil cache": {
-			scanReq: BdevScanRequest{},
+		"use cache; missing controller": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2)),
+				},
+			},
+			cache: &BdevScanResponse{
+				Controllers: MockNvmeControllers(2),
+			},
 			scanResp: &BdevScanResponse{
 				Controllers: MockNvmeControllers(3),
 			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
-		"ignore empty cache": {
-			scanReq: BdevScanRequest{},
-			cache:   &BdevScanResponse{},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
-		"ignore nil cache; no devices in scan": {
-			scanReq: BdevScanRequest{},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{},
+					},
+				},
 			},
 		},
 		"use cache": {
-			scanReq: BdevScanRequest{},
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2)),
+				},
+			},
 			cache: &BdevScanResponse{
 				Controllers: MockNvmeControllers(3),
 			},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(2),
+						},
+					},
+				},
 			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
+		},
+		"multi-tier; bypass cache": {
+			direct: true,
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2), test.MockPCIAddr(3)),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(4), test.MockPCIAddr(5)),
+				},
+			},
+			scanResp: &BdevScanResponse{
+				Controllers: MockNvmeControllers(6),
+			},
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(2), MockNvmeController(3),
+						},
+					},
+				},
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(4), MockNvmeController(5),
+						},
+					},
+				},
+			},
+		},
+		"multi-tier; use cache": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2), test.MockPCIAddr(3)),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(4), test.MockPCIAddr(5)),
+				},
+			},
+			cache: &BdevScanResponse{
+				Controllers: MockNvmeControllers(6),
+			},
+			expResults: []BdevTierScanResult{
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(2), MockNvmeController(3),
+						},
+					},
+				},
+				{
+					Result: &BdevScanResponse{
+						Controllers: []*NvmeController{
+							MockNvmeController(4), MockNvmeController(5),
+						},
+					},
+				},
 			},
 		},
 	} {
@@ -110,14 +248,14 @@ func Test_scanBdevs(t *testing.T) {
 				return tc.scanResp, tc.scanErr
 			}
 
-			gotResp, gotErr := scanBdevs(log, tc.scanReq, tc.cache, scanFn)
+			gotResults, gotErr := scanBdevTiers(log, tc.vmdEnabled, tc.direct, tc.cfg, tc.cache, scanFn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, defBdevCmpOpts()...); diff != "" {
-				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expResults, gotResults, defBdevCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected results (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -128,9 +266,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mockScmTier := NewTierConfig().WithStorageClass(ClassDcpm.String()).
-		WithScmMountPoint("/mnt/daos0").
-		WithScmDeviceList("/dev/pmem0")
 
 	for name, tc := range map[string]struct {
 		cfg        *Config

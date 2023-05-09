@@ -106,9 +106,8 @@ class Test(avocadoTest):
             for interval in ("days", "hours", "minutes", "seconds"):
                 pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
                     interval[0], interval[1:])
-            # pylint: disable=no-member
+            # pylint: disable-next=no-member
             dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
-            # pylint: enable=no-member
             self.timeout = 0
             for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
                 if dhms[index] is not None:
@@ -287,8 +286,7 @@ class Test(avocadoTest):
         if skip_variant:
             self.cancelForTicket(ticket)
 
-    # pylint: disable=invalid-name
-    def cancelForTicket(self, ticket):
+    def cancelForTicket(self, ticket):  # pylint: disable=invalid-name
         """Skip a test due to a ticket needing to be completed.
 
         Args:
@@ -303,7 +301,6 @@ class Test(avocadoTest):
                 verb = "are"
             ticket = ", ".join(ticket)
         return self.cancel("Skipping until {} {} fixed.".format(ticket, verb))
-    # pylint: enable=invalid-name
 
     def add_cancel_ticket(self, ticket, reason=None):
         """Skip a test due to a ticket needing to be completed.
@@ -824,8 +821,8 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.m.value = message
-            cart_ctl.n.value = None
+            cart_ctl.log_message.value = message
+            cart_ctl.no_sync.value = None
             cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
@@ -1345,15 +1342,16 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, msg=None):
+    def fail(self, message=None):
         """Dump engines ULT stacks upon test failure."""
         self.dump_engines_stacks("Test has failed")
-        super().fail(msg)
+        super().fail(message)
 
-    def error(self, msg=None):
+    def error(self, message=None):
+        # pylint: disable=arguments-renamed
         """Dump engines ULT stacks upon test error."""
         self.dump_engines_stacks("Test has errored")
-        super().error(msg)
+        super().error(message)
 
     def tearDown(self):
         """Tear down after each test case."""

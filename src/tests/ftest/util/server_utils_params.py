@@ -69,6 +69,7 @@ class DaosServerYamlParameters(YamlParameters):
         """
         super().__init__("/run/server_config/*", filename, None, common_yaml)
 
+        # pylint: disable=wrong-spelling-in-comment
         # daos_server configuration file parameters
         #
         #   - provider: <str>, e.g. ofi+verbs;ofi_rxm
