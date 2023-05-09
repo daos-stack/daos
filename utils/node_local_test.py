@@ -3785,7 +3785,7 @@ def run_posix_tests(server, conf, test=None):
             # long-running tests which dominate the time, so whilst a higher value here would
             # work there's no benefit in rushing to finish the quicker tests.  The long-running
             # tests are started first.
-            while len(threads) > 5:
+            while len(threads) > 2:
                 for thread_id in threads:
                     thread_id.join(timeout=0)
                     if thread_id.is_alive():
