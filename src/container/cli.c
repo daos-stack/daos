@@ -975,7 +975,7 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, cont);
 	}
 
-	/* DAOS_COO_RO_MDSTATS introduced since 2.4 */
+	/* DAOS_COO_RO_MDSTATS introduced since 2.4 (protocol version 7) */
 	if (dc_cont_proto_version == 6)
 		cont->dc_capas &= ~DAOS_COO_RO_MDSTATS;
 
