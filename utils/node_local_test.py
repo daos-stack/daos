@@ -5009,6 +5009,15 @@ def test_alloc_fail_copy(server, conf, wf):
     container so this is potentially resource intensive.
 
     Create an initial container to copy from so this is testing reading as well as writing
+
+    Note this test will run without the destination containers existing but afterwards they
+    might with varions stages of completion, running just this test in a loop without wiping
+    the containers between runs will exercise different code-paths and probably fail at some
+    point due to the destination container existing but being invalid.  A longer term aim
+    would be to run this test with the destination containers existing but valid (which tests
+    punch) or to have it check that if a test failed then new container was removed as part
+    of the command.  Checking for existing but invalid containers is not covered but this test
+    is probably not the best place for that.
     """
 
     def get_cmd(cont_id):

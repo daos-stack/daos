@@ -1622,25 +1622,30 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 
 	/** check if SB info exists */
 	if (iods[MAGIC_IDX].iod_size == 0) {
-		D_ERROR("SB does not exist.\n");
-		D_GOTO(err, rc = ENOENT);
+		rc = ENOENT;
+		D_ERROR("SB does not exist: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (magic != DFS_SB_MAGIC) {
-		D_ERROR("SB MAGIC verification failed.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("SB MAGIC verification failed: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	/** check version compatibility */
 	if (iods[SB_VER_IDX].iod_size != sizeof(sb_ver) || sb_ver > DFS_SB_VERSION) {
-		D_ERROR("Incompatible SB version.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Incompatible SB version: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
 	    layout_ver > DFS_LAYOUT_VERSION) {
-		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Incompatible DFS Layout version: %d %d (%s)\n", layout_ver, rc,
+			strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	D_DEBUG(DB_ALL, "DFS Container Layout version: %d\n", layout_ver);
