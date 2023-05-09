@@ -26,9 +26,9 @@ class EcodCellSize(IorTestBase):
             type class with container cell size properties from 64K to 1M.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_ior,ior
-        :avocado: tags=ec_cell_size,test_ec_cell_size
+        :avocado: tags=EcodCellSize,ec_cell_size,test_ec_cell_size
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

@@ -427,10 +427,18 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 ```
 ### dmg pool destroy force
 ```
-# dmg pool destroy Timeout or failed due to pool has active container(s)
-# Workaround pool destroy --force option
+# dmg pool destroy Timeout or failed due to pool having active connections
+# Workaround using pool destroy --force option
 
-	$ dmg pool destroy --pool=$DAOS_POOL --force
+	$ dmg pool destroy mypool --force
+	Pool-destroy command succeeded
+```
+### dmg pool destroy recursive
+```
+# dmg pool destroy Timeout or failed due to pool having associated container(s)
+# Workaround using pool destroy --recursive option
+
+	$ dmg pool destroy mypool --recursive
 	Pool-destroy command succeeded
 ```
 ### daos_engine fails to start with error "Address already in use"
