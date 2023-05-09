@@ -2326,7 +2326,7 @@ class Launch():
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
-            f"chmod a+wr {test_dir}",
+            f"chmod a+wrx {test_dir}",
             f"ls -al {test_dir}",
         ]
         # Predefine the sub directories used to collect the files process()/_archive_files()
