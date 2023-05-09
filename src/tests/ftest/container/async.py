@@ -5,8 +5,9 @@
 '''
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 from test_utils_container import TestContainer
 from test_utils_base import CallbackHandler
 

@@ -939,8 +939,8 @@ class DaosServerManager(SubprocessManager):
 
         """
         rank_list = []
-        for rank in self._expected_states:
-            if self._expected_states[rank]["host"] in hosts:
+        for rank, rank_state in self._expected_states.items():
+            if rank_state["host"] in hosts:
                 rank_list.append(rank)
         return rank_list
 

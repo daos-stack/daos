@@ -623,14 +623,14 @@ class TelemetryUtils():
         data = {}
         info = self.get_metrics(",".join(self.ENGINE_CONTAINER_METRICS))
         self.log.info("Container Telemetry Information")
-        for host in info:
+        for host, host_info in info.items():
             data[host] = {name: 0 for name in self.ENGINE_CONTAINER_METRICS}
             for name in self.ENGINE_CONTAINER_METRICS:
-                if name in info[host]:
-                    for metric in info[host][name]["metrics"]:
+                if name in host_info:
+                    for metric in host_info[name]["metrics"]:
                         self.log.info(
                             "  %s (%s): %s (%s)",
-                            info[host][name]["description"], name,
+                            host_info[name]["description"], name,
                             metric["value"], host)
                         data[host][name] = metric["value"]
         return data
@@ -774,27 +774,22 @@ class TelemetryUtils():
             "engine_pool_ops_cont_destroy": destroy_count,
         }
         data = self.get_container_metrics()
-        for host in data:
-            for name in expected:
-                if name in data[host]:
-                    if (expected[name] is not None
-                            and host in expected[name]
-                            and expected[name][host] != data[host][name]):
+        for host, host_data in data.items():
+            for name, count in expected.items():
+                if name in host_data:
+                    if (count is not None and host in count and count[host] != host_data[name]):
                         errors.append(
                             "{} mismatch on {}: expected={}; actual={}".format(
-                                name, host, expected[name][host],
-                                data[host][name]))
+                                name, host, count[host], host_data[name]))
                 else:
                     errors.append("No {} data for {}".format(name, host))
         return errors
 
-    def get_nvme_metrics(self, server, specific_metrics=None):
+    def get_nvme_metrics(self, specific_metrics=None):
         """Get the NVMe telemetry metrics.
 
         Args:
             specific_metrics(list): list of specific NVMe metrics
-            server (DaosServerCommand): the server from which to determine what metrics
-                                        will be available
 
         Returns:
             dict: dictionary of dictionaries of NVMe metric names and

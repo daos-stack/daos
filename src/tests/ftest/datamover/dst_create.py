@@ -153,7 +153,7 @@ class DmvrDstCreate(DataMoverTestBase):
 
         """
         # It's important to check the properties first, since when ior
-        # mounts DFS the alloc'ed OID might be incremented.
+        # mounts DFS the allocated OID might be incremented.
         if check_attr_prop:
             cont.open()
             self.verify_cont_prop(cont, prop_list, api)
