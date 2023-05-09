@@ -4668,7 +4668,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	}
 #elif defined(__aarch64__)
 	/* #define ESR_ELx_CM (UL(1) << 8) */
-	if ((context->uc_mcontext.__reserved[0x219] & 1) == 0) {
+	if (context->uc_mcontext.__reserved[0x219] & 1 == 0) {
 		/* Fault is not from executing instruction */
 		/* #define ESR_ELx_WNR (UL(1) << 6) */
 		if (context->uc_mcontext.__reserved[0x218] & 0x40) {
@@ -4807,25 +4807,25 @@ print_summary(void)
 	rmdir_loc   = atomic_load_relaxed(&num_rmdir);
 	rename_loc  = atomic_load_relaxed(&num_rename);
 	mmap_loc    = atomic_load_relaxed(&num_mmap);
-	D_INFO("libpil4dfs intercepting summary for ops on DFS:\n");
-	D_INFO("[read   ]  %" PRIu64 "\n", read_loc);
-	D_INFO("[write  ]  %" PRIu64 "\n", write_loc);
-	D_INFO("\n");
-	D_INFO("[open   ]  %" PRIu64 "\n", open_loc);
-	D_INFO("[stat   ]  %" PRIu64 "\n", stat_loc);
-	D_INFO("[opendir]  %" PRIu64 "\n", opendir_loc);
-	D_INFO("[readdir]  %" PRIu64 "\n", readdir_loc);
-	D_INFO("[unlink ]  %" PRIu64 "\n", unlink_loc);
-	D_INFO("[seek   ]  %" PRIu64 "\n", seek_loc);
-	D_INFO("[mkdir  ]  %" PRIu64 "\n", mkdir_loc);
-	D_INFO("[rmdir  ]  %" PRIu64 "\n", rmdir_loc);
-	D_INFO("[rename ]  %" PRIu64 "\n", rename_loc);
-	D_INFO("[mmap   ]  %" PRIu64 "\n", mmap_loc);
+	fprintf(stderr, "libpil4dfs intercepting summary for ops on DFS:\n");
+	fprintf(stderr, "[read   ]  %" PRIu64 "\n", read_loc);
+	fprintf(stderr, "[write  ]  %" PRIu64 "\n", write_loc);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "[open   ]  %" PRIu64 "\n", open_loc);
+	fprintf(stderr, "[stat   ]  %" PRIu64 "\n", stat_loc);
+	fprintf(stderr, "[opendir]  %" PRIu64 "\n", opendir_loc);
+	fprintf(stderr, "[readdir]  %" PRIu64 "\n", readdir_loc);
+	fprintf(stderr, "[unlink ]  %" PRIu64 "\n", unlink_loc);
+	fprintf(stderr, "[seek   ]  %" PRIu64 "\n", seek_loc);
+	fprintf(stderr, "[mkdir  ]  %" PRIu64 "\n", mkdir_loc);
+	fprintf(stderr, "[rmdir  ]  %" PRIu64 "\n", rmdir_loc);
+	fprintf(stderr, "[rename ]  %" PRIu64 "\n", rename_loc);
+	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
 	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc +
 		 unlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
-	D_INFO("\n");
-	D_INFO("[op_sum ]  %" PRIu64 "\n", op_sum);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
 
 static void

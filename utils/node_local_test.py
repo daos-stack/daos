@@ -1042,21 +1042,23 @@ def pil4dfs_cmd(dfuse, cmd):
     my_env['D_IL_REPORT'] = '1'
     my_env['D_LOG_MASK'] = 'DEBUG'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
-    ret = subprocess.run(cmd, env=my_env, check=False)
+    ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         env=my_env, check=False)
     print(f'Logged pil4dfs to {log_name}')
     print(ret)
 
-    if os.path.exists(log_name):
-        print(f'DBG> log file {log_name} exists.')
-
     assert ret.returncode == 0
-    try:
-        log_test(dfuse.conf, log_name, check_read=False, check_write=False,
-                 check_fstat=False, check_summary=True)
-    except NLTestFail:
-        command = ' '.join(cmd)
-        print(f"ERROR: functions intercepted are not found in command '{command}'")
-        ret.returncode = 1
+
+    # check stderr for interception summary
+    search = re.findall(r'\[op_sum\ ]  \d+', ret.stderr.decode('utf-8'))
+    if len(search) == 0:
+        raise NLTestFail('[op_sum ] is NOT found.')
+    num_op = int(search[0][9:])
+    if num_op == 0:
+        raise NLTestFail('op_sum is zero. Unexpected.')
+    print(f'DBG> num_op = {num_op}')
+
+    log_test(dfuse.conf, log_name, check_read=False, check_write=False, check_fstat=False)
 
     return ret
 
@@ -4014,8 +4016,7 @@ def log_test(conf,
              leak_wf=None,
              check_read=False,
              check_write=False,
-             check_fstat=False,
-             check_summary=False):
+             check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
@@ -4040,25 +4041,6 @@ def log_test(conf,
         print(f'Running log_test on {filename} {sizeof_fmt(fstat.st_size)}')
 
     log_iter = nlt_lp.LogIter(filename)
-
-    # check the summary of libpil4dfs.so
-    if check_summary:
-        data = ""
-        try:
-            with open(filename, "r") as log_file:
-                data = log_file.read()
-        except OSError as error:
-            if error.errno == errno.ENOENT:
-                print(f'DBG> log file {filename} does not exist.')
-                raise NLTestFail('Failed to open log file.')
-        search = re.findall(r'\[op_sum\ ]  \d+', data)
-        if len(search) == 0:
-            raise NLTestFail('[op_sum ] is NOT found.')
-        num_op = int(search[0][9:])
-        if num_op == 0:
-            raise NLTestFail('op_sum is zero. Unexpected.')
-        else:
-            print(f'DBG> num_op = {num_op}')
 
     # LogIter will have opened the file and seek through it as required, so start a background
     # process to compress it in parallel with the log tracing.

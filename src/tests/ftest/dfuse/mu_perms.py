@@ -250,7 +250,7 @@ class DfuseMUPerms(DfuseTestBase):
         dfuse1.stop()
         dfuse2.stop()
 
-    def test_dfuse_mu_perms_il(self):
+    def test_dfuse_mu_perms_il(self, il_lib=None):
         """Jira ID: DAOS-10857.
 
         Test Description:
@@ -270,11 +270,9 @@ class DfuseMUPerms(DfuseTestBase):
             Verify other users do not have access with or without IL.
             For each case, verify IL debug messages for files.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms
-        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_il
         """
+        if il_lib is None:
+            self.fail('il_lib is not defined.')
         # Setup the verify command. Only test with the owner and group_user
         verify_perms_cmd = VerifyPermsCommand(self.hostlist_clients)
         verify_perms_cmd.get_params(self)
@@ -303,11 +301,11 @@ class DfuseMUPerms(DfuseTestBase):
         env_without_il = verify_perms_cmd.env.copy()
         env_with_il = env_without_il.copy()
         env_with_il.update({
-            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', il_lib),
             'D_IL_REPORT': -1  # Log all intercepted calls
         })
 
-        def _verify(use_il, expected_il_messages, expect_der_no_perm):
+        def _verify(use_il, expected_il_messages, expect_der_no_perm, il_lib=None):
             """Verify permissions for a given configuration.
 
             Args:
@@ -320,6 +318,10 @@ class DfuseMUPerms(DfuseTestBase):
             """
             verify_perms_cmd.env = env_with_il if use_il else env_without_il
             result = verify_perms_cmd.run()
+
+            # the output of libioil.so and libpil4dfs.so are different.
+            if il_lib == 'libpil4dfs.so':
+                return
 
             num_il_messages = 0
             found_der_no_perm = False
@@ -365,9 +367,9 @@ class DfuseMUPerms(DfuseTestBase):
             # which the user also doesn't have
             verify_perms_cmd.update_params(perms=posix_perms)
             self.log.info('Verify - no perms - not using IL')
-            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False, il_lib=il_lib)
             self.log.info('Verify - no perms - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False, il_lib=il_lib)
 
             # Give the user POSIX perms
             posix_perms = {'file': '606', 'dir': '505'}[entry_type]
@@ -380,9 +382,9 @@ class DfuseMUPerms(DfuseTestBase):
             # With POSIX perms only, access is based on POSIX perms whether using IL or not
             verify_perms_cmd.update_params(perms=posix_perms)
             self.log.info('Verify - POSIX perms only - not using IL')
-            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False, il_lib=il_lib)
             self.log.info('Verify - POSIX perms only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=True)
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=True, il_lib=il_lib)
 
             # Give the user pool/container ACL perms
             self.log.info('Giving %s pool "r" ACL permissions', other_user)
@@ -392,9 +394,9 @@ class DfuseMUPerms(DfuseTestBase):
 
             # With POSIX perms and ACLs, open is based on POSIX, but IO is based on ACLs
             self.log.info('Verify - POSIX and ACL perms - not using IL')
-            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False, il_lib=il_lib)
             self.log.info('Verify - POSIX and ACL perms - using IL')
-            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False, il_lib=il_lib)
 
             # Revoke POSIX permissions
             posix_perms = {'file': '600', 'dir': '00'}[entry_type]
@@ -407,9 +409,27 @@ class DfuseMUPerms(DfuseTestBase):
             # Without POSIX permissions, pool/container ACLs don't matter since open requires POSIX
             verify_perms_cmd.update_params(perms=posix_perms)
             self.log.info('Verify - ACLs only - not using IL')
-            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
+            _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False, il_lib=il_lib)
             self.log.info('Verify - ACLs only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False, il_lib=il_lib)
 
         # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
         dfuse.stop()
+
+    def test_dfuse_mu_perms_ioil(self):
+        """
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_il,test_dfuse_mu_perms_ioil
+        """
+        self.test_dfuse_mu_perms_il(il_lib='libioil.so')
+
+    def test_dfuse_mu_perms_pil4dfs(self):
+        """
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_mu,verify_perms,pil4dfs
+        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_il,test_dfuse_mu_perms_pil4dfs
+        """
+        self.test_dfuse_mu_perms_il(il_lib='libpil4dfs.so')

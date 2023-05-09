@@ -1,6 +1,8 @@
 /**
- * Copyright (c) 2021, Lei Huang.
- * Use of this source code is governed by a MIT license.
+ * (C) Copyright 2018-2021 Lei Huang.
+ * (C) Copyright 2023 Intel.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __HOOK
