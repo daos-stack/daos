@@ -36,6 +36,9 @@ class OSAOnlineParallelTest(OSAUtils):
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
         self.pool = None
         self.out_queue = queue.Queue()
         self.ds_racer_queue = queue.Queue()
@@ -93,7 +96,7 @@ class OSAOnlineParallelTest(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
+        exc = random.randint(0, (self.hostlist_servers * self.engine_count))  # nosec
         target_list.append(exc)
         target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])

@@ -35,6 +35,9 @@ class NvmePoolExclude(OSAUtils):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
         self.pool = None
         self.cont_list = []
         self.dmg_command.exit_status_exception = True
@@ -61,7 +64,7 @@ class NvmePoolExclude(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude rank :  ranks other than rank 0.
-        exclude_servers = len(self.hostlist_servers) * 2
+        exclude_servers = len(self.hostlist_servers) * self.engine_count
         rank_list = list(range(1, exclude_servers))
 
         for val in range(0, num_pool):

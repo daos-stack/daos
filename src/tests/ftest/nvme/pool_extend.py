@@ -31,6 +31,9 @@ class NvmePoolExtend(OSAUtils):
 
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
         self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_extend(self, num_pool, oclass=None):
@@ -46,7 +49,7 @@ class NvmePoolExtend(OSAUtils):
         ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
 
         daos_command = self.get_daos_command()
-        total_servers = len(self.hostlist_servers) * 2
+        total_servers = len(self.hostlist_servers) * self.engine_count
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value

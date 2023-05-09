@@ -32,6 +32,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
 
     def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
         """Run the offline drain without data.
@@ -50,7 +53,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
+        exc = random.randint(0, (self.hostlist_servers * self.engine_count))  # nosec
         target_list.append(exc)
         target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])

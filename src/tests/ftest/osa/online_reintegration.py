@@ -32,6 +32,9 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.pool = None
@@ -60,7 +63,7 @@ class OSAOnlineReintegration(OSAUtils):
         test_seq = self.ior_test_sequence[0]
         # Create a pool
         pool = {}
-        exclude_servers = (len(self.hostlist_servers) * 2) - 1
+        exclude_servers = (len(self.hostlist_servers) * self.engine_count) - 1
 
         # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)  # nosec
