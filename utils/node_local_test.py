@@ -2257,6 +2257,30 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
+    @needs_dfuse
+    def test_list_xattr(self):
+        """Perform tests with listing extended attributes.
+
+        Ensure that the user.daos command can be read, and is included in the list.
+        xattrs are all byte strings.
+        """
+        expected_keys = {b'user.daos', b'user.dummy'}
+        root_xattr = xattr.getxattr(self.dfuse.dir, "user.daos")
+        print(f'The root xattr is {root_xattr}')
+
+        xattr.set(self.dfuse.dir, 'user.dummy', 'short string')
+
+        for (key, value) in xattr.get_all(self.dfuse.dir):
+            expected_keys.remove(key)
+            print(f'xattr is {key}:{value}')
+
+        # Leave this out for now to avoid adding attr as a new rpm dependency.
+        # rc = subprocess.run(['getfattr', '-n', 'user.daos', self.dfuse.dir], check=False)
+        # print(rc)
+        # assert rc.returncode == 0, rc
+
+        assert len(expected_keys) == 0, 'Expected key not found'
+
     @needs_dfuse_with_opt(wbcache=True, caching=True)
     def test_stat_before_open(self):
         """Run open/close in a loop on the same file
@@ -4490,7 +4514,6 @@ def test_pydaos_kv(server, conf):
 
 def test_pydaos_kv_obj_class(server, conf):
     """Test the predefined object class works with KV"""
-
     with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
                                      suffix='.log',
                                      delete=False) as tmp_file:
