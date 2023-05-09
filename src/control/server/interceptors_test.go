@@ -131,9 +131,10 @@ func TestServer_checkVersion(t *testing.T) {
 			ctx:          newTestAuthCtx(context.TODO(), "3v1l"),
 			expErr:       errors.New("not compatible"),
 		},
-		"insecure versioned component defaults to server": {
+		"insecure components not compatible": {
 			selfVersion:  "2.4.0",
 			otherVersion: "2.4.1",
+			expErr:       errors.New("not compatible in insecure mode"),
 		},
 		"secure versioned component": {
 			selfVersion:  "2.4.0",
