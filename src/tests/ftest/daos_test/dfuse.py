@@ -19,9 +19,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
     :avocado: recursive
     """
 
-    def test_daos_dfuse_unit(self, il_lib=None):
+    def run_test(self, il_lib=None):
         """
-
         Test Description: Run dfuse_test to check correctness.
 
         Use cases:
@@ -106,7 +105,6 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
     def test_daos_dfuse_unit_ioil(self):
         """
-
         Test Description: Run dfuse_test to check correctness.
 
         Use cases:
@@ -115,21 +113,20 @@ class DaosCoreTestDfuse(DfuseTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_test,daos_cmd
-        :avocado: tags=dfuse_unit,test_daos_dfuse_unit,test_daos_dfuse_unit_ioil
+        :avocado: tags=DaosCoreTestDfuse,dfuse_unit,test_daos_dfuse_unit_ioil
         """
-        self.test_daos_dfuse_unit(il_lib='libioil.so')
+        self.run_test(il_lib='libioil.so')
 
     def test_daos_dfuse_unit_pil4dfs(self):
         """
-
         Test Description: Run dfuse_test to check correctness.
 
         Use cases:
             DAOS DFuse unit tests with an interception library
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_test,daos_cmd,pil4dfs
-        :avocado: tags=dfuse_unit,test_daos_dfuse_unit,test_daos_dfuse_unit_pil4dfs
+        :avocado: tags=DaosCoreTestDfuse,dfuse_unit,test_daos_dfuse_unit_pil4dfs
         """
-        self.test_daos_dfuse_unit(il_lib='libpil4dfs.so')
+        self.run_test(il_lib='libpil4dfs.so')
