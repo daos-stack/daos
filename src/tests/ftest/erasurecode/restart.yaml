@@ -26,7 +26,7 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  size: 20%
+  size: 40%
   svcn: 3
   control_method: dmg
   pool_query_timeout: 30
