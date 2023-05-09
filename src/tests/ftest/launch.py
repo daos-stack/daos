@@ -1565,7 +1565,7 @@ class Launch():
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
             control_metadata (str, optional): directory to store control plane metadata when using
-                metadata on SSD. Defaults to None.
+                metadata on SSD.
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files

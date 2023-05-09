@@ -601,7 +601,8 @@ class StorageInfo():
 
         lines = ['server_config:']
         if control_metadata:
-            lines.append(f'  control_metadata: {control_metadata}')
+            lines.append('  control_metadata:')
+            lines.append(f'    path: {control_metadata}')
         lines.append('  engines:')
         for engine in range(engines):
             lines.append(f'    {str(engine)}:')
