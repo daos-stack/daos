@@ -96,6 +96,8 @@ static _Atomic uint64_t        num_rmdir;
 static _Atomic uint64_t        num_rename;
 static _Atomic uint64_t        num_mmap;
 
+static _Atomic uint32_t        daos_init_cnt;
+
 static bool            bLog;
 static long int        page_size;
 
@@ -821,6 +823,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				exit(1);
 			}
 			daos_inited = true;
+			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
@@ -4981,10 +4984,15 @@ finalize_dfs(void)
 	}
 
 	if (daos_inited) {
-		rc = daos_fini();
-		if (rc != 0) {
-			fprintf(stderr, "Error> error in daos_fini()\n");
-			exit(1);
+		uint32_t init_cnt, j;
+
+		init_cnt = atomic_load_relaxed(&daos_init_cnt);
+		for (j = 0; j < init_cnt; j++) {
+			rc = daos_fini();
+			if (rc != 0) {
+				fprintf(stderr, "Error> error in daos_fini()\n");
+				exit(1);
+			}
 		}
 	}
 }
