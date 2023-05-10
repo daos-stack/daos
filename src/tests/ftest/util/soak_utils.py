@@ -1306,23 +1306,23 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 sbatch_cmds.append(f"module load {mpi_module}")
             mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
+            env = EnvironmentVariables()
+            env["D_LOG_FILE_APPEND_PID"] = "1"
             if "mpich" in mpi_module:
                 # Pass pool and container information to the commands
-                env = EnvironmentVariables()
                 env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
-                env["D_LOG_FILE_APPEND_PID"] = "1"
-                if self.enable_il and api == "POSIX-LIBPIL4DFS":
-                    env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                    env["D_IL_REPORT"] = "1"
-                if self.enable_il and api == "POSIX-LIBIOIL":
-                    env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                    env["D_IL_REPORT"] = "1"
-                mpirun_cmd.assign_environment(env, True)
+            if self.enable_il and api == "POSIX-LIBPIL4DFS":
+                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+                env["D_IL_REPORT"] = "1"
+            if self.enable_il and api == "POSIX-LIBIOIL":
+                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                env["D_IL_REPORT"] = "1"
+            mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
-            cmdline = "{}".format(str(mpirun_cmd))
+            cmdline = "{str(mpirun_cmd)}"
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
