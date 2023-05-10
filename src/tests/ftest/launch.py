@@ -59,10 +59,10 @@ TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
-        ("opx", "ofi+opx"),
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
+        ("opx", "ofi+opx"),
     ]
 )
 PROCS_TO_CLEANUP = [
