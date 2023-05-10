@@ -10,6 +10,7 @@ import time
 import random
 import threading
 import re
+import product
 
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
@@ -86,7 +87,7 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
         kwargs['file_oclass'] = file_oclass
         properties = self.params.get('properties', path, "")
         redundancy_factor = extract_redundancy_factor(file_oclass)
-        rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+        rd_fac = f'rd_fac:{str(redundancy_factor)}'
         kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
     if dir_oclass:
         kwargs['dir_oclass'] = dir_oclass
@@ -108,7 +109,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
     fscopy_cmd = FsCopy(self.get_daos_command(), self.log)
     # writes random data to file and then copy the file to container
     if cmd == "write":
-        with open(file, 'w') as src_file:
+        with open(file, 'w', encoding="utf-8") as src_file:
             src_file.write(str(os.urandom(num_bytes)))
             src_file.close()
         dst_file = format_path(pool, container)
@@ -142,21 +143,20 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         shared_dir = self.sharedsoaktest_dir
     if append:
         for host in host_list:
-            shared_dir_tmp = shared_dir + append + "{}".format(host)
-            dest_dir_tmp = dest_dir + append + "{}".format(host)
+            shared_dir_tmp = shared_dir + append + f"{host}"
+            dest_dir_tmp = dest_dir + append + f"{host}"
             if not os.path.exists(shared_dir_tmp):
                 os.mkdir(shared_dir_tmp)
             if not os.path.exists(dest_dir_tmp):
                 os.mkdir(dest_dir_tmp)
             # copy the directory from each client node to a shared directory
             # tagged with the hostname
-            command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
-                source_dir, shared_dir_tmp)
+            command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir_tmp}/.."
             result = run_remote(self.log, host, command, timeout=300)
             if not result.passed:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
-            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
+                    f"<<FAILED: Soak remote logfiles not copied from clients>>: {host}")
+            command = f"/usr/bin/cp -R -p {shared_dir_tmp}/ \'{dest_dir}\'"
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
@@ -166,15 +166,15 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
 
     else:
         # copy the remote dir on all client nodes to a shared directory
-        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(source_dir, shared_dir)
+        command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir}/.."
         result = run_remote(self.log, host_list, command, timeout=300)
         if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+                f"<<FAILED: Soak remote logfiles not copied from clients>>: {host_list}")
 
         # copy the local logs and the logs in the shared dir to avocado dir
         for directory in [source_dir, shared_dir]:
-            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
+            command = f"/usr/bin/cp -R -p {directory}/ \'{dest_dir}\'"
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
@@ -184,14 +184,14 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
 
     if rm_remote:
         # remove the remote soak logs for this pass
-        command = "/usr/bin/rm -rf {0}".format(source_dir)
+        command = f"/usr/bin/rm -rf {source_dir}"
         result = run_remote(self.log, host_list, command)
         if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak logfiles removal failed>>: {} on {}".format(directory, host_list))
+                f"<<FAILED: Soak logfiles removal failed>>: {directory} on {host_list}")
         # remove the local log for this pass
         for directory in [source_dir, shared_dir]:
-            command = "/usr/bin/rm -rf {0}".format(directory)
+            command = f"/usr/bin/rm -rf {directory}"
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
@@ -210,7 +210,7 @@ def write_logfile(data, name, destination):
     if not os.path.exists(destination):
         os.makedirs(destination)
     logfile = destination + "/" + str(name)
-    with open(logfile, 'w') as log_file:
+    with open(logfile, 'w', encoding="utf-8") as log_file:
         # identify what be used to run this script
         if isinstance(data, list):
             text = "\n".join(data)
@@ -274,7 +274,7 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
         self.sudo_cmd, journalctl_type, since, until)
     err = "Error gathering system log events"
     results = get_host_data(hosts, command, "journalctl", err)
-    name = "journalctl_{}.log".format(journalctl_type)
+    name = f"journalctl_{journalctl_type}.log"
     destination = self.outputsoak_dir
     if logging:
         for result in results:
@@ -331,11 +331,11 @@ def run_metrics_check(self, logging=True, prefix=None):
 
     if enable_telemetry:
         for engine in range(engine_count):
-            name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
+            name = "pass" + str(self.loop) + f"_metrics_{engine}.csv"
             if prefix:
-                name = prefix + "_metrics_{}.csv".format(engine)
+                name = prefix + f"_metrics_{engine}.csv"
             destination = self.outputsoak_dir
-            daos_metrics = "{} daos_metrics -S {} --csv".format(self.sudo_cmd, engine)
+            daos_metrics = f"{self.sudo_cmd} daos_metrics -S {engine} --csv"
             self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
                                command=daos_metrics,
@@ -387,12 +387,11 @@ def wait_for_pool_rebuild(self, pool, name):
         pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
-        self.log.error("<<<FAILED:{} rebuild timed out: {}".format(name, error), exc_info=error)
+        self.log.error(f"<<<FAILED:{name} rebuild timed out: {error}", exc_info=error)
         rebuild_status = False
     except TestFail as error1:
         self.log.error(
-            "<<<FAILED:{} rebuild failed due to test issue: {}".format(name, error1),
-            exc_info=error1)
+            f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
     return rebuild_status
 
 
@@ -590,7 +589,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             tgt_idx = None
         else:
             target_list = random.sample(range(0, 8), targets)
-            tgt_idx = "{}".format(','.join(str(tgt) for tgt in target_list))
+            tgt_idx = f"{','.join(str(tgt) for tgt in target_list)}"
 
         # init the status dictionary
         params = {"name": name,
@@ -672,8 +671,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     pool.drain(rank)
                 except TestFail as error:
                     self.log.error(
-                        "<<<FAILED:dmg pool {} drain failed".format(
-                            pool.identifier), exc_info=error)
+                        f"<<<FAILED:dmg pool {pool.identifier} drain failed", exc_info=error)
                     status = False
                 drain_status &= status
                 if drain_status:
@@ -731,9 +729,8 @@ def launch_server_stop_start(self, pools, name, results, args):
                         pool.reintegrate(rank)
                         status = True
                     except TestFail as error:
-                        self.log.error(
-                            "<<<FAILED:dmg pool {} reintegrate failed".format(
-                                pool.identifier), exc_info=error)
+                        self.log.error(f"<<<FAILED:dmg pool {pool.identifier} reintegrate failed",
+                                       exc_info=error)
                         status = False
                     reintegrate_status &= status
                     if reintegrate_status:
@@ -784,8 +781,7 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
             if key_obj is not None and hasattr(key_obj, "update"):
                 key_obj.update(value, key)
             else:
-                raise SoakTestError(
-                    "<<FAILED: The srun param {} does not exist".format(key))
+                raise SoakTestError(f"<<FAILED: The srun param {key} does not exist")
     if env:
         srun_cmd.assign_environment(env)
     return str(srun_cmd)
@@ -815,8 +811,8 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.soaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
-    dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
-    module_load = "module load {}".format(self.mpi_module)
+    dfuse_env = f"export D_LOG_MASK=ERR;export D_LOG_FILE={dfuse_log}"
+    module_load = f"module load {self.mpi_module}"
 
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
@@ -906,77 +902,77 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
     for api in api_list:
         if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
             continue
-        for b_size in bsize_list:
-            for t_size in tsize_list:
-                for file_oclass, dir_oclass in oclass_list:
-                    if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
-                        continue
-                    ior_cmd = IorCommand()
-                    ior_cmd.namespace = ior_params
-                    ior_cmd.get_params(self)
-                    ior_cmd.max_duration.update(ior_timeout)
-                    if api == "HDF5-VOL":
-                        ior_cmd.api.update("HDF5")
-                    elif api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                        ior_cmd.api.update("POSIX")
-                    else:
-                        ior_cmd.api.update(api)
-                    ior_cmd.block_size.update(b_size)
-                    ior_cmd.transfer_size.update(t_size)
-                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                        ior_cmd.dfs_oclass.update(None)
-                        ior_cmd.dfs_dir_oclass.update(None)
-                    else:
-                        ior_cmd.dfs_oclass.update(file_oclass)
-                        ior_cmd.dfs_dir_oclass.update(dir_oclass)
-                    if ior_cmd.api.value == "DFS":
-                        ior_cmd.test_file.update(os.path.join("/", "testfile"))
-                    if not cont:
-                        add_containers(self, pool, file_oclass, dir_oclass)
-                        container = self.container[-1]
-                    else:
-                        container = cont
-                    ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
-                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
-                        job_spec.replace("/", "_"), api, b_size, t_size,
-                        file_oclass, nodesperjob * ppn, nodesperjob, ppn)
-                    daos_log = os.path.join(
-                        self.soaktest_dir, self.test_name + "_" + log_name
-                        + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
-                    env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
-                    env["D_LOG_FILE_APPEND_PID"] = "1"
-                    sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
-                    # include dfuse cmdlines
-                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                        dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, container, name=log_name, job_spec=job_spec)
-                        sbatch_cmds.extend(dfuse_start_cmdlist)
-                        ior_cmd.test_file.update(
-                            os.path.join(dfuse.mount_dir.value, "testfile"))
-                    mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
-                    mpirun_cmd.get_params(self)
-                    if api == "POSIX-LIBPIL4DFS":
-                        env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                        env["IL_LOG"] = "1"
-                    if api == "POSIX-LIBIOIL":
-                        env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                        env["D_IL_REPORT"] = "1"
-                    # add envs if api is HDF5-VOL
-                    if api == "HDF5-VOL":
-                        vol = True
-                        env["HDF5_VOL_CONNECTOR"] = "daos"
-                        env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-                    mpirun_cmd.assign_processes(nodesperjob * ppn)
-                    mpirun_cmd.assign_environment(env, True)
-                    mpirun_cmd.ppn.update(ppn)
-                    sbatch_cmds.append(str(mpirun_cmd))
-                    sbatch_cmds.append("status=$?")
-                    if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                        sbatch_cmds.extend(stop_dfuse(dfuse, vol))
-                    commands.append([sbatch_cmds, log_name])
-                    self.log.info("<<IOR {} cmdlines>>:".format(api))
-                    for cmd in sbatch_cmds:
-                        self.log.info("%s", cmd)
+        if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
+            continue
+        for b_size, t_size, file_dir_oclass in product(bsize_list,
+                                                       tsize_list,
+                                                       oclass_list):
+            ior_cmd = IorCommand()
+            ior_cmd.namespace = ior_params
+            ior_cmd.get_params(self)
+            ior_cmd.max_duration.update(ior_timeout)
+            if api == "HDF5-VOL":
+                ior_cmd.api.update("HDF5")
+            elif api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                ior_cmd.api.update("POSIX")
+            else:
+                ior_cmd.api.update(api)
+            ior_cmd.block_size.update(b_size)
+            ior_cmd.transfer_size.update(t_size)
+            if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                ior_cmd.dfs_oclass.update(None)
+                ior_cmd.dfs_dir_oclass.update(None)
+            else:
+                ior_cmd.dfs_oclass.update(file_dir_oclass[0])
+                ior_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
+            if ior_cmd.api.value == "DFS":
+                ior_cmd.test_file.update(os.path.join("/", "testfile"))
+            if not cont:
+                add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
+                container = self.container[-1]
+            else:
+                container = cont
+            ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+            log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
+                job_spec.replace("/", "_"), api, b_size, t_size,
+                file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
+            daos_log = os.path.join(
+                self.soaktest_dir, self.test_name + "_" + log_name
+                + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+            env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
+            env["D_LOG_FILE_APPEND_PID"] = "1"
+            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            # include dfuse cmdlines
+            if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                dfuse, dfuse_start_cmdlist = start_dfuse(
+                    self, pool, container, name=log_name, job_spec=job_spec)
+                sbatch_cmds.extend(dfuse_start_cmdlist)
+                ior_cmd.test_file.update(
+                    os.path.join(dfuse.mount_dir.value, "testfile"))
+            mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
+            mpirun_cmd.get_params(self)
+            if api == "POSIX-LIBPIL4DFS":
+                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+                env["D_IL_REPORT"] = "1"
+            if api == "POSIX-LIBIOIL":
+                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                env["D_IL_REPORT"] = "1"
+            # add envs if api is HDF5-VOL
+            if api == "HDF5-VOL":
+                vol = True
+                env["HDF5_VOL_CONNECTOR"] = "daos"
+                env["HDF5_PLUGIN_PATH"] = f"{plugin_path}"
+            mpirun_cmd.assign_processes(nodesperjob * ppn)
+            mpirun_cmd.assign_environment(env, True)
+            mpirun_cmd.ppn.update(ppn)
+            sbatch_cmds.append(str(mpirun_cmd))
+            sbatch_cmds.append("status=$?")
+            if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                sbatch_cmds.extend(stop_dfuse(dfuse, vol))
+            commands.append([sbatch_cmds, log_name])
+            self.log.info(f"<<IOR {api} cmdlines>>:")
+            for cmd in sbatch_cmds:
+                self.log.info(cmd)
     return commands
 
 
@@ -1024,10 +1020,10 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.env.copy()
-            env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
+            env["D_LOG_FILE"] = get_log_file(daos_log or f"{macsio.command}_daos.log")
             env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
-            sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
+            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1038,7 +1034,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 sbatch_cmds.extend(dfuse_start_cmdlist)
                 # add envs for HDF5-VOL
                 env["HDF5_VOL_CONNECTOR"] = "daos"
-                env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+                env["HDF5_PLUGIN_PATH"] = f"{plugin_path}"
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
@@ -1049,7 +1045,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             commands.append([sbatch_cmds, log_name])
             self.log.info("<<MACSio cmdlines>>:")
             for cmd in sbatch_cmds:
-                self.log.info("%s", cmd)
+                self.log.info(cmd)
     return commands
 
 
@@ -1068,8 +1064,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         cmd: cmdline string
 
     """
-    # pylint: disable=too-many-nested-blocks
-
     commands = []
     mdtest_params = os.path.join(os.sep, "run", job_spec, "*")
     # mdtest job specs with a list of parameters; update each value
@@ -1087,66 +1081,66 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
             continue
         if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
             continue
-        for write_bytes in write_bytes_list:
-            for read_bytes in read_bytes_list:
-                for depth in depth_list:
-                    for file_oclass, dir_oclass in oclass_list:
-                        # Get the parameters for Mdtest
-                        mdtest_cmd = MdtestCommand()
-                        mdtest_cmd.namespace = mdtest_params
-                        mdtest_cmd.get_params(self)
-                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                            mdtest_cmd.api.update("POSIX")
-                        else:
-                            mdtest_cmd.api.update(api)
-                        mdtest_cmd.write_bytes.update(write_bytes)
-                        mdtest_cmd.read_bytes.update(read_bytes)
-                        mdtest_cmd.depth.update(depth)
-                        mdtest_cmd.flags.update(flag)
-                        mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
-                        mdtest_cmd.dfs_oclass.update(file_oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
-                        add_containers(self, pool, file_oclass, dir_oclass)
-                        mdtest_cmd.set_daos_params(
-                            self.server_group, pool,
-                            self.container[-1].identifier)
-                        log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-                            job_spec, api, write_bytes, read_bytes, depth,
-                            file_oclass, nodesperjob * ppn, nodesperjob,
-                            ppn)
-                        daos_log = os.path.join(
-                            self.soaktest_dir, self.test_name + "_" + log_name
-                            + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
-                        env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
-                        env["D_LOG_FILE_APPEND_PID"] = "1"
-                        sbatch_cmds = [
-                            "module purge", "module load {}".format(self.mpi_module)]
-                        # include dfuse cmdlines
-                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                            dfuse, dfuse_start_cmdlist = start_dfuse(
-                                self, pool, self.container[-1], name=log_name, job_spec=job_spec)
-                            sbatch_cmds.extend(dfuse_start_cmdlist)
-                            mdtest_cmd.test_dir.update(dfuse.mount_dir.value)
-                            if self.enable_il and api == "POSIX-LIBPIL4DFS":
-                                env["LD_PRELOAD"] = os.path.join(
-                                    self.prefix, 'lib64', 'libpil4dfs.so')
-                                env["IL_LOG"] = "1"
-                            if self.enable_il and api == "POSIX-LIBIOIL":
-                                env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                                env["D_IL_REPORT"] = "1"
-                        mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
-                        mpirun_cmd.get_params(self)
-                        mpirun_cmd.assign_processes(nodesperjob * ppn)
-                        mpirun_cmd.assign_environment(env, True)
-                        mpirun_cmd.ppn.update(ppn)
-                        sbatch_cmds.append(str(mpirun_cmd))
-                        sbatch_cmds.append("status=$?")
-                        if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
-                            sbatch_cmds.extend(stop_dfuse(dfuse))
-                        commands.append([sbatch_cmds, log_name])
-                        self.log.info("<<MDTEST {} cmdlines>>:".format(api))
-                        for cmd in sbatch_cmds:
-                            self.log.info("%s", cmd)
+        for write_bytes, read_bytes, depth, file_dir_oclass in product(write_bytes_list,
+                                                                       read_bytes_list,
+                                                                       depth_list,
+                                                                       oclass_list):
+            # Get the parameters for Mdtest
+            mdtest_cmd = MdtestCommand()
+            mdtest_cmd.namespace = mdtest_params
+            mdtest_cmd.get_params(self)
+            if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                mdtest_cmd.api.update("POSIX")
+            else:
+                mdtest_cmd.api.update(api)
+            mdtest_cmd.write_bytes.update(write_bytes)
+            mdtest_cmd.read_bytes.update(read_bytes)
+            mdtest_cmd.depth.update(depth)
+            mdtest_cmd.flags.update(flag)
+            mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
+            mdtest_cmd.dfs_oclass.update(file_dir_oclass[0])
+            mdtest_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
+            add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
+            mdtest_cmd.set_daos_params(
+                self.server_group, pool,
+                self.container[-1].identifier)
+            log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+                job_spec, api, write_bytes, read_bytes, depth,
+                file_dir_oclass[0], nodesperjob * ppn, nodesperjob,
+                ppn)
+            daos_log = os.path.join(
+                self.soaktest_dir, self.test_name + "_" + log_name
+                + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+            env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
+            env["D_LOG_FILE_APPEND_PID"] = "1"
+            sbatch_cmds = [
+                "module purge", f"module load {self.mpi_module}"]
+            # include dfuse cmdlines
+            if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                dfuse, dfuse_start_cmdlist = start_dfuse(
+                    self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+                sbatch_cmds.extend(dfuse_start_cmdlist)
+                mdtest_cmd.test_dir.update(dfuse.mount_dir.value)
+                if self.enable_il and api == "POSIX-LIBPIL4DFS":
+                    env["LD_PRELOAD"] = os.path.join(
+                        self.prefix, 'lib64', 'libpil4dfs.so')
+                    env["D_IL_REPORT"] = "1"
+                if self.enable_il and api == "POSIX-LIBIOIL":
+                    env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                    env["D_IL_REPORT"] = "1"
+            mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
+            mpirun_cmd.get_params(self)
+            mpirun_cmd.assign_processes(nodesperjob * ppn)
+            mpirun_cmd.assign_environment(env, True)
+            mpirun_cmd.ppn.update(ppn)
+            sbatch_cmds.append(str(mpirun_cmd))
+            sbatch_cmds.append("status=$?")
+            if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
+                sbatch_cmds.extend(stop_dfuse(dfuse))
+            commands.append([sbatch_cmds, log_name])
+            self.log.info(f"<<MDTEST {api} cmdlines>>:")
+            for cmd in sbatch_cmds:
+                self.log.info(cmd)
     return commands
 
 
@@ -1184,7 +1178,7 @@ def create_racer_cmdline(self, job_spec):
     commands.append([cmds, log_name])
     self.log.info("<<DAOS racer cmdlines>>:")
     for cmd in cmds:
-        self.log.info("%s", cmd)
+        self.log.info(cmd)
     return commands
 
 
@@ -1217,57 +1211,55 @@ def create_fio_cmdline(self, job_spec, pool):
     fio_cmd.namespace = fio_namespace
     fio_cmd.get_params(self)
     fio_cmd.aux_path.update(self.test_dir, "aux_path")
-    for blocksize in bs_list:
-        for size in size_list:
-            for rw_val in rw_list:
-                for file_oclass, dir_oclass in oclass_list:
-                    for api in api_list:
-                        if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
-                            continue
-                        # update fio params
-                        fio_cmd.update(
-                            "global", "blocksize", blocksize,
-                            "fio --name=global --blocksize")
-                        fio_cmd.update(
-                            "global", "size", size,
-                            "fio --name=global --size")
-                        fio_cmd.update(
-                            "global", "rw", rw_val,
-                            "fio --name=global --rw")
-                        cmds = []
-                        # add start dfuse cmds; api is always POSIX
-                        fio_cmd.api.update("POSIX")
-                        # Connect to the pool, create container and then start dfuse
-                        add_containers(self, pool, file_oclass, dir_oclass)
-                        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
-                        log_name = "{}_{}_{}_{}_{}_{}".format(
-                            job_spec, api, blocksize, size, rw_val, file_oclass)
+    for blocksize, size, rw_val, file_dir_oclass, api in product(bs_list,
+                                                                 size_list,
+                                                                 rw_list,
+                                                                 oclass_list,
+                                                                 api_list):
+        if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
+            continue
+        # update fio params
+        fio_cmd.update(
+            "global", "blocksize", blocksize,
+            "fio --name=global --blocksize")
+        fio_cmd.update(
+            "global", "size", size,
+            "fio --name=global --size")
+        fio_cmd.update(
+            "global", "rw", rw_val,
+            "fio --name=global --rw")
+        cmds = []
+        # add start dfuse cmds; api is always POSIX
+        fio_cmd.api.update("POSIX")
+        # Connect to the pool, create container and then start dfuse
+        add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
+        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
+        log_name = "{}_{}_{}_{}_{}_{}".format(
+            job_spec, api, blocksize, size, rw_val, file_dir_oclass[0])
 
-                        dfuse, cmds = start_dfuse(
-                            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
-                        # Update the FIO cmdline
-                        fio_cmd.update(
-                            "global", "directory",
-                            dfuse.mount_dir.value,
-                            "fio --name=global --directory")
-                        # add fio cmdline
-                        cmds.append("cd {};".format(dfuse.mount_dir.value))
-                        if self.enable_il and api == "POSIX-LIBPIL4DFS":
-                            cmds.append("export LD_PRELOAD={}".format(
-                                os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')))
-                            cmds.append("export IL_LOG=1")
-                        if self.enable_il and api == "POSIX-LIBIOIL":
-                            cmds.append("export LD_PRELOAD={}".format(
-                                os.path.join(self.prefix, 'lib64', 'libioil.so')))
-                            cmds.append("export IL_LOG=1")
-                        cmds.append(str(fio_cmd))
-                        cmds.append("status=$?")
-                        cmds.append("cd -")
-                        cmds.extend(stop_dfuse(dfuse))
-                        commands.append([cmds, log_name])
-                        self.log.info("<<Fio cmdlines>>:")
-                        for cmd in cmds:
-                            self.log.info("%s", cmd)
+        dfuse, cmds = start_dfuse(
+            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+        # Update the FIO cmdline
+        fio_cmd.update(
+            "global", "directory",
+            dfuse.mount_dir.value,
+            "fio --name=global --directory")
+        # add fio cmdline
+        cmds.append(f"cd {dfuse.mount_dir.value};")
+        if self.enable_il and api == "POSIX-LIBPIL4DFS":
+            cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')}")
+            cmds.append("export D_IL_REPORT=1")
+        if self.enable_il and api == "POSIX-LIBIOIL":
+            cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libioil.so')}")
+            cmds.append("export D_IL_REPORT=1")
+        cmds.append(str(fio_cmd))
+        cmds.append("status=$?")
+        cmds.append("cd -")
+        cmds.extend(stop_dfuse(dfuse))
+        commands.append([cmds, log_name])
+        self.log.info("<<Fio cmdlines>>:")
+        for cmd in cmds:
+            self.log.info(cmd)
     return commands
 
 
@@ -1301,7 +1293,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 continue
             add_containers(self, pool, file_oclass, dir_oclass)
-            sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
+            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             # include dfuse cmdlines
@@ -1311,7 +1303,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 sbatch_cmds.extend(dfuse_start_cmdlist)
             # allow apps that use an mpi other than default (self.mpi_module)
             if mpi_module != self.mpi_module:
-                sbatch_cmds.append("module load {}".format(mpi_module))
+                sbatch_cmds.append(f"module load {mpi_module}")
             mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
             if "mpich" in mpi_module:
@@ -1321,7 +1313,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 env["D_LOG_FILE_APPEND_PID"] = "1"
                 if self.enable_il and api == "POSIX-LIBPIL4DFS":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                    env["IL_LOG"] = "1"
+                    env["D_IL_REPORT"] = "1"
                 if self.enable_il and api == "POSIX-LIBIOIL":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
                     env["D_IL_REPORT"] = "1"
@@ -1335,10 +1327,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 if mpi_module != self.mpi_module:
-                    sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
+                    sbatch_cmds.extend(["module purge", f"module load {self.mpi_module}"])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
-            self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
+            self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
             if mpi_module != self.mpi_module:
@@ -1350,6 +1342,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
 def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """Create datamover cmdlines for job script.
 
+    Args:
         self (obj): soak obj
         job_spec (str):   datamover job in yaml to run
         pool (obj):       TestPool obj
