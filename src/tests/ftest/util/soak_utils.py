@@ -10,7 +10,7 @@ import time
 import random
 import threading
 import re
-import product
+from itertools import product
 
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
