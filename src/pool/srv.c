@@ -128,7 +128,7 @@ static struct daos_rpc_handler pool_handlers_v5[] = {
 #undef X
 
 static void *
-pool_tls_init(int xs_id, int tgt_id)
+pool_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct pool_tls *tls;
 
@@ -141,7 +141,7 @@ pool_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-pool_tls_fini(void *data)
+pool_tls_fini(int tags, void *data)
 {
 	struct pool_tls		*tls = data;
 	struct ds_pool_child	*child;

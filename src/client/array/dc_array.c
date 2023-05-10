@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -956,6 +956,20 @@ dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 	*chunk_size = array->chunk_size;
 	*cell_size = array->cell_size;
 
+	array_decref(array);
+
+	return 0;
+}
+
+int
+dc_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size)
+{
+	struct dc_array		*array;
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+	array->chunk_size = chunk_size;
 	array_decref(array);
 
 	return 0;

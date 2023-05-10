@@ -959,10 +959,16 @@ io_obj_cache_test(void **state)
 	char			*po_name;
 	uuid_t			 pool_uuid;
 	daos_handle_t		 l_poh, l_coh;
+	struct daos_lru_cache   *old_cache;
 	int			 i, rc;
+	struct vos_tls          *tls;
 
 	rc = vos_obj_cache_create(10, &occ);
 	assert_rc_equal(rc, 0);
+
+	tls             = vos_tls_get();
+	old_cache       = tls->vtl_ocache;
+	tls->vtl_ocache = occ;
 
 	rc = vts_alloc_gen_fname(&po_name);
 	assert_int_equal(rc, 0);
@@ -992,7 +998,7 @@ io_obj_cache_test(void **state)
 
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
 	assert_rc_equal(rc, 0);
-	/** Should be prevented because object olready held for discard */
+	/** Should be prevented because object already held for discard */
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
 	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 	/** Should prevent simultaneous hold for create as well */
@@ -1065,6 +1071,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_rc_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
+	tls->vtl_ocache = old_cache;
 	free(po_name);
 }
 

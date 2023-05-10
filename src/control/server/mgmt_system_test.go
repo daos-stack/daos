@@ -122,6 +122,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				MsRanks:     []uint32{0},
 				DataVersion: 2,
+				Sys:         build.DefaultSystemName,
 			},
 		},
 		"Server uses TCP sockets + Ethernet": {
@@ -154,6 +155,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				MsRanks:     []uint32{0},
 				DataVersion: 2,
+				Sys:         build.DefaultSystemName,
 			},
 		},
 		"older client (AllRanks: false)": {
@@ -182,6 +184,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				MsRanks:     []uint32{0},
 				DataVersion: 2,
+				Sys:         build.DefaultSystemName,
 			},
 		},
 	} {
@@ -2001,7 +2004,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			svc.startJoinLoop(ctx)
+			svc.startBatchLoops(ctx)
 
 			if tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName

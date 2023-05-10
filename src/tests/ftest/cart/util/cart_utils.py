@@ -10,12 +10,12 @@ import subprocess  # nosec
 import logging
 import re
 import glob
-import cart_logparse
-import cart_logtest
 
-from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 
+import cart_logparse
+import cart_logtest
+from apricot import TestWithoutServers
 from run_utils import stop_processes
 from host_utils import get_local_host
 from write_host_file import write_host_file

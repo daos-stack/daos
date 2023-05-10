@@ -7,7 +7,7 @@ Create Second container:
 ```sh
 # Create Second container
 $ export DAOS_CONT2=cont2
-$ daos container create --type POSIX --label $DAOS_CONT2 $DAOS_POOL
+$ daos container create --type POSIX $DAOS_CONT2 $DAOS_POOL
 Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
 ```
 
@@ -29,8 +29,6 @@ Rebuild idle, 0 objs, 0 recs
 ```
 
 Move data from POSIX directory into a DAOS container:
-
-DAOS 1.2 only supports directory copy if using `daos filesystem copy`
 
 ```sh
 # moving everything under /tmp/daos_dfuse to new cont $DAOS_CONT2

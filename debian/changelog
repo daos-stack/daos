@@ -1,8 +1,14 @@
-daos (2.3.106-3) unstable; urgency=medium
+daos (2.3.107-2) unstable; urgency=medium
   [ Ryon Jensen ]
   * Removed unnecessary test files
 
- -- Ryon Jensen <ryon.jensen@intel.com>  Wed, Mar 29 2023 10:46:00 -0700
+ -- Ryon Jensen <ryon.jensen@intel.com>  Wed, May 10 2023 10:46:00 -0700
+
+daos (2.3.107-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.3.107
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 5 May 2023 10:00:00 -0100
 
 daos (2.3.106-2) unstable; urgency=medium
   [ Tom Nabarro ]

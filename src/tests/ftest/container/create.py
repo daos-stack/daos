@@ -3,12 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 
 
 class CreateContainerTest(TestWithServers):

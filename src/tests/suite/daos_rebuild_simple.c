@@ -487,7 +487,7 @@ rebuild_snap_punch_keys(void **state)
 
 			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
 					       &th_open, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			number = 2 * SNAP_CNT;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
