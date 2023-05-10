@@ -2378,26 +2378,16 @@ opendir(const char *path)
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_opendir, 1);
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0))
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		/* dfs_lookup() is needed for root dir */
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &dir_obj, &mode, NULL);
-	else
+		if (rc)
+			D_GOTO(out_err_ret, rc);
+	} else {
 		rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFDIR, O_RDONLY, 0, 0, NULL,
 			      &dir_obj);
-	if (rc) {
-		errno = rc;
-		return NULL;
-	}
-
-	if (parent == NULL) {
-		if (strncmp(item_name, "/", 2) != 0) {
-			dfs_obj_t *parent_obj;
-
-			rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &parent_obj, &mode, NULL);
-			if (rc)
-				D_GOTO(out_err, rc);
-			dfs_release(parent_obj);
-		}
-	} else {
+		if (rc)
+			D_GOTO(out_err_ret, rc);
 		rc = dfs_get_mode(dir_obj, &mode);
 		if (rc)
 			D_GOTO(out_err, rc);
@@ -2441,6 +2431,8 @@ opendir(const char *path)
 
 out_err:
 	dfs_release(dir_obj);
+
+out_err_ret:
 	errno = rc;
 	return NULL;
 }
