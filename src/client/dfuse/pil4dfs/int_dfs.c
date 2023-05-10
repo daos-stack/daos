@@ -735,7 +735,7 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
- *  returns parent object, item name, full path of parent dir, full absolute path, and 
+ *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
  */
 static int
@@ -799,7 +799,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
 	len = remove_dot_and_cleanup(full_path_parse, len);
 
-        /* standarlize and determine whether a path is a target path or not */
+	/* standarlize and determine whether a path is a target path or not */
+
 	/* Assume full_path_parse[] = "/A/B/C/../D/E", it will be "/A/B/D/E" after
 	 * remove_dot_dot.
 	 */
@@ -1576,7 +1577,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if ((oflags & O_RDWR) && (oflags & O_CREAT)) {
 		if (parent == NULL) {
 			dfs_obj_t *parent_obj;
-			rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &parent_obj, &mode_parent, NULL);
+
+			rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &parent_obj,
+					&mode_parent, NULL);
 			if (rc)
 				D_GOTO(out_error, rc);
 			dfs_release(parent_obj);
@@ -2388,6 +2391,7 @@ opendir(const char *path)
 	if (parent == NULL) {
 		if (strncmp(item_name, "/", 2) != 0) {
 			dfs_obj_t *parent_obj;
+
 			rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &parent_obj, &mode, NULL);
 			if (rc)
 				D_GOTO(out_err, rc);
