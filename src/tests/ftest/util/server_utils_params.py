@@ -219,7 +219,7 @@ class DaosServerYamlParameters(YamlParameters):
         """
         yaml_data_updated = super().is_yaml_data_updated()
         if not yaml_data_updated:
-            for other_params in (self.engine_params, self.metadata_params):
+            for other_params in self.engine_params + [self.metadata_params]:
                 if other_params.is_yaml_data_updated():
                     yaml_data_updated = True
                     break
@@ -228,7 +228,7 @@ class DaosServerYamlParameters(YamlParameters):
     def reset_yaml_data_updated(self):
         """Reset each yaml file parameter updated state to False."""
         super().reset_yaml_data_updated()
-        for other_params in (self.engine_params, self.metadata_params):
+        for other_params in self.engine_params + [self.metadata_params]:
             other_params.reset_yaml_data_updated()
 
     def set_value(self, name, value):
@@ -246,7 +246,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         # Set the value for each per-engine configuration attribute name
         if not status:
-            for other_params in (self.engine_params, self.metadata_params):
+            for other_params in self.engine_params + [self.metadata_params]:
                 if other_params.set_value(name, value):
                     status = True
 
@@ -267,11 +267,10 @@ class DaosServerYamlParameters(YamlParameters):
         # Look for the value in the per-engine configuration parameters.  The
         # first value found will be returned.
         index = 0
-        while value is None and index < len(self.engine_params):
-            value = self.engine_params[index].get_value(name)
+        other_params = self.engine_params + [self.metadata_params]
+        while value is None and index < len(other_params):
+            value = other_params[index].get_value(name)
             index += 1
-        if value is None:
-            value = self.metadata_params.get_value(name)
 
         return value
 
@@ -387,8 +386,7 @@ class ControlMetadataParameters(YamlParameters):
         """Initialize an ControlMetadataParameters object.
 
         Args:
-            filename (str): yaml configuration file name
-            common_yaml (YamlParameters): [description]
+            base_namespace (str): namespace for the server configuration
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["control_metadata", "*"]
         self._base_namespace = base_namespace
