@@ -127,10 +127,6 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
 int
 dfs_relink_root(daos_handle_t coh);
 
-/** query mode of a dfs object */
-mode_t
-dfs_obj_mode(dfs_t *dfs, dfs_obj_t *obj);
-
 #if defined(__cplusplus)
 }
 #endif

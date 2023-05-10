@@ -7287,12 +7287,3 @@ out:
 		D_FREE(entry.value);
 	return rc;
 }
-
-mode_t
-dfs_obj_mode(dfs_t *dfs, dfs_obj_t *obj)
-{
-	if (obj == NULL)
-		return dfs->root.mode;
-	else
-		return obj->mode;
-}
