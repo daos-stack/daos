@@ -24,11 +24,6 @@
 #include <gurt/telemetry_common.h>
 #include <daos_srv/policy.h>
 
-/*
- * Aggregation of pool/container/object/keys disk format change.
- */
-#define DS_POOL_GLOBAL_VERSION		2
-
 /**
  * Each individual object layout format, like oid layout, dkey to group,
  * dkey to EC group start.
