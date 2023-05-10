@@ -35,6 +35,13 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+
+	/* Per process spinlock
+	 * This is used to lock readdir against closedir where they share a readdir handle,
+	 * so this could be per inode however that's lots of additional memory and the locking
+	 * is only needed for minimal list management so isn't locked often or for long.
+	 */
+	pthread_spinlock_t   di_lock;
 };
 
 struct dfuse_projection_info {
@@ -78,20 +85,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 struct dfuse_inode_entry;
 
-struct dfuse_readdir_entry {
-	/* Name of this directory entry */
-	char  dre_name[NAME_MAX + 1];
-
-	/* Offset of this directory entry */
-	off_t dre_offset;
-
-	/* Offset of the next directory entry
-	 * A value of DFUSE_READDIR_EOD means end
-	 * of directory.
-	 */
-	off_t dre_next_offset;
-};
-
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
@@ -111,11 +104,17 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint64_t           doh_write_count;
 
+	/* Next offset we expect from readdir */
+	off_t                     doh_rd_offset;
+
+	/* Pointer to the last returned drc entry */
+	struct dfuse_readdir_c   *doh_rd_nextc;
+
 	/* Linear read function, if a file is read from start to end then this normally requires
 	 * a final read request at the end of the file that returns zero bytes.  Detect this case
 	 * and when the final read is detected then just return without a round trip.
 	 * Store a flag for this being enabled (starts as true, but many I/O patterns will set it
-	 * to false), the expected position of the next read and a boonean for if EOF has been
+	 * to false), the expected position of the next read and a boolean for if EOF has been
 	 * detected.
 	 */
 	off_t                     doh_linear_read_pos;
@@ -124,12 +123,6 @@ struct dfuse_obj_hdl {
 
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
-
-	/* True if the kernel may have been told to keep the cache for this open.  This is used
-	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
-	 * here and this flag may be set on create even if the kernel flag isn't provided.
-	 */
-	bool                      doh_keep_cache;
 
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                      doh_writeable;
@@ -145,9 +138,36 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_finished;
 };
 
+/* Readdir entry as saved by the iterator.  These are forward-looking from the current position */
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char  dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
+	off_t dre_offset;
+
+	/* Offset of the next directory entry  A value of DFUSE_READDIR_EOD means end of directory.
+	 * This could in theory be a boolean.
+	 */
+	off_t dre_next_offset;
+};
+
+/* Readdir entry as saved by the cache.  These are backwards looking from the current position
+ * and will be used by other open handles on the same inode doing subsequent readdir calls.
+ */
+struct dfuse_readdir_c {
+	d_list_t    drc_list;
+	struct stat drc_stbuf;
+	d_list_t   *drc_rlink;
+	off_t       drc_offset;
+	off_t       drc_next_offset;
+	char        drc_name[NAME_MAX + 1];
+};
+
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT 1024
 
+/* Readdir handle.  Pointed to by any open directory handle after the first readdir call */
 struct dfuse_readdir_hdl {
 	/** an anchor to track listing in readdir */
 	daos_anchor_t              drh_anchor;
@@ -160,7 +180,29 @@ struct dfuse_readdir_hdl {
 	uint32_t                   drh_dre_last_index;
 	/** Next value from anchor */
 	uint32_t                   drh_anchor_index;
+
+	/** List of directory entries read so far, list of dfuse_readdir_c */
+	d_list_t                   drh_cache_list;
+
+	/* Count of how many directory handles are using this handle */
+	ATOMIC uint32_t            drh_ref;
+
+	/* Set to true if this handle is caching and potentially shared.  Immutable. */
+	bool                       drh_caching;
+
+	/* Starts at true and set to false if a directory is modified when open.  Prevents new
+	 * readers from sharing the handle
+	 */
+	bool                       drh_valid;
 };
+
+/* Drop a readdir handle from a open directory handle.
+ *
+ * For non-caching handles this means free it however in the case of caching it will drop
+ * a reference only.
+ */
+void
+dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
@@ -459,7 +501,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 				(attr)->st_mode, (attr)->st_size);                                 \
 		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
-			dfuse_cache_set_time(ie);                                                  \
+			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
@@ -523,7 +565,18 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open");                                             \
+		DFUSE_TRA_DEBUG(oh, "Returning open, keep_cache %d", (_fi)->keep_cache);           \
+		__rc = fuse_reply_open(req, _fi);                                                  \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(oh, "Returning open, use_cache %d keep_cache %d",                  \
+				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
 		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \
@@ -547,7 +600,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if (entry.attr_timeout > 0) {                                                      \
 			(inode)->ie_stat = entry.attr;                                             \
-			dfuse_cache_set_time(inode);                                               \
+			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
 		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
@@ -592,13 +645,13 @@ struct dfuse_inode_entry {
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
 	 */
-	struct stat              ie_stat;
+	struct stat               ie_stat;
 
-	dfs_obj_t               *ie_obj;
+	dfs_obj_t                *ie_obj;
 
 	/** DAOS object ID of the dfs object.  Used for uniquely identifying files */
 
-	daos_obj_id_t            ie_oid;
+	daos_obj_id_t             ie_oid;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
@@ -606,7 +659,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char                     ie_name[NAME_MAX + 1];
+	char                      ie_name[NAME_MAX + 1];
 
 	/** The parent inode of this entry.
 	 *
@@ -614,45 +667,50 @@ struct dfuse_inode_entry {
 	 * be incorrect at any point after that.  The inode does not hold
 	 * a reference on the parent so the inode may not be valid.
 	 */
-	fuse_ino_t               ie_parent;
+	fuse_ino_t                ie_parent;
 
-	struct dfuse_cont       *ie_dfs;
+	struct dfuse_cont        *ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table locking.
 	 */
-	d_list_t                 ie_htl;
+	d_list_t                  ie_htl;
 
-	/* Time of last kernel cache update.
-	 */
-	struct timespec          ie_cache_last_update;
+	/* Time of last kernel cache metadata update */
+	struct timespec           ie_mcache_last_update;
+
+	/* Time of last kernel cache data update, also used for kernel readdir caching. */
+	struct timespec           ie_dcache_last_update;
 
 	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t                   ie_start_off;
-	size_t                   ie_end_off;
+	size_t                    ie_start_off;
+	size_t                    ie_end_off;
 
 	/** Reference counting for the inode Used by the hash table callbacks */
-	ATOMIC uint32_t          ie_ref;
+	ATOMIC uint32_t           ie_ref;
 
 	/* Number of open file descriptors for this inode */
-	ATOMIC uint32_t          ie_open_count;
+	ATOMIC uint32_t           ie_open_count;
 
-	ATOMIC uint32_t          ie_open_write_count;
+	ATOMIC uint32_t           ie_open_write_count;
 
 	/* Number of file open file descriptors using IL */
-	ATOMIC uint32_t          ie_il_count;
+	ATOMIC uint32_t           ie_il_count;
+
+	/* Readdir handle, if present.  May be shared */
+	struct dfuse_readdir_hdl *ie_rd_hdl;
 
 	/** Number of active readdir operations */
-	ATOMIC uint32_t          ie_readir_number;
+	ATOMIC uint32_t           ie_readir_number;
 
 	/** file was truncated from 0 to a certain size */
-	bool                     ie_truncated;
+	bool                      ie_truncated;
 
 	/** file is the root of a container */
-	bool                     ie_root;
+	bool                      ie_root;
 
 	/** File has been unlinked from daos */
-	bool                     ie_unlinked;
+	bool                      ie_unlinked;
 };
 
 extern char *duns_xattr_name;
@@ -683,17 +741,37 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
 
+/* Metadata caching functions. */
+
 /* Mark the cache as up-to-date from now */
 void
-dfuse_cache_set_time(struct dfuse_inode_entry *ie);
+dfuse_mcache_set_time(struct dfuse_inode_entry *ie);
 
 /* Set the cache as invalid */
 void
-dfuse_cache_evict(struct dfuse_inode_entry *ie);
+dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 
 /* Check the cache setting against a given timeout, and return time left */
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* Data caching functions */
+
+/* Mark the cache as up-to-date from now */
+void
+dfuse_dcache_set_time(struct dfuse_inode_entry *ie);
+
+/* Set the cache as invalid */
+void
+dfuse_dcache_evict(struct dfuse_inode_entry *ie);
+
+/* Set both caches invalid */
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie);
+
+/* Check the cache setting against a given timeout */
+bool
+dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,

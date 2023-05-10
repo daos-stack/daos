@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -89,13 +89,21 @@ class DaosRacerCommand(ExecutableCommand):
 
         self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the daos_racer command remotely.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
@@ -110,6 +118,7 @@ class DaosRacerCommand(ExecutableCommand):
                     "Stopping timed out daos_racer process on %s", self.host)
                 pcmd(self.host, "pkill daos_racer", True)
 
-            raise CommandFailure("Error running '{}'".format(self._command))
+            if raise_exception:
+                raise CommandFailure("Error running '{}'".format(self._command))
 
         self.log.info("Test passed!")
