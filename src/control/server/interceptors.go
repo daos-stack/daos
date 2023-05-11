@@ -132,13 +132,14 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	if err == nil {
 		buildComponent = build.Component(secComponent.String())
 	}
+	isInsecure := status.Code(err) == codes.Unauthenticated
 
-	otherVersion := "0.0.0"
+	otherVersion := build.MustNewVersion("0.0.0")
 	if sReq, ok := req.(interface{ GetSys() string }); ok {
 		comps := strings.Split(sReq.GetSys(), "-")
 		if len(comps) > 1 {
 			if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
-				otherVersion = ver.String()
+				otherVersion = ver
 			}
 		}
 	} else {
@@ -148,11 +149,15 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 		return nil
 	}
 
-	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
+	if isInsecure && !self.Version.Equals(otherVersion) {
+		return FaultNoCompatibilityInsecure(self.Version, otherVersion)
+	}
+
+	other, err := build.NewVersionedComponent(buildComponent, otherVersion.String())
 	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
-			Version:   build.MustNewVersion(otherVersion),
+			Version:   build.MustNewVersion(otherVersion.String()),
 		}
 		return FaultIncompatibleComponents(self, other)
 	}
