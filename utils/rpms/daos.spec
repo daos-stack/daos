@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.106
-Release:       2%{?relval}%{?dist}
+Version:       2.3.107
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -554,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
+- Bump version to 2.3.107
+
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
 - Add numactl requires for server package
 

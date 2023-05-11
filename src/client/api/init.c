@@ -127,6 +127,8 @@ const struct daos_task_api dc_funcs[] = {
 
 	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
 	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
+	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
+	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
 
 	/** Pipeline */
 	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},

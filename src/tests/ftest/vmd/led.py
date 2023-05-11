@@ -5,6 +5,8 @@
 """
 import time
 
+from avocado import fail_on
+
 from dmg_utils import get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from nvme_utils import set_device_faulty
@@ -71,6 +73,7 @@ class VmdLedStatus(OSAUtils):
                 self.fail("dmg command failed: {}".format(result['response']['host_errors']))
         return result
 
+    @fail_on(CommandFailure)
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
@@ -79,7 +82,7 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
-        host_uuids = get_storage_query_device_uuids(self, self.dmg)
+        host_uuids = get_storage_query_device_uuids(self.dmg)
         for hosts, uuid_list in host_uuids.items():
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
@@ -90,6 +93,7 @@ class VmdLedStatus(OSAUtils):
                 self.log.info(led_identify_result)
                 self.log.info(get_led_result)
 
+    @fail_on(CommandFailure)
     def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290
 
@@ -98,7 +102,7 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """
-        host_uuids = get_storage_query_device_uuids(self, self.dmg)
+        host_uuids = get_storage_query_device_uuids(self.dmg)
         for hosts, uuid_list in host_uuids.items():
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
@@ -107,6 +111,7 @@ class VmdLedStatus(OSAUtils):
                 time.sleep(15)
                 self.log.info(resp)
 
+    @fail_on(CommandFailure)
     def test_disk_failure_recover(self):
         """Jira ID: DAOS-11284
 
@@ -115,7 +120,7 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
-        host_uuids = get_storage_query_device_uuids(self, self.dmg)
+        host_uuids = get_storage_query_device_uuids(self.dmg)
         for hosts, uuid_list in host_uuids.items():
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
