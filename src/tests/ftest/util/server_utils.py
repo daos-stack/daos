@@ -287,6 +287,19 @@ class DaosServerManager(SubprocessManager):
                     if cmd not in clean_commands:
                         clean_commands.append(cmd)
 
+        if self.manager.job.using_control_metadata:
+            # Remove the contents (superblocks) of the control plane metadata path
+            cmd = "sudo fm -fr {}/*".format(self.manager.job.control_metadata.path.value)
+            if cmd not in clean_commands:
+                clean_commands.append(cmd)
+
+            if self.manager.job.control_metadata.device.value is not None:
+                # Dismount the control plane metadata mount point
+                cmd = "while sudo umount {}; do continue; done".format(
+                    self.manager.job.control_metadata.device.value)
+                if cmd not in clean_commands:
+                    clean_commands.append(cmd)
+
         pcmd(self._hosts, "; ".join(clean_commands), verbose)
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):

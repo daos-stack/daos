@@ -318,6 +318,15 @@ class DaosServerYamlParameters(YamlParameters):
                 return True
         return False
 
+    @property
+    def using_control_metadata(self):
+        """Is the configuration file setup to use a control plane metadata.
+
+        Returns:
+            bool: True if a control metadata path is being used; False otherwise
+        """
+        return (self.metadata_params.path.value is not None)
+
     def update_log_files(self, control_log, helper_log, server_log):
         """Update the logfile parameter for the daos server.
 
