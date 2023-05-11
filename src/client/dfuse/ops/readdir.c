@@ -135,7 +135,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	uint32_t                  oldref;
 	off_t                     expected_offset = 2;
 
-	DFUSE_TRA_INFO(oh, "Dropping ref on %p", oh->doh_rd);
+	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
 	if (!oh->doh_rd)
 		return;
@@ -150,11 +150,11 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
-		DFUSE_TRA_INFO(hdl, "Ref was %d", oldref);
+		DFUSE_TRA_DEBUG(hdl, "Ref was %d", oldref);
 		D_GOTO(unlock, 0);
 	}
 
-	DFUSE_TRA_INFO(hdl, "Ref was 1, freeing");
+	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
 
 	/* Check for common */
 	if (hdl == oh->doh_ie->ie_rd_hdl)
@@ -166,7 +166,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 			 drc->drc_next_offset == READDIR_EOD);
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
-			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+			d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
@@ -533,13 +533,13 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	if (to_seek) {
 		uint32_t num;
 
-		DFUSE_TRA_INFO(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
 
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
-			DFUSE_TRA_INFO(oh, "Switching to private handle");
+			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL)
