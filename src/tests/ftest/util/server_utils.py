@@ -289,7 +289,7 @@ class DaosServerManager(SubprocessManager):
 
         if self.manager.job.using_control_metadata:
             # Remove the contents (superblocks) of the control plane metadata path
-            cmd = "sudo fm -fr {}/*".format(self.manager.job.control_metadata.path.value)
+            cmd = "sudo rm -fr {}/*".format(self.manager.job.control_metadata.path.value)
             if cmd not in clean_commands:
                 clean_commands.append(cmd)
 
