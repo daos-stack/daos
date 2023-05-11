@@ -5,6 +5,7 @@
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
+%global libfabric_max_version 1.18
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -27,7 +28,7 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel >= %{libfabric_version}, libfabric-devel < %{libfabric_max_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -147,7 +148,7 @@ Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: numactl
 %{?systemd_requires}
 
@@ -165,7 +166,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else
@@ -555,6 +556,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
 * Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
 - Bump version to 2.3.107
 
