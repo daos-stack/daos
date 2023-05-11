@@ -1655,7 +1655,7 @@ unmap_wal(struct bio_meta_context *mc, uint64_t unmap_start, uint64_t unmap_end,
 }
 
 int
-bio_wal_replay(struct bio_meta_context *mc,
+bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
@@ -1669,6 +1669,8 @@ bio_wal_replay(struct bio_meta_context *mc,
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
+	uint64_t		 total_bytes = 0, rpl_entries = 0, total_tx = 0;
+	uint64_t		 s_us;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
@@ -1682,6 +1684,10 @@ bio_wal_replay(struct bio_meta_context *mc,
 
 	tx_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
 	start_id = tx_id;
+
+	/* upper layer (VOS) rehydration metrics if any */
+	if (wrs != NULL)
+		s_us = daos_getutime();
 
 load_wal:
 	tight_loop = 0;
@@ -1728,6 +1734,13 @@ load_wal:
 		tight_loop++;
 		nr_replayed++;
 		blk_off += blk_desc.bd_blks;
+
+		/* replay metrics */
+		if (wrs != NULL) {
+			total_bytes += (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
+			rpl_entries += hdr->th_tot_ents;
+			total_tx++;
+		}
 
 		/* Bump last committed tx ID in WAL super info */
 		if (wal_id_cmp(si, tx_id, si->si_commit_id) > 0) {
@@ -1777,6 +1790,14 @@ out:
 		rc = unmap_wal(mc, unmap_start, unmap_end, NULL);
 		if (rc)
 			D_ERROR("Unmap after replay failed. "DF_RC"\n", DP_RC(rc));
+
+		/* upper layer (VOS) rehydration metrics */
+		if (wrs != NULL) {
+			wrs->wrs_tm = daos_getutime() - s_us;
+			wrs->wrs_sz = total_bytes;
+			wrs->wrs_entries = rpl_entries;
+			wrs->wrs_tx_cnt = total_tx;
+		}
 	} else {
 		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
 	}
