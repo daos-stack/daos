@@ -24,7 +24,7 @@ static __thread bool		ev_thpriv_is_init;
  * Global progress timeout for synchronous operation
  * busy-polling by default (0), timeout in us otherwise
  */
-static uint32_t ev_prog_timeout = 0;
+static uint32_t ev_prog_timeout;
 
 #define EQ_WITH_CRT
 
