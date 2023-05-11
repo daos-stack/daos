@@ -554,7 +554,7 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].cont         = container;
 	dfs_list[num_dfs].dfs_dir_hash = NULL;
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
-	atomic_store_relaxed(&(dfs_list[num_dfs].inited), 0);
+	atomic_store_relaxed(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
 }
 
@@ -585,7 +585,7 @@ discover_dfuse(void)
 					"Skip this entry.\n");
 				continue;
 			}
-			atomic_store_relaxed(&(dfs_list[num_dfs].inited), 0);
+			atomic_store_relaxed(&dfs_list[num_dfs].inited, 0);
 			dfs_list[num_dfs].pool         = NULL;
 			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
 					 DFS_MAX_PATH - 1);
