@@ -4775,9 +4775,6 @@ class AllocFailTestRun():
         if not self.fault_injected:
             _explain()
             return
-        # if not self.aft.check_stderr:
-        #    _explain()
-        #    return
 
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
@@ -4864,8 +4861,6 @@ class AllocFailTest():
         self.cmd = cmd
         self.description = desc
         self.prefix = True
-        # Check stderr from commands where faults were injected.
-        self.check_stderr = True
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
         # Check stderr conforms to daos_hdlr.c style
@@ -5018,7 +5013,6 @@ def test_dfuse_start(server, conf, wf):
     test_cmd.skip_daos_init = False
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False  # Checked.
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     os.rmdir(mount_point)
@@ -5034,7 +5028,7 @@ def test_alloc_fail_copy(server, conf, wf):
     Create an initial container to copy from so this is testing reading as well as writing
 
     Note this test will run without the destination containers existing but afterwards they
-    might with varions stages of completion, running just this test in a loop without wiping
+    might with various stages of completion, running just this test in a loop without wiping
     the containers between runs will exercise different code-paths and probably fail at some
     point due to the destination container existing but being invalid.  A longer term aim
     would be to run this test with the destination containers existing but valid (which tests
@@ -5072,7 +5066,6 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     return test_cmd.launch()
 
@@ -5096,7 +5089,6 @@ def test_alloc_cont_create(server, conf, wf):
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = False
 
     return test_cmd.launch()
 
@@ -5121,7 +5113,6 @@ def test_alloc_fail_cont_create(server, conf):
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = False
 
     rc = test_cmd.launch()
     dfuse.stop()
@@ -5148,7 +5139,6 @@ def test_alloc_fail_cat(server, conf):
 
     test_cmd = AllocFailTest(conf, 'il-cat', ['cat', target_file])
     test_cmd.use_il = True
-    test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
 
     rc = test_cmd.launch()
@@ -5187,7 +5177,6 @@ def test_alloc_fail_il_cp(server, conf):
 
     test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
     test_cmd.use_il = True
-    test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
 
     rc = test_cmd.launch()
@@ -5233,7 +5222,6 @@ def test_fi_get_prop(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
     test_cmd.wf = wf
-    test_cmd.check_stderr = True
     test_cmd.check_post_stdout = False  # Checked.
 
     rc = test_cmd.launch()
@@ -5263,7 +5251,6 @@ def test_fi_get_attr(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5287,7 +5274,6 @@ def test_fi_cont_query(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5311,7 +5297,6 @@ def test_fi_cont_check(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5417,27 +5402,27 @@ def run(wf, args):
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
                 # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                # fatal_errors.add_result(test_alloc_fail(server, conf))
+                fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 # container create with properties test.
-                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 
