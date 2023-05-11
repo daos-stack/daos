@@ -750,7 +750,10 @@ class DaosServer():
 
         agent_config = join(self.agent_dir, 'nlt_agent.yaml')
         with open(agent_config, 'w') as fd:
-            agent_data = {'access_points': scyaml['access_points']}
+            agent_data = {
+                'access_points': scyaml['access_points'],
+                'control_log_mask': 'NOTICE',  # INFO logs every client process connection
+            }
             json.dump(agent_data, fd)
 
         agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
@@ -2321,6 +2324,30 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
+    @needs_dfuse
+    def test_list_xattr(self):
+        """Perform tests with listing extended attributes.
+
+        Ensure that the user.daos command can be read, and is included in the list.
+        xattrs are all byte strings.
+        """
+        expected_keys = {b'user.daos', b'user.dummy'}
+        root_xattr = xattr.getxattr(self.dfuse.dir, "user.daos")
+        print(f'The root xattr is {root_xattr}')
+
+        xattr.set(self.dfuse.dir, 'user.dummy', 'short string')
+
+        for (key, value) in xattr.get_all(self.dfuse.dir):
+            expected_keys.remove(key)
+            print(f'xattr is {key}:{value}')
+
+        # Leave this out for now to avoid adding attr as a new rpm dependency.
+        # rc = subprocess.run(['getfattr', '-n', 'user.daos', self.dfuse.dir], check=False)
+        # print(rc)
+        # assert rc.returncode == 0, rc
+
+        assert len(expected_keys) == 0, 'Expected key not found'
+
     @needs_dfuse_with_opt(wbcache=True, caching=True)
     def test_stat_before_open(self):
         """Run open/close in a loop on the same file
@@ -3185,15 +3212,15 @@ class PosixTests():
         side_test_file = join(side_dfuse.dir, 'test-file')
 
         # Create a file.
-        with open(test_file, 'w') as fd:
+        with open(test_file, 'w', encoding='ascii', errors='ignore') as fd:
             fd.write('data')
 
         # Read it through both.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
-        with open(side_test_file, 'r') as fd:
+        with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3205,14 +3232,14 @@ class PosixTests():
 
         # Read it through the second channel.
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
             pass
 
         # Read it through first instance, this should work as the contents are cached.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3221,7 +3248,7 @@ class PosixTests():
         time.sleep(cache_time * 2)
 
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
@@ -3229,7 +3256,7 @@ class PosixTests():
 
         # Read it through the first dfuse, this should now fail as the cache has expired.
         try:
-            with open(test_file, 'r') as fd:
+            with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
@@ -4554,7 +4581,6 @@ def test_pydaos_kv(server, conf):
 
 def test_pydaos_kv_obj_class(server, conf):
     """Test the predefined object class works with KV"""
-
     with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
                                      suffix='.log',
                                      delete=False) as tmp_file:

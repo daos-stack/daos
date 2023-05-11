@@ -1139,7 +1139,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_readir_number) == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_readdir_number) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
 
