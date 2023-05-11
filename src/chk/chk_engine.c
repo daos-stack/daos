@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -204,11 +204,21 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 	}
 }
 
-static inline void
-chk_engine_post_repair(struct chk_instance *ins, int *result)
+static int
+chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 {
-	if (!(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+	char	uuid_str[DAOS_UUID_STR_SIZE];
+	int	rc = 0;
+
+	if (!(cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
 		*result = 0;
+
+	if (update) {
+		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		rc = chk_bk_update_pool(&cpr->cpr_bk, uuid_str);
+	}
+
+	return *result != 0 ? *result : rc;
 }
 
 static int
@@ -226,7 +236,6 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t			 seq = 0;
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
@@ -345,12 +354,12 @@ report:
 		 DP_ENGINE(ins), index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank,
 		 index, act, option_nr ? "need interact" : "no interact", result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -395,11 +404,7 @@ report:
 	goto report;
 
 out:
-	chk_engine_post_repair(ins, &result);
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-	rc = chk_bk_update_pool(cbk, uuid_str);
-
-	return result != 0 ? result : rc;
+	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -418,7 +423,6 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	Chk__CheckInconsistAction	 act;
 	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t			 seq = 0;
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
@@ -528,7 +532,7 @@ report:
 		 option_nr ? "need interact" : "no interact", result, rc, decision,
 		 pool_map_status2name(status));
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		/*
 		 * Skip the pool with dangling pm entry if failed to interact with admin for
@@ -538,7 +542,7 @@ report:
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -578,11 +582,7 @@ report:
 	goto report;
 
 out:
-	chk_engine_post_repair(ins, &result);
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-	rc = chk_bk_update_pool(cbk, uuid_str);
-
-	return result != 0 ? result : rc;
+	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -594,7 +594,6 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t			 seq = 0;
 	int				 rc;
 
@@ -626,10 +625,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 		 "target %u, action %u (no interact), handle_rc 0, report_rc %d, decision 0\n",
 		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act, rc);
 
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-	rc = chk_bk_update_pool(cbk, uuid_str);
-
-	return rc;
+	return chk_engine_post_repair(cpr, &rc, rc <= 0);
 }
 
 static int
@@ -823,7 +819,6 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t			 seq = cpr->cpr_label_seq;
 	int				 result = 0;
 	int				 rc = 0;
@@ -876,11 +871,7 @@ report:
 
 	daos_prop_free(label);
 
-	chk_engine_post_repair(ins, &result);
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-	rc = chk_bk_update_pool(cbk, uuid_str);
-
-	return result != 0 ? result : rc;
+	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -1057,12 +1048,12 @@ report:
 		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid), act,
 		 option_nr ? "need interact" : "no interact", result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -1102,9 +1093,7 @@ out:
 	/* NOTE: For orphan container, mark it as 'skip' since we do not support to add it back. */
 	ccr->ccr_skip = 1;
 
-	chk_engine_post_repair(ins, &result);
-
-	return result;
+	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static daos_prop_t *
@@ -1399,12 +1388,12 @@ report:
 		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
 		 "(null)", act, option_nr ? "need interact" : "no interact", result, rc, decision);
 
-	if (rc != 0 && option_nr > 0) {
+	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (rc > 0 || result != 0 || option_nr == 0)
 		goto out;
 
 	option_nr = 0;
@@ -1481,9 +1470,8 @@ out:
 	 */
 
 	daos_prop_free(prop_tmp);
-	chk_engine_post_repair(ins, &result);
 
-	return result;
+	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -1817,8 +1805,8 @@ chk_engine_sched(void *args)
 	uint32_t		 ins_status;
 	uint32_t		 pool_status;
 	d_rank_t		 myrank = dss_self_rank();
+	int			 done = 0;
 	int			 rc = 0;
-	bool			 done = false;
 
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
@@ -1831,9 +1819,16 @@ chk_engine_sched(void *args)
 			D_GOTO(out, rc = 0);
 
 		phase = chk_pools_find_slowest(ins, &done, NULL);
-		if (done) {
-			D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
-			D_GOTO(out, rc = 1);
+		if (done != 0) {
+			if (done > 0) {
+				D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
+				rc = 1;
+			} else {
+				D_INFO(DF_ENGINE" on rank %u is stopped\n", DP_ENGINE(ins), myrank);
+				rc = 0;
+			}
+
+			D_GOTO(out, rc);
 		}
 
 		if (phase > cbk->cb_phase) {
@@ -2116,6 +2111,9 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	ins->ci_starting = 1;
 	ins->ci_started = 0;
 	ins->ci_start_flags = 0;
+	ins->ci_for_orphan = 0;
+	ins->ci_implicated = 0;
+	ins->ci_pool_stopped = 0;
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
@@ -2230,7 +2228,7 @@ out_log:
 }
 
 int
-chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
+chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
@@ -2277,6 +2275,9 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 		}
 	}
 
+	if (ins->ci_pool_stopped)
+		*flags = CSF_POOL_STOPPED;
+
 	if (d_list_empty(&ins->ci_pool_list)) {
 		chk_stop_sched(ins);
 		/* To indicate that there is no active pool(s) on this rank. */
@@ -2284,6 +2285,7 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 	}
 
 out:
+	ins->ci_pool_stopped = 0;
 	ins->ci_stopping = 0;
 
 	if (rc >= 0 || rc == -DER_ALREADY) {
@@ -2918,6 +2920,11 @@ out:
 	return rc;
 }
 
+/*
+ * \return	Positive value if interaction is interrupted, such as check stop.
+ *		Zero on success.
+ *		Negative value if error.
+ */
 static int
 chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 {
@@ -2970,13 +2977,14 @@ log:
 	ABT_mutex_lock(cpr->cpr_mutex);
 
 again:
-	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+		*decision = cpr->cpr_action;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;
 	}
 
-	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
-		*decision = cpr->cpr_action;
+	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+		rc = 1;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;
 	}
