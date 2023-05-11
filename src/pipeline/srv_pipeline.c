@@ -185,20 +185,30 @@ alloc_iter_bufs(daos_iod_t *iods, uint32_t nr, daos_iod_t **iods_iter, d_sg_list
 	daos_iod_t     *iods_iter_out;
 	d_sg_list_t    *sgl_recx_iter_out  = NULL;
 	d_iov_t        *sgl_recx_iter_iovs = NULL;
-	uint32_t        i                   = 0;
+	uint32_t        i;
 	uint32_t        j;
 	size_t          iov_alloc_size;
 	int             rc;
 
+	D_ASSERT(nr != 0);
 	D_ALLOC_ARRAY(sgl_recx_iter_out, nr);
+	if (sgl_recx_iter_out == NULL)
+		return -DER_NOMEM;
 	D_ALLOC_ARRAY(sgl_recx_iter_iovs, nr);
+	if (sgl_recx_iter_iovs == NULL) {
+		D_FREE(sgl_recx_iter_out);
+		return -DER_NOMEM;
+	}
 	D_ALLOC_ARRAY(iods_iter_out, nr);
-	if (sgl_recx_iter_out == NULL || sgl_recx_iter_iovs == NULL || iods_iter_out == NULL)
-		D_GOTO(error, rc = -DER_NOMEM);
+	if (iods_iter_out == NULL) {
+		D_FREE(sgl_recx_iter_out);
+		D_FREE(sgl_recx_iter_iovs);
+		return -DER_NOMEM;
+	}
 
 	memcpy(iods_iter_out, iods, sizeof(*iods) * nr);
 
-	for (; i < nr; i++) {
+	for (i = 0; i < nr; i++) {
 		iov_alloc_size = 0;
 		if (iods[i].iod_type == DAOS_IOD_ARRAY) {
 			for (j = 0; j < iods[i].iod_nr; j++)
@@ -808,8 +818,10 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	/** --  */
 
 	D_ALLOC_ARRAY(kds, pri->pri_nr_kds);
+	if (kds == NULL)
+		D_GOTO(exit0, rc = -DER_NOMEM);
 	D_ALLOC_ARRAY(recx_size, pri->pri_iods.nr * pri->pri_nr_kds);
-	if (kds == NULL || recx_size == NULL)
+	if (recx_size == NULL)
 		D_GOTO(exit0, rc = -DER_NOMEM);
 
 	rc = alloc_iovs_in_sgl(&pri->pri_sgl_keys);
@@ -870,17 +882,8 @@ exit:
 		D_ERROR("send reply failed: " DF_RC "\n", DP_RC(rc));
 
 	/** free memory after sending RPC */
-
-	if (pro->pro_kds.ca_arrays != NULL)
-		D_FREE(pro->pro_kds.ca_arrays);
-	else if (nr_kds_out == 0)
-		D_FREE(kds);
-
-	if (pro->pro_recx_size.ca_arrays != NULL)
-		D_FREE(pro->pro_recx_size.ca_arrays);
-	else if (nr_iods_out == 0)
-		D_FREE(recx_size);
-
+	D_FREE(kds);
+	D_FREE(recx_size);
 	d_sgl_fini(&pri->pri_sgl_keys, true);
 	d_sgl_fini(&pri->pri_sgl_recx, true);
 	d_sgl_fini(&pri->pri_sgl_agg, true);
