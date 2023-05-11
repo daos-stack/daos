@@ -31,6 +31,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
             self.sub_command_class = self.FilesystemSubCommand()
+        elif self.sub_command.value == "system":
+            self.sub_command_class = self.SystemSubCommand()
         elif self.sub_command.value == "version":
             self.sub_command_class = self.VersionSubCommand()
         else:
@@ -235,6 +237,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container create command object."""
                 super().__init__("create")
+                # pylint: disable=wrong-spelling-in-comment
                 # Additional daos container create parameters:
                 #  [label]
                 #       Optional container label
@@ -333,6 +336,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-acl command object."""
                 super().__init__("get-acl")
+                # pylint: disable=wrong-spelling-in-comment
                 # Additional daos container create parameters:
                 #   --verbose
                 #           verbose mode (get-acl)
@@ -552,6 +556,39 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.dst = FormattedParameter("--dst={}")
                 # filename to write and read container properties
                 self.preserve_props = FormattedParameter("--preserve-props={}")
+
+    class SystemSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos system subcommand."""
+
+        def __init__(self):
+            """Create a daos system subcommand object."""
+            super().__init__("/run/daos/system/*", "system")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos system sub command object."""
+            if self.sub_command.value == "query":
+                self.sub_command_class = self.QuerySubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CommonSystemSubCommand(CommandWithParameters):
+            """Defines an object for the common daos system sub-command."""
+
+            def __init__(self, sub_command):
+                """Create a common daos system sub-command object.
+
+                Args:
+                    sub_command (str): sub-command name
+                """
+                super().__init__("/run/daos/system/{}/*".format(sub_command), sub_command)
+
+        class QuerySubCommand(CommonSystemSubCommand):
+            """Defines an object for the daos system query command."""
+
+            def __init__(self):
+                """Create a daos system query command object."""
+                super().__init__("query")
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos version sub command."""

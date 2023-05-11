@@ -96,6 +96,24 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+	case *mgmtpb.PoolEvictReq:
+		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
+		if len(m.Handles) > 0 {
+			shortHdls := make([]string, 0, len(m.Handles))
+			for _, h := range m.Handles {
+				shortHdls = append(shortHdls, h[:8])
+			}
+			fmt.Fprintf(&bld, " handles:%s", strings.Join(shortHdls, ","))
+		}
+		if m.Destroy {
+			fmt.Fprint(&bld, " destroy:true")
+		}
+		if m.ForceDestroy {
+			fmt.Fprint(&bld, " force_destroy:true")
+		}
+		if m.Machine != "" {
+			fmt.Fprintf(&bld, " machine:%s", m.Machine)
+		}
 	case *mgmtpb.ListPoolsResp:
 		fmt.Fprintf(&bld, "%T%d %d pools:", m, m.DataVersion, len(m.Pools))
 		for _, p := range m.Pools {

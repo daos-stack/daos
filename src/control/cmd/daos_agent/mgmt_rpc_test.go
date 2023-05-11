@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,7 +75,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
-		*withHint = *resp
+		withHint = proto.Clone(resp).(*mgmtpb.GetAttachInfoResp)
 		withHint.ClientNetHint.Interface = testFI[0].Name
 		withHint.ClientNetHint.Domain = testFI[0].Name
 
@@ -177,7 +177,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
-		"cached": {
+		"cache": {
 			rpcResps: hostResps(testResps),
 			expResult: []attachInfoResult{
 				{
