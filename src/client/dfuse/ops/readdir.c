@@ -9,9 +9,6 @@
 
 #include "daos_uns.h"
 
-/* Maximum number of dentries to read at one time. */
-#define READDIR_MAX_COUNT  1024
-
 /* Initial number of dentries to read when doing readdirplus */
 #define READDIR_PLUS_COUNT 26
 /* Initial number of dentries to read */
@@ -135,7 +132,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	uint32_t                  oldref;
 	off_t                     expected_offset = 2;
 
-	DFUSE_TRA_INFO(oh, "Dropping ref on %p", oh->doh_rd);
+	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
 	if (!oh->doh_rd)
 		return;
@@ -150,11 +147,11 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
-		DFUSE_TRA_INFO(hdl, "Ref was %d", oldref);
+		DFUSE_TRA_DEBUG(hdl, "Ref was %d", oldref);
 		D_GOTO(unlock, 0);
 	}
 
-	DFUSE_TRA_INFO(hdl, "Ref was 1, freeing");
+	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
 
 	/* Check for common */
 	if (hdl == oh->doh_ie->ie_rd_hdl)
@@ -166,7 +163,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 			 drc->drc_next_offset == READDIR_EOD);
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
-			d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+			d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
@@ -533,13 +530,13 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	if (to_seek) {
 		uint32_t num;
 
-		DFUSE_TRA_INFO(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
 
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
-			DFUSE_TRA_INFO(oh, "Switching to private handle");
+			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL)
@@ -784,10 +781,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	char                         *reply_buff = NULL;
 	int                           rc         = EIO;
 
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readdir_number, 1) == 0,
 		  "Multiple readdir per handle");
 
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1) == 0,
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readdir_number, 1) == 0,
 		  "Multiple readdir per inode");
 
 	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
@@ -813,8 +810,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &size, offset, plus);
 
 out:
-	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_readdir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readdir_number, 1);
 
 	if (rc)
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
