@@ -325,7 +325,7 @@ class DaosServerYamlParameters(YamlParameters):
         Returns:
             bool: True if a control metadata path is being used; False otherwise
         """
-        return (self.metadata_params.path.value is not None)
+        return self.metadata_params.path.value is not None
 
     def update_log_files(self, control_log, helper_log, server_log):
         """Update the logfile parameter for the daos server.
