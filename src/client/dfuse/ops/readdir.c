@@ -9,9 +9,6 @@
 
 #include "daos_uns.h"
 
-/* Maximum number of dentries to read at one time. */
-#define READDIR_MAX_COUNT  1024
-
 /* Initial number of dentries to read when doing readdirplus */
 #define READDIR_PLUS_COUNT 26
 /* Initial number of dentries to read */

@@ -146,13 +146,14 @@ struct dfuse_obj_hdl {
  * The kernel interface to readdir is to make a callback into dfuse to request a number of dentries
  * which are then populated in a buffer which is returned to the kernel, each entry in the buffer
  * contains the name of the entry, the type and some other metadata.  The kernel requests a buffer
- * size and the dfuse can reply with less if it choses - 0 is taken as end-of-directory.  The
+ * size and the dfuse can reply with less if it chooses - 0 is taken as end-of-directory.  The
  * length of the filenames affects the number of entries that will fit in the buffer.
  *
  * The dfs interface to reading entries is to call dfs_iterate() which then calls a dfuse callback
- * with the name of each entry, dfuse then has to perform a lookup to get any metadata for the
- * entry which it does after the iterate has completed.  DFS takes in a buffer size and max count
- * which can be much larger than the 4k buffer the kernel uses.
+ * with the name of each entry, after the iterate completes dfuse then has to perform a lookup to
+ * get any metadata for the entry which it does after the iterate has completed.  DFS takes in a
+ * buffer size and max count which can be much larger than the 4k buffer the kernel uses, for this
+ * dfuse will fetch up to 1024 entries at a time for larger directories.
  *
  * The kernel uses "auto readdir plus" to switch between two types of readdir, the plus calls
  * return full stat information for each file including size (which is expensive to read) and
@@ -170,7 +171,7 @@ struct dfuse_obj_hdl {
  *
  * DFuse has inode handles (struct dfuse_inode_entry), open directory handles
  * (struct dfuse_obj_hdl) as well as readdir handles (struct dfuse_readdir_hdl) which may be shared
- * across directory handles and maybe linked from the inode handle.
+ * across directory handles and may be linked from the inode handle.
  *
  * Readdir operations primarily use readdir handles however these can be shared across directory
  * handles so some data is kept in the directory handle.  The iterator and cache are both in
@@ -192,7 +193,7 @@ struct dfuse_obj_hdl {
  *
  * The cache is kept as a list in dfh_cache_list on the readdir handle which is a standard d_list_t
  * however the directory handle also save a pointer to the appropriate entry for that caller.  When
- * the front of the list is reached then new entries are consumed from the dre entry arracy and
+ * the front of the list is reached then new entries are consumed from the dre entry array and
  * moved to the cache list.
  *
  * To handle cases where readdir handles are shared cache entries may or may not have a rlink
