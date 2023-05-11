@@ -10,6 +10,7 @@ timeouts:
   test_daos_dfs_sys: 90
 pool:
   scm_size: 8G
+  crt_timeout: 60
 server_config:
   name: daos_server
   engines_per_host: 2
