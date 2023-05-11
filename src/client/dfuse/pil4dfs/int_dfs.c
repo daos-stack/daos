@@ -78,7 +78,8 @@ struct dfs_mt {
 	daos_handle_t        coh;
 	struct d_hash_table *dfs_dir_hash;
 	int                  len_fs_root;
-	int                  inited;
+
+	_Atomic uint32_t     inited;
 	char                *pool, *cont;
 	char                 fs_root[DFS_MAX_PATH];
 };
@@ -111,7 +112,7 @@ static void
 discover_dfuse(void);
 static int
 retrieve_handles_from_fuse(int idx);
-static void
+static int
 init_dfs(int idx);
 static int
 query_dfs_mount(const char *dfs_mount);
@@ -180,11 +181,10 @@ static pthread_mutex_t lock_dfs;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
 static pthread_mutex_t lock_mmap;
+static pthread_mutex_t lock_fd_dup2ed;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
-
-static int             fd_stdin = -1, fd_stdout = -1, fd_stderr = -1;
 
 static void
 finalize_dfs(void);
@@ -479,8 +479,6 @@ init_fd_dup2_list(void);
 /* return dest fd */
 static int
 query_fd_forward_dest(int fd_src);
-/* static int Query_Fd_Forward_Src(int fd_dest, int *Closed);	// return src fd */
-/* static void Close_Duped_All_Fd(void); */
 
 static int
 new_close_common(int (*next_close)(int fd), int fd);
@@ -556,7 +554,7 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].cont         = container;
 	dfs_list[num_dfs].dfs_dir_hash = NULL;
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
-	dfs_list[num_dfs].inited       = 0;
+	atomic_store_relaxed(&(dfs_list[num_dfs].inited), 0);
 	num_dfs++;
 }
 
@@ -572,9 +570,10 @@ discover_dfuse(void)
 
 	fp = setmntent("/proc/self/mounts", "r");
 	/* daos_init() is not called yet, so we can not use D_WARN() etc. */
+
 	if (fp == NULL) {
-		fprintf(stderr, "Error> failed to open file: /proc/self/mounts\nQuit\n");
-		exit(1);
+		fprintf(stderr, "Error> failed to open file: /proc/self/mounts\n");
+		return;
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
@@ -582,16 +581,18 @@ discover_dfuse(void)
 			dfs_list[num_dfs].dfs_dir_hash = NULL;
 			dfs_list[num_dfs].len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (dfs_list[num_dfs].len_fs_root >= DFS_MAX_PATH) {
-				fprintf(stderr, "Error> mnt_dir[] is too long!\nQuit\n");
-				exit(1);
+				fprintf(stderr, "Warning> mnt_dir[] is too long!\n"
+					"Skip this entry.\n");
+				continue;
 			}
-			dfs_list[num_dfs].inited       = 0;
+			atomic_store_relaxed(&(dfs_list[num_dfs].inited), 0);
 			dfs_list[num_dfs].pool         = NULL;
 			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
 					 DFS_MAX_PATH - 1);
 			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
-				fprintf(stderr, "Error> fs_root[] is too long.\nQuit\n");
-				exit(1);
+				fprintf(stderr, "Warning> fs_root[] is too long.\n"
+					"Skip this entry.\n");
+				continue;
 			}
 			num_dfs++;
 		}
@@ -814,13 +815,15 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	idx_dfs = query_dfs_mount(full_path_parse);
 
 	if (idx_dfs >= 0) {
+		/* trying to avoid lock as much as possible */
 		if (!daos_inited) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
 			rc = daos_init();
 			if (rc) {
-				fprintf(stderr, "Error> daos_init failed, rc: "DF_RC"\nQuit\n",
+				fprintf(stderr, "Error> daos_init failed, rc: "DF_RC"\n",
 					DP_RC(rc));
-				exit(1);
+				*is_target_path = 0;
+				return 0;
 			}
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
@@ -828,10 +831,13 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 		/* dfs info can be set up after daos has been initialized. */
 		*dfs_mt = &dfs_list[idx_dfs];
-		if ((*dfs_mt)->inited == 0) {
+		/* trying to avoid lock as much as possible. Need to make sure whether
+		 * it is safe enough or not!
+		 */
+		if (atomic_load_relaxed(&((*dfs_mt)->inited)) == 0) {
 			rc = pthread_mutex_lock(&lock_dfs);
 			D_ASSERT(rc == 0);
-			if ((*dfs_mt)->inited == 0) {
+			if (atomic_load_relaxed(&((*dfs_mt)->inited)) == 0) {
 				if ((*dfs_mt)->pool == NULL) {
 					/* retrieve dfs, pool and container handles from dfuse */
 					rc = retrieve_handles_from_fuse(idx_dfs);
@@ -842,9 +848,14 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 						return 0;
 					}
 				} else {
-					init_dfs(idx_dfs);
+					rc = init_dfs(idx_dfs);
+					if (rc) {
+						*is_target_path = 0;
+						rc = pthread_mutex_unlock(&lock_dfs);
+						return rc;
+					}
 				}
-				(*dfs_mt)->inited = 1;
+				atomic_store_relaxed(&((*dfs_mt)->inited), 1);
 			}
 			rc = pthread_mutex_unlock(&lock_dfs);
 			D_ASSERT(rc == 0);
@@ -1020,6 +1031,11 @@ init_fd_list(void)
 		fprintf(stderr, "Error> mutex create_new_lock lock_mmap init failed\n");
 		exit(1);
 	}
+	if (pthread_mutex_init(&lock_fd_dup2ed, NULL) != 0) {
+		fprintf(stderr, "Error> mutex create_new_lock lock_fd_dup2ed init failed\n");
+		exit(1);
+	}
+	/* fatal error above: failure to create mutexes. */
 
 	memset(file_list, 0, sizeof(struct file_obj *) * MAX_OPENED_FILE);
 	memset(dir_list, 0, sizeof(struct dir_obj *) * MAX_OPENED_DIR);
@@ -1063,7 +1079,7 @@ find_next_available_fd(struct file_obj *obj)
 		if (allocated)
 			D_FREE(new_obj);
 		if (bLog)
-			D_ERROR("Error> Failed to allocate fd: out of space.");
+			D_ERROR("failed to allocate fd: out of space.");
 		errno = EMFILE;
 		return next_free_fd;
 	}
@@ -1320,121 +1336,172 @@ free_map(int idx)
 	D_ASSERT(rc == 0);
 }
 
-static inline int
+static int
 Get_Fd_Redirected(int fd)
 {
-	int i;
+	int i, rc;
 
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_src == fd)
-			return fd_dup2_list[i].fd_dest;
-	}
-
-	if (fd >= 3) {
+	if (fd >= FD_FILE_BASE)
 		return fd;
-	} else if (fd == 0) {
-		if (fd_stdin > 0)
-			return fd_stdin;
-	} else if (fd == 1) {
-		if (fd_stdout > 0)
-			return fd_stdout;
-	} else if (fd == 2) {
-		if (fd_stderr > 0)
-			return fd_stderr;
+
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+	if (num_fd_dup2ed > 0) {
+		for (i = 0; i < MAX_FD_DUP2ED; i++) {
+			if (fd_dup2_list[i].fd_src == fd) {
+				rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+				D_ASSERT(rc == 0);
+				return fd_dup2_list[i].fd_dest;
+			}
+		}
 	}
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
 
 	return fd;
 }
 
-static inline int
-query_dup_fd_dest(int fd)
+/* This fd is a fake fd. There exists a associated kernel fd with dup2.
+ * Need to check whether fd is in fd_dup2_list[], set dest_closed true
+ * if yes. Otherwise, close the fake fd.
+ */
+static void
+close_dup_fd_dest_fakefd(int fd)
 {
-	int i;
+	int i, rc;
 
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_dest == fd)
-			return i;
+	if (fd < FD_FILE_BASE)
+		return;
+
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+	if (num_fd_dup2ed > 0) {
+		for (i = 0; i < MAX_FD_DUP2ED; i++) {
+			if (fd_dup2_list[i].fd_dest == fd) {
+				fd_dup2_list[i].dest_closed = true;
+				rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+				D_ASSERT(rc == 0);
+				return;
+			}
+		}
 	}
-	return (-1);
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+
+	free_fd(fd - FD_FILE_BASE);
 }
 
-static inline int
-query_dup_fd_src(int fd)
+/* This fd is a fd from kernel and it is associated with a fake fd.
+ * Need to 1) close(fd) 2) remove the entry in fd_dup2_list[] 3) close
+ * the fake fd if dest_closed is true.
+ */
+static int
+close_dup_fd_src(int (*next_close)(int fd), int fd)
 {
-	int i;
+	int i, rc, idx_dup = -1, fd_dest = -1;
 
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_src == fd)
-			return i;
+	/* close the fd from kernel */
+	rc = next_close(fd);
+	if (rc != 0)
+		return (-1);
+
+	/* remove the fd_dup entry */
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+	if (num_fd_dup2ed > 0) {
+		for (i = 0; i < MAX_FD_DUP2ED; i++) {
+			if (fd_dup2_list[i].fd_src == fd) {
+				idx_dup = i;
+				if (fd_dup2_list[i].dest_closed)
+					fd_dest = fd_dup2_list[i].fd_dest;
+				/* clear the value to free */
+				fd_dup2_list[i].fd_src  = -1;
+				fd_dup2_list[i].fd_dest = -1;
+				fd_dup2_list[i].dest_closed = false;
+				num_fd_dup2ed--;
+				break;
+			}
+		}
 	}
-	return (-1);
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+
+	if (idx_dup < 0) {
+		D_ERROR("failed to find fd %d in fd_dup2_list[].", fd);
+		errno = EINVAL;
+		return (-1);
+	}
+	if (fd_dest > 0)
+		free_fd(fd_dest - FD_FILE_BASE);
+
+	return 0;
 }
 
 static void
 init_fd_dup2_list(void)
 {
-	int i;
+	int i, rc;
 
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		fd_dup2_list[i].fd_src  = -1;
 		fd_dup2_list[i].fd_dest = -1;
 		fd_dup2_list[i].dest_closed = false;
 	}
-}
-
-static void
-free_fd_in_dup2_list(int fd)
-{
-	int i;
-
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_src == fd) {
-			fd_dup2_list[i].fd_src  = -1;
-			fd_dup2_list[i].fd_dest = -1;
-			fd_dup2_list[i].dest_closed = false;
-		}
-	}
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
 }
 
 static int
-find_free_fd_dup2_list(void)
+allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 {
-	int i;
+	int i, rc;
 
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_src == -1)
-			return i;
+	/* Not many applications use dup2(). Normally the number of fd duped is small. */
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+	if (num_fd_dup2ed < MAX_FD_DUP2ED) {
+		for (i = 0; i < MAX_FD_DUP2ED; i++) {
+			if (fd_dup2_list[i].fd_src == -1) {
+				fd_dup2_list[i].fd_src  = fd_src;
+				fd_dup2_list[i].fd_dest = fd_dest;
+				fd_dup2_list[i].dest_closed = false;
+				num_fd_dup2ed++;
+				rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+				D_ASSERT(rc == 0);
+				return i;
+			}
+		}
 	}
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+
 	if (bLog)
 		D_ERROR("fd_dup2_list[] is out of space. MAX_FD_DUP2ED needs to be increased\n");
 	errno = EMFILE;
 	return (-1);
 }
 
-/**
- * static int
- * is_a_duped_fd(int fd)
- * {
- *	int i;
- *
- *	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
- *		if (fd_dup2_list[i].fd_src == fd)	{
- *			return 1;
- *		}
- *	}
- *	return 0;
- * }
- */
-
 static int
 query_fd_forward_dest(int fd_src)
 {
-	int i;
+	int i, rc, fd_dest = -1;
 
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_src == fd_dup2_list[i].fd_src)
-			return fd_dup2_list[i].fd_dest;
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
+	if (num_fd_dup2ed > 0) {
+		for (i = 0; i < MAX_FD_DUP2ED; i++) {
+			if (fd_src == fd_dup2_list[i].fd_src) {
+				fd_dest = fd_dup2_list[i].fd_dest;
+				rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+				D_ASSERT(rc == 0);
+				return fd_dest;
+			}
+		}
 	}
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
 	return -1;
 }
 
@@ -1455,28 +1522,13 @@ close_all_duped_fd(void)
 {
 	int i;
 
+	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		if (fd_dup2_list[i].fd_src >= 0) {
-			fd_dup2_list[i].fd_src = -1;
-			new_close_common(libc_close, fd_dup2_list[i].fd_dest);
-		}
+		if (fd_dup2_list[i].fd_src >= 0)
+			close_dup_fd_src(libc_close, fd_dup2_list[i].fd_src);
 	}
+	num_fd_dup2ed = 0;
 }
-
-/**
- *static int
- * Query_Fd_Forward_Src(int fd_dest, int *Closed)
- * {
- *	int i;
- *
- *	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
- *		if (fd_dest == fd_dup2_list[i].fd_dest)	{
- *			return fd_dup2_list[i].fd_src;
- *		}
- *	}
- *	return -1;
- * }
- */
 
 static int
 check_path_with_dirfd(int dirfd, char *full_path_out, const char *rel_path, int *error)
@@ -1749,7 +1801,7 @@ new_open_pthread(const char *pathname, int oflags, ...)
 static int
 new_close_common(int (*next_close)(int fd), int fd)
 {
-	int        fd_Directed, dup_idx;
+	int fd_Directed;
 
 	if (!hook_enabled)
 		return next_close(fd);
@@ -1761,26 +1813,12 @@ new_close_common(int (*next_close)(int fd), int fd)
 		free_dirfd(fd_Directed - FD_DIR_BASE);
 		return 0;
 	} else if (fd_Directed >= FD_FILE_BASE) {
-		/* regular file */
-		if (fd < FD_FILE_BASE) {
-			next_close(fd);
-			num_fd_dup2ed--;
-			dup_idx = query_dup_fd_src(fd);
-			if (dup_idx < 0) {
-				fprintf(stderr, "Error> dup_idx < 0. Unexpected.");
-				exit(1);
-			}
-			if (fd_dup2_list[dup_idx].dest_closed)
-				free_fd(fd_Directed - FD_FILE_BASE);
-			free_fd_in_dup2_list(fd);
-		} else {
-			dup_idx = query_dup_fd_dest(fd);
-			if (dup_idx >= 0)
-				fd_dup2_list[dup_idx].dest_closed = true;
-			else
-				free_fd(fd_Directed - FD_FILE_BASE);
-		}
+		/* This fd is a kernel fd. There was a duplicate fd created. */
+		if (fd < FD_FILE_BASE)
+			return close_dup_fd_src(next_close, fd);
 
+		/* This fd is a fake fd. There exists a associated kernel fd with dup2. */
+		close_dup_fd_dest_fakefd(fd);
 		return 0;
 	}
 
@@ -4061,7 +4099,8 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
+	int     fd_Directed, param, OrgFunc = 1;
+	int     Next_Dirfd, Next_fd;
 	va_list arg;
 
 	switch (cmd) {
@@ -4095,8 +4134,7 @@ new_fcntl(int fd, int cmd, ...)
 				return libc_fcntl(fd, cmd);
 		}
 
-		fd_dup2ed_Dest = query_fd_forward_dest(fd_Directed);
-		if (fd_dup2ed_Dest >= FD_FILE_BASE) {
+		if (fd_Directed >= FD_FILE_BASE) {
 			if (cmd == F_SETFD)
 				return 0;
 		}
@@ -4180,7 +4218,7 @@ ioctl(int fd, unsigned long request, ...)
 int
 dup(int oldfd)
 {
-	int fd_Directed, fd, idx;
+	int fd_directed;
 
 	if (next_dup == NULL) {
 		next_dup = dlsym(RTLD_NEXT, "dup");
@@ -4189,40 +4227,11 @@ dup(int oldfd)
 	if (!hook_enabled)
 		return next_dup(oldfd);
 
-	if (oldfd >= FD_FILE_BASE) {
-		fd  = allocate_a_fd_from_kernel();
-		idx = find_free_fd_dup2_list();
-		if (idx >= 0) {
-			fd_dup2_list[idx].fd_src  = fd;
-			fd_dup2_list[idx].fd_dest = oldfd;
-			atomic_fetch_add_relaxed(&file_list[oldfd - FD_FILE_BASE]->ref_count, 1);
-			num_fd_dup2ed++;
-			return fd;
-		} else {
-			return idx;
-		}
-	}
+	fd_directed = Get_Fd_Redirected(oldfd);
+	if (fd_directed >= FD_FILE_BASE)
+		return new_fcntl(oldfd, F_DUPFD, 0);
 
-	fd_Directed = Get_Fd_Redirected(oldfd);
-
-	if (fd_Directed >= FD_FILE_BASE) {
-		fd  = allocate_a_fd_from_kernel();
-		idx = find_free_fd_dup2_list();
-		if (idx >= 0) {
-			fd_dup2_list[idx].fd_src  = fd;
-			fd_dup2_list[idx].fd_dest = fd_Directed;
-			atomic_fetch_add_relaxed(&(file_list[fd_Directed - FD_FILE_BASE]->
-						 ref_count), 1);
-			num_fd_dup2ed++;
-			return fd;
-		} else {
-			return idx;
-		}
-	} else {
-		return next_dup(oldfd);
-	}
-
-	return -1;
+	return next_dup(fd_directed);
 }
 
 int
@@ -4230,6 +4239,7 @@ dup2(int oldfd, int newfd)
 {
 	int fd, fd_Directed, idx, rc;
 
+	/* Need more work later. */
 	if (next_dup2 == NULL) {
 		next_dup2 = dlsym(RTLD_NEXT, "dup2");
 		D_ASSERT(next_dup2 != NULL);
@@ -4246,39 +4256,42 @@ dup2(int oldfd, int newfd)
 	if ((oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
 		return next_dup2(oldfd, newfd);
 
+	if (newfd >= FD_FILE_BASE) {
+		if (bLog)
+			D_ERROR("unimplemented yet for newfd >= FD_FILE_BASE.\n");
+		errno = ENOTSUP;
+		return -1;
+	}
 	fd_Directed = query_fd_forward_dest(newfd);
 	if (fd_Directed >= FD_FILE_BASE) {
 		if (bLog)
-			D_ERROR("dup2() is not implemented yet.\n");
+			D_ERROR("unimplemented yet for fd_Directed >= FD_FILE_BASE.\n");
 		errno = ENOTSUP;
-	} else {
+		return -1;
+	}
+
+	if (oldfd >= FD_FILE_BASE)
+		fd_Directed = oldfd;
+	else
 		fd_Directed = query_fd_forward_dest(oldfd);
-		if (oldfd >= FD_FILE_BASE)
-			fd_Directed = oldfd;
-		if (fd_Directed >= FD_FILE_BASE) {
-			rc = close(newfd);
-			if (rc != 0 && errno != EBADF)
-				return -1;
-			fd = allocate_a_fd_from_kernel();
-			if (fd != newfd) {
-				if (bLog)
-					D_ERROR("failed to get the desired fd.");
-				errno = EAGAIN;
-				return (-1);
-			}
-			idx = find_free_fd_dup2_list();
-			if (idx >= 0) {
-				fd_dup2_list[idx].fd_src  = fd;
-				fd_dup2_list[idx].fd_dest = fd_Directed;
-				fd_dup2_list[idx].dest_closed = false;
-				num_fd_dup2ed++;
-				return fd;
-			} else {
-				return idx;
-			}
-		} else {
-			next_dup2(oldfd, newfd);
+	if (fd_Directed >= FD_FILE_BASE) {
+		rc = close(newfd);
+		if (rc != 0 && errno != EBADF)
+			return -1;
+		fd = allocate_a_fd_from_kernel();
+		if (fd != newfd) {
+			if (bLog)
+				D_ERROR("failed to get the desired fd in dup2().");
+			errno = EAGAIN;
+			return (-1);
 		}
+		idx = allocate_dup2ed_fd(fd, fd_Directed);
+		if (idx >= 0)
+			return fd;
+		else
+			return idx;
+	} else {
+		next_dup2(oldfd, newfd);
 	}
 	return -1;
 }
@@ -4607,7 +4620,7 @@ update_cwd(void)
 	} else {
 		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
 		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			fprintf(stderr, "Error> cur_dir[] is not large enough.\nQuit\n");
+			fprintf(stderr, "Error> cwd path is too long.\nQuit\n");
 			exit(1);
 		}
 		free(cwd);
@@ -4693,7 +4706,6 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 		snprintf(err_msg, 256, "Error in dfs_read() in signal handler. %s\n",
 			 strerror(errno));
 		rc = libc_write(STDERR_FILENO, err_msg, strnlen(err_msg, 256));
-		exit(1);
 	}
 #if defined(__x86_64__)
 	if (context->uc_mcontext.gregs[REG_ERR] & 0x2) {
@@ -4767,6 +4779,7 @@ init_myhook(void)
 	update_cwd();
 	if (pthread_mutex_init(&lock_dfs, NULL) != 0) {
 		fprintf(stderr, "Error> mutex create_new_lock lock_dfs failed\n");
+		/* fatal error: failure to create a mutex. */
 		exit(1);
 	}
 	init_fd_list();
@@ -4907,40 +4920,62 @@ finalize_myhook(void)
 	D_ASSERT(rc == 0);
 	rc = pthread_mutex_destroy(&lock_mmap);
 	D_ASSERT(rc == 0);
+	rc = pthread_mutex_destroy(&lock_fd_dup2ed);
+	D_ASSERT(rc == 0);
 
 	uninstall_hook();
 }
 
-static void
+static int
 init_dfs(int idx)
 {
-	int rc;
+	int rc, rc2;
 
 	/* TODO: Need to check the permission of mount point first!!! */
 	rc =
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh,
 			      NULL, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "Error> failed to connect pool: "DF_RC"\nQuit\n", DP_RC(rc));
-		exit(1);
+		D_ERROR("failed to connect pool: "DF_RC"\nQuit\n", DP_RC(rc));
+		return daos_der2errno(rc);
 	}
+
 	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
 			    NULL, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "Error> failed to open container: "DF_RC"\nQuit\n", DP_RC(rc));
-		exit(1);
+		D_ERROR("failed to open container: "DF_RC"\nQuit\n", DP_RC(rc));
+		D_GOTO(out_err_cont_open, rc);
 	}
 	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
 	if (rc != 0) {
-		fprintf(stderr, "Error> failed to mount dfs: %s\nQuit\n", strerror(rc));
-		exit(1);
+		D_ERROR("failed to mount dfs: %s\nQuit\n", strerror(rc));
+		D_GOTO(out_err_mt, rc);
 	}
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
-		fprintf(stderr, "Error> failed to create hash table: "DF_RC"\nQuit\n", DP_RC(rc));
-		exit(1);
+		D_ERROR("failed to create hash table: "DF_RC"\nQuit\n", DP_RC(rc));
+		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
+
+	return 0;
+
+out_err_ht:
+	rc2 = dfs_umount(dfs_list[idx].dfs);
+	if (rc2 != 0)
+		D_ERROR("error in dfs_umount() for %s\n", dfs_list[idx].fs_root);
+
+out_err_mt:
+	rc2 = daos_cont_close(dfs_list[idx].coh, NULL);
+	if (rc2 != 0)
+		D_ERROR("error in daos_cont_close() for %s\n", dfs_list[idx].fs_root);
+
+out_err_cont_open:
+	rc2 = daos_pool_disconnect(dfs_list[idx].poh, NULL);
+	if (rc2 != 0)
+		D_ERROR("error in daos_pool_disconnect() for %s\n", dfs_list[idx].fs_root);
+
+	return rc;
 }
 
 static void
@@ -4990,8 +5025,8 @@ finalize_dfs(void)
 		for (j = 0; j < init_cnt; j++) {
 			rc = daos_fini();
 			if (rc != 0) {
-				fprintf(stderr, "Error> error in daos_fini()\n");
-				exit(1);
+				/* D_ERROR may be not available */
+				fprintf(stderr, "Error> finalize_dfs(): error in daos_fini()\n");
 			}
 		}
 	}
