@@ -25,7 +25,7 @@ public class DaosFsConfigTest {
   @Test
   public void testFsConfigNamesSize() throws Exception {
     DaosFsConfig cf = DaosFsConfig.getInstance();
-    Assert.assertEquals(12, cf.getFsConfigNames().size());
+    Assert.assertEquals(13, cf.getFsConfigNames().size());
   }
 
   @Test
@@ -75,6 +75,7 @@ public class DaosFsConfigTest {
     daosConfig.put(Constants.DAOS_CHUNK_SIZE, "35678");
     daosConfig.put(Constants.DAOS_POOL_ID, "daos pid");
     daosConfig.put(Constants.DAOS_IO_ASYNC, "false");
+    daosConfig.put(Constants.DAOS_OBJECT_CLASS, "OC_S1");
 
     daosConfig.put("spark." + Constants.DAOS_IO_ASYNC, "true");
 
@@ -85,5 +86,6 @@ public class DaosFsConfigTest {
     Assert.assertEquals("9876", hadoopConfig.get(Constants.DAOS_READ_MINIMUM_SIZE));
     Assert.assertEquals("45678", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
     Assert.assertEquals("true", hadoopConfig.get(Constants.DAOS_IO_ASYNC));
+    Assert.assertEquals("OC_S1", hadoopConfig.get(Constants.DAOS_OBJECT_CLASS));
   }
 }
