@@ -111,13 +111,12 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	if !bdevsInCfg {
 		c.log.Debugf("no bdevs in cfg so scan all")
 		// return details of all bdevs if none are assigned to engines
-		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
-			BypassCache: true,
-		})
+		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
 
 		return newScanNvmeResp(req, resp, err)
 	}
 
+	c.log.Debugf("bdevs in cfg so scan only assigned")
 	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)

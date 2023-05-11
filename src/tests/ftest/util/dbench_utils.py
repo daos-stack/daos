@@ -63,6 +63,7 @@ class Dbench(DbenchCommand):
 
     def run(self, processes=1):
         # pylint: disable=arguments-differ
+        # pylint: disable=arguments-renamed
         """Run the dbench command.
 
         Args:
@@ -80,7 +81,7 @@ class Dbench(DbenchCommand):
         mpirun.assign_processes(processes)
         mpirun.exit_status_exception = True
 
-        # run dcp
+        # run dbench
         out = mpirun.run()
 
         return out

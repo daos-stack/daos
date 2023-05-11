@@ -5,8 +5,9 @@
 '''
 import traceback
 
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 
 
 class BadQueryTest(TestWithServers):
