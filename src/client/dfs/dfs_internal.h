@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,6 +100,32 @@ dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name);
 /** update chunk size and oclass of obj with the ones from new_obj */
 void
 dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
+
+/*
+ * Internal routine for the daos fs tool to update an existing chunk size of a file. Note that this
+ * is just meant to be used for updating the chunk size on leaked oids for files that were relinked
+ * in lost+found.
+ */
+int
+dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
+
+/** Internal routine for the daos fs tool to fix a corrupted entry type in the mode bits */
+int
+dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name);
+
+/*
+ * Internal routine to recreate a POSIX container if it was ever corrupted as part of a catastrophic
+ * recovery event.
+ */
+int
+dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
+
+/*
+ * Internal routine to relink the root object into the SB in case the SB entry was removed as part
+ * of a catastrophic recovery event.
+ */
+int
+dfs_relink_root(daos_handle_t coh);
 
 #if defined(__cplusplus)
 }

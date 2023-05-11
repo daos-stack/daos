@@ -69,7 +69,7 @@ func TestBuild_NewVersion(t *testing.T) {
 				return
 			}
 
-			if !tc.expVer.Equals(*gotVer) {
+			if !tc.expVer.Equals(gotVer) {
 				t.Fatalf("expected version %v, got %v", tc.expVer, gotVer)
 			}
 		})

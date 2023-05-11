@@ -127,7 +127,7 @@ struct mgmt_bio_health {
 	uuid_t				mb_devid;
 };
 
-int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid, char *tgt_id);
+int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
 int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
 int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp);
