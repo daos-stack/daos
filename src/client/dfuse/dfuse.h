@@ -151,9 +151,9 @@ struct dfuse_obj_hdl {
  *
  * The dfs interface to reading entries is to call dfs_iterate() which then calls a dfuse callback
  * with the name of each entry, after the iterate completes dfuse then has to perform a lookup to
- * get any metadata for the entry which it does after the iterate has completed.  DFS takes in a
- * buffer size and max count which can be much larger than the 4k buffer the kernel uses, for this
- * dfuse will fetch up to 1024 entries at a time for larger directories.
+ * get any metadata for the entry.  DFS takes in a buffer size and max count which can be much
+ * larger than the 4k buffer the kernel uses, for this dfuse will fetch up to 1024 entries at a
+ *  time for larger directories.
  *
  * The kernel uses "auto readdir plus" to switch between two types of readdir, the plus calls
  * return full stat information for each file including size (which is expensive to read) and
@@ -161,8 +161,8 @@ struct dfuse_obj_hdl {
  * The non-plus call just takes the name and mode for each entry so can do a lighter weight
  * dfs lookup and does not need to do any per dentry hash table operations.
  * For any directory the first call will be a plus type, subsequent entries will depend on if the
- * application is doing stat calls on the dentries, "ls -l" will result in readdir plus being used
- * throughout, "/bin/ls" will result in only the first call being plus.
+ * application is doing stat calls on the dentries, "/bin/ls -l" will result in readdir plus being
+ * used throughout, "/bin/ls" will result in only the first call being plus.
  *
  * In all cases the kernel holds an inode lock on readdir however this does not extend to closedir
  * so list management is needed to protect shared readddir handles and the readdir handle pointer
