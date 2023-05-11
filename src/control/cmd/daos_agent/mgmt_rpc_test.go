@@ -75,7 +75,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
-		*withHint = *resp
+		withHint = proto.Clone(resp).(*mgmtpb.GetAttachInfoResp)
 		withHint.ClientNetHint.Interface = testFI[0].Name
 		withHint.ClientNetHint.Domain = testFI[0].Name
 

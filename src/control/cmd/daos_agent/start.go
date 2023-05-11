@@ -51,7 +51,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
+	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
 	parent, shutdown := context.WithCancel(context.Background())

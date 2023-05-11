@@ -391,7 +391,7 @@ func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
 		}
 	}
 
-	p.log.Debugf("Unable to determine NUMA socket ID for device %q, using NUMA 0", dev.name())
+	p.log.Tracef("device %q: using NUMA 0", dev.name())
 	return 0
 
 }
