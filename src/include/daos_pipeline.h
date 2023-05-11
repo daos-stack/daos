@@ -3,6 +3,10 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+/*
+ * The Pipeline API is under heavy development and should not be used in production. The API is
+ * subject to change.
+ */
 
 #ifndef __DAOS_PIPE_H__
 #define __DAOS_PIPE_H__
