@@ -2,7 +2,7 @@
 """Node local test (NLT).
 
 Test script for running DAOS on a single node over tmpfs and running initial
-smoke/unit tests.
+smoke/unit tests. Test RUN.
 
 Includes support for DFuse with a number of unit tests, as well as stressing
 the client with fault injection of D_ALLOC() usage.
