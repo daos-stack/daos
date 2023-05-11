@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Intel Corporation
+# Copyright 2019-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -63,9 +63,9 @@ class _env_module():  # pylint: disable=invalid-name
 
         stdout, stderr = proc.communicate()
 
-        # pylint: disable=exec-used
         if sys.version_info[0] > 2:
             ns = {}
+            # pylint: disable-next=exec-used
             exec(stdout.decode(), ns)  # nosec
 
             return ns['_mlstatus'], stderr.decode()
@@ -73,10 +73,10 @@ class _env_module():  # pylint: disable=invalid-name
         # Should not get to this point.
         assert False
 
+        # pylint: disable-next=exec-used
         # exec(stdout.decode()) # nosec
 
         # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
-        # pylint: enable=exec-used
 
     def _init_mpi_module(self):
         """init mpi module function"""
