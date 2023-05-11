@@ -143,8 +143,8 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         shared_dir = self.sharedsoaktest_dir
     if append:
         for host in host_list:
-            shared_dir_tmp = shared_dir + append + f"{host}"
-            dest_dir_tmp = dest_dir + append + f"{host}"
+            shared_dir_tmp = shared_dir + append + str(host)
+            dest_dir_tmp = dest_dir + append + str(host)
             if not os.path.exists(shared_dir_tmp):
                 os.mkdir(shared_dir_tmp)
             if not os.path.exists(dest_dir_tmp):
@@ -589,7 +589,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             tgt_idx = None
         else:
             target_list = random.sample(range(0, 8), targets)
-            tgt_idx = f"{','.join(str(tgt) for tgt in target_list)}"
+            tgt_idx = ','.join(str(tgt) for tgt in target_list)
 
         # init the status dictionary
         params = {"name": name,
@@ -961,7 +961,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             if api == "HDF5-VOL":
                 vol = True
                 env["HDF5_VOL_CONNECTOR"] = "daos"
-                env["HDF5_PLUGIN_PATH"] = f"{plugin_path}"
+                env["HDF5_PLUGIN_PATH"] = str(plugin_path)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
@@ -1034,7 +1034,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 sbatch_cmds.extend(dfuse_start_cmdlist)
                 # add envs for HDF5-VOL
                 env["HDF5_VOL_CONNECTOR"] = "daos"
-                env["HDF5_PLUGIN_PATH"] = f"{plugin_path}"
+                env["HDF5_PLUGIN_PATH"] = str(plugin_path)
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
@@ -1322,7 +1322,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mpirun_cmd.ppn.update(ppn)
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
-            cmdline = "{str(mpirun_cmd)}"
+            cmdline = str(mpirun_cmd)
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
