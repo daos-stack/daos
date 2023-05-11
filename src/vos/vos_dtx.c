@@ -3157,6 +3157,9 @@ cmt:
 			return rc;
 		}
 
+		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
+		d_tm_dec_gauge(vos_tls_get()->vtl_committed, cont->vc_dtx_committed_count);
+
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;
 		cont->vc_cmt_dtx_indexed = 0;
