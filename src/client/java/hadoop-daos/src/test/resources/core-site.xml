@@ -44,6 +44,13 @@
     </description>
   </property>
   <property>
+    <name>fs.daos.object.class</name>
+    <value>OC_SX</value>
+    <description>
+      object class of DAOS file.
+    </description>
+  </property>
+  <property>
     <name>fs.daos.read.min.size</name>
     <value>4194304</value>
   </property>

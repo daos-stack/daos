@@ -6,6 +6,8 @@
 
 package io.daos.fs.hadoop;
 
+import io.daos.DaosObjectClass;
+
 /**
  * ALL configuration and value constants.
  */
@@ -36,6 +38,9 @@ public final class Constants {
   public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024 * 1024;
   public static final int MAXIMUM_DAOS_CHUNK_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_CHUNK_SIZE = 4 * 1024;
+
+  public static final String DAOS_OBJECT_CLASS = "fs.daos.object.class";
+  public static final String DEFAULT_DAOS_OBJECT_CLASS = DaosObjectClass.OC_SX.name();
 
   public static final int DAOS_MODLE = 0755;
 

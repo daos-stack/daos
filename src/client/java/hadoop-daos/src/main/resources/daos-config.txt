@@ -51,7 +51,9 @@
         11. fs.daos.chunk.size          1048576                 size of DAOS file chunk. Default is 1m. Value range is
                                                                 4k - 2g.
 
-        12. fs.daos.io.async            true                    perform DAOS IO asynchronously. Default is true.
+        12. fs.daos.object.class        OC_SX                   object class of DAOS file.
+
+        13. fs.daos.io.async            true                    perform DAOS IO asynchronously. Default is true.
                                                                 Set to false to use synchronous IO.
 
 

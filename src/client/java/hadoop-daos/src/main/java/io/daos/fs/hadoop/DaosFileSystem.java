@@ -37,6 +37,7 @@ public class DaosFileSystem extends FileSystem {
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
+  private DaosObjectClass objectClass;
   private int minReadSize;
   private String bucket;
   private String unsPrefix;
@@ -181,6 +182,8 @@ public class DaosFileSystem extends FileSystem {
     this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
     this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
     this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
+    String objClsStr = conf.get(Constants.DAOS_OBJECT_CLASS, Constants.DEFAULT_DAOS_OBJECT_CLASS);
+    this.objectClass = DaosObjectClass.valueOf(objClsStr);
     this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
     this.minReadSize = conf.getInt(Constants.DAOS_READ_MINIMUM_SIZE, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
     if (minReadSize > readBufferSize || minReadSize <= 0) {
@@ -380,7 +383,7 @@ public class DaosFileSystem extends FileSystem {
 
     daosFile.createNewFile(
             Constants.DAOS_MODLE,
-            DaosObjectClass.OC_SX,
+            this.objectClass,
             this.chunkSize,
             true);
 
