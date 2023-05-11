@@ -85,7 +85,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].destroy_snap(epc=self.container[-1].epoch)
         # Now check if the space is returned back.
         counter = 1
-        returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+        returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
 
         data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
         while returned_space < int(data_written):
@@ -99,7 +99,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+            returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
             counter += 1
 
         self.log.info("#####Starting FS_COPY Test")
