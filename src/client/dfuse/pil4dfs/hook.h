@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
- * (C) Copyright 2023 Intel.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */

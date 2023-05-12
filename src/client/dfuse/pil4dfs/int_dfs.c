@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -740,10 +740,11 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
+ *  Dynamically allocate 2 * DFS_MAX_PATH for *parent_dir and *full_path in one malloc().
  */
 static int
 query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *item_name,
-	   char *parent_dir_loc, char full_path_out[], struct dfs_mt **dfs_mt)
+	   char **parent_dir, char **full_path, struct dfs_mt **dfs_mt)
 {
 	int    pos, len;
 	mode_t mode;
@@ -751,9 +752,9 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
-	int    idx_dfs, rc;
+	int    idx_dfs, rc, rc2;
 	char  *pt_end = NULL;
-	char   full_path_parse[DFS_MAX_PATH + 4];
+	char  *full_path_parse = NULL;
 
 	/* determine whether the path starts with daos://pool/cont/. Need more work. */
 	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
@@ -770,6 +771,17 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		*is_target_path = 0;
 		return 0;
 	}
+
+	*full_path = NULL;
+	D_ALLOC(*parent_dir, DFS_MAX_PATH * 2);
+	if (*parent_dir == NULL)
+		goto out_oom;
+	/* allocate both for *parent_dir and *full_path above */
+	*full_path = *parent_dir + DFS_MAX_PATH;
+
+	D_ALLOC(full_path_parse, DFS_MAX_PATH + 4);
+	if (full_path_parse == NULL)
+		goto out_oom;
 
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
@@ -823,7 +835,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				fprintf(stderr, "Error> daos_init failed, rc: "DF_RC"\n",
 					DP_RC(rc));
 				*is_target_path = 0;
-				return 0;
+				goto out_normal;
 			}
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
@@ -844,15 +856,18 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					if (rc) {
 						/* Let the original functions to handle it. */
 						*is_target_path = 0;
-						rc = pthread_mutex_unlock(&lock_dfs);
-						return 0;
+						rc2 = pthread_mutex_unlock(&lock_dfs);
+						D_ASSERT(rc2 == 0);
+						goto out_normal;
 					}
 				} else {
 					rc = init_dfs(idx_dfs);
 					if (rc) {
+						/* Let the original functions to handle it. */
 						*is_target_path = 0;
-						rc = pthread_mutex_unlock(&lock_dfs);
-						return rc;
+						rc2 = pthread_mutex_unlock(&lock_dfs);
+						D_ASSERT(rc2 == 0);
+						goto out_normal;
 					}
 				}
 				atomic_store_relaxed(&((*dfs_mt)->inited), 1);
@@ -862,19 +877,16 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		}
 		*is_target_path = 1;
 
-		/* full_path_out holds the full path inside dfs container */
-		if (full_path_out)
-			strcpy(full_path_out, full_path_parse + (*dfs_mt)->len_fs_root);
-
 		/* root dir */
 		if (full_path_parse[(*dfs_mt)->len_fs_root] == 0) {
 			*parent       = NULL;
-			parent_dir_loc[0] = '\0';
+			(*parent_dir)[0] = '\0';
 			item_name[0]  = '/';
 			item_name[1]  = '\0';
-			if (full_path_out)
-				strncpy(full_path_out, "/", 2);
+			strncpy(*full_path, "/", 2);
 		} else {
+			/* full_path holds the full path inside dfs container */
+			strcpy(*full_path, full_path_parse + (*dfs_mt)->len_fs_root);
 			for (pos = len - 1; pos >= (*dfs_mt)->len_fs_root; pos--) {
 				if (full_path_parse[pos] == '/')
 					break;
@@ -883,15 +895,15 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* the item under root directory */
 			if (pos == (*dfs_mt)->len_fs_root) {
 				*parent       = NULL;
-				parent_dir_loc[0] = '/';
-				parent_dir_loc[1] = '\0';
+				(*parent_dir)[0] = '/';
+				(*parent_dir)[1] = '\0';
 			} else {
 				/* Need to look up the parent directory */
 				full_path_parse[pos] = 0;
-				strcpy(parent_dir_loc, full_path_parse + (*dfs_mt)->len_fs_root);
+				strcpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = lookup_insert_dir(idx_dfs, parent_dir_loc, &mode, parent);
+			rc = lookup_insert_dir(idx_dfs, *parent_dir, &mode, parent);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc = -rc);
@@ -901,10 +913,27 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		*parent         = NULL;
 		item_name[0]    = '\0';
 	}
+
+out_normal:
+	D_FREE(full_path_parse);
+	D_FREE(*parent_dir);
+	*parent_dir = NULL;
 	return 0;
 
 out_err:
+	D_FREE(full_path_parse);
+	D_FREE(*parent_dir);
+	*parent_dir = NULL;
 	errno = rc;
+	return (-1);
+
+out_oom:
+	D_FREE(full_path_parse);
+	D_FREE(*parent_dir);
+	*parent_dir = NULL;
+	if (bLog)
+		D_ERROR("fail to allocate memory.");
+	errno = ENOMEM;
 	return (-1);
 }
 
@@ -1531,50 +1560,75 @@ close_all_duped_fd(void)
 }
 
 static int
-check_path_with_dirfd(int dirfd, char *full_path_out, const char *rel_path, int *error)
+check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int *error)
 {
 	int len_str;
 
 	*error = 0;
+	*full_path_out = NULL;
 
 	if (dirfd >= FD_DIR_BASE) {
-		len_str = snprintf(full_path_out, DFS_MAX_PATH, "%s/%s",
+		len_str = asprintf(full_path_out, "%s/%s",
 				   dir_list[dirfd - FD_DIR_BASE]->path, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
+		else if (len_str < 0)
+			goto out_oom;
 	} else if (dirfd == AT_FDCWD) {
-		len_str = snprintf(full_path_out, DFS_MAX_PATH, "%s/%s", cur_dir, rel_path);
+		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
+		else if (len_str < 0)
+			goto out_oom;
 	} else {
 		char    path_fd_dir[32];
 		ssize_t bytes_read;
 
 		/* 32 bytes should be more than enough */
 		snprintf(path_fd_dir, 32, "/proc/self/fd/%d", dirfd);
-		bytes_read = readlink(path_fd_dir, full_path_out, DFS_MAX_PATH);
+		*full_path_out = malloc(DFS_MAX_PATH);
+		if (*full_path_out == NULL)
+			goto out_oom;
+		bytes_read = readlink(path_fd_dir, *full_path_out, DFS_MAX_PATH);
 		if (bytes_read >= DFS_MAX_PATH) {
-			full_path_out[DFS_MAX_PATH - 1] = 0;
+			(*full_path_out)[DFS_MAX_PATH - 1] = 0;
 			goto out_toolong;
 		} else if (bytes_read < 0) {
-			if (bLog)
-				D_ERROR("readlink() failed in check_path_with_dirfd(%d). %s",
-					dirfd, strerror(errno));
-			*error = errno;
+			goto out_readlink;
 		}
-		len_str = snprintf(full_path_out + bytes_read, DFS_MAX_PATH - bytes_read, "/%s",
+		len_str = snprintf(*full_path_out + bytes_read, DFS_MAX_PATH - bytes_read, "/%s",
 				   rel_path);
 		if ((len_str + (int)bytes_read) >= DFS_MAX_PATH)
 			goto out_toolong;
-		full_path_out[len_str + (int)bytes_read] = 0;
+		(*full_path_out)[len_str + (int)bytes_read] = 0;
 	}
 
-	return query_dfs_mount(full_path_out);
+	return query_dfs_mount(*full_path_out);
 
 out_toolong:
-	if (bLog)
-		D_ERROR("path is too long");
 	*error = ENAMETOOLONG;
+	if (*full_path_out) {
+		free(*full_path_out);
+		*full_path_out = NULL;
+	}
+	if (bLog)
+		D_ERROR("path is too long.");
+	return (-1);
+
+out_oom:
+	*error = ENOMEM;
+	if (bLog)
+		D_ERROR("fail to allocate memory.");
+	return (-1);
+
+out_readlink:
+	*error = errno;
+	if (*full_path_out) {
+		free(*full_path_out);
+		*full_path_out = NULL;
+	}
+	if (bLog)
+		D_ERROR("error in readlink(). %s", strerror(errno));
 	return (-1);
 }
 
@@ -1589,8 +1643,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1609,8 +1663,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (!hook_enabled)
 		goto org_func;
 
-	rc = query_path(pathname, &is_target_path, &parent, item_name, parent_dir,
-			full_path, &dfs_mt);
+	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc != 0 && errno == ENOENT)
 		D_GOTO(out_error, rc = ENOENT);
 
@@ -1695,6 +1749,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			free_dirfd(idx_dirfd);
 			D_GOTO(out_error, rc = ENAMETOOLONG);
 		}
+		D_FREE(parent_dir);
+
 		return (idx_dirfd + FD_DIR_BASE);
 	}
 	if (bLog)
@@ -1713,14 +1769,19 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
 	file_list[idx_fd]->offset = 0;
 	strcpy(file_list[idx_fd]->item_name, item_name);
+
+	D_FREE(parent_dir);
+
 	return (idx_fd + FD_FILE_BASE);
 
 org_func:
+	D_FREE(parent_dir);
 	if (two_args)
 		return real_open(pathname, oflags);
 	else
 		return real_open(pathname, oflags, mode);
 out_error:
+	D_FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2034,17 +2095,18 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	struct dfs_mt   *dfs_mt;
 	mode_t           mode;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (!hook_enabled)
 		return next_xstat(ver, path, stat_buf);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_xstat(ver, path, stat_buf);
+		goto out_org;
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_stat, 1);
 
@@ -2055,18 +2117,26 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 				    stat_buf);
 	}
 	stat_buf->st_mode = mode;
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
 	dfs_release(obj);
 	if (S_ISDIR(mode))
 		/* st_nlink should be 2 or larger number for dir */
 		stat_buf->st_nlink = 2;
+	D_FREE(parent_dir);
 
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_xstat(ver, path, stat_buf);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 static int
@@ -2076,39 +2146,49 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (!hook_enabled)
 		return libc_lxstat(ver, path, stat_buf);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return libc_lxstat(ver, path, stat_buf);
+		goto out_org;
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_stat, 1);
+
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
 	else
 		rc = dfs_stat(dfs_mt->dfs, parent, item_name, stat_buf);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto out_err;
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
 	if (S_ISDIR(stat_buf->st_mode))
 		/* st_nlink should be 2 or larger number for dir in rm */
 		stat_buf->st_nlink = 2;
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return libc_lxstat(ver, path, stat_buf);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 static int
 new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (!hook_enabled)
 		return next_fxstatat(ver, dirfd, path, stat_buf, flags);
@@ -2121,19 +2201,29 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 			return new_xstat(1, path, stat_buf);
 	}
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
 	if (idx_dfs >= 0) {
 		if (flags & AT_SYMLINK_NOFOLLOW)
-			return new_lxstat(1, full_path, stat_buf);
+			rc = new_lxstat(1, full_path, stat_buf);
 		else
-			return new_xstat(1, full_path, stat_buf);
+			rc = new_xstat(1, full_path, stat_buf);
+	} else {
+		rc = next_fxstatat(ver, dirfd, path, stat_buf, flags);
 	}
 
-	return next_fxstatat(ver, dirfd, path, stat_buf, flags);
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 static void
@@ -2167,7 +2257,7 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 {
 	int         rc, idx_dfs, error;
 	struct stat stat_buf;
-	char        full_path[DFS_MAX_PATH];
+	char        *full_path = NULL;
 
 	if (next_statx == NULL) {
 		next_statx = dlsym(RTLD_NEXT, "statx");
@@ -2186,21 +2276,32 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		return rc;
 	}
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
 	if (idx_dfs >= 0) {
 		if (flags & AT_SYMLINK_NOFOLLOW)
 			rc = new_lxstat(1, full_path, &stat_buf);
 		else
 			rc = new_xstat(1, full_path, &stat_buf);
+		error = errno;
 		copy_stat_to_statx(&stat_buf, statx_buf);
-		return rc;
+	} else {
+		rc = next_statx(dirfd, path, flags, mask, statx_buf);
+		error = errno;
 	}
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
 
-	return next_statx(dirfd, path, flags, mask, statx_buf);
+out_err:
+	if (full_path)
+		free(full_path);
+	errno = error;
+	return (-1);
 }
 
 static off_t
@@ -2264,7 +2365,8 @@ statfs(const char *pathname, struct statfs *sfs)
 	int              rc, is_target_path;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_statfs == NULL) {
 		next_statfs = dlsym(RTLD_NEXT, "statfs");
@@ -2274,17 +2376,16 @@ statfs(const char *pathname, struct statfs *sfs)
 	if (!hook_enabled)
 		return next_statfs(pathname, sfs);
 
-	rc = query_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_statfs(pathname, sfs);
+		goto out_org;
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
-	if (rc != 0) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc != 0)
+		goto out_err;
 
 	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
 			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
@@ -2295,7 +2396,17 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_statfs(pathname, sfs);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -2353,7 +2464,8 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	int              rc, is_target_path;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_statvfs == NULL) {
 		next_statvfs = dlsym(RTLD_NEXT, "statvfs");
@@ -2363,18 +2475,19 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	if (!hook_enabled)
 		return next_statvfs(pathname, svfs);
 
-	rc = query_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_statvfs(pathname, svfs);
+		goto out_org;
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
 		if (bLog)
 			D_ERROR("Failed to query pool: "DF_RC"\n", DP_RC(rc));
 		errno = daos_der2errno(rc);
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	}
 
 	svfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
@@ -2386,7 +2499,17 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_statvfs(pathname, svfs);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -2401,8 +2524,8 @@ opendir(const char *path)
 	mode_t           mode;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_opendir == NULL) {
 		next_opendir = dlsym(RTLD_NEXT, "opendir");
@@ -2411,11 +2534,14 @@ opendir(const char *path)
 	if (!hook_enabled)
 		return next_opendir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return NULL;
-	if (!is_target_path)
+		D_GOTO(out_err_ret, rc = errno);
+	if (!is_target_path) {
+		D_FREE(parent_dir);
 		return next_opendir(path);
+	}
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_opendir, 1);
 
@@ -2468,12 +2594,15 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
+	D_FREE(parent_dir);
+
 	return (DIR *)(dir_list[idx_dirfd]);
 
 out_err:
 	dfs_release(dir_obj);
 
 out_err_ret:
+	D_FREE(parent_dir);
 	errno = rc;
 	return NULL;
 }
@@ -2497,8 +2626,8 @@ int
 openat(int dirfd, const char *path, int oflags, ...)
 {
 	unsigned int mode;
-	int          two_args = 1, idx_dfs, error;
-	char         full_path[DFS_MAX_PATH];
+	int          two_args = 1, idx_dfs, error, rc;
+	char         *full_path = NULL;
 
 	if (next_openat == NULL) {
 		next_openat = dlsym(RTLD_NEXT, "openat");
@@ -2526,23 +2655,38 @@ openat(int dirfd, const char *path, int oflags, ...)
 	}
 
 	/* Relative path */
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
 	if (idx_dfs >= 0) {
 		if (two_args)
-			return open_common(libc_open, "new_openat", full_path, oflags);
+			rc = open_common(libc_open, "new_openat", full_path, oflags);
 		else
-			return open_common(libc_open, "new_openat", full_path, oflags, mode);
+			rc = open_common(libc_open, "new_openat", full_path, oflags, mode);
+
+		error = errno;
+		if (full_path) {
+			free(full_path);
+			errno = error;
+		}
+		return rc;
 	}
+
+	if (full_path)
+		free(full_path);
 
 org_func:
 	if (two_args)
 		return next_openat(dirfd, path, oflags);
 	else
 		return next_openat(dirfd, path, oflags, mode);
+
+out_err:
+	if (full_path)
+		free(full_path);
+	errno = error;
+	return (-1);
 }
 
 int
@@ -2551,8 +2695,8 @@ openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__((alias(
 int
 __openat_2(int dirfd, const char *path, int oflags)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	/* Check whether path is NULL or not since application provides dirp */
 	if (path == NULL) {
@@ -2569,15 +2713,25 @@ __openat_2(int dirfd, const char *path, int oflags)
 	if (path[0] == '/')
 		return open_common(libc_open, "__openat_2", path, oflags);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return open_common(libc_open, "__openat_2", full_path, oflags);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_openat_2(dirfd, path, oflags);
+	if (idx_dfs >= 0)
+		rc = open_common(libc_open, "__openat_2", full_path, oflags);
+	else
+		rc = next_openat_2(dirfd, path, oflags);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int
@@ -2615,7 +2769,7 @@ new_readdir(DIR *dirp)
 	int               rc        = 0;
 	int               len_str   = 0;
 	struct dir_obj   *mydir     = (struct dir_obj *)dirp;
-	char              full_path[DFS_MAX_PATH];
+	char              *full_path = NULL;
 
 	if (!hook_enabled || mydir->fd < FD_FILE_BASE)
 		return next_readdir(dirp);
@@ -2651,18 +2805,26 @@ out_null_readdir:
 out_readdir:
 	mydir->num_ents--;
 	mydir->offset++;
-	len_str = snprintf(full_path, DFS_MAX_PATH, "%s/%s",
+	len_str = asprintf(&full_path, "%s/%s",
 			   dir_list[mydir->fd - FD_DIR_BASE]->path +
 			   dir_list[mydir->fd - FD_DIR_BASE]->dfs_mt->len_fs_root,
 			   mydir->ents[mydir->num_ents].d_name);
 	if (len_str >= DFS_MAX_PATH) {
 		if (bLog)
 			D_ERROR("path is too long.");
+		free(full_path);
+		mydir->num_ents = 0;
+		errno = ENAMETOOLONG;
+		return NULL;
+	} else if (len_str < 0) {
+		if (bLog)
+			D_ERROR("failed to allocate memory for full_path[].");
 		mydir->num_ents = 0;
 		errno = ENAMETOOLONG;
 		return NULL;
 	}
 	mydir->ents[mydir->num_ents].d_ino = FAKE_ST_INO(full_path);
+	free(full_path);
 	return &mydir->ents[mydir->num_ents];
 }
 
@@ -2738,7 +2900,8 @@ mkdir(const char *path, mode_t mode)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_mkdir == NULL) {
 		next_mkdir = dlsym(RTLD_NEXT, "mkdir");
@@ -2747,33 +2910,40 @@ mkdir(const char *path, mode_t mode)
 	if (!hook_enabled)
 		return next_mkdir(path, mode);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_mkdir(path, mode);
+		goto out_org;
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_mkdir, 1);
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-		errno = EEXIST;
-		return (-1);
-	}
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		D_GOTO(out_err, rc = EEXIST);
 
 	rc = dfs_mkdir(dfs_mt->dfs, parent, item_name, mode & mode_not_umask, 0);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	} else {
-		return 0;
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
+
+	D_FREE(parent_dir);
+	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_mkdir(path, mode);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
 mkdirat(int dirfd, const char *path, mode_t mode)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_mkdirat == NULL) {
 		next_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
@@ -2785,15 +2955,25 @@ mkdirat(int dirfd, const char *path, mode_t mode)
 	if (path[0] == '/')
 		return mkdir(path, mode);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return mkdir(full_path, mode);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_mkdirat(dirfd, path, mode);
+	if (idx_dfs >= 0)
+		rc = mkdir(full_path, mode);
+	else
+		rc = next_mkdirat(dirfd, path, mode);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int
@@ -2803,7 +2983,8 @@ rmdir(const char *path)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_rmdir == NULL) {
 		next_rmdir = dlsym(RTLD_NEXT, "rmdir");
@@ -2812,21 +2993,30 @@ rmdir(const char *path)
 	if (!hook_enabled)
 		return next_rmdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_rmdir(path);
+		goto out_org;
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_rmdir, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	} else {
-		return 0;
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
+
+	D_FREE(parent_dir);
+	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_rmdir(path);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -2836,7 +3026,8 @@ symlink(const char *symvalue, const char *path)
 	dfs_obj_t       *parent, *obj;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_symlink == NULL) {
 		next_symlink = dlsym(RTLD_NEXT, "symlink");
@@ -2845,32 +3036,39 @@ symlink(const char *symvalue, const char *path)
 	if (!hook_enabled)
 		return next_symlink(symvalue, path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_symlink(symvalue, path);
+		goto out_org;
 
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFLNK, O_CREAT | O_EXCL, 0, 0, symvalue,
 		      &obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto out_err;
 	rc = dfs_release(obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto out_err;
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_symlink(symvalue, path);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
 symlinkat(const char *symvalue, int dirfd, const char *path)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_symlinkat == NULL) {
 		next_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
@@ -2882,26 +3080,37 @@ symlinkat(const char *symvalue, int dirfd, const char *path)
 	if (path[0] == '/')
 		return symlink(symvalue, path);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return symlink(symvalue, full_path);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_symlinkat(symvalue, dirfd, path);
+	if (idx_dfs >= 0)
+		rc = symlink(symvalue, full_path);
+	else
+		rc = next_symlinkat(symvalue, dirfd, path);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 ssize_t
 readlink(const char *path, char *buf, size_t size)
 {
-	int              is_target_path, rc;
+	int              is_target_path, rc, rc2;
 	dfs_obj_t       *parent, *obj;
 	struct dfs_mt   *dfs_mt;
 	daos_size_t      str_len = size;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_readlink == NULL) {
 		next_readlink = dlsym(RTLD_NEXT, "readlink");
@@ -2910,33 +3119,47 @@ readlink(const char *path, char *buf, size_t size)
 	if (!hook_enabled)
 		return next_readlink(path, buf, size);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_readlink(path, buf, size);
+		goto out_org;
 
 	rc =
 	    dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto out_err;
 	rc = dfs_get_symlink_value(obj, buf, &str_len);
-	dfs_release(obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto out_release;
+	rc = dfs_release(obj);
+	if (rc)
+		goto out_err;
 	/* The NULL at the end should not be included in the length */
+	D_FREE(parent_dir);
 	return (str_len - 1);
+
+out_org:
+	D_FREE(parent_dir);
+	return next_readlink(path, buf, size);
+
+out_release:
+	rc2 = dfs_release(obj);
+	if (rc2 & bLog)
+		D_ERROR("failed to dfs_release().");
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 ssize_t
 readlinkat(int dirfd, const char *path, char *buf, size_t size)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_readlinkat == NULL) {
 		next_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
@@ -2948,15 +3171,25 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	if (path[0] == '/')
 		return readlink(path, buf, size);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return readlink(full_path, buf, size);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_readlinkat(dirfd, path, buf, size);
+	if (idx_dfs >= 0)
+		rc = readlink(full_path, buf, size);
+	else
+		rc = next_readlinkat(dirfd, path, buf, size);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 static ssize_t
@@ -3004,8 +3237,11 @@ rename(const char *old_name, const char *new_name)
 	int              fd, errno_save;
 	FILE            *fIn = NULL;
 	char             item_name_old[DFS_MAX_NAME], item_name_new[DFS_MAX_NAME];
-	char             parent_dir_old[DFS_MAX_PATH], parent_dir_new[DFS_MAX_PATH];
-	char             symlink_value[DFS_MAX_PATH];
+	char             *parent_dir_old = NULL;
+	char             *full_path_old  = NULL;
+	char             *parent_dir_new = NULL;
+	char             *full_path_new  = NULL;
+	char             *symlink_value  = NULL;
 
 	if (next_rename == NULL) {
 		next_rename = dlsym(RTLD_NEXT, "rename");
@@ -3015,17 +3251,17 @@ rename(const char *old_name, const char *new_name)
 		return next_rename(old_name, new_name);
 
 	rc = query_path(old_name, &is_target_path1, &parent_old, item_name_old,
-			parent_dir_old, NULL, &dfs_mt1);
+			&parent_dir_old, &full_path_old, &dfs_mt1);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 
 	rc = query_path(new_name, &is_target_path2, &parent_new, item_name_new,
-			parent_dir_new, NULL, &dfs_mt2);
+			&parent_dir_new, &full_path_new, &dfs_mt2);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 
 	if (is_target_path1 == 0 && is_target_path2 == 0)
-		return next_rename(old_name, new_name);
+		goto out_org;
 
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_rename, 1);
@@ -3085,12 +3321,20 @@ rename(const char *old_name, const char *new_name)
 
 		switch (type_old) {
 		case S_IFLNK:
+			D_ALLOC(symlink_value, DFS_MAX_PATH);
+			if (symlink_value == NULL) {
+				if (bLog)
+					D_ERROR("failed to allocate memory for symlink_value");
+				D_GOTO(out_old, rc = ENOMEM);
+			}
 			rc = dfs_get_symlink_value(obj_old, symlink_value, &link_len);
 			if (link_len >= DFS_MAX_PATH) {
 				if (bLog)
 					D_ERROR("link is too long. link_len = %" PRIu64, link_len);
 				D_GOTO(out_old, rc = ENAMETOOLONG);
 			}
+			if (rc)
+				D_GOTO(out_old, rc);
 
 			rc = symlink(symlink_value, new_name);
 			if (rc != 0)
@@ -3129,14 +3373,14 @@ rename(const char *old_name, const char *new_name)
 						D_ERROR("error to read %" PRIu64
 							" bytes from %s\n",
 							byte_to_write, old_name);
-					errno = EREMOTEIO;
-					D_GOTO(out_old, rc);
+					D_GOTO(out_old, rc = EREMOTEIO);
 				}
 
 				rc = write_all(fd, buff, byte_to_write);
 				if (rc == -1) {
+					rc = errno;
 					close(fd);
-					D_GOTO(out_old, rc);
+					goto out_old;
 				}
 				if (rc != byte_to_write) {
 					close(fd);
@@ -3145,8 +3389,7 @@ rename(const char *old_name, const char *new_name)
 						D_ERROR("error to write %" PRIu64
 							" bytes from %s\n",
 							byte_to_write, new_name);
-					errno = EREMOTEIO;
-					D_GOTO(out_old, rc);
+					D_GOTO(out_old, rc = EREMOTEIO);
 				}
 				byte_left -= rc;
 			}
@@ -3155,18 +3398,14 @@ rename(const char *old_name, const char *new_name)
 			break;
 		case S_IFDIR:
 			rc = dfs_release(obj_old);
-			if (rc) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc)
+				goto out_err;
 			rc = mkdir(new_name, stat_old.st_mode);
 			if (rc != 0)
-				return rc;
+				D_GOTO(out_err, rc = errno);
 			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
-			if (rc) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc)
+				goto out_err;
 			break;
 		}
 		return chmod(new_name, stat_old.st_mode);
@@ -3175,35 +3414,29 @@ rename(const char *old_name, const char *new_name)
 
 		rc = stat(old_name, &stat_old);
 		if (rc != 0)
-			return (-1);
+			D_GOTO(out_err, rc = errno);
 		type_old = stat_old.st_mode & S_IFMT;
 		if (type_old != S_IFLNK && type_old != S_IFREG && type_old != S_IFDIR) {
 			if (bLog)
 				D_ERROR("unsupported type for old file %s", old_name);
-			errno = ENOTSUP;
-			return (-1);
+			D_GOTO(out_err, rc = ENOTSUP);
 		}
 
-		if (!parent_new && (strncmp(item_name_new, "/", 2) == 0)) {
+		if (!parent_new && (strncmp(item_name_new, "/", 2) == 0))
 			/* Renaming a root dir of a DAOS container */
-			errno = EINVAL;
-			return (-1);
-		}
+			D_GOTO(out_err, rc = EINVAL);
 
 		rc = dfs_lookup_rel(dfs_mt2->dfs, parent_new, item_name_new, O_RDONLY | O_NOFOLLOW,
 				    &obj_new, &mode_new, &stat_new);
-		if (rc != 0 && rc != ENOENT) {
-			errno = rc;
-			return (-1);
-		}
+		if (rc != 0 && rc != ENOENT)
+			goto out_err;
 		if (rc == 0) {
 			type_new = mode_new & S_IFMT;
 			if (type_new != S_IFLNK && type_new != S_IFREG && type_new != S_IFDIR) {
 				if (bLog)
 					D_ERROR("unsupported type for new file %s\n", new_name);
 				dfs_release(obj_new);
-				errno = ENOTSUP;
-				return (-1);
+				D_GOTO(out_err, rc = ENOTSUP);
 			}
 
 			/* New_name exists on DAOS filesystem, remove first. */
@@ -3214,16 +3447,12 @@ rename(const char *old_name, const char *new_name)
 			    (type_old == S_IFLNK && type_new == S_IFREG)) {
 				/* Unlink then finish renaming */
 				rc = dfs_release(obj_new);
-				if (rc) {
-					errno = rc;
-					return (-1);
-				}
+				if (rc)
+					goto out_err;
 				rc = dfs_remove(dfs_mt2->dfs, parent_new, item_name_new, false,
 						NULL);
-				if (rc) {
-					errno = rc;
-					return (-1);
-				}
+				if (rc)
+					goto out_err;
 			}
 			if (type_old != S_IFDIR && type_new == S_IFDIR) {
 				/* Is a directory */
@@ -3237,37 +3466,42 @@ rename(const char *old_name, const char *new_name)
 		/* New_name was removed, now create a new one from the old one */
 		switch (type_old) {
 		case S_IFLNK:
+			D_ALLOC(symlink_value, DFS_MAX_PATH);
+			if (symlink_value == NULL) {
+				if (bLog)
+					D_ERROR("failed to allocate memory for symlink_value");
+				D_GOTO(out_err, rc = ENOMEM);
+			}
 			link_len = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
 			if (link_len >= DFS_MAX_PATH) {
 				if (bLog)
 					D_ERROR("link is too long. link_len = %" PRIu64, link_len);
-				errno = ENAMETOOLONG;
-				return (-1);
+				D_GOTO(out_err, rc = ENAMETOOLONG);
+			} else if (link_len < 0) {
+				if (bLog)
+					D_ERROR("readlink failed: %s", strerror(errno));
+				D_GOTO(out_err, rc = errno);
 			}
+
 			rc =
 			    dfs_open(dfs_mt2->dfs, parent_new, item_name_new, DEFFILEMODE | S_IFLNK,
 				     O_RDWR | O_CREAT, 0, 0, symlink_value, &obj_new);
-			if (rc != 0) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc != 0)
+				goto out_err;
 			rc = dfs_release(obj_new);
-			if (rc != 0) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc != 0)
+				D_GOTO(out_err, rc);
 			break;
 		case S_IFREG:
 			/* Read the old file, write to the new file */
 			fIn = fopen(old_name, "r");
 			if (fIn == NULL)
-				return (-1);
+				D_GOTO(out_err, rc = errno);
 			rc = dfs_open(dfs_mt2->dfs, parent_new, item_name_new, S_IFREG,
-				      O_RDWR | O_CREAT, 0, 0, symlink_value, &obj_new);
+				      O_RDWR | O_CREAT, 0, 0, NULL, &obj_new);
 			if (rc) {
 				fclose(fIn);
-				errno = rc;
-				return (-1);
+				D_GOTO(out_err, rc);
 			}
 			D_ALLOC(buff, ((stat_old.st_size > FILE_BUFFER_SIZE) ? FILE_BUFFER_SIZE
 									     : stat_old.st_size));
@@ -3295,39 +3529,41 @@ rename(const char *old_name, const char *new_name)
 			rc = fclose(fIn);
 			if (rc != 0) {
 				dfs_release(obj_new);
-				return rc;
+				D_GOTO(out_err, rc = errno);
 			}
 			dfs_release(obj_new);
 			break;
 		case S_IFDIR:
 			rc =
 			    dfs_mkdir(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode, 0);
-			if (rc != 0) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc != 0)
+				goto out_err;
 			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
-			if (rc) {
-				errno = rc;
-				return (-1);
-			}
+			if (rc)
+				goto out_err;
 
 			break;
 		}
 
 		/* This could be improved later by calling daos_obj_update() directly. */
 		rc = dfs_chmod(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
+		if (rc)
+			goto out_err;
 	}
 
 	return 0;
 
+out_org:
+	D_FREE(parent_dir_old);
+	D_FREE(parent_dir_new);
+	return next_rename(old_name, new_name);
+
 out_old:
-	errno_save = rc;
+	D_FREE(symlink_value);
+	D_FREE(parent_dir_old);
+	D_FREE(parent_dir_new);
 	D_FREE(buff);
+	errno_save = rc;
 	rc = dfs_release(obj_old);
 	if (rc && bLog)
 		D_ERROR("error in dfs_release(). %s\n", strerror(rc));
@@ -3335,9 +3571,11 @@ out_old:
 	return (-1);
 
 out_new:
-	errno_save = rc;
+	D_FREE(parent_dir_old);
+	D_FREE(parent_dir_new);
 	D_FREE(buff);
 	fclose(fIn);
+	errno_save = rc;
 	rc = dfs_release(obj_new);
 	if (rc && bLog)
 		D_ERROR("error in dfs_release(). %s\n", strerror(rc));
@@ -3345,6 +3583,9 @@ out_new:
 	return (-1);
 
 out_err:
+	D_FREE(symlink_value);
+	D_FREE(parent_dir_old);
+	D_FREE(parent_dir_new);
 	errno = rc;
 	return (-1);
 }
@@ -3408,8 +3649,8 @@ access(const char *path, int mode)
 	int              rc, is_target_path;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             full_path[DFS_MAX_PATH];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_access == NULL) {
 		next_access = dlsym(RTLD_NEXT, "access");
@@ -3418,29 +3659,37 @@ access(const char *path, int mode)
 	if (!hook_enabled)
 		return next_access(path, mode);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
-	if (is_target_path) {
-		if (!parent && (strncmp(item_name, "/", 2) == 0))
-			rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
-		else
-			rc = dfs_access(dfs_mt->dfs, parent, item_name, mode);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
-		return 0;
-	} else {
-		return next_access(path, mode);
-	}
+		D_GOTO(out_err, rc = errno);
+	if (!is_target_path)
+		goto out_org;
+
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
+	else
+		rc = dfs_access(dfs_mt->dfs, parent, item_name, mode);
+	if (rc)
+		D_GOTO(out_err, rc);
+	D_FREE(parent_dir);
+	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_access(path, mode);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
 faccessat(int dirfd, const char *path, int mode, int flags)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_faccessat == NULL) {
 		next_faccessat = dlsym(RTLD_NEXT, "faccessat");
@@ -3453,27 +3702,37 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	if (path[0] == '/')
 		return access(path, mode);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return access(full_path, mode);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_faccessat(dirfd, path, mode, flags);
+	if (idx_dfs >= 0)
+		rc = access(full_path, mode);
+	else
+		rc = next_faccessat(dirfd, path, mode, flags);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int
 chdir(const char *path)
 {
-	int              is_target_path, rc, len_str;
+	int              is_target_path, rc, len_str, errno_save;
 	dfs_obj_t       *parent;
 	struct stat      stat_buf;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             full_path[DFS_MAX_PATH];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -3482,13 +3741,17 @@ chdir(const char *path)
 	if (!hook_enabled)
 		return next_chdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path) {
+		D_FREE(parent_dir);
 		rc = next_chdir(path);
+		errno_save = errno;
 		if (rc == 0)
 			update_cwd();
+		errno = errno_save;
 		return rc;
 	}
 
@@ -3496,29 +3759,30 @@ chdir(const char *path)
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
 	else
 		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 	if (!S_ISDIR(stat_buf.st_mode)) {
 		if (bLog)
 			D_ERROR("%s is not a directory.\n", path);
-		errno = ENOTDIR;
-		return (-1);
+		D_GOTO(out_err, rc = ENOTDIR);
 	}
 	rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		if (bLog)
 			D_ERROR("path is too long.");
-		errno = ENAMETOOLONG;
-		return (-1);
+		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
+
+	D_FREE(parent_dir);
 	return 0;
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -3553,27 +3817,37 @@ new_unlink(const char *path)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (!hook_enabled)
 		return libc_unlink(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return libc_unlink(path);
+		goto out_org;
 
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_unlink, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	} else {
-		return 0;
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
+
+	D_FREE(parent_dir);
+	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return libc_unlink(path);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -3584,8 +3858,9 @@ unlinkat(int dirfd, const char *path, int flags)
 	struct dfs_mt   *dfs_mt;
 	int              idx_dfs;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *full_path = NULL;
+	char             *parent_dir = NULL;
+	char             *full_path_dummy  = NULL;
 
 	if (next_unlinkat == NULL) {
 		next_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
@@ -3596,33 +3871,51 @@ unlinkat(int dirfd, const char *path, int flags)
 
 	if (path[0] == '/') {
 		/* absolute path, dirfd is ignored */
-		rc = query_path(path, &is_target_path, &parent, item_name, parent_dir,
-				NULL, &dfs_mt);
+		rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+				&full_path_dummy, &dfs_mt);
 		if (rc)
-			return (-1);
+			D_GOTO(out_err, rc = errno);
 		if (!is_target_path)
-			return next_unlinkat(dirfd, path, flags);
+			goto out_org;
 		if (bLog)
 			atomic_fetch_add_relaxed(&num_unlink, 1);
 
 		rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		} else {
-			return 0;
-		}
+		if (rc)
+			D_GOTO(out_err_abs, rc);
+
+		D_FREE(parent_dir);
+		return 0;
 	}
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
 	if (idx_dfs >= 0)
-		return new_unlink(full_path);
+		rc = new_unlink(full_path);
+	else
+		rc = next_unlinkat(dirfd, path, flags);
 
+	error = errno;
+	if (full_path)
+		free(full_path);
+	if (rc)
+		errno = error;
+	return rc;
+
+out_org:
+	D_FREE(parent_dir);
 	return next_unlinkat(dirfd, path, flags);
+
+out_err_abs:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int
@@ -3676,12 +3969,13 @@ ftruncate64(int fd, off_t length) __attribute__((alias("ftruncate"), leaf, nothr
 int
 truncate(const char *path, off_t length)
 {
-	int              is_target_path, rc;
+	int              is_target_path, rc, rc2;
 	dfs_obj_t       *parent, *file_obj;
 	mode_t           mode;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_truncate == NULL) {
 		next_truncate = dlsym(RTLD_NEXT, "truncate");
@@ -3690,30 +3984,39 @@ truncate(const char *path, off_t length)
 	if (!hook_enabled)
 		return next_truncate(path, length);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, NULL, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_truncate(path, length);
+		goto out_org;
 
 	rc = dfs_open(dfs_mt->dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 	if (!S_ISREG(mode)) {
 		if (bLog)
 			D_ERROR("%s is not a regular file.\n", path);
-		errno = EISDIR;
-		return (-1);
+		D_GOTO(out_err, rc = EISDIR);
 	}
 	rc = dfs_punch(dfs_mt->dfs, file_obj, length, DFS_MAX_FSIZE);
-	dfs_release(file_obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	rc2 = dfs_release(file_obj);
+	if (rc)
+		D_GOTO(out_err, rc);
+	if (rc2)
+		D_GOTO(out_err, rc = rc2);
+
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_truncate(path, length);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 static int
@@ -3723,8 +4026,8 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_chmod == NULL) {
 		next_chmod = dlsym(RTLD_NEXT, "chmod");
@@ -3734,25 +4037,34 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	if (!hook_enabled)
 		return next_chmod(path, mode);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
-	if (is_target_path) {
-		/* POSIX API uses AT_SYMLINK_NOFOLLOW; DFS dfs_lookup() uses O_NOFOLLOW. */
-		if (flag & AT_SYMLINK_NOFOLLOW)
-			flag |= O_NOFOLLOW;
-		if (!parent && (strncmp(item_name, "/", 2) == 0))
-			rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode);
-		else
-			rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
-		return 0;
-	}
+		D_GOTO(out_err, rc = errno);
+	if (!is_target_path)
+		goto out_org;
 
+	/* POSIX API uses AT_SYMLINK_NOFOLLOW; DFS dfs_lookup() uses O_NOFOLLOW. */
+	if (flag & AT_SYMLINK_NOFOLLOW)
+		flag |= O_NOFOLLOW;
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
+		rc = dfs_chmod(dfs_mt->dfs, NULL, NULL, mode);
+	else
+		rc = dfs_chmod(dfs_mt->dfs, parent, item_name, mode);
+	if (rc)
+		D_GOTO(out_err, rc);
+
+	D_FREE(parent_dir);
+	return 0;
+
+out_org:
+	D_FREE(parent_dir);
 	return next_chmod(path, mode);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 /* dfs_chmod will dereference symlinks as default */
@@ -3803,8 +4115,8 @@ fchmod(int fd, mode_t mode)
 int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_fchmodat == NULL) {
 		next_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
@@ -3817,15 +4129,25 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	if (path[0] == '/')
 		return chmod_with_flag(path, mode, flag);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return chmod_with_flag(full_path, mode, flag);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_fchmodat(dirfd, path, mode, flag);
+	if (idx_dfs >= 0)
+		rc = chmod_with_flag(full_path, mode, flag);
+	else
+		rc = next_fchmodat(dirfd, path, mode, flag);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int
@@ -3838,8 +4160,8 @@ utime(const char *path, const struct utimbuf *times)
 	struct timespec  times_loc;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_utime == NULL) {
 		next_utime = dlsym(RTLD_NEXT, "utime");
@@ -3848,11 +4170,12 @@ utime(const char *path, const struct utimbuf *times)
 	if (!hook_enabled)
 		return next_utime(path, times);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_utime(path, times);
+		goto out_org;
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &obj, &mode, &stbuf);
@@ -3861,8 +4184,7 @@ utime(const char *path, const struct utimbuf *times)
 	if (rc) {
 		if (bLog)
 			D_ERROR("fail to lookup %s. %s\n", full_path, strerror(rc));
-		errno = rc;
-		return (-1);
+		D_GOTO(out_err, rc);
 	}
 
 	if (times == NULL) {
@@ -3880,17 +4202,25 @@ utime(const char *path, const struct utimbuf *times)
 
 	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
-		errno = rc;
-		return (-1);
+		dfs_release(obj);
+		D_GOTO(out_err, rc);
 	}
 
 	rc = dfs_release(obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_utime(path, times);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -3903,8 +4233,8 @@ utimes(const char *path, const struct timeval times[2])
 	struct timespec  times_loc;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
 	if (next_utimes == NULL) {
 		next_utimes = dlsym(RTLD_NEXT, "utimes");
@@ -3913,11 +4243,12 @@ utimes(const char *path, const struct timeval times[2])
 	if (!hook_enabled)
 		return next_utimes(path, times);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path)
-		return next_utimes(path, times);
+		goto out_org;
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDWR, &obj, &mode, &stbuf);
@@ -3926,8 +4257,7 @@ utimes(const char *path, const struct timeval times[2])
 	if (rc) {
 		if (bLog)
 			D_ERROR("fail to lookup %s. %s\n", full_path, strerror(rc));
-		errno = rc;
-		return (-1);
+		D_GOTO(out_err, rc);
 	}
 
 	if (times == NULL) {
@@ -3945,17 +4275,27 @@ utimes(const char *path, const struct timeval times[2])
 
 	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
-		errno = rc;
-		return (-1);
+		if (bLog)
+			D_ERROR("fail to set attribute. %s\n", strerror(rc));
+		dfs_release(obj);
+		D_GOTO(out_err, rc);
 	}
 
 	rc = dfs_release(obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_org:
+	D_FREE(parent_dir);
+	return next_utimes(path, times);
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 static int
@@ -3969,17 +4309,19 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	struct timeval   times_us[2];
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             parent_dir[DFS_MAX_PATH];
-	char             full_path[DFS_MAX_PATH];
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
 
-	rc = query_path(path, &is_target_path, &parent, item_name, parent_dir, full_path, &dfs_mt);
+	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
+			&full_path, &dfs_mt);
 	if (rc)
-		return (-1);
+		D_GOTO(out_err, rc = errno);
 	if (!is_target_path) {
 		times_us[0].tv_sec  = times[0].tv_sec;
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
 		times_us[1].tv_sec  = times[1].tv_sec;
 		times_us[1].tv_usec = times[1].tv_nsec / 100;
+		D_FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
 
@@ -3991,10 +4333,8 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		rc = dfs_lookup(dfs_mt->dfs, "/", flags, &obj, &mode, &stbuf);
 	else
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, flags, &obj, &mode, &stbuf);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc);
@@ -4011,24 +4351,28 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 
 	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
-		errno = rc;
-		return (-1);
+		dfs_release(obj);
+		D_GOTO(out_err, rc);
 	}
 
 	rc = dfs_release(obj);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		D_GOTO(out_err, rc);
 
+	D_FREE(parent_dir);
 	return 0;
+
+out_err:
+	D_FREE(parent_dir);
+	errno = rc;
+	return (-1);
 }
 
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error;
-	char full_path[DFS_MAX_PATH];
+	int  idx_dfs, error, rc;
+	char *full_path = NULL;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -4047,15 +4391,25 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	if (path[0] == '/')
 		return utimens_timespec(path, times, flags);
 
-	idx_dfs = check_path_with_dirfd(dirfd, full_path, path, &error);
-	if (error) {
-		errno = error;
-		return (-1);
-	}
-	if (idx_dfs >= 0)
-		return utimens_timespec(full_path, times, flags);
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
 
-	return next_utimensat(dirfd, path, times, flags);
+	if (idx_dfs >= 0)
+		rc = utimens_timespec(full_path, times, flags);
+	else
+		rc = next_utimensat(dirfd, path, times, flags);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
 }
 
 int

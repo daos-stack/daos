@@ -86,7 +86,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:
             daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
-            daos_test_env['D_LOG_FILE'] = get_log_file('daos-il.log')
+            daos_test_env['D_LOG_FILE'] = get_log_file(
+                'daos-' + il_lib.replace(".so", "").replace("lib", "") + '.log')
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'

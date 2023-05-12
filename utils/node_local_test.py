@@ -1037,8 +1037,7 @@ def pil4dfs_cmd(dfuse, cmd):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
-    # pylint: disable=protected-access
-    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse.conf.agent_dir
     my_env['D_IL_REPORT'] = '1'
     my_env['D_LOG_MASK'] = 'DEBUG'
     my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')

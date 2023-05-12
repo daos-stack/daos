@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
- * (C) Copyright 2023 Intel.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,7 @@
 #include <fcntl.h>
 #include <execinfo.h>
 #include <inttypes.h>
-#include <assert.h>
+#include <linux/limits.h>
 #include <capstone/capstone.h>
 
 #include "hook.h"
@@ -54,7 +54,7 @@ static int                        get_module_maps_inited;
 
 static size_t                     page_size, mask;
 
-static struct module_patch_info_t module_list[MAX_MODULE];
+static struct module_patch_info_t *module_list;
 
 /* The flag whethere libc.so is found or not. */
 static int                        found_libc = 1;
@@ -86,15 +86,80 @@ static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 static uint64_t lib_base_addr[MAX_NUM_LIB];
 
 /* List of names of loaded libraries */
-static char     lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
+static char     **lib_name_list;
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char     path_ld[MAX_LEN_PATH_NAME] = "";
-static char     path_libc[MAX_LEN_PATH_NAME] = "";
-static char     path_libpthread[MAX_LEN_PATH_NAME] = "";
+static char     *path_ld;
+static char     *path_libc;
+static char     *path_libpthread;
 
-#define MAP_SIZE_SMALL (232144)
+#define MAX_MAP_SIZE	(512*1024)
+#define MAP_SIZE_LIMIT	(16*1024*1024)
+
+/*
+ * read_map_file - Read the whole file /proc/self/maps. Adaptively allocate memory when needed.
+ * Either read the full file or find target string tag, or hit error.
+ */
+static int
+read_map_file(char **buf, const char str_target[], char **pos)
+{
+	int max_read_size, complete = 0, read_size;
+	FILE *fIn;
+
+	max_read_size = MAX_MAP_SIZE;
+
+	/* There is NO way to know the size of /proc/self/maps without reading the full file */
+	/* Keep reading the file until finish the whole file. Increase the buffer size if needed. */
+	while (complete == 0) {
+		*buf = malloc(max_read_size + 1);
+		if (*buf == NULL) {
+			printf("Failed allocate memory (%d bytes).\nQuit\n", max_read_size + 1);
+			exit(1);
+		}
+
+		/* non-seekable file. fread is needed!!! */
+		fIn = fopen("/proc/self/maps", "r");
+		if (fIn == NULL) {
+			printf("Fail to open file: /proc/self/maps\nQuit\n");
+			exit(1);
+		}
+
+		/* fgets seems not working. */
+		/* fread can read complete file. read() does not most of time!!! */
+		read_size = fread(*buf, 1, max_read_size, fIn);
+		fclose(fIn);
+
+		if (read_size < 0) {
+			printf("Error to read file /proc/self/maps.\nQuit\n");
+			exit(1);
+		} else if (read_size == max_read_size) {
+			/* need to increase the buffer and try again */
+			free(*buf);
+			max_read_size *= 3;
+		} else {
+			/* reached the end of the file */
+			complete = 1;
+		}
+		(*buf)[read_size] = '\0';
+		if (str_target) {
+			*pos = strstr(*buf, str_target);
+			/* find the target string and not at the very end! */
+			/* 24 is an empirical parameter. It should work for /ld-2.17.so */
+			if (*pos && ((*buf) + max_read_size - (*pos)) > 24) {
+				/* found the target string tag */
+				complete = 1;
+				break;
+			}
+		}
+		if (max_read_size >= MAP_SIZE_LIMIT) {
+			printf("/proc/self/maps is TOO large!\nQuit.\n");
+			exit(1);
+		}
+	}
+
+	return read_size;
+}
 
 /*
  * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so
@@ -103,32 +168,12 @@ static char     path_libpthread[MAX_LEN_PATH_NAME] = "";
 static void
 determine_lib_path(void)
 {
-	int   i, size_read, rc;
+	int   i, rc;
 	char *read_buff_map = NULL;
 	char *pPos = NULL, *pStart = NULL, *pEnd = NULL;
 	char  lib_ver_str[32], lib_dir_str[256];
-	FILE *fp;
 
-	read_buff_map = malloc(MAP_SIZE_SMALL);
-	if (read_buff_map == NULL) {
-		printf("Failed allocate memory for read_buff_map.\nQuit\n");
-		exit(1);
-	}
-	fp = fopen("/proc/self/maps", "rb");
-	if (fp == NULL) {
-		printf("Fail to open file: /proc/self/maps\nQuit\n");
-		exit(1);
-	}
-
-	size_read = fread(read_buff_map, 1, MAP_SIZE_SMALL, fp);
-	fclose(fp);
-	if (size_read < 0) {
-		printf("Error to read /proc/self/maps\nQuit\n");
-		exit(1);
-	}
-	read_buff_map[MAP_SIZE_SMALL - 1] = '\0';
-
-	pPos = strstr(read_buff_map, "/ld-2.");
+	read_map_file(&read_buff_map, "/ld-2.", &pPos);
 	if (pPos == NULL) {
 		free(read_buff_map);
 		found_libc = 0;
@@ -156,26 +201,41 @@ determine_lib_path(void)
 		exit(1);
 	}
 
-	if ((long int)(pEnd - pStart) >= MAX_LEN_PATH_NAME) {
+	if ((long int)(pEnd - pStart) >= PATH_MAX) {
 		printf("The length of path_ld is too long!\nQuit\n");
+		exit(1);
+	}
+	path_ld = malloc((int)(pEnd - pStart) + 1);
+	if (path_ld == NULL) {
+		printf("Failed to allocate memory for path_ld.\nQuit\n");
 		exit(1);
 	}
 	memcpy(path_ld, pStart, pEnd - pStart);
 	path_ld[pEnd - pStart] = 0;
+
 	memcpy(lib_ver_str, pPos + 4, pEnd - 3 - (pPos + 4));
 	lib_ver_str[pEnd - 3 - (pPos + 4)] = 0;
 	memcpy(lib_dir_str, pStart, pPos - pStart);
 	lib_dir_str[pPos - pStart] = 0;
 
 	free(read_buff_map);
-	rc = snprintf(path_libc, MAX_LEN_PATH_NAME, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
-	if (rc >= MAX_LEN_PATH_NAME) {
+
+	rc = asprintf(&path_libc, "%s/libc-%s.so", lib_dir_str, lib_ver_str);
+	if (rc < 0) {
+		printf("Failed to allocate memory for path_libc!\nQuit\n");
+		exit(1);
+	}
+	if (rc >= PATH_MAX) {
 		printf("The length of path_libc is too long!\nQuit\n");
 		exit(1);
 	}
-	rc = snprintf(path_libpthread, MAX_LEN_PATH_NAME, "%s/libpthread-%s.so",
-		      lib_dir_str, lib_ver_str);
-	if (rc >= MAX_LEN_PATH_NAME) {
+
+	rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
+	if (rc < 0) {
+		printf("Failed to allocate memory for path_libpthread!\nQuit\n");
+		exit(1);
+	}
+	if (rc >= PATH_MAX) {
 		printf("The length of path_libpthread is too long!\nQuit\n");
 		exit(1);
 	}
@@ -386,52 +446,20 @@ get_position_of_next_line(const char buff[], const int pos_start, const int max_
 	return (-1);
 }
 
-/**
- * The max size of read "/proc/self/maps". This size set here should be sufficient
- * for normal applications.
- */
-#define MAX_MAP_SIZE (524288)
-
 /*
- * get_module_maps - Read "/proc/%pid/maps" and extract the names of modules.
+ * get_module_maps - Read "/proc/self/maps" and extract the names of modules.
  */
 static void
 get_module_maps(void)
 {
-	FILE    *fIn;
 	char    *szBuf = NULL, szLibName[512];
-	int      iPos, iPos_Save, ReadItem;
-	long int FileSize;
+	int      iPos, iPos_Save, ReadItem, read_size;
 	uint64_t addr_B, addr_E;
 
-	szBuf = malloc(MAX_MAP_SIZE);
-	if (szBuf == NULL) {
-		printf("Failed allocate memory for szBuf in get_module_maps().\nQuit\n");
-		exit(1);
-	}
+	read_size = read_map_file(&szBuf, NULL, NULL);
 
-	/* non-seekable file. fread is needed!!! */
-	fIn = fopen("/proc/self/maps", "rb");
-	if (fIn == NULL) {
-		printf("Fail to open file: /proc/self/maps\nQuit\n");
-		exit(1);
-	}
-
-	/* fgets seems not working. */
-	/* fread can read complete file. read() does not most of time!!! */
-	FileSize = fread(szBuf, 1, MAX_MAP_SIZE, fIn);
-	fclose(fIn);
-
-	if (FileSize == MAX_MAP_SIZE) {
-		printf("Warning> FileSize == MAX_MAP_SIZE\n"
-		       "You might need to increase MAX_MAP_SIZE.\n");
-	}
-
-	szBuf[FileSize] = 0;
-
-	num_seg         = 0;
-	num_lib_in_map  = 0;
-	szBuf[FileSize] = 0;
+	num_seg          = 0;
+	num_lib_in_map   = 0;
 
 	/* start from the beginging */
 	iPos = 0;
@@ -451,7 +479,7 @@ get_module_maps(void)
 		}
 		iPos_Save = iPos;
 		/* find the next line */
-		iPos = get_position_of_next_line(szBuf, iPos + 38, FileSize);
+		iPos = get_position_of_next_line(szBuf, iPos + 38, read_size);
 		if ((iPos - iPos_Save) > 73) {
 			/* with a lib name */
 			ReadItem = sscanf(szBuf + iPos_Save + 73, "%s", szLibName);
@@ -462,7 +490,11 @@ get_module_maps(void)
 				}
 				if (query_lib_name_in_list(szLibName) == -1) {
 					/* a new name not in list */
-					strcpy(lib_name_list[num_lib_in_map], szLibName);
+					lib_name_list[num_lib_in_map] = strdup(szLibName);
+					if (lib_name_list[num_lib_in_map] == NULL) {
+						printf("Error> strdup(szLibName) failed.\nQuit\n");
+						exit(1);
+					}
 					lib_base_addr[num_lib_in_map] = addr_B;
 					num_lib_in_map++;
 					if (num_lib_in_map >= MAX_NUM_LIB) {
@@ -809,6 +841,23 @@ install_hook(void)
 
 	cs_close(&handle);
 
+	if (path_ld)
+		free(path_ld);
+	if (path_libc)
+		free(path_libc);
+	if (path_libpthread)
+		free(path_libpthread);
+	if (module_list)
+		free(module_list);
+
+	if (lib_name_list) {
+		for (j = 0; j < num_lib_in_map; j++) {
+			if (lib_name_list[j] != NULL)
+				free(lib_name_list[j]);
+		}
+		free(lib_name_list);
+	}
+
 	return num_hook_installed;
 }
 
@@ -839,7 +888,20 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 
 	/* Do initialization work at the very first time. */
 	if (!num_hook) {
+		module_list = malloc(sizeof(struct module_patch_info_t) * MAX_MODULE);
+		if (module_list == NULL) {
+			printf("Failed to allocate memory for module_list.\nQuit\n");
+			exit(1);
+		}
 		memset(module_list, 0, sizeof(struct module_patch_info_t) * MAX_MODULE);
+
+		lib_name_list = (char **)malloc(sizeof(char *) * MAX_NUM_LIB);
+		if (lib_name_list == NULL) {
+			printf("Failed to allocate memory for lib_name_list.\nQuit\n");
+			exit(1);
+		}
+		memset(lib_name_list, 0, sizeof(char *) * MAX_NUM_LIB);
+
 		memset(patch_blk_list, 0, sizeof(struct patch_block_t) * MAX_MODULE);
 		determine_lib_path();
 	}
