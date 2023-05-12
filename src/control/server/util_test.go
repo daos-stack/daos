@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -92,7 +93,10 @@ func (c *mockDrpcClient) IsConnected() bool {
 	return c.cfg.IsConnectedBool
 }
 
-func (c *mockDrpcClient) Connect() error {
+func (c *mockDrpcClient) Connect(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return c.cfg.ConnectError
 }
 
@@ -208,7 +212,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 
 	db := raft.MockDatabase(t, log)
 	ms := system.MockMembership(t, log, db, mockTCPResolver)
-	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
+	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(test.Context(t), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
