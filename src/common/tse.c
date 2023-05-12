@@ -536,6 +536,10 @@ tse_task_complete_callback(tse_task_t *task)
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
 			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			D_MUTEX_LOCK(&dsp->dsp_lock);
+			/* splice any remaining completion CBs back in front of task's list */
+			d_list_splice(&comp_cb_list, &dtp->dtp_comp_cb_list);
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
 			tse_task_decref(task);
 			return false;
 		}
