@@ -8,7 +8,6 @@
 from mpiio_test_base import MpiioTests
 
 
-# pylint: disable=too-many-ancestors
 class LlnlMpi4py(MpiioTests):
     """
     Runs LLNL and MPI4PY test suites.

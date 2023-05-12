@@ -1849,8 +1849,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			rc = 0;
 		}
 		if (rc != 0) {
-			VOS_TX_LOG_FAIL(rc, "akey "DF_KEY" update, akey_update_recx failed, "
-					DF_RC"\n", DP_KEY(&iod->iod_name), DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, DF_UOID" akey "DF_KEY" update, akey_update_recx"
+					" failed, "DF_RC"\n", DP_UOID(obj->obj_id),
+					DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
 		}
 	}

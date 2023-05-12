@@ -12,7 +12,6 @@ from job_manager_utils import get_job_manager
 
 
 class DaosAggregationMultiPoolCont(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
 
        Run IOR with same file option to verify the
@@ -74,7 +73,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         """Jira ID: DAOS-7326
         Test Description:
             This is a common method which run IOR on the specified pools,
-            container quanties and test aggregation.
+            container quantities and test aggregation.
         """
         # test params
         total_runtime = self.params.get('total_runtime', '/run/runtime/*')

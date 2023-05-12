@@ -1,15 +1,14 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from avocado.core.exceptions import TestFail
 
 from ior_test_base import IorTestBase
-from avocado.core.exceptions import TestFail
 
 
 class RbldContainerCreate(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Rebuild with container creation test cases.
 
     Test Class Description:

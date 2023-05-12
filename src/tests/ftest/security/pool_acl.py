@@ -3,11 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import os
 import pwd
 import grp
+
 import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -20,7 +19,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     :avocado: recursive
     """
 
-    # pylint: disable=too-many-ancestors
     def test_daos_pool_acl_enforcement(self):
         """
         Epic:
@@ -44,7 +42,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,pool
-        :avocado: tags=pool_acl,sec_acl,test_daos_pool_acl_enforcement
+        :avocado: tags=DaosRunPoolSecurityTest,pool_acl,sec_acl,test_daos_pool_acl_enforcement
         """
         user_uid = os.geteuid()
         user_gid = os.getegid()
@@ -98,7 +96,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
                 if user_types[ind] == "group":
                     group_acl = test_permission
             test_acl_entries[ind] = default_acl_entries[ind] + test_permission
-        # union of ownergroup and group permission
+        # union of "ownergroup" and group permission
         if user_type == "ownergroup":
             if permission != group_acl:
                 union_acl = "".join(list(set().union(permission, group_acl)))

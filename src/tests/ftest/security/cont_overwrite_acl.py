@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 
 
 class OverwriteContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify ACL entry overwrite.
@@ -62,7 +61,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 self.container.uuid,
                 acl_file)
             test_errs.extend(self.error_handling(
-                self.daos_cmd.result, "No such file or directory"))
+                self.daos_cmd.result, "no such file or directory"))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -94,13 +93,16 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
+            exp_err = "-1003"
+            if content == []:
+                exp_err = "no entries"
 
             # Run overwrite command
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
                 self.container.uuid,
                 path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+            test_errs.extend(self.error_handling(self.daos_cmd.result, exp_err))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)

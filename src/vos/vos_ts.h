@@ -595,6 +595,9 @@ vos_ts_evict(uint32_t *idx, uint32_t type)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
 
+	if (ts_table == NULL)
+		return;
+
 	lrua_evict(ts_table->tt_type_info[type].ti_array, idx);
 }
 
@@ -602,7 +605,12 @@ static inline bool
 vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
+	struct vos_ts_info      *info;
+
+	if (ts_table == NULL)
+		return false;
+
+	info = &ts_table->tt_type_info[type];
 
 	return lrua_peek(info->ti_array, idx, entryp);
 }
