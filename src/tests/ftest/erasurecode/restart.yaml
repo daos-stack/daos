@@ -57,4 +57,4 @@ ior:
   data_percentage:
     size: 1
 aggregation:
-  threshold: "50%"
+  threshold: "70%"

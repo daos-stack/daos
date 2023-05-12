@@ -62,7 +62,7 @@ class EcodServerRestart(TestWithServers):
             containers (dict): container dictionary, container(key): oclass(value)
             ior_kwargs (dict): dictionary of ior arguments
         """
-        for container in list(containers.keys()):
+        for container in containers.keys():
             oclass = containers[container]
             ior_kwargs["container"] = container
             ior_kwargs["ior_params"]["dfs_oclass"] = oclass
@@ -87,8 +87,8 @@ class EcodServerRestart(TestWithServers):
         ior_w_flags = self.params.get("flags", "/run/ior/iorflags/*")
         ior_read_flags = self.params.get("read_flags", "/run/ior/iorflags/*")
         block_transfer_sizes = self.params.get("block_transfer_sizes", "/run/ior/*")[0]
-        processes = self.params.get("ppn", "/run/ior/client_processes/*", default=2)
-        ppn = self.params.get("np", "/run/ior/client_processes/*")
+        processes = self.params.get("np", "/run/ior/client_processes/*", default=2)
+        ppn = self.params.get("ppn", "/run/ior/client_processes/*")
         obj_class = self.params.get("dfs_oclass_list", "/run/ior/objectclass/*")
         aggr_threshold = float(self.params.get("threshold", "/run/aggregation/*")[:-1]) / 100
         block_size = block_transfer_sizes[0]
@@ -103,8 +103,7 @@ class EcodServerRestart(TestWithServers):
                 continue
             rd_fac = extract_redundancy_factor(oclass[0])
             container = self.get_container(
-                self.pool, daos_command=self.get_daos_command(), oclass=oclass[0],
-                properties="rd_fac:{}".format(rd_fac))
+                self.pool, oclass=oclass[0], properties="rd_fac:{}".format(rd_fac))
             containers[container] = oclass[0]
 
         # 2.
