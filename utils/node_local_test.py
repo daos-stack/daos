@@ -3475,7 +3475,7 @@ class PosixTests():
         os.mkdir(dirname)
 
         fname1 = join(dirname, 'f1')
-        with open(fname1, 'w') as fd:
+        with open(fname1, 'w', encoding='ascii') as fd:
             fd.write('test1')
         fname2 = join(dirname, 'f2')
         with open(fname2, 'w') as fd:
@@ -3484,7 +3484,7 @@ class PosixTests():
         dirname1 = join(path, 'test_dir/1d1/')
         os.mkdir(dirname1)
         fname3 = join(dirname1, 'f3')
-        with open(fname3, 'w') as fd:
+        with open(fname3, 'w', encoding='ascii') as fd:
             fd.write('test3')
         dirname2 = join(path, 'test_dir/1d2/')
         os.mkdir(dirname2)
@@ -3599,9 +3599,8 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, None, '1048576')
-        with open(fname1, 'rb') as fd:
+        with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
-            data = data.decode('utf-8-sig').strip()
             if data != 'test1':
                 raise NLTestFail('/test_dir/f1 data is corrupted')
 
@@ -3611,9 +3610,8 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, None, '1048576')
-        with open(fname3, 'rb') as fd:
+        with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
-            data = data.decode('utf-8-sig').strip()
             if data != 'test3':
                 raise NLTestFail('/test_dir/1d1/f3 data is corrupted')
 
