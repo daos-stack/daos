@@ -20,7 +20,7 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         1. Create checksum faults above scrubber threshold
         and see whether SSD auto eviction works as expected.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
         :avocado: tags=test_scrubber_target_auto_eviction,test_scrubber_ssd_auto_eviction
         """
