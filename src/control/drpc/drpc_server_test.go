@@ -314,7 +314,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 
 	// Now start a client...
 	client := NewClientConnection(path)
-	if err := client.Connect(); err != nil {
+	if err := client.Connect(context.Background()); err != nil {
 		t.Fatalf("failed to connect client: %v", err)
 	}
 	defer client.Close()
