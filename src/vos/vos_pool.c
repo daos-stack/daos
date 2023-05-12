@@ -338,8 +338,25 @@ vos_wal_replay(struct umem_store *store,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
+	struct bio_wal_rp_stats wrs;
+	int rc;
+
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_replay(store->stor_priv, replay_cb, arg);
+	rc = bio_wal_replay(store->stor_priv,
+			    (store->stor_stats != NULL) ? &wrs : NULL,
+			    replay_cb, arg);
+
+	/* VOS file rehydration metrics */
+	if (store->stor_stats != NULL && rc >= 0) {
+		struct vos_rh_metrics *vrm = (struct vos_rh_metrics *)store->stor_stats;
+
+		d_tm_set_gauge(vrm->vrh_size, wrs.wrs_sz);
+		d_tm_set_gauge(vrm->vrh_time, wrs.wrs_tm);
+		d_tm_inc_counter(vrm->vrh_entries, wrs.wrs_entries);
+		d_tm_inc_counter(vrm->vrh_tx_cnt, wrs.wrs_tx_cnt);
+		d_tm_inc_counter(vrm->vrh_count, 1);
+	}
+	return rc;
 }
 
 static inline int
@@ -621,7 +638,7 @@ umem_create:
 
 static int
 vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned int flags,
-		 struct umem_pool **ph)
+		 void *metrics, struct umem_pool **ph)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct umem_store	 store = { 0 };
@@ -648,6 +665,11 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
+	if (metrics != NULL) {
+		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
+
+		store.stor_stats = &vpm->vp_rh_metrics;
+	}
 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
@@ -1303,7 +1325,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, &ph);
+	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);
 	if (rc) {
 		D_ERROR("Error in opening the pool "DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));

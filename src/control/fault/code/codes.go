@@ -141,6 +141,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 )
 

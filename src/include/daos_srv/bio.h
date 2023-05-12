@@ -1002,6 +1002,14 @@ int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct b
  */
 int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
 
+/* WAL replay stats */
+struct bio_wal_rp_stats {
+	uint64_t	wrs_tm;		/* rehydration time */
+	uint64_t	wrs_sz;		/* bytes replayed */
+	uint64_t	wrs_entries;	/* replayed entries count */
+	uint64_t	wrs_tx_cnt;	/* total transactions */
+};
+
 /*
  * Replay committed transactions in the WAL on post-crash recovery
  *
@@ -1011,7 +1019,7 @@ int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_replay(struct bio_meta_context *mc,
+int bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *stats,
 		   int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *data),
 		   void *arg);
 
