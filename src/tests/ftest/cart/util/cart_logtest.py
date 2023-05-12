@@ -588,6 +588,7 @@ class LogTest():
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
+        # pylint: disable=too-many-branches,too-many-nested-blocks
         """Check a pid from a single log file for consistency"""
         # pylint: disable=too-many-nested-blocks,too-many-locals,too-many-branches
         # Dict of active descriptors.

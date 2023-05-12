@@ -59,6 +59,7 @@ class LogRaw():
 
 
 class LogLine():
+    # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Class for parsing CaRT log lines
 
     This class implements a way of inspecting individual lines of a log
@@ -439,6 +440,7 @@ class StateIter():
 
 
 class LogIter():
+    # pylint: disable=too-many-branches,too-few-public-methods
     """Class for parsing CaRT log files
 
     This class implements a iterator for lines in a cart log file.  The iterator

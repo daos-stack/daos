@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 
 from agent_utils import include_local_host
@@ -77,7 +76,8 @@ class CmockaUtils():
             "CMOCKA_MESSAGE_OUTPUT": "xml",
         })
 
-    def get_cmocka_command(self, command):
+    @staticmethod
+    def get_cmocka_command(command):
         """Get an ExecutableCommand representing the provided command string.
 
         Adds detection of any bad keywords in the command output that, if found, will result in a
