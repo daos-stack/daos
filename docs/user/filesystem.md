@@ -191,8 +191,8 @@ It is anticipated that in this mode DFuse will be configured to start at boot ti
 general purpose filesystem providing access to multiple users.
 
 Multi-user mode requires the fuse package to be reconfigured as it's disabled by default.  In order
-to run the setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf`
-which will need to be done as root and takes effect for all users on that node.
+to run the setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf` which
+will need to be done as root and takes effect for all users on that node.
 
 ### Launching
 

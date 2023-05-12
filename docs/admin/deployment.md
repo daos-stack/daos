@@ -1552,3 +1552,17 @@ the `[Service]` section before reloading systemd and restarting the
 [^5]: https://github.com/pmem/ndctl/issues/130
 
 [6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+
+## Multi-user DFuse setup
+
+Running a single-user dfuse instance, for example on a compute node, requires no special setup
+however configuration is required for allowing multi-user dfuse on a node.
+
+### Updating fuse config
+
+Multi-user dfuse makes use of the `allow_other` fuse mount option which allows requests from users
+other than the user running dfuse.  For reasons of safety this option is disabled by default for
+fuse and must be enabled by root before any user can use it.  To allow this then root must add or
+uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
+does not do this automatically, an administrator must set this option on login nodes if they want to
+provide a persistent multi-user dfuse service.
