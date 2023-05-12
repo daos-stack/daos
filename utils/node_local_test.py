@@ -2225,7 +2225,6 @@ class PosixTests():
                            'bs=128k'],
                           check_fstat=False)
 
-
     @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
@@ -3802,7 +3801,7 @@ def run_posix_tests(server, conf, test=None):
             # long-running tests which dominate the time, so whilst a higher value here would
             # work there's no benefit in rushing to finish the quicker tests.  The long-running
             # tests are started first.
-            while len(threads) > 2:
+            while len(threads) > 4:
                 for thread_id in threads:
                     thread_id.join(timeout=0)
                     if thread_id.is_alive():
