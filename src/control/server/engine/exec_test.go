@@ -115,7 +115,7 @@ func TestRunnerContextExit(t *testing.T) {
 
 	runner := NewRunner(log, cfg)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(test.Context(t))
 	eiChan, err := runner.Start(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +167,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		)
 	runner := NewRunner(log, cfg)
 
-	eiChan, err := runner.Start(context.Background())
+	eiChan, err := runner.Start(test.Context(t))
 	if err != nil {
 		t.Fatal(err)
 	}
