@@ -4092,7 +4092,7 @@ def create_and_read_via_il(dfuse, path):
         ofd.flush()
         assert_file_size(ofd, 12)
         print(os.fstat(ofd.fileno()))
-    dfuse.il_cmd(dfuse, ['cat', fname], check_write=False)
+    dfuse.il_cmd(['cat', fname], check_write=False)
 
 
 def run_container_query(conf, path):
