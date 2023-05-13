@@ -40,6 +40,9 @@
 
 #include "hook.h"
 
+/* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
+#define FREE(ptr)	({if((ptr) != NULL) free(ptr);})
+
 /* Use very large synthetic FD to distinguish regular FD from Kernel */
 
 /* FD_FILE_BASE - The base number of the file descriptor for a regular file.
@@ -773,13 +776,17 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	*full_path = NULL;
-	D_ALLOC(*parent_dir, DFS_MAX_PATH * 2);
+	/* D_ALLOC() macro is not suitable since daos_init() may be not called yet.
+	 * It causes dead lock inside daos_init which queries file stat and calls
+	 * query_path(). D_ALLOC calls D_DEBUG and accesses lock.
+	 */
+	*parent_dir = malloc(DFS_MAX_PATH * 2);
 	if (*parent_dir == NULL)
 		goto out_oom;
 	/* allocate both for *parent_dir and *full_path above */
 	*full_path = *parent_dir + DFS_MAX_PATH;
 
-	D_ALLOC(full_path_parse, DFS_MAX_PATH + 4);
+	full_path_parse = malloc(DFS_MAX_PATH + 4);
 	if (full_path_parse == NULL)
 		goto out_oom;
 
@@ -915,21 +922,19 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 out_normal:
-	D_FREE(full_path_parse);
-	D_FREE(*parent_dir);
-	*parent_dir = NULL;
+	FREE(full_path_parse);
 	return 0;
 
 out_err:
-	D_FREE(full_path_parse);
-	D_FREE(*parent_dir);
+	FREE(full_path_parse);
+	FREE(*parent_dir);
 	*parent_dir = NULL;
 	errno = rc;
 	return (-1);
 
 out_oom:
-	D_FREE(full_path_parse);
-	D_FREE(*parent_dir);
+	FREE(full_path_parse);
+	FREE(*parent_dir);
 	*parent_dir = NULL;
 	if (bLog)
 		D_ERROR("fail to allocate memory.");
@@ -1749,7 +1754,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			free_dirfd(idx_dirfd);
 			D_GOTO(out_error, rc = ENAMETOOLONG);
 		}
-		D_FREE(parent_dir);
+		FREE(parent_dir);
 
 		return (idx_dirfd + FD_DIR_BASE);
 	}
@@ -1770,18 +1775,18 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->offset = 0;
 	strcpy(file_list[idx_fd]->item_name, item_name);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 
 	return (idx_fd + FD_FILE_BASE);
 
 org_func:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	if (two_args)
 		return real_open(pathname, oflags);
 	else
 		return real_open(pathname, oflags, mode);
 out_error:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2125,16 +2130,16 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	if (S_ISDIR(mode))
 		/* st_nlink should be 2 or larger number for dir */
 		stat_buf->st_nlink = 2;
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2171,15 +2176,15 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	if (S_ISDIR(stat_buf->st_mode))
 		/* st_nlink should be 2 or larger number for dir in rm */
 		stat_buf->st_nlink = 2;
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2187,7 +2192,7 @@ out_err:
 static int
 new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (!hook_enabled)
@@ -2255,7 +2260,7 @@ copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
 int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
-	int         rc, idx_dfs, error;
+	int         rc, idx_dfs, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
 
@@ -2396,15 +2401,15 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_statfs(pathname, sfs);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2499,15 +2504,15 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_statvfs(pathname, svfs);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2539,7 +2544,7 @@ opendir(const char *path)
 	if (rc)
 		D_GOTO(out_err_ret, rc = errno);
 	if (!is_target_path) {
-		D_FREE(parent_dir);
+		FREE(parent_dir);
 		return next_opendir(path);
 	}
 	if (bLog)
@@ -2594,7 +2599,7 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 
 	return (DIR *)(dir_list[idx_dirfd]);
 
@@ -2602,7 +2607,7 @@ out_err:
 	dfs_release(dir_obj);
 
 out_err_ret:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return NULL;
 }
@@ -2626,7 +2631,7 @@ int
 openat(int dirfd, const char *path, int oflags, ...)
 {
 	unsigned int mode;
-	int          two_args = 1, idx_dfs, error, rc;
+	int          two_args = 1, idx_dfs, error = 0, rc;
 	char         *full_path = NULL;
 
 	if (next_openat == NULL) {
@@ -2695,7 +2700,7 @@ openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__((alias(
 int
 __openat_2(int dirfd, const char *path, int oflags)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	/* Check whether path is NULL or not since application provides dirp */
@@ -2926,15 +2931,15 @@ mkdir(const char *path, mode_t mode)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_mkdir(path, mode);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -2942,7 +2947,7 @@ out_err:
 int
 mkdirat(int dirfd, const char *path, mode_t mode)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_mkdirat == NULL) {
@@ -3006,15 +3011,15 @@ rmdir(const char *path)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_rmdir(path);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3051,15 +3056,15 @@ symlink(const char *symvalue, const char *path)
 	if (rc)
 		goto out_err;
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_symlink(symvalue, path);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3067,7 +3072,7 @@ out_err:
 int
 symlinkat(const char *symvalue, int dirfd, const char *path)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_symlinkat == NULL) {
@@ -3137,11 +3142,11 @@ readlink(const char *path, char *buf, size_t size)
 	if (rc)
 		goto out_err;
 	/* The NULL at the end should not be included in the length */
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return (str_len - 1);
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_readlink(path, buf, size);
 
 out_release:
@@ -3150,7 +3155,7 @@ out_release:
 		D_ERROR("failed to dfs_release().");
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3158,7 +3163,7 @@ out_err:
 ssize_t
 readlinkat(int dirfd, const char *path, char *buf, size_t size)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_readlinkat == NULL) {
@@ -3554,14 +3559,14 @@ rename(const char *old_name, const char *new_name)
 	return 0;
 
 out_org:
-	D_FREE(parent_dir_old);
-	D_FREE(parent_dir_new);
+	FREE(parent_dir_old);
+	FREE(parent_dir_new);
 	return next_rename(old_name, new_name);
 
 out_old:
 	D_FREE(symlink_value);
-	D_FREE(parent_dir_old);
-	D_FREE(parent_dir_new);
+	FREE(parent_dir_old);
+	FREE(parent_dir_new);
 	D_FREE(buff);
 	errno_save = rc;
 	rc = dfs_release(obj_old);
@@ -3571,8 +3576,8 @@ out_old:
 	return (-1);
 
 out_new:
-	D_FREE(parent_dir_old);
-	D_FREE(parent_dir_new);
+	FREE(parent_dir_old);
+	FREE(parent_dir_new);
 	D_FREE(buff);
 	fclose(fIn);
 	errno_save = rc;
@@ -3584,8 +3589,8 @@ out_new:
 
 out_err:
 	D_FREE(symlink_value);
-	D_FREE(parent_dir_old);
-	D_FREE(parent_dir_new);
+	FREE(parent_dir_old);
+	FREE(parent_dir_new);
 	errno = rc;
 	return (-1);
 }
@@ -3672,15 +3677,15 @@ access(const char *path, int mode)
 		rc = dfs_access(dfs_mt->dfs, parent, item_name, mode);
 	if (rc)
 		D_GOTO(out_err, rc);
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_access(path, mode);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3688,7 +3693,7 @@ out_err:
 int
 faccessat(int dirfd, const char *path, int mode, int flags)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_faccessat == NULL) {
@@ -3746,7 +3751,7 @@ chdir(const char *path)
 	if (rc)
 		D_GOTO(out_err, rc = errno);
 	if (!is_target_path) {
-		D_FREE(parent_dir);
+		FREE(parent_dir);
 		rc = next_chdir(path);
 		errno_save = errno;
 		if (rc == 0)
@@ -3776,11 +3781,11 @@ chdir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3837,15 +3842,15 @@ new_unlink(const char *path)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return libc_unlink(path);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -3853,7 +3858,7 @@ out_err:
 int
 unlinkat(int dirfd, const char *path, int flags)
 {
-	int              is_target_path, rc, error;
+	int              is_target_path, rc, error = 0;
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	int              idx_dfs;
@@ -3884,7 +3889,7 @@ unlinkat(int dirfd, const char *path, int flags)
 		if (rc)
 			D_GOTO(out_err_abs, rc);
 
-		D_FREE(parent_dir);
+		FREE(parent_dir);
 		return 0;
 	}
 
@@ -3905,11 +3910,11 @@ unlinkat(int dirfd, const char *path, int flags)
 	return rc;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_unlinkat(dirfd, path, flags);
 
 out_err_abs:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 
@@ -4006,15 +4011,15 @@ truncate(const char *path, off_t length)
 	if (rc2)
 		D_GOTO(out_err, rc = rc2);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_truncate(path, length);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -4054,15 +4059,15 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_chmod(path, mode);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -4115,7 +4120,7 @@ fchmod(int fd, mode_t mode)
 int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_fchmodat == NULL) {
@@ -4210,15 +4215,15 @@ utime(const char *path, const struct utimbuf *times)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_utime(path, times);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -4285,15 +4290,15 @@ utimes(const char *path, const struct timeval times[2])
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_org:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return next_utimes(path, times);
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -4321,7 +4326,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
 		times_us[1].tv_sec  = times[1].tv_sec;
 		times_us[1].tv_usec = times[1].tv_nsec / 100;
-		D_FREE(parent_dir);
+		FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
 
@@ -4359,11 +4364,11 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	return 0;
 
 out_err:
-	D_FREE(parent_dir);
+	FREE(parent_dir);
 	errno = rc;
 	return (-1);
 }
@@ -4371,7 +4376,7 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error, rc;
+	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
 	if (next_utimensat == NULL) {
