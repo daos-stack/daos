@@ -41,7 +41,7 @@
 #include "hook.h"
 
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
-#define FREE(ptr)	({if((ptr) != NULL) free(ptr);})
+#define FREE(ptr)	({if ((ptr) != NULL) free(ptr); })
 
 /* Use very large synthetic FD to distinguish regular FD from Kernel */
 
