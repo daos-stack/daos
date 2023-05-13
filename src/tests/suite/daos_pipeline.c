@@ -371,15 +371,13 @@ free_pipeline(daos_pipeline_t *pipe)
 
 	/** freeing objects allocated by DAOS */
 	rc = daos_pipeline_free(pipe);
-	if (rc != 0)
-		return rc;
 
 	/** freeing filters */
 	for (i = 0; i < total_filters; i++)
 		free(filters_to_free[i]);
 	free(filters_to_free);
 
-	return 0;
+	return rc;
 }
 
 void
