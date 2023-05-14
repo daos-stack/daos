@@ -484,6 +484,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer
