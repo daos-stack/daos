@@ -201,11 +201,9 @@ class Pass2Test(TestWithServers):
         self.log.info("rank_to_free_fixed = %s", rank_to_free_fixed)
         dst_free_orig = rank_to_free_orig[dst_rank]
         dst_free_fixed = rank_to_free_fixed[dst_rank]
-        # Free space should have been recovered to the original value, but it could be
-        # a little smaller. If it's smaller than 10% of the pool size, conclude that the
-        # free space hasn't been recovered.
-        buffer = int(self.pool.size.value * 0.01)
-        if dst_free_fixed + buffer < dst_free_orig:
+        # Free space should have been recovered to the original value. If not, bring it up
+        # in the CR working group.
+        if dst_free_fixed < dst_free_orig:
             msg = (f"Destination rank space was not recovered by checker! "
                    f"Original = {dst_free_orig}; With fixed = {dst_free_fixed}")
             errors.append(msg)
