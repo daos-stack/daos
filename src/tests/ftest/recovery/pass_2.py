@@ -46,16 +46,12 @@ class Pass2Test(TestWithServers):
         4. Stop servers.
         5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
         another engine where we didn’t create.
-        6. Start servers.
-        7. Call dmg storage query usage to verify that the pool is using more space by
-        comparing with the previous values.
-        8. Stop the servers to enable the checker.
-        9. Enable and start the checker.
-        10. Query the checker and verify that the issue was fixed.
+        6. Enable and start the checker.
+        7. Query the checker and verify that the issue was fixed.
         i.e., Current status is COMPLETED.
-        11. Disable the checker.
-        12. Restart the servers so that the storage usage in the next step is updated.
-        13. Call dmg storage query usage to verify that the pool usage is back to the
+        8. Disable the checker.
+        9. Restart the servers so that the storage usage in the next step is updated.
+        10. Call dmg storage query usage to verify that the pool usage is back to the
         original value.
 
         Jira ID: DAOS-11734
@@ -175,35 +171,13 @@ class Pass2Test(TestWithServers):
                            f"{str(dst_host)}:{dst_mount}/{self.pool.uuid.lower()}")
         pcmd(hosts=src_host, command=xargs_rsync_cmd)
 
-        # 6. Start servers.
-        dmg_command.system_start()
-
-        # 7. Call dmg storage query usage to verify that the pool is using more space at
-        # destination host by comparing with the previous values. (Verify that the fault
-        # was injected correctly.)
-        rank_to_free_orphan = self.get_rank_to_free()
-        self.log.info("rank_to_free_orphan = %s", rank_to_free_orphan)
-        dst_free_orig = rank_to_free_orig[dst_rank]
-        dst_free_orphan = rank_to_free_orphan[dst_rank]
-        errors = []
-        # Free space should be reduced by the pool size. Add 90% of the pool size to the
-        # free space. If the sum is larger than the original, conclude that the free space
-        # wasn't reduced as expected.
-        buffer = int(self.pool.size.value * 0.9)
-        if dst_free_orphan + buffer > dst_free_orig:
-            msg = (f"Pool was not copied to dst rank! Original = {dst_free_orig}; "
-                   f"With orphan = {dst_free_orphan}")
-            errors.append(msg)
-
-        # 8. Stop the servers to enable the checker.
-        dmg_command.system_stop()
-
-        # 9. Enable and start the checker.
+        # 6. Enable and start the checker.
         dmg_command.check_enable()
         dmg_command.check_start()
 
-        # 10. Query the checker and verify that the issue was fixed.
+        # 7. Query the checker and verify that the issue was fixed.
         # i.e., Current status is COMPLETED.
+        errors = []
         query_msg = ""
         for _ in range(8):
             check_query_out = dmg_command.check_query()
@@ -215,21 +189,22 @@ class Pass2Test(TestWithServers):
             errors.append(
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
-        # 11. Disable the checker.
+        # 8. Disable the checker.
         dmg_command.check_disable()
 
-        # 12. Restart the servers so that the storage usage in the next step is updated.
+        # 9. Restart the servers so that the storage usage in the next step is updated.
         dmg_command.system_start()
 
-        # 13. Call dmg storage query usage to verify that the pool usage is back to the
+        # 10. Call dmg storage query usage to verify that the pool usage is back to the
         # original value.
         rank_to_free_fixed = self.get_rank_to_free()
         self.log.info("rank_to_free_fixed = %s", rank_to_free_fixed)
+        dst_free_orig = rank_to_free_orig[dst_rank]
         dst_free_fixed = rank_to_free_fixed[dst_rank]
         # Free space should have been recovered to the original value, but it could be
         # a little smaller. If it's smaller than 10% of the pool size, conclude that the
         # free space hasn't been recovered.
-        buffer = int(self.pool.size.value * 0.1)
+        buffer = int(self.pool.size.value * 0.01)
         if dst_free_fixed + buffer < dst_free_orig:
             msg = (f"Destination rank space was not recovered by checker! "
                    f"Original = {dst_free_orig}; With fixed = {dst_free_fixed}")
