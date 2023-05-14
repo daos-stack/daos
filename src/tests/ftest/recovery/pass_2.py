@@ -111,7 +111,6 @@ class Pass2Test(TestWithServers):
                         src_mount = scm_namespace["mount"]["path"]
                         # Use the same mount point as source.
                         dst_mount = src_mount
-            # else:
         for storage_dict in hash_dict.values():
             if str(dst_host) in storage_dict["hosts"]:
                 # Determine destination rank that mpas to dst_mount.
@@ -138,7 +137,7 @@ class Pass2Test(TestWithServers):
         chmod_cmd = f"sudo chmod 777 {dst_mount}"
         pcmd(hosts=dst_host, command=chmod_cmd)
 
-        # 5-3. Since we're seding each file (vos-0 to 7 + rdb-pool) one at a time, we need
+        # 5-3. Since we're sending each file (vos-0 to 7 + rdb-pool) one at a time, we need
         # to create the destination fake pool directory first.
         self.log.info("Create a fake pool directory at the destination mount point.")
         mkdir_cmd = f"sudo mkdir {dst_mount}/{self.pool.uuid.lower()}"
