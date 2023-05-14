@@ -86,6 +86,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 	resp.DataVersion = v
 
+	resp.Sys = svc.sysdb.SystemName()
+
 	return resp, nil
 }
 

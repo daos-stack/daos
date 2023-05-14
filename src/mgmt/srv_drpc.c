@@ -2144,7 +2144,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (bio_health == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
+	rc = ds_mgmt_bio_health_query(bio_health, uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to query BIO health data :"DF_RC"\n",
 			DP_RC(rc));

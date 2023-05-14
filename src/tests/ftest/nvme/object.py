@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,7 +66,7 @@ def test_runner(self, namespace, record_size, array_size, thread_per_size=4):
     self.container.append(self.get_container(self.pool[-1]))
     self.container[-1].open()
 
-    # initialize dicts to hold threads
+    # initialize dictionary to hold threads
     jobs = {"write": [], "read": []}
 
     # create read/write threads.

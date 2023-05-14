@@ -401,11 +401,13 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
-			dtx_dre_release(drh, dre);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
-				goto out;
+				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
+					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
+					dra->discard_version, DP_RC(err));
+			dtx_dre_release(drh, dre);
 			continue;
 		}
 

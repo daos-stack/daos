@@ -181,7 +181,6 @@ filesystem
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -326,6 +325,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -343,6 +343,7 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
 puuid

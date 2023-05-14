@@ -24,6 +24,20 @@ class DaosCommand(DaosCommandBase):
             r"Highest Aggregated Epoch:\s+(\d+)",
     }
 
+    def system_query(self):
+        """Query the DAOS system for client endpoint information.
+
+        Args:
+            None
+
+        Returns:
+            dict: JSON output
+
+        Raises:
+            CommandFailure: if the daos system query command fails.
+        """
+        return self._get_json_result(("system", "query"))
+
     def pool_query(self, pool, sys_name=None, sys=None):
         """Query a pool.
 
