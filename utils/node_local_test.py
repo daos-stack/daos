@@ -991,6 +991,56 @@ class DaosServer():
 
         return self.test_pool
 
+    def run_daos_client_cmd_pil4dfs(self, cmd):
+        """Run a DAOS client with libpil4dfs.so
+
+        Run a command, returning what subprocess.run() would.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime.
+        Disable valgrind at this moment. Will revisit this issue later.
+        """
+        cmd_env = get_base_env()
+
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+                                         suffix='.log',
+                                         dir=self.conf.tmp_dir,
+                                         delete=False) as log_file:
+            log_name = log_file.name
+            cmd_env['D_LOG_FILE'] = log_name
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        cmd_env['D_IL_REPORT'] = '1'
+        cmd_env['D_LOG_MASK'] = 'DEBUG'
+        cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+
+        print('Run command: ')
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False)
+        print(rc)
+
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+
+        if rc.stdout != b'':
+            print('Stdout from command')
+            print(rc.stdout.decode('utf-8').strip())
+
+        # check stderr for interception summary
+        search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
+        if len(search) == 0:
+            raise NLTestFail('[op_sum ] is NOT found.')
+        num_op = int(search[0][9:])
+        if num_op == 0:
+            raise NLTestFail('op_sum is zero. Unexpected.')
+        print(f'DBG> num_op = {num_op}')
+
+        assert rc.returncode == 0
+
+        log_test(self.conf, log_name, show_memleaks=False,
+                 check_read=False, check_write=False, check_fstat=False)
+
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
@@ -1025,39 +1075,6 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
         command = ' '.join(cmd)
         print(f"ERROR: command '{command}' did not log via {error.function}")
         ret.returncode = 1
-
-    return ret
-
-
-def pil4dfs_cmd(dfuse, cmd):
-    """Run a command under the interception library pil4dfs
-    """
-    my_env = get_base_env()
-    prefix = f'dnt_dfuse_pil4dfs_{get_inc_id()}_'
-    with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
-        log_name = log_file.name
-    my_env['D_LOG_FILE'] = log_name
-    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse.conf.agent_dir
-    my_env['D_IL_REPORT'] = '1'
-    my_env['D_LOG_MASK'] = 'DEBUG'
-    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
-    ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         env=my_env, check=False)
-    print(f'Logged pil4dfs to {log_name}')
-    print(ret)
-
-    assert ret.returncode == 0
-
-    # check stderr for interception summary
-    search = re.findall(r'\[op_sum\ ]  \d+', ret.stderr.decode('utf-8'))
-    if len(search) == 0:
-        raise NLTestFail('[op_sum ] is NOT found.')
-    num_op = int(search[0][9:])
-    if num_op == 0:
-        raise NLTestFail('op_sum is zero. Unexpected.')
-    print(f'DBG> num_op = {num_op}')
-
-    log_test(dfuse.conf, log_name, check_read=False, check_write=False, check_fstat=False)
 
     return ret
 
@@ -2265,52 +2282,6 @@ class PosixTests():
                                   'oflag=direct',
                                   'bs=128k'],
                      check_fstat=False)
-        assert ret.returncode == 0
-
-    @needs_dfuse
-    def test_pil4dfs(self):
-        """Run a basic interception library test for libpil4dfs.so"""
-
-        # Create a file natively.
-        file1 = join(self.dfuse.dir, 'file1')
-        with open(file1, 'w') as fd:
-            fd.write('Hello World!')
-
-        # Copy a file.
-        file2 = join(self.dfuse.dir, 'file2')
-        ret = pil4dfs_cmd(self.dfuse, ['cp', file1, file2])
-        assert ret.returncode == 0
-
-        # Read a file with cat.
-        ret = pil4dfs_cmd(self.dfuse, ['cat', file2])
-        assert ret.returncode == 0
-
-        # touch a file.
-        file3 = join(self.dfuse.dir, 'file3')
-        ret = pil4dfs_cmd(self.dfuse, ['touch', file3])
-        assert ret.returncode == 0
-
-        # create a dir.
-        dir1 = join(self.dfuse.dir, 'dir1')
-        ret = pil4dfs_cmd(self.dfuse, ['mkdir', dir1])
-        assert ret.returncode == 0
-
-        # find to list all files/dirs.
-        ret = pil4dfs_cmd(self.dfuse, ['find', self.dfuse.dir])
-        assert ret.returncode == 0
-
-        # remove a file.
-        ret = pil4dfs_cmd(self.dfuse, ['rm', file3])
-        assert ret.returncode == 0
-
-        # rm a dir with a file and a symlink
-        file4 = join(self.dfuse.dir, 'dir1/file4')
-        ret = pil4dfs_cmd(self.dfuse, ['touch', file4])
-        assert ret.returncode == 0
-        link1 = join(self.dfuse.dir, 'dir1/link1')
-        ret = pil4dfs_cmd(self.dfuse, ['ln', '-s', file4, link1])
-        assert ret.returncode == 0
-        ret = pil4dfs_cmd(self.dfuse, ['rm', '-Rf', dir1])
         assert ret.returncode == 0
 
     @needs_dfuse
@@ -3709,6 +3680,53 @@ class PosixTests():
         nr_entries = len(dir_list)
         if nr_entries != 1:
             raise NLTestFail('Wrong number of entries')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_pil4dfs(self):
+        """Test interception library libpil4dfs.so"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='pil4dfs')
+        path = dfuse.dir
+
+        # Create a file natively.
+        file1 = join(path, 'file1')
+        with open(file1, 'w') as fd:
+            fd.write('Hello World!')
+
+        # Copy a file.
+        file2 = join(path, 'file2')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
+
+        # Read a file with cat.
+        self.server.run_daos_client_cmd_pil4dfs(['cat', file2])
+
+        # touch a file.
+        file3 = join(path, 'file3')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # create a dir.
+        dir1 = join(path, 'dir1')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
+
+        # find to list all files/dirs.
+        self.server.run_daos_client_cmd_pil4dfs(['find', path])
+
+        # remove a file.
+        self.server.run_daos_client_cmd_pil4dfs(['rm', file3])
+
+        # rm a dir with a file and a symlink
+        file4 = join(path, 'dir1/file4')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file4])
+        link1 = join(path, 'dir1/link1')
+        self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
+        self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
         if dfuse.stop():
             self.fatal_errors = True
