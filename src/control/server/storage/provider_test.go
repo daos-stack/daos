@@ -7,7 +7,6 @@
 package storage
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -456,7 +455,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotReq, gotErr := BdevWriteConfigRequestFromConfig(context.TODO(), log, tc.cfg,
+			gotReq, gotErr := BdevWriteConfigRequestFromConfig(test.Context(t), log, tc.cfg,
 				tc.vmdEnabled, tc.getTopoFn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
