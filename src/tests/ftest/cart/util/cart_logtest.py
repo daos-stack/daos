@@ -210,7 +210,7 @@ SHUTDOWN_RC = ("DER_SHUTDOWN(-2017): 'Service should shut down'",
                "DER_NOTLEADER(-2008): 'Not service leader'")
 
 # Functions that are never reported as errors.
-IGNORED_FUNCTIONS = ('rdb_stop', 'sched_watchdog_post', 'rdb_timerd')
+IGNORED_FUNCTIONS = ('sched_watchdog_post', 'rdb_timerd')
 
 
 class LogTest():
