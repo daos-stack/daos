@@ -95,6 +95,10 @@ func TestLogging_StandardFormat(t *testing.T) {
 		fmtFnArgs []interface{}
 		expected  *regexp.Regexp
 	}{
+		"Trace": {fn: logger.Trace, fnInput: "test",
+			expected: regexp.MustCompile(`^TRACE \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
+		"Tracef": {fmtFn: logger.Tracef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
+			expected: regexp.MustCompile(`^TRACE \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
 		"Debug": {fn: logger.Debug, fnInput: "test",
 			expected: regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
 		"Debugf": {fmtFn: logger.Debugf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
