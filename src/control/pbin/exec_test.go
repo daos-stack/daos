@@ -8,7 +8,6 @@ package pbin_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -166,7 +165,7 @@ func TestPbin_Exec(t *testing.T) {
 				tc.binPath = os.Args[0]
 			}
 
-			ctx := context.Background()
+			ctx := test.Context(t)
 			res, err := pbin.ExecReq(ctx, log, tc.binPath, tc.req)
 
 			test.CmpErr(t, tc.expErr, err)

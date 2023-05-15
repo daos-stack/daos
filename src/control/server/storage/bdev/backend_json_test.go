@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -239,7 +238,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				return
 			}
 
-			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
+			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(test.Context(t), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 
 			gotCfg, gotErr := newSpdkConfig(log, writeReq)
