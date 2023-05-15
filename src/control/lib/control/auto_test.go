@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -142,7 +141,7 @@ func fabricFromHostResp(t *testing.T, log logging.Logger, uErr error, hostRespon
 		},
 	})
 
-	return getNetworkSet(context.TODO(), log, []string{}, mi)
+	return getNetworkSet(test.Context(t), log, []string{}, mi)
 }
 
 func cmpHostErrs(t *testing.T, expErrs []*MockHostError, gotErrs *HostErrorsResp) {
@@ -528,7 +527,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 				},
 			})
 
-			storageSet, err := getStorageSet(context.TODO(), log, []string{}, mi)
+			storageSet, err := getStorageSet(test.Context(t), log, []string{}, mi)
 			test.CmpErr(t, tc.expErr, err)
 
 			// Additionally verify any internal error details.
@@ -634,7 +633,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				},
 			})
 
-			storageSet, err := getStorageSet(context.TODO(), log, []string{}, mi)
+			storageSet, err := getStorageSet(test.Context(t), log, []string{}, mi)
 			if err != nil {
 				t.Fatal(err)
 			}

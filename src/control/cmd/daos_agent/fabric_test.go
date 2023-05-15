@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -932,7 +931,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
+			result := NUMAFabricFromScan(test.Context(t), log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)

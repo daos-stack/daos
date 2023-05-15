@@ -48,7 +48,7 @@ func (d *DomainInfo) String() string {
 	if d.creds == nil {
 		return "nil creds"
 	}
-	outStr := fmt.Sprintf("%s pid: %d", d.ctx, d.creds.Pid)
+	outStr := fmt.Sprintf("pid: %d", d.creds.Pid)
 	if pName, err := common.GetProcName(int(d.creds.Pid)); err == nil {
 		outStr += fmt.Sprintf(" (%s)", pName)
 	}

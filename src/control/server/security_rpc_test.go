@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -65,8 +64,9 @@ func TestSrvSecurityModule_BadMethod(t *testing.T) {
 	test.CmpErr(t, errors.New("invalid method -1 for module Security"), err)
 }
 
-func callValidateCreds(mod *SecurityModule, body []byte) ([]byte, error) {
-	return mod.HandleCall(context.Background(), nil, drpc.MethodValidateCredentials, body)
+func callValidateCreds(t *testing.T, mod *SecurityModule, body []byte) ([]byte, error) {
+	t.Helper()
+	return mod.HandleCall(test.Context(t), nil, drpc.MethodValidateCredentials, body)
 }
 
 func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
@@ -75,7 +75,7 @@ func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	// Put garbage in the body
-	resp, err := callValidateCreds(mod, []byte{byte(123), byte(90), byte(255)})
+	resp, err := callValidateCreds(t, mod, []byte{byte(123), byte(90), byte(255)})
 
 	if resp != nil {
 		t.Errorf("Expected no response, got %+v", resp)
@@ -127,7 +127,7 @@ func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	reqBytes := marshal(t, &auth.ValidateCredReq{})
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -148,7 +148,7 @@ func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 		Data:   []byte{byte(1), byte(2)},
 	})
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -169,7 +169,7 @@ func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
 		Data:   []byte{byte(1), byte(2)},
 	}, nil)
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -213,7 +213,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -233,7 +233,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_BadVerifier(t *testing.T) {
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, &auth.Token{Data: []byte{0x1}}) // junk verifier
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -290,7 +290,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, key))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -310,7 +310,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -336,7 +336,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	// unsigned hash instead of signed by cert
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
