@@ -160,12 +160,12 @@ class MdtestBase(DfuseTestBase):
                 self.mdtest_cmd.items.update(params[4])
             self.mdtest_cmd.depth.update(params[5])
             self.mdtest_cmd.flags.update(params[6])
-            if params[7]:
+            if len(params) == 8 and params[7]:
                 self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(
                     self.prefix, 'lib64', 'libpil4dfs.so')
             # run mdtest
             self.execute_mdtest()
-            if params[7]:
+            if len(params) == 8 and params[7]:
                 del self.mdtest_cmd.env['LD_PRELOAD']
             # re-set mdtest params before next iteration
             self.mdtest_cmd.get_params(self)
