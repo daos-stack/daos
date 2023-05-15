@@ -38,7 +38,7 @@ func getPoolLockCtx(t *testing.T, parent context.Context, sysdb *raft.Database, 
 	t.Helper()
 
 	if parent == nil {
-		parent = context.Background()
+		parent = test.Context(t)
 	}
 
 	lock, err := sysdb.TakePoolLock(parent, poolUUID)
@@ -474,8 +474,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.Context(t)
 
 			if tc.mgmtSvc == nil {
 				engineCfg := engine.MockConfig().
@@ -504,7 +503,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
-					events.NewPubSub(context.Background(), log))
+					events.NewPubSub(test.Context(t), log))
 			}
 
 			numMembers := tc.memberCount
@@ -529,7 +528,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			pcCtx, pcCancel := context.WithTimeout(context.Background(), 260*time.Millisecond)
+			pcCtx, pcCancel := context.WithTimeout(test.Context(t), 260*time.Millisecond)
 			defer pcCancel()
 			gotResp, gotErr := tc.mgmtSvc.PoolCreate(pcCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -547,9 +546,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
 	ec := engine.MockConfig().
@@ -604,7 +600,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 	wantReq.Tierratio = []float64{0, 0}
 
-	_, err = mgmtSvc.PoolCreate(ctx, req)
+	_, err = mgmtSvc.PoolCreate(test.Context(t), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1117,7 +1113,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolExtend(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolExtend(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1214,7 +1210,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolDrain(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolDrain(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1307,7 +1303,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolEvict(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolEvict(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1335,7 +1331,7 @@ func TestListPools_NoMS(t *testing.T) {
 	h.started.SetTrue()
 	svc := newTestMgmtSvcNonReplica(t, log)
 
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+	resp, err := svc.ListPools(test.Context(t), newTestListPoolsReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1381,7 +1377,7 @@ func TestListPools_Success(t *testing.T) {
 		})
 	}
 
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+	resp, err := svc.ListPools(test.Context(t), newTestListPoolsReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -1411,7 +1407,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 
 	svc := newTestMgmtSvcNonReplica(t, log)
 
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
+	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1435,7 +1431,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
+	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -1456,7 +1452,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
+	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1476,7 +1472,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
+	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1501,7 +1497,7 @@ func TestPoolOverwriteACL_NoMS(t *testing.T) {
 
 	svc := newTestMgmtSvcNonReplica(t, log)
 
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1519,7 +1515,7 @@ func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1539,7 +1535,7 @@ func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1563,7 +1559,7 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -1581,7 +1577,7 @@ func TestPoolUpdateACL_NoMS(t *testing.T) {
 
 	svc := newTestMgmtSvcNonReplica(t, log)
 
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1599,7 +1595,7 @@ func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1619,7 +1615,7 @@ func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1643,7 +1639,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -1669,7 +1665,7 @@ func TestPoolDeleteACL_NoMS(t *testing.T) {
 
 	svc := newTestMgmtSvcNonReplica(t, log)
 
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
+	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1687,7 +1683,7 @@ func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
+	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1707,7 +1703,7 @@ func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
+	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -1731,7 +1727,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
+	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -1836,7 +1832,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolQuery(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1980,7 +1976,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			_, gotErr := ms.PoolSetProp(context.TODO(), tc.req)
+			_, gotErr := ms.PoolSetProp(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -2063,7 +2059,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			_, gotErr := ms.PoolGetProp(context.TODO(), tc.req)
+			_, gotErr := ms.PoolGetProp(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -2151,7 +2147,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolUpgrade(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolUpgrade(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

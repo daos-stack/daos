@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -411,7 +410,7 @@ func TestControl_StorageScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageScan(ctx, mi, &StorageScanReq{})
@@ -717,7 +716,7 @@ func TestControl_StorageFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageFormat(ctx, mi, &StorageFormatReq{Reformat: tc.reformat})
@@ -801,7 +800,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 
 			req := &StorageFormatReq{}
 			req.SetHostList(tc.reqHosts)
-			err := checkFormatReq(context.Background(), mi, req)
+			err := checkFormatReq(test.Context(t), mi, req)
 			test.CmpErr(t, tc.expErr, err)
 
 		})
@@ -887,7 +886,7 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageNvmeRebind(ctx, mi, &NvmeRebindReq{
@@ -984,7 +983,7 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageNvmeAddDevice(ctx, mi, &NvmeAddDeviceReq{

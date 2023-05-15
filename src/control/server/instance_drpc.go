@@ -145,10 +145,13 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 
 	resChan := make(chan *system.MemberResult)
-	go func() {
+	go func(ctx context.Context) {
 		dresp, err := ei.CallDrpc(ctx, method, nil)
-		resChan <- drespToMemberResult(rank, dresp, err, targetState)
-	}()
+		select {
+		case <-ctx.Done():
+		case resChan <- drespToMemberResult(rank, dresp, err, targetState):
+		}
+	}(ctx)
 
 	select {
 	case <-ctx.Done():
