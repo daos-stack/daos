@@ -9,9 +9,12 @@
  * src/tests/suite/daos_pipeline.c
  */
 #include <daos.h>
+#if BUILD_PIPELINE
 #include <daos_pipeline.h>
+#endif
 #include "daos_test.h"
 
+#if BUILD_PIPELINE
 #define NUM_AKEYS 4
 #define VALUE_MAX_SIZE 10
 
@@ -2004,14 +2007,19 @@ pipeline_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 }
+#endif
 
 int
 run_daos_pipeline_test(int rank, int size)
 {
 	int rc = 0;
 
+#if BUILD_PIPELINE
 	rc = cmocka_run_group_tests_name("DAOS_Pipeline", pipeline_tests, pipeline_setup,
 					 test_teardown);
+#else
+	print_message("DAOS PIPELINE is not enabled in release builds\n");
+#endif
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
