@@ -80,7 +80,9 @@ func runDrpcServer(log logging.Logger) error {
 func runDrpcClient(log logging.Logger) error {
 	client := drpc.NewClientConnection(*unixSocket)
 
-	err := client.Connect()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err := client.Connect(ctx)
 	if err != nil {
 		return errors.Wrap(err, "connecting to socket")
 	}

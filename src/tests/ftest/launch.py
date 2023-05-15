@@ -62,6 +62,7 @@ PROVIDER_KEYS = OrderedDict(
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
+        ("opx", "ofi+opx"),
     ]
 )
 PROCS_TO_CLEANUP = [
