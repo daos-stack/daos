@@ -502,13 +502,32 @@ func cleanEngineHugepages(srv *server) error {
 }
 
 // Provide some confidence that engines will have enough memory to run without OOM failures by
-// ensuring reported available memory (of type RAM) is enough to cover at least 90% of the
-// combined total memory of all engine RAM-disk sizes set in the storage config.
+// ensuring reported available memory (of type RAM) is enough to cover at least 90% of engine
+// AM-disk sizes set in the storage config.
 //
 // Note that check is to be performed after hugepages have been allocated, as such the available
 // memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
 // available) so don't need to take into account hugepage allowances during calculation.
-func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+func checkMemForRamdisk(log logging.Logger, memRamdisks, memAvail uint64) error {
+	memRequired := (memRamdisks / 100) * uint64(memCheckThreshold)
+
+	msg := fmt.Sprintf("checking MemAvailable (%s) covers at least %d%% of engine ram-disks "+
+		"(%s required to cover %s ram-disk mem)",
+		humanize.IBytes(memAvail), memCheckThreshold, humanize.IBytes(memRequired),
+		humanize.IBytes(memRamdisks))
+
+	if memAvail < memRequired {
+		log.Errorf("%s: available mem too low to support ramdisk size", msg)
+
+		return storage.FaultRamdiskLowMem("Available", memRamdisks, memRequired, memAvail)
+	}
+
+	log.Debugf("%s: check successful!", msg)
+
+	return nil
+}
+
+func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
 	sc, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return err
@@ -518,26 +537,12 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 		return nil // no ramdisk to check
 	}
 
-	memAvailBytes := uint64(mi.MemAvailableKiB) * humanize.KiByte
-	confSizeBytes := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
-	nrEngines := uint64(len(srv.cfg.Engines))
-	memRequired := ((confSizeBytes * nrEngines) / 100) * uint64(memCheckThreshold)
+	memRamdisk := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
+	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
 
-	msg := fmt.Sprintf("checking MemAvailable (%s) covers at least %d%% of total configured "+
-		"ram-disk memory (%s required to cover %d engines with size %s)",
-		humanize.IBytes(memAvailBytes), memCheckThreshold, humanize.IBytes(memRequired),
-		nrEngines, humanize.IBytes(confSizeBytes))
-
-	if memAvailBytes < memRequired {
-		srv.log.Errorf("%s: available mem too low to support config ramdisk size", msg)
-
-		return &ErrServerExit{
-			ErrInner: storage.FaultRamdiskLowMem("Available", confSizeBytes,
-				memRequired, memAvailBytes),
-		}
+	if err := checkMemForRamdisk(srv.log, memRamdisk, memAvail); err != nil {
+		return err
 	}
-
-	srv.log.Debugf("%s: check successful!", msg)
 
 	return nil
 }
@@ -545,6 +550,13 @@ func checkMemAvailable(srv *server, ei *EngineInstance, mi *common.MemInfo) erro
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
+
+	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
+		if engine.storage.BdevRoleMetaConfigured() {
+			return engine.storage.UnmountTmpfs()
+		}
+		return nil
+	})
 
 	// Register callback to publish engine format requested events.
 	engine.OnAwaitFormat(createPublishFormatRequiredFunc(srv.pubSub.Publish, srv.hostname))
@@ -579,9 +591,9 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 			return errors.Wrap(err, "updating engine memory parameters")
 		}
 
-		// Check available RAM is sufficient before starting engines.
-		if err := checkMemAvailable(srv, engine, mi); err != nil {
-			return err
+		// Check available RAM can satisfy tmpfs size before starting a new engine.
+		if err := checkEngineTmpfsMem(srv, engine, mi); err != nil {
+			return errors.Wrap(err, "check ram available for engine tmpfs")
 		}
 
 		return nil

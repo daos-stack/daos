@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -248,7 +248,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 	return mi.cfg.RemoveSuperblockErr
 }
 
-func (mi *MockInstance) Run(_ context.Context, _ bool, _ chan error) {}
+func (mi *MockInstance) Run(_ context.Context, _ bool) {}
 
 func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank) error {
 	return mi.cfg.SetupRankErr

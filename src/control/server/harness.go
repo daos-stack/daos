@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,7 +61,7 @@ type Engine interface {
 	IsReady() bool
 	LocalState() system.MemberState
 	RemoveSuperblock() error
-	Run(context.Context, bool, chan error)
+	Run(context.Context, bool)
 	SetupRank(context.Context, ranklist.Rank) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
@@ -236,9 +236,8 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
-	fatalErrChan := make(chan error, 1)
 	for _, ei := range h.Instances() {
-		ei.Run(ctx, cfg.RecreateSuperblocks, fatalErrChan)
+		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
 	h.OnDrpcFailure(func(_ context.Context, errIn error) {
@@ -263,15 +262,10 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		}
 	})
 
-	var err error
-	select {
-	case <-ctx.Done():
-		err = ctx.Err()
-	case err = <-fatalErrChan:
-	}
+	<-ctx.Done()
 	h.log.Debug("shutting down harness")
 
-	return err
+	return ctx.Err()
 }
 
 // readyRanks returns rank assignment of configured harness instances that are
