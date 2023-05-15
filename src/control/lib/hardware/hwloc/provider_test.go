@@ -27,7 +27,7 @@ func TestHwloc_CacheContext(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, err := CacheContext(context.Background(), log)
+	ctx, err := CacheContext(test.Context(t), log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,10 +61,10 @@ func TestHwloc_Cleanup(t *testing.T) {
 		expCleanupCalled int
 	}{
 		"no cleanup cached": {
-			ctx: context.Background(),
+			ctx: test.Context(t),
 		},
 		"success": {
-			ctx:              context.WithValue(context.Background(), cleanupKey, mockCleanup),
+			ctx:              context.WithValue(test.Context(t), cleanupKey, mockCleanup),
 			expCleanupCalled: 1,
 		},
 	} {
@@ -792,7 +792,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
 			provider := NewProvider(log)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
 			defer cancel()
 
 			hwlocMajor, _, _ := hwlocVersion()
@@ -823,7 +823,7 @@ func TestHwloc_Provider_GetNUMANodeForPID_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	runTest_GetNUMANodeForPID_Parallel(t, context.Background(), log)
+	runTest_GetNUMANodeForPID_Parallel(t, test.Context(t), log)
 }
 
 func runTest_GetNUMANodeForPID_Parallel(t *testing.T, parent context.Context, log logging.Logger) {
@@ -863,7 +863,7 @@ func TestHwloc_Provider_GetNUMANodeForPID_Parallel_CachedCtx(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	cachedCtx, err := CacheContext(context.Background(), log)
+	cachedCtx, err := CacheContext(test.Context(t), log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -883,7 +883,7 @@ func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
 
 	provider := NewProvider(nil)
 
-	ctx, cancelCtx := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelCtx := context.WithTimeout(test.Context(t), 5*time.Second)
 	defer cancelCtx()
 	testTopo, cleanup, err := provider.getRawTopology(ctx)
 	if err != nil {
