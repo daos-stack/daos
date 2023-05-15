@@ -287,7 +287,7 @@ jtc_maps_gen(struct jm_test_ctx *ctx)
 
 	gen_pool_and_placement_map(1, ctx->domain_nr, ctx->node_nr,
 				   ctx->target_nr, PL_TYPE_JUMP_MAP,
-				   &ctx->po_map, &ctx->pl_map);
+				   PO_COMP_TP_RANK, &ctx->po_map, &ctx->pl_map);
 
 	assert_non_null(ctx->po_map);
 	assert_non_null(ctx->pl_map);

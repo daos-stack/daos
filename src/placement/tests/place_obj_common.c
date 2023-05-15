@@ -541,9 +541,8 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 
 void
 gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
-			   int vos_per_target, pl_map_type_t pl_type,
-			   struct pool_map **po_map_out,
-			   struct pl_map **pl_map_out)
+			   int vos_per_target, pl_map_type_t pl_type, int fdom_lvl,
+			   struct pool_map **po_map_out, struct pl_map **pl_map_out)
 {
 	struct pool_buf         *buf;
 	int                      i;
@@ -619,8 +618,10 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	/* No longer needed, copied into pool map */
 	D_FREE(buf);
 
+	D_ASSERTF(fdom_lvl == PO_COMP_TP_RANK || fdom_lvl == PO_COMP_TP_NODE,
+		  "bad fdom_lvl %d\n", fdom_lvl);
 	mia.ia_type         = pl_type;
-	mia.ia_ring.domain  = PO_COMP_TP_RANK;
+	mia.ia_ring.domain  = fdom_lvl;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);

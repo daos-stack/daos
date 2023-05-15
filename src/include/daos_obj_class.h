@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -378,6 +378,9 @@ enum {
 	OC_EC_16P2G16	= OBJ_CLASS_DEF(OR_RS_16P2, 16ULL),
 	OC_EC_16P2G32	= OBJ_CLASS_DEF(OR_RS_16P2, 32ULL),
 	OC_EC_16P2GX	= OBJ_CLASS_DEF(OR_RS_16P2, MAX_NUM_GROUPS),
+
+	/** non-replica group 128, for demo */
+	OC_S128		= OBJ_CLASS_DEF(OR_RP_1, 128ULL),
 
 	/** Class ID equal or higher than this is reserved */
 	OC_RESERVED		= 1 << 30,
