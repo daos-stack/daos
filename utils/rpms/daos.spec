@@ -144,8 +144,8 @@ Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_versi
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -171,11 +171,11 @@ Requires: fuse3 >= 3
 %else
 Requires: fuse3 >= 3.4.2
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
 %if (0%{?rhel} >= 8)
