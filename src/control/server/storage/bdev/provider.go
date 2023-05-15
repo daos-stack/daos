@@ -51,6 +51,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
+	p.log.Debug("run bdev storage provider scan")
 	return p.backend.Scan(req)
 }
 

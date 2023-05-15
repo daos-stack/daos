@@ -62,6 +62,7 @@ PROVIDER_KEYS = OrderedDict(
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
+        ("opx", "ofi+opx"),
     ]
 )
 PROCS_TO_CLEANUP = [
@@ -2043,7 +2044,7 @@ class Launch():
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
-            f"chmod a+wr {test_dir}",
+            f"chmod a+wrx {test_dir}",
             f"ls -al {test_dir}",
             f"mkdir -p {user_dir}"
         ]

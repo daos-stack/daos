@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,13 +17,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-const (
-	invalidIndex         = -1
-	verbsProvider        = "ofi+verbs"
-	defaultNetworkDevice = "lo"
-	defaultDomain        = "lo"
 )
 
 // NotCachedErr is the error returned when trying to fetch data that is not cached.
@@ -172,7 +165,6 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 	}
 
 	c.initialized.SetTrue()
-	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.

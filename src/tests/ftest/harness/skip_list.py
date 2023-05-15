@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2021 Intel Corporation.
 
@@ -14,7 +13,7 @@ class TestHarnessSkipsBase(Test):
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
-        super(TestHarnessSkipsBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.commit_title_file = os.path.join(os.sep, 'tmp', 'commit_title')
 
     def setUp(self):
@@ -80,6 +79,7 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         self.cancelled = False
 
     def cancel(self, message=None):
+        # pylint: disable=arguments-renamed
         """Override Avocado Test.cancel()."""
         self.log.info("Test correctly called cancel(%s)", message)
         self.cancelled = True
@@ -88,8 +88,9 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         """Test w/o a fix in this commit w/o a committed fix.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_1
+        :avocado: tags=TestHarnessSkipsSkipped,test_case_1
         """
         if not self.cancelled:
             self.fail("This test was not skipped as it should have been")
@@ -98,8 +99,9 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         """Test w/o a fix in the commit w/ a committed fix not in the code base.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_3
+        :avocado: tags=TestHarnessSkipsSkipped,test_case_3
         """
         if not self.cancelled:
             self.fail("This test was not skipped as it should have been")
@@ -111,38 +113,44 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
     :avocado: recursive
     """
 
-    def cancel(self, _message=None):
+    def cancel(self, message=None):
         """Override Test.cancel()."""
+        # pylint: disable=unused-argument
+        # pylint: disable=arguments-renamed
         self.fail('This test should not be skipped')
 
     def test_case_2(self):
         """Test w/o a fix in this commit w/ a committed fix in this code base.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_2
+        :avocado: tags=TestHarnessSkipsRun,test_case_2
         """
 
     def test_case_4(self):
         """Test w/ a fix in this commit w/o a committed fix.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_4
+        :avocado: tags=TestHarnessSkipsRun,test_case_4
         """
 
     def test_case_5(self):
         """Test w/ a fix in this commit w/ a committed fix in this code base.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_5
+        :avocado: tags=TestHarnessSkipsRun,test_case_5
         """
 
     def test_case_6(self):
         """Test w/ a fix in the commit w/ a committed fix not in the code base.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,test_skips
-        :avocado: tags=test_case_6
+        :avocado: tags=TestHarnessSkipsRun,test_case_6
         """

@@ -6,7 +6,8 @@
 from multiprocessing import Queue
 import threading
 
-from avocado.core.exceptions import TestFail
+from avocado import fail_on
+
 from dmg_utils import get_storage_query_device_info, get_dmg_response
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
@@ -22,13 +23,14 @@ class NvmeFaultReintegrate(TestWithServers):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.daos_command = self.get_daos_command()
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
+    @fail_on(CommandFailure)
     def verify_dev_led_state(self, device, dev_state="NORMAL", led_state="OFF"):
         """Verify device dev_state and led_state.
 
@@ -42,7 +44,7 @@ class NvmeFaultReintegrate(TestWithServers):
 
         """
         return self.check_result(
-            get_dmg_response(self, self.dmg.storage_led_check, ids=device), dev_state, led_state)
+            get_dmg_response(self.dmg.storage_led_check, ids=device), dev_state, led_state)
 
     def check_result(self, result, dev_state, led_state):
         """Check for result of storage device and led states.
@@ -66,24 +68,7 @@ class NvmeFaultReintegrate(TestWithServers):
                         return True
         return False
 
-    def reset_fault_device(self, device):
-        """Call dmg storage led identify to reset the device.
-
-        Args:
-            device (str): device to reset
-
-        Returns:
-            list: a list of any errors detected when removing the pool
-
-        """
-        error_list = []
-        try:
-            get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
-        except TestFail as error:
-            self.log.info("#  %s", error)
-            error_list.append("Error resetting device {}: {}".format(device, error))
-        return error_list
-
+    @fail_on(CommandFailure)
     def test_nvme_fault_reintegration(self):
         """Test ID: DAOS-10034.
 
@@ -115,7 +100,7 @@ class NvmeFaultReintegrate(TestWithServers):
         oclass = self.params.get("dfs_oclass", "/run/ior/iorflags/*")
         wr_flags = self.params.get("write_flags", "/run/ior/iorflags/*")
         read_flags = self.params.get("read_flags", "/run/ior/iorflags/*")
-        device_info = get_storage_query_device_info(self, self.dmg)
+        device_info = get_storage_query_device_info(self.dmg)
         devices = [device['uuid'] for device in device_info]
         self.log.info("Device information")
         self.log.info("==================")
@@ -125,7 +110,7 @@ class NvmeFaultReintegrate(TestWithServers):
                 self.log.info("  %s: %s", key, entry[key])
         test_dev = devices[0]
         for device in devices:
-            get_dmg_response(self, self.dmg.storage_led_identify, reset=True, ids=device)
+            get_dmg_response(self.dmg.storage_led_identify, reset=True, ids=device)
         # 2.
         self.log_step("Verify that each device is in a 'NORMAL' state and its LED is 'OFF'")
         err_dev = []
@@ -227,15 +212,12 @@ class NvmeFaultReintegrate(TestWithServers):
             run_ior(**ior_kwargs)
         except CommandFailure as error:
             self.fail("Error in ior read {}.".format(error))
-        kwargs = {"pool": self.pool.identifier,
-                  "cont": self.container.identifier}
-        output = self.daos_command.container_check(**kwargs)
-        self.log.info(output)
+        self.container.check()
 
         # 9.
         self.log_step("Replace the same drive back.")
         result = get_dmg_response(
-            self, self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
+            self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete

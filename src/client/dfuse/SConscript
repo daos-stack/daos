@@ -129,7 +129,7 @@ my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
 
 struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
 
-""" % ctype
+""" % ctype  # pylint: disable=consider-using-f-string
 
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
