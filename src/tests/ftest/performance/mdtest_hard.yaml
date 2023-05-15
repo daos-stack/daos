@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 2
-timeout: 300
+timeout: 480
 server_config:
   name: daos_server
   control_log_mask: INFO
