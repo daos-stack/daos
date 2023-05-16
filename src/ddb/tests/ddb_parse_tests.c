@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -322,6 +322,7 @@ keys_are_parsed_correctly(void **state)
 
 	/* Currently don't check for value that's too big */
 	assert_true(ddb_parse_key("{uint8:3000000000}", &key) > 0);
+	daos_iov_free(&key);
 }
 
 /*

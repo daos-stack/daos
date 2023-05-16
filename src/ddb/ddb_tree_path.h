@@ -14,6 +14,7 @@
 
 #define INVALID_IDX -1
 #define INVALID_PATH "INVALID PATH"
+#define DDB_MAX_PRITABLE_KEY 1024
 
 #define ERROR_BASE 5000
 typedef enum {

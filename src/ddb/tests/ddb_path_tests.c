@@ -71,6 +71,7 @@ key_printing_and_parsing_tests(void **state)
 	itp_print_part_key(&g_ctx, &__v); \
 	assert_printed_exact(printed); \
 	dvt_fake_print_reset(); \
+        daos_iov_free(&__v.itp_key); \
 } while (0)
 
 	assert_key_parsed_printed("akey", "akey");

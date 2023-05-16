@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,6 +92,8 @@ static int
 init_path(struct ddb_ctx *ctx, char *path, struct dv_indexed_tree_path *itp)
 {
 	int rc;
+
+	memset(itp, 0, sizeof(*itp));
 
 	rc = itp_parse(path, itp);
 	if (!SUCCESS(rc))
@@ -221,12 +223,15 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	ddb_print(ctx, "'\n");
 	if (!SUCCESS(ddb_vtp_verify(ctx->dc_poh, &vtp))) {
 		ddb_print(ctx, "Not a valid path\n");
+		itp_free(&itp);
 		return -DER_NONEXIST;
 	}
 
-	if (itp_has_recx_complete(&itp))
+	if (itp_has_recx_complete(&itp)) {
+		itp_free(&itp);
 		/* recx doesn't actually have anything under it. */
 		return 0;
+	}
 
 	lsctx.ctx = ctx;
 	rc = dv_iterate(ctx->dc_poh, &vtp, opt->recursive, &handlers, &lsctx, &itp);
@@ -528,8 +533,8 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 int
 ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 {
-	struct dv_indexed_tree_path	itp;
-	struct dv_tree_path		vtp;
+	struct dv_indexed_tree_path	itp = {0};
+	struct dv_tree_path		vtp = {0};
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;

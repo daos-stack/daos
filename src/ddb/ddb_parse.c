@@ -328,7 +328,7 @@ key_parse_int(enum key_value_type type, const char *input, daos_key_t *key)
 static int
 key_parse_typed(const char *key_str, daos_key_t *key)
 {
-	enum key_value_type	 type;
+	enum key_value_type	 type = KEY_VALUE_TYPE_UNKNOWN;
 	const char		*value_str;
 	size_t			 size = 0;
 	int			 rc;
