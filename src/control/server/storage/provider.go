@@ -311,7 +311,7 @@ func (p *Provider) UnmountTmpfs() error {
 		return err
 	}
 
-	p.log.Debugf("%s unmounted: %t", res.Target, res.Mounted)
+	p.log.Debugf("%s unmounted: %t", res.Target, !res.Mounted)
 	return nil
 }
 

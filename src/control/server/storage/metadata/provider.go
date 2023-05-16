@@ -219,6 +219,7 @@ func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (out bool, _ e
 		return false, errors.Wrap(err, "checking control metadata root path existence")
 	}
 
+	alreadyMounted := false
 	if req.Device != "" {
 		p.log.Debugf("checking control metadata device filesystem")
 		if fs, err := p.sys.Getfs(req.Device); err != nil {
@@ -231,8 +232,12 @@ func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (out bool, _ e
 		if _, err := p.Mount(storage.MetadataMountRequest{
 			RootPath: req.RootPath,
 			Device:   req.Device,
-		}); err != nil && !errors.Is(errors.Cause(err), storage.FaultTargetAlreadyMounted) {
-			return false, errors.Wrap(err, "mounting control metadata device")
+		}); err != nil {
+			if errors.Is(errors.Cause(err), storage.FaultTargetAlreadyMounted) {
+				alreadyMounted = true
+			} else {
+				return false, errors.Wrap(err, "mounting control metadata device")
+			}
 		}
 	}
 
@@ -244,7 +249,7 @@ func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (out bool, _ e
 		return false, errors.Wrap(err, "checking control metadata path existence")
 	}
 
-	if hasDevice(req) {
+	if hasDevice(req) && !alreadyMounted {
 		if _, err := p.Unmount(storage.MetadataMountRequest{
 			RootPath: req.RootPath,
 		}); err != nil {
