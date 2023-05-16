@@ -207,7 +207,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_release() returned: %d (%s)", rc, strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 

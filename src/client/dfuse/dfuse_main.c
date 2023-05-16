@@ -557,7 +557,7 @@ main(int argc, char **argv)
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint failed: %d (%s)", rc,
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned: %d (%s)", rc,
 		       strerror(rc));
 	if (rc == 0) {
 		if (pool_name[0]) {
