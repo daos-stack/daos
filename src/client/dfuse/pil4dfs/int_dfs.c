@@ -106,6 +106,7 @@ static bool            bLog;
 static long int        page_size;
 
 static bool            daos_inited;
+static bool            daos_debug_inited;
 static int             num_dfs;
 static struct dfs_mt   dfs_list[MAX_DAOS_MT];
 
@@ -541,25 +542,25 @@ discover_daos_mount(void)
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		printf("warning> DAOS_MOUNT_POINT is too long. It is ignored.");
+		D_WARN("DAOS_MOUNT_POINT is too long. It is ignored.");
 		return;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		printf("warning> DAOS_POOL is not set.\n");
+		D_WARN("warning> DAOS_POOL is not set.\n");
 		return;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		printf("warning> DAOS_CONTAINER is not set.\n");
+		D_WARN("warning> DAOS_CONTAINER is not set.\n");
 		return;
 	}
 
 	pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_root, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
-		printf("dfs_list[num_dfs].fs_root[] is not large enough.\nQuit\n");
+		D_WARN("dfs_list[num_dfs].fs_root[] is not large enough.\nQuit\n");
 		return;
 	}
 	dfs_list[num_dfs].pool         = pool;
@@ -584,7 +585,7 @@ discover_dfuse(void)
 	/* daos_init() is not called yet, so we can not use D_WARN() etc. */
 
 	if (fp == NULL) {
-		fprintf(stderr, "Error> failed to open file: /proc/self/mounts\n");
+		D_ERROR("failed to open file: /proc/self/mounts\n");
 		return;
 	}
 
@@ -593,8 +594,7 @@ discover_dfuse(void)
 			dfs_list[num_dfs].dfs_dir_hash = NULL;
 			dfs_list[num_dfs].len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (dfs_list[num_dfs].len_fs_root >= DFS_MAX_PATH) {
-				fprintf(stderr, "Warning> mnt_dir[] is too long!\n"
-					"Skip this entry.\n");
+				D_WARN("mnt_dir[] is too long! Skip this entry.");
 				continue;
 			}
 			atomic_store_relaxed(&dfs_list[num_dfs].inited, 0);
@@ -602,8 +602,7 @@ discover_dfuse(void)
 			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
 					 DFS_MAX_PATH - 1);
 			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
-				fprintf(stderr, "Warning> fs_root[] is too long.\n"
-					"Skip this entry.\n");
+				D_WARN("fs_root[] is too long. Skip this entry.");
 				continue;
 			}
 			num_dfs++;
@@ -848,8 +847,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* daos_init() is expensive to call. We call it only when necessary. */
 			rc = daos_init();
 			if (rc) {
-				fprintf(stderr, "Error> daos_init failed, rc: "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR("daos_init failed, rc: "DF_RC"\n", DP_RC(rc));
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -1000,8 +998,12 @@ again:
 	p_Offset_2Dots = strstr(path, "/../");
 	if (p_Offset_2Dots)
 		goto again;
-	else
-		return 0;
+	p_Offset_2Dots = strstr(path, "/..");
+	if (p_Offset_2Dots && p_Offset_2Dots[3] == '\0')
+		/* /.. at the very end of the path. */
+		goto again;
+
+	return 0;
 }
 
 /* Remove '/./'. Replace '//' with '/'. Remove '/.'. Remove '/' at the end of path. */
@@ -1068,19 +1070,19 @@ init_fd_list(void)
 {
 	/* daos_init() is not called yet, so we can not use D_ERROR() etc. */
 	if (pthread_mutex_init(&lock_fd, NULL) != 0) {
-		fprintf(stderr, "Error> mutex create_new_lock lock_fd init failed\n");
+		D_ERROR("mutex create_new_lock lock_fd init failed\n");
 		exit(1);
 	}
 	if (pthread_mutex_init(&lock_dirfd, NULL) != 0) {
-		fprintf(stderr, "Error> mutex create_new_lock lock_dirfd init failed\n");
+		D_ERROR("mutex create_new_lock lock_dirfd init failed\n");
 		exit(1);
 	}
 	if (pthread_mutex_init(&lock_mmap, NULL) != 0) {
-		fprintf(stderr, "Error> mutex create_new_lock lock_mmap init failed\n");
+		D_ERROR("mutex create_new_lock lock_mmap init failed\n");
 		exit(1);
 	}
 	if (pthread_mutex_init(&lock_fd_dup2ed, NULL) != 0) {
-		fprintf(stderr, "Error> mutex create_new_lock lock_fd_dup2ed init failed\n");
+		D_ERROR("mutex create_new_lock lock_fd_dup2ed init failed\n");
 		exit(1);
 	}
 	/* fatal error above: failure to create mutexes. */
@@ -2136,9 +2138,6 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
 	dfs_release(obj);
-	if (S_ISDIR(mode))
-		/* st_nlink should be 2 or larger number for dir */
-		stat_buf->st_nlink = 2;
 	FREE(parent_dir);
 
 	return 0;
@@ -2182,9 +2181,6 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	if (rc)
 		goto out_err;
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
-	if (S_ISDIR(stat_buf->st_mode))
-		/* st_nlink should be 2 or larger number for dir in rm */
-		stat_buf->st_nlink = 2;
 	FREE(parent_dir);
 	return 0;
 
@@ -2399,7 +2395,7 @@ statfs(const char *pathname, struct statfs *sfs)
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc != 0)
-		goto out_err;
+		D_GOTO(out_err, rc = daos_der2errno(rc));
 
 	sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
 			info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
@@ -4991,12 +4987,12 @@ update_cwd(void)
 	cwd = get_current_dir_name();
 
 	if (cwd == NULL) {
-		fprintf(stderr, "Error> Fail to get CWD with get_current_dir_name().\nQuit\n");
+		D_ERROR("failed to get CWD with get_current_dir_name(). Quit.");
 		exit(1);
 	} else {
 		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
 		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			fprintf(stderr, "Error> cwd path is too long.\nQuit\n");
+			D_ERROR("cwd path is too long. Quit.");
 			exit(1);
 		}
 		free(cwd);
@@ -5127,7 +5123,7 @@ register_handler(int sig, struct sigaction *old_handler)
 
 	rc = sigaction(sig, &action, old_handler);
 	if (rc != 0) {
-		fprintf(stderr, "Error> sigaction failed with %d. errno: %d\n", rc, errno);
+		D_ERROR("sigaction failed with %d. errno: %d\n", rc, errno);
 		exit(1);
 	}
 }
@@ -5137,6 +5133,7 @@ init_myhook(void)
 {
 	mode_t umask_old;
 	char   *env_log;
+	int    rc;
 
 	/* DAOS log utility is not available since daos_init() is not called yet. */
 
@@ -5144,6 +5141,13 @@ init_myhook(void)
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
 	page_size = sysconf(_SC_PAGESIZE);
+
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		fprintf(stderr, "Error> daos_debug_init() failed, %s\n",
+			strerror(daos_der2errno(rc)));
+	else
+		daos_debug_inited = true;
 
 	env_log = getenv("D_IL_REPORT");
 	if (env_log) {
@@ -5154,7 +5158,7 @@ init_myhook(void)
 
 	update_cwd();
 	if (pthread_mutex_init(&lock_dfs, NULL) != 0) {
-		fprintf(stderr, "Error> mutex create_new_lock lock_dfs failed\n");
+		D_ERROR("mutex create_new_lock lock_dfs failed\n");
 		/* fatal error: failure to create a mutex. */
 		exit(1);
 	}
@@ -5402,8 +5406,10 @@ finalize_dfs(void)
 			rc = daos_fini();
 			if (rc != 0) {
 				/* D_ERROR may be not available */
-				fprintf(stderr, "Error> finalize_dfs(): error in daos_fini()\n");
+				D_ERROR("finalize_dfs(): error in daos_fini()\n");
 			}
 		}
 	}
+	if (daos_debug_inited)
+		daos_debug_fini();
 }
