@@ -1396,14 +1396,14 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 	}{
 		"pmem tier; skip check": {
 			scmCfgs: map[int]*storage.TierConfig{
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassDcpm,
 				},
 			},
 		},
 		"meminfo fetch fails": {
 			scmCfgs: map[int]*storage.TierConfig{
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 5,
@@ -1415,7 +1415,7 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 		},
 		"single engine; ram tier; perform check; low mem": {
 			scmCfgs: map[int]*storage.TierConfig{
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 5,
@@ -1428,7 +1428,7 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 		},
 		"single engine; ram tier; perform check": {
 			scmCfgs: map[int]*storage.TierConfig{
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 5,
@@ -1439,13 +1439,13 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 		},
 		"dual engine; ram tier; perform check; low mem": {
 			scmCfgs: map[int]*storage.TierConfig{
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 80,
 					},
 				},
-				1: &storage.TierConfig{
+				1: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 80,
@@ -1458,13 +1458,13 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 		},
 		"dual engine; ram tier; perform check": {
 			scmCfgs: map[int]*storage.TierConfig{
-				1: &storage.TierConfig{
+				1: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 80,
 					},
 				},
-				0: &storage.TierConfig{
+				0: {
 					Class: storage.ClassRam,
 					Scm: storage.ScmConfig{
 						RamdiskSize: 80,
