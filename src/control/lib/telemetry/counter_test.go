@@ -37,7 +37,7 @@ func TestTelemetry_GetCounter(t *testing.T) {
 		expErr     error
 	}{
 		"non-handle ctx": {
-			ctx:        context.TODO(),
+			ctx:        test.Context(t),
 			metricName: counterName,
 			expErr:     errors.New("no handle"),
 		},

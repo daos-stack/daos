@@ -390,7 +390,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				return tc.hs, tc.hsErr
 			}
 
-			gotCfg, gotErr := cmd.confGen(context.TODO(), gf, gs)
+			gotCfg, gotErr := cmd.confGen(test.Context(t), gf, gs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

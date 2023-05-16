@@ -27,7 +27,7 @@ type (
 		Running          atm.Bool
 		SignalCb         func(uint32, os.Signal)
 		LastPid          uint64
-		RunnerExitInfoCb func() *RunnerExitInfo
+		RunnerExitInfoCb func(context.Context) *RunnerExitInfo
 		RunnerExitInfo   *RunnerExitInfo
 	}
 
@@ -52,7 +52,7 @@ func (tr *TestRunner) Start(ctx context.Context) (RunnerExitChan, error) {
 		tr.runnerCfg.StartCb()
 	}
 	if tr.runnerCfg.RunnerExitInfoCb == nil {
-		tr.runnerCfg.RunnerExitInfoCb = func() *RunnerExitInfo {
+		tr.runnerCfg.RunnerExitInfoCb = func(_ context.Context) *RunnerExitInfo {
 			return tr.runnerCfg.RunnerExitInfo
 		}
 	}
@@ -61,7 +61,7 @@ func (tr *TestRunner) Start(ctx context.Context) (RunnerExitChan, error) {
 	go func() {
 		select {
 		case <-ctx.Done():
-		case runnerExitInfoCh <- tr.runnerCfg.RunnerExitInfoCb():
+		case runnerExitInfoCh <- tr.runnerCfg.RunnerExitInfoCb(ctx):
 			tr.runnerCfg.Running.SetFalse()
 		}
 	}()
