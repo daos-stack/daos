@@ -751,7 +751,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 }
 
-func TestServer_checkMemAvailable(t *testing.T) {
+func TestServer_checkEngineTmpfsMem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		srvCfgExtra func(*config.Server) *config.Server
 		memAvailGiB int
@@ -768,24 +768,17 @@ func TestServer_checkMemAvailable(t *testing.T) {
 				return sc.WithEngines(ramEngine(0, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			memAvailGiB: 16,
+			memAvailGiB: 9,
 		},
 		"dual engine; ram tier; perform check; low mem": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
-			// 20gib for ram-disks, 90% is 18gib
-			memAvailGiB: 17,
+			// Only accounts for single engine
+			memAvailGiB: 8,
 			expErr: storage.FaultRamdiskLowMem("Available", 10*humanize.GiByte,
-				18*humanize.GiByte, 17*humanize.GiByte),
-		},
-		"dual engine; ram tier; perform check": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(ramEngine(0, 10), ramEngine(1, 10)).
-					WithBdevExclude(test.MockPCIAddr(1))
-			},
-			memAvailGiB: 18,
+				9*humanize.GiByte, 8*humanize.GiByte),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -814,7 +807,7 @@ func TestServer_checkMemAvailable(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotErr := checkMemAvailable(srv, instance, mi)
+			gotErr := checkEngineTmpfsMem(srv, instance, mi)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
