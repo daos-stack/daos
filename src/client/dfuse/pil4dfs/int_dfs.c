@@ -41,7 +41,7 @@
 #include "hook.h"
 
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
-#define FREE(ptr)	({if ((ptr) != NULL) free(ptr); })
+#define FREE(ptr)	do {free(ptr); (ptr) = NULL;} while (0)
 
 /* Use very large synthetic FD to distinguish regular FD from Kernel */
 
@@ -247,6 +247,13 @@ static d_hash_table_ops_t hdl_hash_ops = {.hop_key_cmp    = key_cmp,
 					  .hop_rec_free   = rec_free,
 					  .hop_rec_hash   = rec_hash};
 
+/**
+ * Look up a path in hash table to get the dfs_obj for a dir.
+ * If not found in hash table, call to dfs_lookup() to open the object on DAOS.
+ * If the object is corresponding to a dir, insert the object into hash table.
+ * Since many DFS APIs need parent dir DFS object as parameter, we use a hash
+ * table to cache parent objects for efficiency.
+ */
 static int
 lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 {
@@ -258,13 +265,13 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 
 	if (obj == NULL) {
 		D_ERROR("Invalid pointer!");
-		return -EFAULT;
+		return EFAULT;
 	}
 	*obj = NULL;
 	len = strnlen(name, DFS_MAX_PATH);
 	if (len >= DFS_MAX_PATH) {
 		D_ERROR("path is too long!");
-		return -ENAMETOOLONG;
+		return ENAMETOOLONG;
 	}
 	rlink = d_hash_rec_find(dfs_list[idx_dfs].dfs_dir_hash, name, len);
 	if (rlink != NULL) {
@@ -283,8 +290,10 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 	}
 
 	D_ALLOC_PTR(hdl);
-	if (hdl == NULL)
-		return -ENOMEM;
+	if (hdl == NULL) {
+		dfs_release(oh);
+		return ENOMEM;
+	}
 
 	/* "len + 1" is used to avoid compiling issue on Ubuntu. */
 	strncpy(hdl->name, name, len + 1);
@@ -295,7 +304,7 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 		D_ERROR("Failed to insert dir handle in hashtable.");
 		dfs_release(hdl->oh);
 		D_FREE(hdl);
-		return -daos_der2errno(rc);
+		return daos_der2errno(rc);
 	}
 	*obj = hdl->oh;
 	return 0;
@@ -456,11 +465,11 @@ static int                next_free_dirfd, last_dirfd = -1, num_dirfd;
 static int                next_free_map, last_map     = -1, num_map;
 
 static int
-find_next_available_fd(struct file_obj *obj);
+find_next_available_fd(struct file_obj *obj, int *new_fd);
 static int
-find_next_available_dirfd(struct dir_obj *obj);
+find_next_available_dirfd(struct dir_obj *obj, int *new_fd);
 static int
-find_next_available_map(void);
+find_next_available_map(int *idx);
 static void
 free_fd(int idx);
 static void
@@ -796,7 +805,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
-				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
+				D_ERROR("full_path_parse[] is not large enough.");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else if (szInput[0] == '/') {
@@ -805,7 +814,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
-				D_ERROR("full_path_parse[] is not large enough.\nQuit\n");
+				D_ERROR("full_path_parse[] is not large enough.");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	} else {
@@ -813,7 +822,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		len = snprintf(full_path_parse, DFS_MAX_PATH, "%s/%s", cur_dir, szInput);
 		if (len >= DFS_MAX_PATH) {
 			if (daos_inited && bLog)
-				D_ERROR("The length of path is too long.\n");
+				D_ERROR("The length of path is too long.");
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	}
@@ -828,7 +837,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	 */
 	rc = remove_dot_dot(full_path_parse, &len);
 	if (rc)
-		D_GOTO(out_err, rc = -rc);
+		D_GOTO(out_err, rc);
 
 	/* determine whether the path contains any known dfs mount point */
 	idx_dfs = query_dfs_mount(full_path_parse);
@@ -893,12 +902,20 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			strncpy(*full_path, "/", 2);
 		} else {
 			/* full_path holds the full path inside dfs container */
-			strcpy(*full_path, full_path_parse + (*dfs_mt)->len_fs_root);
+			strncpy(*full_path, full_path_parse + (*dfs_mt)->len_fs_root, len + 1);
 			for (pos = len - 1; pos >= (*dfs_mt)->len_fs_root; pos--) {
 				if (full_path_parse[pos] == '/')
 					break;
 			}
-			strcpy(item_name, full_path_parse + pos + 1);
+			int len_item_name;
+
+			len_item_name = strnlen(full_path_parse + pos + 1, len);
+			if (len_item_name >= DFS_MAX_NAME) {
+				if (daos_inited && bLog)
+					D_ERROR("item_name[] is not large enough.");
+				D_GOTO(out_err, rc = ENAMETOOLONG);
+			}
+			strncpy(item_name, full_path_parse + pos + 1, len_item_name + 1);
 			/* the item under root directory */
 			if (pos == (*dfs_mt)->len_fs_root) {
 				*parent       = NULL;
@@ -907,13 +924,13 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			} else {
 				/* Need to look up the parent directory */
 				full_path_parse[pos] = 0;
-				strcpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root);
+				strncpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root, len + 1);
 			}
 			/* look up the dfs object from hash table for the parent dir */
 			rc = lookup_insert_dir(idx_dfs, *parent_dir, &mode, parent);
 			/* parent dir does not exist or something wrong */
 			if (rc)
-				D_GOTO(out_err, rc = -rc);
+				D_GOTO(out_err, rc);
 		}
 	} else {
 		*is_target_path = 0;
@@ -928,18 +945,14 @@ out_normal:
 out_err:
 	FREE(full_path_parse);
 	FREE(*parent_dir);
-	*parent_dir = NULL;
-	errno = rc;
-	return (-1);
+	return rc;
 
 out_oom:
 	FREE(full_path_parse);
 	FREE(*parent_dir);
-	*parent_dir = NULL;
 	if (bLog)
 		D_ERROR("fail to allocate memory.");
-	errno = ENOMEM;
-	return (-1);
+	return ENOMEM;
 }
 
 static int
@@ -956,7 +969,7 @@ again:
 	if (p_Offset_2Dots == path) {
 		if (daos_inited && bLog)
 			D_ERROR("wrong path: %s", path);
-		return -EINVAL;
+		return EINVAL;
 	}
 
 	while (p_Offset_2Dots > 0) {
@@ -1085,7 +1098,7 @@ init_fd_list(void)
 }
 
 static int
-find_next_available_fd(struct file_obj *obj)
+find_next_available_fd(struct file_obj *obj, int *new_fd)
 {
 	int i, idx = -1, rc;
 	struct file_obj *new_obj = NULL;
@@ -1094,8 +1107,7 @@ find_next_available_fd(struct file_obj *obj)
 	if (obj == NULL) {
 		D_ALLOC_PTR(new_obj);
 		if (new_obj == NULL) {
-			errno = ENOMEM;
-			return (-1);
+			return ENOMEM;
 		}
 		new_obj->file      = NULL;
 		new_obj->idx_mmap  = -1;
@@ -1114,8 +1126,7 @@ find_next_available_fd(struct file_obj *obj)
 			D_FREE(new_obj);
 		if (bLog)
 			D_ERROR("failed to allocate fd: out of space.");
-		errno = EMFILE;
-		return next_free_fd;
+		return EMFILE;
 	}
 	idx = next_free_fd;
 	if (idx >= 0) {
@@ -1138,11 +1149,12 @@ find_next_available_fd(struct file_obj *obj)
 	rc = pthread_mutex_unlock(&lock_fd);
 	D_ASSERT(rc == 0);
 
-	return idx;
+	*new_fd = idx;
+	return 0;
 }
 
 static int
-find_next_available_dirfd(struct dir_obj *obj)
+find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 {
 	int i, idx = -1, rc;
 	struct dir_obj *new_obj;
@@ -1151,8 +1163,7 @@ find_next_available_dirfd(struct dir_obj *obj)
 	if (obj == NULL) {
 		D_ALLOC(new_obj, sizeof(struct dir_obj));
 		if (new_obj == NULL) {
-			errno = ENOMEM;
-			return (-1);
+			return ENOMEM;
 		}
 		new_obj->dir       = NULL;
 		new_obj->ref_count = 0;
@@ -1170,8 +1181,7 @@ find_next_available_dirfd(struct dir_obj *obj)
 			D_FREE(new_obj);
 		if (bLog)
 			D_ERROR("Error> Failed to allocate dirfd: out of space.");
-		errno = EMFILE;
-		return next_free_dirfd;
+		return EMFILE;
 	}
 	idx = next_free_dirfd;
 	if (idx >= 0) {
@@ -1195,14 +1205,16 @@ find_next_available_dirfd(struct dir_obj *obj)
 	rc = pthread_mutex_unlock(&lock_dirfd);
 	D_ASSERT(rc == 0);
 
-	return idx;
+	*new_dir_fd = idx;
+	return 0;
 }
 
 static int
-find_next_available_map(void)
+find_next_available_map(int *idx)
 {
-	int i, idx = -1, rc;
+	int i, rc;
 
+	*idx = -1;
 	rc = pthread_mutex_lock(&lock_mmap);
 	D_ASSERT(rc == 0);
 	if (next_free_map < 0) {
@@ -1210,15 +1222,14 @@ find_next_available_map(void)
 		D_ASSERT(rc == 0);
 		if (bLog)
 			D_ERROR("Error> Failed to allocate space from mmap_list[]: out of space.");
-		errno = EMFILE;
-		return next_free_map;
+		return EMFILE;
 	}
-	idx = next_free_map;
+	*idx = next_free_map;
 	if (next_free_map > last_map)
 		last_map = next_free_map;
 	next_free_map = -1;
 
-	for (i = idx + 1; i < MAX_MMAP_BLOCK; i++) {
+	for (i = (*idx) + 1; i < MAX_MMAP_BLOCK; i++) {
 		if (mmap_list[i].addr == NULL) {
 			/* available, then update next_free_map */
 			next_free_map = i;
@@ -1230,7 +1241,7 @@ find_next_available_map(void)
 	rc = pthread_mutex_unlock(&lock_mmap);
 	D_ASSERT(rc == 0);
 
-	return idx;
+	return 0;
 }
 
 /* May need to support duplicated fd as duplicated dirfd too. */
@@ -1373,7 +1384,7 @@ free_map(int idx)
 static int
 Get_Fd_Redirected(int fd)
 {
-	int i, rc;
+	int i, rc, fd_ret = fd;
 
 	if (fd >= FD_FILE_BASE)
 		return fd;
@@ -1383,16 +1394,15 @@ Get_Fd_Redirected(int fd)
 	if (num_fd_dup2ed > 0) {
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
-				rc = pthread_mutex_unlock(&lock_fd_dup2ed);
-				D_ASSERT(rc == 0);
-				return fd_dup2_list[i].fd_dest;
+				fd_ret = fd_dup2_list[i].fd_dest;
+				break;
 			}
 		}
 	}
 	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
 	D_ASSERT(rc == 0);
 
-	return fd;
+	return fd_ret;
 }
 
 /* This fd is a fake fd. There exists a associated kernel fd with dup2.
@@ -1548,7 +1558,7 @@ allocate_a_fd_from_kernel(void)
 	clock_gettime(CLOCK_REALTIME, &times_loc);
 	snprintf(file_name, sizeof(file_name) - 1, "dummy_%ld_%ld", times_loc.tv_sec,
 		 times_loc.tv_nsec);
-	return memfd_create("dummy", 0);
+	return memfd_create(file_name, 0);
 }
 
 static void
@@ -1670,7 +1680,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
-	if (rc != 0 && errno == ENOENT)
+	if (rc == ENOENT)
 		D_GOTO(out_error, rc = ENOENT);
 
 	if (!is_target_path)
@@ -1721,9 +1731,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		D_GOTO(out_error, rc);
 
 	if (S_ISDIR(mode_query)) {
-		idx_dirfd = find_next_available_dirfd(NULL);
-		if (idx_dirfd < 0)
-			D_GOTO(out_error, rc = EMFILE);
+		rc = find_next_available_dirfd(NULL, &idx_dirfd);
+		if (rc)
+			D_GOTO(out_error, rc);
 
 		dir_list[idx_dirfd]->dfs_mt      = dfs_mt;
 		dir_list[idx_dirfd]->fd          = idx_dirfd + FD_DIR_BASE;
@@ -1761,9 +1771,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (bLog)
 		atomic_fetch_add_relaxed(&num_open, 1);
 
-	idx_fd = find_next_available_fd(NULL);
-	if (idx_fd < 0)
-		D_GOTO(out_error, rc = errno);
+	rc = find_next_available_fd(NULL, &idx_fd);
+	if (rc)
+		D_GOTO(out_error, rc);
 
 	file_list[idx_fd]->dfs_mt      = dfs_mt;
 	file_list[idx_fd]->file        = dfs_obj;
@@ -1773,7 +1783,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->open_flag   = oflags;
 	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
 	file_list[idx_fd]->offset = 0;
-	strcpy(file_list[idx_fd]->item_name, item_name);
+	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
 
@@ -2109,7 +2119,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 	if (bLog)
@@ -2160,7 +2170,7 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 	if (bLog)
@@ -2384,7 +2394,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -2483,7 +2493,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -2542,7 +2552,7 @@ opendir(const char *path)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err_ret, rc = errno);
+		D_GOTO(out_err_ret, rc);
 	if (!is_target_path) {
 		FREE(parent_dir);
 		return next_opendir(path);
@@ -2568,9 +2578,9 @@ opendir(const char *path)
 	if ((S_IRUSR & mode) == 0)
 		D_GOTO(out_err, rc = EACCES);
 
-	idx_dirfd = find_next_available_dirfd(NULL);
-	if (idx_dirfd < 0)
-		D_GOTO(out_err, rc = EMFILE);
+	rc = find_next_available_dirfd(NULL, &idx_dirfd);
+	if (rc)
+		D_GOTO(out_err, rc);
 
 	dir_list[idx_dirfd]->dfs_mt   = dfs_mt;
 	dir_list[idx_dirfd]->fd       = idx_dirfd + FD_DIR_BASE;
@@ -2918,7 +2928,7 @@ mkdir(const char *path, mode_t mode)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 	if (bLog)
@@ -3001,7 +3011,7 @@ rmdir(const char *path)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 	if (bLog)
@@ -3044,7 +3054,7 @@ symlink(const char *symvalue, const char *path)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -3127,7 +3137,7 @@ readlink(const char *path, char *buf, size_t size)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -3258,12 +3268,12 @@ rename(const char *old_name, const char *new_name)
 	rc = query_path(old_name, &is_target_path1, &parent_old, item_name_old,
 			&parent_dir_old, &full_path_old, &dfs_mt1);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 
 	rc = query_path(new_name, &is_target_path2, &parent_new, item_name_new,
 			&parent_dir_new, &full_path_new, &dfs_mt2);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 
 	if (is_target_path1 == 0 && is_target_path2 == 0)
 		goto out_org;
@@ -3623,7 +3633,7 @@ getcwd(char *buf, size_t size)
 		return strdup(cur_dir);
 	}
 
-	strcpy(buf, cur_dir);
+	strncpy(buf, cur_dir, size);
 	return buf;
 }
 
@@ -3667,7 +3677,7 @@ access(const char *path, int mode)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -3749,7 +3759,7 @@ chdir(const char *path)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path) {
 		FREE(parent_dir);
 		rc = next_chdir(path);
@@ -3831,7 +3841,7 @@ new_unlink(const char *path)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -3879,7 +3889,7 @@ unlinkat(int dirfd, const char *path, int flags)
 		rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 				&full_path_dummy, &dfs_mt);
 		if (rc)
-			D_GOTO(out_err, rc = errno);
+			D_GOTO(out_err, rc);
 		if (!is_target_path)
 			goto out_org;
 		if (bLog)
@@ -3992,7 +4002,7 @@ truncate(const char *path, off_t length)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -4045,7 +4055,7 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -4178,7 +4188,7 @@ utime(const char *path, const struct utimbuf *times)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -4251,7 +4261,7 @@ utimes(const char *path, const struct timeval times[2])
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
 
@@ -4320,7 +4330,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		D_GOTO(out_err, rc);
 	if (!is_target_path) {
 		times_us[0].tv_sec  = times[0].tv_sec;
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
@@ -4459,7 +4469,7 @@ static int
 new_fcntl(int fd, int cmd, ...)
 {
 	int     fd_Directed, param, OrgFunc = 1;
-	int     Next_Dirfd, Next_fd;
+	int     Next_Dirfd, Next_fd, rc;
 	va_list arg;
 
 	switch (cmd) {
@@ -4503,12 +4513,20 @@ new_fcntl(int fd, int cmd, ...)
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_Directed >= FD_DIR_BASE) {
-				Next_Dirfd = find_next_available_dirfd(
-						dir_list[fd_Directed - FD_DIR_BASE]);
+				rc = find_next_available_dirfd(
+						dir_list[fd_Directed - FD_DIR_BASE], &Next_Dirfd);
+				if (rc) {
+					errno = rc;
+					return (-1);
+				}
 				return (Next_Dirfd + FD_DIR_BASE);
 			} else if (fd_Directed >= FD_FILE_BASE) {
-				Next_fd = find_next_available_fd(
-						file_list[fd_Directed - FD_FILE_BASE]);
+				rc = find_next_available_fd(
+						file_list[fd_Directed - FD_FILE_BASE], &Next_fd);
+				if (rc) {
+					errno = rc;
+					return (-1);
+				}
 				return (Next_fd + FD_FILE_BASE);
 			}
 		} else if ((cmd == F_GETFD) || (cmd == F_SETFD)) {
@@ -4740,11 +4758,11 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		return MAP_FAILED;
 	}
 
-	idx_map = find_next_available_map();
-	if (idx_map < 0) {
+	rc = find_next_available_map(&idx_map);
+	if (rc) {
 		if (bLog)
 			D_ERROR("mmap_list is out of space.");
-		errno = ENFILE;
+		errno = rc;
 		return MAP_FAILED;
 	}
 

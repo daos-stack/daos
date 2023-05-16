@@ -1036,10 +1036,9 @@ class DaosServer():
             raise NLTestFail('op_sum is zero. Unexpected.')
         print(f'DBG> num_op = {num_op}')
 
-        assert rc.returncode == 0
-
         log_test(self.conf, log_name, show_memleaks=False,
                  check_read=False, check_write=False, check_fstat=False)
+        assert rc.returncode == 0
 
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
