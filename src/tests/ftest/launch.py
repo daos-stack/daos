@@ -62,6 +62,7 @@ PROVIDER_KEYS = OrderedDict(
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
+        ("opx", "ofi+opx"),
     ]
 )
 PROCS_TO_CLEANUP = [
@@ -1491,6 +1492,7 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
+        control_metadata = None
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1513,6 +1515,7 @@ class Launch():
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
+                control_metadata = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], 'control_metadata')
 
         self.details["storage"] = storage_info.device_dict()
 
@@ -1529,7 +1532,8 @@ class Launch():
 
         # Generate storage configuration extra yaml files if requested
         self._add_auto_storage_yaml(
-            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers)
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers,
+            control_metadata)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1551,7 +1555,7 @@ class Launch():
             test.set_yaml_info(args.include_localhost)
 
     def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
-                               max_nvme_tiers):
+                               max_nvme_tiers, control_metadata):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1561,6 +1565,8 @@ class Launch():
             scm_size (int): scm_size to use with ram storage tiers
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD.
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1585,7 +1591,8 @@ class Launch():
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
+                        control_metadata)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",

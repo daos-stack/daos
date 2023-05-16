@@ -81,6 +81,7 @@ struct pool_iv_prop {
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
 	uint32_t	pip_svc_list_offset;
+	uint32_t	pip_perf_domain;
 	char		pip_iv_buf[0];
 };
 

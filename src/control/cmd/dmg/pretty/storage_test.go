@@ -7,7 +7,6 @@
 package pretty
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -390,7 +389,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 
 			mi := control.NewMockInvoker(log, tc.mic)
 
-			resp, err := control.StorageScan(context.TODO(), mi, &control.StorageScanReq{})
+			resp, err := control.StorageScan(test.Context(t), mi, &control.StorageScanReq{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -841,7 +840,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := control.NewMockInvoker(log, tc.mic)
 
 			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
@@ -965,7 +964,7 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := control.NewMockInvoker(log, tc.mic)
 
 			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})

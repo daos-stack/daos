@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers: 1
   test_clients: 1
@@ -15,12 +13,7 @@ server_config:
           scm_mount: /mnt/daos
 timeout: 900
 pool:
-  control_method: dmg
-  pool_size: !mux
-    small_pool:
-      size: 134217728  # 128Mb
-    larger_pool:
-      size: 53687091200  # 50G
+  size: 53687091200  # 50G
   threshold_percent: 0.1  # 10%
 container:
   control_method: daos

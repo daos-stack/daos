@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -386,7 +385,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := SmdQuery(ctx, mi, tc.req)
@@ -716,7 +715,7 @@ func TestControl_SmdManage(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := SmdManage(ctx, mi, tc.req)
