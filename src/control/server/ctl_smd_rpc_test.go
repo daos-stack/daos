@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -669,7 +668,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := svc.SmdQuery(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdQuery(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1314,7 +1313,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			}
 
 			t.Log(tc.req)
-			gotResp, gotErr := svc.SmdManage(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdManage(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

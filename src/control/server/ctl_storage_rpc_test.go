@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -448,7 +448,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				}
 			}
 
-			resp, err := cs.StorageScan(context.TODO(), tc.req)
+			resp, err := cs.StorageScan(test.Context(t), tc.req)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1336,14 +1336,14 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			}
 
 			if tc.scanTwice {
-				_, err := cs.StorageScan(context.TODO(), tc.req)
+				_, err := cs.StorageScan(test.Context(t), tc.req)
 				test.CmpErr(t, tc.expErr, err)
 				if err != nil {
 					return
 				}
 			}
 
-			resp, err := cs.StorageScan(context.TODO(), tc.req)
+			resp, err := cs.StorageScan(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -1880,7 +1880,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ei.runner = engine.NewTestRunner(trc, config.Engines[i])
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(test.Context(t))
 			if tc.awaitTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.awaitTimeout)
 			}
@@ -1893,9 +1893,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			awaitCh := make(chan error)
 			for _, ei := range instances {
 				t.Logf("call awaitStorageReady() (%d)", ei.Index())
-				go func(e *EngineInstance) {
-					awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs)
-				}(ei.(*EngineInstance))
+				go func(ctx context.Context, e *EngineInstance) {
+					select {
+					case <-ctx.Done():
+					case awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs):
+					}
+				}(ctx, ei.(*EngineInstance))
 			}
 
 			// When all instances are in awaiting format state ("waitFormat" set),
@@ -1942,7 +1945,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				}
 			}
 
-			resp, fmtErr := cs.StorageFormat(context.TODO(), &ctlpb.StorageFormatReq{
+			resp, fmtErr := cs.StorageFormat(test.Context(t), &ctlpb.StorageFormatReq{
 				Reformat: tc.reformat,
 			})
 			if fmtErr != nil {
@@ -2035,7 +2038,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 				scm.NewMockProvider(log, nil, nil), mbp)
 			cs := &ControlService{StorageControlService: *scs}
 
-			resp, err := cs.StorageNvmeRebind(context.TODO(), tc.req)
+			resp, err := cs.StorageNvmeRebind(test.Context(t), tc.req)
 
 			mbb.RLock()
 			if tc.expPrepCall == nil {
@@ -2354,7 +2357,7 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 
 			cs := mockControlService(t, log, serverCfg, tc.bmbc, nil, nil)
 
-			resp, err := cs.StorageNvmeAddDevice(context.TODO(), tc.req)
+			resp, err := cs.StorageNvmeAddDevice(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
