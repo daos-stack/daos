@@ -77,8 +77,8 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.label_generator.get_label('cont'))
+                self.ior_cmd.set_daos_params(
+                    self.server_group, self.pool, self.label_generator.get_label('cont'))
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
@@ -132,8 +132,8 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.label_generator.get_label('cont'))
+                self.ior_cmd.set_daos_params(
+                    self.server_group, self.pool, self.label_generator.get_label('cont'))
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Stop all servers

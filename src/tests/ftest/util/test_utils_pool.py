@@ -710,25 +710,17 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
-    def set_property(self, prop_name=None, prop_value=None):
+    def set_property(self, prop_name, prop_value):
         """Set Property.
 
         It sets property for a given pool uuid using dmg.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to
-                None, which uses the TestPool.prop_name.value
-            prop_value (str, optional): value to be set for the property.
-                Defaults to None, which uses the TestPool.prop_value.value
+            prop_name (str): pool property name
+            prop_value (str): value to be set for the property
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.identifier)
-
-            # If specific values are not provided, use the class values
-            if prop_name is None:
-                prop_name = self.prop_name.value
-            if prop_value is None:
-                prop_value = self.prop_value.value
             properties = ":".join([prop_name, prop_value])
             self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 

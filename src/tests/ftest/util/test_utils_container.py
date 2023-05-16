@@ -960,12 +960,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return True
 
     @fail_on(CommandFailure)
-    def list_snaps(self, *args, **kwargs):
+    def list_snaps(self):
         """Get container properties by calling daos container list-snaps.
-
-        Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_list_snaps
-            kwargs (dict, optional): named arguments to DaosCommand.container_list_snaps
 
         Returns:
             str: JSON output of daos container list-snaps
@@ -974,8 +970,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             CommandFailure: Raised from the daos command call
 
         """
-        return self.daos.container_list_snaps(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
 
     @fail_on(CommandFailure)
     def query(self, *args, **kwargs):

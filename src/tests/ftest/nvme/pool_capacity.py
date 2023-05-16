@@ -5,7 +5,6 @@
 """
 import time
 import threading
-import uuid
 from itertools import product
 import queue
 
@@ -30,13 +29,10 @@ class NvmePoolCapacity(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.out_queue = queue.Queue()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
@@ -50,30 +46,22 @@ class NvmePoolCapacity(TestWithServers):
             flags (str): IOR flags
             results (queue): queue for returning thread results
 
-        Returns:
-            None
-
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
 
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, pool)
+        ior_cmd.set_daos_params(
+            self.server_group, pool, self.label_generator.get_label('TestContainer'))
         ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
         ior_cmd.flags.update(flags)
 
-        container_info["{}{}{}"
-                       .format(oclass, api, test[2])] = str(uuid.uuid4())
-
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_cmd)
-        key = "{}{}{}".format(oclass, api, test[2])
-        job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(job_manager))
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(processes)
@@ -82,8 +70,8 @@ class NvmePoolCapacity(TestWithServers):
         # run IOR Command
         try:
             job_manager.run()
-        except CommandFailure:
-            results.put("FAIL")
+        except CommandFailure as error:
+            results.put("FAIL - {}".format(str(error)))
 
     def run_test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
@@ -121,8 +109,7 @@ class NvmePoolCapacity(TestWithServers):
 
             # Destroy the last num_pool pools created
             for index in range(offset, offset + num_pool):
-                display_string = "Pool {} space at the End".format(
-                    self.pool[index].uuid)
+                display_string = "{} space at the End".format(str(self.pool[index]))
                 self.pool[index].display_pool_daos_space(display_string)
                 nvme_size_end[index] = self.pool[index].get_pool_free_space("NVME")
                 self.pool[index].destroy()
@@ -132,7 +119,7 @@ class NvmePoolCapacity(TestWithServers):
 
             # After destroying pools, check memory leak for each test loop.
             if m_leak != 0:
-                self.fail("Memory leak : iteration {0} \n".format(m_leak))
+                self.fail("Memory leak : iteration {}".format(m_leak))
 
     def run_test(self, num_pool=1):
         """
@@ -184,8 +171,9 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # Test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get() == "FAIL" and test[4] == "PASS"):
-                    self.fail("FAIL")
+                result = self.out_queue.get()
+                if ("FAIL" in result and test[4] == "PASS"):
+                    self.fail(result)
 
             # Destroy the last num_pool pools created
             offset = loop_count * num_pool
