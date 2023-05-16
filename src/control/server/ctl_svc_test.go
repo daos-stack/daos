@@ -7,9 +7,9 @@
 package server
 
 import (
-	"context"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -42,9 +42,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	sp := system.NewMockSysProvider(log, smsc)
 	mounter := mount.NewProvider(log, sp)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
+	ctx := test.Context(t)
 	cs := &ControlService{
 		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 			sp,

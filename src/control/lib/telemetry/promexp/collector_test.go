@@ -12,7 +12,6 @@
 package promexp
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -56,7 +55,7 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, cleanup, err := NewEngineSource(context.TODO(), tc.idx, tc.rank)
+			result, cleanup, err := NewEngineSource(test.Context(t), tc.idx, tc.rank)
 			if cleanup != nil {
 				defer cleanup()
 			}
@@ -79,7 +78,7 @@ func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
-	es, cleanup, err := NewEngineSource(context.Background(), uint32(testIdx), 2)
+	es, cleanup, err := NewEngineSource(test.Context(t), uint32(testIdx), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,13 +140,13 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 	realMetrics := allTestMetrics(t)
 	telemetry.AddTestMetrics(t, realMetrics)
 
-	validSrc, cleanupValid, err := NewEngineSource(context.Background(), testIdx, testRank)
+	validSrc, cleanupValid, err := NewEngineSource(test.Context(t), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanupValid()
 
-	disabledSrc, cleanupDisabled, err := NewEngineSource(context.Background(), testIdx, testRank)
+	disabledSrc, cleanupDisabled, err := NewEngineSource(test.Context(t), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +166,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 		},
 		"bad source": {
 			es: &EngineSource{
-				ctx:   context.Background(),
+				ctx:   test.Context(t),
 				Rank:  123,
 				Index: testIdx + 1,
 			},
@@ -333,7 +332,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 		},
 	}
 
-	engSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	engSrc, cleanup, err := NewEngineSource(test.Context(t), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +416,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	realMetrics := allTestMetrics(t)
 	telemetry.AddTestMetrics(t, realMetrics)
 
-	engSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	engSrc, cleanup, err := NewEngineSource(test.Context(t), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}

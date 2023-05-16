@@ -296,6 +296,18 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
+		"perf_domain": {
+			Property: PoolProperty{
+				Number:      PoolPropertyPerfDomain,
+				Description: "Pool performance domain",
+			},
+			values: map[string]uint64{
+				"root":   PoolPerfDomainRoot,
+				"node":   PoolPerfDomainNode,
+				"target": PoolPerfDomainTarget,
+				"rank":   PoolPerfDomainRank,
+			},
+		},
 		"svc_rf": {
 			Property: PoolProperty{
 				Number:      PoolPropertySvcRedunFac,

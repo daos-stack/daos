@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1978,7 +1978,7 @@ sched_watchdog_post(struct dss_xstream *dx)
 	info->si_stats.ss_watchdog_ts = cur;
 
 	strings = backtrace_symbols(&info->si_ult_func, 1);
-	D_ERROR("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
+	D_WARN("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
 		info->si_ult_func, elapsed, strings != NULL ? strings[0] : NULL);
 
 	free(strings);

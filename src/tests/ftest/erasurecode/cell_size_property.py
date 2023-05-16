@@ -24,12 +24,10 @@ class EcodCellSizeProperty(IorTestBase):
         Args:
             expected_size (int): expected container cell size
         """
-        daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell_sz"])
+        cont_prop = self.container.get_prop(properties=["ec_cell_sz"])
         actual_size = cont_prop["response"][0]["value"]
 
-        self.assertEqual(expected_size, actual_size)
+        self.assertEqual(expected_size, actual_size, "unexpected container ec_cell_sz")
 
     def test_ec_pool_property(self):
         """Jira ID: DAOS-7321.
