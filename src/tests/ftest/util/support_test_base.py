@@ -21,7 +21,7 @@ class SupportTestBase(ControlTestBase):
         self.custom_log_file = None
         self.custom_log_data = None
         self.log_hosts = None
-        self.extract_dir = "/tmp/Extracted_support_log"
+        self.extract_dir = os.path.join(self.base_test_dir, "extracted_support_logs")
 
     def create_custom_log(self, folder_name):
         """Create custom log directory with custom data file on each servers.
@@ -29,10 +29,10 @@ class SupportTestBase(ControlTestBase):
         Args:
             folder_name (str): Name of the custom folder
         """
-        server_custom_log = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
+        server_custom_log = self.base_test_dir
         self.custom_log_dir = os.path.join(server_custom_log, folder_name)
         self.custom_log_file = os.path.join(self.custom_log_dir, "Custom_File")
-        self.target_folder = os.path.join("/tmp", "DAOS_Support_logs")
+        self.target_folder = os.path.join(self.base_test_dir, "DAOS_Support_logs")
 
         # make the custom log dir on node (clients or servers)
         mkdir_cmd = "mkdir -p {}".format(self.custom_log_dir)

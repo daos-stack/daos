@@ -218,9 +218,9 @@ func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, e
 		return "", errors.New(string(out))
 	}
 
-	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, target)
 	cmd := strings.ReplaceAll(cp[0].cmd, " -", "_")
 	cmd = strings.ReplaceAll(cmd, " ", "_")
+	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, filepath.Join(target, cmd))
 
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
