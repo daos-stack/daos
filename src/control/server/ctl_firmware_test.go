@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -498,7 +497,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			config := config.DefaultServer()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 
-			resp, err := cs.FirmwareQuery(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareQuery(test.Context(t), &tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -818,7 +817,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				}
 			}
 
-			resp, err := cs.FirmwareUpdate(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareUpdate(test.Context(t), &tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 

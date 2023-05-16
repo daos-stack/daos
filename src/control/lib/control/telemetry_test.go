@@ -195,7 +195,7 @@ func TestControl_scrapeMetrics(t *testing.T) {
 				getBodyFn: tc.scrapeFn,
 			}
 
-			result, err := scrapeMetrics(context.TODO(), req)
+			result, err := scrapeMetrics(test.Context(t), req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -288,7 +288,7 @@ func TestControl_MetricsList(t *testing.T) {
 				tc.req.getBodyFn = tc.scrapeFn
 			}
 
-			resp, err := MetricsList(context.TODO(), tc.req)
+			resp, err := MetricsList(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
@@ -572,7 +572,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				tc.req.getBodyFn = tc.scrapeFn
 			}
 
-			resp, err := MetricsQuery(context.TODO(), tc.req)
+			resp, err := MetricsQuery(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
