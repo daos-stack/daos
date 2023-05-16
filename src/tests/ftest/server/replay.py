@@ -104,7 +104,11 @@ class ReplayTests(TestWithServers):
             TestFail: if the detected list of snapshots does not match the detected list
         """
         self.log.debug("Expected list of snapshots: %s", expected)
-        detected = container.list_snaps()
+        detected = []
+        data = container.list_snaps()
+        if data['status'] == 0:
+            for item in data['response']:
+                detected.append(item['epoch'])
         self.assertListEqual(
             sorted(expected), sorted(detected), 'Detected snapshots does not match expected')
 

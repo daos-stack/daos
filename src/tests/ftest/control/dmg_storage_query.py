@@ -12,7 +12,6 @@ from control_test_base import ControlTestBase
 from dmg_utils import get_storage_query_pool_info, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str, dict_to_str
-from storage_utils import get_tier_roles
 
 
 class DmgStorageQuery(ControlTestBase):
@@ -48,12 +47,10 @@ class DmgStorageQuery(ControlTestBase):
                              'roles': ','.join(tier.bdev_roles.value or []),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
-        if md_on_ssd:
+        if not md_on_ssd:
             for device in bdev_info:
-                if device['roles']:
-                    # Use predefined roles
-                    continue
-                device['roles'] = ','.join(get_tier_roles(device['tier'], bdev_tiers + 1))
+                if not device['roles']:
+                    device['roles'] = 'data'
 
         self.log.info('Detected NVMe devices in config')
         for bdev in bdev_info:
