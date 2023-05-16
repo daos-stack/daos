@@ -41,7 +41,7 @@
 #include "hook.h"
 
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
-#define FREE(ptr)	do {free(ptr); (ptr) = NULL;} while (0)
+#define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
 /* Use very large synthetic FD to distinguish regular FD from Kernel */
 
@@ -924,7 +924,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			} else {
 				/* Need to look up the parent directory */
 				full_path_parse[pos] = 0;
-				strncpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root, len + 1);
+				strncpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root,
+					len + 1);
 			}
 			/* look up the dfs object from hash table for the parent dir */
 			rc = lookup_insert_dir(idx_dfs, *parent_dir, &mode, parent);
@@ -1106,9 +1107,8 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 
 	if (obj == NULL) {
 		D_ALLOC_PTR(new_obj);
-		if (new_obj == NULL) {
+		if (new_obj == NULL)
 			return ENOMEM;
-		}
 		new_obj->file      = NULL;
 		new_obj->idx_mmap  = -1;
 		new_obj->ref_count = 0;
@@ -1162,9 +1162,8 @@ find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 
 	if (obj == NULL) {
 		D_ALLOC(new_obj, sizeof(struct dir_obj));
-		if (new_obj == NULL) {
+		if (new_obj == NULL)
 			return ENOMEM;
-		}
 		new_obj->dir       = NULL;
 		new_obj->ref_count = 0;
 		allocated          = true;
