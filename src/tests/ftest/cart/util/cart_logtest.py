@@ -420,21 +420,9 @@ class LogTest():
                         show = False
                     elif show and line.function in IGNORED_FUNCTIONS:
                         show = False
+                    if show and any(map(line.get_msg().endswith, self.skip_suffixes)):
+                        show = False
                     if show:
-<<<<<<< HEAD
-                        # Allow WARNING or ERROR messages, but anything higher
-                        # like assert should trigger a failure.
-                        show_this = True
-                        for ignores in self.skip_suffixes:
-                            if line.get_msg().endswith(ignores):
-                                show_this = False
-                        if show_this:
-                            if line.level < cart_logparse.LOG_LEVELS['ERR']:
-                                show_line(line, 'HIGH', 'error in strict mode')
-                            else:
-                                show_line(line, 'NORMAL', 'warning in strict mode')
-                            warnings_mode = True
-=======
                         # Allow WARNING or ERROR messages, but anything higher like assert should
                         # trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:
@@ -442,7 +430,6 @@ class LogTest():
                         else:
                             show_line(line, 'NORMAL', 'warning in strict mode')
                         warnings_mode = True
->>>>>>> master
             if line.trace:
                 trace_lines += 1
                 if not have_debug and line.level > cart_logparse.LOG_LEVELS['INFO']:
