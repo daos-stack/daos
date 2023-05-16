@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"log/syslog"
@@ -76,7 +75,7 @@ func TestControl_eventNotify(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotErr := eventNotify(context.TODO(), rpcClient, tc.seq, tc.evt, tc.aps)
+			gotErr := eventNotify(test.Context(t), rpcClient, tc.seq, tc.evt, tc.aps)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -129,7 +128,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 
 			ef := NewEventForwarder(mi, tc.aps)
 			for i := 0; i < callCount; i++ {
-				ef.OnEvent(context.TODO(), tc.event)
+				ef.OnEvent(test.Context(t), tc.event)
 			}
 
 			test.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
@@ -210,7 +209,7 @@ prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] 
 			}
 
 			el := newEventLogger(logBasic, tc.newSyslogger)
-			el.OnEvent(context.TODO(), tc.event)
+			el.OnEvent(test.Context(t), tc.event)
 
 			// check event logged to control plane
 			test.AssertEqual(t, tc.expShouldLog,

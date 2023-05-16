@@ -7,7 +7,6 @@
 package sysfs
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -509,7 +508,7 @@ func TestProvider_GetTopology(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetTopology(context.Background())
+			result, err := tc.p.GetTopology(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -616,7 +615,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetFabricInterfaces(context.Background(), tc.provider)
+			result, err := tc.p.GetFabricInterfaces(test.Context(t), tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,8 +64,11 @@ func TestServer_Harness_Start(t *testing.T) {
 	}{
 		"normal startup/shutdown": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -97,8 +100,11 @@ func TestServer_Harness_Start(t *testing.T) {
 		},
 		"startup/shutdown with preset ranks": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -136,8 +142,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
@@ -157,8 +166,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
@@ -291,7 +303,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(test.Context(t))
 			if tc.waitTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.waitTimeout)
 			}
@@ -588,7 +600,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				drpcFailureInvoked.SetTrue()
 			})
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(test.Context(t))
 			db := &mockdb{
 				isLeader: !tc.notLeader,
 			}

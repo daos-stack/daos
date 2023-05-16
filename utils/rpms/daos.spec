@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -142,14 +142,15 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: numactl
 %{?systemd_requires}
 
@@ -167,26 +168,22 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
-Requires: capstone >= 4.0.1
 %else
 Requires: fuse3 >= 3.4.2
-Requires: capstone >= 4.0.1
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 Requires: libfuse3-3 >= 3.4.2
-Requires: libcapstone-devel >= 4.0.1
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
-Requires: capstone >= 4.0.1
 %else
 Requires: fuse < 3, fuse3-libs >= 3.4.2
-Requires: capstone >= 4.0.1
 %endif
 %endif
 %{?systemd_requires}
@@ -562,8 +559,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu May 11 2023 Lei Huang <lei.huang@intel.com> 2.3.107-3
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
 - Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
 
 * Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
 - Temporarily pin libfabric to < 1.18

@@ -54,9 +54,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	tly1 := newTally(2)
@@ -86,9 +84,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	tly1 := newTally(2)
 	tly2 := newTally(2)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 
 	ps.Subscribe(RASTypeStateChange, tly1)
 
@@ -128,10 +124,10 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 
 	tly1 := newTally(2)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 	defer cancel()
 
-	ps := NewPubSub(context.Background(), log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	ps.Subscribe(RASTypeStateChange, tly1)
@@ -160,9 +156,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	tly1 := newTally(3)
@@ -208,9 +202,7 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 
 	evt1 := mockSwimRankDeadEvt(1, 1)
 	debounceType := evt1.ID
@@ -245,9 +237,7 @@ func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 
 	evt1 := mockSwimRankDeadEvt(1, 1)
 	debounceType := evt1.ID
