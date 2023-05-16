@@ -28,6 +28,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -215,7 +216,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				t.Fatal(err)
 			}
 			tc.svc.clientNetworkHint = []*mgmtpb.ClientNetHint{tc.clientNetworkHint}
-			gotResp, gotErr := tc.svc.GetAttachInfo(context.TODO(), tc.req)
+			gotResp, gotErr := tc.svc.GetAttachInfo(test.Context(t), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
 			}
@@ -271,8 +272,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			defer cleanup()
 			svc.sysdb = db
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.Context(t)
 			if err := db.Start(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -285,7 +285,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 				time.Sleep(250 * time.Millisecond)
 			}
 
-			gotResp, gotErr := svc.LeaderQuery(context.TODO(), tc.req)
+			gotResp, gotErr := svc.LeaderQuery(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -340,7 +340,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -366,7 +366,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := svc.ClusterEvent(context.TODO(), pbReq)
+			gotResp, gotErr := svc.ClusterEvent(test.Context(t), pbReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -407,26 +407,26 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 		expErr  error
 	}{
 		"no peer": {
-			ctx:    context.Background(),
+			ctx:    test.Context(t),
 			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer details not found in context"),
 		},
 		"no input address": {
-			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			ctx:    peer.NewContext(test.Context(t), &peer.Peer{Addr: defaultAddr}),
 			expErr: errors.New("get listening port: missing port in address"),
 		},
 		"non tcp address": {
-			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			ctx:    peer.NewContext(test.Context(t), &peer.Peer{Addr: ipAddr}),
 			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer address (127.0.0.1) not tcp"),
 		},
 		"normal operation": {
-			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			ctx:     peer.NewContext(test.Context(t), &peer.Peer{Addr: defaultAddr}),
 			addr:    "0.0.0.0:15001",
 			expAddr: combinedAddr,
 		},
 		"specific addr": {
-			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			ctx:     peer.NewContext(test.Context(t), &peer.Peer{Addr: defaultAddr}),
 			addr:    combinedAddr.String(),
 			expAddr: combinedAddr,
 		},
@@ -1023,7 +1023,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				t.Fatalf("unexpected fanout request (-want, +got)\n%s\n", diff)
 			}
 
-			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), gotFanReq, baseResp, true)
+			gotResp, gotRankSet, gotErr := svc.rpcFanout(test.Context(t), gotFanReq, baseResp, true)
 			test.CmpErr(t, expErr, gotErr)
 			if tc.expErrMsg != "" {
 				return
@@ -1247,7 +1247,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
 			svc.clientNetworkHint = tc.clientNetHints
 
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -1273,7 +1273,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemQuery(context.TODO(), req)
+			gotResp, gotErr := svc.SystemQuery(test.Context(t), req)
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
@@ -1435,7 +1435,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -1447,7 +1447,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStart(context.TODO(), tc.req)
+			gotResp, gotAPIErr := svc.SystemStart(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -1624,7 +1624,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			}
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -1636,7 +1636,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStop(context.TODO(), tc.req)
+			gotResp, gotAPIErr := svc.SystemStop(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -1786,9 +1786,7 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			t.Cleanup(cancel)
-
+			ctx := test.Context(t)
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
@@ -1908,7 +1906,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemErase(context.TODO(), req)
+			gotResp, gotErr := svc.SystemErase(test.Context(t), req)
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
@@ -1970,7 +1968,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
@@ -1992,7 +1990,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
@@ -2013,7 +2011,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
@@ -2038,7 +2036,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
@@ -2067,10 +2065,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 
 			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			svc.startBatchLoops(ctx)
-
 			if tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
@@ -2096,11 +2090,9 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			peerCtx := peer.NewContext(ctx, &peer.Peer{Addr: peerAddr})
+			peerCtx := peer.NewContext(test.Context(t), &peer.Peer{Addr: peerAddr})
 
 			setupMockDrpcClient(svc, tc.guResp, nil)
-			ei := svc.harness.instances[0].(*EngineInstance)
-			mdc := ei._drpcClient.(*mockDrpcClient)
 
 			gotResp, gotErr := svc.Join(peerCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -2108,8 +2100,28 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				return
 			}
 
+			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			if tc.expGuReq == nil {
+				return
+			}
+
+			ei := svc.harness.instances[0].(*EngineInstance)
+			mdc := ei._drpcClient.(*mockDrpcClient)
 			gotGuReq := new(mgmtpb.GroupUpdateReq)
-			if err := proto.Unmarshal(mdc.calls[len(mdc.calls)-1].Body, gotGuReq); err != nil {
+			calls := mdc.calls.get()
+			// wait for GroupUpdate
+			for ; ; calls = mdc.calls.get() {
+				if len(calls) == 0 {
+					continue
+				}
+				if calls[len(calls)-1].Method == drpc.MethodGroupUpdate {
+					break
+				}
+			}
+			if err := proto.Unmarshal(calls[len(calls)-1].Body, gotGuReq); err != nil {
 				t.Fatal(err)
 			}
 			cmpOpts := cmp.Options{
@@ -2118,10 +2130,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

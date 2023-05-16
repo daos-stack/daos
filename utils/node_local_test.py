@@ -749,7 +749,10 @@ class DaosServer():
 
         agent_config = join(self.agent_dir, 'nlt_agent.yaml')
         with open(agent_config, 'w') as fd:
-            agent_data = {'access_points': scyaml['access_points']}
+            agent_data = {
+                'access_points': scyaml['access_points'],
+                'control_log_mask': 'NOTICE',  # INFO logs every client process connection
+            }
             json.dump(agent_data, fd)
 
         agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
@@ -989,43 +992,6 @@ class DaosServer():
             self._make_pool()
 
         return self.test_pool
-
-
-def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
-    """Run a command under the interception library
-
-    Do not run valgrind here, not because it's not useful
-    but the options needed are different.  Valgrind handles
-    linking differently so some memory is wrongly lost that
-    would be freed in the _fini() function, and a lot of
-    commands do not free all memory anyway.
-    """
-    my_env = get_base_env()
-    prefix = f'dnt_dfuse_il_{get_inc_id()}_'
-    with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
-        log_name = log_file.name
-    my_env['D_LOG_FILE'] = log_name
-    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
-    # pylint: disable=protected-access
-    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
-    my_env['D_IL_REPORT'] = '2'
-    ret = subprocess.run(cmd, env=my_env, check=False)
-    print(f'Logged il to {log_name}')
-    print(ret)
-
-    if dfuse.caching:
-        check_fstat = False
-
-    try:
-        log_test(dfuse.conf, log_name, check_read=check_read, check_write=check_write,
-                 check_fstat=check_fstat)
-        assert ret.returncode == 0
-    except NLTestNoFunction as error:
-        command = ' '.join(cmd)
-        print(f"ERROR: command '{command}' did not log via {error.function}")
-        ret.returncode = 1
-
-    return ret
 
 
 class ValgrindHelper():
@@ -1301,6 +1267,42 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+
+    def il_cmd(self, cmd, check_read=True, check_write=True, check_fstat=True):
+        """Run a command under the interception library
+
+        Do not run valgrind here, not because it's not useful
+        but the options needed are different.  Valgrind handles
+        linking differently so some memory is wrongly lost that
+        would be freed in the _fini() function, and a lot of
+        commands do not free all memory anyway.
+        """
+        my_env = get_base_env()
+        prefix = f'dnt_dfuse_il_{get_inc_id()}_'
+        with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+            log_name = log_file.name
+        my_env['D_LOG_FILE'] = log_name
+        my_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
+        my_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        my_env['D_IL_REPORT'] = '2'
+        ret = subprocess.run(cmd, env=my_env, check=False)
+        print(f'Logged il to {log_name}')
+        print(ret)
+
+        if self.caching:
+            check_fstat = False
+
+        try:
+            log_test(self.conf, log_name, check_read=check_read, check_write=check_write,
+                     check_fstat=check_fstat)
+            assert ret.returncode == 0
+        except NLTestNoFunction as error:
+            command = ' '.join(cmd)
+            print(f"ERROR: command '{command}' did not log via {error.function}")
+            ret.returncode = 1
+
+        assert ret.returncode == 0, ret
+        return ret
 
 
 def assert_file_size_fd(fd, size):
@@ -2186,11 +2188,7 @@ class PosixTests():
         if self.dfuse.caching:
             check_fstat = False
 
-        rc = il_cmd(self.dfuse,
-                    ['cat', fname],
-                    check_write=False,
-                    check_fstat=check_fstat)
-        assert rc.returncode == 0
+        self.dfuse.il_cmd(['cat', fname], check_write=False, check_fstat=check_fstat)
 
     @needs_dfuse_with_opt(caching=False)
     def test_il(self):
@@ -2208,30 +2206,24 @@ class PosixTests():
         with open(file, 'w') as fd:
             fd.write('Hello')
         # Copy it across containers.
-        ret = il_cmd(self.dfuse, ['cp', file, sub_cont_dir])
-        assert ret.returncode == 0
+        self.dfuse.il_cmd(['cp', file, sub_cont_dir])
 
         # Copy it within the container.
         child_dir = join(self.dfuse.dir, 'new_dir')
         os.mkdir(child_dir)
-        il_cmd(self.dfuse, ['cp', file, child_dir])
-        assert ret.returncode == 0
-
+        self.dfuse.il_cmd(['cp', file, child_dir])
         # Copy something into a container
-        ret = il_cmd(self.dfuse, ['cp', '/bin/bash', sub_cont_dir], check_read=False)
-        assert ret.returncode == 0
+        self.dfuse.il_cmd(['cp', '/bin/bash', sub_cont_dir], check_read=False)
         # Read it from within a container
-        ret = il_cmd(self.dfuse, ['md5sum', join(sub_cont_dir, 'bash')],
-                     check_read=False, check_write=False, check_fstat=False)
-        assert ret.returncode == 0
-        ret = il_cmd(self.dfuse, ['dd',
-                                  f'if={join(sub_cont_dir, "bash")}',
-                                  f'of={join(sub_cont_dir, "bash_copy")}',
-                                  'iflag=direct',
-                                  'oflag=direct',
-                                  'bs=128k'],
-                     check_fstat=False)
-        assert ret.returncode == 0
+        self.dfuse.il_cmd(['md5sum', join(sub_cont_dir, 'bash')],
+                          check_read=False, check_write=False, check_fstat=False)
+        self.dfuse.il_cmd(['dd',
+                           f'if={join(sub_cont_dir, "bash")}',
+                           f'of={join(sub_cont_dir, "bash_copy")}',
+                           'iflag=direct',
+                           'oflag=direct',
+                           'bs=128k'],
+                          check_fstat=False)
 
     @needs_dfuse
     def test_xattr(self):
@@ -2256,6 +2248,30 @@ class PosixTests():
             xattr.set(fd, 'user.Xfuse.ids', b'other_value')
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
+
+    @needs_dfuse
+    def test_list_xattr(self):
+        """Perform tests with listing extended attributes.
+
+        Ensure that the user.daos command can be read, and is included in the list.
+        xattrs are all byte strings.
+        """
+        expected_keys = {b'user.daos', b'user.dummy'}
+        root_xattr = xattr.getxattr(self.dfuse.dir, "user.daos")
+        print(f'The root xattr is {root_xattr}')
+
+        xattr.set(self.dfuse.dir, 'user.dummy', 'short string')
+
+        for (key, value) in xattr.get_all(self.dfuse.dir):
+            expected_keys.remove(key)
+            print(f'xattr is {key}:{value}')
+
+        # Leave this out for now to avoid adding attr as a new rpm dependency.
+        # rc = subprocess.run(['getfattr', '-n', 'user.daos', self.dfuse.dir], check=False)
+        # print(rc)
+        # assert rc.returncode == 0, rc
+
+        assert len(expected_keys) == 0, 'Expected key not found'
 
     @needs_dfuse_with_opt(wbcache=True, caching=True)
     def test_stat_before_open(self):
@@ -3121,15 +3137,15 @@ class PosixTests():
         side_test_file = join(side_dfuse.dir, 'test-file')
 
         # Create a file.
-        with open(test_file, 'w') as fd:
+        with open(test_file, 'w', encoding='ascii', errors='ignore') as fd:
             fd.write('data')
 
         # Read it through both.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
-        with open(side_test_file, 'r') as fd:
+        with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3141,14 +3157,14 @@ class PosixTests():
 
         # Read it through the second channel.
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
             pass
 
         # Read it through first instance, this should work as the contents are cached.
-        with open(test_file, 'r') as fd:
+        with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'data':
                 print('Check kernel data')
@@ -3157,7 +3173,7 @@ class PosixTests():
         time.sleep(cache_time * 2)
 
         try:
-            with open(side_test_file, 'r') as fd:
+            with open(side_test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
@@ -3165,7 +3181,7 @@ class PosixTests():
 
         # Read it through the first dfuse, this should now fail as the cache has expired.
         try:
-            with open(test_file, 'r') as fd:
+            with open(test_file, 'r', encoding='ascii', errors='ignore') as fd:
                 data = fd.read()
                 assert False
         except PermissionError:
@@ -3459,7 +3475,7 @@ class PosixTests():
         os.mkdir(dirname)
 
         fname1 = join(dirname, 'f1')
-        with open(fname1, 'w') as fd:
+        with open(fname1, 'w', encoding='ascii') as fd:
             fd.write('test1')
         fname2 = join(dirname, 'f2')
         with open(fname2, 'w') as fd:
@@ -3468,7 +3484,7 @@ class PosixTests():
         dirname1 = join(path, 'test_dir/1d1/')
         os.mkdir(dirname1)
         fname3 = join(dirname1, 'f3')
-        with open(fname3, 'w') as fd:
+        with open(fname3, 'w', encoding='ascii') as fd:
             fd.write('test3')
         dirname2 = join(path, 'test_dir/1d2/')
         os.mkdir(dirname2)
@@ -3583,9 +3599,8 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, None, '1048576')
-        with open(fname1, 'rb') as fd:
+        with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
-            data = data.decode('utf-8-sig').strip()
             if data != 'test1':
                 raise NLTestFail('/test_dir/f1 data is corrupted')
 
@@ -3595,9 +3610,8 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, None, '1048576')
-        with open(fname3, 'rb') as fd:
+        with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
-            data = data.decode('utf-8-sig').strip()
             if data != 'test3':
                 raise NLTestFail('/test_dir/1d1/f3 data is corrupted')
 
@@ -3785,7 +3799,7 @@ def run_posix_tests(server, conf, test=None):
             # long-running tests which dominate the time, so whilst a higher value here would
             # work there's no benefit in rushing to finish the quicker tests.  The long-running
             # tests are started first.
-            while len(threads) > 5:
+            while len(threads) > 4:
                 for thread_id in threads:
                     thread_id.join(timeout=0)
                     if thread_id.is_alive():
@@ -3838,8 +3852,7 @@ def run_tests(dfuse):
     assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
-    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    dfuse.il_cmd(['cat', fname], check_write=False)
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
@@ -4077,8 +4090,7 @@ def create_and_read_via_il(dfuse, path):
         ofd.flush()
         assert_file_size(ofd, 12)
         print(os.fstat(ofd.fileno()))
-    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    dfuse.il_cmd(['cat', fname], check_write=False)
 
 
 def run_container_query(conf, path):
@@ -4490,7 +4502,6 @@ def test_pydaos_kv(server, conf):
 
 def test_pydaos_kv_obj_class(server, conf):
     """Test the predefined object class works with KV"""
-
     with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
                                      suffix='.log',
                                      delete=False) as tmp_file:

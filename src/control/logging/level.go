@@ -23,12 +23,15 @@ const (
 	LogLevelInfo
 	// LogLevelDebug emits messages at DEBUG or higher
 	LogLevelDebug
+	// LogLevelTrace emits messages at TRACE or higher
+	LogLevelTrace
 
 	strDisabled = "DISABLED"
 	strError    = "ERROR"
 	strNotice   = "NOTICE"
 	strInfo     = "INFO"
 	strDebug    = "DEBUG"
+	strTrace    = "TRACE"
 )
 
 // LogLevel represents the level at which the logger will emit log messages
@@ -59,6 +62,8 @@ func (ll *LogLevel) SetString(in string) error {
 		level = LogLevelInfo
 	case strings.EqualFold(in, strDebug):
 		level = LogLevelDebug
+	case strings.EqualFold(in, strTrace):
+		level = LogLevelTrace
 	default:
 		return fmt.Errorf("%q is not a valid log level", in)
 	}
@@ -79,6 +84,8 @@ func (ll LogLevel) String() string {
 		return strInfo
 	case LogLevelDebug:
 		return strDebug
+	case LogLevelTrace:
+		return strTrace
 	default:
 		return "UNKNOWN"
 	}

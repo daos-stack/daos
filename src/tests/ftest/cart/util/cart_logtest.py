@@ -205,10 +205,19 @@ class HwmCounter():
         self.__val -= val
 
 
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-locals
+# During shutdown ERROR messages that end with these strings are not reported as errors.
+SHUTDOWN_RC = ("DER_SHUTDOWN(-2017): 'Service should shut down'",
+               "DER_NOTLEADER(-2008): 'Not service leader'")
+
+# Functions that are never reported as errors.
+IGNORED_FUNCTIONS = ('sched_watchdog_post', 'rdb_timerd')
+
+
 class LogTest():
     """Log testing"""
+
+    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-locals
 
     def __init__(self, log_iter, quiet=False):
         self.quiet = quiet
@@ -396,28 +405,23 @@ class LogTest():
                             # -DER_NOMEM
                             show = False
                     elif line.rpc:
-                        # Ignore the SWIM RPC opcode, as this often sends RPCs
-                        # that fail during shutdown.
+                        # Ignore the SWIM RPC opcode, as this often sends RPCs that fail during
+                        # shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    # Disable checking for a number of conditions, either
-                    # because these errors/lines are badly formatted or because
-                    # they're intermittent and we don't want noise in the test
-                    # results.
+                    # Disable checking for a number of conditions, either because these errors/lines
+                    # are badly formatted or because they're intermittent and we don't want noise in
+                    # the test results.
                     if line.fac == 'external':
                         show = False
-                    elif show and server_shutdown and (line.get_msg().endswith(
-                        "DER_SHUTDOWN(-2017): 'Service should shut down'")
-                            or line.get_msg().endswith(
-                                "DER_NOTLEADER(-2008): 'Not service leader'")):
+                    elif show and server_shutdown and any(map(line.get_msg().endswith,
+                                                              SHUTDOWN_RC)):
                         show = False
-                    elif show and line.function == 'rdb_stop':
-                        show = False
-                    elif show and line.function == 'sched_watchdog_post':
+                    elif show and line.function in IGNORED_FUNCTIONS:
                         show = False
                     if show:
-                        # Allow WARNING or ERROR messages, but anything higher
-                        # like assert should trigger a failure.
+                        # Allow WARNING or ERROR messages, but anything higher like assert should
+                        # trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:
                             show_line(line, 'HIGH', 'error in strict mode')
                         else:

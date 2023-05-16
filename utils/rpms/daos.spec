@@ -5,6 +5,7 @@
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
+%global libfabric_max_version 1.18
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       1%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -27,7 +28,7 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel >= %{libfabric_version}, libfabric-devel < %{libfabric_max_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -139,14 +140,15 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
 Requires: numactl
 %{?systemd_requires}
 
@@ -164,13 +166,14 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else
 Requires: fuse3 >= 3.4.2
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -553,6 +556,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
+
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
 * Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
 - Bump version to 2.3.107
 

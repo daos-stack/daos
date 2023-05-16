@@ -55,7 +55,7 @@
 
 ## Force specific debug mask for daos_agent (control plane).
 ## Mask specifies minimum level of message significance to pass to logger.
-## Currently supported values are DEBUG, INFO and ERROR.
+## Currently supported values are DISABLED, TRACE, DEBUG, INFO, NOTICE and ERROR.
 #
 ## default: INFO
 #control_log_mask: DEBUG

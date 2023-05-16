@@ -122,7 +122,7 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 				return srvResp, nil
 			}
 
-			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, getFn)
+			cachedResp, gotErr := tc.aic.Get(test.Context(t), numaNode, sysName, getFn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -328,7 +328,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 				tc.lfc.log = log
 			}
 
-			tc.lfc.CacheScan(context.TODO(), tc.input)
+			tc.lfc.CacheScan(test.Context(t), tc.input)
 
 			test.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 
@@ -423,7 +423,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				tc.input.log = log
 			}
 
-			tc.lfc.Cache(context.TODO(), tc.input)
+			tc.lfc.Cache(test.Context(t), tc.input)
 
 			test.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 

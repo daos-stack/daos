@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pblog "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -112,13 +113,20 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
+	client := &procInfo{
+		pid: pid,
+	}
+	procName, err := common.GetProcName(int(pid))
+	if err == nil {
+		client.name = procName
+	}
+	mod.log.Tracef("%s: %s", client, pblog.Debug(pbReq))
 
 	// Check the system name. Due to the special daos_init-dc_mgmt_net_cfg
 	// case, where the system name is not available, we let an empty
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
-		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
+		mod.log.Errorf("%s: %s: unknown system name", client, pbReq.Sys)
 		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)})
 		if err != nil {
 			return nil, drpc.MarshalingFailure()
@@ -128,11 +136,10 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	numaNode, err := mod.getNUMANode(ctx, pid)
 	if err != nil {
-		mod.log.Errorf("unable to get NUMA node: %s", err.Error())
+		mod.log.Errorf("%s: unable to get NUMA node: %s", client, err)
 		return nil, err
 	}
-
-	mod.log.Debugf("client process NUMA node %d", numaNode)
+	mod.log.Tracef("%s: detected numa %d", client, numaNode)
 
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq)
 	switch {
@@ -146,8 +153,12 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, err
 	}
 
-	mod.log.Debugf("GetAttachInfoResp: %+v", resp)
-
+	if resp.ClientNetHint != nil {
+		mod.log.Infof("%s: numa:%d iface:%s dom:%s prov:%s srx:%d", client, numaNode,
+			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain,
+			resp.ClientNetHint.Provider, resp.ClientNetHint.SrvSrxSet)
+	}
+	mod.log.Tracef("%s: %s", client, pblog.Debug(resp))
 	return proto.Marshal(resp)
 }
 
@@ -162,7 +173,7 @@ func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error)
 		mod.useDefaultNUMA = true
 		return 0, nil
 	} else if err != nil {
-		return 0, errors.Wrap(err, "get NUMA node ID")
+		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)
 	}
 
 	return numaNode, nil
@@ -205,7 +216,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	resp.ClientNetHint.Domain = iface
 	if domain != "" {
 		resp.ClientNetHint.Domain = domain
-		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
+		mod.log.Tracef("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
 

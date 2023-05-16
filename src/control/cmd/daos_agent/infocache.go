@@ -19,13 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	invalidIndex         = -1
-	verbsProvider        = "ofi+verbs"
-	defaultNetworkDevice = "lo"
-	defaultDomain        = "lo"
-)
-
 // NotCachedErr is the error returned when trying to fetch data that is not cached.
 var NotCachedErr = errors.New("not cached")
 
@@ -172,7 +165,6 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 	}
 
 	c.initialized.SetTrue()
-	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.

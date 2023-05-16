@@ -33,6 +33,10 @@ const (
 	CurrentSchemaVersion = 0
 )
 
+var (
+	dbgUuidStr = logging.ShortUUID
+)
+
 type (
 	onLeadershipGainedFn func(context.Context) error
 	onLeadershipLostFn   func() error
@@ -496,7 +500,10 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 			runOnLeadershipLost()
 
-			db.shutdownErrCh <- db.ShutdownRaft()
+			select {
+			case <-parent.Done():
+			case db.shutdownErrCh <- db.ShutdownRaft():
+			}
 			close(db.shutdownErrCh)
 			return
 		case isLeader := <-db.raftLeaderNotifyCh:
@@ -1164,8 +1171,4 @@ func (db *Database) GetSystemAttrs(keys []string, filterFn func(string) bool) (m
 		return nil, system.ErrSystemAttrNotFound(k)
 	}
 	return out, nil
-}
-
-func dbgUuidStr(u uuid.UUID) string {
-	return u.String()[0:8]
 }
