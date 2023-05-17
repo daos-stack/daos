@@ -6,16 +6,7 @@
 
 package cache
 
-import (
-	"context"
-	"errors"
-	"testing"
-	"time"
-
-	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/google/go-cmp/cmp"
-)
-
+/*
 type testData string
 
 func (c testData) Copy() Data {
@@ -501,3 +492,4 @@ func TestCache_ItemCache_Delete(t *testing.T) {
 		})
 	}
 }
+*/

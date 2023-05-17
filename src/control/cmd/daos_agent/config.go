@@ -25,25 +25,35 @@ const (
 	defaultLogFile    = "/tmp/daos_agent.log"
 )
 
-// Config defines the agent configuration.
-type Config struct {
-	SystemName                  string                    `yaml:"name"`
-	AccessPoints                []string                  `yaml:"access_points"`
-	ControlPort                 int                       `yaml:"port"`
-	RuntimeDir                  string                    `yaml:"runtime_dir"`
-	LogFile                     string                    `yaml:"log_file"`
-	LogLevel                    common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
-	TransportConfig             *security.TransportConfig `yaml:"transport_config"`
-	DisableCache                bool                      `yaml:"disable_caching,omitempty"`
-	CacheRefreshIntervalMinutes uint                      `yaml:"cache_refresh_interval,omitempty"`
-	DisableAutoEvict            bool                      `yaml:"disable_auto_evict,omitempty"`
-	ExcludeFabricIfaces         common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
-	FabricInterfaces            []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+type refreshMinutes time.Duration
+
+func (rm *refreshMinutes) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var mins uint
+	if err := unmarshal(&mins); err != nil {
+		return err
+	}
+	*rm = refreshMinutes(time.Duration(mins) * time.Minute)
+	return nil
 }
 
-// CacheRefreshInterval returns a time.Duration equivalent to CacheRefreshIntervalMin in minutes.
-func (c *Config) CacheRefreshInterval() time.Duration {
-	return time.Duration(c.CacheRefreshIntervalMinutes) * time.Minute
+func (rm refreshMinutes) Duration() time.Duration {
+	return time.Duration(rm)
+}
+
+// Config defines the agent configuration.
+type Config struct {
+	SystemName          string                    `yaml:"name"`
+	AccessPoints        []string                  `yaml:"access_points"`
+	ControlPort         int                       `yaml:"port"`
+	RuntimeDir          string                    `yaml:"runtime_dir"`
+	LogFile             string                    `yaml:"log_file"`
+	LogLevel            common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
+	AttachInfoRefresh   refreshMinutes            `yaml:"attachinfo_refresh_interval,omitempty"`
+	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
+	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
+	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

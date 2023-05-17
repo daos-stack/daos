@@ -81,7 +81,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
 
 	cacheStart := time.Now()
-	cache := NewInfoCache(cmd.Logger, cmd.cfg)
+	cache := NewInfoCache(ctx, cmd.Logger, cmd.ctlInvoker, cmd.cfg)
 	if cmd.attachInfoCacheDisabled() {
 		cache.DisableAttachInfoCache()
 		cmd.Debug("GetAttachInfo agent caching has been disabled")

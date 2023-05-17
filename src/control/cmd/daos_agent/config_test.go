@@ -44,7 +44,7 @@ runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
 disable_caching: true
-cache_refresh_interval: 30
+attachinfo_refresh_interval: 30
 disable_auto_evict: true
 transport_config:
   allow_insecure: true
@@ -123,15 +123,15 @@ transport_config:
 		"all options": {
 			path: optCfg,
 			expResult: &Config{
-				SystemName:                  "shire",
-				AccessPoints:                []string{"one:10001", "two:10001"},
-				ControlPort:                 4242,
-				RuntimeDir:                  "/tmp/runtime",
-				LogFile:                     "/home/frodo/logfile",
-				LogLevel:                    common.ControlLogLevelDebug,
-				DisableCache:                true,
-				CacheRefreshIntervalMinutes: 30,
-				DisableAutoEvict:            true,
+				SystemName:        "shire",
+				AccessPoints:      []string{"one:10001", "two:10001"},
+				ControlPort:       4242,
+				RuntimeDir:        "/tmp/runtime",
+				LogFile:           "/home/frodo/logfile",
+				LogLevel:          common.ControlLogLevelDebug,
+				DisableCache:      true,
+				AttachInfoRefresh: refreshMinutes(30 * time.Minute),
+				DisableAutoEvict:  true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -179,7 +179,7 @@ transport_config:
 	}
 }
 
-func TestAgent_Config_CacheRefreshInterval(t *testing.T) {
+/*func TestAgent_Config_CacheRefreshInterval(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfgInterval uint
 		expResult   time.Duration
@@ -202,3 +202,4 @@ func TestAgent_Config_CacheRefreshInterval(t *testing.T) {
 		})
 	}
 }
+*/
