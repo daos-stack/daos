@@ -32,7 +32,7 @@ class SupportTestBase(ControlTestBase):
         server_custom_log = self.base_test_dir
         self.custom_log_dir = os.path.join(server_custom_log, folder_name)
         self.custom_log_file = os.path.join(self.custom_log_dir, "Custom_File")
-        self.target_folder = os.path.join(self.base_test_dir, "DAOS_Support_logs")
+        self.target_folder = os.path.join(self.base_test_dir, "DAOS_Support")
 
         # make the custom log dir on node (clients or servers)
         mkdir_cmd = "mkdir -p {}".format(self.custom_log_dir)
