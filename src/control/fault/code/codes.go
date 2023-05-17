@@ -79,6 +79,7 @@ const (
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
+	ScmConfigTierMissing
 )
 
 // Bdev fault codes
@@ -92,11 +93,17 @@ const (
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
 	BdevConfigOptFlagUnknown
-	BdevConfigTypeMismatch
+	BdevConfigTierTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU
-	BdevConfigMultiTiersWithDCPM
-	BdevConfigBadNrRoles
+	BdevConfigRolesWithDCPM
+	BdevConfigRolesBadNr
+	BdevConfigRolesMissing
+	BdevConfigMultiTierWithoutRoles
+	BdevConfigBadNrTiersWithRoles
+	BdevConfigControlMetadataNoRoles
+	BdevConfigRolesNoControlMetadata
+	BdevConfigRolesWalDataNoMeta
 )
 
 // DAOS system fault codes
@@ -180,6 +187,7 @@ const (
 	ServerConfigRamdiskUnderMinMem
 	ServerConfigRamdiskOverMaxMem
 	ServerConfigScmDiffClass
+	ServerConfigEngineBdevRolesMismatch
 )
 
 // SPDK library bindings codes

@@ -50,13 +50,14 @@ var errNoNuma = errors.New("zero numa nodes reported on hosts")
 type (
 	// ConGenerateReq contains the inputs for the request.
 	ConfGenerateReq struct {
-		NrEngines    int
-		NetClass     hardware.NetDevClass
-		NetProvider  string
-		SCMOnly      bool // generate a config without nvme
-		UseTmpfsSCM  bool
-		AccessPoints []string
-		Log          logging.Logger
+		NrEngines       int
+		NetClass        hardware.NetDevClass
+		NetProvider     string
+		SCMOnly         bool // generate a config without nvme
+		UseTmpfsSCM     bool
+		AccessPoints    []string
+		ExtMetadataPath string
+		Log             logging.Logger
 	}
 
 	// ConfGenerateResp contains the generated server config.
@@ -141,7 +142,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req.Log, req.AccessPoints, ecs, sd.MemInfo, tc)
+	sc, err := genServerConfig(req.Log, req.AccessPoints, req.ExtMetadataPath, ecs, sd.MemInfo, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -943,8 +944,7 @@ func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAd
 	// 2-5 SSDs: tiers 1:N-1
 	// 6+ SSDs: tiers 2:N-2
 	//
-	// Bdev tier device roles are implied from the tier order when the config file is
-	// processed on daos_server start-up. Therefore roles are not explicitly specified.
+	// Bdev tier device roles are assigned later based on tier structure applied here.
 	//
 	// TODO: Decide whether engine config target count should be calculated based on
 	//       the number of cores and number of SSDs in the second (meta+data) tier.
@@ -1108,7 +1108,7 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath string, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
@@ -1123,6 +1123,22 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
+
+	// TODO: Add capability to create an ephemeral RAM-disk based configuration as currently
+	//       MD-on-SSD enabled conf will be generated whenever scm tier is tmpfs.
+	for idx := range cfg.Engines {
+		tiers := cfg.Engines[idx].Storage.Tiers
+		if err := tiers.AssignBdevTierRoles(); err != nil {
+			return nil, errors.Wrapf(err, "assigning engine %d storage bdev tier roles",
+				idx)
+		}
+		// Add default control_metadata path if roles have been assigned.
+		if idx == 0 && tiers.HasBdevRoleMeta() {
+			cfg.Metadata = storage.ControlMetadata{
+				Path: extMetadataPath,
+			}
+		}
+	}
 
 	if err := cfg.Validate(log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")

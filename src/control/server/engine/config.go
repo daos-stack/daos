@@ -148,7 +148,7 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Storage.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {

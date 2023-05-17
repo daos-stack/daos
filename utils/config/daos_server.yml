@@ -611,7 +611,7 @@
 #    #bdev_busid_range: 208-223
 #
 #    # See about bdev_roles above.
-#    bdev_roles: []
+#    bdev_roles: [wal, meta, data]
 #
 #
 #  # Specify accelerator engine setting (experimental).
