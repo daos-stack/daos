@@ -10,7 +10,7 @@ ENV:
     - D_LOG_MASK: "DEBUG"
     - OFI_INTERFACE: "eth0"
     - HG_LOG_SUBSYS: "hg,na,libfabric"
-    - HG_LOG_LEVEL: "DEBUG"
+    - HG_LOG_LEVEL: "WARN"
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
 env_CRT_CTX_SHARE_ADDR: !mux
@@ -25,7 +25,7 @@ hosts: !mux
     config: one_node
     test_servers: server-1
     test_clients: server-1
-# timeout: 600
+timeout: 2400
 tests: !mux
   multisend:
     name: multisend
