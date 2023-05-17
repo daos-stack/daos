@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 
 
 class DaosObjectQuery(TestWithServers):
@@ -41,9 +40,9 @@ class DaosObjectQuery(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=control
-        :avocado: tags=daos_object_query,test_object_query
+        :avocado: tags=DaosObjectQuery,test_object_query
         """
-        daos_cmd = DaosCommand(self.bin)
+        daos_cmd = self.get_daos_command()
         errors = []
 
         # Create a pool and a container. Specify --oclass, which will be used
@@ -104,8 +103,8 @@ class DaosObjectQuery(TestWithServers):
         self.log.info("oid.lo = %s", expected_oid_lo)
         oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
         kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid,
+            "pool": self.pool.identifier,
+            "cont": self.container.identifier,
             "oid": oid_concat
         }
 

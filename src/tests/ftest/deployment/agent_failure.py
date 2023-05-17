@@ -35,9 +35,9 @@ class AgentFailure(IorTestBase):
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(
-            group=self.server_group, pool=self.pool, cont_uuid=self.container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+            group=self.server_group, pool=self.pool, cont_uuid=self.container.identifier)
+        testfile = os.path.join(os.sep, file_name)
+        ior_cmd.update_params(test_file=testfile)
 
         # We need to provide hostnames to the util files with NodeSet.
         clients_nodeset = NodeSet.fromlist(clients)

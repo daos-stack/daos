@@ -7,7 +7,6 @@
 package drpc
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -194,7 +193,7 @@ func TestService_ProcessMessage(t *testing.T) {
 			service := NewModuleService(log)
 			service.RegisterModule(mockMod)
 
-			respBytes, err := service.ProcessMessage(context.Background(), &Session{}, tc.callBytes)
+			respBytes, err := service.ProcessMessage(test.Context(t), &Session{}, tc.callBytes)
 
 			if err != nil {
 				t.Fatalf("expected nil error, got: %v", err)
