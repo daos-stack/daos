@@ -84,6 +84,7 @@ struct dfs_mt {
 
 	_Atomic uint32_t     inited;
 	char                *pool, *cont;
+	pthread_rwlock_t     lock_ht;
 	char                 fs_root[DFS_MAX_PATH];
 };
 
@@ -274,7 +275,9 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 		D_ERROR("path is too long!");
 		return ENAMETOOLONG;
 	}
+	D_RWLOCK_RDLOCK(&dfs_list[idx_dfs].lock_ht);
 	rlink = d_hash_rec_find(dfs_list[idx_dfs].dfs_dir_hash, name, len);
+	D_RWLOCK_UNLOCK(&dfs_list[idx_dfs].lock_ht);
 	if (rlink != NULL) {
 		hdl = hdl_obj(rlink);
 		*obj = hdl->oh;
@@ -300,7 +303,9 @@ lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
 	strncpy(hdl->name, name, len + 1);
 	hdl->oh = oh;
 
+	D_RWLOCK_WRLOCK(&dfs_list[idx_dfs].lock_ht);
 	rc = d_hash_rec_insert(dfs_list[idx_dfs].dfs_dir_hash, hdl->name, len, &hdl->entry, true);
+	D_RWLOCK_UNLOCK(&dfs_list[idx_dfs].lock_ht);
 	if (rc) {
 		D_ERROR("Failed to insert dir handle in hashtable.");
 		dfs_release(hdl->oh);
@@ -5312,6 +5317,10 @@ init_dfs(int idx)
 	int rc, rc2;
 
 	/* TODO: Need to check the permission of mount point first!!! */
+
+	rc = D_RWLOCK_INIT(&dfs_list[idx].lock_ht, NULL);
+	D_ASSERT(rc == 0);
+
 	rc =
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh,
 			      NULL, NULL);
@@ -5331,7 +5340,7 @@ init_dfs(int idx)
 		D_ERROR("failed to mount dfs: %s\nQuit\n", strerror(rc));
 		D_GOTO(out_err_mt, rc);
 	}
-	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
 		D_ERROR("failed to create hash table: "DF_RC"\nQuit\n", DP_RC(rc));
@@ -5365,6 +5374,8 @@ finalize_dfs(void)
 	d_list_t *rlink = NULL;
 
 	for (i = 0; i < num_dfs; i++) {
+		rc = D_RWLOCK_DESTROY(&dfs_list[i].lock_ht);
+		D_ASSERT(rc == 0);
 		if (dfs_list[i].dfs_dir_hash == NULL)
 			continue;
 

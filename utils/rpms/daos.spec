@@ -168,11 +168,6 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
 Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
