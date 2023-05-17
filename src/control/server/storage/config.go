@@ -352,7 +352,6 @@ func (tcs TierConfigs) Validate() error {
 //     two NVMe tiers. In the latter case, all combinations to co-locate two of the
 //     roles shall be allowed, although not all those combinations may be technically
 //     desirable in production environments.
-//
 func (tcs TierConfigs) validateBdevRoles() error {
 	scmConfs := tcs.ScmConfigs()
 	if len(scmConfs) != 1 || scmConfs[0].Tier != 0 {
