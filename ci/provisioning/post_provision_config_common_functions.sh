@@ -185,16 +185,15 @@ set_local_repo() {
     rm -f "$REPOS_DIR"/daos_ci-"$DISTRO_NAME".repo
     ln "$REPOS_DIR"/daos_ci-"$DISTRO_NAME"{-"$repo_server",.repo}
 
-    local version
-    version="$(lsb_release -sr)"
-    version=${version%%.*}
+    . /etc/os-release
+
     if [ "$repo_server" = "artifactory" ] &&
        { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
        [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
-            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
+            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
     fi
     dnf repolist
 }
@@ -257,7 +256,7 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    lsb_release -a
+    cat /etc/os-release
 
     # start with everything fully up-to-date
     # all subsequent package installs beyond this will install the newest packages
@@ -303,11 +302,6 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    if [ -n "${LSB_RELEASE:-}" ]; then
-        if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360 install "$LSB_RELEASE"
-        fi
-    fi
 
     # shellcheck disable=SC2001
     if ! rpm -q "$(echo "$INST_RPMS" |
@@ -352,7 +346,7 @@ EOF
 
     distro_custom
 
-    lsb_release -a
+    cat /etc/os-release
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release

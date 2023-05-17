@@ -47,7 +47,7 @@ install_mofed() {
 
 
     stream=false
-    gversion="$(lsb_release -sr)"
+    gversion="$VERSION_ID"
     if [ "$gversion" == "8" ]; then
         gversion="8.6"
         stream=true
