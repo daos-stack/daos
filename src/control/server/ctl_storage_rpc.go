@@ -540,7 +540,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// because devices have already been claimed during format.
 	for idx, ei := range instances {
 		if msg, hasError := instanceErrors[idx]; hasError {
-			c.log.Errorf("instance %d: %s", ei.Index(), msg)
+			c.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
 		ei.NotifyStorageReady()
