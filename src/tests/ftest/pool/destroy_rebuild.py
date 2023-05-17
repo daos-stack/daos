@@ -33,7 +33,18 @@ class DestroyRebuild(TestWithServers):
         """
         # Get the test parameters
         targets = self.server_managers[0].get_config_value("targets")
-        ranks = self.params.get("rank_to_kill", "/run/testparams/*")
+
+        # Select 3 ranks to rebuild
+        # rank 0 plus 1 host from access-point list, and 1 host from non-access-point list
+        ranks = [0]
+        server_hosts_list = list(set(self.hostlist_servers))
+        server_hosts_list.sort()
+        ap_hosts_list = list(set(self.access_points))
+        ap_hosts_list.sort()
+        non_ap_hosts_list = [ht for ht in server_hosts_list if ht not in ap_hosts_list]
+        ranks.append(self.server_managers[0].get_host_ranks(ap_hosts_list[-1])[0])
+        ranks.append(self.server_managers[0].get_host_ranks(non_ap_hosts_list[-1])[0])
+        self.log.info("Ranks to rebuild: %s", ranks)
 
         # 1.
         self.log_step("Create a pool")
