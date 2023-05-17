@@ -48,12 +48,14 @@ class DmgStorageQuery(ControlTestBase):
                              'roles': ','.join(tier.bdev_roles.value or []),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
-        if md_on_ssd:
-            for device in bdev_info:
-                if device['roles']:
-                    # Use predefined roles
-                    continue
+        for device in bdev_info:
+            if device['roles']:
+                # Use predefined roles
+                continue
+            if md_on_ssd:
                 device['roles'] = ','.join(get_tier_roles(device['tier'], bdev_tiers + 1))
+            else:
+                device['roles'] = ['data']
 
         self.log.info('Detected NVMe devices in config')
         for bdev in bdev_info:
