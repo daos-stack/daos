@@ -665,7 +665,7 @@ class PreReqComponent():
                         ['$CVS', '--add', "'!**/src/gurt/examples/'"],
                         ['$CVS', '--add', "'!**/src/utils/crt_launch/'"],
                         ['$CVS', '--add', "'!**/src/utils/daos_autotest.c'"],
-                        ['$CVS', '--add', "'!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', "'!**/src/placement/ring_map.c'"],
                         ['$CVS', '--add', "'!**/src/common/tests_dmg_helpers.c'"],
                         ['$CVS', '--add', "'!**/src/common/tests_lib.c'"]]
             if not RUNNER.run_commands(commands):
