@@ -60,7 +60,10 @@ class DestroyRebuild(TestWithServers):
         # Get the pool leader rank
         pool.set_query_data()
         leader_rank = pool.query_data["response"]["leader"]
-        ap_ranks.remove(leader_rank)
+        if leader_rank in ap_ranks:
+            ap_ranks.remove(leader_rank)
+        elif leader_rank in non_ap_ranks:
+            non_ap_ranks.remove(leader_rank)
 
         # Select the following ranks to stop
         #  - the pool leader rank
