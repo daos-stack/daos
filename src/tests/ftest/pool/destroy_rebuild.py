@@ -36,14 +36,25 @@ class DestroyRebuild(TestWithServers):
 
         # Select 3 ranks to rebuild
         # rank 0 plus 1 host from access-point list, and 1 host from non-access-point list
-        ranks = [0]
-        server_hosts_list = list(set(self.hostlist_servers))
-        server_hosts_list.sort()
-        ap_hosts_list = list(set(self.access_points))
-        ap_hosts_list.sort()
-        non_ap_hosts_list = [ht for ht in server_hosts_list if ht not in ap_hosts_list]
-        ranks.append(self.server_managers[0].get_host_ranks(ap_hosts_list[-1])[0])
-        ranks.append(self.server_managers[0].get_host_ranks(non_ap_hosts_list[-1])[0])
+        all_ranks = self.server_managers[0].ranks.keys()
+        ap_ranks = self.server_managers[0].get_host_ranks(self.access_points)
+        non_ap_ranks = list(set(all_ranks) - set(ap_ranks))
+        
+        # After creating a pool get the pool leader rank
+        pool.set_query_data()
+        leader_rank = pool.query_data["response"]["leader"]
+        ap_ranks.remove(leader_rank)
+        
+        # Select the following ranks to stop:
+        #  - the pool leader rank
+        #  - a random rank this is an access point and not the pool leader
+        #  - a random rank that is not an access point
+        self.log.debug(
+            "Engine ranks:  pool leader=%s, access points=%s, other=%s",
+            leader_rank, ap_ranks, non_ap_ranks)
+        ranks = [pool_leader_rank]
+        ranks.append(random.choice(ap_ranks)  # nosec
+        ranks.append(random.choice(non_ap_ranks)  # nosec
         self.log.info("Ranks to rebuild: %s", ranks)
 
         # 1.
