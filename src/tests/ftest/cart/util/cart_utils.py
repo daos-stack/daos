@@ -364,9 +364,6 @@ class CartTest(TestWithoutServers):
             hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
 
-        if self.provider == "ofi+psm2":
-            mca_flags.append("pml ob1")
-
         tst_cmd = env
 
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
