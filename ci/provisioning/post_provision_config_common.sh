@@ -44,7 +44,7 @@ case "$ID_LIKE" in
         DISTRO_GENERIC=el
         # shellcheck disable=SC2034
         ;;
-    openSUSE)
+    *suse*)
         # shellcheck disable=SC2034
         DISTRO_NAME=leap${VERSION_ID%%.*}
         # shellcheck disable=SC2034
