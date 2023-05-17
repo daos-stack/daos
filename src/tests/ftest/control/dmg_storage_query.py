@@ -32,14 +32,11 @@ class DmgStorageQuery(ControlTestBase):
                 storage configuration
         """
         targets = self.server_managers[-1].get_config_value('targets')
-        md_on_ssd = False
         bdev_tiers = 0
         bdev_info = []
         for engine in self.server_managers[-1].manager.job.yaml.engine_params:
             for index, tier in enumerate(engine.storage.storage_tiers):
-                if tier.storage_class.value == 'ram':
-                    md_on_ssd = True
-                elif tier.storage_class.value == 'nvme':
+                if tier.storage_class.value == 'nvme':
                     bdev_tiers += 1
                     for item, device in enumerate(tier.bdev_list.value):
                         bdev_info.append(
@@ -47,10 +44,6 @@ class DmgStorageQuery(ControlTestBase):
                              'roles': ','.join(tier.bdev_roles.value or []),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
-        if not md_on_ssd:
-            for device in bdev_info:
-                if not device['roles']:
-                    device['roles'] = 'data'
 
         self.log.info('Detected NVMe devices in config')
         for bdev in bdev_info:
