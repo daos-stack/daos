@@ -22,12 +22,14 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/testing/protocmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -36,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -1384,6 +1387,110 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 }
 
+func TestServer_checkTmpfsMem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		scmCfgs     map[int]*storage.TierConfig
+		memInfoErr  error
+		memAvailGiB int
+		expErr      error
+	}{
+		"pmem tier; skip check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassDcpm,
+				},
+			},
+		},
+		"meminfo fetch fails": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memInfoErr: errors.New("fail"),
+			expErr:     errors.New("fail"),
+		},
+		"single engine; ram tier; perform check; low mem": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memAvailGiB: 4,
+			expErr: storage.FaultRamdiskLowMem("Available", 5*humanize.GiByte,
+				4.5*humanize.GiByte, 4*humanize.GiByte),
+		},
+		"single engine; ram tier; perform check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memAvailGiB: 5,
+		},
+		"dual engine; ram tier; perform check; low mem": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+				1: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+			},
+			memAvailGiB: 140,
+			expErr: storage.FaultRamdiskLowMem("Available", 160*humanize.GiByte,
+				144*humanize.GiByte, 140*humanize.GiByte),
+		},
+		"dual engine; ram tier; perform check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				1: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+			},
+			memAvailGiB: 145,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			getMemInfo := func() (*common.MemInfo, error) {
+				return &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemAvailableKiB: (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte,
+				}, tc.memInfoErr
+			}
+
+			gotErr := checkTmpfsMem(log, tc.scmCfgs, getMemInfo)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
 func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	mockNvmeController0 := storage.MockNvmeController(0)
 	mockNvmeController1 := storage.MockNvmeController(1)
@@ -1392,11 +1499,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
 		superblockExists bool
 		instancesStarted bool // engine already started
-		recreateSBs      bool
-		mountRet         error
-		unmountRet       error
-		mkdirRet         error
-		removeRet        error
 		sMounts          []string
 		sClass           storage.Class
 		sDevs            []string
@@ -1405,12 +1507,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		bDevs            [][]string
 		bSize            int
 		bmbc             *bdev.MockBackendConfig
-		metaProv         *storage.MockMetadataProvider
 		awaitTimeout     time.Duration
+		getMemInfo       func() (*common.MemInfo, error)
 		expAwaitExit     bool
 		expAwaitErr      error
 		expResp          *ctlpb.StorageFormatResp
-		isRoot           bool
 		reformat         bool // indicates setting of reformat parameter
 	}{
 		"ram no nvme": {
@@ -1861,17 +1962,35 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if tc.scmMounted {
 				getFsRetStr = "ext4"
 			}
-			msc := &system.MockSysConfig{
+			smsc := &system.MockSysConfig{
 				IsMountedBool:  tc.scmMounted,
-				MountErr:       tc.mountRet,
-				UnmountErr:     tc.unmountRet,
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
 			}
-			cs := mockControlServiceNoSB(t, log, config, tc.bmbc, nil, msc)
+			sysProv := system.NewMockSysProvider(log, smsc)
+			mounter := mount.NewProvider(log, sysProv)
+			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
+			bdevProv := bdev.NewMockProvider(log, tc.bmbc)
+			if tc.getMemInfo == nil {
+				tc.getMemInfo = func() (*common.MemInfo, error) {
+					return &common.MemInfo{
+						MemAvailableKiB: (6 * humanize.GiByte) / humanize.KiByte,
+					}, nil
+				}
+			}
 
-			instances := cs.harness.Instances()
-			test.AssertEqual(t, len(tc.sMounts), len(instances), name)
+			mscs := NewMockStorageControlService(log, config.Engines, sysProv, scmProv,
+				bdevProv, tc.getMemInfo)
+
+			ctxEvt, cancelEvtCtx := context.WithCancel(context.Background())
+			t.Cleanup(cancelEvtCtx)
+
+			cs := &ControlService{
+				StorageControlService: *mscs,
+				harness:               &EngineHarness{log: log},
+				events:                events.NewPubSub(ctxEvt, log),
+				srvCfg:                config,
+			}
 
 			// Mimic control service start-up and engine creation where cache is shared
 			// to the engines from the base control service storage provider.
@@ -1880,10 +1999,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			for i, e := range instances {
-				ei := e.(*EngineInstance)
-				ei.storage.SetBdevCache(*nvmeScanResp)
-
+			for i, ec := range config.Engines {
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]
@@ -1892,26 +2008,39 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				trc := &engine.TestRunnerConfig{}
+				trc.Running.Store(tc.instancesStarted)
+				runner := engine.NewTestRunner(trc, ec)
+
+				storProv := storage.MockProvider(log, 0, &ec.Storage, sysProv,
+					scmProv, bdevProv, nil)
+
+				ei := NewEngineInstance(log, storProv, nil, runner)
+				ei.ready.Store(tc.instancesStarted)
+				ei.storage.SetBdevCache(*nvmeScanResp)
+
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
 					if err := ei.createSuperblock(false); err != nil {
 						t.Fatal(err)
 					}
+				} else {
+					ei.setSuperblock(nil)
 				}
 
-				trc := &engine.TestRunnerConfig{}
-				if tc.instancesStarted {
-					trc.Running.SetTrue()
-					ei.ready.SetTrue()
+				if err := cs.harness.AddInstance(ei); err != nil {
+					t.Fatal(err)
 				}
-				ei.runner = engine.NewTestRunner(trc, config.Engines[i])
 			}
+
+			instances := cs.harness.Instances()
+			test.AssertEqual(t, len(tc.sMounts), len(instances), "nr mounts != nr instances")
 
 			ctx, cancel := context.WithCancel(test.Context(t))
 			if tc.awaitTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.awaitTimeout)
 			}
-			defer cancel()
+			t.Cleanup(cancel)
 
 			// Trigger await storage ready on each instance and send results to
 			// awaitCh. awaitStorageReady() will set "waitFormat" flag, fire off
@@ -1923,7 +2052,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				go func(ctx context.Context, e *EngineInstance) {
 					select {
 					case <-ctx.Done():
-					case awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs):
+					case awaitCh <- e.awaitStorageReady(ctx, false):
 					}
 				}(ctx, ei.(*EngineInstance))
 			}

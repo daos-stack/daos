@@ -177,7 +177,7 @@ func (ei *EngineInstance) logScmStorage() error {
 	}
 
 	ei.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
-		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
+		humanize.IBytes(mp.TotalBytes), humanize.IBytes(mp.AvailBytes))
 
 	return nil
 }

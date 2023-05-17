@@ -288,6 +288,33 @@ func (p *Provider) MountScm() error {
 	return nil
 }
 
+// UnmountTmpfs unmounts SCM based on provider config.
+func (p *Provider) UnmountTmpfs() error {
+	cfg, err := p.GetScmConfig()
+	if err != nil {
+		return err
+	}
+
+	if cfg.Class != ClassRam {
+		p.log.Debugf("skipping unmount tmpfs as scm class is not ram")
+		return nil
+	}
+
+	req := ScmMountRequest{
+		Target: cfg.Scm.MountPoint,
+	}
+
+	p.log.Debugf("attempting to unmount %s\n", cfg.Scm.MountPoint)
+
+	res, err := p.scm.Unmount(req)
+	if err != nil {
+		return err
+	}
+
+	p.log.Debugf("%s unmounted: %t", res.Target, !res.Mounted)
+	return nil
+}
+
 func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmFormatRequest, error) {
 	req := ScmFormatRequest{
 		Mountpoint: scmCfg.MountPoint,

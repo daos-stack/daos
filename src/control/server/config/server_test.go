@@ -62,8 +62,8 @@ func baseCfg(t *testing.T, testFile string) *Server {
 	if err != nil {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
-	// Clear the control metadata by default. We'll add it manually in tests that use it.
-	return config.WithControlMetadata(storage.ControlMetadata{})
+
+	return config
 }
 
 func defaultEngineCfg() *engine.Config {
@@ -305,7 +305,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-					WithBdevFileSize(16),
+					WithBdevFileSize(16).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
@@ -544,7 +545,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 						defaultEngineCfg().
 							WithFabricInterfacePort(5678).
@@ -556,7 +558,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
-									WithBdevBusidRange("0x90-0x9f"),
+									WithBdevBusidRange("0x90-0x9f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 					)
 			},
@@ -614,7 +617,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						)), // NVMe conf should end up in metadata dir
 				),
 		},
-		"md-on-ssd disabled with explicit role assignment": {
+		"md-on-ssd enabled with role assignment": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithControlMetadata(storage.ControlMetadata{
 					Path:       testMetadataDir,
@@ -631,7 +634,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevDeviceRoles(storage.BdevRoleData),
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 					)
 			},
@@ -652,7 +655,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-								WithBdevDeviceRoles(storage.BdevRoleData),
+								WithBdevDeviceRoles(storage.BdevRoleAll),
 						).
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
@@ -664,6 +667,40 @@ func TestServerConfig_Validation(t *testing.T) {
 							"daos_nvme.conf",
 						)), // NVMe conf should end up in metadata dir
 				),
+		},
+		"md-on-ssd enabled with role assignment on one engine only": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/0").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:80:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+						defaultEngineCfg().
+							WithFabricInterfacePort(2234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
 		},
 		"control metadata has path only": {
 			extraConfig: func(c *Server) *Server {
@@ -681,7 +718,8 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-									WithBdevBusidRange("0x80-0x8f"),
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
 							),
 					)
 			},
@@ -727,6 +765,47 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigControlMetadataNoPath,
 		},
+		"control metadata with no roles specified": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
+		},
+		"roles specified with no control metadata path": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigRolesNoControlMetadata,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -738,6 +817,8 @@ func TestServerConfig_Validation(t *testing.T) {
 
 			// Apply test case changes to basic config
 			cfg := tt.extraConfig(baseCfg(t, testFile))
+
+			log.Debugf("baseCfg metadata: %+v", cfg.Metadata)
 
 			CmpErr(t, tt.expErr, cfg.Validate(log))
 			if tt.expErr != nil || tt.expConfig == nil {
@@ -826,7 +907,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expNrHugepages: 4608,
+			expNrHugepages: 4096,
 		},
 		"zero hugepages set in config; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -885,12 +966,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 
 			mi := &common.MemInfo{
 				HugepageSizeKiB: 2048,
-			}
-
-			// TODO: Remove validate once bdev role assignment side effect has been
-			//       removed.
-			if err := cfg.Validate(log); err != nil {
-				t.Fatal(err)
 			}
 
 			CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
@@ -1606,13 +1681,13 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		},
 		"duplicates in bdev_list": {
 			configA: configA().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 				),
 			configB: configB().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),

@@ -454,7 +454,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		// Calculate overall target count if NVMe is enabled.
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgTargetCount += ec.TargetCount
-			if ec.Storage.Tiers.HaveBdevRoleMeta() {
+			if ec.Storage.Tiers.HasBdevRoleMeta() {
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++
@@ -564,7 +564,7 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 			memTotBytes)
 	}
 
-	for _, ec := range cfg.Engines {
+	for idx, ec := range cfg.Engines {
 		scs := ec.Storage.Tiers.ScmConfigs()
 		if len(scs) != 1 {
 			return errors.Errorf("unexpected number of scm tiers, want 1 got %d",
@@ -575,11 +575,11 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		confSize := uint64(scs[0].Scm.RamdiskSize) * humanize.GiByte
 		if confSize == 0 {
 			// Apply calculated size in config as not already set.
-			log.Debugf("%s: auto-sized ram-disk in engine %d config", msg, ec.Index)
+			log.Debugf("%s: auto-sized ram-disk in engine-%d config", msg, idx)
 			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
 		} else if confSize > maxRamdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
-			log.Errorf("%s: engine %d config size too large for total memory", msg,
+			log.Errorf("%s: engine-%d config size too large for total memory", msg,
 				ec.Index)
 
 			return FaultConfigRamdiskOverMaxMem(confSize, maxRamdiskSize,
@@ -732,6 +732,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 		}
 
 		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+
 			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
 			if seenIn, exists := seenValues[mountConfig]; exists {
 				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
