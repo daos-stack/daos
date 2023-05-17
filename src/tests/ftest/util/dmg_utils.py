@@ -1342,7 +1342,7 @@ def get_json_response(data, key, description):
     try:
         if 'error' in data and data['error']:
             raise CommandFailure("{} failed: {}".format(description, data['error']))
-        if 'response' in data and len(data['response']['host_errors']) > 0:
+        if 'host_errors' in data['response'] and len(data['response']['host_errors']) > 0:
             raise CommandFailure(
                 "{} failed: {}".format(description, data['response']['host_errors']))
         response = data['response'][key] if key else data['response']

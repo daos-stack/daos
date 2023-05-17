@@ -132,7 +132,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=telemetry_pool_metrics,test_telemetry_pool_metrics
+        :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics
         """
 
         # create pool and container
@@ -199,7 +199,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=telemetry_pool_metrics,test_telemetry_pool_metrics_sanity_check
+        :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics_sanity_check
         """
         # Create a Pool
         self.add_pool(connect=False)
