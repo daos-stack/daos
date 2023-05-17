@@ -42,7 +42,6 @@ case "$ID_LIKE" in
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el
-        # shellcheck disable=SC2034
         ;;
     *suse*)
         # shellcheck disable=SC2034

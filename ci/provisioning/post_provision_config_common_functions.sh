@@ -267,7 +267,7 @@ post_provision_config_nodes() {
     else
         cmd+=(upgrade)
     fi
-    if ! "${cmd[@]}"; then
+    if ! "${cmd[@]}" --exclude golang-*.daos.*; then
         dump_repos
         return 1
     fi
