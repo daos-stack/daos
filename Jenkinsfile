@@ -901,6 +901,29 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
+                /*stage('Functional on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'EL9-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                    inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                    test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional on EL 9')
+                */
                 stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
@@ -945,6 +968,25 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('Test EL 8 RPMs on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el9',
+                                daos_pkg_version: daosPackagesVersion('el8', next_version)
+                   }
+                    post {
+                        always {
+                            job_status_update()
+                        }
+                    }
+                } // stage('Test EL 8.6 RPMs')
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
