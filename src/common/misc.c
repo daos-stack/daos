@@ -794,7 +794,11 @@ daos_grow_env_array(void)
 	}
 
 	env_var_str = malloc(strlen("DAOS_") + strlen(env_var_num) + 1);
-	if (
+	if (env_var_str == NULL) {
+		D_ERROR("failed to allocate env var buffer: rc = %d (%s)\n",
+			rc, strerror(errno));
+		return;
+	}
 
 	/* setenv() MORE_ENV_VARS dummy env vars.
 	 *
