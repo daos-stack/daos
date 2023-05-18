@@ -12,6 +12,9 @@
 #include <daos/common.h>
 #include <daos/checksum.h>
 #include <daos/dtx.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 
 int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
@@ -768,4 +771,73 @@ daos_hlc2timestamp(uint64_t hlc, time_t *ts)
 
 	*ts = tspec.tv_sec;
 	return 0;
+}
+
+#define MORE_ENV_VARS 200
+/**
+ * Constructor to pre-allocate an env vars pointers array enough big to
+ * avoid re-allocation during any setenv() (in DAOS and any 3rd party
+ * lib) and thus prevent any race when using getenv().
+ */
+static __attribute__((constructor)) void
+daos_grow_env_array(void)
+{
+	int i, j, rc;
+	char *env_var_str;
+	char env_var_num[10];
+
+	rc = sprintf(env_var_num, "%d", MORE_ENV_VARS);
+	if (rc < 0) {
+		D_ERROR("failed to generate max env num string: rc = %d (%s)\n",
+			rc, strerror(errno));
+		return;
+	}
+
+	env_var_str = malloc(strlen("DAOS_") + strlen(env_var_num) + 1);
+	if (
+
+	/* setenv() MORE_ENV_VARS dummy env vars.
+	 *
+	 * XXX setenv() must be used and putenv() can't because it keeps/stores
+	 * original buffer address, so it will always consider the same variable
+	 * being added
+	 */
+	for (i = 0; i < MORE_ENV_VARS; i++) {
+		rc = sprintf(env_var_str, "DAOS_%u", i);
+		if (rc < 0) {
+			D_ERROR("failed to generate env var string: rc = %d (%s)\n",
+				rc, strerror(errno));
+			/* try to continue to set more vars */
+			continue;
+		}
+		rc = setenv(env_var_str, "DUMMY", 0);
+		if (rc < 0) {
+			D_ERROR("failed to add env var: rc = %d (%s)\n",
+				rc, strerror(errno));
+			/* try to continue to set more vars */
+			continue;
+		}
+	}
+
+	/* unsetenv() all these MORE_ENV_VARS dummy env vars
+	 *
+	 * XXX faster if starting back from first var because presently unsetenv()
+	 * parses environ array sequentially doing string compare
+	 */
+	for (j = 0; j < i; j++) {
+		rc = sprintf(env_var_str, "DAOS_%u", j);
+		if (rc < 0) {
+			D_ERROR("failed to generate env var string: rc = %d (%s)\n",
+				rc, strerror(errno));
+			/* try to continue to unset more vars */
+			continue;
+		}
+		rc = unsetenv(env_var_str);
+		if (rc < 0) {
+			D_ERROR("failed to unset env var: rc = %d (%s)\n",
+				rc, strerror(errno));
+			/* try to continue to unset more vars */
+			continue;
+		}
+	}
 }
