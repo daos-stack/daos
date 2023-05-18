@@ -562,12 +562,12 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int    __rc;                                                                       \
 		double timeout = 0;                                                                \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
-				(attr)->st_mode, (attr)->st_size);                                 \
 		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \

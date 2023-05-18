@@ -653,6 +653,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				D_GOTO(reply, rc);
 			}
 
+			DFUSE_TRA_DEBUG(hdl, "File %s size %zi", dre->dre_name, stbuf.st_size);
+
 			dfs_obj2id(obj, &oid);
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
@@ -676,8 +678,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					entry.attr = stbuf;
 				}
 
-				/* If saving this in the cache then take an extra ref for the
-				 * entry on the list, as well as saving rlink
+				/* If saving this in the cache then take an extra ref for the entry
+				 * on the list, as well as saving rlink
 				 */
 				if (drc) {
 					drc->drc_stbuf = entry.attr;
@@ -686,6 +688,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				}
 
 				set_entry_params(&entry, ie);
+
+				DFUSE_TRA_INFO(hdl, "timeout %lf", entry.attr_timeout);
 
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
