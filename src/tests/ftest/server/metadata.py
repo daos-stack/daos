@@ -19,6 +19,7 @@ def run_ior_loop(test, manager, loops):
     """Run IOR multiple times.
 
     Args:
+        test (Test): the test object
         manager (str): mpi job manager command
         loops (int): number of times to run IOR
 
