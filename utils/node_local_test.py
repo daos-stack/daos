@@ -1982,7 +1982,7 @@ class PosixTests():
         cache_time = 20
 
         cont_attrs = {}
-        cont_attrs['dfuse-data-cache'] = cache_time
+        cont_attrs['dfuse-data-cache'] = False
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
@@ -1991,6 +1991,7 @@ class PosixTests():
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=True,
+                       wbcache=False,
                        container=self.container)
         dfuse0.start(v_hint='expire_0')
 
@@ -2038,7 +2039,7 @@ class PosixTests():
         assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
 
         # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
-        time.sleep(cache_time + 1)
+        time.sleep(cache_time + 2)
 
         stat_log2 = PrintStat()
         stat_log2.dir_add(dfuse0.dir)
@@ -2054,7 +2055,7 @@ class PosixTests():
                 ofd.write('hello world')
 
         # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
-        time.sleep(cache_time + 1)
+        time.sleep(cache_time + 2)
 
         stat_log3 = PrintStat()
         stat_log3.dir_add(dfuse0.dir)

@@ -675,12 +675,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
-		if (entry.attr_timeout > 0) {                                                      \
-			(inode)->ie_stat = entry.attr;                                             \
+		if ((entry).attr_timeout > 0) {                                                    \
+			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
+				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
+				(entry).attr_timeout);                                             \
 		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(inode, "fuse_reply_entry() returned: %d (%s)", __rc,       \
