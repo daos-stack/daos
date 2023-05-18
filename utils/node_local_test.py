@@ -2048,8 +2048,8 @@ class PosixTests():
         print(os.stat(join(dfuse0.dir, 'batch0.1')))
         print(os.stat(join(dfuse1.dir, 'batch0.1')))
 
-        # Now modify a batch1 file to see how this is updated.
-        for idx in range(8, 2):
+        # Now modify a batch1 file to see how this is updated, and create a new one.
+        for idx in range(18, 21):
             with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
                 ofd.write('hello world')
 
