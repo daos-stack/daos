@@ -33,6 +33,7 @@ Build-Depends: debhelper (>= 10),
                python3-tabulate,
                liblz4-dev,
                liblmdb-dev
+               libcapstone-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/
 Vcs-Git: https://github.com/daos-stack/daos.git

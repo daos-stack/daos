@@ -359,8 +359,11 @@ struct obj_ec_singv_local {
 	uint32_t	esl_bytes_pad;
 };
 
+/* logical shard index to store short single value */
+#define OBJ_EC_SHORT_SINGV_IDX	(0)
 /** Query the target index for small sing-value record */
-#define obj_ec_singv_small_idx(obj, dkey_hash, iod)	obj_ec_shard_idx(obj, dkey_hash, 0)
+#define obj_ec_singv_small_idx(obj, dkey_hash, iod)	\
+	obj_ec_shard_idx(obj, dkey_hash, OBJ_EC_SHORT_SINGV_IDX)
 
 /* check EC data shard by its logical offset */
 static inline bool

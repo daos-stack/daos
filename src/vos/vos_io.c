@@ -1745,14 +1745,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
 		ioc->ic_epr.epr_hi);
 
-	if (is_array) {
-		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
-			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
-				DP_KEY(&iod->iod_name));
-			return rc;
-		}
+	if (is_array)
 		flags |= SUBTR_EVT;
-	}
 
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,

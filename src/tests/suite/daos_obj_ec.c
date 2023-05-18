@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1859,6 +1859,193 @@ ec_data_recov(void **state)
 	}
 }
 
+static void
+ec_multi_singv_overwrite(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl[3];
+	d_iov_t		 sg_iov[3];
+	daos_iod_t	 iod[3];
+	char		*buf[3];
+	size_t		 len[3];
+	char		*new_buf[3];
+	size_t		 new_len[3];
+	int		 i, rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < 3; i++) {
+		buf[i] = NULL;
+		new_buf[i] = NULL;
+		len[i] = 0;
+		new_len[i] = 0;
+	}
+
+	len[0] = 5822;
+	len[1] = 195;
+	len[2] = 6162;
+	new_len[0] = 733;
+	new_len[1] = 559;
+	new_len[2] = 294;
+
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(buf[i], len[i]);
+		assert_non_null(buf[i]);
+		dts_buf_render(buf[i], len[i]);
+		if (new_len[i] != 0) {
+			D_ALLOC(new_buf[i], new_len[i]);
+			assert_non_null(new_buf[i]);
+			dts_buf_render(new_buf[i], new_len[i]);
+		}
+	}
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], buf[i], len[i]);
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs = &sg_iov[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+		iod[i].iod_size = len[i];
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* overwrite */
+	for (i = 0; i < 3; i++) {
+		iod[i].iod_size = new_len[i];
+		d_iov_set(&sg_iov[i], new_buf[i], new_len[i]);
+	}
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_rc_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++) {
+		D_FREE(buf[i]);
+		D_FREE(new_buf[i]);
+	}
+}
+
+static void
+ec_multi_array(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl[3];
+	d_iov_t		 sg_iov[3];
+	daos_iod_t	 iod[3];
+	char		*buf[3];
+	char		*fetch_buf[3];
+	size_t		 len[3];
+	daos_recx_t	 recx[3];
+	int		 i, rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < 3; i++) {
+		buf[i] = NULL;
+		len[i] = 0;
+	}
+
+	len[0] = ec_cell_size * 4;
+	len[1] = 8192;
+	len[2] = ec_cell_size;
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr = len[0];
+	recx[1].rx_idx = 0;
+	recx[1].rx_nr = len[1];
+	recx[2].rx_idx = ec_cell_size;
+	recx[2].rx_nr = len[2];
+
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(buf[i], len[i]);
+		assert_non_null(buf[i]);
+		dts_buf_render(buf[i], len[i]);
+		D_ALLOC(fetch_buf[i], len[i]);
+		assert_non_null(fetch_buf[i]);
+	}
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], buf[i], len[i]);
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs = &sg_iov[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = &recx[i];
+		iod[i].iod_type = DAOS_IOD_ARRAY;
+		iod[i].iod_size = 1;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], fetch_buf[i], len[i]);
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		assert_memory_equal(buf[i], fetch_buf[i], len[i]);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_rc_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++) {
+		D_FREE(buf[i]);
+		D_FREE(fetch_buf[i]);
+	}
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -2151,6 +2338,10 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
 	 test_case_teardown},
 	{"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
+	{"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable,
+	test_case_teardown},
+	{"EC24: ec multi-array update", ec_multi_array, async_disable,
+	test_case_teardown},
 };
 
 int
