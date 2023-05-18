@@ -342,13 +342,25 @@ smd_pool_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	enum smd_dev_type	 st;
 	struct d_uuid            id;
 	int                      rc;
+	bool			 meta_pool = false;
+
+	if (!strncmp(table, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
+		meta_pool = true;
 
 	D_ASSERT(key->iov_len == sizeof(id));
 	id = *(struct d_uuid *)key->iov_buf;
 	memset(pools, 0, sizeof(struct smd_pool) * SMD_DEV_TYPE_MAX);
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		rc = smd_db_fetch(TABLE_POOLS[st], &id, sizeof(id), &pools[st], sizeof(pools[st]));
-		if (rc && !(rc == -DER_NONEXIST && st > SMD_DEV_TYPE_DATA))
+		/* PMDK case, only check data blob */
+		if (!meta_pool) {
+			if (rc)
+				return rc;
+			break;
+		}
+
+		/* MD-ON-SSD case, data blob might not exist */
+		if (rc && (rc != -DER_NONEXIST || st != SMD_DEV_TYPE_DATA))
 			return rc;
 	}
 
@@ -374,7 +386,10 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 		return 0; /* There is no NVMe, smd will not be initialized */
 
 	smd_db_lock();
-	rc = smd_db_traverse(TABLE_POOLS[SMD_DEV_TYPE_DATA], smd_pool_list_cb, &td);
+	rc = smd_db_traverse(TABLE_POOLS[SMD_DEV_TYPE_META], smd_pool_list_cb, &td);
+	/* No meta found, it might be PMDK case */
+	if (rc == 0 && td.td_count == 0)
+		rc = smd_db_traverse(TABLE_POOLS[SMD_DEV_TYPE_DATA], smd_pool_list_cb, &td);
 	smd_db_unlock();
 
 	if (rc == 0) { /* success */

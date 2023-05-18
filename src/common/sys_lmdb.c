@@ -362,8 +362,10 @@ lmm_db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 		return mdb_error2daos_error(rc);
 
 	rc = mdb_cursor_open(ldb->db_txn, ldb->db_dbi, &cursor);
-	if (rc)
+	if (rc) {
+		rc = mdb_error2daos_error(rc);
 		goto tx_end;
+	}
 
 	while ((rc = mdb_cursor_get(cursor, &db_key, &db_data, MDB_NEXT)) == 0) {
 		if (strncmp(db_key.mv_data, table, table_len) != 0)
@@ -371,22 +373,24 @@ lmm_db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 
 		rc = lmm_db_unpack_key(table, &key, &db_key);
 		if (rc)
-			break;
+			goto close;
 
 		rc = cb(db, table, &key, args);
 		D_FREE(key.iov_buf);
 		if (rc)
-			break;
+			goto close;
 	}
 	/* reach end */
 	if (rc == MDB_NOTFOUND)
 		rc = 0;
-
+	rc = mdb_error2daos_error(rc);
+close:
 	mdb_cursor_close(cursor);
 tx_end:
 	mdb_txn_abort(ldb->db_txn);
 	ldb->db_txn = NULL;
-	return mdb_error2daos_error(rc);
+
+	return rc;
 }
 
 static int
