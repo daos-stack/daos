@@ -220,8 +220,9 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		/* The lookup has resulted in an existing file, so reuse that entry, drop the inode
-		 * in the lookup descriptor and do not keep a reference on the parent.
+		/* The lookup has resulted in an existing file, so reuse that
+		 * entry, drop the inode in the lookup descriptor and do not
+		 * keep a reference on the parent.
 		 */
 
 		/* Update the existing object with the new name/parent */
@@ -260,7 +261,6 @@ set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
 	entry->generation = 1;
 	entry->ino        = entry->attr.st_ino;
 
-#if 0
 	if (S_ISDIR(ie->ie_stat.st_mode))
 		entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
 	else
@@ -269,7 +269,6 @@ set_entry_params(struct fuse_entry_param *entry, struct dfuse_inode_entry *ie)
 	if ((atomic_load_relaxed(&ie->ie_il_count)) != 0)
 		return;
 	entry->attr_timeout = ie->ie_dfs->dfc_attr_timeout;
-#endif
 }
 
 static inline void
@@ -654,8 +653,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				D_GOTO(reply, rc);
 			}
 
-			DFUSE_TRA_DEBUG(hdl, "File %s size %zi", dre->dre_name, stbuf.st_size);
-
 			dfs_obj2id(obj, &oid);
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
@@ -671,9 +668,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					D_GOTO(reply, rc);
 				}
 
-				DFUSE_TRA_DEBUG(hdl, "File %s size %zi", dre->dre_name,
-						stbuf.st_size);
-
 				ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 				if (ie->ie_root) {
@@ -682,11 +676,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					entry.attr = stbuf;
 				}
 
-				DFUSE_TRA_DEBUG(hdl, "File %s size %zi %zi", dre->dre_name,
-						stbuf.st_size, entry.attr.st_size);
-
-				/* If saving this in the cache then take an extra ref for the entry
-				 * on the list, as well as saving rlink
+				/* If saving this in the cache then take an extra ref for the
+				 * entry on the list, as well as saving rlink
 				 */
 				if (drc) {
 					drc->drc_stbuf = entry.attr;
@@ -695,8 +686,6 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				}
 
 				set_entry_params(&entry, ie);
-
-				DFUSE_TRA_INFO(hdl, "timeout %lf", entry.attr_timeout);
 
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
