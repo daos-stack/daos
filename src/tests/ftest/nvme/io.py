@@ -58,6 +58,5 @@ class NvmeIo(IorTestBase):
                 self.verify_pool_size(size_before_ior, ior_param[3])
 
                 # Destroy the pool and container
+                self.container.destroy()
                 self.pool.destroy()
-                self.pool = None
-                self.container = None

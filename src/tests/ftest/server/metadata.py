@@ -15,12 +15,12 @@ from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(test, manager, num_run):
+def run_ior_loop(test, manager, loops):
     """Run IOR multiple times.
 
     Args:
         manager (str): mpi job manager command
-        num_run (int): number of times to run IOR
+        loops (int): number of times to run IOR
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -28,7 +28,7 @@ def run_ior_loop(test, manager, num_run):
     """
     results = []
     errors = []
-    for index in range(num_run):
+    for index in range(loops):
         cont = test.label_generator.get_label('cont')
         manager.job.dfs_cont.update(cont, "ior.dfs_cont")
 
@@ -40,7 +40,7 @@ def run_ior_loop(test, manager, num_run):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, num_run, cont, error))
+                    ior_mode, index, loops, cont, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
@@ -48,7 +48,7 @@ def run_ior_loop(test, manager, num_run):
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), num_run, "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
     return results
 
 
@@ -395,7 +395,8 @@ class ObjectMetadata(TestWithServers):
                 self.ior_managers[-1].verbose = False
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(manager=self.ior_managers[-1], num_run=files_per_thread)
+                thread_manager.add(
+                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
                 self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
