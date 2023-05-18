@@ -786,6 +786,8 @@ daos_grow_env_array(void)
 	char *env_var_str;
 	char env_var_num[10];
 
+	D_INFO("Pre-allocating %d slots in env vars array.\n", MORE_ENV_VARS);
+
 	rc = sprintf(env_var_num, "%d", MORE_ENV_VARS);
 	if (rc < 0) {
 		D_ERROR("failed to generate max env num string: rc = %d (%s)\n",
