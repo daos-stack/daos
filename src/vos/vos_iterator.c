@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -669,22 +669,6 @@ vos_iter_sched_check(struct vos_iterator *iter)
 	return ret;
 }
 
-static inline int
-vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
-	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
-{
-	struct vos_iterator *iter = vos_hdl2iter(ih);
-	int		rc;
-
-	vos_iter_sched_sync(iter);
-	D_ASSERT(iter_cb != NULL);
-	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
-	if (vos_iter_sched_check(iter))
-		*acts |= VOS_ITER_CB_YIELD;
-
-	return rc;
-}
-
 static int
 vos_iter_validate_internal(struct vos_iterator *iter)
 {
@@ -733,6 +717,35 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	iter->it_anchors->ia_probe_level = iter->it_type;
 
 	return iter->it_type;
+}
+
+static inline int
+vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
+	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts,
+	    struct vos_iter_anchors *anchors)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int                  rc;
+	int                  validate_rc;
+
+	vos_iter_sched_sync(iter);
+	D_ASSERT(iter_cb != NULL);
+	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	if (vos_iter_sched_check(iter)) {
+		*acts |= VOS_ITER_CB_YIELD;
+		if (rc == 0 && iter->it_parent != NULL && anchors->ia_probe_level == 0) {
+			/* All of our iterator use cases should never be iterating a
+			 * subtree of something that is deleted.  Let's assert this
+			 * is the case so as to catch any bugs earlier.
+			 */
+			validate_rc = vos_iter_validate_internal(iter->it_parent);
+			D_ASSERTF(validate_rc == 0,
+				  "Validation at level %d failed, parent removed, returned %d\n",
+				  iter->it_type, validate_rc);
+		}
+	}
+
+	return rc;
 }
 
 #define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
@@ -847,7 +860,7 @@ probe:
 		if (pre_cb && stage == VOS_ITER_STAGE_PRE) {
 			acts = 0;
 			anchors->ia_probe_level = 0;
-			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts, anchors);
 			if (rc != 0)
 				break;
 			if (anchors->ia_probe_level != 0 &&
@@ -912,23 +925,9 @@ probe:
 		if (post_cb) {
 			acts = 0;
 			anchors->ia_probe_level = 0;
-			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts, anchors);
 			if (rc != 0)
 				break;
-
-			if (iter->it_parent != NULL && anchors->ia_probe_level == 0 &&
-			    (acts & VOS_ITER_CB_YIELD) != 0) {
-				/* If we did a yield, all of our iterator usages should be such
-				 * that we haven't deleted the entity above us...but let's check
-				 * to be sure this is the case so we can find such bugs more
-				 * easily.
-				 */
-				rc = vos_iter_validate_internal(iter->it_parent);
-				D_ASSERTF(
-				    rc == 0,
-				    "Validation at level %d failed, parent removed, returned %d\n",
-				    iter->it_type, rc);
-			}
 
 			if (anchors->ia_probe_level != 0 &&
 			    anchors->ia_probe_level != iter->it_type)
