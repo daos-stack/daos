@@ -376,6 +376,17 @@ vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 	if (oid.id_layout_ver == layout_ver)
 		return 0;
 
+	/* NB: This is only used by object layout version upgrade. During upgrade,
+	 * it does not need to recreate the ilog or vos_tree for the new OI entry,
+	 * i.e. the new layout OI entry and old OI entry will share the same ilog
+	 * and vos_tree.
+	 *
+	 * So this function will fetch the OI entry, then use @val_out by dbtree_upsert(),
+	 * so oi_rec_alloc() will not allocate new ilog and vos_tree.
+	 *
+	 * The old OI_entry will be deleted by oi_rec_free(), which will not delete ilog
+	 * and vos_tree in this case.
+	 **/
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,

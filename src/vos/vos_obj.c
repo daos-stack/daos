@@ -622,7 +622,7 @@ out:
 }
 
 static int
-_vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
+vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
@@ -659,13 +659,13 @@ out:
 int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 {
-	return _vos_obj_delete(coh, oid, false);
+	return vos_obj_delete_internal(coh, oid, false);
 }
 
 int
 vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid)
 {
-	return _vos_obj_delete(coh, oid, true);
+	return vos_obj_delete_internal(coh, oid, true);
 }
 
 /* Delete a key in its parent tree.
