@@ -118,7 +118,6 @@ func getKernelVersion(kernel *KernelVersion, open openFunc) {
 				break
 			}
 		}
-		break
 	}
 }
 
@@ -138,7 +137,6 @@ func getDistributionRelease(fileName string, dv *DistributionVersion, open openF
 				break
 			}
 		}
-		break
 	}
 	if dv.Major > 0 {
 		dv.StringVersion = ""
