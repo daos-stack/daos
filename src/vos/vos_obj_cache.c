@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -406,6 +406,8 @@ check_object:
 		vos_obj_release(occ, obj, false);
 		/* Update request will retry with this error */
 		rc = -DER_UPDATE_AGAIN;
+		D_ERROR("OID "DF_UOID", create %d, flags "DF_X64", "DF_RC"\n",
+			DP_UOID(oid), create, flags, DP_RC(rc));
 		goto failed_2;
 	}
 
