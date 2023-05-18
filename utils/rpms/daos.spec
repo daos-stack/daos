@@ -5,7 +5,7 @@
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
-%global libfabric_max_version 1.18
+%global libfabric_max_version 1.19
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)

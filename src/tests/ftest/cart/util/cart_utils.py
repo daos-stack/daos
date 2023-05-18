@@ -219,6 +219,14 @@ class CartTest(TestWithoutServers):
         ofi_interface = None
         ofi_domain = None
         ofi_share_addr = None
+        hg_log_subsys = None
+        hg_log_level = None
+
+        if "HG_LOG_SUBSYS" in os.environ:
+            hg_log_subsys = os.environ.get("HG_LOG_SUBSYS")
+
+        if "HG_LOG_LEVEL" in os.environ:
+            hg_log_level = os.environ.get("HG_LOG_LEVEL")
 
         if "D_LOG_MASK" in os.environ:
             log_mask = os.environ.get("D_LOG_MASK")
@@ -262,6 +270,12 @@ class CartTest(TestWithoutServers):
 
         if ofi_share_addr is not None:
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
+
+        if hg_log_subsys is not None:
+            env += " -x HG_LOG_SUBSYS={!s}".format(hg_log_subsys)
+
+        if hg_log_level is not None:
+            env += " -x HG_LOG_LEVEL={!s}".format(hg_log_level)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
