@@ -1979,7 +1979,7 @@ class PosixTests():
         # TODO: Find a way to disable kernel readdir caching for this test and run test from dfuse
         cache which will require holding open a dir fd.
         """
-        cache_time = 10
+        cache_time = 20
 
         cont_attrs = {}
         cont_attrs['dfuse-data-cache'] = cache_time
@@ -2035,7 +2035,7 @@ class PosixTests():
 
         elapsed = time.time() - start
 
-        assert elapsed < cache_time / 2, 'Test ran to slow, increase timeout'
+        assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
 
         # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
         time.sleep(cache_time + 1)
@@ -2043,6 +2043,30 @@ class PosixTests():
         stat_log2 = PrintStat()
         stat_log2.dir_add(dfuse0.dir)
         print(stat_log2)
+
+        # Print just the data on one file.
+        print(os.stat(join(dfuse0.dir, 'batch0.1')))
+        print(os.stat(join(dfuse1.dir, 'batch0.1')))
+
+        # Now modify a batch1 file to see how this is updated.
+        for idx in range(8, 2):
+            with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
+                ofd.write('hello world')
+
+        # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
+        time.sleep(cache_time + 1)
+
+        stat_log3 = PrintStat()
+        stat_log3.dir_add(dfuse0.dir)
+        print(stat_log3)
+
+        stat_log_oob1 = PrintStat()
+        stat_log_oob1.dir_add(dfuse1.dir)
+        print(stat_log_oob1)
+
+        # Print just the data on one file.
+        print(os.stat(join(dfuse0.dir, 'batch0.1')))
+        print(os.stat(join(dfuse1.dir, 'batch0.1')))
 
         if dfuse0.stop():
             self.fatal_errors = True
