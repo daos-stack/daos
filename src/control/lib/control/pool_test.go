@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -141,7 +140,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolDestroy(ctx, mi, tc.req)
@@ -219,7 +218,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolUpgrade(ctx, mi, tc.req)
@@ -281,7 +280,7 @@ func TestControl_PoolDrain(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolDrain(ctx, mi, tc.req)
@@ -337,7 +336,7 @@ func TestControl_PoolEvict(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolEvict(ctx, mi, tc.req)
@@ -491,7 +490,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolCreate(ctx, mi, tc.req)
@@ -881,7 +880,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolQuery(ctx, mi, req)
@@ -982,7 +981,7 @@ func TestPoolSetProp(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolSetProp(ctx, mi, req)
@@ -1118,6 +1117,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
 						{
+							Number: propWithVal("perf_domain", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{255},
+						},
+						{
 							Number: propWithVal("scrub", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
 						},
@@ -1148,6 +1151,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
@@ -1207,7 +1211,7 @@ func TestPoolGetProp(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetProp(ctx, mi, req)
@@ -1615,7 +1619,7 @@ func TestControl_ListPools(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := ListPools(ctx, mi, req)
@@ -2306,7 +2310,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker, tc.TgtRanks)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(test.Context(t), log, mockInvoker, tc.TgtRanks)
 
 			if tc.ExpectedOutput.Error != nil {
 				test.AssertTrue(t, err != nil, "Expected error")
