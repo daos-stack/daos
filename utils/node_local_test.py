@@ -28,6 +28,7 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
+import re
 import shutil
 import xattr
 import junit_xml
