@@ -420,9 +420,9 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
-			srv.mgmtSvc.startBatchLoops(ctx)
+			srv.mgmtSvc.startAsyncLoops(ctx)
 			registerLeaderSubscriptions(srv)
-			srv.log.Debugf("requesting sync GroupUpdate after leader change")
+			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
 			go func() {
 				for {
 					select {

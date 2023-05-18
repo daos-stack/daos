@@ -98,7 +98,7 @@ enum daos_pool_props {
 	 * Pool upgrade status.
 	 */
 	DAOS_PROP_PO_UPGRADE_STATUS,
-	/**
+	/*
 	 * Schedule that the checksum scrubber will run. See
 	 * DAOS_SCRUBBER_SCHED_*
 	 *
@@ -123,6 +123,10 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_REDUN_FAC,
 	/** object global version */
 	DAOS_PROP_PO_OBJ_VERSION,
+	/**
+	 * The pool performance domain
+	 */
+	DAOS_PROP_PO_PERF_DOMAIN,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -167,6 +171,11 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
 {
 	return svc_rf <= DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
 }
+
+/**
+ * default performance domain is root
+ */
+#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT	PO_COMP_TP_ROOT
 
 /**
  * Number of pool property types
@@ -576,6 +585,16 @@ daos_label_is_valid(const char *label)
 
 /* default policy string */
 #define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+
+/**
+ * Check if DAOS pool performance domain string is valid, string
+ * has same requirement as label.
+ */
+static inline bool
+daos_perf_domain_is_valid(const char *perf_domain)
+{
+	return daos_label_is_valid(perf_domain);
+}
 
 /** daos properties, for pool or container */
 typedef struct {
