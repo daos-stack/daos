@@ -55,7 +55,8 @@ class EcodServerRestart(TestWithServers):
             containers (dict): container dictionary, container(key): oclass(value)
             ior_kwargs (dict): dictionary of ior arguments
         """
-        for container, oclass in containers.items():
+        for container in containers:
+            oclass = container.oclass.value
             ior_kwargs["container"] = container
             ior_kwargs["ior_params"]["dfs_oclass"] = oclass
             ior_kwargs["ior_params"]["dfs_dir_oclass"] = oclass
@@ -87,15 +88,15 @@ class EcodServerRestart(TestWithServers):
         transfer_size = block_transfer_sizes[1]
         self.log_step("Create pool and containers")
         self.pool = self.get_pool()
-        containers = {}
+        containers = []
         for oclass in obj_class:
             # Skip the object type if server count does not meet the minimum EC object
             # server count
             if oclass[1] > self.server_managers[0].engines:
                 continue
             rd_fac = extract_redundancy_factor(oclass[0])
-            containers[oclass[0]] = self.get_container(
-                self.pool, oclass=oclass[0], properties="rd_fac:{}".format(rd_fac))
+            containers.append(self.get_container(
+                self.pool, oclass=oclass[0], properties="rd_fac:{}".format(rd_fac)))
 
         # 2.
         self.log_step("Disable aggregation")
