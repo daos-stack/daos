@@ -794,6 +794,17 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt)
 	struct bio_dev_health	*bdh = &bb->bb_dev_health;
 	int			 rc;
 
+	/* Drain the inflight request before putting I/O channel */
+	D_ASSERT(bdh->bdh_inflights < 2);
+	if (bdh->bdh_inflights > 0) {
+		ctxt->bxc_blobstore = NULL;
+
+		D_INFO("Wait for health collecting done...\n");
+		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
+		D_ASSERT(rc == 0);
+		D_INFO("Health collecting done...\n");
+	}
+
 	/* Free NVMe admin passthru DMA buffers */
 	if (bdh->bdh_health_buf) {
 		spdk_dma_free(bdh->bdh_health_buf);
@@ -822,20 +833,6 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt)
 	if (bdh->bdh_desc) {
 		spdk_bdev_close(bdh->bdh_desc);
 		bdh->bdh_desc = NULL;
-	}
-
-	/*
-	 * Init xstream will finialize bdev subsystem later, so we need
-	 * to wait for the inflight health collecting request done.
-	 */
-	D_ASSERT(bdh->bdh_inflights < 2);
-	if (bdh->bdh_inflights > 0) {
-		ctxt->bxc_blobstore = NULL;
-
-		D_INFO("Wait for health collecting done...\n");
-		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
-		D_ASSERT(rc == 0);
-		D_INFO("Health collecting done...\n");
 	}
 }
 
