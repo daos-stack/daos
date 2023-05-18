@@ -1766,7 +1766,21 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 	epr.epr_hi = arg->tgt_discard->epoch;
 	epr.epr_lo = 0;
-	rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
+			DP_RC(rc), DP_UOID(ent->ie_oid));
+		/* Busy - inform iterator and yield */
+		*acts |= VOS_ITER_CB_YIELD;
+		dss_sleep(0);
+	} while (1);
+
+
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
 			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
