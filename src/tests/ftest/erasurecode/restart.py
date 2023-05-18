@@ -18,13 +18,6 @@ class EcodServerRestart(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for test case."""
-        super().setUp()
-        self.percent = self.params.get("size", "/run/ior/data_percentage/*")
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        self.server_count = len(self.hostlist_servers) * engine_count
-
     def verify_aggreation(self, expected_free_space):
         """Verify aggregation by checking pool free space is greater than expected.
 
@@ -62,8 +55,7 @@ class EcodServerRestart(TestWithServers):
             containers (dict): container dictionary, container(key): oclass(value)
             ior_kwargs (dict): dictionary of ior arguments
         """
-        for container in containers.keys():
-            oclass = containers[container]
+        for container, oclass in containers.items():
             ior_kwargs["container"] = container
             ior_kwargs["ior_params"]["dfs_oclass"] = oclass
             ior_kwargs["ior_params"]["dfs_dir_oclass"] = oclass
@@ -99,12 +91,11 @@ class EcodServerRestart(TestWithServers):
         for oclass in obj_class:
             # Skip the object type if server count does not meet the minimum EC object
             # server count
-            if oclass[1] > self.server_count:
+            if oclass[1] > self.server_managers[0].engines:
                 continue
             rd_fac = extract_redundancy_factor(oclass[0])
-            container = self.get_container(
+            containers[oclass[0]] = self.get_container(
                 self.pool, oclass=oclass[0], properties="rd_fac:{}".format(rd_fac))
-            containers[container] = oclass[0]
 
         # 2.
         self.log_step("Disable aggregation")
