@@ -86,7 +86,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
 	if (rc) {
-		DFUSE_TRA_ERROR(oh, "dfs_iterate() returned %d: %s", rc, strerror(rc));
+		DFUSE_TRA_ERROR(oh, "dfs_iterate() returned: %d (%s)", rc, strerror(rc));
 		return rc;
 	}
 

@@ -43,7 +43,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
 		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+			DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 	}
 
 	/* Update the inode entry data */

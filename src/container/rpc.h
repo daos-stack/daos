@@ -128,6 +128,7 @@ enum cont_operation {
 
 extern struct crt_proto_format cont_proto_fmt_v7;
 extern struct crt_proto_format cont_proto_fmt_v6;
+extern int dc_cont_proto_version;
 
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
@@ -503,7 +504,8 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 {
 	crt_opcode_t opcode;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, DAOS_CONT_VERSION);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, dc_cont_proto_version ?
+				 dc_cont_proto_version : DAOS_CONT_VERSION);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
 

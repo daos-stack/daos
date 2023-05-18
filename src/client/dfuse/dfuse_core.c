@@ -718,7 +718,7 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 
 	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(err_close, rc);
 	}
 
@@ -1127,7 +1127,7 @@ dfuse_ie_close(struct dfuse_inode_entry *ie)
 		if (rc == ENOMEM)
 			rc = dfs_release(ie->ie_obj);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)", strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		}
 	}
 
