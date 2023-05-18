@@ -2317,6 +2317,8 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 {
+	int	rc;
+
 	if (!obj_is_modification_opc(opc))
 		return 0;
 
@@ -2327,8 +2329,10 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 	if ((flags & ORF_REINTEGRATING_IO) &&
 	    (child->sc_pool->spc_pool->sp_need_discard &&
 	     child->sc_pool->spc_discard_done == 0)) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
+		rc = -DER_UPDATE_AGAIN;
+		D_ERROR("reintegrating "DF_UUID" retry, "DF_RC".\n",
+			DP_UUID(child->sc_pool->spc_uuid), DP_RC(rc));
+		return rc;
 	}
 
 	/* All I/O during rebuilding, needs to wait for the rebuild fence to
@@ -2340,8 +2344,10 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 	if ((flags & ORF_REBUILDING_IO) &&
 	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
 	      child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
+		rc = -DER_UPDATE_AGAIN;
+		D_ERROR("rebuilding "DF_UUID" retry, "DF_RC".\n",
+			DP_UUID(child->sc_pool->spc_uuid), DP_RC(rc));
+		return rc;
 	}
 
 	return 0;
