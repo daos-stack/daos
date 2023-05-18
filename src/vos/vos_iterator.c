@@ -685,6 +685,56 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	return rc;
 }
 
+static int
+vos_iter_validate_internal(struct vos_iterator *iter)
+{
+	daos_anchor_t     *anchor;
+	int                rc;
+	struct dtx_handle *old;
+
+	D_ASSERT(iter->it_anchors != NULL);
+
+	if (iter->it_parent) {
+		rc = vos_iter_validate_internal(iter->it_parent);
+		if (rc != 0)
+			return rc;
+	} else {
+		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	}
+
+	switch (iter->it_type) {
+	case VOS_ITER_OBJ:
+		anchor = &iter->it_anchors->ia_obj;
+		break;
+	case VOS_ITER_DKEY:
+		anchor = &iter->it_anchors->ia_dkey;
+		break;
+	case VOS_ITER_AKEY:
+		anchor = &iter->it_anchors->ia_akey;
+		break;
+	case VOS_ITER_SINGLE:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	case VOS_ITER_RECX:
+		anchor = &iter->it_anchors->ia_sv;
+		break;
+	default:
+		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
+	}
+
+	old = vos_dth_get();
+	vos_dth_set(iter->it_dth);
+	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	vos_dth_set(old);
+
+	if (rc == 0)
+		return 0;
+
+	iter->it_anchors->ia_probe_level = iter->it_type;
+
+	return iter->it_type;
+}
+
 #define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
 	do {										\
 		switch (rc) {								\
@@ -866,6 +916,20 @@ probe:
 			if (rc != 0)
 				break;
 
+			if (iter->it_parent != NULL && anchors->ia_probe_level == 0 &&
+			    (acts & VOS_ITER_CB_YIELD) != 0) {
+				/* If we did a yield, all of our iterator usages should be such
+				 * that we haven't deleted the entity above us...but let's check
+				 * to be sure this is the case so we can find such bugs more
+				 * easily.
+				 */
+				rc = vos_iter_validate_internal(iter->it_parent);
+				D_ASSERTF(
+				    rc == 0,
+				    "Validation at level %d failed, parent removed, returned %d\n",
+				    iter->it_type, rc);
+			}
+
 			if (anchors->ia_probe_level != 0 &&
 			    anchors->ia_probe_level != iter->it_type)
 				goto finish;
@@ -964,61 +1028,16 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 				    pre_cb, post_cb, arg, dth);
 }
 
-static int
-vos_iter_validate_internal(struct vos_iterator *iter)
+int
+vos_iter_validate(daos_handle_t ih)
 {
-	daos_anchor_t     *anchor;
-	int                rc;
-	struct dtx_handle *old;
+	struct vos_iterator *iter = vos_hdl2iter(ih);
 
+	D_ASSERT(iter != NULL);
 	D_ASSERT(iter->it_anchors != NULL);
 
 	if (!vos_iter_sched_check(iter))
 		return 0; /* No interleaving operations so no need to revalidate */
 
-	if (iter->it_parent) {
-		rc = vos_iter_validate_internal(iter->it_parent);
-		if (rc != 0)
-			return rc;
-	} else {
-		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	}
-
-	switch (iter->it_type) {
-	case VOS_ITER_OBJ:
-		anchor = &iter->it_anchors->ia_obj;
-		break;
-	case VOS_ITER_DKEY:
-		anchor = &iter->it_anchors->ia_dkey;
-		break;
-	case VOS_ITER_AKEY:
-		anchor = &iter->it_anchors->ia_akey;
-		break;
-	case VOS_ITER_SINGLE:
-		anchor = &iter->it_anchors->ia_sv;
-		break;
-	case VOS_ITER_RECX:
-		anchor = &iter->it_anchors->ia_sv;
-		break;
-	default:
-		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
-	}
-
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
-	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
-	vos_dth_set(old);
-
-	if (rc == 0)
-		return 0;
-
-	iter->it_anchors->ia_probe_level = iter->it_type;
-
-	return iter->it_type;
-}
-
-int
-vos_iter_validate(daos_handle_t ih)
-{
 	return vos_iter_validate_internal(vos_hdl2iter(ih));
 }
