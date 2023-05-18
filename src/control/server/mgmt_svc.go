@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"time"
 
@@ -23,6 +24,11 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
+)
+
+const (
+	groupUpdateInterval = 500 * time.Millisecond
+	batchLoopInterval   = 250 * time.Millisecond
 )
 
 type (
@@ -41,7 +47,7 @@ type (
 	batchReqChan  chan *batchRequest
 
 	batchProcessResp struct {
-		msgName       string
+		msgType       reflect.Type
 		retryableReqs []*batchRequest
 	}
 
@@ -70,7 +76,7 @@ type mgmtSvc struct {
 	events            *events.PubSub
 	systemProps       daos.SystemPropertyMap
 	clientNetworkHint *mgmtpb.ClientNetHint
-	joinReqs          joinReqChan
+	batchInterval     time.Duration
 	batchReqs         batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
@@ -86,7 +92,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		events:            p,
 		systemProps:       daos.SystemProperties(),
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
-		joinReqs:          make(joinReqChan),
+		batchInterval:     batchLoopInterval,
 		batchReqs:         make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
 	}
@@ -146,10 +152,10 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 	return svc.checkSystemRequest(req)
 }
 
-// startBatchLoops kicks off the asynchronous batch processing loops.
-func (svc *mgmtSvc) startBatchLoops(ctx context.Context) {
-	go svc.joinLoop(ctx)
-	go svc.batchLoop(ctx)
+// startAsyncLoops kicks off the asynchronous processing loops.
+func (svc *mgmtSvc) startAsyncLoops(ctx context.Context) {
+	go svc.leaderTaskLoop(ctx)
+	go svc.batchReqLoop(ctx)
 }
 
 // submitBatchRequest submits a message for batch processing and waits for a response.
@@ -178,7 +184,7 @@ func (svc *mgmtSvc) processBatchPoolEvictions(ctx context.Context, bprChan batch
 	for _, req := range reqs {
 		msg, ok := req.msg.(*mgmtpb.PoolEvictReq)
 		if !ok {
-			svc.log.Errorf("unexpected message type %T", req.msg)
+			req.sendResponse(ctx, nil, errors.Errorf("unexpected message type %T", req.msg))
 			continue
 		}
 		poolReqs[msg.Id] = append(poolReqs[msg.Id], req)
@@ -210,9 +216,41 @@ func (svc *mgmtSvc) processBatchPoolEvictions(ctx context.Context, bprChan batch
 	return nil
 }
 
+// processBatchJoins processes a batch of JoinReq messages.
+func (svc *mgmtSvc) processBatchJoins(ctx context.Context, bprChan batchProcessRespChan, reqs []*batchRequest) []*batchRequest {
+	var updateNeeded bool
+	for _, req := range reqs {
+		msg, ok := req.msg.(*mgmtpb.JoinReq)
+		if !ok {
+			req.sendResponse(ctx, nil, errors.Errorf("unexpected message type %T", req.msg))
+			continue
+		}
+
+		// Get the peer's address from the request context if it wasn't
+		// specified in the request message.
+		replyAddr, err := getPeerListenAddr(req.ctx, msg.Addr)
+		if err != nil {
+			req.sendResponse(ctx, nil, errors.Wrapf(err, "failed to parse %q into a peer control address", msg.Addr))
+			continue
+		}
+
+		resp, err := svc.join(ctx, msg, replyAddr)
+		req.sendResponse(ctx, resp, err)
+		if err == nil {
+			updateNeeded = true
+		}
+	}
+	if updateNeeded {
+		svc.log.Debug("requesting immediate group update after join(s)")
+		svc.reqGroupUpdate(ctx, true)
+	}
+
+	return nil
+}
+
 // processBatchedMsgRequests processes a batch of requests for a given message type.
-func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batchProcessRespChan, msgName string, reqs []*batchRequest) {
-	bpr := &batchProcessResp{msgName: msgName}
+func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batchProcessRespChan, msgType reflect.Type, reqs []*batchRequest) {
+	bpr := &batchProcessResp{msgType: msgType}
 	if len(reqs) == 0 {
 		select {
 		case <-ctx.Done():
@@ -222,11 +260,13 @@ func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batch
 		return
 	}
 
-	switch msgName {
-	case string(proto.MessageName(new(mgmtpb.PoolEvictReq))):
+	switch reqs[0].msg.(type) {
+	case *mgmtpb.PoolEvictReq:
 		bpr.retryableReqs = svc.processBatchPoolEvictions(ctx, bprChan, reqs)
+	case *mgmtpb.JoinReq:
+		bpr.retryableReqs = svc.processBatchJoins(ctx, bprChan, reqs)
 	default:
-		svc.log.Errorf("no batch handler for message type %s", msgName)
+		svc.log.Errorf("no batch handler for message type %s", msgType)
 	}
 
 	select {
@@ -236,25 +276,25 @@ func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batch
 	}
 }
 
-// batchLoop is the main loop for processing batched requests.
-func (svc *mgmtSvc) batchLoop(parent context.Context) {
-	batchedMsgReqs := make(map[string][]*batchRequest)
+// batchReqLoop is the main loop for processing batched requests.
+func (svc *mgmtSvc) batchReqLoop(parent context.Context) {
+	batchedMsgReqs := make(map[reflect.Type][]*batchRequest)
 
-	batchTimer := time.NewTicker(batchLoopInterval)
+	batchTimer := time.NewTicker(svc.batchInterval)
 	defer batchTimer.Stop()
 
-	svc.log.Debug("starting batchLoop")
+	svc.log.Debug("starting batchReqLoop")
 	for {
 		select {
 		case <-parent.Done():
-			svc.log.Debug("stopped batchLoop")
+			svc.log.Debug("stopped batchReqLoop")
 			return
 		case req := <-svc.batchReqs:
-			msgName := string(proto.MessageName(req.msg))
-			if _, ok := batchedMsgReqs[msgName]; !ok {
-				batchedMsgReqs[msgName] = []*batchRequest{}
+			msgType := reflect.TypeOf(req.msg)
+			if _, ok := batchedMsgReqs[msgType]; !ok {
+				batchedMsgReqs[msgType] = []*batchRequest{}
 			}
-			batchedMsgReqs[msgName] = append(batchedMsgReqs[msgName], req)
+			batchedMsgReqs[msgType] = append(batchedMsgReqs[msgType], req)
 		case <-batchTimer.C:
 			batchedMsgNr := len(batchedMsgReqs)
 			if batchedMsgNr == 0 {
@@ -262,19 +302,54 @@ func (svc *mgmtSvc) batchLoop(parent context.Context) {
 			}
 
 			bprChan := make(batchProcessRespChan, batchedMsgNr)
-			for msgName, reqs := range batchedMsgReqs {
-				svc.log.Debugf("processing %d %s requests", len(reqs), msgName)
-				go svc.processBatchedMsgRequests(parent, bprChan, msgName, reqs)
+			for msgType, reqs := range batchedMsgReqs {
+				svc.log.Debugf("processing %d %s requests", len(reqs), msgType)
+				go svc.processBatchedMsgRequests(parent, bprChan, msgType, reqs)
 			}
 
 			for i := 0; i < batchedMsgNr; i++ {
 				bpr := <-bprChan
 				if len(bpr.retryableReqs) > 0 {
-					batchedMsgReqs[bpr.msgName] = bpr.retryableReqs
+					batchedMsgReqs[bpr.msgType] = bpr.retryableReqs
 				} else {
-					delete(batchedMsgReqs, bpr.msgName)
+					delete(batchedMsgReqs, bpr.msgType)
 				}
 			}
+		}
+	}
+}
+
+// leaderTaskLoop is the main loop for handling MS leader tasks.
+func (svc *mgmtSvc) leaderTaskLoop(parent context.Context) {
+	var groupUpdateNeeded bool
+
+	groupUpdateTimer := time.NewTicker(groupUpdateInterval)
+	defer groupUpdateTimer.Stop()
+
+	svc.log.Debug("starting leaderTaskLoop")
+	for {
+		select {
+		case <-parent.Done():
+			svc.log.Debug("stopped leaderTaskLoop")
+			return
+		case immediate := <-svc.groupUpdateReqs:
+			groupUpdateNeeded = true
+			if immediate {
+				if err := svc.doGroupUpdate(parent, true); err != nil {
+					svc.log.Errorf("immediate GroupUpdate failed: %s", err)
+					continue
+				}
+				groupUpdateNeeded = false
+			}
+		case <-groupUpdateTimer.C:
+			if !groupUpdateNeeded {
+				continue
+			}
+			if err := svc.doGroupUpdate(parent, false); err != nil {
+				svc.log.Errorf("lazy GroupUpdate failed: %s", err)
+				continue
+			}
+			groupUpdateNeeded = false
 		}
 	}
 }
