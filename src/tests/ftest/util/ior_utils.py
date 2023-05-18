@@ -243,13 +243,13 @@ class IorCommand(SubProcessCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont=None):
+    def set_daos_params(self, group, pool, cont):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool/str): DAOS test pool object or pool uuid/label
-            cont (str, optional): the container uuid or label. Defaults to None.
+            cont (str): the container uuid or label
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             try:
@@ -259,7 +259,7 @@ class IorCommand(SubProcessCommand):
             self.update_params(
                 dfs_group=group,
                 dfs_pool=dfs_pool,
-                dfs_cont=cont or None)
+                dfs_cont=cont)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
