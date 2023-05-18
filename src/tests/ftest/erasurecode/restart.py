@@ -38,6 +38,7 @@ class EcodServerRestart(ErasureCodeIor):
         self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
         self.log.info(self.pool.pool_percentage_used())
         self.pool.pool_percentage_used()
+        self.log.info("Size before Restart: %s ", self.pool.pool_percentage_used())
 
         if not agg_check:
             # Set time mode aggregation
@@ -58,12 +59,12 @@ class EcodServerRestart(ErasureCodeIor):
 
         if agg_check == "After":
             self.pool.pool_percentage_used()
-            self.log.info("Size after Restarti: %s ", self.pool.pool_percentage_used())
+            self.log.info("Size after Restart: %s ", self.pool.pool_percentage_used())
             # Verify if Aggregation is getting started
             if not any(self.check_aggregation_status(attempt=50).values()):
                 self.fail("Aggregation failed to start After server restart..")
 
-        # Read all EC object data from NVMe
+        # Read all EC object data from NVMe/
         self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
         # Read all EC object data which was written on SCM
         self.read_set_from_beginning = False
