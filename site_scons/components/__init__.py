@@ -126,6 +126,7 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
