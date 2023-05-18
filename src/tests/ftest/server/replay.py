@@ -104,7 +104,7 @@ class ReplayTests(TestWithServers):
             TestFail: if the detected list of snapshots does not match the detected list
         """
         self.log.debug("Expected list of snapshots: %s", expected)
-        detected = container.list_snaps()
+        detected = [entry["epoch"] for entry in container.list_snaps()["response"]]
         self.assertListEqual(
             sorted(expected), sorted(detected), 'Detected snapshots does not match expected')
 
@@ -221,7 +221,7 @@ class ReplayTests(TestWithServers):
             self.write_data(container, ppn)
 
             self.log_step(join(' ', 'Creating a snapshot (daos container create-snap)', '-', step))
-            snapshots.append(container.create_snap()["epoch"])
+            snapshots.append(container.create_snap()['response']['epoch'])
 
         self.log_step('Verifying all three snapshots exist (daos container list-snaps)')
         self.verify_snapshots(container, snapshots)

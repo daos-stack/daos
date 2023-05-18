@@ -470,22 +470,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self.epoch = None
         return result
 
-    @fail_on(CommandFailure)
-    def list_snaps(self):
-        """List the snapshots defined for this container.
-
-        Raises:
-            DaosTestError: if the daos container list-snaps command fails
-
-        Returns:
-            list: a list of snapshot epochs defined for this container
-        """
-        if not self.daos:
-            raise DaosTestError(
-                "Undefined daos command for listing snapshots for container {}".format(self))
-        data = self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
-        return data["epochs"] if "epochs" in data else []
-
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
         """Open the container with pool handle and container UUID if provided.
@@ -996,12 +980,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return True
 
     @fail_on(CommandFailure)
-    def list_snaps(self, *args, **kwargs):
+    def list_snaps(self):
         """Get container properties by calling daos container list-snaps.
-
-        Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_list_snaps
-            kwargs (dict, optional): named arguments to DaosCommand.container_list_snaps
 
         Returns:
             str: JSON output of daos container list-snaps
@@ -1010,8 +990,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             CommandFailure: Raised from the daos command call
 
         """
-        return self.daos.container_list_snaps(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
 
     @fail_on(CommandFailure)
     def query(self, *args, **kwargs):
