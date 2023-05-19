@@ -3492,7 +3492,8 @@ rename(const char *old_name, const char *new_name)
 			link_len_libc = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
 			if (link_len_libc >= DFS_MAX_PATH) {
 				if (bLog)
-					D_ERROR("link is too long. link_len = %" PRIu64, link_len_libc);
+					D_ERROR("link is too long. link_len = %" PRIu64,
+						link_len_libc);
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			} else if (link_len_libc < 0) {
 				if (bLog)
