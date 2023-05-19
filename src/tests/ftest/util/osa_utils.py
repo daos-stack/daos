@@ -426,8 +426,12 @@ class OSAUtils(MdtestBase, IorTestBase):
             fail_on_warning (bool, optional): Test terminates for IOR warnings. Defaults to True.
         """
         self.cleanup_queue()
-        self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.pool = pool
+        self.ior_cmd.get_params(self)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, None)
+        self.log.info("Redundancy Factor : %s", self.test_with_rf)
+        self.ior_cmd.dfs_oclass.update(oclass)
+        self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
@@ -437,10 +441,12 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(self.container)
         else:
             self.fail("Not supported option on ior_thread")
-        self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
-        self.ior_cmd.dfs_oclass.update(oclass)
-        self.ior_cmd.dfs_dir_oclass.update(oclass)
+        try:
+            job_manager = self.get_ior_job_manager_command()
+        except CommandFailure as err_msg:
+            self.out_queue.put(err_msg)
+            self.assert_on_exception()
+        job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)

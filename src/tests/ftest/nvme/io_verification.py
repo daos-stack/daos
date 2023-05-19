@@ -78,6 +78,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 container = self.get_container(self.pool)
+                container.open()  # Workaround for pydaos handles
                 self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
