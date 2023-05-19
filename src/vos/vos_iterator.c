@@ -682,8 +682,6 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		rc = vos_iter_validate_internal(iter->it_parent);
 		if (rc != 0)
 			return rc;
-	} else {
-		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	}
 
 	switch (iter->it_type) {
