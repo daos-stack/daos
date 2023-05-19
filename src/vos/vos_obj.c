@@ -621,8 +621,8 @@ out:
 	return rc;
 }
 
-int
-vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+static int
+vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
@@ -645,7 +645,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		goto out;
 
-	rc = vos_oi_delete(cont, obj->obj_id);
+	rc = vos_oi_delete(cont, obj->obj_id, only_delete_entry);
 	if (rc)
 		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
 
@@ -654,6 +654,18 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
+}
+
+int
+vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	return vos_obj_delete_internal(coh, oid, false);
+}
+
+int
+vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	return vos_obj_delete_internal(coh, oid, true);
 }
 
 /* Delete a key in its parent tree.
