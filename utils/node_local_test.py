@@ -1966,18 +1966,15 @@ class PosixTests():
         Crete two mount points on the same container, one for testing, the second for
         oob-modifications.
 
-        Populate directory, read files in it (simulating ls -l). Take checksum of files.
+        Populate directory, read files in it (simulating ls -l).
 
-        oob remove some files and write to others.
+        oob remove some files, create some more and write to others.
 
-        read files and take checksum again - should be the same as before.
+        re-read directory contents, this should appear unchanged.
 
         Wait for expiry time to pass
 
-        read files and take checksum again - should be the correct values.
-
-        # TODO: Find a way to disable kernel readdir caching for this test and run test from dfuse
-        cache which will require holding open a dir fd.
+        re-read directory contents again, now this should be up to date.
         """
         cache_time = 20
 
@@ -2044,30 +2041,6 @@ class PosixTests():
         stat_log2 = PrintStat()
         stat_log2.dir_add(dfuse0.dir)
         print(stat_log2)
-
-        # Print just the data on one file.
-        print(os.stat(join(dfuse0.dir, 'batch0.1')))
-        print(os.stat(join(dfuse1.dir, 'batch0.1')))
-
-        # Now modify a batch1 file to see how this is updated, and create a new one.
-        for idx in range(18, 21):
-            with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
-                ofd.write('hello world')
-
-        # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
-        time.sleep(cache_time + 2)
-
-        stat_log3 = PrintStat()
-        stat_log3.dir_add(dfuse0.dir)
-        print(stat_log3)
-
-        stat_log_oob1 = PrintStat()
-        stat_log_oob1.dir_add(dfuse1.dir)
-        print(stat_log_oob1)
-
-        # Print just the data on one file.
-        print(os.stat(join(dfuse0.dir, 'batch0.1')))
-        print(os.stat(join(dfuse1.dir, 'batch0.1')))
 
         if dfuse0.stop():
             self.fatal_errors = True
