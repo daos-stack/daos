@@ -653,7 +653,7 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	D_ASSERT(obj != NULL);
 	tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		"tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
+		" tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
 	if (nr == 0 || is_ec_parity_shard_by_tgt_off(tgt_off, obj_get_oca(obj))) {
 		obj_decref(obj);
 		return 0;

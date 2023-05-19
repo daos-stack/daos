@@ -89,6 +89,7 @@ soak_stress:
     - macsio_stress
     - datamover_stress
   ignore_soak_errors: false
+  enable_intercept_lib: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -109,6 +110,8 @@ ior_stress:
     - DFS
     - MPIIO
     - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
     - HDF5
     - HDF5-VOL
   test_file: daos:/testFile
@@ -132,6 +135,10 @@ ior_stress:
     thread_count: 8
     cores: '0-7'
 fio_stress:
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   job_timeout: 30
   names:
     - global
@@ -179,7 +186,10 @@ vpic_stress:
   taskspernode:
     - 32
   cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
-  posix: true
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
@@ -193,7 +203,10 @@ lammps_stress:
   taskspernode:
     - 32
   cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj"
-  posix: true
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
@@ -213,8 +226,10 @@ mdtest_stress:
     - 16
   test_dir: "/"
   api:
-    - 'DFS'
-    - 'POSIX'
+    - DFS
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   iteration: 1
   num_of_files_dirs: 3000
   branching_factor: 1

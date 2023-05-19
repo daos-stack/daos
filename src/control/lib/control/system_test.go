@@ -138,7 +138,7 @@ func TestControl_StartRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StartRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := StartRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -240,7 +240,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PrepShutdownRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := PrepShutdownRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -342,7 +342,7 @@ func TestControl_StopRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StopRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3", Force: true})
+			gotResp, gotErr := StopRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3", Force: true})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -444,7 +444,7 @@ func TestControl_PingRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PingRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := PingRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -671,7 +671,7 @@ func TestControl_SystemQuery(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemQuery(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemQuery(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -820,7 +820,7 @@ func TestControl_SystemStart(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemStart(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemStart(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -991,7 +991,7 @@ func TestControl_SystemStop(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemStop(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemStop(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1134,7 +1134,7 @@ func TestControl_SystemExclude(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemExclude(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemExclude(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1194,7 +1194,7 @@ func TestDmg_System_checkSystemErase(t *testing.T) {
 					&mgmtpb.SystemQueryResp{Members: tc.members}),
 			})
 
-			err := checkSystemErase(context.Background(), mi)
+			err := checkSystemErase(test.Context(t), mi)
 			test.CmpErr(t, tc.expErr, err)
 		})
 	}
@@ -1394,7 +1394,7 @@ func TestControl_SystemErase(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemErase(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemErase(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1425,7 +1425,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 				},
 			})
 
-			gotResp, gotErr := SystemJoin(context.TODO(), client, &SystemJoinReq{})
+			gotResp, gotErr := SystemJoin(test.Context(t), client, &SystemJoinReq{})
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %v", gotErr)
 			}
@@ -1516,7 +1516,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.Background()
+			ctx := test.Context(t)
 			client := NewMockInvoker(log, tc.mic)
 			gotResp, gotErr := SystemJoin(ctx, client, &SystemJoinReq{})
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -1578,7 +1578,7 @@ func TestControl_SystemSetAttr(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewMockInvoker(log, tc.mic)
-			gotErr := SystemSetAttr(context.TODO(), client, tc.req)
+			gotErr := SystemSetAttr(test.Context(t), client, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1635,7 +1635,7 @@ func TestControl_SystemGetAttr(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewMockInvoker(log, tc.mic)
-			gotResp, gotErr := SystemGetAttr(context.TODO(), client, tc.req)
+			gotResp, gotErr := SystemGetAttr(test.Context(t), client, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

@@ -194,9 +194,7 @@ class _DObj():
 
 class DDictIter():
     # pylint: disable=too-few-public-methods
-
     """ Iterator class for DDict """
-
     def __init__(self, ddict):
         self._dc = DaosClient()
         self._entries = []
