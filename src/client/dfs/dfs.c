@@ -1643,7 +1643,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
 	    layout_ver > DFS_LAYOUT_VERSION) {
 		rc = EINVAL;
-		D_ERROR("Incompatible DFS Layout version: %d %d (%s)\n", layout_ver, rc,
+		D_ERROR("Incompatible DFS Layout version %d: %d (%s)\n", layout_ver, rc,
 			strerror(rc));
 		D_GOTO(err, rc);
 	}
