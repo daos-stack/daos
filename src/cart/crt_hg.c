@@ -1352,7 +1352,11 @@ out:
 
 		crt_cbinfo.cci_rpc = rpc_pub;
 		crt_cbinfo.cci_arg = rpc_priv->crp_arg;
-		crt_cbinfo.cci_rc = rc;
+
+		if (rc != DER_SUCCESS)
+			crt_cbinfo.cci_rc = -DER_HG_SEND_FAILED;
+		else
+			crt_cbinfo.cci_rc = DER_SUCCESS;
 
 		if (crt_cbinfo.cci_rc != 0)
 			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
