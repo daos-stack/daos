@@ -51,6 +51,7 @@ func (cmd *dbCfgCmd) getDatabaseConfig() (*sdb.DatabaseConfig, error) {
 func printSnapshotDetails(out io.Writer, sInfo *sdb.SnapshotDetails) error {
 	ew := txtfmt.NewErrWriter(out)
 
+	fmt.Fprintf(ew, "Path: %s\n", sInfo.Path)
 	fmt.Fprintf(ew, "Index: %d\n", sInfo.Metadata.Index)
 	fmt.Fprintf(ew, "Term: %d\n", sInfo.Metadata.Term)
 	fmt.Fprintf(ew, "DB Version: %d\n", sInfo.Version)

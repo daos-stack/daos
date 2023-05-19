@@ -513,9 +513,9 @@ struct daos_cpd_sub_req {
 		daos_unit_oid_t		 dcsr_oid;
 		/* Used by client side cache. */
 		struct {
-			void		*dcsr_obj;
-			void		*dcsr_reasb;
-			d_sg_list_t	*dcsr_sgls;
+			void			*dcsr_obj;
+			d_sg_list_t		*dcsr_sgls;
+			struct obj_reasb_req	*dcsr_reasb;
 		};
 	};
 	daos_key_t			 dcsr_dkey;
