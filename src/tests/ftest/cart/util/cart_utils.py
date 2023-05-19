@@ -31,7 +31,6 @@ class CartTest(TestWithoutServers):
         self.stdout = logging.getLogger('avocado.test.stdout')
         self.progress_log = logging.getLogger("progress")
         self.module_init = False
-        self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -214,11 +213,10 @@ class CartTest(TestWithoutServers):
         # Parse out envs of interest from the yaml file
         envars_to_parse = ["D_LOG_MASK", "CRT_PHY_ADDR_STR", "D_PROVIDER", "D_INTERFACE",
                            "D_DOMAIN", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CTX_SHARE_ADDR",
-                           "D_PORT", "OFI_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS", "PATH"]
+                           "D_PORT", "OFI_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
         yaml_envs = ""
 
         for env_name in envars_to_parse:
-            env_value = None
             env_value = os.environ.get(env_name)
 
             if env_value is not None:
@@ -235,6 +233,9 @@ class CartTest(TestWithoutServers):
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
         env += yaml_envs
+
+        if os.environ.get("PATH") is not None:
+            env += " -x PATH"
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
@@ -336,9 +337,6 @@ class CartTest(TestWithoutServers):
         else:
             hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
-
-        if self.provider == "ofi+psm2":
-            mca_flags.append("pml ob1")
 
         tst_cmd = env
 
