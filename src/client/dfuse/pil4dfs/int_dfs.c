@@ -3480,6 +3480,8 @@ rename(const char *old_name, const char *new_name)
 		}
 		/* New_name was removed, now create a new one from the old one */
 		switch (type_old) {
+			ssize_t link_len_libc;
+
 		case S_IFLNK:
 			D_ALLOC(symlink_value, DFS_MAX_PATH);
 			if (symlink_value == NULL) {
@@ -3487,12 +3489,12 @@ rename(const char *old_name, const char *new_name)
 					D_ERROR("failed to allocate memory for symlink_value");
 				D_GOTO(out_err, rc = ENOMEM);
 			}
-			link_len = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
-			if (link_len >= DFS_MAX_PATH) {
+			link_len_libc = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
+			if (link_len_libc >= DFS_MAX_PATH) {
 				if (bLog)
-					D_ERROR("link is too long. link_len = %" PRIu64, link_len);
+					D_ERROR("link is too long. link_len = %" PRIu64, link_len_libc);
 				D_GOTO(out_err, rc = ENAMETOOLONG);
-			} else if (link_len < 0) {
+			} else if (link_len_libc < 0) {
 				if (bLog)
 					D_ERROR("readlink failed: %s", strerror(errno));
 				D_GOTO(out_err, rc = errno);
@@ -4667,8 +4669,6 @@ dup2(int oldfd, int newfd)
 			return fd;
 		else
 			return idx;
-	} else {
-		next_dup2(oldfd, newfd);
 	}
 	return -1;
 }

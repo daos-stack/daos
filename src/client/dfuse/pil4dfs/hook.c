@@ -104,6 +104,7 @@ static char     *path_libpthread;
 static int
 read_map_file(char **buf, const char str_target[], char **pos)
 {
+	bool buffer_full;
 	int max_read_size, complete = 0, read_size;
 	FILE *fIn;
 
@@ -112,6 +113,7 @@ read_map_file(char **buf, const char str_target[], char **pos)
 	/* There is NO way to know the size of /proc/self/maps without reading the full file */
 	/* Keep reading the file until finish the whole file. Increase the buffer size if needed. */
 	while (complete == 0) {
+		buffer_full = false;
 		*buf = malloc(max_read_size + 1);
 		if (*buf == NULL) {
 			printf("Failed allocate memory (%d bytes).\nQuit\n", max_read_size + 1);
@@ -135,8 +137,8 @@ read_map_file(char **buf, const char str_target[], char **pos)
 			exit(1);
 		} else if (read_size == max_read_size) {
 			/* need to increase the buffer and try again */
-			free(*buf);
 			max_read_size *= 3;
+			buffer_full = true;
 		} else {
 			/* reached the end of the file */
 			complete = 1;
@@ -152,6 +154,8 @@ read_map_file(char **buf, const char str_target[], char **pos)
 				break;
 			}
 		}
+		if (buffer_full)
+			free(*buf);
 		if (max_read_size >= MAP_SIZE_LIMIT) {
 			printf("/proc/self/maps is TOO large!\nQuit.\n");
 			exit(1);
@@ -914,14 +918,14 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		get_module_maps_inited = 1;
 	}
 
-	if (strcmp(module_name, "ld") == 0)
-		strcpy(module_name_local, path_ld);
-	else if (strcmp(module_name, "libc") == 0)
-		strcpy(module_name_local, path_libc);
-	else if (strcmp(module_name, "libpthread") == 0)
-		strcpy(module_name_local, path_libpthread);
+	if (strncmp(module_name, "ld", 3) == 0)
+		strncpy(module_name_local, path_ld, MAX_LEN_PATH_NAME);
+	else if (strncmp(module_name, "libc", 5) == 0)
+		strncpy(module_name_local, path_libc, MAX_LEN_PATH_NAME);
+	else if (strncmp(module_name, "libpthread", 11) == 0)
+		strncpy(module_name_local, path_libpthread, MAX_LEN_PATH_NAME);
 	else
-		strcpy(module_name_local, module_name);
+		strncpy(module_name_local, module_name, MAX_LEN_PATH_NAME);
 
 	if (module_name_local[0] == '/') {
 		/* absolute path */
