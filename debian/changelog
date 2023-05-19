@@ -1,3 +1,10 @@
+daos (2.3.107-4) unstable; urgency=medium
+  [ Lei Huang ]
+  * Add libcapstone as a new prerequisite package
+  * Add libpil4dfs.so in daos-client rpm
+
+ -- Lei Huang <lei.huang@intel.com>  Tue, 16 May 2023 14:00:00 -0600
+
 daos (2.3.107-3) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Fix libfabric/libfabric1 dependency mismatch on SuSE
