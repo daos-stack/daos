@@ -109,10 +109,12 @@ struct dc_tx {
 	struct daos_cpd_sg	 tx_tgts;
 
 	struct daos_cpd_bulk	 tx_head_bulk;
+	struct daos_cpd_bulk	 tx_reqs_bulk;
 	struct daos_cpd_bulk	 tx_disp_bulk;
 	struct daos_cpd_bulk	 tx_tgts_bulk;
 
 	struct d_backoff_seq	 tx_backoff_seq;
+	crt_proc_t		 tx_crt_proc;
 };
 
 static int
@@ -510,6 +512,23 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	/* Keep 'tx_set_resend'. */
 
+	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
+		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
+			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
+			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
+		}
+
+		D_FREE(tx->tx_reqs_bulk.dcb_iov.iov_buf);
+	}
+
+	tx->tx_reqs.dcs_buf = NULL;
+
+	if (tx->tx_crt_proc != NULL) {
+		crt_proc_destroy(tx->tx_crt_proc);
+		tx->tx_crt_proc = NULL;
+	}
+
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
 		if (tx->tx_head_bulk.dcb_bulk != NULL) {
 			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
@@ -527,7 +546,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 	tx->tx_head.dcs_buf = NULL;
 
-	if (tx->tx_disp.dcs_type == DCST_BULK_DISP) {
+	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
 		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
 			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
 				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
@@ -1591,7 +1610,7 @@ dc_tx_dump(struct dc_tx *tx)
 		"read_cnt: %u\n"
 		"write_cnt: %u\n"
 		"head: %p/%u/%u/%u/%p\n"
-		"reqs: %p/%u/%u\n"
+		"reqs: %p/%u/%u/%u/%p\n"
 		"disp: %p/%u/%u/%u/%p\n"
 		"tgts: %p/%u/%u/%u/%p\n",
 		tx, DP_DTI(&tx->tx_id), tx->tx_epoch.oe_value, tx->tx_flags,
@@ -1600,27 +1619,26 @@ dc_tx_dump(struct dc_tx *tx)
 		tx->tx_head.dcs_buf, tx->tx_head.dcs_nr, tx->tx_head.dcs_type,
 		tx->tx_head_bulk.dcb_size, tx->tx_head_bulk.dcb_bulk,
 		tx->tx_reqs.dcs_buf, tx->tx_reqs.dcs_nr, tx->tx_reqs.dcs_type,
+		tx->tx_reqs_bulk.dcb_size, tx->tx_reqs_bulk.dcb_bulk,
 		tx->tx_disp.dcs_buf, tx->tx_disp.dcs_nr, tx->tx_disp.dcs_type,
 		tx->tx_disp_bulk.dcb_size, tx->tx_disp_bulk.dcb_bulk,
 		tx->tx_tgts.dcs_buf, tx->tx_tgts.dcs_nr, tx->tx_tgts.dcs_type,
 		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
 }
 
-/* The calculted CPD RPC body size may be some larger than the real case, no matter. */
+/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
-dc_tx_cpd_body_size(struct daos_cpd_sub_req *dcsr, int count)
+dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
 	struct daos_cpd_update	*dcu;
 	daos_iod_t		*iod;
 	struct obj_iod_array	*oia;
 	struct dcs_iod_csums	*csum;
 	struct obj_io_desc	*desc;
-	size_t			 size;
+	size_t			 size = 0;
 	int			 i;
 	int			 j;
 	int			 k;
-
-	size = sizeof(struct obj_cpd_in) + sizeof(struct daos_cpd_sg) * 4;
 
 	for (i = 0; i < count; i++, dcsr++) {
 		size += offsetof(struct daos_cpd_sub_req, dcsr_update);
@@ -1701,6 +1719,17 @@ dc_tx_cpd_body_need_bulk(size_t size)
 	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
 }
 
+static inline size_t
+dc_tx_cpd_adjust_size(size_t size)
+{
+	/* Lower layer (mercury) need some additional space to pack related payload into
+	 * RPC body (or specified buffer) via related proc interfaces, usually that will
+	 * not exceed 1/10 of the payload. We can make some relative large estimation if
+	 * we do not exactly know the real size now.
+	 */
+	return size * 11 / 10;
+}
+
 static int
 dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 		    tse_task_t *task, void *buf, size_t size, uint32_t nr, uint32_t type)
@@ -1726,6 +1755,47 @@ dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 		dcb->dcb_iov.iov_buf = NULL;
 	}
 
+	return rc;
+}
+
+int
+dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
+{
+	struct daos_cpd_sub_req	*dcsr;
+	unsigned char		*buf;
+	uint32_t		 req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+	uint32_t		 start;
+	size_t			 used;
+	int			 rc;
+	int			 i;
+
+	D_ALLOC(buf, size);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = crt_proc_create(daos_task2ctx(task), buf, size, CRT_PROC_ENCODE, &tx->tx_crt_proc);
+	if (rc != 0) {
+		D_FREE(buf);
+		goto out;
+	}
+
+	start = dc_tx_leftmost_req(tx, false);
+	for (i = 0; i < req_cnt; i++) {
+		dcsr = &tx->tx_req_cache[i + start];
+		rc = crt_proc_struct_daos_cpd_sub_req(tx->tx_crt_proc, CRT_PROC_ENCODE,
+						      dcsr, false);
+		if (rc != 0)
+			goto out;
+	}
+
+	used = crp_proc_get_size_used(tx->tx_crt_proc);
+	D_ASSERTF(used <= size, "Input buffer size %ld is too small for real case %ld\n",
+		  size, used);
+
+	rc = dc_tx_cpd_body_bulk(&tx->tx_reqs, &tx->tx_reqs_bulk, task, buf, used, req_cnt,
+				 DCST_BULK_REQ);
+
+out:
 	return rc;
 }
 
@@ -1789,7 +1859,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (dcsr->dcsr_sgls != NULL && rc > (DAOS_BULK_LIMIT >> 2)) {
+			if (dcsr->dcsr_sgls != NULL &&
+			    (rc > (DAOS_BULK_LIMIT >> 2) ||
+			     (obj_is_ec(obj) && !dcsr->dcsr_reasb->orr_single_tgt))) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1872,7 +1944,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			D_GOTO(out, rc = grp_idx);
 
 		if (obj_is_ec(obj) && dcsr->dcsr_reasb != NULL)
-			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
+			bit_map = dcsr->dcsr_reasb->tgt_bitmap;
 		else
 			bit_map = NIL_BITMAP;
 
@@ -1980,19 +2052,28 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_leader_rank = shard_tgts[0].st_rank;
 	tx->tx_leader_tag = shard_tgts[0].st_tgt_idx;
 
-	/*
-	 * There is limitation for the sub requests count because of server side minor epoch
-	 * restriction. So we always directly pack the sub requests into CPD RPC body without
-	 * bulk transfer. That avoids complex sub request parse and unparse as CaRT proc does.
-	 */
-	tx->tx_reqs.dcs_type = DCST_REQ_CLI;
-	tx->tx_reqs.dcs_nr = req_cnt;
-	tx->tx_reqs.dcs_buf = tx->tx_req_cache + start;
+	body_size = sizeof(struct obj_cpd_in) + sizeof(struct daos_cpd_sg) * 4;
 
-	body_size = dc_tx_cpd_body_size(tx->tx_req_cache + start, req_cnt);
-	if (unlikely(body_size >= DAOS_BULK_LIMIT))
-		D_WARN("The TX "DF_DTI" is too large (1): %u/%u\n",
-		       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	/* The overhead of transferring sub-reuqests via bulk is relative expensive.
+	 * Let's try to pack them inline the CPD RPC body firstly.
+	 */
+	size = dc_tx_cpd_sub_reqs_size(tx->tx_req_cache + start, req_cnt);
+	size = dc_tx_cpd_adjust_size(size);
+
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		rc = dc_tx_cpd_pack_sub_reqs(tx, task, size);
+		if (rc != 0)
+			goto out;
+	} else {
+		tx->tx_reqs.dcs_type = DCST_REQ_CLI;
+		tx->tx_reqs.dcs_nr = req_cnt;
+		tx->tx_reqs.dcs_buf = tx->tx_req_cache + start;
+
+		body_size += size;
+		if (unlikely(body_size >= DAOS_BULK_LIMIT))
+			D_WARN("The TX "DF_DTI" is too large (1): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
 
 	size = sizeof(*dcsh) + sizeof(*mbs) + mbs->dm_data_size;
 
@@ -2019,7 +2100,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		/* Reset dcsh, its buffer will be freed via tx->tx_head.dcs_buf in dc_tx_cleanup. */
 		dcsh = NULL;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (2): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
@@ -2049,15 +2130,15 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		}
 
 		rc = dc_tx_cpd_body_bulk(&tx->tx_disp, &tx->tx_disp_bulk, task, dcdes,
-					 size, act_tgt_cnt, DCST_BULK_DISP);
+					 size, act_tgt_cnt, DCST_BULK_ENT);
 		if (rc != 0)
 			goto out;
 	} else {
-		tx->tx_disp.dcs_type = DCST_DISP;
+		tx->tx_disp.dcs_type = DCST_ENT;
 		tx->tx_disp.dcs_nr = act_tgt_cnt;
 		tx->tx_disp.dcs_buf = dcdes;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (3): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
@@ -2081,7 +2162,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		tx->tx_tgts.dcs_nr = act_tgt_cnt;
 		tx->tx_tgts.dcs_buf = shard_tgts;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (4): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);

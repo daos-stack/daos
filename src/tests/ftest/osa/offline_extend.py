@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
 
@@ -22,7 +21,6 @@ class OSAOfflineExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         self.extra_servers = self.get_hosts_from_yaml(
@@ -119,10 +117,7 @@ class OSAOfflineExtend(OSAUtils):
                 self.run_ior_thread("Read", oclass[index], test_seq)
                 self.run_mdtest_thread(oclass[index])
                 self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                self.container.check()
 
     def test_osa_offline_extend(self):
         """JIRA ID: DAOS-4751.

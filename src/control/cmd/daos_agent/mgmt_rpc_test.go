@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,7 +75,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
-		*withHint = *resp
+		withHint = proto.Clone(resp).(*mgmtpb.GetAttachInfoResp)
 		withHint.ClientNetHint.Interface = testFI[0].Name
 		withHint.ClientNetHint.Domain = testFI[0].Name
 
@@ -177,7 +177,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			},
 		},
-		"cached": {
+		"cache": {
 			rpcResps: hostResps(testResps),
 			expResult: []attachInfoResult{
 				{
@@ -223,7 +223,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 			for i, exp := range tc.expResult {
 				t.Logf("iteration %d\n", i)
-				respBytes, err := mod.handleGetAttachInfo(context.Background(), reqBytes, int32(os.Getpid()))
+				respBytes, err := mod.handleGetAttachInfo(test.Context(t), reqBytes, int32(os.Getpid()))
 
 				test.CmpErr(t, exp.err, err)
 
@@ -295,7 +295,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(context.Background(), 0, sysName)
+			_, err := mod.getAttachInfo(test.Context(t), 0, sysName)
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}
@@ -353,7 +353,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 				numaGetter:     tc.numaGetter,
 			}
 
-			result, err := mod.getNUMANode(context.Background(), 123)
+			result, err := mod.getNUMANode(test.Context(t), 123)
 
 			test.AssertEqual(t, tc.expResult, result, "")
 			test.CmpErr(t, tc.expErr, err)
@@ -462,7 +462,7 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 				devStateGetter: tc.devStateProv,
 			}
 
-			err := mod.waitFabricReady(context.Background(), tc.netDevClass)
+			err := mod.waitFabricReady(test.Context(t), tc.netDevClass)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {

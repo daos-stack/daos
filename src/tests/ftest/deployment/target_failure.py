@@ -40,8 +40,8 @@ class TargetFailure(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        testfile = os.path.join(os.sep, file_name)
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
@@ -198,7 +198,7 @@ class TargetFailure(IorTestBase):
         9. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,target_failure,rebuild
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """

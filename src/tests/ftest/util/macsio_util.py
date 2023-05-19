@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,6 +23,8 @@ class MacsioCommand(ExecutableCommand):
             path (str, optional): path to the macsio command. Defaults to "".
         """
         super().__init__("/run/macsio/*", "macsio", path)
+
+        # pylint: disable=wrong-spelling-in-comment
 
         # MACSio command parameters - defaults specified in square brackets:
 
@@ -444,6 +446,7 @@ class MacsioCommand(ExecutableCommand):
                 self.env[key] = val
 
     def check_results(self, result, hosts):
+        # pylint: disable=arguments-differ
         """Check the macsio command results.
 
         Args:

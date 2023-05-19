@@ -153,12 +153,16 @@ class RemoteCommandResult():
 
         """
         for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
+            if data.timeout and len(data.stdout) == 1:
+                log.debug(
+                    "  %s (rc=%s) timed out: %s", str(data.hosts), data.returncode, data.stdout[0])
             elif len(data.stdout) == 1:
                 log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
+            elif data.timeout:
+                log.debug("  %s (rc=%s) timed out:", str(data.hosts), data.returncode)
             else:
                 log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
+            if len(data.stdout) > 1:
                 for line in data.stdout:
                     log.debug("    %s", line)
 
@@ -291,7 +295,10 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
-        log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+        if timeout is None:
+            log.debug("Running on %s without a timeout: %s", hosts, timeout, command)
+        else:
+            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
