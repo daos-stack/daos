@@ -36,13 +36,19 @@ class PoolCreateTests(TestWithServers):
             Verify that DAOS is ready to accept requests within 2 minutes.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
+        storage = self.server_managers[0].get_available_storage()
+        if storage['nvme'][0] < 750156374016:
+            self.log.info(
+                'Reducing pool quantity from %s -> 150 due to insufficient NVMe capacity (%s < '
+                '750156374016)', quantity, storage['nvme'][0])
+            quantity = 150
 
         # Define all the pools with the same size defined in the test yaml
         self.log_step('Defining {} pools'.format(quantity))
