@@ -882,7 +882,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 {
 	void *module;
 	int   idx, idx_mod;
-	char  module_name_local[MAX_LEN_PATH_NAME];
+	char  module_name_local[MAX_LEN_PATH_NAME + 4];
 
 	/* make sure module_name[] and func_name[] are not too long. */
 	if (strnlen(module_name, MAX_LEN_PATH_NAME + 1) >= MAX_LEN_PATH_NAME)
