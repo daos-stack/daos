@@ -84,7 +84,6 @@ struct dfs_mt {
 
 	_Atomic uint32_t     inited;
 	char                *pool, *cont;
-	pthread_rwlock_t     lock_ht;
 	char                 fs_root[DFS_MAX_PATH];
 };
 
@@ -196,10 +195,14 @@ finalize_dfs(void);
 static void
 update_cwd(void);
 
+/* Hash table entry for directory handles.  The struct and name will be allocated as a single
+ * entity.
+ */
 struct dir_hdl {
 	d_list_t   entry;
 	dfs_obj_t *oh;
-	char       name[DFS_MAX_PATH];
+	size_t     name_size;
+	char       name[];
 };
 
 static inline struct dir_hdl *
@@ -213,7 +216,10 @@ key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned 
 {
 	struct dir_hdl *hdl = hdl_obj(rlink);
 
-	return (strncmp(hdl->name, (const char *)key, DFS_MAX_PATH) == 0);
+	if (hdl->name_size != ksize)
+		return false;
+
+	return (strncmp(hdl->name, (const char *)key, ksize) == 0);
 }
 
 static void
@@ -225,8 +231,8 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	rc = dfs_release(hdl->oh);
 	if (rc == ENOMEM)
 		rc = dfs_release(hdl->oh);
-	if (rc && bLog)
-		D_WARN("dfs_release() failed: %s", strerror(rc));
+	if (rc)
+		D_ERROR("dfs_release() failed: %d (%s)", rc, strerror(rc));
 	D_FREE(hdl);
 }
 
@@ -241,7 +247,7 @@ rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dir_hdl *hdl = hdl_obj(rlink);
 
-	return d_hash_string_u32(hdl->name, strnlen(hdl->name, DFS_MAX_PATH));
+	return d_hash_string_u32(hdl->name, hdl->name_size);
 }
 
 static d_hash_table_ops_t hdl_hash_ops = {.hop_key_cmp    = key_cmp,
@@ -249,71 +255,68 @@ static d_hash_table_ops_t hdl_hash_ops = {.hop_key_cmp    = key_cmp,
 					  .hop_rec_free   = rec_free,
 					  .hop_rec_hash   = rec_hash};
 
-/**
- * Look up a path in hash table to get the dfs_obj for a dir.
- * If not found in hash table, call to dfs_lookup() to open the object on DAOS.
- * If the object is corresponding to a dir, insert the object into hash table.
- * Since many DFS APIs need parent dir DFS object as parameter, we use a hash
- * table to cache parent objects for efficiency.
+/*
+ * Look up a path in hash table to get the dfs_obj for a dir. If not found in hash table, call to
+ * dfs_lookup() to open the object on DAOS. If the object is corresponding is a dir, insert the
+ * object into hash table. Since many DFS APIs need parent dir DFS object as parameter, we use a
+ * hash table to cache parent objects for efficiency.
+ *
+ * Places no restrictions on the length of the string which does not need to be \0 terminated. len
+ * should be length of the string, not including any \0 termination.
  */
 static int
-lookup_insert_dir(int idx_dfs, const char *name, mode_t *mode, dfs_obj_t **obj)
+lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode, dfs_obj_t **obj)
 {
-	struct dir_hdl *hdl;
+	struct dir_hdl *hdl = NULL;
 	dfs_obj_t      *oh;
 	d_list_t       *rlink;
-	size_t          len;
 	int             rc;
 
-	if (obj == NULL) {
-		D_ERROR("Invalid pointer!");
-		return EFAULT;
-	}
-	*obj = NULL;
-	len = strnlen(name, DFS_MAX_PATH);
-	if (len >= DFS_MAX_PATH) {
-		D_ERROR("path is too long!");
-		return ENAMETOOLONG;
-	}
-	D_RWLOCK_RDLOCK(&dfs_list[idx_dfs].lock_ht);
-	rlink = d_hash_rec_find(dfs_list[idx_dfs].dfs_dir_hash, name, len);
-	D_RWLOCK_UNLOCK(&dfs_list[idx_dfs].lock_ht);
+	/* TODO: Remove this after testing. */
+	D_ASSERT(strlen(name) == len);
+
+	*obj  = NULL;
+	rlink = d_hash_rec_find(mt->dfs_dir_hash, name, len);
 	if (rlink != NULL) {
-		hdl = hdl_obj(rlink);
+		hdl  = hdl_obj(rlink);
 		*obj = hdl->oh;
 		return 0;
 	}
 
-	rc = dfs_lookup(dfs_list[idx_dfs].dfs, name, O_RDWR, &oh, mode, NULL);
+	rc = dfs_lookup(mt->dfs, name, O_RDWR, &oh, mode, NULL);
 	if (rc)
 		return rc;
 
-	if (mode && !S_ISDIR(*mode)) {
+	if (!S_ISDIR(*mode)) {
 		*obj = oh;
 		return 0;
 	}
 
-	D_ALLOC_PTR(hdl);
+	/* Allocate struct and string in a single buffer.  This includes a extra byte so name will
+	 * be \0 terminiated however that is not required.
+	 */
+	D_ALLOC(hdl, sizeof(*hdl) + len + 1);
 	if (hdl == NULL) {
+		D_GOTO(out_release, rc = ENOMEM);
 		dfs_release(oh);
 		return ENOMEM;
 	}
 
-	/* "len + 1" is used to avoid compiling issue on Ubuntu. */
-	strncpy(hdl->name, name, len + 1);
-	hdl->oh = oh;
+	hdl->name_size = len;
+	hdl->oh        = oh;
+	strncpy(hdl->name, name, len);
 
-	D_RWLOCK_WRLOCK(&dfs_list[idx_dfs].lock_ht);
-	rc = d_hash_rec_insert(dfs_list[idx_dfs].dfs_dir_hash, hdl->name, len, &hdl->entry, true);
-	D_RWLOCK_UNLOCK(&dfs_list[idx_dfs].lock_ht);
-	if (rc) {
-		D_ERROR("Failed to insert dir handle in hashtable.");
-		dfs_release(hdl->oh);
-		D_FREE(hdl);
-		return daos_der2errno(rc);
+	rlink = d_hash_rec_find_insert(mt->dfs_dir_hash, hdl->name, len, &hdl->entry);
+	if (rlink != &hdl->entry) {
+		rec_free(NULL, &hdl->entry);
+		hdl = hdl_obj(rlink);
 	}
 	*obj = hdl->oh;
 	return 0;
+
+out_release:
+	D_FREE(hdl);
+	return rc;
 }
 
 static int (*ld_open)(const char *pathname, int oflags, ...);
@@ -636,8 +639,6 @@ retrieve_handles_from_fuse(int idx)
 	cmd = _IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_SIZE, struct dfuse_hs_reply);
 	rc  = ioctl(fd, cmd, &hs_reply);
 	if (rc != 0) {
-		if (errno == EPERM)
-			errno = EACCES;
 		if (bLog)
 			D_ERROR("failed to query size info from dfuse with ioctl().");
 		goto err;
@@ -793,7 +794,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	 * It causes dead lock inside daos_init which queries file stat and calls
 	 * query_path(). D_ALLOC calls D_DEBUG and accesses lock.
 	 */
-	*parent_dir = malloc(DFS_MAX_PATH * 2);
+	*parent_dir = calloc(2, DFS_MAX_PATH);
 	if (*parent_dir == NULL)
 		goto out_oom;
 	/* allocate both for *parent_dir and *full_path above */
@@ -899,11 +900,11 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		/* root dir */
 		if (full_path_parse[(*dfs_mt)->len_fs_root] == 0) {
 			*parent       = NULL;
-			(*parent_dir)[0] = '\0';
 			item_name[0]  = '/';
 			item_name[1]  = '\0';
 			strncpy(*full_path, "/", 2);
 		} else {
+			size_t path_len;
 			/* full_path holds the full path inside dfs container */
 			strncpy(*full_path, full_path_parse + (*dfs_mt)->len_fs_root, len + 1);
 			for (pos = len - 1; pos >= (*dfs_mt)->len_fs_root; pos--) {
@@ -919,19 +920,29 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			}
 			strncpy(item_name, full_path_parse + pos + 1, len_item_name + 1);
+
 			/* the item under root directory */
 			if (pos == (*dfs_mt)->len_fs_root) {
+				/* TODO: Do we need to call lookup_insert_dir() in this case, as
+				 * there's no ref counting on the hash table it's probably
+				 * sufficient to keep a pointer to the root dfs object and use
+				 * that here.
+				 */
 				*parent       = NULL;
 				(*parent_dir)[0] = '/';
-				(*parent_dir)[1] = '\0';
+				path_len         = 1;
 			} else {
 				/* Need to look up the parent directory */
 				full_path_parse[pos] = 0;
+				/* path_len is length of the string, without termination, parent_dir
+				 * is already zeroed for the entire buffer.
+				 */
+				path_len = pos - (*dfs_mt)->len_fs_root;
 				strncpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root,
-					len + 1);
+					path_len);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = lookup_insert_dir(idx_dfs, *parent_dir, &mode, parent);
+			rc = lookup_insert_dir(*dfs_mt, *parent_dir, path_len, &mode, parent);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc);
@@ -5318,32 +5329,29 @@ init_dfs(int idx)
 
 	/* TODO: Need to check the permission of mount point first!!! */
 
-	rc = D_RWLOCK_INIT(&dfs_list[idx].lock_ht, NULL);
-	D_ASSERT(rc == 0);
-
 	rc =
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh,
 			      NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("failed to connect pool: "DF_RC"\nQuit\n", DP_RC(rc));
+		D_ERROR("failed to connect pool: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
 	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
 			    NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("failed to open container: "DF_RC"\nQuit\n", DP_RC(rc));
+		D_ERROR("failed to open container: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err_cont_open, rc);
 	}
 	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
 	if (rc != 0) {
-		D_ERROR("failed to mount dfs: %s\nQuit\n", strerror(rc));
+		D_ERROR("failed to mount dfs: %s\n", strerror(rc));
 		D_GOTO(out_err_mt, rc);
 	}
-	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 6, NULL,
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
-		D_ERROR("failed to create hash table: "DF_RC"\nQuit\n", DP_RC(rc));
+		D_ERROR("failed to create hash table: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
 
@@ -5374,8 +5382,6 @@ finalize_dfs(void)
 	d_list_t *rlink = NULL;
 
 	for (i = 0; i < num_dfs; i++) {
-		rc = D_RWLOCK_DESTROY(&dfs_list[i].lock_ht);
-		D_ASSERT(rc == 0);
 		if (dfs_list[i].dfs_dir_hash == NULL)
 			continue;
 
