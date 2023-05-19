@@ -28,6 +28,7 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
+import re
 import shutil
 import xattr
 import junit_xml
@@ -1050,6 +1051,55 @@ class DaosServer():
             self.conf.valgrind_errors = True
             rc.returncode = 0
         assert rc.returncode == 0, rc
+
+    def run_daos_client_cmd_pil4dfs(self, cmd):
+        """Run a DAOS client with libpil4dfs.so
+
+        Run a command, returning what subprocess.run() would.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime.
+        Disable valgrind at this moment. Will revisit this issue later.
+        """
+        cmd_env = get_base_env()
+
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+                                         suffix='.log',
+                                         dir=self.conf.tmp_dir,
+                                         delete=False) as log_file:
+            log_name = log_file.name
+            cmd_env['D_LOG_FILE'] = log_name
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        cmd_env['D_IL_REPORT'] = '1'
+        cmd_env['D_LOG_MASK'] = 'DEBUG'
+        cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+
+        print('Run command: ')
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False)
+        print(rc)
+
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+
+        if rc.stdout != b'':
+            print('Stdout from command')
+            print(rc.stdout.decode('utf-8').strip())
+
+        # check stderr for interception summary
+        search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
+        if len(search) == 0:
+            raise NLTestFail('[op_sum ] is NOT found.')
+        num_op = int(search[0][9:])
+        if num_op == 0:
+            raise NLTestFail('op_sum is zero. Unexpected.')
+        print(f'DBG> num_op = {num_op}')
+
+        log_test(self.conf, log_name, show_memleaks=False,
+                 check_read=False, check_write=False, check_fstat=False)
+        assert rc.returncode == 0
 
 
 class ValgrindHelper():
@@ -3744,6 +3794,53 @@ class PosixTests():
         nr_entries = len(dir_list)
         if nr_entries != 1:
             raise NLTestFail('Wrong number of entries')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_pil4dfs(self):
+        """Test interception library libpil4dfs.so"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='pil4dfs')
+        path = dfuse.dir
+
+        # Create a file natively.
+        file1 = join(path, 'file1')
+        with open(file1, 'w') as fd:
+            fd.write('Hello World!')
+
+        # Copy a file.
+        file2 = join(path, 'file2')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
+
+        # Read a file with cat.
+        self.server.run_daos_client_cmd_pil4dfs(['cat', file2])
+
+        # touch a file.
+        file3 = join(path, 'file3')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # create a dir.
+        dir1 = join(path, 'dir1')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
+
+        # find to list all files/dirs.
+        self.server.run_daos_client_cmd_pil4dfs(['find', path])
+
+        # remove a file.
+        self.server.run_daos_client_cmd_pil4dfs(['rm', file3])
+
+        # rm a dir with a file and a symlink
+        file4 = join(path, 'dir1/file4')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file4])
+        link1 = join(path, 'dir1/link1')
+        self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
+        self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
         if dfuse.stop():
             self.fatal_errors = True
