@@ -28,11 +28,6 @@
 /* Pool service (opaque) */
 struct ds_pool_svc;
 
-/*
- * Aggregation of pool/container/object/keys disk format change.
- */
-#define DS_POOL_GLOBAL_VERSION		1
-
 /**
  * Each individual object layout format, like oid layout, dkey to group,
  * dkey to EC group start.
