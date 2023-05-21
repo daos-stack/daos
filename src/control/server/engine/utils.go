@@ -52,15 +52,17 @@ const (
 	logMasksStrAssignOp  = "="
 )
 
+// LogLevel enum representing engine logging levels.
 type LogLevel uint
 
+// LogLevels matching D_LOG API priority strings.
 const (
 	LogLevelUndefined LogLevel = iota
-	LogLevelDebug
+	LogLevelDbug
 	LogLevelInfo
 	LogLevelNote
 	LogLevelWarn
-	LogLevelError
+	LogLevelErr
 	LogLevelCrit
 	LogLevelAlrt
 	LogLevelEmrg
@@ -69,16 +71,16 @@ const (
 
 func (ll LogLevel) String() string {
 	switch ll {
-	case LogLevelDebug:
-		return "DEBUG"
+	case LogLevelDbug:
+		return "DBUG"
 	case LogLevelInfo:
 		return "INFO"
 	case LogLevelNote:
 		return "NOTE"
 	case LogLevelWarn:
 		return "WARN"
-	case LogLevelError:
-		return "ERROR"
+	case LogLevelErr:
+		return "ERR"
 	case LogLevelCrit:
 		return "CRIT"
 	case LogLevelAlrt:
@@ -95,7 +97,7 @@ func (ll LogLevel) String() string {
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
 	case "DEBUG", "DBUG":
-		return LogLevelDebug
+		return LogLevelDbug
 	case "INFO":
 		return LogLevelInfo
 	case "NOTE":
@@ -103,7 +105,7 @@ func StrToLogLevel(s string) LogLevel {
 	case "WARN":
 		return LogLevelWarn
 	case "ERROR", "ERR":
-		return LogLevelError
+		return LogLevelErr
 	case "CRIT":
 		return LogLevelCrit
 	case "ALRT":
@@ -233,7 +235,7 @@ func ValidateLogSubsystems(subsystems string) error {
 func getBaseLogLevel(masks string) LogLevel {
 	level := StrToLogLevel(strings.Split(masks, logMasksStrAssignSep)[0])
 	if level == LogLevelUndefined {
-		return LogLevelError
+		return LogLevelErr
 	}
 	return level
 }
@@ -273,13 +275,13 @@ func getLogLevelAssignments(masks, subsystemsStr string, baseLevel LogLevel) ([]
 
 	// Remove assignments if level < ERROR and subsystem not in subsystems slice.
 	for i, a := range assignments {
-		if a.level < LogLevelError && !common.Includes(subsystems, a.subsys) {
+		if a.level < LogLevelErr && !common.Includes(subsystems, a.subsys) {
 			assignments = append(assignments[:i], assignments[i+1:]...)
 			i-- // slice just got shorter
 		}
 	}
 
-	if baseLevel >= LogLevelError {
+	if baseLevel >= LogLevelErr {
 		return assignments, nil
 	}
 
@@ -339,8 +341,8 @@ func MergeLogEnvVars(logMasks, subsystemsStr string) (string, error) {
 		return "", err
 	}
 
-	if baseLevel < LogLevelError {
-		baseLevel = LogLevelError
+	if baseLevel < LogLevelErr {
+		baseLevel = LogLevelErr
 	}
 
 	// Remove any assignment where level is equal to the new base level.

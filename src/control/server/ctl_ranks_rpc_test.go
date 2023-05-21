@@ -876,7 +876,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req           *ctlpb.SetLogMasksReq
+		req           ctlpb.SetLogMasksReq
 		cfgMasks      string
 		cfgStreams    string
 		cfgSubsystems string
@@ -886,22 +886,53 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 		expErr        error
 	}{
 		"empty masks string in request; reset not set in request": {
-			req:    &ctlpb.SetLogMasksReq{},
 			expErr: errors.New("empty log masks in request"),
 		},
 		"empty masks string in request; no configured log mask": {
-			req: &ctlpb.SetLogMasksReq{
+			req: ctlpb.SetLogMasksReq{
 				ResetMasks: true,
 			},
 			expErr: errors.New("empty log masks in config"),
 		},
 		"empty masks string in request; configured log mask": {
-			req: &ctlpb.SetLogMasksReq{
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
 				ResetMasks: true,
 			},
-			cfgMasks: "DEBUG",
+			cfgMasks: "ERR",
+			expMasks: "ERR",
 		},
-		// TODO: improve code coverage
+		"masks specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks: "DEBUG",
+			},
+			cfgMasks: "ERR",
+			expMasks: "DEBUG",
+		},
+		"all values specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				Streams:    "MGMT",
+				Subsystems: "MISC",
+			},
+			expMasks:   "ERR,MISC=DBUG",
+			expStreams: "MGMT",
+		},
+		"all values specified in config": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:           "DEBUG",
+				Streams:         "MGMT",
+				Subsystems:      "MISC",
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:      "ERR",
+			cfgStreams:    "md",
+			cfgSubsystems: "misc",
+			expMasks:      "ERR",
+			expStreams:    "md",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := engine.MockConfig().
@@ -909,20 +940,20 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				WithLogStreams(tc.cfgStreams).
 				WithLogSubsystems(tc.cfgSubsystems)
 
-			gotErr := updateSetLogMasksReq(cfg, tc.req)
+			gotErr := updateSetLogMasksReq(cfg, &tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expMasks, tc.req.Masks, defRankCmpOpts...); diff != "" {
-				t.Fatalf("unexpected Masks: %s", diff)
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks); diff != "" {
+				t.Fatalf("unexpected masks: %s", diff)
 			}
-			if diff := cmp.Diff(tc.expMasks, tc.req.Masks, defRankCmpOpts...); diff != "" {
-				t.Fatalf("unexpected Masks: %s", diff)
+			if diff := cmp.Diff(tc.expStreams, tc.req.Streams); diff != "" {
+				t.Fatalf("unexpected streams: %s", diff)
 			}
-			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems, defRankCmpOpts...); diff != "" {
-				t.Fatalf("unexpected Subsystems: %s", diff)
+			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems); diff != "" {
+				t.Fatalf("unexpected subsystems: %s", diff)
 			}
 		})
 	}

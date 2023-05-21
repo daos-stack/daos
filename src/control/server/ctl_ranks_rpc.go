@@ -408,7 +408,7 @@ func updateSetLogMasksReq(cfg *engine.Config, req *ctlpb.SetLogMasksReq) error {
 		req.Subsystems = subsystems
 	}
 
-	newMasks, err := engine.MergeLogEnvVars(req.Subsystems, req.Masks)
+	newMasks, err := engine.MergeLogEnvVars(req.Masks, req.Subsystems)
 	if err != nil {
 		return err
 	}
