@@ -354,13 +354,3 @@ func MergeLogEnvVars(logMasks, subsystemsStr string) (string, error) {
 	// Generate log masks string from assignments and base (default) log level.
 	return genLogMasks(assignments, baseLevel), nil
 }
-
-//	baseLevelIdx := common.Index(validLogLevels, baseLevel)
-//	if baseLevelIdx < 0 {
-//		return "", errors.Errorf("base log level %s is invalid", baseLevel)
-//	}
-
-//	isBaseLevelLessThanErr := baseLevelIdx < common.Index(validLogLevels, "ERROR")
-//	if !assignments.hasLessThanErrAssigns() && !isLevelLessThanErr(baseLevel) {
-//		return logMask, nil
-//	}
