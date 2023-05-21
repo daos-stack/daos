@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -105,7 +105,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
             self.pool.set_query_data()
             self.log.info(
                 "--%s.(1)Pool Query before write:\n"
-                "--Pool %s query data: %s\n", test_loop, self.pool.uuid, self.pool.query_data)
+                "--%s query data: %s\n", test_loop, str(self.pool), self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
             self.log.info("--%s.(2)Pool free space before container create: %s",
                           test_loop, free_space)

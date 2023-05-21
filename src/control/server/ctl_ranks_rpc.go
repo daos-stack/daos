@@ -80,14 +80,22 @@ func (svc *ControlService) drpcOnLocalRanks(ctx context.Context, req *ctlpb.Rank
 	ch := make(chan *system.MemberResult)
 	for _, srv := range instances {
 		inflight++
-		go func(e Engine) {
-			ch <- e.tryDrpc(ctx, method)
-		}(srv)
+		go func(ctx context.Context, e Engine) {
+			select {
+			case <-ctx.Done():
+			case ch <- e.tryDrpc(ctx, method):
+			}
+		}(ctx, srv)
 	}
 
 	results := make(system.MemberResults, 0, inflight)
 	for inflight > 0 {
-		result := <-ch
+		var result *system.MemberResult
+		select {
+		case <-ctx.Done():
+			return results, ctx.Err()
+		case result = <-ch:
+		}
 		inflight--
 		if result == nil {
 			return nil, errors.New("sending request over dRPC to local ranks: nil result")

@@ -903,6 +903,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	int			 rc = 0;
 	int			 rc1;
 	int			 count;
+	int			 i;
 	bool			 drop;
 
 	D_INIT_LIST_HEAD(&head);
@@ -1050,11 +1051,31 @@ next:
 			/*
 			 * The leader does not have related DTX info, we may miss
 			 * related DTX abort request, so let's abort it locally.
+			 *
+			 * NOTE:
+			 * There is race between DTX refresh RPC being triggered on current engine
+			 * and DTX commit RPC on remote leader. Related DTX entry on current engine
+			 * may has been committed by race before DTX refresh RPC being replied. And
+			 * it is possible that related DTX entry on remote leader may be removed by
+			 * DTX aggregation before the DTX refresh RPC being handled on the leader.
+			 * Under such case, the leader will reply -DER_NONEXIST to the DTX refresh
+			 * RPC sponsor. Let's check such case to avoid confused abort failure.
 			 */
-			rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
-			if (rc1 == 0 || rc1 == -DER_NONEXIST || rc1 == -DER_NO_PERM || !failout) {
+
+			rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid,
+					    NULL, NULL, NULL, NULL, false);
+			if (rc1 == DTX_ST_COMMITTED || rc1 == DTX_ST_COMMITTABLE ||
+			    rc1 == -DER_NONEXIST) {
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
+			} else {
+				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
+				D_ASSERT(rc1 != -DER_NO_PERM);
+
+				if (rc1 == 0 || !failout) {
+					d_list_del(&dsp->dsp_link);
+					dtx_dsp_free(dsp);
+				}
 			}
 		}
 
@@ -1155,6 +1176,9 @@ next:
 out:
 	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
 				       drr_link)) != NULL) {
+		for (i = 0; i < drr->drr_count; i++)
+			dtx_dsp_free(drr->drr_cb_args[i]);
+
 		D_FREE(drr->drr_cb_args);
 		D_FREE(drr->drr_dti);
 		D_FREE(drr->drr_flags);

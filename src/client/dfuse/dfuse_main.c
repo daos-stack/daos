@@ -531,8 +531,8 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
-			       rc, strerror(rc));
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
+			       strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -541,7 +541,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path (%d) %s\n", rc, strerror(rc));
+			printf("Error reading attr from path: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
@@ -557,8 +557,8 @@ main(int argc, char **argv)
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
-		       rc, strerror(rc));
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned: %d (%s)", rc,
+		       strerror(rc));
 	if (rc == 0) {
 		if (pool_name[0]) {
 			printf("Pool specified multiple ways\n");
@@ -583,14 +583,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* DUNS may have logged this already but won't have printed anything */
-		printf("Error resolving mount point (%d) %s\n", rc, strerror(rc));
+		printf("Error resolving mount point: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	/* Connect to a pool. */
 	rc = dfuse_pool_connect(fs_handle, pool_name, &dfp);
 	if (rc != 0) {
-		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
@@ -599,7 +599,7 @@ main(int argc, char **argv)
 	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
-		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 

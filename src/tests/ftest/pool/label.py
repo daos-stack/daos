@@ -5,8 +5,9 @@
 """
 import string
 
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 from general_utils import report_errors, get_random_string
 from exception_utils import CommandFailure
 
