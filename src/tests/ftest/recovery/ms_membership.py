@@ -9,7 +9,7 @@ from general_utils import report_errors
 from exception_utils import CommandFailure
 
 
-class Pass0Test(TestWithServers):
+class MSMembershipTest(TestWithServers):
     """Test Pass 0: Management Service & Membership
 
     :avocado: recursive
@@ -33,8 +33,8 @@ class Pass0Test(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=recovery,pass_0
-        :avocado: tags=test_checker_on_admin_excluded
+        :avocado: tags=recovery,ms_membership
+        :avocado: tags=MSMembershipTest,test_checker_on_admin_excluded
         """
         dmg_command = self.get_dmg_command()
 
@@ -95,8 +95,8 @@ class Pass0Test(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=recovery,pass_0
-        :avocado: tags=test_enable_disable_admin_excluded
+        :avocado: tags=recovery,ms_membership
+        :avocado: tags=MSMembershipTest,test_enable_disable_admin_excluded
         """
         errors = []
         dmg_command = self.get_dmg_command()

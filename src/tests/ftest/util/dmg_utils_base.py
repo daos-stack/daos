@@ -697,8 +697,6 @@ class DmgCommandBase(YamlCommand):
                     self.sub_command_class = self.ListDevicesSubCommand()
                 elif self.sub_command.value == "list-pools":
                     self.sub_command_class = self.ListPoolsSubCommand()
-                elif self.sub_command.value == "target-health":
-                    self.sub_command_class = self.TargetHealthSubCommand()
                 elif self.sub_command.value == "usage":
                     self.sub_command_class = self.UsageSubCommand()
                 else:
@@ -732,22 +730,12 @@ class DmgCommandBase(YamlCommand):
                     self.uuid = FormattedParameter("-u {}", None)
                     self.verbose = FormattedParameter("--verbose", False)
 
-            class TargetHealthSubCommand(CommandWithParameters):
-                """Defines a dmg storage query target-health object."""
-
-                def __init__(self):
-                    """Create a dmg storage query target-health object."""
-                    super().__init__("/run/dmg/storage/query/target-health/*", "target-health")
-                    self.rank = FormattedParameter("-r {}", None)
-                    self.tgtid = FormattedParameter("-t {}", None)
-
             class UsageSubCommand(CommandWithParameters):
                 """Defines a dmg storage query usage object."""
 
                 def __init__(self):
                     """Create a dmg storage query usage object."""
                     super().__init__("/run/dmg/storage/query/usage/*", "usage")
-                    self.host_list = FormattedParameter("-l {}", None)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""

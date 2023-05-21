@@ -4,13 +4,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from general_utils import report_errors, pcmd
+from general_utils import report_errors
+from run_utils import run_remote
 
 
-class Pass2Test(TestWithServers):
+class PoolMembershipTest(TestWithServers):
     """Test Pass 2: Pool Membership
 
     :avocado: recursive
@@ -24,9 +26,7 @@ class Pass2Test(TestWithServers):
             dict: Key is rank and value is free space of the rank in bytes as int.
 
         """
-        host_list = str(self.hostlist_servers)
-        storage_query_out = self.get_dmg_command().storage_query_usage(
-            host_list=host_list)
+        storage_query_out = self.server_managers[0].dmg.storage_query_usage()
         rank_to_free = {}
         storage_list = storage_query_out["response"]["HostStorage"]
         for storage_hash in storage_list.values():
@@ -50,19 +50,18 @@ class Pass2Test(TestWithServers):
         7. Query the checker and verify that the issue was fixed.
         i.e., Current status is COMPLETED.
         8. Disable the checker.
-        9. Restart the servers so that the storage usage in the next step is updated.
-        10. Call dmg storage query usage to verify that the pool usage is back to the
+        9. Call dmg storage query usage to verify that the pool usage is back to the
         original value.
 
         Jira ID: DAOS-11734
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_2
-        :avocado: tags=Pass2Test,test_orphan_pool_shard
+        :avocado: tags=recovery,pool_membership
+        :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
         # 1. Create a pool.
-        self.pool = self.get_pool(connect=False, target_list="0")
+        pool = self.get_pool(connect=False, target_list="0")
 
         # 2. Call dmg storage query usage to store the default space utilization.
         rank_to_free_orig = self.get_rank_to_free()
@@ -75,14 +74,11 @@ class Pass2Test(TestWithServers):
 
         # 3-1. Determine source host and destination host. Source host is where rank 0 is.
         # Destination host is the other host.
-        rank_to_host = self.server_managers[0].ranks
-        self.log.info("rank_to_host = %s", rank_to_host)
-        src_host = NodeSet(rank_to_host[0])
-        dst_host = None
-        for rank in range(1, 4):
-            if rank_to_host[rank] != str(src_host):
-                dst_host = NodeSet(rank_to_host[rank])
-                break
+        src_host = dst_host = NodeSet(self.server_managers[0].get_host(0))
+        rank = 1
+        while rank < self.server_managers[0].engines and dst_host == src_host:
+            dst_host = NodeSet(self.server_managers[0].get_host(rank))
+            rank += 1
         self.log.info("src_host = %s; dst_host = %s", src_host, dst_host)
 
         # 3-2. Determine source and destination mount point. First, find the source mount
@@ -90,32 +86,28 @@ class Pass2Test(TestWithServers):
         # This way, we can handle the case where the mount point name is changed in the
         # future. At the same time, determine the destination rank, which is where
         # dst_mount is mapped.
-        # dst_mount = "/mnt/daos0"
         src_mount = None
         dst_mount = None
         dst_rank = None
-        host_list = str(self.hostlist_servers)
         dmg_command = self.get_dmg_command()
-        storage_query_out = dmg_command.storage_query_usage(
-            host_list=host_list)
+        storage_query_out = dmg_command.storage_query_usage()
         hash_dict = storage_query_out["response"]["HostStorage"]
         for storage_dict in hash_dict.values():
             if str(src_host) in storage_dict["hosts"]:
                 # Determine source mount point that maps to rank 0.
                 for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
                     if scm_namespace["mount"]["rank"] == 0:
-                        src_mount = scm_namespace["mount"]["path"]
-                        # Use the same mount point as source.
-                        dst_mount = src_mount
+                        # For dst_mount, use the same mount point as source.
+                        dst_mount = src_mount = scm_namespace["mount"]["path"]
         for storage_dict in hash_dict.values():
             if str(dst_host) in storage_dict["hosts"]:
-                # Determine destination rank that mpas to dst_mount.
+                # Determine destination rank that maps to dst_mount.
                 for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
                     if scm_namespace["mount"]["path"] == dst_mount:
                         dst_rank = scm_namespace["mount"]["rank"]
 
         # 4. Stop servers.
-        dmg_command.system_stop()
+        self.server_managers[0].system_stop()
 
         # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
         # another engine where we didn’t create.
@@ -124,26 +116,30 @@ class Pass2Test(TestWithServers):
         # directory to 777.
         self.log.info("Update mode of the source pool directory.")
         chmod_cmd = (f"sudo chmod 777 {src_mount}; "
-                     f"sudo chmod -R 777 {src_mount}/{self.pool.uuid.lower()}")
-        pcmd(hosts=src_host, command=chmod_cmd)
+                     f"sudo chmod -R 777 {src_mount}/{pool.uuid.lower()}")
+        if not run_remote(log=self.log, hosts=src_host, command=chmod_cmd).passed:
+            self.fail(f"Following command failed on {dst_host}! {chmod_cmd}")
 
         # 5-2. Update mode of the destination mount point to 777 so that we can send the
         # pool files.
         self.log.info("Update mode of the destination mount point.")
         chmod_cmd = f"sudo chmod 777 {dst_mount}"
-        pcmd(hosts=dst_host, command=chmod_cmd)
+        if not run_remote(log=self.log, hosts=dst_host, command=chmod_cmd).passed:
+            self.fail(f"Following command failed on {dst_host}! {chmod_cmd}")
 
         # 5-3. Since we're sending each file (vos-0 to 7 + rdb-pool) one at a time, we need
         # to create the destination fake pool directory first.
         self.log.info("Create a fake pool directory at the destination mount point.")
-        mkdir_cmd = f"sudo mkdir {dst_mount}/{self.pool.uuid.lower()}"
-        pcmd(hosts=dst_host, command=mkdir_cmd)
+        mkdir_cmd = f"sudo mkdir {dst_mount}/{pool.uuid.lower()}"
+        if not run_remote(log=self.log, hosts=dst_host, command=mkdir_cmd).passed:
+            self.fail(f"Following command failed on {dst_host}! {mkdir_cmd}")
 
         # 5-4. Update mode of the destination pool directory to 777 so that we can send
         # the pool files.
         self.log.info("Update mode of the fake pool directory at destination.")
-        chmod_cmd = f"sudo chmod 777 {dst_mount}/{self.pool.uuid.lower()}"
-        pcmd(hosts=dst_host, command=chmod_cmd)
+        chmod_cmd = f"sudo chmod 777 {dst_mount}/{pool.uuid.lower()}"
+        if not run_remote(log=self.log, hosts=dst_host, command=chmod_cmd).passed:
+            self.fail(f"Following command failed on {dst_host}! {chmod_cmd}")
 
         # 5-5. Send the files.
         # 1. The initial ls command lists the content of the pool directory, which
@@ -165,11 +161,12 @@ class Pass2Test(TestWithServers):
         self.log.info(
             "Copy pool files from %s:%s to %s:%s.", src_host, src_mount, dst_host,
             dst_mount)
-        xargs_rsync_cmd = (f"ls {src_mount}/{self.pool.uuid.lower()} | "
+        xargs_rsync_cmd = (f"ls {src_mount}/{pool.uuid.lower()} | "
                            f"xargs --max-procs=8 -I% "
-                           f"rsync -avz {src_mount}/{self.pool.uuid.lower()}/% "
-                           f"{str(dst_host)}:{dst_mount}/{self.pool.uuid.lower()}")
-        pcmd(hosts=src_host, command=xargs_rsync_cmd)
+                           f"rsync -avz {src_mount}/{pool.uuid.lower()}/% "
+                           f"{str(dst_host)}:{dst_mount}/{pool.uuid.lower()}")
+        if not run_remote(log=self.log, hosts=src_host, command=xargs_rsync_cmd).passed:
+            self.fail(f"Following command failed on {src_host}! {xargs_rsync_cmd}")
 
         # 6. Enable and start the checker.
         dmg_command.check_enable()
@@ -192,10 +189,7 @@ class Pass2Test(TestWithServers):
         # 8. Disable the checker.
         dmg_command.check_disable()
 
-        # 9. Restart the servers so that the storage usage in the next step is updated.
-        dmg_command.system_start()
-
-        # 10. Call dmg storage query usage to verify that the pool usage is back to the
+        # 9. Call dmg storage query usage to verify that the pool usage is back to the
         # original value.
         rank_to_free_fixed = self.get_rank_to_free()
         self.log.info("rank_to_free_fixed = %s", rank_to_free_fixed)

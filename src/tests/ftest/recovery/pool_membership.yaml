@@ -20,4 +20,4 @@ server_config:
       fabric_iface: ib1
 
 pool:
-  size: 100000000000 # 100G
+  size: 100G

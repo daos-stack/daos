@@ -371,22 +371,6 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("storage", "query", "device-health"), uuid=uuid)
 
-    def storage_query_target_health(self, rank, tgtid):
-        """Get the result of the 'dmg storage query target-health' command.
-
-        Args:
-            rank (int): Rank hosting target.
-            tgtid (int): Target index to query.
-
-        Raises:
-            CommandFailure: if the dmg storage query target-health command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        return self._get_json_result(("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
-
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
 
@@ -400,12 +384,8 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("storage", "scan"), nvme_health=True)
 
-    def storage_query_usage(self, host_list=None):
+    def storage_query_usage(self):
         """Get the result of the 'dmg storage query usage' command.
-
-        Args:
-            host_list (str): A comma separated list of addresses <ipv4addr/hostname> to
-                connect to
 
         Raises:
             CommandFailure: if the dmg storage query usage command fails.
@@ -479,7 +459,7 @@ class DmgCommand(DmgCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("storage", "query", "usage"), host_list=host_list)
+        return self._get_json_result(("storage", "query", "usage"))
 
     def server_set_logmasks(self, masks=None, raise_exception=None):
         """Set engine log-masks at runtime.
