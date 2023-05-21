@@ -22,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -373,20 +372,40 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	return resp, nil
 }
 
-func updateSetLogMasksReq(log logging.Logger, cfg *engine.Config, req *ctlpb.SetLogMasksReq) error {
-	if req.Masks == "" {
+// If reset flags are set, pull values from config before merging DD_SUBSYS into D_LOG_MASK and
+// setting the result in the request.
+func updateSetLogMasksReq(cfg *engine.Config, req *ctlpb.SetLogMasksReq) error {
+	msg := "request"
+	if req.ResetMasks {
+		msg = "config"
 		req.Masks = cfg.LogMask
 	}
 	if req.Masks == "" {
-		return errors.New("no log_mask set in engine config")
+		return errors.Errorf("empty log masks in %s", msg)
 	}
-	if req.Streams == "" {
+
+	if req.ResetStreams {
 		streams, err := cfg.ReadLogDbgStreams()
 		if err != nil {
 			return err
 		}
 		req.Streams = streams
 	}
+
+	if req.ResetSubsystems {
+		subsystems, err := cfg.ReadLogSubsystems()
+		if err != nil {
+			return err
+		}
+		req.Subsystems = subsystems
+	}
+
+	newMasks, err := engine.MergeLogEnvVars(req.Subsystems, req.Masks)
+	if err != nil {
+		return err
+	}
+	req.Masks = newMasks
+	req.Subsystems = ""
 
 	return nil
 }
@@ -397,22 +416,24 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New("nil request")
 	}
 
-	var errs []string
+	errs := []string{}
 
 	for idx, ei := range svc.harness.Instances() {
+		eReq := *req // local per-engine copy
+
 		if !ei.IsReady() {
 			errs = append(errs, fmt.Sprintf("engine-%d: not ready", ei.Index()))
 			continue
 		}
 
-		if err := updateSetLogMasksReq(svc.log, svc.srvCfg.Engines[idx], req); err != nil {
+		if err := updateSetLogMasksReq(svc.srvCfg.Engines[idx], &eReq); err != nil {
 			errs = append(errs, errors.Wrapf(err, "engine-%d", ei.Index()).Error())
 			continue
 		}
-		svc.log.Debugf("setting engine %d log masks %q and debug streams %q", ei.Index(),
-			req.Masks, req.Streams)
+		svc.log.Debugf("setting engine %d log masks %q, streams %q and subsystems %q",
+			ei.Index(), eReq.Masks, eReq.Streams, eReq.Subsystems)
 
-		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, req)
+		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, &eReq)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
 			continue

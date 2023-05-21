@@ -42,10 +42,26 @@ struct  _Ctl__SetLogMasksReq
    * enable specific set of debug streams to log
    */
   char *streams;
+  /*
+   * enable logging of specific subsystems
+   */
+  char *subsystems;
+  /*
+   * reset log-masks to engine log_mask value in config
+   */
+  protobuf_c_boolean reset_masks;
+  /*
+   * reset debug-streams to DD_MASK env value in config
+   */
+  protobuf_c_boolean reset_streams;
+  /*
+   * reset enabled-subsystems to DD_SUBSYS env value in config
+   */
+  protobuf_c_boolean reset_subsystems;
 };
 #define CTL__SET_LOG_MASKS_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__set_log_masks_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
 
 
 /*

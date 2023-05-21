@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -877,6 +877,59 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	}
 }
 
+func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req           *ctlpb.SetLogMasksReq
+		cfgMasks      string
+		cfgStreams    string
+		cfgSubsystems string
+		expMasks      string
+		expStreams    string
+		expSubsystems string
+		expErr        error
+	}{
+		"empty masks string in request; reset not set in request": {
+			req:    &ctlpb.SetLogMasksReq{},
+			expErr: errors.New("empty log masks in request"),
+		},
+		"empty masks string in request; no configured log mask": {
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expErr: errors.New("empty log masks in config"),
+		},
+		"empty masks string in request; configured log mask": {
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			cfgMasks: "DEBUG",
+		},
+		// TODO: improve code coverage
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := engine.MockConfig().
+				WithLogMask(tc.cfgMasks).
+				WithLogStreams(tc.cfgStreams).
+				WithLogSubsystems(tc.cfgSubsystems)
+
+			gotErr := updateSetLogMasksReq(cfg, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks, defRankCmpOpts...); diff != "" {
+				t.Fatalf("unexpected Masks: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks, defRankCmpOpts...); diff != "" {
+				t.Fatalf("unexpected Masks: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems, defRankCmpOpts...); diff != "" {
+				t.Fatalf("unexpected Subsystems: %s", diff)
+			}
+		})
+	}
+}
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingRank      bool
@@ -893,14 +946,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
-		"empty masks string in request; no configured log mask": {
-			req:    &ctlpb.SetLogMasksReq{},
-			expErr: errors.New("no log_mask set in engine config"),
-		},
 		"empty masks string in request; configured log mask": {
 			cfgLogMask: "DEBUG",
-			req:        &ctlpb.SetLogMasksReq{},
-			expErr:     errors.New("dRPC returned no response"),
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expErr: errors.New("dRPC returned no response"),
 		},
 		"instances stopped": {
 			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},

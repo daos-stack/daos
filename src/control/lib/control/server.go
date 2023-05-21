@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
@@ -22,8 +21,9 @@ import (
 // request.
 type SetEngineLogMasksReq struct {
 	unaryRequest
-	Masks   string `json:"masks"`
-	Streams string `json:"streams"`
+	Masks      *string `json:"masks"`
+	Streams    *string `json:"streams"`
+	Subsystems *string `json:"subsystems"`
 }
 
 // SetEngineLogMasksResp contains the results of a set engine log level
@@ -38,17 +38,35 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if err := engine.ValidateLogMasks(req.Masks); err != nil {
-		return nil, err
-	}
-	if err := engine.ValidateLogStreams(req.Streams); err != nil {
-		return nil, err
+	pbReq := new(ctlpb.SetLogMasksReq)
+
+	if req.Masks == nil {
+		pbReq.ResetMasks = true
+	} else {
+		if err := engine.ValidateLogMasks(*req.Masks); err != nil {
+			return nil, err
+		}
+		pbReq.Masks = *req.Masks
 	}
 
-	pbReq := new(ctlpb.SetLogMasksReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, err
+	if req.Streams == nil {
+		pbReq.ResetStreams = true
+	} else {
+		if err := engine.ValidateLogStreams(*req.Streams); err != nil {
+			return nil, err
+		}
+		pbReq.Streams = *req.Streams
 	}
+
+	if req.Subsystems == nil {
+		pbReq.ResetSubsystems = true
+	} else {
+		if err := engine.ValidateLogSubsystems(*req.Subsystems); err != nil {
+			return nil, err
+		}
+		pbReq.Subsystems = *req.Subsystems
+	}
+
 	pbReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, pbReq)

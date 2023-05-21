@@ -484,22 +484,39 @@ func TestConfig_Validation(t *testing.T) {
 			cfg:    validConfig().WithLogMask("DBGG"),
 			expErr: errUnknownLogLevel("DBGG"),
 		},
-		"empty log debug stream env in config": {
+		"empty DD_MASK env in config": {
 			cfg: validConfig().WithEnvVars("DD_MASK="),
 		},
-		"invalid log debug stream env in config": {
-			cfg:    validConfig().WithEnvVars("DD_MASK=mgmt,grogu"),
-			expErr: errUnknownLogStream("grogu"),
+		"empty DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS="),
 		},
-		"valid log debug stream env in config": {
+		"invalid DD_MASK env in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=mgmt,grogu"),
+			expErr: errors.New("unknown name \"grogu\""),
+		},
+		"invalid DD_SUBSYS env in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=mgmt,mando"),
+			expErr: errors.New("unknown name \"mando\""),
+		},
+		"valid DD_MASK env in config": {
 			cfg: validConfig().WithEnvVars("DD_MASK=REBUILD,PL,mgmt,epc"),
 		},
-		"valid all log debug streams in config": {
+		"valid DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=COMMON,misc,rpc"),
+		},
+		"valid 'all' DD_MASKs in config": {
 			cfg: validConfig().WithEnvVars("DD_MASK=all"),
 		},
-		"invalid all and other log debug streams in config": {
+		"valid 'all' DD_SUBSYS in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=all"),
+		},
+		"invalid 'all' with another debug stream in config": {
 			cfg:    validConfig().WithEnvVars("DD_MASK=all,PL"),
-			expErr: errAllWithOtherLogStream,
+			expErr: errLogNameAllWithOther,
+		},
+		"invalid 'all' with another subsystem in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=all,MEM"),
+			expErr: errLogNameAllWithOther,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
