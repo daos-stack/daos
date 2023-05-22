@@ -50,8 +50,9 @@
 	ACTION(dfuse,     dfuse,     arg)	\
 	ACTION(il,        il,        arg)	\
 	ACTION(csum,      csum,      arg)	\
-	ACTION(stack,     stack,     arg)	\
-	ACTION(pipeline,  pipeline,  arg)
+	ACTION(pipeline,  pipeline,  arg)	\
+	ACTION(stack,     stack,     arg)
+
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\
