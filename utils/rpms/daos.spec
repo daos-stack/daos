@@ -219,8 +219,10 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
+Requires: libcapstone-devel
 %else
 Requires: Lmod
+Requires: capstone-devel
 %endif
 
 %description client-tests
