@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -276,7 +275,7 @@ func TestAuto_confGen(t *testing.T) {
 			mic.UnaryError = tc.uErr
 			cmd.ctlInvoker = control.NewMockInvoker(log, &mic)
 
-			gotCfg, gotErr := cmd.confGen(context.TODO())
+			gotCfg, gotErr := cmd.confGen(test.Context(t))
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

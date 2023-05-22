@@ -360,10 +360,13 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	if (dti == NULL)
 		return -DER_NOMEM;
 
-	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link)
-		dti[i++] = dcrc->dcrc_dte->dte_xid;
+	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
+		dti[i] = dcrc->dcrc_dte->dte_xid;
+		if (++i >= count)
+			break;
+	}
 
-	D_ASSERT(i == count);
+	D_ASSERTF(i == count, "Invalid count %d/%d\n", i, count);
 	*dtis = dti;
 
 	return count;

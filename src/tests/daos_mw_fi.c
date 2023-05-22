@@ -351,6 +351,6 @@ out_pool:
 	if (rc == 0)
 		rc = rc2;
 out_init:
-	dfs_fini();
+	daos_fini();
 	return rc;
 }

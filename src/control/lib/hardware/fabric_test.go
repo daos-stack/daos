@@ -1697,7 +1697,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				}
 			}
 
-			result, err := scanner.Scan(context.Background(), tc.providers...)
+			result, err := scanner.Scan(test.Context(t), tc.providers...)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
@@ -1934,7 +1934,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -2195,7 +2195,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2347,7 +2347,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2494,7 +2494,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2635,10 +2635,10 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			var ctx context.Context
 
 			if tc.timeout == 0 {
-				ctx = context.Background()
+				ctx = test.Context(t)
 			} else {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				ctx, cancel = context.WithTimeout(test.Context(t), tc.timeout)
 				defer cancel()
 			}
 
