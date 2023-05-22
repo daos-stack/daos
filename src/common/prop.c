@@ -126,8 +126,8 @@ daos_prop_free(daos_prop_t *prop)
 	D_FREE(prop);
 }
 
-daos_prop_t *
-daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop)
 {
 	daos_prop_t		*result;
 	int			rc;
@@ -137,76 +137,12 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 
 	if (old_prop == NULL || new_prop == NULL) {
 		D_ERROR("NULL input\n");
-		return NULL;
-	}
-
-	/*
-	 * We might override some values in the old prop. Need to account for
-	 * that in the final prop count.
-	 */
-	result_nr = old_prop->dpp_nr;
-	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(old_prop,
-					    new_prop->dpp_entries[i].dpe_type);
-		if (entry == NULL) /* New entry isn't a duplicate of old */
-			result_nr++;
-	}
-
-	result = daos_prop_alloc(result_nr);
-	if (result == NULL)
-		return NULL;
-
-	if (result->dpp_nr == 0) /* Nothing more to do */
-		return result;
-
-	result_i = 0;
-	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
-		rc = daos_prop_entry_copy(&old_prop->dpp_entries[i],
-					  &result->dpp_entries[result_i]);
-		if (rc != 0)
-			goto err;
-	}
-
-	/*
-	 * Either add or update based on the values of the new prop entries
-	 */
-	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(result,
-					    new_prop->dpp_entries[i].dpe_type);
-		if (entry == NULL) {
-			D_ASSERT(result_i < result_nr);
-			entry = &result->dpp_entries[result_i];
-			result_i++;
-		}
-		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
-		if (rc != 0)
-			goto err;
-	}
-
-	return result;
-
-err:
-	daos_prop_free(result);
-	return NULL;
-}
-
-int
-daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **_new_prop)
-{
-	daos_prop_t            *result;
-	int                     rc;
-	uint32_t                result_nr;
-	uint32_t                i, result_i;
-	struct daos_prop_entry *entry;
-
-	if (old_prop == NULL || new_prop == NULL) {
-		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
 
 	/*
-	 * We might override some values in the old prop. Need to account for
-	 * that in the final prop count.
+	 * We might override some values in the old prop. Need to account for that in the final prop
+	 * count.
 	 */
 	result_nr = old_prop->dpp_nr;
 	for (i = 0; i < new_prop->dpp_nr; i++) {
@@ -220,19 +156,17 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **_ne
 		return -DER_NOMEM;
 
 	if (result->dpp_nr == 0) /* Nothing more to do */
-		D_GOTO(out, 0);
+		D_GOTO(out, rc = -DER_SUCCESS);
 
 	result_i = 0;
 	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
-		rc =
-		    daos_prop_entry_copy(&old_prop->dpp_entries[i], &result->dpp_entries[result_i]);
+		rc = daos_prop_entry_copy(&old_prop->dpp_entries[i],
+					  &result->dpp_entries[result_i]);
 		if (rc != 0)
-			D_GOTO(err, rc);
+			goto err;
 	}
 
-	/*
-	 * Either add or update based on the values of the new prop entries
-	 */
+	/*  Either add or update based on the values of the new prop entries */
 	for (i = 0; i < new_prop->dpp_nr; i++) {
 		entry = daos_prop_entry_get(result, new_prop->dpp_entries[i].dpe_type);
 		if (entry == NULL) {
@@ -242,16 +176,27 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **_ne
 		}
 		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
 		if (rc != 0)
-			D_GOTO(err, rc);
+			goto err;
 	}
-
 out:
-	*_new_prop = result;
-	return -DER_SUCCESS;
+	*out_prop = result;
+	return rc;
 
 err:
 	daos_prop_free(result);
 	return rc;
+}
+
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+{
+	daos_prop_t *out_prop;
+	int          rc;
+
+	rc = daos_prop_merge2(old_prop, new_prop, &out_prop);
+	if (rc == -DER_SUCCESS)
+		return out_prop;
+	return NULL;
 }
 
 static bool

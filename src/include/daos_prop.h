@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -653,22 +653,24 @@ daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
  *
  * \param[in]	old_prop	Existing set of properties
  * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	out_prop	New properties - may override old entries
  *
- * \return	Newly allocated merged property
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
  */
-daos_prop_t *
-daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
  *
  * \param[in]	old_prop	Existing set of properties
  * \param[in]	new_prop	New properties - may override old entries
- * \param[out]	_new_prop	New properties - may override old entries
  *
+ * \return	Newly allocated merged property
  */
-int
-daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **_new_prop);
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
  * Search and return a property entry of type \a type in the property list
