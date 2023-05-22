@@ -178,13 +178,13 @@ class ServerFillUp(IorTestBase):
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
+        self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
+        self.ior_local_cmd.test_file.update('/testfile')
+
         # Created new container or use the existing container for reading
         if create_cont:
             self.create_container()
-
-        self.ior_local_cmd.set_daos_params(
-            self.server_group, self.pool, self.nvme_local_cont.identifier)
-        self.ior_local_cmd.test_file.update('/testfile')
+        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont.uuid)
 
         # Define the job manager for the IOR command
         job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
