@@ -30,7 +30,7 @@ test_swim(void **state)
 	rc = crt_swim_init(0);
 	assert_int_equal(rc, 0);
 
-	rc = crt_rank_self_set(0);
+	rc = crt_rank_self_set(0, 1 /* group_version_min */);
 	assert_int_equal(rc, 0);
 
 	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1, d_hlc_get());
