@@ -1705,4 +1705,9 @@ vos_flush_wal_header(struct vos_pool *vp)
 
 	return 0;
 }
+
+int
+vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
+			  uint32_t layout_ver);
+
 #endif /* __VOS_INTERNAL_H__ */

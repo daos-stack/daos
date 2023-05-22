@@ -1758,8 +1758,19 @@ class PrintStat():
     def __init__(self, filename=None):
         # Setup the object, and maybe add some data to it.
         self._stats = []
+        self.count = 0
         if filename:
             self.add(filename)
+
+    def dir_add(self, dirname):
+        """Add a directory contents
+
+        This differs from .add(dirname, show_dir=True) as it does not add the dir itself can the
+        result can be compared across mounts.
+        """
+        with os.scandir(dirname) as dirfd:
+            for entry in dirfd:
+                self.add(entry.name, attr=os.stat(join(dirname, entry.name)))
 
     def add(self, filename, attr=None, show_dir=False):
         """Add an entry to be displayed"""
@@ -1771,6 +1782,7 @@ class PrintStat():
                             attr.st_size,
                             stat.filemode(attr.st_mode),
                             filename])
+        self.count += 1
 
         if show_dir:
             tab = '.' * len(filename)
@@ -1779,6 +1791,9 @@ class PrintStat():
 
     def __str__(self):
         return tabulate.tabulate(self._stats, self.headers)
+
+    def __eq__(self, other):
+        return self._stats == other._stats
 
 
 # This is test code where methods are tests, so we want to have lots of them.
@@ -2000,6 +2015,101 @@ class PosixTests():
             self.fatal_errors = True
         if dfuse1.stop():
             self.fatal_errors = True
+
+    def test_cache_expire(self):
+        """Check that data and readdir cache expire correctly
+
+        Crete two mount points on the same container, one for testing, the second for
+        oob-modifications.
+
+        Populate directory, read files in it (simulating ls -l).
+
+        oob remove some files, create some more and write to others.
+
+        re-read directory contents, this should appear unchanged.
+
+        Wait for expiry time to pass
+
+        re-read directory contents again, now this should be up to date.
+        """
+        cache_time = 20
+
+        cont_attrs = {}
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = cache_time
+        cont_attrs['dfuse-dentry-time'] = cache_time
+        cont_attrs['dfuse-ndentry-time'] = cache_time
+        self.container.set_attrs(cont_attrs)
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       wbcache=False,
+                       container=self.container)
+        dfuse0.start(v_hint='expire_0')
+
+        dfuse1 = DFuse(self.server,
+                       self.conf,
+                       caching=False,
+                       container=self.container)
+        dfuse1.start(v_hint='expire_1')
+
+        # Create ten files.
+        for idx in range(10):
+            with open(join(dfuse0.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        start = time.time()
+
+        stat_log = PrintStat()
+        stat_log.dir_add(dfuse0.dir)
+        print(stat_log)
+
+        # Create ten more.
+        for idx in range(10, 20):
+            with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        # Update some of the original ten.
+        for idx in range(3):
+            with open(join(dfuse1.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello world')
+
+        # Remove some of the original ten.
+        for idx in range(3, 6):
+            os.unlink(join(dfuse1.dir, f'batch0.{idx}'))
+
+        stat_log_oob = PrintStat()
+        stat_log_oob.dir_add(dfuse1.dir)
+        print(stat_log_oob)
+
+        stat_log1 = PrintStat()
+        stat_log1.dir_add(dfuse0.dir)
+        print(stat_log1)
+
+        elapsed = time.time() - start
+
+        assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
+
+        # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
+        time.sleep(cache_time + 2)
+
+        stat_log2 = PrintStat()
+        stat_log2.dir_add(dfuse0.dir)
+        print(stat_log2)
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if dfuse1.stop():
+            self.fatal_errors = True
+
+        assert stat_log == stat_log1, 'Contents changed within timeout'
+        assert stat_log != stat_log2, 'Contents did not change after timeout'
+
+        assert stat_log.count == 10, 'Incorrect initial file count'
+        assert stat_log2.count == 17, 'Incorrect file count after timeout'
+
+        assert stat_log2 == stat_log_oob, 'Contents not correct after timeout'
 
     @needs_dfuse
     def test_readdir_basic(self):
