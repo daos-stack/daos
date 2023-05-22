@@ -250,7 +250,7 @@ class DfuseMUPerms(DfuseTestBase):
         dfuse1.stop()
         dfuse2.stop()
 
-    def test_dfuse_mu_perms_il(self):
+    def run_test_il(self, il_lib=None):
         """Jira ID: DAOS-10857.
 
         Test Description:
@@ -270,11 +270,9 @@ class DfuseMUPerms(DfuseTestBase):
             Verify other users do not have access with or without IL.
             For each case, verify IL debug messages for files.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms
-        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_il
         """
+        if il_lib is None:
+            self.fail('il_lib is not defined.')
         # Setup the verify command. Only test with the owner and group_user
         verify_perms_cmd = VerifyPermsCommand(self.hostlist_clients)
         verify_perms_cmd.get_params(self)
@@ -303,7 +301,7 @@ class DfuseMUPerms(DfuseTestBase):
         env_without_il = verify_perms_cmd.env.copy()
         env_with_il = env_without_il.copy()
         env_with_il.update({
-            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            'LD_PRELOAD': os.path.join(self.prefix, 'lib64', il_lib),
             'D_IL_REPORT': -1  # Log all intercepted calls
         })
 
@@ -320,6 +318,10 @@ class DfuseMUPerms(DfuseTestBase):
             """
             verify_perms_cmd.env = env_with_il if use_il else env_without_il
             result = verify_perms_cmd.run()
+
+            # the output of libioil.so and libpil4dfs.so are different.
+            if il_lib == 'libpil4dfs.so':
+                return
 
             num_il_messages = 0
             found_der_no_perm = False
@@ -413,3 +415,21 @@ class DfuseMUPerms(DfuseTestBase):
 
         # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
         dfuse.stop()
+
+    def test_dfuse_mu_perms_ioil(self):
+        """
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_ioil
+        """
+        self.run_test_il(il_lib='libioil.so')
+
+    def test_dfuse_mu_perms_pil4dfs(self):
+        """
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_mu,verify_perms,pil4dfs
+        :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_pil4dfs
+        """
+        self.run_test_il(il_lib='libpil4dfs.so')
