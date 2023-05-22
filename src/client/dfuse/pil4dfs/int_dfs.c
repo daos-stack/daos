@@ -265,11 +265,12 @@ static d_hash_table_ops_t hdl_hash_ops = {.hop_key_cmp    = key_cmp,
  * should be length of the string, not including any \0 termination.
  */
 static int
-lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode, dfs_obj_t **obj)
+lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **obj)
 {
 	struct dir_hdl *hdl = NULL;
 	dfs_obj_t      *oh;
 	d_list_t       *rlink;
+	mode_t          mode;
 	int             rc;
 
 	/* TODO: Remove this after testing. */
@@ -282,11 +283,11 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode,
 		return 0;
 	}
 
-	rc = dfs_lookup(mt->dfs, name, O_RDWR, &oh, mode, NULL);
+	rc = dfs_lookup(mt->dfs, name, O_RDWR, &oh, &mode, NULL);
 	if (rc)
 		return rc;
 
-	if (!S_ISDIR(*mode)) {
+	if (!S_ISDIR(mode)) {
 		*obj = oh;
 		return 0;
 	}
@@ -761,7 +762,6 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	   char **parent_dir, char **full_path, struct dfs_mt **dfs_mt)
 {
 	int    pos, len;
-	mode_t mode;
 	bool   with_daos_prefix;
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
@@ -932,7 +932,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					path_len);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = lookup_insert_dir(*dfs_mt, *parent_dir, path_len, &mode, parent);
+			rc = lookup_insert_dir(*dfs_mt, *parent_dir, path_len, parent);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc);
