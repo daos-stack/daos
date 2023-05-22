@@ -159,16 +159,19 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
 /*
  * Copy out the internal BIO blobstore device state.
  */
-void
+int
 bio_get_bs_state(int *bs_state, uuid_t dev_uuid, struct bio_xs_context *xs)
 {
 	struct bio_xs_blobstore *bxb;
 
 	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
-	if (bxb)
-		*bs_state = bxb->bxb_blobstore->bb_state;
+	if (!bxb) {
+		D_ERROR("Failed to find BS for dev:"DF_UUID"\n", DP_UUID(dev_uuid));
+		return -DER_NONEXIST;
+	}
 
-	return;
+	*bs_state = bxb->bxb_blobstore->bb_state;
+	return 0;
 }
 
 /*

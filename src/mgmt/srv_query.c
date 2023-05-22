@@ -25,6 +25,7 @@ bs_state_query(void *arg)
 	struct dss_module_info		*info = dss_get_module_info();
 	struct bio_xs_context		*bxc;
 	struct bs_state_query_arg	*bs_arg = arg;
+	int				 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO blobstore state query on xs:%d, tgt:%d\n",
@@ -37,7 +38,10 @@ bs_state_query(void *arg)
 		return;
 	}
 
-	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
+	rc = bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
+	if (rc)
+		D_ERROR("Blobstore query on dev:"DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(bs_arg->bs_arg_uuid), DP_RC(rc));
 }
 
 static inline enum dss_xs_type
@@ -90,17 +94,18 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	uuid_copy(bs_arg.bs_arg_uuid, bs_uuid);
+	*bs_state = -1;
 	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, tgt2xs_type(tgt_id),
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
 	}
-	*bs_state = bs_arg.bs_arg_state;
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
-
+	/* Set 'bs_state' after state query ULT executed */
+	*bs_state = bs_arg.bs_arg_state;
 out:
 	smd_dev_free_info(dev_info);
 	return rc;
