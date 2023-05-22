@@ -44,7 +44,7 @@ class PoolCreateTests(TestWithServers):
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         storage = self.server_managers[0].get_available_storage()
-        if storage['nvme'][0] < 750156374016:
+        if storage['nvme'] < 750156374016:
             self.log.info(
                 'Reducing pool quantity from %s -> 150 due to insufficient NVMe capacity (%s < '
                 '750156374016)', quantity, storage['nvme'][0])
