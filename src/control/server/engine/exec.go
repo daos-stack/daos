@@ -149,8 +149,8 @@ func processLogEnvs(env []string) ([]string, error) {
 		return nil, err
 	}
 
-	env, err = common.UpdateEnvValue(env, envLogSubsystems, "")
-	if err != nil {
+	env, err = common.DeleteEnvValue(env, envLogSubsystems)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 

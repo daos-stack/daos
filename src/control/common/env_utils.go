@@ -104,6 +104,18 @@ func UpdateEnvValue(keyPairs []string, name, newValue string) ([]string, error) 
 	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
 }
 
+// DeleteEnvValue removes an existing key and returns new slice of key-value pairs.
+func DeleteEnvValue(keyPairs []string, name string) ([]string, error) {
+	for i, pair := range keyPairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) == 2 && kv[0] == name {
+			return append(keyPairs[:i], keyPairs[i+1:]...), nil
+		}
+	}
+
+	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
+}
+
 // MergeEnvVars merges and deduplicates two slices of environment
 // variables. Conflicts are resolved by taking the value from the
 // second list.
