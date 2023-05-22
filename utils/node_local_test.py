@@ -1052,14 +1052,21 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd):
+    def run_daos_client_cmd_pil4dfs(self, cmd, container=None):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
 
-        Looks like valgrind and libpil4dfs.so do not work together sometime.
-        Disable valgrind at this moment. Will revisit this issue later.
+        If container is supplied setup the environment to access that container, using a temporary
+        directory as a "mount point" and run the command from that directory so that paths can be
+        relative.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime. Disable valgrind at
+        this moment. Will revisit this issue later.
         """
+        if container is not None:
+            assert isinstance(container, DaosCont)
+
         cmd_env = get_base_env()
 
         with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
@@ -1073,10 +1080,19 @@ class DaosServer():
         cmd_env['D_IL_REPORT'] = '1'
         cmd_env['D_LOG_MASK'] = 'DEBUG'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        if container is not None:
+            # pylint: disable-next=consider-using-with
+            tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
+            cwd = tmp_dir.name
+            cmd_env['DAOS_MOUNT_POINT'] = cwd
+            cmd_env['DAOS_POOL'] = container.pool.id()
+            cmd_env['DAOS_CONTAINER'] = container.id()
+        else:
+            cwd = None
 
         print('Run command: ')
         print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
                             env=cmd_env, check=False)
         print(rc)
 
@@ -1100,6 +1116,9 @@ class DaosServer():
         log_test(self.conf, log_name, show_memleaks=False,
                  check_read=False, check_write=False, check_fstat=False)
         assert rc.returncode == 0
+        if cwd:
+            os.rmdir(cwd)
+        return rc
 
 
 class ValgrindHelper():
@@ -3688,9 +3707,15 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    def test_pil4dfs_no_dfuse(self):
+        """Test pil4dfs with no fuse instance"""
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/bin/sh', '.'], container=self.container)
+        rc = self.server.run_daos_client_cmd_pil4dfs(['ls'], container=self.container)
+        print(rc.stdout)
+        assert rc.stdout == b'sh\n', rc
+
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
