@@ -1081,6 +1081,8 @@ class DaosServer():
         cmd_env['D_LOG_MASK'] = 'DEBUG'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
         if container is not None:
+            # Create a temporary directory for the mount point, this will be removed as it goes out
+            # scope so keep as a local for the rest of the function.
             # pylint: disable-next=consider-using-with
             tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
             cwd = tmp_dir.name
@@ -1116,8 +1118,6 @@ class DaosServer():
         log_test(self.conf, log_name, show_memleaks=False,
                  check_read=False, check_write=False, check_fstat=False)
         assert rc.returncode == 0
-        if cwd:
-            os.rmdir(cwd)
         return rc
 
 
