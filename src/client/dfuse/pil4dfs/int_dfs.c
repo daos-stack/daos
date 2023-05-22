@@ -275,7 +275,6 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode,
 	/* TODO: Remove this after testing. */
 	D_ASSERT(strlen(name) == len);
 
-	*obj  = NULL;
 	rlink = d_hash_rec_find(mt->dfs_dir_hash, name, len);
 	if (rlink != NULL) {
 		hdl  = hdl_obj(rlink);
@@ -296,11 +295,8 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode,
 	 * be \0 terminiated however that is not required.
 	 */
 	D_ALLOC(hdl, sizeof(*hdl) + len + 1);
-	if (hdl == NULL) {
+	if (hdl == NULL)
 		D_GOTO(out_release, rc = ENOMEM);
-		dfs_release(oh);
-		return ENOMEM;
-	}
 
 	hdl->name_size = len;
 	hdl->oh        = oh;
@@ -315,6 +311,7 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, mode_t *mode,
 	return 0;
 
 out_release:
+	dfs_release(oh);
 	D_FREE(hdl);
 	return rc;
 }
@@ -773,6 +770,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	char  *pt_end = NULL;
 	char  *full_path_parse = NULL;
 
+	*parent = NULL;
+
 	/* determine whether the path starts with daos://pool/cont/. Need more work. */
 	with_daos_prefix = is_path_start_with_daos(szInput, pool, cont, &rel_path);
 	if (with_daos_prefix) {
@@ -899,7 +898,6 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 		/* root dir */
 		if (full_path_parse[(*dfs_mt)->len_fs_root] == 0) {
-			*parent       = NULL;
 			item_name[0]  = '/';
 			item_name[1]  = '\0';
 			strncpy(*full_path, "/", 2);
@@ -923,20 +921,12 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 			/* the item under root directory */
 			if (pos == (*dfs_mt)->len_fs_root) {
-				/* TODO: Do we need to call lookup_insert_dir() in this case, as
-				 * there's no ref counting on the hash table it's probably
-				 * sufficient to keep a pointer to the root dfs object and use
-				 * that here.
-				 */
-				*parent       = NULL;
 				(*parent_dir)[0] = '/';
 				path_len         = 1;
 			} else {
 				/* Need to look up the parent directory */
 				full_path_parse[pos] = 0;
-				/* path_len is length of the string, without termination, parent_dir
-				 * is already zeroed for the entire buffer.
-				 */
+				/* path_len is length of the string, without termination */
 				path_len = pos - (*dfs_mt)->len_fs_root;
 				strncpy(*parent_dir, full_path_parse + (*dfs_mt)->len_fs_root,
 					path_len);
@@ -949,7 +939,6 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		}
 	} else {
 		*is_target_path = 0;
-		*parent         = NULL;
 		item_name[0]    = '\0';
 	}
 
