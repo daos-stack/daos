@@ -180,7 +180,7 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out
 	}
 out:
 	*out_prop = result;
-	return rc;
+	return 0;
 
 err:
 	daos_prop_free(result);
