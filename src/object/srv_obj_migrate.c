@@ -2561,19 +2561,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_cont, rc);
 	}
 
-	memset(&anchor, 0, sizeof(anchor));
-	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_FOR_MIGRATION;
-		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
-	} else {
-		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
-	}
-
-	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	unpack_arg.arg = arg;
 	unpack_arg.epr = *epr;
 	unpack_arg.oh = oh;
@@ -2589,6 +2576,24 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			daos_obj_id2class(arg->oid.id_pub));
 		D_GOTO(out_cont, rc);
 	}
+
+	memset(&anchor, 0, sizeof(anchor));
+	memset(&akey_anchor, 0, sizeof(akey_anchor));
+	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
+	if (tls->mpt_opc == RB_OP_UPGRADE) {
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+			     DIOF_FOR_MIGRATION;
+		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
+		if (!daos_oclass_is_ec(&unpack_arg.oc_attr)) {
+			dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+			enum_flags |= DIOF_TO_SPEC_GROUP;
+		}
+	} else {
+		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
+	}
+
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
