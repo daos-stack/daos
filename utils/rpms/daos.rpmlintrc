@@ -51,3 +51,5 @@ addFilter("daos-client-tests.x86_64: E: devel-dependency protobuf-c-devel")
 
 # capstone-devel is needed to build daos from source so pulls in build deps and is expected.
 addFilter("daos-client-tests.x86_64: E: devel-dependency capstone-devel")
+addFilter("daos-client-tests.x86_64: E: explicit-lib-dependency libcapstone-devel")
+addFilter("daos-client-tests.x86_64: E: devel-dependency libcapstone-devel")
