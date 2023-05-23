@@ -45,7 +45,6 @@ class NvmePoolExtend(OSAUtils):
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
 
-        daos_command = self.get_daos_command()
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
@@ -94,7 +93,7 @@ class NvmePoolExtend(OSAUtils):
 
             # Extend ranks (4,5), (6,7), (8,9)
             ranks_extended = "{},{}".format((index * 2) + 4, (index * 2) + 5)
-            output = pool.extend(ranks_extended)
+            pool.extend(ranks_extended)
 
             # Wait for rebuild to complete
             pool.wait_for_rebuild_to_start()
@@ -129,8 +128,7 @@ class NvmePoolExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(index)
             pool.display_pool_daos_space(display_string)
             self.container = self.pool_cont_dict[pool][0]
-            output = daos_command.container_check(pool=pool.identifier, cont=self.container.uuid)
-            self.log.info(output)
+            self.container.check()
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086.

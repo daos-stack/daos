@@ -23,15 +23,11 @@ class IorCrash(IorTestBase):
 
     def cont_nhandles_match(self, exp_nhandles=1, attempts=5, delay_sec=2):
         """Verify container number of handles. If needed, perform multiple queries (with delay)."""
-        checks = {
-            "ci_nhandles": exp_nhandles}
-        chkres = False
         for _ in range(attempts):
-            chkres = self.container.check_container_info(**checks)
-            if chkres is True:
-                break
+            if self.container.check_container_info(ci_nhandles=exp_nhandles):
+                return True
             time.sleep(delay_sec)
-        return chkres
+        return False
 
     def test_ior_crash(self):
         """Jira ID: DAOS-4332.
@@ -53,12 +49,12 @@ class IorCrash(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,ior,dfs
-        :avocado: tags=test_ior_crash
+        :avocado: tags=IorCrash,test_ior_crash
         """
         # Create pool and container
         self.pool = self.get_pool(connect=False)
         self.container = self.get_container(self.pool)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
 
         # Don't check subprocess status, since output is buffered and can't be read in real time
         self.ior_cmd.pattern = None
