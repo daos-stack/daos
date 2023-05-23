@@ -1052,7 +1052,7 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
@@ -1062,7 +1062,7 @@ class DaosServer():
         """
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
                                          suffix='.log',
                                          dir=self.conf.tmp_dir,
                                          delete=False) as log_file:
@@ -1071,7 +1071,6 @@ class DaosServer():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd_env['D_IL_REPORT'] = '1'
-        cmd_env['D_LOG_MASK'] = 'DEBUG'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
 
         print('Run command: ')
@@ -1088,18 +1087,21 @@ class DaosServer():
             print('Stdout from command')
             print(rc.stdout.decode('utf-8').strip())
 
+        # Run log_test before other checks so this can warn for errors.
+        log_test(self.conf, log_name)
+
+        if check:
+            assert rc.returncode == 0, rc
+
         # check stderr for interception summary
         search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')
         num_op = int(search[0][9:])
-        if num_op == 0:
+        if check and num_op == 0:
             raise NLTestFail('op_sum is zero. Unexpected.')
         print(f'DBG> num_op = {num_op}')
-
-        log_test(self.conf, log_name, show_memleaks=False,
-                 check_read=False, check_write=False, check_fstat=False)
-        assert rc.returncode == 0
+        return rc
 
 
 class ValgrindHelper():
@@ -3800,7 +3802,6 @@ class PosixTests():
 
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
@@ -3824,6 +3825,12 @@ class PosixTests():
         # touch a file.
         file3 = join(path, 'file3')
         self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # cat a filename where a directory in the path is a file, should fail.  For now this does
+        # work but leaks memory.
+        # nop_file = join(file3, 'new_file which will not exist...')
+        # rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
+        # assert rc.returncode == 1, rc
 
         # create a dir.
         dir1 = join(path, 'dir1')
