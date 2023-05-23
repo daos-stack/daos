@@ -352,9 +352,18 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 		}
 
-		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		if (singv_lo != NULL)
-			singv_lo->cs_cell_align = 1;
+		singv_lo = (singv_los == NULL || iod->iod_type == DAOS_IOD_ARRAY) ?
+			   NULL : &singv_los[i];
+		if (singv_lo != NULL) {
+			/* Single-value csum layout not needed for short single value that only
+			 * stored on one data shard.
+			 */
+			if (obj_ec_singv_one_tgt(iod->iod_size, NULL,
+						 &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca))
+				singv_lo = NULL;
+			else
+				singv_lo->cs_cell_align = 1;
+		}
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);

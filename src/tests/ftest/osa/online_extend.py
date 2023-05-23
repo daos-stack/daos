@@ -11,7 +11,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -27,7 +26,6 @@ class OSAOnlineExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
@@ -72,7 +70,7 @@ class OSAOnlineExtend(OSAUtils):
             pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
-        # Extend the pool_uuid, rank and targets
+        # Extend the pool, rank and targets
         for val in range(0, num_pool):
             threads = []
             self.pool = pool[val]
@@ -145,10 +143,7 @@ class OSAOnlineExtend(OSAUtils):
             else:
                 break
             self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            self.container.check()
 
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751.
