@@ -499,8 +499,6 @@ main(int argc, char **argv)
 
 		allowed = hwloc_bitmap_weight(hw);
 
-		D_ERROR("Using %d/%d cores\n", allowed, total);
-
 		hwloc_topology_destroy(hwt);
 
 		if (total == allowed)
