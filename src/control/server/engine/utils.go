@@ -58,7 +58,7 @@ type LogLevel uint
 // LogLevels matching D_LOG API priority strings.
 const (
 	LogLevelUndefined LogLevel = iota
-	LogLevelDbug
+	LogLevelDebug
 	LogLevelInfo
 	LogLevelNote
 	LogLevelWarn
@@ -71,8 +71,8 @@ const (
 
 func (ll LogLevel) String() string {
 	switch ll {
-	case LogLevelDbug:
-		return "DBUG"
+	case LogLevelDebug:
+		return "DEBUG"
 	case LogLevelInfo:
 		return "INFO"
 	case LogLevelNote:
@@ -97,7 +97,7 @@ func (ll LogLevel) String() string {
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
 	case "DEBUG", "DBUG":
-		return LogLevelDbug
+		return LogLevelDebug
 	case "INFO":
 		return LogLevelInfo
 	case "NOTE":
@@ -328,8 +328,8 @@ func genLogMasks(assignments []logSubsysLevel, baseLevel LogLevel) string {
 // 6. Remove any assignment where level is equal to the new base level.
 // 7. Return new log masks generated from assignments and the new base level.
 func MergeLogEnvVars(logMasks, subsystemsStr string) (string, error) {
-	if subsystemsStr == "" || logMasks == "" {
-		return logMasks, nil
+	if subsystemsStr == "" || strings.ToUpper(subsystemsStr) == "ALL" || logMasks == "" {
+		return strings.ToUpper(logMasks), nil
 	}
 
 	// Identify original base log level from D_LOG_MASK string.

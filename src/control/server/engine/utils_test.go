@@ -133,7 +133,7 @@ func Test_MergeLogEnvVars(t *testing.T) {
 		"debug base level": {
 			masks:      "debug",
 			subsystems: "vos",
-			expMasks:   "ERR,vos=DBUG",
+			expMasks:   "ERR,vos=DEBUG",
 		},
 		"skip subsystem": {
 			masks:      "ERROR,misc=CRIT,mem=DEBUG",
@@ -143,22 +143,27 @@ func Test_MergeLogEnvVars(t *testing.T) {
 		"don't skip subsystem if level above error": {
 			masks:      "error,common=crit,vos=debug",
 			subsystems: "vos",
-			expMasks:   "ERR,common=CRIT,vos=DBUG",
+			expMasks:   "ERR,common=CRIT,vos=DEBUG",
 		},
 		"keep assignment for subsystem in list": {
 			masks:      "err,container=debug,object=debug",
 			subsystems: "object",
-			expMasks:   "ERR,object=DBUG",
+			expMasks:   "ERR,object=DEBUG",
 		},
 		"add assignment for subsystem in list; remove ineffective assignments": {
 			masks:      "dbug,rdb=crit,pool=err",
 			subsystems: "pool,mgmt",
-			expMasks:   "ERR,rdb=CRIT,mgmt=DBUG",
+			expMasks:   "ERR,rdb=CRIT,mgmt=DEBUG",
 		},
 		"default base level applied": {
 			masks:      "corpc=crit,iv=dbug,grp=dbug",
 			subsystems: "iv,st",
-			expMasks:   "ERR,corpc=CRIT,iv=DBUG",
+			expMasks:   "ERR,corpc=CRIT,iv=DEBUG",
+		},
+		"all debug": {
+			masks:      "debug",
+			subsystems: "all",
+			expMasks:   "DEBUG",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
