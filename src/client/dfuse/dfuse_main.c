@@ -501,6 +501,8 @@ main(int argc, char **argv)
 
 		D_ERROR("Using %d/%d cores\n", allowed, total);
 
+		hwloc_topology_destroy(hwt);
+
 		if (total == allowed)
 			dfuse_info->di_thread_count = min(allowed, 16);
 		else
