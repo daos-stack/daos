@@ -1249,7 +1249,12 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 			/** just try fetching entry to open the file */
 			daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_array_close(file->oh, NULL);
+			int rc2;
+
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2 == -DER_NOMEM)
+				daos_array_close(file->oh, NULL);
+
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			return rc;
 		} else {
