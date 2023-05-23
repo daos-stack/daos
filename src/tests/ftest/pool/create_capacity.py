@@ -47,7 +47,7 @@ class PoolCreateTests(TestWithServers):
         if storage['nvme'] < 750156374016:
             self.log.info(
                 'Reducing pool quantity from %s -> 150 due to insufficient NVMe capacity (%s < '
-                '750156374016)', quantity, storage['nvme'][0])
+                '750156374016)', quantity, storage['nvme'])
             quantity = 150
 
         # Define all the pools with the same size defined in the test yaml
