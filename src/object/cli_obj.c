@@ -6226,11 +6226,6 @@ out:
 	return shard;
 }
 
-/* TODO: This seems to be returning an error (if negative or number of shards but it's using
- * DF_RC(rc) which is reporting DER_UNKNOWN for positive values.  The caller only checks for
- * < 0 so this should just return a daos error code and DER_SUCCESS for success, never returning
- * a shard count or positive value.
- */
 static int
 obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		    daos_obj_list_t *args, uint32_t *shard, uint32_t *shard_cnt,
