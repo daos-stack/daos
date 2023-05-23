@@ -2932,6 +2932,12 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				sgls, NULL);
 }
 
+int
+vos_obj_layout_upgrade(daos_handle_t coh, daos_unit_oid_t oid, uint32_t layout_ver)
+{
+	return  vos_oi_upgrade_layout_ver(vos_hdl2cont(coh), oid, layout_ver);
+}
+
 /**
  * @} vos_obj_update() & vos_obj_fetch() functions
  */
