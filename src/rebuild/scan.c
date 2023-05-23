@@ -918,7 +918,7 @@ rebuild_scanner(void *data)
 				      PO_COMP_ST_NEW) ||
 	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
 	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
-		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = 0);
 	}
 
@@ -998,13 +998,21 @@ rebuild_scan_leader(void *data)
 
 	/* Wait for dtx resync to finish */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+		if (!rpt->rt_abort && !rpt->rt_finishing) {
+			ABT_mutex_lock(rpt->rt_lock);
+			ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			ABT_mutex_unlock(rpt->rt_lock);
+		}
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_INFO("shutdown rebuild "DF_UUID": "DF_RC"\n",
 			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
-		dss_sleep(2 * 1000);
+
 	}
+
+	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
+		DP_UUID(rpt->rt_pool_uuid));
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
