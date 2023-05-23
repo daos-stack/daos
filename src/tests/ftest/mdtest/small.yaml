@@ -39,6 +39,8 @@ container:
 mdtest:
   client_processes:
     ppn: 32
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
   manager: "MPICH"
   mdtest_params:
