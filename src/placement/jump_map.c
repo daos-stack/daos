@@ -73,12 +73,14 @@ struct pl_jump_map {
  *				recent pool map changes, like reintegration.
  * \param[in]	new		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
+ * \param[in]	for_reint	diff calls from find_reint() to extract the reintegrating
+ *                              shards.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
 static inline void
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		 struct pl_obj_layout *new, d_list_t *diff)
+		 struct pl_obj_layout *new, d_list_t *diff, bool for_reint)
 {
 	int index;
 
@@ -90,7 +92,12 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		uint32_t reint_tgt = new->ol_shards[index].po_target;
 		struct pool_target *temp_tgt;
 
-		if (reint_tgt != original_target) {
+		/* For reintegration, rebuilding shards should be added to the
+		 * reintegrated shards, since "DOWN" shard is being considered
+		 * during layout recalculation.
+		 */
+		if (reint_tgt != original_target ||
+		    (for_reint && original->ol_shards[index].po_rebuilding)) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);
 			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN | PO_COMP_ST_UP |
@@ -801,7 +808,7 @@ jump_map_obj_extend_layout(struct pl_jump_map *jmap, struct jm_obj_placement *jm
 
 	obj_layout_dump(md->omd_id, new_layout);
 
-	layout_find_diff(jmap, layout, new_layout, &extend_list);
+	layout_find_diff(jmap, layout, new_layout, &extend_list, false);
 	if (!d_list_empty(&extend_list)) {
 		rc = pl_map_extend(layout, &extend_list);
 		if (rc != 0) {
@@ -1019,7 +1026,7 @@ jump_map_obj_find_reint(struct pl_map *map, uint32_t layout_ver, struct daos_obj
 		D_GOTO(out, rc);
 
 	obj_layout_dump(md->omd_id, reint_layout);
-	layout_find_diff(jmap, layout, reint_layout, &reint_list);
+	layout_find_diff(jmap, layout, reint_layout, &reint_list, true);
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, &idx, reint_layout, &reint_list, false);

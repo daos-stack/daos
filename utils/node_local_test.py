@@ -28,6 +28,7 @@ import traceback
 import subprocess  # nosec
 import tempfile
 import pickle  # nosec
+import re
 import shutil
 import xattr
 import junit_xml
@@ -993,6 +994,113 @@ class DaosServer():
 
         return self.test_pool
 
+    def run_daos_client_cmd(self, cmd):
+        """Run a DAOS client
+
+        Run a command, returning what subprocess.run() would.
+
+        Enable logging, and valgrind for the command.
+        """
+        valgrind_hdl = ValgrindHelper(self.conf)
+
+        if self.conf.args.memcheck == 'no':
+            valgrind_hdl.use_valgrind = False
+
+        exec_cmd = valgrind_hdl.get_cmd_prefix()
+
+        exec_cmd.extend(cmd)
+
+        cmd_env = get_base_env()
+
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+                                         suffix='.log',
+                                         dir=self.conf.tmp_dir,
+                                         delete=False) as log_file:
+            log_name = log_file.name
+            cmd_env['D_LOG_FILE'] = log_name
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False)
+
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+
+        if rc.stdout != b'':
+            print(rc.stdout.decode('utf-8').strip())
+
+        show_memleaks = True
+
+        # A negative return code means the process exited with a signal so do not
+        # check for memory leaks in this case as it adds noise, right when it's
+        # least wanted.
+        if rc.returncode < 0:
+            show_memleaks = False
+
+        rc.fi_loc = log_test(self.conf, log_name, show_memleaks=show_memleaks)
+        valgrind_hdl.convert_xml()
+        # If there are valgrind errors here then mark them for later reporting but
+        # do not abort.  This allows a full-test run to report all valgrind issues
+        # in a single test run.
+        if valgrind_hdl.use_valgrind and rc.returncode == 42:
+            print("Valgrind errors detected")
+            print(rc)
+            self.conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
+            self.conf.valgrind_errors = True
+            rc.returncode = 0
+        assert rc.returncode == 0, rc
+
+    def run_daos_client_cmd_pil4dfs(self, cmd):
+        """Run a DAOS client with libpil4dfs.so
+
+        Run a command, returning what subprocess.run() would.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime.
+        Disable valgrind at this moment. Will revisit this issue later.
+        """
+        cmd_env = get_base_env()
+
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+                                         suffix='.log',
+                                         dir=self.conf.tmp_dir,
+                                         delete=False) as log_file:
+            log_name = log_file.name
+            cmd_env['D_LOG_FILE'] = log_name
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+        cmd_env['D_IL_REPORT'] = '1'
+        cmd_env['D_LOG_MASK'] = 'DEBUG'
+        cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+
+        print('Run command: ')
+        print(cmd)
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False)
+        print(rc)
+
+        if rc.stderr != b'':
+            print('Stderr from command')
+            print(rc.stderr.decode('utf-8').strip())
+
+        if rc.stdout != b'':
+            print('Stdout from command')
+            print(rc.stdout.decode('utf-8').strip())
+
+        # check stderr for interception summary
+        search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
+        if len(search) == 0:
+            raise NLTestFail('[op_sum ] is NOT found.')
+        num_op = int(search[0][9:])
+        if num_op == 0:
+            raise NLTestFail('op_sum is zero. Unexpected.')
+        print(f'DBG> num_op = {num_op}')
+
+        log_test(self.conf, log_name, show_memleaks=False,
+                 check_read=False, check_write=False, check_fstat=False)
+        assert rc.returncode == 0
+
 
 class ValgrindHelper():
     """Class for running valgrind commands
@@ -1218,7 +1326,7 @@ class DFuse():
         if self._sp:
             self.stop()
 
-    def stop(self):
+    def stop(self, ignore_einval=False):
         """Stop a previously started dfuse instance"""
         fatal_errors = False
         if not self._sp:
@@ -1247,7 +1355,7 @@ class DFuse():
             fatal_errors = True
             run_leak_test = False
         self._sp = None
-        log_test(self.conf, self.log_file, show_memleaks=run_leak_test)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test, ignore_einval=ignore_einval)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1369,17 +1477,14 @@ def run_daos_cmd(conf,
                  show_stdout=False,
                  valgrind=True,
                  log_check=True,
+                 ignore_busy=False,
                  use_json=False,
-                 log_mask=None,
                  cwd=None):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
-
-    if prefix is set to False do not run a DAOS command, but instead run what's
-    provided, however run it under the IL.
     """
     dcr = DaosCmdReturn()
     valgrind_hdl = ValgrindHelper(conf)
@@ -1414,8 +1519,6 @@ def run_daos_cmd(conf,
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
-    if log_mask:
-        cmd_env['D_LOG_MASK'] = log_mask
     rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         env=cmd_env, check=False, cwd=cwd)
 
@@ -1434,7 +1537,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, ignore_busy=ignore_busy)
     valgrind_hdl.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -1649,8 +1752,19 @@ class PrintStat():
     def __init__(self, filename=None):
         # Setup the object, and maybe add some data to it.
         self._stats = []
+        self.count = 0
         if filename:
             self.add(filename)
+
+    def dir_add(self, dirname):
+        """Add a directory contents
+
+        This differs from .add(dirname, show_dir=True) as it does not add the dir itself can the
+        result can be compared across mounts.
+        """
+        with os.scandir(dirname) as dirfd:
+            for entry in dirfd:
+                self.add(entry.name, attr=os.stat(join(dirname, entry.name)))
 
     def add(self, filename, attr=None, show_dir=False):
         """Add an entry to be displayed"""
@@ -1662,6 +1776,7 @@ class PrintStat():
                             attr.st_size,
                             stat.filemode(attr.st_mode),
                             filename])
+        self.count += 1
 
         if show_dir:
             tab = '.' * len(filename)
@@ -1670,6 +1785,9 @@ class PrintStat():
 
     def __str__(self):
         return tabulate.tabulate(self._stats, self.headers)
+
+    def __eq__(self, other):
+        return self._stats == other._stats
 
 
 # This is test code where methods are tests, so we want to have lots of them.
@@ -1891,6 +2009,101 @@ class PosixTests():
             self.fatal_errors = True
         if dfuse1.stop():
             self.fatal_errors = True
+
+    def test_cache_expire(self):
+        """Check that data and readdir cache expire correctly
+
+        Crete two mount points on the same container, one for testing, the second for
+        oob-modifications.
+
+        Populate directory, read files in it (simulating ls -l).
+
+        oob remove some files, create some more and write to others.
+
+        re-read directory contents, this should appear unchanged.
+
+        Wait for expiry time to pass
+
+        re-read directory contents again, now this should be up to date.
+        """
+        cache_time = 20
+
+        cont_attrs = {}
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = cache_time
+        cont_attrs['dfuse-dentry-time'] = cache_time
+        cont_attrs['dfuse-ndentry-time'] = cache_time
+        self.container.set_attrs(cont_attrs)
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       wbcache=False,
+                       container=self.container)
+        dfuse0.start(v_hint='expire_0')
+
+        dfuse1 = DFuse(self.server,
+                       self.conf,
+                       caching=False,
+                       container=self.container)
+        dfuse1.start(v_hint='expire_1')
+
+        # Create ten files.
+        for idx in range(10):
+            with open(join(dfuse0.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        start = time.time()
+
+        stat_log = PrintStat()
+        stat_log.dir_add(dfuse0.dir)
+        print(stat_log)
+
+        # Create ten more.
+        for idx in range(10, 20):
+            with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        # Update some of the original ten.
+        for idx in range(3):
+            with open(join(dfuse1.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello world')
+
+        # Remove some of the original ten.
+        for idx in range(3, 6):
+            os.unlink(join(dfuse1.dir, f'batch0.{idx}'))
+
+        stat_log_oob = PrintStat()
+        stat_log_oob.dir_add(dfuse1.dir)
+        print(stat_log_oob)
+
+        stat_log1 = PrintStat()
+        stat_log1.dir_add(dfuse0.dir)
+        print(stat_log1)
+
+        elapsed = time.time() - start
+
+        assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
+
+        # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
+        time.sleep(cache_time + 2)
+
+        stat_log2 = PrintStat()
+        stat_log2.dir_add(dfuse0.dir)
+        print(stat_log2)
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if dfuse1.stop():
+            self.fatal_errors = True
+
+        assert stat_log == stat_log1, 'Contents changed within timeout'
+        assert stat_log != stat_log2, 'Contents did not change after timeout'
+
+        assert stat_log.count == 10, 'Incorrect initial file count'
+        assert stat_log2.count == 17, 'Incorrect file count after timeout'
+
+        assert stat_log2 == stat_log_oob, 'Contents not correct after timeout'
 
     @needs_dfuse
     def test_readdir_basic(self):
@@ -3202,7 +3415,6 @@ class PosixTests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.log_mask = 'CRIT'
         dfuse.start(v_hint='fs_check_test')
         path = dfuse.dir
         dirname = join(path, 'test_dir')
@@ -3291,14 +3503,7 @@ class PosixTests():
             raise NLTestFail('Wrong number of entries')
 
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir/1d1/"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        if rc.stderr != b'':
-            print('Stderr from command')
-            print(rc.stderr.decode('utf-8').strip())
-        if rc.stdout != b'':
-            print(rc.stdout.decode('utf-8').strip())
+        self.server.run_daos_client_cmd(cmd)
 
         dir_list = os.listdir(dir1)
         nr_entries = len(dir_list)
@@ -3306,20 +3511,12 @@ class PosixTests():
             raise NLTestFail('Wrong number of entries')
 
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_entry", "/test_dir"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        if rc.stderr != b'':
-            print('Stderr from command')
-            print(rc.stderr.decode('utf-8').strip())
-        if rc.stdout != b'':
-            print(rc.stdout.decode('utf-8').strip())
-        assert rc.returncode == 0
+        self.server.run_daos_client_cmd(cmd)
 
         # run the checker while dfuse is still mounted (should fail - EX open)
         cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
                'lf1']
-        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -3359,7 +3556,6 @@ class PosixTests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.log_mask = 'CRIT'
         dfuse.start(v_hint='fs_check_test')
         path = dfuse.dir
 
@@ -3391,15 +3587,7 @@ class PosixTests():
         # punch the test_dir2 object.
         # this makes test_dir2 an empty dir (leaking everything under it)
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "punch_obj", "/test_dir2"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        if rc.stderr != b'':
-            print('Stderr from command')
-            print(rc.stderr.decode('utf-8').strip())
-        if rc.stdout != b'':
-            print(rc.stdout.decode('utf-8').strip())
-        assert rc.returncode == 0
+        self.server.run_daos_client_cmd(cmd)
 
         # stop dfuse
         if dfuse.stop():
@@ -3433,7 +3621,6 @@ class PosixTests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.log_mask = 'CRIT'
         dfuse.start(v_hint='fs_check_test')
         path = dfuse.dir
 
@@ -3462,13 +3649,11 @@ class PosixTests():
 
     def test_daos_fs_fix(self):
         """Test DAOS FS Fix Tool"""
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.log_mask = 'CRIT'
         dfuse.start(v_hint='fs_fix_test')
         path = dfuse.dir
         dirname = join(path, 'test_dir')
@@ -3497,20 +3682,11 @@ class PosixTests():
         cmd_env = get_base_env()
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/f1"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        assert rc.returncode == 0
+        self.server.run_daos_client_cmd(cmd)
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d1/f3"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        assert rc.returncode == 0
+        self.server.run_daos_client_cmd(cmd)
         cmd = [daos_mw_fi, self.pool.id(), self.container.id(), "corrupt_entry", "/test_dir/1d2"]
-        print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False, cwd=dfuse.dir)
-        assert rc.returncode == 0
+        self.server.run_daos_client_cmd(cmd)
 
         # try to read from corrupted entries. all should fail
         try:
@@ -3534,7 +3710,7 @@ class PosixTests():
         # fix corrupted entries while dfuse is running - should fail
         cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
                '--type', '--chunk-size', '1048576']
-        rc = run_daos_cmd(self.conf, cmd, log_mask='CRIT')
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -3543,7 +3719,7 @@ class PosixTests():
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
-        if dfuse.stop():
+        if dfuse.stop(ignore_einval=True):
             self.fatal_errors = True
 
         # fix corrupted entries
@@ -3583,7 +3759,6 @@ class PosixTests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.log_mask = 'CRIT'
         dfuse.start(v_hint='fs_fix_test')
         path = dfuse.dir
         dirname = join(path, 'test_dir')
@@ -3619,6 +3794,53 @@ class PosixTests():
         nr_entries = len(dir_list)
         if nr_entries != 1:
             raise NLTestFail('Wrong number of entries')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_pil4dfs(self):
+        """Test interception library libpil4dfs.so"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='pil4dfs')
+        path = dfuse.dir
+
+        # Create a file natively.
+        file1 = join(path, 'file1')
+        with open(file1, 'w') as fd:
+            fd.write('Hello World!')
+
+        # Copy a file.
+        file2 = join(path, 'file2')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
+
+        # Read a file with cat.
+        self.server.run_daos_client_cmd_pil4dfs(['cat', file2])
+
+        # touch a file.
+        file3 = join(path, 'file3')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # create a dir.
+        dir1 = join(path, 'dir1')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
+
+        # find to list all files/dirs.
+        self.server.run_daos_client_cmd_pil4dfs(['find', path])
+
+        # remove a file.
+        self.server.run_daos_client_cmd_pil4dfs(['rm', file3])
+
+        # rm a dir with a file and a symlink
+        file4 = join(path, 'dir1/file4')
+        self.server.run_daos_client_cmd_pil4dfs(['touch', file4])
+        link1 = join(path, 'dir1/link1')
+        self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
+        self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -3946,10 +4168,14 @@ def log_test(conf,
              quiet=False,
              skip_fi=False,
              leak_wf=None,
+             ignore_einval=False,
+             ignore_busy=False,
              check_read=False,
              check_write=False,
              check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
+    # pylint: disable=too-many-arguments
+
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
 
@@ -3981,6 +4207,12 @@ def log_test(conf,
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
     lto.hide_fi_calls = skip_fi
+
+    if ignore_einval:
+        lto.skip_suffixes.append(': 22 (Invalid argument)')
+
+    if ignore_busy:
+        lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
     try:
         lto.check_log_file(abort_on_warning=True,
