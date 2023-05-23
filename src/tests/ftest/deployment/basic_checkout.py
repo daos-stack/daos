@@ -10,7 +10,6 @@ from exception_utils import CommandFailure
 
 
 class BasicCheckout(PerformanceTestBase):
-    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -92,12 +91,11 @@ class BasicCheckout(PerformanceTestBase):
             self.fail("Test FAILED")
 
         # run mdtest
-        self.run_mdtest_multiple_variants(mdtest_params)
+        self.run_mdtest_multiple_variants(
+            mdtest_params, cont_namespace="/run/container_mdtest_small/*")
 
 
 class BasicCheckoutDm(DataMoverTestBase):
-    # pylint: disable=too-few-public-methods
-    # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
