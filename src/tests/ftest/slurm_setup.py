@@ -213,7 +213,7 @@ class SlurmSetup():
             run_remote(self.log, self.control, f'ls -al {script}')
             raise SlurmSetupException(f'Error writing slurm epilog script {script}') from error
 
-        command = command_as_user(self.root, f'chmod 755 {script}')
+        command = command_as_user(f'chmod 755 {script}', self.root)
         if not run_remote(self.log, self.control, command).passed:
             raise SlurmSetupException(f'Error setting slurm epilog script {script} permissions')
 
@@ -229,7 +229,7 @@ class SlurmSetup():
             SlurmSetupException: if there is an error copying the file on any host
         """
         self.log(f'Copying the {source} file to {destination} on {str(nodes)}')
-        command = command_as_user(self.root, f'cp {source} {destination}')
+        command = command_as_user(f'cp {source} {destination}', self.root)
         result = run_remote(self.log, nodes, command)
         if not result.passed:
             raise SlurmSetupException(

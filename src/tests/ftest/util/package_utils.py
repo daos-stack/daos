@@ -20,7 +20,7 @@ def install_packages(logger, nodes, packages, user=None, timeout=600):
         RemoteCommandResult: the 'dnf install' command results
     """
     logger.info('Installing packages on %s: %s', nodes, ', '.join(packages))
-    command = command_as_user(user, ' '.join(['dnf', 'install', '-y'] + packages))
+    command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
     return run_remote(logger, nodes, command, timeout=timeout)
 
 
@@ -37,5 +37,5 @@ def remove_packages(logger, nodes, packages, user=None, timeout=600):
         RemoteCommandResult: the 'dnf remove' command results
     """
     logger.info('Removing packages on %s: %s', nodes, ', '.join(packages))
-    command = command_as_user(user, ' '.join(['dnf', 'remove', '-y'] + packages))
+    command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)
     return run_remote(logger, nodes, command, timeout=timeout)
