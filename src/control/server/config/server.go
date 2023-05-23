@@ -580,7 +580,7 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		} else if confSize > maxRamdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
 			log.Errorf("%s: engine-%d config size too large for total memory", msg,
-				ec.Index)
+				idx)
 
 			return FaultConfigRamdiskOverMaxMem(confSize, maxRamdiskSize,
 				storage.MinRamdiskMem)

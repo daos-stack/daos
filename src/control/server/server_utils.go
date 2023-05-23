@@ -503,7 +503,7 @@ func cleanEngineHugepages(srv *server) error {
 
 // Provide some confidence that engines will have enough memory to run without OOM failures by
 // ensuring reported available memory (of type RAM) is enough to cover at least 90% of engine
-// AM-disk sizes set in the storage config.
+// RAM-disk sizes set in the storage config.
 //
 // Note that check is to be performed after hugepages have been allocated, as such the available
 // memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
