@@ -1052,7 +1052,7 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
@@ -1062,7 +1062,7 @@ class DaosServer():
         """
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
                                          suffix='.log',
                                          dir=self.conf.tmp_dir,
                                          delete=False) as log_file:
@@ -1071,7 +1071,6 @@ class DaosServer():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd_env['D_IL_REPORT'] = '1'
-        cmd_env['D_LOG_MASK'] = 'DEBUG'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
 
         print('Run command: ')
@@ -1088,18 +1087,21 @@ class DaosServer():
             print('Stdout from command')
             print(rc.stdout.decode('utf-8').strip())
 
+        # Run log_test before other checks so this can warn for errors.
+        log_test(self.conf, log_name)
+
+        if check:
+            assert rc.returncode == 0, rc
+
         # check stderr for interception summary
         search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')
         num_op = int(search[0][9:])
-        if num_op == 0:
+        if check and num_op == 0:
             raise NLTestFail('op_sum is zero. Unexpected.')
         print(f'DBG> num_op = {num_op}')
-
-        log_test(self.conf, log_name, show_memleaks=False,
-                 check_read=False, check_write=False, check_fstat=False)
-        assert rc.returncode == 0
+        return rc
 
 
 class ValgrindHelper():
@@ -1752,8 +1754,19 @@ class PrintStat():
     def __init__(self, filename=None):
         # Setup the object, and maybe add some data to it.
         self._stats = []
+        self.count = 0
         if filename:
             self.add(filename)
+
+    def dir_add(self, dirname):
+        """Add a directory contents
+
+        This differs from .add(dirname, show_dir=True) as it does not add the dir itself can the
+        result can be compared across mounts.
+        """
+        with os.scandir(dirname) as dirfd:
+            for entry in dirfd:
+                self.add(entry.name, attr=os.stat(join(dirname, entry.name)))
 
     def add(self, filename, attr=None, show_dir=False):
         """Add an entry to be displayed"""
@@ -1765,6 +1778,7 @@ class PrintStat():
                             attr.st_size,
                             stat.filemode(attr.st_mode),
                             filename])
+        self.count += 1
 
         if show_dir:
             tab = '.' * len(filename)
@@ -1773,6 +1787,9 @@ class PrintStat():
 
     def __str__(self):
         return tabulate.tabulate(self._stats, self.headers)
+
+    def __eq__(self, other):
+        return self._stats == other._stats
 
 
 # This is test code where methods are tests, so we want to have lots of them.
@@ -1994,6 +2011,101 @@ class PosixTests():
             self.fatal_errors = True
         if dfuse1.stop():
             self.fatal_errors = True
+
+    def test_cache_expire(self):
+        """Check that data and readdir cache expire correctly
+
+        Crete two mount points on the same container, one for testing, the second for
+        oob-modifications.
+
+        Populate directory, read files in it (simulating ls -l).
+
+        oob remove some files, create some more and write to others.
+
+        re-read directory contents, this should appear unchanged.
+
+        Wait for expiry time to pass
+
+        re-read directory contents again, now this should be up to date.
+        """
+        cache_time = 20
+
+        cont_attrs = {}
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = cache_time
+        cont_attrs['dfuse-dentry-time'] = cache_time
+        cont_attrs['dfuse-ndentry-time'] = cache_time
+        self.container.set_attrs(cont_attrs)
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       wbcache=False,
+                       container=self.container)
+        dfuse0.start(v_hint='expire_0')
+
+        dfuse1 = DFuse(self.server,
+                       self.conf,
+                       caching=False,
+                       container=self.container)
+        dfuse1.start(v_hint='expire_1')
+
+        # Create ten files.
+        for idx in range(10):
+            with open(join(dfuse0.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        start = time.time()
+
+        stat_log = PrintStat()
+        stat_log.dir_add(dfuse0.dir)
+        print(stat_log)
+
+        # Create ten more.
+        for idx in range(10, 20):
+            with open(join(dfuse1.dir, f'batch1.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        # Update some of the original ten.
+        for idx in range(3):
+            with open(join(dfuse1.dir, f'batch0.{idx}'), 'w') as ofd:
+                ofd.write('hello world')
+
+        # Remove some of the original ten.
+        for idx in range(3, 6):
+            os.unlink(join(dfuse1.dir, f'batch0.{idx}'))
+
+        stat_log_oob = PrintStat()
+        stat_log_oob.dir_add(dfuse1.dir)
+        print(stat_log_oob)
+
+        stat_log1 = PrintStat()
+        stat_log1.dir_add(dfuse0.dir)
+        print(stat_log1)
+
+        elapsed = time.time() - start
+
+        assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
+
+        # Now wait for cache timeout, allowing for the readdir calls above to repopulate it.
+        time.sleep(cache_time + 2)
+
+        stat_log2 = PrintStat()
+        stat_log2.dir_add(dfuse0.dir)
+        print(stat_log2)
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if dfuse1.stop():
+            self.fatal_errors = True
+
+        assert stat_log == stat_log1, 'Contents changed within timeout'
+        assert stat_log != stat_log2, 'Contents did not change after timeout'
+
+        assert stat_log.count == 10, 'Incorrect initial file count'
+        assert stat_log2.count == 17, 'Incorrect file count after timeout'
+
+        assert stat_log2 == stat_log_oob, 'Contents not correct after timeout'
 
     @needs_dfuse
     def test_readdir_basic(self):
@@ -3690,7 +3802,6 @@ class PosixTests():
 
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
@@ -3714,6 +3825,12 @@ class PosixTests():
         # touch a file.
         file3 = join(path, 'file3')
         self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # cat a filename where a directory in the path is a file, should fail.  For now this does
+        # work but leaks memory.
+        # nop_file = join(file3, 'new_file which will not exist...')
+        # rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
+        # assert rc.returncode == 1, rc
 
         # create a dir.
         dir1 = join(path, 'dir1')
