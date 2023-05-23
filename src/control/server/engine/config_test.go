@@ -661,6 +661,49 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 }
 
+func TestConfig_EnvVarConflict(t *testing.T) {
+	logMask1 := "LOG_MASK_VALUE_1"
+	logMask2 := "LOG_MASK_VALUE_2"
+
+	for name, tc := range map[string]struct {
+		logMask    string
+		envLogMask string
+		expEnvMask string
+	}{
+		"log_mask takes precedence": {
+			logMask:    logMask1,
+			envLogMask: logMask2,
+			expEnvMask: logMask1,
+		},
+		"empty log_mask uses env": {
+			logMask:    "",
+			envLogMask: logMask2,
+			expEnvMask: logMask2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().
+				WithLogMask(tc.logMask).
+				WithEnvVars("D_LOG_MASK=" + tc.envLogMask)
+
+			wantEnv := []string{
+				"D_LOG_MASK=" + tc.expEnvMask,
+				"CRT_TIMEOUT=0",
+				"CRT_CTX_SHARE_ADDR=0",
+				"FI_OFI_RXM_USE_SRX=1",
+			}
+
+			gotEnv, err := cfg.CmdLineEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestFabricConfig_Update(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fc        *FabricConfig

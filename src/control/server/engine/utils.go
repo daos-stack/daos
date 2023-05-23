@@ -135,7 +135,8 @@ var (
 		"MISC", "MEM", // Common subsystems (GURT)
 		"RPC", "BULK", "CORPC", "GRP", "LM", "HG", "ST", "IV", // CaRT subsystems
 	}
-	errLogNameAllWithOther = errors.New("'all' stream identifier cannot be used with any other")
+	errLogNameAllWithOther = errors.New("'all' identifier cannot be used with any other")
+	errLogNameAllInMasks   = errors.New("'all' identifier cannot be used in log mask level assignments")
 )
 
 func isLogLevelValid(name string) bool {
@@ -189,8 +190,17 @@ func ValidateLogMasks(masks string) error {
 			return errors.Errorf("tokens after the first separator should be of the "+
 				"form PREFIX=LEVEL but token %d is %q", idx, tok)
 		}
-		if !isLogLevelValid(subsysLevel[1]) {
-			return errUnknownLogLevel(subsysLevel[1])
+
+		subsys := subsysLevel[0]
+		level := subsysLevel[1]
+		if !isLogLevelValid(level) {
+			return errUnknownLogLevel(level)
+		}
+		if strings.ToUpper(subsys) == "ALL" {
+			return errLogNameAllInMasks
+		}
+		if err := ValidateLogSubsystems(subsys); err != nil {
+			return err
 		}
 	}
 

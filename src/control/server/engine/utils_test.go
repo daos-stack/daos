@@ -41,6 +41,14 @@ func Test_ValidateLogMasks(t *testing.T) {
 			masks:  "ERR, mgmt=DEBUG",
 			expErr: errors.New("illegal characters"),
 		},
+		"single level; single assignment; bad subsystem": {
+			masks:  "ERR,zzz=DBUG",
+			expErr: errors.New("unknown name"),
+		},
+		"single level; single assignment; illegal use of all": {
+			masks:  "ERR,all=DBUG",
+			expErr: errors.New(""),
+		},
 		"single level; single assignment; bad level": {
 			masks:  "ERR,mgmt=DEG",
 			expErr: errors.New("unknown log level"),
