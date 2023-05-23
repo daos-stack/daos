@@ -77,6 +77,7 @@ class SlurmSetup():
         Returns:
             bool: were all packages removed from all hosts successfully
         """
+        self.log.info("Removing slurm packages")
         return remove_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root).passed
 
     def install_packages(self):
@@ -85,6 +86,7 @@ class SlurmSetup():
         Returns:
             bool: were all packages installed on all hosts successfully
         """
+        self.log.info("Installing slurm packages")
         return install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root).passed
 
     def update_config(self, partition):
@@ -96,6 +98,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem
         """
+        self.log.info("Updating slurm config files")
+
         # Create the slurm epilog script on the control node
         self._create_epilog_script(self.EPILOG_FILE)
 
@@ -121,6 +125,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting munge
         """
+        self.log.info("Starting munge")
+
         # Setup the munge dir file permissions on all hosts
         self._update_file(self.all_nodes, self.MUNGE_DIR, '777', user)
 
@@ -163,6 +169,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting slurm
         """
+        self.log.info("Starting slurm")
+
         self._mkdir(self.all_nodes, self.SLURM_LOG_DIR)
         self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, user)
         self._mkdir(self.all_nodes, '/var/spool/slurmd')
@@ -228,7 +236,7 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is an error copying the file on any host
         """
-        self.log(f'Copying the {source} file to {destination} on {str(nodes)}')
+        self.log.debug(f'Copying the {source} file to {destination} on {str(nodes)}')
         command = command_as_user(f'cp {source} {destination}', self.root)
         result = run_remote(self.log, nodes, command)
         if not result.passed:
