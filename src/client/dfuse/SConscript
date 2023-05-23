@@ -217,7 +217,7 @@ def scons():
 
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
-    prereqs.require(cenv, 'fuse')
+    cenv.require('hwloc', 'fuse')
 
     configure_fuse(cenv)
 
@@ -226,7 +226,6 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
-    cenv.require('hwloc')
     cenv.AppendUnique(LIBS=['gurt'])
     dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
