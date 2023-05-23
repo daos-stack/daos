@@ -716,8 +716,9 @@ class DaosServer():
 
         for (key, value) in server_env.items():
             # If server log is set via server_debug then do not also set env settings.
-            if self.conf.args.server_debug and key not in ('DD_MASK', 'DD_SUBSYS', 'D_LOG_MASK'):
-                scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
+            if self.conf.args.server_debug and key in ('DD_MASK', 'DD_SUBSYS', 'D_LOG_MASK'):
+                continue
+            scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
         ref_engine['storage'][0]['scm_size'] = int(
