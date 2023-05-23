@@ -915,7 +915,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Streams:    "MGMT",
 				Subsystems: "MISC",
 			},
-			expMasks:   "ERR,MISC=DBUG",
+			expMasks:   "ERR,MISC=DEBUG",
 			expStreams: "MGMT",
 		},
 		"all values specified in config": {
