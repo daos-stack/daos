@@ -382,7 +382,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			}
 			cmd.Logger = log
 
-			gf := func(_ context.Context, _ logging.Logger) (*control.HostFabric, error) {
+			gf := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
 				return tc.hf, tc.hfErr
 			}
 
