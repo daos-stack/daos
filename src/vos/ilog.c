@@ -471,6 +471,8 @@ ilog_destroy(struct umem_instance *umm,
 	int			 rc = 0;
 	struct ilog_array_cache	 cache = {0};
 
+	D_DEBUG(DB_TRACE, "Destroy ilog " DF_X64 "\n", lctx.ic_root_off);
+
 	ILOG_ASSERT_VALID(root);
 
 	rc = ilog_tx_begin(&lctx);

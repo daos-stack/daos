@@ -378,6 +378,14 @@ rdb_raft_unload_snapshot(struct rdb *db)
 }
 
 static int
+iterate_wrap(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	     void *arg, struct dtx_handle *dth)
+{
+	return vos_iterate(param, type, recursive, anchors, pre_cb, post_cb, arg, dth);
+}
+
+static int
 rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 		    d_iov_t *data, struct rdb_anchor *anchor)
 {
@@ -412,8 +420,8 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = ds_obj_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg,
-			      vos_iterate, NULL /* dth */);
+	rc = ds_obj_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg, iterate_wrap,
+			      NULL /* dth */);
 	if (rc < 0)
 		return rc;
 

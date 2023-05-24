@@ -731,15 +731,16 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
 	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
-		if (rc == 0 && iter->it_parent != NULL && anchors->ia_probe_level == 0) {
-			/* All of our iterator use cases should never be iterating a
-			 * subtree of something that is deleted.  Let's assert this
-			 * is the case so as to catch any bugs earlier.
+		if (iter->it_parent != NULL || rc != 0 || iter->it_type <= VOS_ITER_OBJ ||
+		    anchors->ia_probe_level != 0)
+			return rc;
+		validate_rc = vos_iter_validate_internal(iter->it_parent);
+		if (validate_rc != 0) {
+			/** In theory, this should never happen with our use cases but let's
+			 *  warn if it does.
 			 */
-			validate_rc = vos_iter_validate_internal(iter->it_parent);
-			D_ASSERTF(validate_rc == 0,
-				  "Validation at level %d failed, parent removed, returned %d\n",
-				  iter->it_type, validate_rc);
+			D_WARN("Iterator tree disappeared above iterator level %d at %d\n",
+			       iter->it_type, validate_rc);
 		}
 	}
 
@@ -816,6 +817,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	iter = vos_hdl2iter(ih);
 	/** Save pointer to anchors for vos_iter_validate */
 	iter->it_anchors          = anchors;
+	iter->it_param            = param;
 	iter->it_show_uncommitted = 0;
 	if (show_uncommitted) {
 		iter->it_show_uncommitted = 1;
@@ -897,10 +899,8 @@ probe:
 				goto out;
 			}
 
-
-			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
-					 recursive, anchors, pre_cb, post_cb,
-					 arg, dth);
+			rc = vos_iterate_(&child_param, iter_ent.ie_child_type, recursive, anchors,
+					  pre_cb, post_cb, arg, dth);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -1015,9 +1015,9 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
  * cb(\a arg) for each entry.
  */
 int
-vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+vos_iterate_(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	     void *arg, struct dtx_handle *dth)
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 

@@ -3085,6 +3085,14 @@ obj_restore_enum_args(crt_rpc_t *rpc, struct ds_obj_enum_arg *des,
 }
 
 static int
+iterate_wrap(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	     void *arg, struct dtx_handle *dth)
+{
+	return vos_iterate(param, type, recursive, anchors, pre_cb, post_cb, arg, dth);
+}
+
+static int
 obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	       struct vos_iter_anchors *anchors, struct ds_obj_enum_arg *enum_arg,
 	       daos_epoch_t *e_out)
@@ -3209,7 +3217,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = ds_obj_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
+	rc = ds_obj_enum_pack(&param, type, recursive, &anchors[0], enum_arg, iterate_wrap, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN) {

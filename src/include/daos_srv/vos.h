@@ -1122,10 +1122,15 @@ vos_iter_validate(daos_handle_t ih);
  * \retval		> 0	callback return value
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
+#define vos_iterate(param, type, recursive, ...)                                                   \
+	({                                                                                         \
+		D_DEBUG(DB_IO, "vos_iterate type=%d recursive=%d\n", type, recursive);             \
+		vos_iterate_(param, type, recursive, __VA_ARGS__);                                 \
+	})
 int
-vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	     void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

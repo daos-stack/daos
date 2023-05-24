@@ -177,6 +177,8 @@ typedef enum {
 	VOS_ITER_NONE,
 	/** iterate container UUIDs in a pool */
 	VOS_ITER_COUUID,
+	/** iterate VOS active-DTX table */
+	VOS_ITER_DTX,
 	/** iterate objects within a container */
 	VOS_ITER_OBJ,
 	/** iterate all d-keys */
@@ -187,8 +189,6 @@ typedef enum {
 	VOS_ITER_SINGLE,
 	/** iterate record extents and epoch validities of these extents */
 	VOS_ITER_RECX,
-	/** iterate VOS active-DTX table */
-	VOS_ITER_DTX,
 } vos_iter_type_t;
 
 static inline int
