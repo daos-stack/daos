@@ -94,6 +94,7 @@ func (ll LogLevel) String() string {
 	}
 }
 
+// StrToLogLevel takes an input string and returns a LogLevel type object.
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
 	case "DEBUG", "DBUG":
