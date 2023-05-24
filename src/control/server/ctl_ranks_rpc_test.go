@@ -907,7 +907,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Masks: "DEBUG",
 			},
 			cfgMasks: "ERR",
-			expMasks: "DEBUG",
+			expMasks: "DBUG",
 		},
 		"all values specified in request": {
 			req: ctlpb.SetLogMasksReq{
@@ -915,7 +915,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Streams:    "MGMT",
 				Subsystems: "MISC",
 			},
-			expMasks:   "ERR,MISC=DEBUG",
+			expMasks:   "ERR,MISC=DBUG",
 			expStreams: "MGMT",
 		},
 		"all values specified in config": {

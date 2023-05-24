@@ -58,7 +58,7 @@ type LogLevel uint
 // LogLevels matching D_LOG API priority strings.
 const (
 	LogLevelUndefined LogLevel = iota
-	LogLevelDebug
+	LogLevelDbug
 	LogLevelInfo
 	LogLevelNote
 	LogLevelWarn
@@ -71,8 +71,8 @@ const (
 
 func (ll LogLevel) String() string {
 	switch ll {
-	case LogLevelDebug:
-		return "DEBUG"
+	case LogLevelDbug:
+		return "DBUG"
 	case LogLevelInfo:
 		return "INFO"
 	case LogLevelNote:
@@ -97,7 +97,7 @@ func (ll LogLevel) String() string {
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
 	case "DEBUG", "DBUG":
-		return LogLevelDebug
+		return LogLevelDbug
 	case "INFO":
 		return LogLevelInfo
 	case "NOTE":
@@ -110,7 +110,7 @@ func StrToLogLevel(s string) LogLevel {
 		return LogLevelCrit
 	case "ALRT":
 		return LogLevelAlrt
-	case "EMRG":
+	case "FATAL", "EMRG":
 		return LogLevelEmrg
 	case "EMIT":
 		return LogLevelEmit
@@ -121,19 +121,23 @@ func StrToLogLevel(s string) LogLevel {
 
 var (
 	validLogLevels = []string{
-		"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
+		"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "FATAL",
+		"EMRG", "EMIT",
 	}
 	validLogStreams = []string{
-		"ALL",                                                      // Select all debug streams
-		"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "DAOS_DEFAULT", // DAOS debug streams
+		"ALL",                                                       // Select all streams
+		"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "GROUP_DEFAULT", // DAOS debug streams
+		"GROUP_METADATA_ONLY", "GROUP_METADATA",
 		"ANY", "TRACE", "MEM", "NET", "IO", // GURT debug streams
 	}
 	validLogSubsystems = []string{
 		"ALL",                                                      // Select all subsystems
-		"COMMON", "TREE", "VOS", "CLIENT", "SERVER", "RDB", "POOL", // DAOS subsystems
-		"CONTAINER", "OBJECT", "PLACEMENT", "REBUILD", "TIER", "MGMT", "BIO", "TESTS",
-		"MISC", "MEM", // Common subsystems (GURT)
-		"RPC", "BULK", "CORPC", "GRP", "LM", "HG", "ST", "IV", // CaRT subsystems
+		"ARRAY", "KV", "COMMON", "TREE", "VOS", "CLIENT", "SERVER", // DAOS subsystems
+		"RDB", "RSVC", "POOL", "CONTAINER", "OBJECT", "PLACEMENT",
+		"REBUILD", "TIER", "MGMT", "BIO", "TESTS", "DFS", "DUNS",
+		"DRPC", "SECURITY", "DTX", "DFUSE", "IL", "CSUM",
+		"MISC", "MEM", "SWIM", "TELEM", // Common subsystems (GURT)
+		"RPC", "BULK", "CORPC", "GRP", "HG", "ST", "IV", "CTL", // CaRT subsystems
 	}
 	errLogNameAllWithOther = errors.New("'all' identifier cannot be used with any other")
 	errLogNameAllInMasks   = errors.New("'all' identifier cannot be used in log mask level assignments")
@@ -277,7 +281,7 @@ func getLogLevelAssignments(masks, subsystemsStr string, baseLevel LogLevel) ([]
 
 	var subsystems []string
 	for _, ss := range strings.Split(subsystemsStr, logMasksStrAssignSep) {
-		if ss == "" {
+		if ss == "" || strings.ToUpper(ss) == "ALL" {
 			continue
 		}
 		subsystems = append(subsystems, ss)
@@ -338,8 +342,8 @@ func genLogMasks(assignments []logSubsysLevel, baseLevel LogLevel) string {
 // 6. Remove any assignment where level is equal to the new base level.
 // 7. Return new log masks generated from assignments and the new base level.
 func MergeLogEnvVars(logMasks, subsystemsStr string) (string, error) {
-	if subsystemsStr == "" || strings.ToUpper(subsystemsStr) == "ALL" || logMasks == "" {
-		return strings.ToUpper(logMasks), nil
+	if logMasks == "" {
+		return "", nil
 	}
 
 	// Identify original base log level from D_LOG_MASK string.
@@ -349,6 +353,10 @@ func MergeLogEnvVars(logMasks, subsystemsStr string) (string, error) {
 	assignments, err := getLogLevelAssignments(logMasks, subsystemsStr, baseLevel)
 	if err != nil {
 		return "", err
+	}
+
+	if subsystemsStr == "" || strings.ToUpper(subsystemsStr) == "ALL" {
+		return genLogMasks(assignments, baseLevel), nil
 	}
 
 	if baseLevel < LogLevelErr {
