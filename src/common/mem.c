@@ -308,8 +308,6 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 			goto error;
 		}
 		umm_pool->up_priv = dav_hdl;
-
-		/* TODO: Do checkpoint here to write back allocator heap */
 		break;
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_create(path, 0, store, &bh);
@@ -383,10 +381,6 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 		umm_pool->up_priv = pop;
 		break;
 	case DAOS_MD_BMEM:
-		/* TODO mmap tmpfs file */
-		/* TODO Load all meta pages from SSD */
-		/* TODO Replay WAL */
-
 		dav_hdl = dav_obj_open(path, 0, &umm_pool->up_store);
 		if (!dav_hdl) {
 			D_ERROR("Error in opening the pool %s: errno =%d\n",

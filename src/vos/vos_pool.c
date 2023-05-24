@@ -1141,9 +1141,10 @@ enum {
 static void
 lock_pool_memory(struct vos_pool *pool)
 {
-	static		 int lock_mem = LM_FLAG_UNINIT;
-	struct rlimit	 rlim;
-	int		 rc;
+	static int	lock_mem = LM_FLAG_UNINIT;
+	struct rlimit	rlim;
+	size_t		lock_bytes;
+	int		rc;
 
 	if (lock_mem == LM_FLAG_UNINIT) {
 		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
@@ -1165,16 +1166,21 @@ lock_pool_memory(struct vos_pool *pool)
 	if (lock_mem == LM_FLAG_DISABLED)
 		return;
 
-	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		lock_bytes = vos_pool2umm(pool)->umm_pool->up_store.stor_size;
+	else
+		lock_bytes = pool->vp_pool_df->pd_scm_sz;
+
+	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
 	if (rc != 0) {
 		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
-		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       "; errno=%d (%s)\n", lock_bytes, pool->vp_umm.umm_base,
 		       errno, strerror(errno));
 		return;
 	}
 
 	/* Only save the size if the locking was successful */
-	pool->vp_size = pool->vp_pool_df->pd_scm_sz;
+	pool->vp_size = lock_bytes;
 	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
 		pool->vp_umm.umm_base);
 }
