@@ -44,21 +44,35 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def execute_mdtest(self, out_queue=None, display_space=True, cont_namespace=None):
+    def get_mdtest_container(self, pool):
+        """Create a container to use with mdtest.
+
+        Args:
+            pool (TestPool): pool to create container in
+
+        Returns:
+            TestContainer: the new container
+        """
+        params = {}
+        if self.mdtest_cmd.dfs_oclass.value:
+            params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
+        return self.get_container(pool, **params)
+
+    def execute_mdtest(self, out_queue=None, display_space=True):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
-            cont_namespace (str, optional): container namespace when creating a container.
-                Defaults to None.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)
         # create container
         if self.container is None:
-            self.container = self.get_container(self.pool, namespace=cont_namespace)
+            self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
 
@@ -139,13 +153,11 @@ class MdtestBase(DfuseTestBase):
 
         return None
 
-    def run_mdtest_multiple_variants(self, mdtest_params, cont_namespace=None):
+    def run_mdtest_multiple_variants(self, mdtest_params):
         """Running mdtest different variants of mdtest with
            different values.
         Args:
             mdtest_params(list): List comprising of different set of mdtest parameters.
-            cont_namespace (str, optional): container namespace when creating a container.
-                Defaults to None.
         """
 
         # Running mdtest for different variants
@@ -167,7 +179,7 @@ class MdtestBase(DfuseTestBase):
                 self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(
                     self.prefix, 'lib64', 'libpil4dfs.so')
             # run mdtest
-            self.execute_mdtest(cont_namespace=cont_namespace)
+            self.execute_mdtest()
             if len(params) == 8 and params[7]:
                 del self.mdtest_cmd.env['LD_PRELOAD']
             # re-set mdtest params before next iteration

@@ -35,14 +35,12 @@ pool:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: S1
-  dir_oclass: SX
   control_method: daos
 mdtest:
   client_processes:
     ppn: 32
-  dfs_oclass: S1     # Should match "container"
-  dfs_dir_oclass: SX # Should match "container"
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
   manager: "MPICH"
   mdtest_params:

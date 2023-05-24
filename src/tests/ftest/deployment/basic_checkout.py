@@ -91,8 +91,7 @@ class BasicCheckout(PerformanceTestBase):
             self.fail("Test FAILED")
 
         # run mdtest
-        self.run_mdtest_multiple_variants(
-            mdtest_params, cont_namespace="/run/container_mdtest_small/*")
+        self.run_mdtest_multiple_variants(mdtest_params)
 
 
 class BasicCheckoutDm(DataMoverTestBase):

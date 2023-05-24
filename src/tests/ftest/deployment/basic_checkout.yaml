@@ -28,12 +28,6 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-container_mdtest_small:
-  type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  file_oclass: S1
-  dir_oclass: SX
-  control_method: daos
 
 # ior easy
 ior_easy: &ior_easy_base
@@ -147,8 +141,8 @@ ior_dm:
 mdtest:
   client_processes:
     ppn: 16
-  dfs_oclass: S1     # Should match "container_mdtest_small"
-  dfs_dir_oclass: SX # Should match "container_mdtest_small"
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
   iteration: 1
   dfs_destroy: true
