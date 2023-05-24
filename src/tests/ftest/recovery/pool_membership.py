@@ -60,7 +60,7 @@ class PoolMembershipTest(TestWithServers):
         :avocado: tags=recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
-        # 1. Create a pool.
+        # 1. Create a pool on rank 0.
         pool = self.get_pool(connect=False, target_list="0")
 
         # 2. Call dmg storage query usage to store the default space utilization.
