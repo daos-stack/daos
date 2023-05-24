@@ -98,7 +98,7 @@ func Test_ValidateLogStreams(t *testing.T) {
 			streams: "NET",
 		},
 		"multiple streams": {
-			streams: "ANY,TRACE",
+			streams: "ANY,TRACE,GROUP_METADATA",
 		},
 		"unknown stream": {
 			streams: "NET,WARNING",

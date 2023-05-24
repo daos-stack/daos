@@ -160,7 +160,7 @@ func checkStrChars(in string) error {
 			len(in), logMasksStrMaxLen)
 	}
 
-	re := regexp.MustCompile(`^([a-zA-Z,=]+)$`)
+	re := regexp.MustCompile(`^([a-zA-Z,=_]+)$`)
 	matches := re.FindStringSubmatch(in)
 	if matches == nil {
 		return errors.Errorf("string has illegal characters: %q", in)
