@@ -599,7 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err = -DER_HG_SEND_FAILED;
+	return err == -DER_HG_SEND_FAILED;
 }
 
 
