@@ -258,9 +258,9 @@ class SlurmSetup():
             command = f'grep {control_keyword} {self.SLURM_CONF}'
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
-                command = (
+                command = command_as_user(
                     f'sed -i -e \'s/{control_keyword}=linux0/{control_keyword}={str(self.control)}'
-                    f'/g\' {self.SLURM_CONF}')
+                    f'/g\' {self.SLURM_CONF}', self.root)
                 mod_results = run_remote(self.log, results.passed_hosts, command)
                 if mod_results.failed_hosts:
                     raise SlurmSetupException(
