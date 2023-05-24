@@ -766,6 +766,8 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
 	struct umem_store       *store = dcr->dcr_store;
 
+	D_DEBUG(DB_MD, DF_DB ": commit >= " DF_X64 "\n", DP_DB(db), wait_id);
+
 	if (wait_id == 0) {
 		/** Special case, checkpoint needs to yield to allow progress */
 		ABT_thread_yield();
@@ -775,13 +777,15 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
 		goto out;
 
+	D_DEBUG(DB_MD, DF_DB ": wait for commit >= " DF_X64 "\n", DP_DB(db), wait_id);
 	ABT_mutex_lock(db->d_chkpt_mutex);
 	dcr->dcr_waiting = 1;
 	dcr->dcr_wait_id = wait_id;
 	ABT_cond_wait(db->d_commit_cv, db->d_chkpt_mutex);
 	ABT_mutex_unlock(db->d_chkpt_mutex);
-
 out:
+	D_DEBUG(DB_MD, DF_DB ": commit " DF_X64 " is >= " DF_X64 "\n", DP_DB(db),
+		dcr->dcr_commit_id, wait_id);
 	*commit_id = dcr->dcr_commit_id;
 }
 
@@ -802,26 +806,32 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 	if (dcr->dcr_idle) {
 		if (used_blocks >= dcr->dcr_thresh) {
 			dcr->dcr_needed = 1;
-			dcr->dcr_idle   = 0;
 			D_DEBUG(DB_MD,
 				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
 				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
 			ABT_cond_broadcast(db->d_chkpt_cv);
 		}
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is idle\n", DP_DB(db),
+			commit_id);
 		return;
 	}
 
-	if (!dcr->dcr_waiting)
+	if (!dcr->dcr_waiting) {
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is not waiting\n",
+			DP_DB(db), commit_id);
 		return;
+	}
 
 	/** Checkpoint ULT is waiting for a commit, check if we can wake it up */
 	if (store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
 		dcr->dcr_waiting = 0;
 		D_DEBUG(DB_MD,
-			DF_DB ": waking checkpoint on commit commit_id=" DF_X64 ", wait_id=" DF_X64
+			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64
 			      "\n",
 			DP_DB(db), commit_id, dcr->dcr_wait_id);
 		ABT_cond_broadcast(db->d_commit_cv);
+	} else {
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 "\n", DP_DB(db), commit_id);
 	}
 }
 
@@ -853,13 +863,6 @@ static void
 rdb_chkpt_fini(struct rdb *db)
 {
 	vos_pool_checkpoint_fini(db->d_pool);
-}
-
-static int
-rdb_chkpt(struct rdb *db)
-{
-	D_DEBUG(DB_MD, DF_DB ": starting checkpoint\n", DP_DB(db));
-	return vos_pool_checkpoint(db->d_pool);
 }
 
 /* Daemon ULT for checkpointing to metadata blob (MD on SSD only) */
@@ -896,7 +899,8 @@ rdb_chkptd(void *arg)
 		ABT_mutex_unlock(db->d_chkpt_mutex);
 		if (dcr->dcr_stop)
 			break;
-		rc = rdb_chkpt(db);
+		dcr->dcr_idle = 0;
+		rc            = vos_pool_checkpoint(db->d_pool);
 		if (rc != 0) {
 			D_ERROR(DF_DB ": failed to checkpoint: rc=" DF_RC "\n", DP_DB(db),
 				DP_RC(rc));
