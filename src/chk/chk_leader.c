@@ -590,7 +590,10 @@ report:
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
-	cru.cru_msg = "Check leader detects dangling pool.\n";
+	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru.cru_msg = "Check leader dryrun-detects dangling pool.\n";
+	else
+		cru.cru_msg = "Check leader detects dangling pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -791,7 +794,10 @@ report:
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = clue->pc_label;
-	cru.cru_msg = "Check leader detects orphan pool.\n";
+	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru.cru_msg = "Check leader dryrun-detects orphan pool.\n";
+	else
+		cru.cru_msg = "Check leader detects orphan pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -1107,7 +1113,10 @@ report:
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
-	cru.cru_msg = "Check leader detects corrupted pool without quorum.\n";
+	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru.cru_msg = "Check leader dryrun-detects corrupted pool without quorum.\n";
+	else
+		cru.cru_msg = "Check leader detects corrupted pool without quorum.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -1449,7 +1458,8 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check leader detects corrupted pool label: %s (MS) vs %s (PS).\n",
+		 "Check leader %s corrupted pool label: %s (MS) vs %s (PS).\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
 		 clue->pc_label != NULL ? clue->pc_label : "(null)");
 	cru.cru_msg = msg;

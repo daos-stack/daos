@@ -337,8 +337,9 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects orphan %s entry in pool map for "
+		 "Check engine %s orphan %s entry in pool map for "
 		 DF_UUIDF", rank %u, index %d\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank, index);
 	cru.cru_msg = msg;
 	cru.cru_options = options;
@@ -511,8 +512,9 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects dangling %s entry in pool map for pool "
+		 "Check engine %s dangling %s entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u, (want) mark as %s\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index,
 		 pool_map_status2name(status));
@@ -590,6 +592,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 {
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
@@ -611,9 +614,10 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects unknown target entry in pool map for pool "
+		 "Check engine %s unknown target entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u, status %u, skip it. You can change "
 		 "its status via DAOS debug tool if it is not for downgraded case.\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
@@ -814,6 +818,7 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 {
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_property		*prop = &ins->ci_prop;
 	daos_prop_t			*label = NULL;
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
@@ -849,7 +854,8 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects corrupted pool label: %s (MS) vs %s (PS).\n",
+		 "Check engine %s corrupted pool label: %s (MS) vs %s (PS).\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
 		 label != NULL ? label->dpp_entries[0].dpe_str : "(null)");
 	cru.cru_msg = msg;
@@ -1033,7 +1039,8 @@ report:
 	if (ccr->ccr_label_prop != NULL)
 		cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF"\n",
+		 "Check engine %s orphan container "DF_UUIDF"/"DF_UUIDF"\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
 	cru.cru_msg = msg;
 	cru.cru_options = options;
@@ -1369,7 +1376,8 @@ report:
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
 	cru.cru_cont_label = label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects inconsistent container label: %s (CS) vs %s (property).\n",
+		 "Check engine %s inconsistent container label: %s (CS) vs %s (property).\n",
+		 prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN ? "dryrun-detects" : "detects",
 		 daos_iov_empty(&ccr->ccr_label_cs) ? "(null)" : (char *)ccr->ccr_label_cs.iov_buf,
 		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
 		 "(null)");
