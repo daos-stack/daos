@@ -917,13 +917,20 @@ dss_start_xs_id(int tag, int xs_id)
 		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
 		free(cpuset);
 	} else {
-		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
 		 * All system XS will use the first core, but
 		 * the SWIM XS will use separate core if enough cores
 		 */
-		if (xs_id > 2)
-			xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
+		if (xs_id > 2) {
+			/* If there are at most 2 helper threads, and SWIM has separate core,
+			 * share it with SWIM XS */
+			if (tag == DAOS_OFF_TAG &&
+			    dss_helper_pool && dss_tgt_offload_xs_nr <= 2 &&
+			    dss_core_nr <= (dss_tgt_nr + 2) && dss_core_nr > dss_tgt_nr)
+				xs_core_offset = 1;
+			else
+				xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
+		}
 		else if (xs_id == 1)
 			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
 		else
@@ -936,6 +943,10 @@ dss_start_xs_id(int tag, int xs_id)
 				xs_id);
 			return -DER_INVAL;
 		}
+
+		D_INFO("Using non-NUMA aware core allocation, xs_id %d,xs_core_offset %d,"
+		       "dss_core_offset %d, dss_core_nr %d,dss_sys_xs_nr %u\n", xs_id,
+		       xs_core_offset, dss_core_offset, dss_core_nr, dss_sys_xs_nr);
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
