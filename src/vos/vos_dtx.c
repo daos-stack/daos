@@ -830,6 +830,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		D_ASSERT(dtx_is_valid_handle(dth));
 		D_ASSERT(dth->dth_solo);
 
+		dae = dth->dth_ent;
+		D_ASSERT(dae != NULL);
+
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = dth->dth_epoch;
 	}
@@ -843,6 +846,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	*dce_p = dce;
 	dce = NULL;
 
+	dae->dae_committing = 1;
+
 	if (epoch != 0)
 		goto out;
 
@@ -851,8 +856,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		*fatal = true;
 		goto out;
 	}
-
-	dae->dae_committing = 1;
 
 	D_ASSERT(dae_p != NULL);
 	*dae_p = dae;
@@ -1173,8 +1176,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (dtx_is_valid_handle(dth) && dae == dth->dth_ent)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
+	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
+		if (entry & DTX_LID_SOLO_FLAG && dae->dae_committing)
+			/* For solo 'committing' DTX, do not return ALB_AVAILABLE_CLEAN. Otherwise,
+			 * it will misguide the caller as fake 'committed', but related data may
+			 * be invisible to the subsequent fetch until become real 'committed'.
+			 */
+			return dtx_inprogress(dae, dth, false, false, 7);
+
 		return ALB_AVAILABLE_CLEAN;
+	}
 
 	if (vos_dae_is_abort(dae))
 		return ALB_UNAVAILABLE;
