@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -556,6 +556,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
+- Add libcapstone-devel to deps of client-tests package
+
 * Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
 - Add libcapstone as a new prerequisite package
 - Add libpil4dfs.so in daos-client rpm
