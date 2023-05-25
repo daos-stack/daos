@@ -32,4 +32,4 @@ jobs:
         if: failure()
         with:
           name: git-diff-for-pr-${{ github.event.pull_request.number }}
-          path: chang-format-changes.diff
+          path: auto-format-changes.diff
