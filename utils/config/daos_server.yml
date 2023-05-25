@@ -30,9 +30,9 @@
 ## Control plane metadata
 ## Immutable after running "dmg storage format".
 #
-## Optional. Define a directory or partition/mountpoint to be used as the
-## storage location for control plane metadata. If this section is not defined,
-## control plane metadata is stored on the SCM associated with the first engine.
+## Mandatory if MD-on-SSD bdev device roles have been assigned.
+## Define a directory or partition/mountpoint to be used as the storage location for
+## control plane metadata. The location specified should be persistent across reboots.
 #
 #control_metadata:
 #  # Directory to store control plane metadata.

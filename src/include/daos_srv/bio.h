@@ -745,8 +745,9 @@ int bio_get_dev_state(struct nvme_stats *dev_state, uuid_t dev_uuid,
  * \param dev_id	[IN]	UUID of device
  * \param xs		[IN]	xstream context
  *
+ * \return			Zero on success, negative value on error
  */
-void bio_get_bs_state(int *blobstore_state, uuid_t dev_uuid, struct bio_xs_context *xs);
+int bio_get_bs_state(int *blobstore_state, uuid_t dev_uuid, struct bio_xs_context *xs);
 
 
 /*

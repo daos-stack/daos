@@ -15,6 +15,7 @@ arch=$(uname -i)
 dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
+    capstone-devel \
     clang \
     clang-tools-extra \
     cmake \

@@ -159,16 +159,19 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
 /*
  * Copy out the internal BIO blobstore device state.
  */
-void
+int
 bio_get_bs_state(int *bs_state, uuid_t dev_uuid, struct bio_xs_context *xs)
 {
 	struct bio_xs_blobstore *bxb;
 
 	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
-	if (bxb)
-		*bs_state = bxb->bxb_blobstore->bb_state;
+	if (!bxb) {
+		D_ERROR("Failed to find BS for dev:"DF_UUID"\n", DP_UUID(dev_uuid));
+		return -DER_NONEXIST;
+	}
 
-	return;
+	*bs_state = bxb->bxb_blobstore->bb_state;
+	return 0;
 }
 
 /*
@@ -827,6 +830,15 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt, struct bio_blobstore *bb
 	struct bio_dev_health	*bdh = &bb->bb_dev_health;
 	int			 rc;
 
+	/* Drain the inflight request before putting I/O channel */
+	D_ASSERT(bdh->bdh_inflights < 2);
+	if (bdh->bdh_inflights > 0) {
+		D_INFO("Wait for health collecting done...\n");
+		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
+		D_ASSERT(rc == 0);
+		D_INFO("Health collecting done...\n");
+	}
+
 	/* Free NVMe admin passthru DMA buffers */
 	if (bdh->bdh_health_buf) {
 		spdk_dma_free(bdh->bdh_health_buf);
@@ -855,18 +867,6 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt, struct bio_blobstore *bb
 	if (bdh->bdh_desc) {
 		spdk_bdev_close(bdh->bdh_desc);
 		bdh->bdh_desc = NULL;
-	}
-
-	/*
-	 * Init xstream will finialize bdev subsystem later, so we need
-	 * to wait for the inflight health collecting request done.
-	 */
-	D_ASSERT(bdh->bdh_inflights < 2);
-	if (bdh->bdh_inflights > 0) {
-		D_INFO("Wait for health collecting done...\n");
-		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
-		D_ASSERT(rc == 0);
-		D_INFO("Health collecting done...\n");
 	}
 }
 

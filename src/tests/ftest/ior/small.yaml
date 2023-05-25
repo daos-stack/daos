@@ -37,7 +37,7 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
 ior:
-  ior_timeout: 75
+  ior_timeout: 100
   client_processes:
     ppn: 32
   test_file: daos:/testFile

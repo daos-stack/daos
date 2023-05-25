@@ -356,6 +356,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor

@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -59,9 +59,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -167,11 +169,6 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
 Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
@@ -458,6 +455,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -558,6 +556,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
+- Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
 * Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
 - Fix libfabric/libfabric1 dependency mismatch on SuSE
 
