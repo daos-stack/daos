@@ -1280,7 +1280,7 @@ daos_event_priv_wait()
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
-			if (rc)
+			if (evx->evx_status == DAOS_EVS_READY)
 				break;
 			continue;
 		}
@@ -1295,6 +1295,7 @@ daos_event_priv_wait()
 		break;
 	}
 
+	D_ASSERT(evx->evx_status == DAOS_EVS_READY);
 	rc2 = daos_event_priv_reset();
 	if (rc2) {
 		if (rc == 0)
