@@ -704,12 +704,14 @@ static int
 ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
+	uuid_t			anonym_uuid;
 
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
 	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
 						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
@@ -1695,7 +1697,6 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
-	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 
@@ -1765,7 +1766,21 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 	epr.epr_hi = arg->tgt_discard->epoch;
 	epr.epr_lo = 0;
-	rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
+			DP_RC(rc), DP_UOID(ent->ie_oid));
+		/* Busy - inform iterator and yield */
+		*acts |= VOS_ITER_CB_YIELD;
+		dss_sleep(0);
+	} while (1);
+
+
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
 			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),

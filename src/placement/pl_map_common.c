@@ -237,36 +237,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 }
 
 bool
-need_remap_comp(struct pool_component *comp, uint32_t allow_status, uint32_t allow_version,
-		bool for_reint)
+need_remap_comp(struct pool_component *comp, uint32_t allow_status)
 {
-	uint32_t status = comp->co_status;
-
-	/* Correct the target status by allow_version */
-	if (status == PO_COMP_ST_UP) {
-		if (comp->co_in_ver > allow_version) {
-			if (comp->co_fseq > 0)
-				status = PO_COMP_ST_DOWNOUT;
-			else
-				status = PO_COMP_ST_NEW;
-		}
-	} else if (for_reint && (status == PO_COMP_ST_DOWN)) {
-		/* In jump_map_obj_find_reint(), it needs to compare between the original layout
-		 * and new(after extend/reintegration) layout to figure out which shard needs to
-		 * be relocated, so it has to follow the failure sequence strictly, i.e. all the
-		 * the target has to be restored to its original status.
-		 * In other cases, it has to skip the DOWN target in all cases, otherwise the new
-		 * generated layout might include the failure shards, and inflight I/O might hit
-		 * the failure rank.
-		 */
-		if (comp->co_fseq > allow_version && comp->co_in_ver < allow_version)
-			status = PO_COMP_ST_UPIN;
-	}
-
-	if (!(status & allow_status))
-		return true;
-
-	return false;
+	return !(comp->co_status & allow_status);
 }
 
 /**
@@ -278,8 +251,8 @@ need_remap_comp(struct pool_component *comp, uint32_t allow_status, uint32_t all
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t *remap_list, uint32_t allow_status,
-		       uint32_t allow_version, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending, bool for_reint)
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard,
+		       bool *is_extending)
 {
 	if (!spare_avail)
 		goto next_fail;
@@ -288,7 +261,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		*is_extending = true;
 
 	/* The selected spare target is down as well */
-	if (need_remap_comp(&spare_tgt->ta_comp, allow_status, allow_version, for_reint)) {
+	if (need_remap_comp(&spare_tgt->ta_comp, allow_status)) {
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 
@@ -378,38 +351,12 @@ grp_map_is_set(uint32_t *grp_map, uint32_t grp_map_size, uint32_t tgt_id)
 	return false;
 }
 
-static uint32_t*
-grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
-{
-	uint32_t *new_grp_map;
-	uint32_t new_grp_size = *grp_map_size + STACK_TGTS_SIZE;
-	int	 i;
-
-	if (*grp_map_size > STACK_TGTS_SIZE) {
-		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
-				new_grp_size);
-	} else {
-		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
-		memcpy(new_grp_map, grp_map, *grp_map_size * sizeof(*grp_map));
-	}
-
-	for (i = *grp_map_size; i < new_grp_size; i++)
-		new_grp_map[i] = -1;
-
-	*grp_map_size = new_grp_size;
-	return new_grp_map;
-}
-
 int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 {
 	struct pl_obj_shard	*new_shards;
 	struct failed_shard	*f_shard;
 	struct failed_shard	*tmp;
-	uint32_t                *grp_map = NULL;
-	uint32_t		 grp_map_idx = 0;
-	uint32_t		 grp_map_size;
-	uint32_t		 grp_map_array[STACK_TGTS_SIZE] = {-1};
 	/* holds number of "extra" shards for the group in the new_shards */
 	uint32_t                *grp_count = NULL;
 	uint32_t		 grp_cnt_array[STACK_TGTS_SIZE] = {0};
@@ -425,8 +372,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	if (d_list_empty(extended_list))
 		goto out;
 
-	grp_map = grp_map_array;
-	grp_map_size = STACK_TGTS_SIZE;
 	if (layout->ol_grp_nr <= STACK_TGTS_SIZE) {
 		grp_count = grp_cnt_array;
 	} else {
@@ -440,21 +385,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 
 	/* Eliminate duplicate targets and calculate the grp number. */
 	d_list_for_each_entry_safe(f_shard, tmp, extended_list, fs_list) {
-		if (grp_map_is_set(grp_map, grp_map_idx, f_shard->fs_tgt_id)) {
-			d_list_del_init(&f_shard->fs_list);
-			D_FREE(f_shard);
-			continue;
-		}
-
-		if (grp_map_idx >= grp_map_size) {
-			uint32_t *new_grp_map;
-
-			new_grp_map = grp_map_extend(grp_map, &grp_map_size);
-			if (new_grp_map == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			grp_map = new_grp_map;
-		}
-		grp_map[grp_map_idx++] = f_shard->fs_tgt_id;
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
 		grp_count[grp]++;
 		if (max_fail_grp < grp_count[grp])
@@ -504,8 +434,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	layout->ol_shards = new_shards;
 
 out:
-	if (grp_map != grp_map_array && grp_map != NULL)
-		D_FREE(grp_map);
 	if (grp_count != grp_cnt_array && grp_count != NULL)
 		D_FREE(grp_count);
 	return rc;

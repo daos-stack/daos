@@ -25,6 +25,9 @@ const (
 func NewCommandLineLogger() *LeveledLogger {
 	return &LeveledLogger{
 		level: DefaultLogLevel,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(os.Stderr),
+		},
 		debugLoggers: []DebugLogger{
 			NewDebugLogger(os.Stderr),
 		},
@@ -52,6 +55,9 @@ func NewStdoutLogger(prefix string) *LeveledLogger {
 func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 	return &LeveledLogger{
 		level: DefaultLogLevel,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(output),
+		},
 		debugLoggers: []DebugLogger{
 			NewDebugLogger(output),
 		},
@@ -69,9 +75,9 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 
 // NewTestLogger returns a logger and a *LogBuffer,
 // with the logger configured to send all output into
-// the buffer. The logger's level is set to DEBUG by default.
+// the buffer. The logger's level is set to TRACE by default.
 func NewTestLogger(prefix string) (*LeveledLogger, *LogBuffer) {
 	var buf LogBuffer
 	return NewCombinedLogger(prefix, &buf).
-		WithLogLevel(LogLevelDebug), &buf
+		WithLogLevel(LogLevelTrace), &buf
 }

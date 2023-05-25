@@ -519,8 +519,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 }
 
 int
-ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
-			 char *tgt_id)
+ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
 	return 0;
 }

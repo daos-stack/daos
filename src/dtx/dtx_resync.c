@@ -401,11 +401,13 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
-			dtx_dre_release(drh, dre);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
-				goto out;
+				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
+					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
+					dra->discard_version, DP_RC(err));
+			dtx_dre_release(drh, dre);
 			continue;
 		}
 
@@ -608,6 +610,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		return rc;
 	}
 
+	D_INFO("Enter DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
@@ -616,12 +621,13 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 					      dss_get_module_info()->dmi_tgt_id, &target);
 	D_ASSERT(rc == 1);
 
-	if (target->ta_comp.co_status == PO_COMP_ST_UP)
+	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-	ABT_rwlock_unlock(pool->sp_lock);
+		D_INFO("DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
+		       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	}
 
-	D_INFO("DTX resync for "DF_UUID"/"DF_UUID" with discard version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ABT_mutex_lock(cont->sc_mutex);
 
@@ -700,6 +706,9 @@ fail:
 out:
 	if (!dtx_cont_opened(cont))
 		stop_dtx_reindex_ult(cont);
+
+	D_INFO("Exit DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;

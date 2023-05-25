@@ -20,6 +20,13 @@ from junit_xml import TestSuite, TestCase
 import yaml
 
 
+def check_version():
+    """Ensure python version is compatible"""
+    if sys.version_info < (3, 6):
+        print("Python version 3.6 or greater is required""")
+        sys.exit(-1)
+
+
 def write_xml_result(name, suite_junit):
     """Write an junit result"""
     with open(f"test_results/test_{name}.xml", "w", encoding='UTF-8') as file:
@@ -135,10 +142,17 @@ class ValgrindHelper():
         return cmd_prefix + cmd
 
 
-def run_cmd(cmd, env=None):
+def run_cmd(cmd, output_log=None, env=None):
     """Run a command"""
-    print(f"RUNNING COMMAND {' '.join(cmd)}")
-    ret = subprocess.run(cmd, check=False, env=env)
+    # capture_output is only available in 3.7+
+    if output_log:
+        with open(output_log, "w", encoding="UTF-8") as output:
+            print(f"RUNNING COMMAND {' '.join(cmd)}\n    Log: {output_log}")
+            ret = subprocess.run(cmd, check=False, env=env, stdout=output,
+                                 stderr=subprocess.STDOUT)
+    else:
+        print(f"RUNNING COMMAND {' '.join(cmd)}")
+        ret = subprocess.run(cmd, check=False, env=env)
     print(f'rc is {ret.returncode}')
     return ret.returncode
 
@@ -158,8 +172,10 @@ class SuiteConfigError(Exception):
 def change_ownership(fname, _arg):
     """For files created by sudo process, change the permissions and ownership"""
     if not os.path.isfile(fname):
+        print(f"{fname} not a file")
         return
     uname = os.getlogin()
+    print(f"chown {fname}")
     run_cmd(["sudo", "-E", "chgrp", uname, fname])
     run_cmd(["sudo", "-E", "chown", uname, fname])
 
@@ -190,17 +206,21 @@ def process_cmocka(fname, suite_name):
                         outfile.write(f"{match.group(1)}classname=\"UTEST_{suite_name}.{suite}\""
                                       + f" name{match.group(2)}\n")
                         continue
+                    match = re.search("^(.*case classname=\")(.*$)", line)
+                    if match:
+                        outfile.write(f"{match.group(1)}UTEST_{suite_name}.{match.group(2)}\n")
+                        continue
                 outfile.write(f"{line}\n")
     os.unlink(fname)
 
 
-def for_each_xml(path, operate, arg):
+def for_each_file(path, operate, arg, ext=None):
     """Find cmocka files, run some operation on each"""
     for file in os.listdir(path):
         full_path = os.path.join(path, file)
         if not os.path.isfile(full_path):
             continue
-        if ".xml" == os.path.splitext(file)[-1]:
+        if ext is None or ext == os.path.splitext(file)[-1]:
             operate(full_path, arg)
 
 
@@ -322,13 +342,26 @@ class Test():
             print(f"Filtered test  {' '.join(self.cmd)}")
             raise TestSkipped()
 
-        self.root = path_info["DAOS_BASE"]
-        self.res_path = os.path.join(self.root, "test_results")
-        self.env["D_LOG_FILE"] = os.path.join("/tmp", f"{self.name}.log")
+        self.path_info = path_info
+        name = '-'.join(self.cmd).replace(';', '-').replace('/', '-') + f"_{Test.test_num}"
+        self.name = name.replace(' ', '-')
+        self.env["D_LOG_FILE"] = os.path.join(self.log_dir(), "daos.log")
         Test.test_num = Test.test_num + 1
 
         if self.needs_aio():
             self.env["VOS_BDEV_CLASS"] = "AIO"
+
+    def log_dir(self):
+        """Return the log directory"""
+        return os.path.join(self.path_info["LOG_DIR"], self.name)
+
+    def root_dir(self):
+        """Return the log directory"""
+        return self.path_info["DAOS_BASE"]
+
+    def cmocka_dir(self):
+        """Return the log directory"""
+        return os.path.join(self.root_dir(), "test_results")
 
     def subst(self, cmd, replacements, path_info):
         """Make any substitutions for variables in path_info"""
@@ -358,10 +391,6 @@ class Test():
 
         return True
 
-    def name(self):
-        """Return derived name"""
-        return '-'.join(self.cmd).replace(';', '-').replace('/', '-') + f"_{Test.test_num}"
-
     def needs_aio(self):
         """Returns true if the test uses aio"""
         return self.aio["aio"] is not None
@@ -381,6 +410,13 @@ class Test():
         if self.needs_aio():
             aio.prepare_test(self.aio["aio"], self.aio["size"])
 
+        os.makedirs(self.log_dir(), exist_ok=True)
+        for file in os.listdir():
+            fname = os.path.join(self.log_dir(), file)
+            if os.path.isfile(fname):
+                print(f"Removing old log {fname}")
+                os.unlink(fname)
+
         return True
 
     def run(self, base, memcheck, sudo):
@@ -389,27 +425,43 @@ class Test():
         if memcheck:
             if os.path.splitext(cmd[0])[-1] in [".sh", ".py"]:
                 self.env.update({"USE_VALGRIND": "memcheck",
-                                 "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root)})
+                                 "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root_dir())})
             else:
-                cmd = ValgrindHelper.setup_cmd(self.root, cmd, self.name())
+                cmd = ValgrindHelper.setup_cmd(self.root_dir(), cmd, self.name)
         if sudo:
             new_cmd = ["sudo", "-E"]
             new_cmd.extend(cmd)
             cmd = new_cmd
         self.last = cmd
 
-        return run_cmd(cmd, self.env)
+        output_log = os.path.join(self.log_dir(), "output.log")
+        retval = run_cmd(cmd, output_log=output_log, env=self.env)
+
+        return retval
 
     def teardown(self, suite_name, aio, sudo):
         """Teardown the test"""
         if self.needs_aio():
             aio.finalize_test()
         if sudo:
-            change_ownership(ValgrindHelper.get_xml_name(self.name()), None)
-            change_ownership(self.env["D_LOG_FILE"], None)
-            if self.env.get("CMOCKA_XML_FILE", None):
-                for_each_xml(self.res_path, change_ownership, None)
-        for_each_xml(self.res_path, process_cmocka, suite_name)
+            change_ownership(ValgrindHelper.get_xml_name(self.name), None)
+            for_each_file(self.log_dir(), change_ownership, None)
+            for_each_file(self.cmocka_dir(), change_ownership, None, ".xml")
+        for_each_file(self.cmocka_dir(), process_cmocka, suite_name, ".xml")
+        self.remove_empty_files(self.log_dir())
+
+    def remove_empty_files(self, log_dir):
+        """Remove empty log files, they are useless"""
+        if not os.path.isdir(log_dir):
+            return
+        print(f"Processing logs for {self.name}")
+        for log in os.listdir(log_dir):
+            fname = os.path.join(log_dir, log)
+            if not os.path.isfile(fname):
+                continue
+            if os.path.getsize(fname) == 0:
+                os.unlink(fname)
+            print(f"   produced {fname}")
 
 
 class Suite():
@@ -500,7 +552,8 @@ class Suite():
                 try:
                     ret = test.run(self.base, args.memcheck, self.sudo)
                     if ret != 0:
-                        results.add_failure(f"{' '.join(test.get_last())}")
+                        results.add_failure(f"{' '.join(test.get_last())} failed: ret={ret} "
+                                            + f"logs={test.log_dir()}")
                 except Exception:
                     results.add_error(f"{traceback.format_exc()}")
                     ret = 1  # prevent reporting errors on teardown too
@@ -547,10 +600,10 @@ def get_args():
     parser.add_argument('--no-fail-on-error', action='store_true',
                         help='Disable non-zero return code on failure')
     parser.add_argument('--no_sudo', action='store_true', help='Disable tests requiring sudo')
-    parser.add_argument('--mount', default="/mnt/daos",
-                        help="Specify location of mounted dax system to use")
     parser.add_argument('--bdev', default=None,
                         help="Device to use for AIO, will create file by default")
+    parser.add_argument('--log_dir', default="/tmp/daos_utest",
+                        help="Path to store test logs")
     return parser.parse_args()
 
 
@@ -561,7 +614,8 @@ def get_path_info(args):
     build_vars_file = os.path.join(daos_base, '.build_vars.json')
     path_info = {"DAOS_BASE": daos_base,
                  "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml"),
-                 "MOUNT_DIR": args.mount}
+                 "MOUNT_DIR": "/mnt/daos",
+                 "LOG_DIR": args.log_dir}
     try:
         with open(build_vars_file, "r", encoding="UTF-8") as vars_file:
             build_vars = json.load(vars_file)
@@ -584,7 +638,7 @@ def main():
     aio = None
 
     if not args.no_sudo:
-        aio = AIO(args.mount, args.bdev)
+        aio = AIO(path_info["MOUNT_DIR"], args.bdev)
 
     suites = []
     with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
@@ -619,4 +673,5 @@ def main():
 
 
 if __name__ == '__main__':
+    check_version()
     main()

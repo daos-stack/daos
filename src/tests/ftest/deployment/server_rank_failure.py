@@ -46,7 +46,7 @@ class ServerRankFailure(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
         ior_cmd.update_params(test_file=os.path.join(os.sep, file_name))
 
         manager = get_job_manager(

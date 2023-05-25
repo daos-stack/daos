@@ -91,9 +91,15 @@ func (cmd *startCmd) configureLogging() error {
 	// unless it was explicitly set to debug via CLI flag.
 	applyLogConfig := func() error {
 		switch logging.LogLevel(cmd.config.ControlLogMask) {
+		case logging.LogLevelTrace:
+			log.SetLevel(logging.LogLevelTrace)
+			cmd.Debugf("Switching control log level to TRACE")
 		case logging.LogLevelDebug:
 			log.SetLevel(logging.LogLevelDebug)
 			cmd.Debugf("Switching control log level to DEBUG")
+		case logging.LogLevelNotice:
+			log.SetLevel(logging.LogLevelNotice)
+			cmd.Debugf("Switching control log level to NOTICE")
 		case logging.LogLevelError:
 			cmd.Debugf("Switching control log level to ERROR")
 			log.SetLevel(logging.LogLevelError)
@@ -131,8 +137,10 @@ func (cmd *startCmd) configureLogging() error {
 		// to the specified file.
 		cmd.Logger = log.
 			WithErrorLogger(logging.NewErrorLogger(hostname, f)).
+			WithNoticeLogger(logging.NewNoticeLogger(hostname, f)).
 			WithInfoLogger(logging.NewInfoLogger(hostname, f)).
-			WithDebugLogger(logging.NewDebugLogger(f))
+			WithDebugLogger(logging.NewDebugLogger(f)).
+			WithTraceLogger(logging.NewTraceLogger(f))
 
 		return applyLogConfig()
 	}
