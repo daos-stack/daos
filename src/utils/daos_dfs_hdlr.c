@@ -31,17 +31,17 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	int        flags;
 	dfs_t     *dfs;
 	dfs_obj_t *obj;
-char      *name     = NULL;
+	char      *name     = NULL;
 	char      *dir_name = NULL;
 	int        rc, rc2;
 
 	flags = O_RDWR;
 
 	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
-if (rc) {
-	fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n", ap->cont_str,
-		strerror(rc), rc);
-	return rc;
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n", ap->cont_str,
+			strerror(rc), rc);
+		return rc;
 	}
 
 	if (ap->dfs_prefix) {
