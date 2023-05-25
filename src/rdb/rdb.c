@@ -801,6 +801,9 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 		dcr->dcr_thresh = total_blocks >> 1;
 	}
 
+	if (commit_id == dcr->dcr_commit_id)
+		return; /** reserve path can call this with duplicate commit_id */
+
 	dcr->dcr_commit_id = commit_id;
 
 	if (dcr->dcr_idle) {
