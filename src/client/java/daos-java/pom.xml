@@ -74,23 +74,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
+	<configuration>
           <compilerArgs>
             <arg>-h</arg>
-            <arg>${project.basedir}/src/main/native/include</arg>
+	    <arg>${project.basedir}/src/main/native/include</arg>
+	    <arg>--add-exports</arg>
+	    <arg>java.base/sun.nio.ch=ALL-UNNAMED</arg>
           </compilerArgs>
         </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -344,7 +335,14 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
+	<artifactId>maven-javadoc-plugin</artifactId>
+	<configuration>
+	  <failOnError>false</failOnError>
+	  <additionalJOptions>
+	    <additionalJOption>-J--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</additionalJOption>
+	    <additionalJOption>-J--add-exports=java.xml/jdk.xml.internal=ALL-UNNAMED</additionalJOption>
+	  </additionalJOptions>
+	</configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -352,11 +350,17 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
+	<artifactId>maven-surefire-plugin</artifactId>
+	<configuration>
+          <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+	</configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-failsafe-plugin</artifactId>
+	<artifactId>maven-failsafe-plugin</artifactId>
+	<configuration>
+	  <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+	</configuration>
         <executions>
           <execution>
             <id>integration-test</id>
