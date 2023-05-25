@@ -596,13 +596,16 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
 	if (!overwrite) {
-		/** TODO: handle NVME */
+		int	rc;
+
 		/* SCM value is stored together with vos_irec_df */
 		if (addr->ba_type == DAOS_MEDIA_NVME) {
 			struct vos_pool *pool = tins->ti_priv;
 
 			D_ASSERT(pool != NULL);
-			vos_bio_addr_free(pool, addr, irec->ir_size);
+			rc = vos_bio_addr_free(pool, addr, irec->ir_size);
+			if (rc)
+				return rc;
 		}
 
 		return umem_free(&tins->ti_umm, rec->rec_off);
