@@ -402,7 +402,8 @@
               <compilerArgs>
                 <arg>-h</arg>
                 <arg>${project.basedir}/src/main/native/include</arg>
-                <arg>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</arg>
+                <arg>--add-exports</arg>
+                <arg>java.base/sun.nio.ch=ALL-UNNAMED</arg>
               </compilerArgs>
             </configuration>
           </plugin>
