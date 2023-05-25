@@ -31,5 +31,5 @@ jobs:
         uses: actions/upload-artifact@v3
         if: failure()
         with:
-          name: diff
+          name: git-diff-for-pr-${{ github.event.pull_request.number }}
           path: chang-format-changes.diff
