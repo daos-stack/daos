@@ -158,11 +158,11 @@ class CulmTimer():
 
     def start(self):
         """Start the timer"""
-        self._start = time.time()
+        self._start = time.perf_counter()
 
     def stop(self):
         """Stop the timer, and add elapsed to total"""
-        self.total += time.time() - self._start
+        self.total += time.perf_counter() - self._start
 
 
 class BoolRatchet():
@@ -547,7 +547,7 @@ class DaosServer():
                                                      delete=False)
         self.server_logs = []
         for engine in range(self.engines):
-            prefix = f'dnt_server_{engine}_'
+            prefix = f'dnt_server_{self._test_class}_{engine}_'
             self.server_logs.append(tempfile.NamedTemporaryFile(prefix=prefix,
                                                                 suffix='.log',
                                                                 dir=conf.tmp_dir,
@@ -629,7 +629,7 @@ class DaosServer():
                                    test_class=self._test_class)
 
     def _check_timing(self, name, start, max_time):
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         if elapsed > max_time:
             res = f'{name} failed after {elapsed:.2f}s (max {max_time:.2f}s)'
             self._add_test_case(name, duration=elapsed, failure=res)
@@ -715,6 +715,9 @@ class DaosServer():
         scyaml['socket_dir'] = self.agent_dir
 
         for (key, value) in server_env.items():
+            # If server log is set via server_debug then do not also set env settings.
+            if self.conf.args.server_debug and key in ('DD_MASK', 'DD_SUBSYS', 'D_LOG_MASK'):
+                continue
             scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
@@ -777,7 +780,7 @@ class DaosServer():
         # /mnt/daos exists and has data in.  It will be used as is.
         # /mnt/daos is mounted but empty.  It will be used-as is.
         # In this last case the --no-root option must be used.
-        start = time.time()
+        start = time.perf_counter()
 
         cmd = ['storage', 'format', '--json']
         start_timeout = 0.5
@@ -805,7 +808,7 @@ class DaosServer():
                 start_timeout *= 2
 
             self._check_timing('format', start, self.max_start_time)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         self._add_test_case('format', duration=duration)
         print(f'Format completion in {duration:.2f} seconds')
         self.running = True
@@ -821,7 +824,7 @@ class DaosServer():
                 start_timeout *= 2
 
             self._check_timing("start", start, self.max_start_time)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         self._add_test_case('start', duration=duration)
         print(f'Server started in {duration:.2f} seconds')
         self.fetch_pools()
@@ -889,7 +892,7 @@ class DaosServer():
             entry['message'] = message
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
-        start = time.time()
+        start = time.perf_counter()
         rc = self.run_dmg(['system', 'stop'])
         if rc.returncode != 0:
             print(rc)
@@ -909,7 +912,7 @@ class DaosServer():
                 break
             self._check_timing("stop", start, self.max_stop_time)
 
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         self._add_test_case('stop', duration=duration)
         print(f'Server stopped in {duration:.2f} seconds')
 
@@ -1052,7 +1055,7 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
@@ -1062,7 +1065,7 @@ class DaosServer():
         """
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
                                          suffix='.log',
                                          dir=self.conf.tmp_dir,
                                          delete=False) as log_file:
@@ -1071,7 +1074,6 @@ class DaosServer():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd_env['D_IL_REPORT'] = '1'
-        cmd_env['D_LOG_MASK'] = 'DEBUG'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
 
         print('Run command: ')
@@ -1088,18 +1090,21 @@ class DaosServer():
             print('Stdout from command')
             print(rc.stdout.decode('utf-8').strip())
 
+        # Run log_test before other checks so this can warn for errors.
+        log_test(self.conf, log_name)
+
+        if check:
+            assert rc.returncode == 0, rc
+
         # check stderr for interception summary
         search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
         if len(search) == 0:
             raise NLTestFail('[op_sum ] is NOT found.')
         num_op = int(search[0][9:])
-        if num_op == 0:
+        if check and num_op == 0:
             raise NLTestFail('op_sum is zero. Unexpected.')
         print(f'DBG> num_op = {num_op}')
-
-        log_test(self.conf, log_name, show_memleaks=False,
-                 check_read=False, check_write=False, check_fstat=False)
-        assert rc.returncode == 0
+        return rc
 
 
 class ValgrindHelper():
@@ -1759,7 +1764,7 @@ class PrintStat():
     def dir_add(self, dirname):
         """Add a directory contents
 
-        This differs from .add(dirname, show_dir=True) as it does not add the dir itself can the
+        This differs from .add(dirname, show_dir=True) as it does not add the dir itself and the
         result can be compared across mounts.
         """
         with os.scandir(dirname) as dirfd:
@@ -1895,12 +1900,10 @@ class PosixTests():
                       self.pool.id(), self.container.id()],
                      show_stdout=True)
 
-        cont_attrs = {}
-        cont_attrs['dfuse-attr-time'] = '2'
-        cont_attrs['dfuse-dentry-time'] = '100s'
-        cont_attrs['dfuse-dentry-dir-time'] = '100s'
-        cont_attrs['dfuse-ndentry-time'] = '100s'
-
+        cont_attrs = {'dfuse-attr-time': 2,
+                      'dfuse-dentry-time': '100s',
+                      'dfuse-dentry-dir-time': '100s',
+                      'dfuse-ndentry-time': '100s'}
         self.container.set_attrs(cont_attrs)
 
         run_daos_cmd(self.conf,
@@ -2028,11 +2031,10 @@ class PosixTests():
         """
         cache_time = 20
 
-        cont_attrs = {}
-        cont_attrs['dfuse-data-cache'] = False
-        cont_attrs['dfuse-attr-time'] = cache_time
-        cont_attrs['dfuse-dentry-time'] = cache_time
-        cont_attrs['dfuse-ndentry-time'] = cache_time
+        cont_attrs = {'dfuse-data-cache': False,
+                      'dfuse-attr-time': cache_time,
+                      'dfuse-dentry-time': cache_time,
+                      'dfuse-ndentry-time': cache_time}
         self.container.set_attrs(cont_attrs)
 
         dfuse0 = DFuse(self.server,
@@ -2053,7 +2055,7 @@ class PosixTests():
             with open(join(dfuse0.dir, f'batch0.{idx}'), 'w') as ofd:
                 ofd.write('hello')
 
-        start = time.time()
+        start = time.perf_counter()
 
         stat_log = PrintStat()
         stat_log.dir_add(dfuse0.dir)
@@ -2081,7 +2083,7 @@ class PosixTests():
         stat_log1.dir_add(dfuse0.dir)
         print(stat_log1)
 
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
 
         assert elapsed < cache_time / 2, f'Test ran to slow, increase timeout {elapsed}'
 
@@ -2132,39 +2134,39 @@ class PosixTests():
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
         wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
-        start = time.time()
+        start = time.perf_counter()
         for idx in range(count):
             with open(join(wide_dir, f'file_{idx}'), 'w'):
                 pass
             if test_all:
                 files = os.listdir(wide_dir)
                 assert len(files) == idx + 1
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         rate = count / duration
         print(f'Created {count} files in {duration:.1f} seconds rate {rate:.1f}')
         print('Listing dir contents')
-        start = time.time()
+        start = time.perf_counter()
         files = os.listdir(wide_dir)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         rate = count / duration
         print(f'Listed {count} files in {duration:.1f} seconds rate {rate:.1f}')
         print(files)
         print(len(files))
         assert len(files) == count
         print('Listing dir contents again')
-        start = time.time()
+        start = time.perf_counter()
         files = os.listdir(wide_dir)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         print(f'Listed {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
         print(files)
         print(len(files))
         assert len(files) == count
         files = []
-        start = time.time()
+        start = time.perf_counter()
         with os.scandir(wide_dir) as entries:
             for entry in entries:
                 files.append(entry.name)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         print(f'Scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
         print(files)
         print(len(files))
@@ -2172,14 +2174,14 @@ class PosixTests():
 
         files = []
         files2 = []
-        start = time.time()
+        start = time.perf_counter()
         with os.scandir(wide_dir) as entries:
             with os.scandir(wide_dir) as second:
                 for entry in entries:
                     files.append(entry.name)
                 for entry in second:
                     files2.append(entry.name)
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         print(f'Double scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
         print(files)
         print(len(files))
@@ -3331,12 +3333,10 @@ class PosixTests():
         """Test permissions caching for DAOS-12577"""
         cache_time = 10
 
-        cont_attrs = {}
-        cont_attrs['dfuse-data-cache'] = False
-        cont_attrs['dfuse-attr-time'] = cache_time
-        cont_attrs['dfuse-dentry-time'] = cache_time
-        cont_attrs['dfuse-ndentry-time'] = cache_time
-
+        cont_attrs = {'dfuse-data-cache': False,
+                      'dfuse-attr-time': cache_time,
+                      'dfuse-dentry-time': cache_time,
+                      'dfuse-ndentry-time': cache_time}
         self.container.set_attrs(cont_attrs)
 
         dfuse = DFuse(self.server, self.conf, container=self.container, wbcache=False)
@@ -3800,7 +3800,6 @@ class PosixTests():
 
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-
         dfuse = DFuse(self.server,
                       self.conf,
                       pool=self.pool.id(),
@@ -3824,6 +3823,12 @@ class PosixTests():
         # touch a file.
         file3 = join(path, 'file3')
         self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
+
+        # cat a filename where a directory in the path is a file, should fail.  For now this does
+        # work but leaks memory.
+        # nop_file = join(file3, 'new_file which will not exist...')
+        # rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
+        # assert rc.returncode == 1, rc
 
         # create a dir.
         dir1 = join(path, 'dir1')
@@ -3935,7 +3940,7 @@ def run_posix_tests(server, conf, test=None):
         while True:
             ptl.needs_more = False
             ptl.test_name = function
-            start = time.time()
+            start = time.perf_counter()
             out_wrapper.sprint(f'Calling {function}')
             print(f'Calling {function}')
 
@@ -3955,7 +3960,7 @@ def run_posix_tests(server, conf, test=None):
                 ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
-                duration = time.time() - start
+                duration = time.perf_counter() - start
                 out_wrapper.sprint(f'{ptl.test_name} Failed')
                 conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
@@ -3965,7 +3970,7 @@ def run_posix_tests(server, conf, test=None):
                                       test_class='test',
                                       duration=duration)
                 raise
-            duration = time.time() - start
+            duration = time.perf_counter() - start
             out_wrapper.sprint(f'Test {ptl.test_name} took {duration:.1f} seconds')
             conf.wf.add_test_case(ptl.test_name,
                                   stdout=out_wrapper.get_thread_output(),
@@ -4447,13 +4452,11 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {}
-        cont_attrs['dfuse-data-cache'] = False
-        cont_attrs['dfuse-attr-time'] = 60
-        cont_attrs['dfuse-dentry-time'] = 60
-        cont_attrs['dfuse-ndentry-time'] = 60
-        cont_attrs['dfuse-direct-io-disable'] = False
-
+        cont_attrs = {'dfuse-data-cache': False,
+                      'dfuse-attr-time': 60,
+                      'dfuse-dentry-time': 60,
+                      'dfuse-ndentry-time': 60,
+                      'dfuse-direct-io-disable': False}
         container.set_attrs(cont_attrs)
         container = container.uuid
 
@@ -4482,13 +4485,13 @@ def run_in_fg(server, conf, args):
 
     try:
         if args.launch_cmd:
-            start = time.time()
+            start = time.perf_counter()
             # Set the PATH and agent dir.
             agent_env = os.environ.copy()
             agent_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
             agent_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{agent_env["PATH"]}'
             rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir, env=agent_env)
-            elapsed = time.time() - start
+            elapsed = time.perf_counter() - start
             dfuse.stop()
             (minutes, seconds) = divmod(elapsed, 60)
             print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
@@ -4525,7 +4528,7 @@ def check_readdir_perf(server, conf):
         file_dir = join(parent, f'files.{count}.in')
         t_file = join(parent, f'files.{count}')
 
-        start_all = time.time()
+        start_all = time.perf_counter()
         if not os.path.exists(t_dir):
             try:
                 os.mkdir(dir_dir)
@@ -4536,7 +4539,7 @@ def check_readdir_perf(server, conf):
                     os.mkdir(join(dir_dir, str(idx)))
                 except FileExistsError:
                     pass
-            dir_time = time.time() - start_all
+            dir_time = time.perf_counter() - start_all
             print(f'Creating {count} dirs took {dir_time:.2f}')
             os.rename(dir_dir, t_dir)
 
@@ -4545,11 +4548,11 @@ def check_readdir_perf(server, conf):
                 os.mkdir(file_dir)
             except FileExistsError:
                 pass
-            start = time.time()
+            start = time.perf_counter()
             for idx in range(count):
                 with open(join(file_dir, str(idx)), 'w'):
                     pass
-            file_time = time.time() - start
+            file_time = time.perf_counter() - start
             print(f'Creating {count} files took {file_time:.2f}')
             os.rename(file_dir, t_file)
 
@@ -4576,7 +4579,7 @@ def check_readdir_perf(server, conf):
     create_times = make_dirs(parent, count)
     dfuse.stop()
 
-    all_start = time.time()
+    all_start = time.perf_counter()
 
     while True:
 
@@ -4587,19 +4590,19 @@ def check_readdir_perf(server, conf):
         dir_dir = join(dfuse.dir, f'dirs.{count}')
         file_dir = join(dfuse.dir, f'files.{count}')
         dfuse.start()
-        start = time.time()
+        start = time.perf_counter()
         subprocess.run(['/bin/ls', dir_dir], stdout=subprocess.PIPE, check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
         dfuse.stop()
         dfuse = DFuse(server, conf, pool=pool, container=container,
                       caching=False)
         dfuse.start()
-        start = time.time()
+        start = time.perf_counter()
         subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE,
                        check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
         dfuse.stop()
@@ -4607,22 +4610,22 @@ def check_readdir_perf(server, conf):
         dfuse = DFuse(server, conf, pool=pool, container=container,
                       caching=False)
         dfuse.start()
-        start = time.time()
+        start = time.perf_counter()
         subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE,
                        check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
         dfuse.stop()
         dfuse = DFuse(server, conf, pool=pool, container=container,
                       caching=False)
         dfuse.start()
-        start = time.time()
+        start = time.perf_counter()
         # Use sort by time here so ls calls stat, if you run ls -l then it will
         # also call getxattr twice which skews the figures.
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE,
                        check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
         dfuse.stop()
@@ -4636,21 +4639,21 @@ def check_readdir_perf(server, conf):
                       container=container,
                       caching=True)
         dfuse.start()
-        start = time.time()
+        start = time.perf_counter()
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE,
                        check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
-        start = time.time()
+        start = time.perf_counter()
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE,
                        check=True)
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         print(f'processed {count} dirs in {elapsed:.2f} seconds')
         row.append(elapsed)
         results.append(row)
 
-        elapsed = time.time() - all_start
+        elapsed = time.perf_counter() - all_start
         if elapsed > 5 * 60:
             dfuse.stop()
             break
@@ -5587,15 +5590,16 @@ def run(wf, args):
                 fatal_errors.add_result(set_server_fi(server))
 
     if args.mode == 'all':
-        with DaosServer(conf, wf=wf_server, fatal_errors=fatal_errors) as server:
+        with DaosServer(conf, test_class='restart', wf=wf_server,
+                        fatal_errors=fatal_errors) as server:
             pass
 
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
     # exit again.
     if args.server_valgrind:
-        with DaosServer(conf, valgrind=True, test_class='valgrind',
-                        wf=wf_server, fatal_errors=fatal_errors) as server:
+        with DaosServer(conf, test_class='valgrind', wf=wf_server, valgrind=True,
+                        fatal_errors=fatal_errors) as server:
             pools = server.fetch_pools()
             for pool in pools:
                 cmd = ['pool', 'query', pool.id()]
