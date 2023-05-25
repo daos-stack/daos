@@ -16,3 +16,5 @@ jobs:
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
       - name: Install docker image
         uses: ./.github/actions/clang-format
+        with:
+          target_commit: ${{ github.event.pull_request.base.sha }}
