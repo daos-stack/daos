@@ -573,14 +573,6 @@ class DaosServer():
         self.network_interface = None
         self.network_provider = None
 
-        # Detect the number of cores for dfuse and do something sensible, if there are
-        # more than 32 on the node then use 12, otherwise use the whole node.
-        # pylint: disable-next=no-member
-        num_cores = len(os.sched_getaffinity(0))
-        if num_cores > 32:
-            self.dfuse_cores = 12
-        else:
-            self.dfuse_cores = None
         self.fuse_procs = []
 
     def __enter__(self):
@@ -730,18 +722,13 @@ class DaosServer():
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
         scyaml['engines'] = []
-        # Leave some cores for dfuse, and start the daos server after these.
-        if self.dfuse_cores:
-            first_core = self.dfuse_cores
-        else:
-            first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         self.network_interface = ref_engine['fabric_iface']
         self.network_provider = scyaml['provider']
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
-            engine['first_core'] = first_core + (ref_engine['targets'] * idx)
+            engine['first_core'] = ref_engine['targets'] * idx
             engine['fabric_iface_port'] += server_port_count * idx
             engine['storage'][0]['scm_mount'] = f'{ref_engine["storage"][0]["scm_mount"]}_{idx}'
             scyaml['engines'].append(engine)
@@ -1200,7 +1187,7 @@ class DFuse():
             self.pool = container.pool.id()
         self.conf = conf
         self.multi_user = multi_user
-        self.cores = daos.dfuse_cores
+        self.cores = 0
         self._daos = daos
         self.caching = caching
         self.wbcache = wbcache
