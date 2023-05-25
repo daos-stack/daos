@@ -292,9 +292,14 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH)) {
+		D_ASSERTF(orwo->orw_iod_csums.ca_arrays != NULL, "NULL ca_arrays\n");
+		D_ASSERTF(orwo->orw_iod_csums.ca_arrays->ic_data != NULL, "NULL ic_data\n");
+		D_ASSERTF(orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum != NULL,
+			  "NULL cs_csum\n");
 		/** Got csum successfully from server. Now poison it!! */
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
+	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
