@@ -267,9 +267,6 @@ func (p *Provider) getPCIBridgesPerNUMANode(topo *topology, nodes hardware.NodeM
 				node.AddPCIBus(bus)
 			}
 		case bridgeTypePCI:
-			if bus == nil {
-				return errors.New("unexpected PCI bridge before host bridge")
-			}
 			// TODO: Add secondary buses, if relevant.
 		default:
 			return errors.Errorf("unexpected bridge type %d", bridgeType)
