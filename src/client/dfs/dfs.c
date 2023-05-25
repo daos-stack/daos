@@ -2066,7 +2066,7 @@ mount:
 					break;
 			}
 			if (rc) {
-				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+				D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 				D_GOTO(err, rc);
 			}
 		} else {
@@ -2081,7 +2081,7 @@ mount:
 		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
-			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+			D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
@@ -3859,7 +3859,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
 						NULL);
 				if (rc) {
-					D_ERROR("Failed to stat entry %s: %d (%s)\n",
+					D_ERROR("Failed to stat entry '%s': %d (%s)\n",
 						dirs[key_nr].d_name, rc, strerror(rc));
 					D_GOTO(out, rc);
 				}
@@ -4128,8 +4128,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		break;
 	default:
-		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Invalid entry type (not a dir, file, symlink): %d (%s)\n", rc,
+			strerror(rc));
+		D_GOTO(err_obj, rc);
 	}
 
 	if (mode)
@@ -4584,7 +4586,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to read from array object: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -4635,7 +4637,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	args->iod	= &params->arr_iod;
 
 	daos_task_set_priv(task, params);
-	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
 		D_GOTO(err_params, rc = daos_der2errno(rc));
 
@@ -4645,7 +4647,8 @@ err_params:
 	D_FREE(params);
 err_task:
 	tse_task_complete(task, rc);
-	return rc;
+	/** the event is completed with the proper rc */
+	return 0;
 }
 
 int
@@ -6703,7 +6706,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 	rc = daos_cont_open(poh, cont, co_flags, &coh, NULL, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_cont_open() failed: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 

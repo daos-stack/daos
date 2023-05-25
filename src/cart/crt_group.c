@@ -412,6 +412,10 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			} else if (provider == CRT_PROV_OFI_CXI) {
 				rc = generate_cxi_uris(provider, base_addr, tag, ui);
 			} else {
+				/*
+				 * TODO: implement generate_opx_uris() function. Once done OPX
+				 * 'contig_ep' setting should be set to true
+				 */
 				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
 				rc = -DER_INVAL;
 			}

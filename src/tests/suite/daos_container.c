@@ -54,11 +54,23 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
 		print_message("container opened\n");
 	}
 
 	if (arg->hdl_share)
 		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
+
+	print_message("querying container %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
+	print_message("container queried\n");
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
 
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -3520,8 +3532,9 @@ setup(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-    {"CONT1: create/open/close/destroy container", co_create, async_disable, test_case_teardown},
-    {"CONT2: create/open/close/destroy container (async)", co_create, async_enable,
+    {"CONT1: create/open/query/close/destroy container", co_create, async_disable,
+     test_case_teardown},
+    {"CONT2: create/open/query/close/destroy container (async)", co_create, async_enable,
      test_case_teardown},
     {"CONT3: container handle local2glocal and global2local", co_create, hdl_share_enable,
      test_case_teardown},
