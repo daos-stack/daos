@@ -17,4 +17,4 @@ jobs:
       - name: Install docker image
         uses: ./.github/actions/clang-format
         with:
-          target_commit: ${{ github.event.pull_request.base.sha }}
+          target: ${{ github.event.pull_request.base.sha }}

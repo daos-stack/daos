@@ -4,6 +4,6 @@ runs:
   using: 'docker'
   image: 'Dockerfile'
 inputs:
-  target-commit:
+  target:
     description: 'Target commit'
     required: true

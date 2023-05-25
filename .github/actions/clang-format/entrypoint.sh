@@ -2,6 +2,6 @@
 
 ls -l
 
-git-clang-format ${target_commit}
+git-clang-format ${INPUT_TARGET}
 
 git diff
