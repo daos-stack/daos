@@ -18,7 +18,7 @@
 #include "dtx_internal.h"
 
 static void *
-dtx_tls_init(int xs_id, int tgt_id)
+dtx_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct dtx_tls  *tls;
 	int              rc;
@@ -43,7 +43,7 @@ dtx_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-dtx_tls_fini(void *data)
+dtx_tls_fini(int tags, void *data)
 {
 	D_FREE(data);
 }

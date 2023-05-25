@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -138,10 +138,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, Errored: true, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, Errored: true, State: stateString(system.MemberStateUnresponsive)},
-			},
+			expErr: context.DeadlineExceeded,
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is canceled
 			req:           &ctlpb.RanksReq{Ranks: "0-3"},
@@ -151,7 +148,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expErr: errors.New("nil result"), // parent ctx cancel
+			expErr: context.Canceled,
 		},
 		"unsuccessful call": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
@@ -220,8 +217,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			}
 
 			var cancel context.CancelFunc
-			ctx, outerCancel := context.WithCancel(context.Background())
-			t.Cleanup(outerCancel)
+			ctx := test.Context(t)
 			if tc.ctxTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
 				defer cancel()
@@ -330,7 +326,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			ctx, outerCancel := context.WithCancel(context.Background())
+			ctx, outerCancel := context.WithCancel(test.Context(t))
 			t.Cleanup(outerCancel)
 			var cancel context.CancelFunc
 			if tc.timeout != time.Duration(0) {
@@ -490,10 +486,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, Errored: true, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, Errored: true, State: stateString(system.MemberStateUnresponsive)},
-			},
+			expErr: context.DeadlineExceeded,
 		},
 		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
 			// force flag in request triggers dRPC ping
@@ -504,7 +497,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expErr: errors.New("nil result"), // parent ctx cancel
+			expErr: context.Canceled,
 		},
 		"dRPC unsuccessful call": {
 			// force flag in request triggers dRPC ping
@@ -586,7 +579,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			ctx, outerCancel := context.WithCancel(context.Background())
+			ctx, outerCancel := context.WithCancel(test.Context(t))
 			t.Cleanup(outerCancel)
 			if tc.ctxTimeout != 0 {
 				inner, cancel := context.WithTimeout(ctx, tc.ctxTimeout)
@@ -664,7 +657,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, outerCancel := context.WithCancel(context.Background())
+			ctx, outerCancel := context.WithCancel(test.Context(t))
 			t.Cleanup(outerCancel)
 			if tc.timeout != time.Duration(0) {
 				t.Logf("timeout of %s being applied", tc.timeout)
@@ -813,7 +806,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, outerCancel := context.WithCancel(context.Background())
+			ctx, outerCancel := context.WithCancel(test.Context(t))
 			t.Cleanup(outerCancel)
 			if tc.timeout != time.Duration(0) {
 				t.Logf("timeout of %s being applied", tc.timeout)
@@ -847,8 +840,12 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				// mimic srv.run, set "ready" on startLoop rx
-				go func(s *EngineInstance, startFails bool) {
-					<-s.startRequested
+				go func(ctx context.Context, s *EngineInstance, startFails bool) {
+					select {
+					case <-ctx.Done():
+						return
+					case <-s.startRequested:
+					}
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails || !tc.instancesStopped {
 						return
@@ -861,7 +858,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					}
 					s.ready.SetTrue()
 					t.Log("ready set to true")
-				}(srv, tc.startFails)
+				}(ctx, srv, tc.startFails)
 			}
 
 			gotResp, gotErr := svc.StartRanks(ctx, tc.req)
@@ -988,10 +985,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			t.Cleanup(cancel)
-
-			gotResp, gotErr := svc.SetEngineLogMasks(ctx, tc.req)
+			gotResp, gotErr := svc.SetEngineLogMasks(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

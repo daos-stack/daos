@@ -159,6 +159,16 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_INVAL;
 	}
 
+	if (strnlen(resp->sys, sizeof(info->system_name)) > 0) {
+		if (copy_str(info->system_name, resp->sys)) {
+			D_ERROR("GetAttachInfo failed: %d. System name string too long\n",
+				resp->status);
+			return -DER_INVAL;
+		}
+	} else {
+		D_NOTE("No system name in GetAttachInfo. Agent may be out of date with libdaos\n");
+	}
+
 	info->crt_ctx_share_addr = hint->crt_ctx_share_addr;
 	info->crt_timeout = hint->crt_timeout;
 	info->srv_srx_set = hint->srv_srx_set;
@@ -313,6 +323,96 @@ dc_get_attach_info(const char *name, bool all_ranks,
 		   struct dc_mgmt_sys_info *info,
 		   Mgmt__GetAttachInfoResp **respp) {
 	return get_attach_info(name, all_ranks, info, respp);
+}
+
+static void
+free_rank_uris(struct daos_rank_uri *uris, uint32_t nr_uris)
+{
+	uint32_t i;
+
+	for (i = 0; i < nr_uris; i++)
+		D_FREE(uris[i].dru_uri);
+	D_FREE(uris);
+}
+
+static int
+alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
+{
+	struct daos_rank_uri	*uris;
+	uint32_t		i;
+
+	D_ALLOC_ARRAY(uris, resp->n_rank_uris);
+	if (uris == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < resp->n_rank_uris; i++) {
+		uris[i].dru_rank = resp->rank_uris[i]->rank;
+
+		D_ASPRINTF(uris[i].dru_uri, resp->rank_uris[i]->uri);
+		if (uris[i].dru_uri == NULL) {
+			free_rank_uris(uris, i);
+			return -DER_NOMEM;
+		}
+	}
+
+	*out = uris;
+	return 0;
+}
+
+int
+dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
+{
+	struct daos_sys_info	*info;
+	struct dc_mgmt_sys_info	internal = {0};
+	Mgmt__GetAttachInfoResp	*resp = NULL;
+	struct daos_rank_uri	*ranks = NULL;
+	int			rc = 0;
+
+	if (out == NULL) {
+		D_ERROR("daos_sys_info must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_get_attach_info(sys, true, &internal, &resp);
+	if (rc != 0) {
+		D_ERROR("dc_get_attach_info failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		D_GOTO(out_attach_info, rc = -DER_NOMEM);
+
+	rc = alloc_rank_uris(resp, &ranks);
+	if (rc != 0) {
+		D_ERROR("failed to allocate rank URIs: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_info, rc);
+	}
+
+	info->dsi_nr_ranks = resp->n_ms_ranks;
+	info->dsi_ranks = ranks;
+	copy_str(info->dsi_system_name, internal.system_name);
+	copy_str(info->dsi_fabric_provider, internal.provider);
+
+	*out = info;
+
+	D_GOTO(out_attach_info, rc = 0);
+
+err_info:
+	D_FREE(info);
+out_attach_info:
+	dc_put_attach_info(&internal, resp);
+out:
+	return rc;
+}
+
+void
+dc_mgmt_put_sys_info(struct daos_sys_info *info)
+{
+	if (info == NULL)
+		return;
+	free_rank_uris(info->dsi_ranks, info->dsi_nr_ranks);
+	D_FREE(info);
 }
 
 #define SYS_INFO_BUF_SIZE 16

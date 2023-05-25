@@ -108,6 +108,7 @@ type cliOptions struct {
 	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
 	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
 	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
+	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
 	Version    versionCmd     `command:"version" description:"print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
@@ -150,7 +151,7 @@ or query/manage an object inside a container.`
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 			if os.Getenv("D_LOG_MASK") == "" {
 				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
 			}

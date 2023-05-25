@@ -49,36 +49,67 @@ class TelemetryUtils():
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
-        "engine_pool_ops_pool_evict",
         "engine_pool_ops_pool_connect",
         "engine_pool_ops_pool_disconnect",
+        "engine_pool_ops_pool_evict",
         "engine_pool_ops_pool_query",
         "engine_pool_ops_pool_query_space",
         "engine_pool_resent",
-        "engine_pool_uncommitted_retry",
         "engine_pool_restarted",
         "engine_pool_retry",
+        "engine_pool_scrubber_busy_time",
+        "engine_pool_scrubber_bytes_scrubbed_current",
+        "engine_pool_scrubber_bytes_scrubbed_prev",
+        "engine_pool_scrubber_bytes_scrubbed_total",
+        "engine_pool_scrubber_corruption_current",
+        "engine_pool_scrubber_corruption_total",
+        "engine_pool_scrubber_csums_current",
+        "engine_pool_scrubber_csums_prev",
+        "engine_pool_scrubber_csums_total",
+        "engine_pool_scrubber_next_csum_scrub",
+        "engine_pool_scrubber_next_tree_scrub",
+        "engine_pool_scrubber_prev_duration",
+        "engine_pool_scrubber_prev_duration_max",
+        "engine_pool_scrubber_prev_duration_mean",
+        "engine_pool_scrubber_prev_duration_min",
+        "engine_pool_scrubber_prev_duration_stddev",
+        "engine_pool_scrubber_scrubber_started",
+        "engine_pool_scrubber_scrubs_completed",
         "engine_pool_started_at",
+        "engine_pool_vos_aggregation_akey_deleted",
+        "engine_pool_vos_aggregation_akey_scanned",
+        "engine_pool_vos_aggregation_akey_skipped",
+        "engine_pool_vos_aggregation_csum_errors",
+        "engine_pool_vos_aggregation_deleted_ev",
+        "engine_pool_vos_aggregation_deleted_sv",
+        "engine_pool_vos_aggregation_dkey_deleted",
+        "engine_pool_vos_aggregation_dkey_scanned",
+        "engine_pool_vos_aggregation_dkey_skipped",
+        "engine_pool_vos_aggregation_epr_duration",
+        "engine_pool_vos_aggregation_epr_duration_max",
+        "engine_pool_vos_aggregation_epr_duration_mean",
+        "engine_pool_vos_aggregation_epr_duration_min",
+        "engine_pool_vos_aggregation_epr_duration_stddev",
+        "engine_pool_vos_aggregation_merged_recs",
+        "engine_pool_vos_aggregation_merged_size",
+        "engine_pool_vos_aggregation_obj_deleted",
+        "engine_pool_vos_aggregation_obj_scanned",
+        "engine_pool_vos_aggregation_obj_skipped",
+        "engine_pool_vos_aggregation_uncommitted",
+        "engine_pool_vos_space_nvme_used",
+        "engine_pool_vos_space_scm_used",
         "engine_pool_xferred_fetch",
         "engine_pool_xferred_update",
-        'engine_pool_scrubber_corruption_current',
-        'engine_pool_scrubber_corruption_total',
-        'engine_pool_scrubber_csums_current',
-        'engine_pool_scrubber_csums_prev',
-        'engine_pool_scrubber_csums_total',
-        'engine_pool_scrubber_bytes_scrubbed_current',
-        'engine_pool_scrubber_bytes_scrubbed_prev',
-        'engine_pool_scrubber_bytes_scrubbed_total',
-        'engine_pool_scrubber_last_duration',
-        'engine_pool_scrubber_last_duration_max',
-        'engine_pool_scrubber_last_duration_mean',
-        'engine_pool_scrubber_last_duration_min',
-        'engine_pool_scrubber_last_duration_stddev',
-        'engine_pool_scrubber_scrubber_started',
-        'engine_pool_scrubber_ult_start',
-        'engine_pool_scrubber_wait_gauge',
-        'engine_pool_vos_space_scm_used',
-        'engine_pool_vos_space_nvme_used']
+        "engine_pool_EC_update_full_stripe",
+        "engine_pool_EC_update_partial",
+        "engine_pool_block_allocator_alloc_hint",
+        "engine_pool_block_allocator_alloc_large",
+        "engine_pool_block_allocator_alloc_small",
+        "engine_pool_block_allocator_frags_aging",
+        "engine_pool_block_allocator_frags_large",
+        "engine_pool_block_allocator_frags_small",
+        "engine_pool_block_allocator_free_blks",
+        "engine_pool_ops_key2anchor"]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -623,14 +654,14 @@ class TelemetryUtils():
         data = {}
         info = self.get_metrics(",".join(self.ENGINE_CONTAINER_METRICS))
         self.log.info("Container Telemetry Information")
-        for host in info:
+        for host, host_info in info.items():
             data[host] = {name: 0 for name in self.ENGINE_CONTAINER_METRICS}
             for name in self.ENGINE_CONTAINER_METRICS:
-                if name in info[host]:
-                    for metric in info[host][name]["metrics"]:
+                if name in host_info:
+                    for metric in host_info[name]["metrics"]:
                         self.log.info(
                             "  %s (%s): %s (%s)",
-                            info[host][name]["description"], name,
+                            host_info[name]["description"], name,
                             metric["value"], host)
                         data[host][name] = metric["value"]
         return data
@@ -774,27 +805,22 @@ class TelemetryUtils():
             "engine_pool_ops_cont_destroy": destroy_count,
         }
         data = self.get_container_metrics()
-        for host in data:
-            for name in expected:
-                if name in data[host]:
-                    if (expected[name] is not None
-                            and host in expected[name]
-                            and expected[name][host] != data[host][name]):
+        for host, host_data in data.items():
+            for name, count in expected.items():
+                if name in host_data:
+                    if (count is not None and host in count and count[host] != host_data[name]):
                         errors.append(
                             "{} mismatch on {}: expected={}; actual={}".format(
-                                name, host, expected[name][host],
-                                data[host][name]))
+                                name, host, count[host], host_data[name]))
                 else:
                     errors.append("No {} data for {}".format(name, host))
         return errors
 
-    def get_nvme_metrics(self, server, specific_metrics=None):
+    def get_nvme_metrics(self, specific_metrics=None):
         """Get the NVMe telemetry metrics.
 
         Args:
             specific_metrics(list): list of specific NVMe metrics
-            server (DaosServerCommand): the server from which to determine what metrics
-                                        will be available
 
         Returns:
             dict: dictionary of dictionaries of NVMe metric names and

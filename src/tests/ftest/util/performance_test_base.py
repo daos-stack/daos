@@ -471,6 +471,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         params = {}
         if self.mdtest_cmd.dfs_oclass.value:
             params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         if self.mdtest_cmd.dfs_chunk.value:
             params['chunk_size'] = self.mdtest_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)
@@ -487,7 +489,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.subprocess = True
 
         self.log.info("Running MDTEST")
-        self.execute_mdtest()
+        self.execute_mdtest(display_space=False)
         if stop_rank_s:
             time.sleep(stop_rank_s)
             self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])

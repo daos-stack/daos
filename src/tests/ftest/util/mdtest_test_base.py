@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 from dfuse_test_base import DfuseTestBase
 from mdtest_utils import MdtestCommand
 from exception_utils import CommandFailure
@@ -43,11 +44,12 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def execute_mdtest(self, out_queue=None):
+    def execute_mdtest(self, out_queue=None, display_space=True):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
+            display_space (bool, optional): Whether to display the pool space. Defaults to True.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -65,7 +67,7 @@ class MdtestBase(DfuseTestBase):
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes, out_queue=out_queue)
+                        self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
             return
@@ -158,7 +160,12 @@ class MdtestBase(DfuseTestBase):
                 self.mdtest_cmd.items.update(params[4])
             self.mdtest_cmd.depth.update(params[5])
             self.mdtest_cmd.flags.update(params[6])
+            if len(params) == 8 and params[7]:
+                self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(
+                    self.prefix, 'lib64', 'libpil4dfs.so')
             # run mdtest
             self.execute_mdtest()
+            if len(params) == 8 and params[7]:
+                del self.mdtest_cmd.env['LD_PRELOAD']
             # re-set mdtest params before next iteration
             self.mdtest_cmd.get_params(self)

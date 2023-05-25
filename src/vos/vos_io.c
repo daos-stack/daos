@@ -1752,14 +1752,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
 		ioc->ic_epr.epr_hi);
 
-	if (is_array) {
-		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
-			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
-				DP_KEY(&iod->iod_name));
-			return rc;
-		}
+	if (is_array)
 		flags |= SUBTR_EVT;
-	}
 
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
@@ -1849,8 +1843,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			rc = 0;
 		}
 		if (rc != 0) {
-			VOS_TX_LOG_FAIL(rc, "akey "DF_KEY" update, akey_update_recx failed, "
-					DF_RC"\n", DP_KEY(&iod->iod_name), DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, DF_UOID" akey "DF_KEY" update, akey_update_recx"
+					" failed, "DF_RC"\n", DP_UOID(obj->obj_id),
+					DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -2935,6 +2930,12 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 {
 	return vos_obj_fetch_ex(coh, oid, epoch, flags, dkey, iod_nr, iods,
 				sgls, NULL);
+}
+
+int
+vos_obj_layout_upgrade(daos_handle_t coh, daos_unit_oid_t oid, uint32_t layout_ver)
+{
+	return  vos_oi_upgrade_layout_ver(vos_hdl2cont(coh), oid, layout_ver);
 }
 
 /**

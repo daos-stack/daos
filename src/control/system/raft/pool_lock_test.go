@@ -50,11 +50,11 @@ func TestRaft_getLockCtx(t *testing.T) {
 			expErr: errors.New("nil context"),
 		},
 		"no lock in context": {
-			ctx:    context.Background(),
+			ctx:    test.Context(t),
 			expErr: errNoCtxLock,
 		},
 		"lock in context": {
-			ctx: lock.InContext(context.Background()),
+			ctx: lock.InContext(test.Context(t)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -107,11 +107,11 @@ func TestRaft_PoolLock_InContext(t *testing.T) {
 			shouldPanic: true,
 		},
 		"parent contains different lock": {
-			parent:      lock2.InContext(context.Background()),
+			parent:      lock2.InContext(test.Context(t)),
 			shouldPanic: true,
 		},
 		"parent contains same lock": {
-			parent:  lock1.InContext(context.Background()),
+			parent:  lock1.InContext(test.Context(t)),
 			expLock: lock1,
 		},
 	} {
@@ -158,21 +158,21 @@ func TestRaft_AddContextLock(t *testing.T) {
 			expErr: errors.New("nil context"),
 		},
 		"nil lock": {
-			parent: context.Background(),
+			parent: test.Context(t),
 			expErr: errors.New("nil lock"),
 		},
 		"parent contains different lock": {
-			parent: lock2.InContext(context.Background()),
+			parent: lock2.InContext(test.Context(t)),
 			lock:   lock1,
 			expErr: errors.New("contains another lock"),
 		},
 		"parent contains same lock": {
-			parent:  lock1.InContext(context.Background()),
+			parent:  lock1.InContext(test.Context(t)),
 			lock:    lock1,
 			expLock: lock1,
 		},
 		"new child context with lock": {
-			parent:    context.Background(),
+			parent:    test.Context(t),
 			lock:      lock1,
 			expLock:   lock1,
 			expNewCtx: true,

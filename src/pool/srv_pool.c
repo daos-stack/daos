@@ -333,6 +333,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_EC_PDA:
 		case DAOS_PROP_PO_RP_PDA:
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
+		case DAOS_PROP_PO_PERF_DOMAIN:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_POLICY:
@@ -569,6 +570,12 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			val32 = entry->dpe_val;
 			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_upgrade_status,
+					   &value);
+			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			val32 = entry->dpe_val;
+			d_iov_set(&value, &val32, sizeof(val32));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_perf_domain,
 					   &value);
 			break;
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
@@ -2364,6 +2371,26 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		idx++;
 	}
+
+	if (bits & DAOS_PO_QUERY_PROP_PERF_DOMAIN) {
+		d_iov_set(&value, &val32, sizeof(val32));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_perf_domain,
+				   &value);
+		if (rc == -DER_NONEXIST && global_ver < 2)
+			val32 = DAOS_PROP_PO_PERF_DOMAIN_DEFAULT;
+		else if (rc != 0)
+			D_GOTO(out_prop, rc);
+
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_PERF_DOMAIN;
+		prop->dpp_entries[idx].dpe_val = val32;
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		}
+		idx++;
+	}
+
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_MODE) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_mode,
@@ -2667,7 +2694,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			D_GOTO(out_svc, rc);
 	}
 
-	ds_rebuild_running_query(in->pci_op.pi_uuid, &out->pco_rebuild_ver);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3595,9 +3621,6 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 			D_GOTO(out_svc, rc);
 	}
 
-	if (version >= 5)
-		ds_rebuild_running_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_ver);
-
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3701,6 +3724,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 			case DAOS_PROP_PO_SCRUB_THRESH:
 			case DAOS_PROP_PO_SVC_REDUN_FAC:
 			case DAOS_PROP_PO_OBJ_VERSION:
+			case DAOS_PROP_PO_PERF_DOMAIN:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -4731,6 +4755,22 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
+	d_iov_set(&value, &val32, sizeof(val32));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_perf_domain, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		val32 = DAOS_PROP_PO_PERF_DOMAIN_DEFAULT;
+		rc = rdb_tx_update(tx, &svc->ps_root,
+				   &ds_pool_prop_perf_domain, &value);
+		if (rc != 0) {
+			D_ERROR("failed to write pool performain domain prop, "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
 			   &value);
 	if (rc && rc != -DER_NONEXIST) {
@@ -5729,15 +5769,19 @@ pool_svc_rfcheck_ult(void *arg)
 
 	do {
 		/* retry until some one stop the pool svc(rc == 1) or succeed */
-		rc = ds_cont_rdb_iterate(svc->ps_uuid, cont_rf_check_cb,
+		rc = ds_cont_rdb_iterate(svc->ps_cont_svc, cont_rf_check_cb,
 					 &svc->ps_rfcheck_sched);
 		if (rc >= 0)
 			break;
-		D_ERROR(DF_UUID" check rf with %d and retry\n", DP_UUID(svc->ps_uuid), rc);
+
+		D_DEBUG(DB_MD, DF_UUID" check rf with %d and retry\n",
+			DP_UUID(svc->ps_uuid), rc);
+
 		dss_sleep(0);
 	} while (1);
 
 	sched_end(&svc->ps_rfcheck_sched);
+	D_INFO("RF check finished for "DF_UUID"\n", DP_UUID(svc->ps_uuid));
 	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
 }
 
@@ -5779,6 +5823,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
+	uint32_t		rebuild_ver = 0;
 	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
 	int			rc;
@@ -5786,6 +5831,19 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	D_DEBUG(DB_MD, DF_UUID": opc=%u exclude_rank=%d ntgts=%d ntgt_addrs=%d\n",
 		DP_UUID(svc->ps_uuid), opc, exclude_rank, tgts->pti_number,
 		tgt_addrs == NULL ? 0 : tgt_addrs->pta_number);
+
+	/* Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	 * updating the pool map during rebuild, which might screw the object layout.
+	 */
+	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver, NULL, NULL);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc, DER_BUSY);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)

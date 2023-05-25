@@ -61,7 +61,6 @@ type (
 		IncludeBioHealth bool          `json:"include_bio_health"`
 		UUID             string        `json:"uuid"`
 		Rank             ranklist.Rank `json:"rank"`
-		Target           string        `json:"target"`
 		FaultyDevsOnly   bool          `json:"-"` // only show faulty devices
 	}
 

@@ -20,7 +20,7 @@ import (
 type DomainSocketClient interface {
 	sync.Locker
 	IsConnected() bool
-	Connect() error
+	Connect(context.Context) error
 	Close() error
 	SendMsg(context.Context, *Call) (*Response, error)
 	GetSocketPath() string
@@ -28,7 +28,7 @@ type DomainSocketClient interface {
 
 // domainSocketDialer is an interface that connects to a Unix Domain Socket
 type domainSocketDialer interface {
-	dial(socketPath string) (net.Conn, error)
+	dial(ctx context.Context, socketPath string) (net.Conn, error)
 }
 
 // ClientConnection represents a client connection to a dRPC server
@@ -54,7 +54,7 @@ func (c *ClientConnection) IsConnected() bool {
 }
 
 // Connect opens a connection to the internal Unix Domain Socket path
-func (c *ClientConnection) Connect() error {
+func (c *ClientConnection) Connect(ctx context.Context) error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
@@ -63,7 +63,7 @@ func (c *ClientConnection) Connect() error {
 		return nil
 	}
 
-	conn, err := c.dialer.dial(c.socketPath)
+	conn, err := c.dialer.dial(ctx, c.socketPath)
 	if err != nil {
 		return errors.Wrap(err, "dRPC connect")
 	}
@@ -77,14 +77,16 @@ func (c *ClientConnection) Connect() error {
 func (c *ClientConnection) Close() error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
+	return c.close()
+}
 
+func (c *ClientConnection) close() error {
 	if !c.isConnected() {
 		// Nothing to do
 		return nil
 	}
 
-	err := c.conn.Close()
-	if err != nil {
+	if err := c.conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		return errors.Wrap(err, "dRPC close")
 	}
 
@@ -94,10 +96,8 @@ func (c *ClientConnection) Close() error {
 
 func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 	// increment sequence every call, always nonzero
-	c.connMu.Lock()
 	c.sequence++
 	msg.Sequence = c.sequence
-	c.connMu.Unlock()
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
@@ -106,15 +106,21 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 
 	callWrite := make(chan struct{})
 	defer close(callWrite)
-	go func() {
+	go func(closeConn func() error) {
 		select {
 		case <-ctx.Done():
-			c.Close()
+			closeConn()
 		case <-callWrite:
 		}
-	}()
+	}(c.conn.Close)
 
 	if _, err := c.conn.Write(callBytes); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			if cErr := c.close(); cErr != nil {
+				err = errors.Wrapf(err, "failed to close dRPC connection: %v", cErr)
+			}
+		}
 		return errors.Wrap(err, "dRPC send")
 	}
 
@@ -124,17 +130,23 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) {
 	respRead := make(chan struct{})
 	defer close(respRead)
-	go func() {
+	go func(closeConn func() error) {
 		select {
 		case <-ctx.Done():
-			c.Close()
+			closeConn()
 		case <-respRead:
 		}
-	}()
+	}(c.conn.Close)
 
 	respBytes := make([]byte, MaxMsgSize)
 	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			if cErr := c.close(); cErr != nil {
+				err = errors.Wrapf(err, "failed to close dRPC connection: %v", cErr)
+			}
+		}
 		return nil, errors.Wrap(err, "dRPC recv")
 	}
 
@@ -150,7 +162,9 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 // SendMsg sends a message to the connected dRPC server, and returns the
 // response to the caller.
 func (c *ClientConnection) SendMsg(ctx context.Context, msg *Call) (*Response, error) {
-	if !c.IsConnected() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+	if !c.isConnected() {
 		return nil, errors.Errorf("dRPC not connected")
 	}
 
@@ -185,10 +199,11 @@ type clientDialer struct {
 }
 
 // dial connects to the real unix domain socket located at socketPath
-func (c *clientDialer) dial(socketPath string) (net.Conn, error) {
-	addr := &net.UnixAddr{
+func (c *clientDialer) dial(ctx context.Context, socketPath string) (net.Conn, error) {
+	var d net.Dialer
+	addr := net.UnixAddr{
 		Net:  "unixpacket",
 		Name: socketPath,
 	}
-	return net.DialUnix("unixpacket", nil, addr)
+	return d.DialContext(ctx, "unixpacket", addr.String())
 }

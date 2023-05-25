@@ -1358,6 +1358,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				WithDevices([]*PCIDevice{
 					mockPCIDevice("test", 1, 2, 3, 4).withType(DeviceTypeOFIDomain),
 					mockPCIDevice("os_test", 1, 2, 3, 4).withType(DeviceTypeNetInterface),
+					mockPCIDevice("os_test", 2, 2, 3, 4).withType(DeviceTypeNetInterface),
 				}),
 		},
 	}
@@ -1366,13 +1367,24 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		&FabricInterface{
 			Name:          "test01",
 			NetInterfaces: common.NewStringSet("os_test01"),
+			Providers:     newTestFabricProviderSet("ofi+verbs"),
+		},
+		&FabricInterface{
+			Name:          "os_test01",
+			NetInterfaces: common.NewStringSet("os_test01"),
 			Providers:     newTestFabricProviderSet("ofi+tcp"),
+		},
+
+		&FabricInterface{
+			Name:          "os_test02",
+			NetInterfaces: common.NewStringSet("os_test02"),
+			Providers:     newTestFabricProviderSet("ofi+sockets"),
 		},
 	)
 
 	for name, tc := range map[string]struct {
 		config             *FabricScannerConfig
-		provider           string
+		providers          []string
 		cacheTopology      *Topology
 		nilScanner         bool
 		builders           []FabricInterfaceSetBuilder
@@ -1401,7 +1413,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							NDC: Ether,
+							NDC: Infiniband,
 						},
 					},
 				},
@@ -1421,13 +1433,13 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							NDC: Ether,
+							NDC: Infiniband,
 						},
 					},
 				},
 			},
-			provider: "ofi+tcp",
-			expErr:   errors.New("no fabric interfaces found with provider \"ofi+tcp\""),
+			providers: []string{"ofi+tcp"},
+			expErr:    errors.New("no fabric interfaces found with providers: ofi+tcp"),
 		},
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
@@ -1501,13 +1513,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 			},
 			// we ignore the error in this case
-			expResult: NewFabricInterfaceSet(
-				&FabricInterface{
-					Name:          "test01",
-					NetInterfaces: common.NewStringSet("os_test01"),
-					Providers:     newTestFabricProviderSet("ofi+tcp"),
-				},
-			),
+			expResult: testFis,
 		},
 		"re-init with different provider": {
 			config: &FabricScannerConfig{
@@ -1516,19 +1522,25 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 				FabricInterfaceProviders: []FabricInterfaceProvider{
 					&MockFabricInterfaceProvider{
-						GetFabricReturn: testFis,
+						GetFabricReturn: NewFabricInterfaceSet(
+							&FabricInterface{
+								Name:          "os_test01",
+								NetInterfaces: common.NewStringSet("os_test01"),
+								Providers:     newTestFabricProviderSet("ofi+tcp"),
+							},
+						),
 					},
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							NDC:      Ether,
+							NDC:      Infiniband,
 							ExpInput: "os_test01",
 						},
 					},
 				},
 			},
-			provider: "ofi+test",
+			providers: []string{"ofi+tcp"},
 			builders: []FabricInterfaceSetBuilder{
 				&mockFabricInterfaceSetBuilder{},
 				&mockFabricInterfaceSetBuilder{},
@@ -1537,14 +1549,14 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			expBuildersChanged: true,
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:          "test01",
+					Name:          "os_test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
-					DeviceClass:   Ether,
+					DeviceClass:   Infiniband,
 					Providers:     newTestFabricProviderSet("ofi+tcp"),
 				},
 			),
 		},
-		"success": {
+		"success for all providers": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{
 					GetTopoReturn: testTopo,
@@ -1557,7 +1569,15 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
+							NDC:      Infiniband,
+							ExpInput: "os_test01",
+						},
+						{
 							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+						{
+							NDC:      Infiniband,
 							ExpInput: "os_test01",
 						},
 					},
@@ -1567,10 +1587,46 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				&FabricInterface{
 					Name:          "test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
-					DeviceClass:   Ether,
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+verbs"),
+				},
+				&FabricInterface{
+					Name:          "os_test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
 					Providers:     newTestFabricProviderSet("ofi+tcp"),
 				},
+				&FabricInterface{
+					Name:          "os_test02",
+					NetInterfaces: common.NewStringSet("os_test02"),
+					DeviceClass:   Ether,
+					Providers:     newTestFabricProviderSet("ofi+sockets"),
+				},
 			),
+		},
+		"request multiple providers": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&multiCallFabricInterfaceProvider{prefix: "os_test"},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC:      Ether,
+							ExpInput: "os_test01",
+						},
+						{
+							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+					},
+				},
+			},
+			providers: []string{"ofi+verbs", "ofi+tcp"},
+			expResult: expectedMultiCallFIProviderResult("os_test", Ether, "ofi+verbs", "ofi+tcp"),
 		},
 		"topology cached": {
 			config: &FabricScannerConfig{
@@ -1585,7 +1641,15 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
+							NDC:      Infiniband,
+							ExpInput: "os_test01",
+						},
+						{
 							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+						{
+							NDC:      Infiniband,
 							ExpInput: "os_test01",
 						},
 					},
@@ -1596,8 +1660,20 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				&FabricInterface{
 					Name:          "test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
-					DeviceClass:   Ether,
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+verbs"),
+				},
+				&FabricInterface{
+					Name:          "os_test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
 					Providers:     newTestFabricProviderSet("ofi+tcp"),
+				},
+				&FabricInterface{
+					Name:          "os_test02",
+					NetInterfaces: common.NewStringSet("os_test02"),
+					DeviceClass:   Ether,
+					Providers:     newTestFabricProviderSet("ofi+sockets"),
 				},
 			),
 		},
@@ -1621,7 +1697,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				}
 			}
 
-			result, err := scanner.Scan(context.Background(), tc.provider)
+			result, err := scanner.Scan(test.Context(t), tc.providers...)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
@@ -1697,8 +1773,8 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 
 func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	config := &FabricInterfaceSetBuilderConfig{
-		Provider: "testprovider",
-		Topology: &Topology{},
+		Providers: []string{"testprovider"},
+		Topology:  &Topology{},
 		FabricInterfaceProviders: []FabricInterfaceProvider{
 			&MockFabricInterfaceProvider{},
 			&MockFabricInterfaceProvider{},
@@ -1707,7 +1783,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	}
 	expResult := []FabricInterfaceSetBuilder{
 		newFabricInterfaceBuilder(nil,
-			"testprovider",
+			[]string{"testprovider"},
 			&MockFabricInterfaceProvider{},
 			&MockFabricInterfaceProvider{}),
 		newNetworkDeviceBuilder(nil, &Topology{}),
@@ -1746,7 +1822,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			expResult: NewFabricInterfaceSet(),
 		},
 		"nil set": {
-			builder: newFabricInterfaceBuilder(nil, ""),
+			builder: newFabricInterfaceBuilder(nil, []string{}),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
 		},
 		"uninit": {
@@ -1756,7 +1832,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			expResult: NewFabricInterfaceSet(),
 		},
 		"success": {
-			builder: newFabricInterfaceBuilder(nil, "",
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
@@ -1779,7 +1855,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			),
 		},
 		"merge success": {
-			builder: newFabricInterfaceBuilder(nil, "",
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
@@ -1830,7 +1906,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			),
 		},
 		"get FI fails": {
-			builder: newFabricInterfaceBuilder(nil, "",
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
@@ -1858,7 +1934,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -2119,7 +2195,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2271,7 +2347,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2418,7 +2494,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2559,10 +2635,10 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			var ctx context.Context
 
 			if tc.timeout == 0 {
-				ctx = context.Background()
+				ctx = test.Context(t)
 			} else {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				ctx, cancel = context.WithTimeout(test.Context(t), tc.timeout)
 				defer cancel()
 			}
 

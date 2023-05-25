@@ -553,6 +553,10 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
+	else {
+		/* Use tagged messages for other providers, disable multi-recv */
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
+	}
 
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
@@ -988,6 +992,19 @@ static inline bool is_integer_str(char *str)
 }
 
 static inline int
+crt_get_port_opx(int *port)
+{
+	int     rc = 0;
+	uint16_t    pid;
+
+	pid = getpid();
+	*port = pid;
+	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
+
+	return rc;
+}
+
+static inline int
 crt_get_port_psm2(int *port)
 {
 	int		rc = 0;
@@ -1176,7 +1193,14 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
+	} else if (provider == CRT_PROV_OFI_OPX) {
+		rc = crt_get_port_opx(&port);
+		if (rc != 0) {
+			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
+
 	na_cfg->noc_port = port;
 
 out:
