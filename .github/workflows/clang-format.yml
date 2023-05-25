@@ -27,3 +27,9 @@ jobs:
         uses: ./.github/actions/clang-format
         with:
           target: ${{ github.event.pull_request.base.sha }}
+      - name: Export changes
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: diff
+          path: chang-format-changes.diff
