@@ -146,7 +146,8 @@ class SlurmSetup():
         non_control = self.nodes.difference(self.control)
         self.log.debug('Copying the munge key to %s', non_control)
         command = command_as_user(
-            get_clush_command(non_control, args=f"--copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}"),
+            get_clush_command(
+                non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}"),
             self.root)
         result = run_remote(self.log, self.control, command)
         if not result.passed:
