@@ -108,8 +108,6 @@ func DefaultEngineCfg(idx int) *engine.Config {
 
 // ConfGenerate derives an optimal server config file from details of network, storage and CPU
 // hardware by evaluating affinity matches for NUMA node combinations.
-//
-// TODO DAOS-11859: When enabling tmpfs SCM, enumerate them in the same map NumaSCMs.
 func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabric, hs *HostStorage) (*ConfGenerateResp, error) {
 	// process host fabric scan results to retrieve network details
 	nd, err := getNetworkDetails(req.Log, req.NetClass, req.NetProvider, hf)
@@ -1134,6 +1132,9 @@ func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath 
 		}
 		// Add default control_metadata path if roles have been assigned.
 		if idx == 0 && tiers.HasBdevRoleMeta() {
+			if extMetadataPath == "" {
+				return nil, errors.New("no external metadata path specified in request")
+			}
 			cfg.Metadata = storage.ControlMetadata{
 				Path: extMetadataPath,
 			}

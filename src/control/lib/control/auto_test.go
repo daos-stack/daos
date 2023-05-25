@@ -1532,7 +1532,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			hpSize:   defHpSizeKb,
 			memTotal: (52 * humanize.GiByte) / humanize.KiByte,
-			expErr:   storage.FaultBdevConfigRolesNoControlMetadata,
+			expErr:   errors.New("no external metadata path"),
 		},
 		"dual engine tmpfs; no hugepage size": {
 			extMetadataPath: metadataMountPath,

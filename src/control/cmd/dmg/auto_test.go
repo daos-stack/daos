@@ -265,7 +265,7 @@ func TestAuto_confGen(t *testing.T) {
 				{netHostResp},
 				{storHostRespHighMem},
 			},
-			expErr: storage.FaultBdevConfigRolesNoControlMetadata,
+			expErr: ErrTmpfsNoExtMDPath,
 		},
 		"successful fetch of host storage and fabric; ram scm tier; low mem": {
 			tmpfsSCM:        true,
