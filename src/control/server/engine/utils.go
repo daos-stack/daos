@@ -126,19 +126,20 @@ var (
 		"EMRG", "EMIT",
 	}
 	validLogStreams = []string{
-		"ALL",                                                       // Select all streams
-		"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "GROUP_DEFAULT", // DAOS debug streams
-		"GROUP_METADATA_ONLY", "GROUP_METADATA",
-		"ANY", "TRACE", "MEM", "NET", "IO", // GURT debug streams
+		"ALL",                                                     // Select all streams
+		"MD", "PL", "MGMT", "EPC", "DF", "REBUILD", "SEC", "CSUM", // DAOS debug streams
+		"GROUP_DEFAULT", "GROUP_METADATA_ONLY", "GROUP_METADATA",
+		"ANY", "TRACE", "MEM", "NET", "IO", "TEST", // GURT debug streams
 	}
 	validLogSubsystems = []string{
-		"ALL",                                                      // Select all subsystems
-		"ARRAY", "KV", "COMMON", "TREE", "VOS", "CLIENT", "SERVER", // DAOS subsystems
-		"RDB", "RSVC", "POOL", "CONTAINER", "OBJECT", "PLACEMENT",
-		"REBUILD", "TIER", "MGMT", "BIO", "TESTS", "DFS", "DUNS",
-		"DRPC", "SECURITY", "DTX", "DFUSE", "IL", "CSUM",
-		"MISC", "MEM", "SWIM", "TELEM", // Common subsystems (GURT)
-		"RPC", "BULK", "CORPC", "GRP", "HG", "ST", "IV", "CTL", // CaRT subsystems
+		"ALL",                                                    // Select all subsystems
+		"DAOS", "ARRAY", "KV", "COMMON", "TREE", "VOS", "CLIENT", // DAOS subsystems
+		"SERVER", "RDB", "RSVC", "POOL", "CONTAINER", "OBJECT",
+		"PLACEMENT", "REBUILD", "MGMT", "BIO", "TESTS", "DFS", "DUNS",
+		"DRPC", "SECURITY", "DTX", "DFUSE", "IL", "CSUM", "STACK",
+		"MISC", "MEM", "SWIM", "FI", "TELEM", // Common subsystems (GURT)
+		"CRT", "RPC", "BULK", "CORPC", "GRP", "LM", "HG", // CaRT subsystems
+		"EXTERNAL", "ST", "IV", "CTL",
 	}
 	errLogNameAllWithOther = errors.New("'all' identifier cannot be used with any other")
 	errLogNameAllInMasks   = errors.New("'all' identifier cannot be used in log mask level assignments")
