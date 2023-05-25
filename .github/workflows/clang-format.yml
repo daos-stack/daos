@@ -1,0 +1,24 @@
+name: clang-format
+
+on:
+  pull_request:
+
+jobs:
+  pylint:
+    name: Pylint check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install software
+        run: sudo apt-get install clang-format
+      - name: Check version
+        run: clang-format --version
+      - name: Pull via git
+        run: git fetch origin ${{ github.event.pull_request.base.sha }}
+      - name: Run pylint check.
+        run: git-clang-format ${{ github.event.pull_request.base.sha }}
+      - name: Show diff.
+        run: git diff
