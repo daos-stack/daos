@@ -14,7 +14,5 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Pull via git
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
-      - name: Run format check.
-        run: git-clang-format ${{ github.event.pull_request.base.sha }}
       - name: Install docker image
         uses: ./.github/actions/clang-format
