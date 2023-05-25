@@ -389,7 +389,8 @@ def define_components(reqs):
         capstone_pkg = 'libcapstone-devel'
     else:
         capstone_pkg = 'capstone-devel'
-    reqs.define('capstone', libs=['capstone'], headers=['capstone.h'], package=capstone_pkg)
+    reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
+                package=capstone_pkg)
 
 
 __all__ = ['define_components']
