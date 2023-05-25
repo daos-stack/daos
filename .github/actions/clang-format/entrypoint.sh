@@ -8,7 +8,7 @@ set +e
 
 # Show what would be changed as a diff.
 git-clang-format "${INPUT_TARGET}" --diffstat
-git-clang-format "${INPUT_TARGET}" --diff > auto-format-changes.diff
+git-clang-format "${INPUT_TARGET}" --diff --quiet > auto-format-changes.diff
 cat auto-format-changes.diff
 
 if [ -s auto-format-changes.diff ]
