@@ -1135,7 +1135,7 @@ class DmgCommand(DmgCommandBase):
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control
-                metadata in MD-on-SSD mode.
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
