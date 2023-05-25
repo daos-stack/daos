@@ -1117,6 +1117,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
 						{
+							Number: propWithVal("perf_domain", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{255},
+						},
+						{
 							Number: propWithVal("scrub", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
 						},
@@ -1147,6 +1151,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
