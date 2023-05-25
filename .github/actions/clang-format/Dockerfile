@@ -1,4 +1,4 @@
-FROM: fedora:38
+FROM fedora:38
 
 RUN dnf install clang-format
 
