@@ -1,5 +1,14 @@
 name: clang-format
 
+# Report style formatting changes.
+# Run git-clang-format on the contents of the PR against the target commit and display a diff of
+# any recommended changes.  Fail the job if any are recommended.
+#
+# Future work would be to have a way to apply these automatically which would require making and
+# pushing a new git commit so should be optional.
+#
+# Runs in a fedora docker container to get a recent clang-format version.
+
 on:
   pull_request:
 
