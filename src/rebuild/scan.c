@@ -512,15 +512,35 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	 * still includes the current rank. If not, the object can be
 	 * deleted/reclaimed because it is no longer reachable
 	 */
-	rc = pl_obj_place(map, layout_ver, md, DAOS_OO_RO, -1, NULL, &layout);
+	rc = pl_obj_place(map, oid.id_layout_ver, md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		return rc;
 
-	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank, mytarget,
-					      oid.id_shard);
+	/* If there are further targets failure during reintegration/extend/drain,
+	 * rebuild will choose replacement targets for the impacted objects anyway,
+	 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
+	 */
+	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank,
+					      mytarget, oid.id_shard,
+					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
-	if (still_needed && new_layout_ver <= oid.id_layout_ver)
+	if (still_needed) {
+		if (new_layout_ver > 0) {
+			/* upgrade job reclaim */
+			if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+				if (oid.id_layout_ver == new_layout_ver) {
+					*acts |= VOS_ITER_CB_DELETE;
+					vos_obj_delete_ent(param->ip_hdl, oid);
+				}
+			} else {
+				if (oid.id_layout_ver < new_layout_ver) {
+					*acts |= VOS_ITER_CB_DELETE;
+					vos_obj_delete_ent(param->ip_hdl, oid);
+				}
+			}
+		}
 		return 0;
+	}
 
 	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
 		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
@@ -718,6 +738,10 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_UPGRADE:
 		rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
 				     arg->co_props.dcp_obj_version, &md, tgts, shards);
+		/* Then only upgrade the layout version */
+		if (rc == 0)
+			rc = vos_obj_layout_upgrade(param->ip_hdl, oid, rpt->rt_new_layout_ver);
+
 		break;
 	default:
 		D_ASSERT(0);

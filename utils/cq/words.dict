@@ -168,6 +168,7 @@ enum
 env
 environ
 epcrange
+epilog
 errored
 ethernet
 fchmod
@@ -177,7 +178,6 @@ filesystem
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -321,6 +321,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -338,6 +339,7 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
 puuid
@@ -353,6 +355,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor

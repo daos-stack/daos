@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -158,6 +158,10 @@ func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
 	defer func() {
 		if err == nil {
+			return
+		}
+		// If the context was canceled, don't trigger callbacks.
+		if errors.Cause(err) == context.Canceled {
 			return
 		}
 		// Don't trigger callbacks for these errors which can happen when

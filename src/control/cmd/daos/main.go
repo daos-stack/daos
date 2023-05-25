@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,8 +54,7 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	status := 0
 	var errStr *string
 	if cmdErr != nil {
-		errStr = new(string)
-		*errStr = cmdErr.Error()
+		errStr = func() *string { str := cmdErr.Error(); return &str }()
 		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
@@ -109,6 +108,7 @@ type cliOptions struct {
 	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
 	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
 	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
+	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
 	Version    versionCmd     `command:"version" description:"print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
@@ -151,7 +151,7 @@ or query/manage an object inside a container.`
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 			if os.Getenv("D_LOG_MASK") == "" {
 				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
 			}
@@ -204,6 +204,15 @@ or query/manage an object inside a container.`
 		}
 
 		return nil
+	}
+
+	// Configure DAOS client logging to stderr if no log file
+	// is specified. This is to avoid polluting the JSON output.
+	if os.Getenv("D_LOG_FILE") == "" {
+		os.Setenv("D_LOG_FILE", "/dev/null")
+		if os.Getenv("DD_STDERR") == "" {
+			os.Setenv("DD_STDERR", "debug")
+		}
 	}
 
 	// Initialize the daos debug system first so that

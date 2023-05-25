@@ -24,7 +24,7 @@ pkgs="gotestsum openmpi$OPENMPI_VER                \
       python3$PY_MINOR_VER-junit_xml               \
       python3$PY_MINOR_VER-tabulate numactl        \
       libyaml-devel                                \
-      valgrind-devel patchelf"
+      valgrind-devel patchelf capstone"
 
 if $quick_build; then
     if ! read -r mercury_version < "$distro"-required-mercury-rpm-version; then

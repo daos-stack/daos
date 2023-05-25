@@ -16,7 +16,6 @@ server_config:
           scm_size: 4
 pool:
   scm_size: 1G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -25,5 +24,3 @@ ior:
   api: POSIX
   flags: "-v -w -k"
   max_duration: 10
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"

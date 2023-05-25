@@ -1403,7 +1403,7 @@ obj_ec_fail_info_insert(struct obj_reasb_req *reasb_req, uint16_t fail_tgt)
 }
 
 int
-obj_ec_singv_split(daos_unit_oid_t oid, uint32_t layout_ver, struct daos_oclass_attr *oca,
+obj_ec_singv_split(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 		   uint64_t dkey_hash, daos_size_t iod_size, d_sg_list_t *sgl)
 {
 	uint64_t c_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
@@ -1442,7 +1442,7 @@ out:
 }
 
 int
-obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint32_t layout_ver, struct daos_oclass_attr *oca,
+obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 			uint64_t dkey_hash, daos_iod_t *iod, d_sg_list_t *sgl,
 			d_iov_t *e_iov)
 {
@@ -1534,8 +1534,8 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 			rc = obj_ec_fail_info_parity_get(obj, reasb_req, dkey_hash, &idx,
 							 NIL_BITMAP);
 			if (rc) {
-				D_ERROR(DF_OID" can not get parity failed, "
-					DF_RC".\n", DP_OID(reasb_req->orr_oid), DP_RC(rc));
+				D_ERROR(DF_OID " can not get parity failed, " DF_RC "\n",
+					DP_OID(reasb_req->orr_oid), DP_RC(rc));
 				goto out;
 			}
 		} else {
@@ -1918,10 +1918,20 @@ tgt_check:
 				tail_hole_size += recx_size;
 				continue;
 			}
+
 			D_ASSERT(data_size <= recx_size);
 			tail_hole_size += recx_size - data_size;
 			D_ASSERT(tail_hole_size <= size_in_iod);
-			dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
+
+			/**
+			 * During EC data recovery, data size might be shorter than
+			 * the real data size, because the tail degraded sgl might
+			 * be truncated by ioc_trim_tail_holes. so the sgl buf size
+			 * is set by obj_ec_recov_fill_back().
+			 */
+			if (!reasb_req->orr_recov_data ||
+			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl))
+				dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
 
 			return;
 		}
@@ -2154,7 +2164,7 @@ obj_ec_recov_codec_init(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 	D_ASSERT(nerrs > 0 && err_list != NULL);
 	if (nerrs > p) {
 		rc = -DER_DATA_LOSS;
-		D_ERROR(DF_OID" nerrs %d > p %d, "DF_RC".\n", DP_OID(obj->cob_md.omd_id), nerrs,
+		D_ERROR(DF_OID " nerrs %d > p %d, " DF_RC "\n", DP_OID(obj->cob_md.omd_id), nerrs,
 			p, DP_RC(rc));
 		return rc;
 	}
@@ -2501,6 +2511,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods, uint32
 					    stripe_rec_nr;
 			}
 			rtask->ert_oiod = iod;
+			rtask->ert_uiod = &reasb_req->orr_uiods[i];
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
 			rtask->ert_iod.iod_size = recx_ep == NULL ?
@@ -2582,8 +2593,8 @@ obj_ec_recov_prep(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 
 out:
 	if (rc)
-		D_ERROR(DF_OID" obj_ec_recov_prep failed, "DF_RC".\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		D_ERROR(DF_OID " obj_ec_recov_prep failed, " DF_RC "\n", DP_OID(obj->cob_md.omd_id),
+			DP_RC(rc));
 	return rc;
 }
 
@@ -2610,16 +2621,34 @@ struct oes_copy_arg {
 	void		*buf;
 	uint64_t	 size;
 	uint64_t	 copied;
+	d_sg_list_t	*sgl;
+	struct daos_sgl_idx *sgl_idx;
 };
 
 static int
 oes_copy(uint8_t *buf, size_t len, void *data)
 {
 	struct oes_copy_arg	*arg = data;
+	d_sg_list_t		*sgl = arg->sgl;
+	struct daos_sgl_idx	*idx = arg->sgl_idx;
 
 	D_ASSERT(arg->copied + len <= arg->size);
 	memcpy(buf, arg->buf + arg->copied, len);
 	arg->copied += len;
+
+	if (idx->iov_offset == 0) {
+		D_ASSERT(idx->iov_idx > 0);
+		sgl->sg_iovs[idx->iov_idx - 1].iov_len =
+		     sgl->sg_iovs[idx->iov_idx - 1].iov_buf_len;
+	} else {
+		sgl->sg_iovs[idx->iov_idx].iov_len =
+			max(sgl->sg_iovs[idx->iov_idx].iov_len, idx->iov_offset);
+		D_ASSERTF(sgl->sg_iovs[idx->iov_idx].iov_len <=
+			  sgl->sg_iovs[idx->iov_idx].iov_buf_len,
+			  "iov_idx %u %p/%p offset %zd + len %zd > buf_len %zd",
+			  idx->iov_idx, sgl, sgl->sg_iovs[idx->iov_idx].iov_buf,
+			  idx->iov_offset, len, sgl->sg_iovs[idx->iov_idx].iov_buf_len);
+	}
 
 	return 0;
 }
@@ -2640,6 +2669,8 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	arg.buf = buf;
 	arg.size = size;
 	arg.copied = 0;
+	arg.sgl = sgl;
+	arg.sgl_idx = &sgl_idx;
 	/* to copy data from [buf, buf + size) to sgl */
 	rc = daos_sgl_processor(sgl, true, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
@@ -2813,6 +2844,7 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_recov_fill_back(iod, sgl, recov_list, stripe_list,
 				       stripe_sgl, stripe_total_sz,
 				       stripe_rec_nr);
+		reasb_req->orr_recov_data = 1;
 	}
 }
 

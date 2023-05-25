@@ -5,7 +5,7 @@
 """
 # pylint: disable=too-many-lines
 from datetime import datetime
-from distutils.spawn import find_executable
+from distutils.spawn import find_executable  # pylint: disable=deprecated-module
 import os
 import re
 import time
@@ -16,9 +16,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, \
-    get_journalctl_command
-from run_utils import run_remote
+from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command
+from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
 
@@ -92,11 +91,16 @@ class JobManager(ExecutableCommand):
         """
         super().__init__(namespace, command, path, subprocess)
         self.job = job
-        self._hosts = None
+        self._hosts = NodeSet()
 
     @property
     def hosts(self):
-        """Get the list of hosts associated with this command."""
+        """Get the hosts associated with this command.
+
+        Returns:
+            NodeSet: hosts used to run the job
+
+        """
         return self._hosts
 
     @property
@@ -143,7 +147,7 @@ class JobManager(ExecutableCommand):
         """
         return self.job.check_subprocess_status(sub_process)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command.
 
         Set the appropriate command line parameter with the specified value.
@@ -154,6 +158,8 @@ class JobManager(ExecutableCommand):
                 a hostfile. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
         """
 
     def assign_processes(self, processes):
@@ -250,15 +256,21 @@ class JobManager(ExecutableCommand):
 
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
+        if not self.job:
+            return
         regex = self.job.command_regex
-        result = stop_processes(self._hosts, regex)
-        if 0 in result and len(result) == 1:
+        detected, running = stop_processes(self.log, self._hosts, regex)
+        if not detected:
             self.log.info(
-                "No remote %s processes killed (none found), done.", regex)
+                "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote %s process on %s! Please investigate/report.***",
+                regex, running)
         else:
             self.log.info(
-                "***At least one remote %s process needed to be killed! Please "
-                "investigate/report.***", regex)
+                "***At least one remote %s process needed to be killed on %s! Please investigate/"
+                "report.***", regex, detected)
 
 
 class Orterun(JobManager):
@@ -283,6 +295,7 @@ class Orterun(JobManager):
             "btl_openib_warn_default_gid_prefix": "0",
             "btl": "tcp,self",
             "oob": "tcp",
+            "coll": "^hcoll",
             "pml": "ob1",
             "btl_tcp_if_include": "eth0",
         }
@@ -304,7 +317,7 @@ class Orterun(JobManager):
         self.bind_to = FormattedParameter("--bind-to {}", None)
         self.mpi_type = mpi_type
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (--hostfile).
 
         Args:
@@ -312,8 +325,12 @@ class Orterun(JobManager):
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
         """
         self._hosts = hosts.copy()
+        if not hostfile:
+            return
         kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -358,8 +375,13 @@ class Orterun(JobManager):
         """
         self.export.update_default(env_vars.to_list())
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the orterun command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -368,7 +390,7 @@ class Orterun(JobManager):
         if not load_mpi(self.mpi_type):
             raise MPILoadError(self.mpi_type)
 
-        return super().run()
+        return super().run(raise_exception)
 
 
 class Mpirun(JobManager):
@@ -395,6 +417,7 @@ class Mpirun(JobManager):
                 "btl_openib_warn_default_gid_prefix": "0",
                 "btl": "tcp,self",
                 "oob": "tcp",
+                "coll": "^hcoll",
                 "pml": "ob1",
                 "btl_tcp_if_include": "eth0",
             }
@@ -411,9 +434,10 @@ class Mpirun(JobManager):
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.bind_to = FormattedParameter("--bind-to {}", None)
+        self.map_by = FormattedParameter("--map-by {}", None)
         self.mpi_type = mpi_type
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (-f).
 
         Args:
@@ -421,8 +445,12 @@ class Mpirun(JobManager):
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
         """
         self._hosts = hosts.copy()
+        if not hostfile:
+            return
         kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -462,8 +490,13 @@ class Mpirun(JobManager):
         """
         self.genv.update_default(env_vars.to_list())
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the mpirun command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -472,7 +505,7 @@ class Mpirun(JobManager):
         if not load_mpi(self.mpi_type):
             raise MPILoadError(self.mpi_type)
 
-        return super().run()
+        return super().run(raise_exception)
 
 
 class Srun(JobManager):
@@ -503,7 +536,7 @@ class Srun(JobManager):
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (-f).
 
         Args:
@@ -511,8 +544,12 @@ class Srun(JobManager):
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
+            hostfile (bool, optional): whether or not to also update any host related command
+                parameters to keep them in sync with the hosts. Defaults to True.
         """
         self._hosts = hosts.copy()
+        if not hostfile:
+            return
         kwargs = {"hosts": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
@@ -520,7 +557,7 @@ class Srun(JobManager):
         self.ntasks_per_node.value = slots
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node (--ntasks).
+        """Assign the number of processes per node.
 
         Args:
             processes (int): number of processes per node
@@ -586,11 +623,6 @@ class Systemctl(JobManager):
             "restart": None,
         }
 
-    @property
-    def hosts(self):
-        """Get the list of hosts associated with this command."""
-        return list(self._hosts) if self._hosts else None
-
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -600,12 +632,17 @@ class Systemctl(JobManager):
         """
         return self._systemctl.__str__()
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Start the job's service via the systemctl command.
 
         Enable the service, start the service, and report the status of the
         service.  If an error occurs with any of these commands also display
         the journalctl output for the service.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if unable to enable or start the service
@@ -615,6 +652,9 @@ class Systemctl(JobManager):
                 values indicating which hosts yielded the return code.
 
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         # Start the daos_server.service
         self.service_enable()
         result = self.service_start()
@@ -625,7 +665,8 @@ class Systemctl(JobManager):
         if not self.check_subprocess_status(None):
             msg = "Command '{}' did not launch correctly".format(self)
             self.log.error(msg)
-            raise CommandFailure(msg)
+            if raise_exception:
+                raise CommandFailure(msg)
 
         return result
 
@@ -674,17 +715,16 @@ class Systemctl(JobManager):
             self.job.pattern, self.timestamps["start"], None,
             self.job.pattern_count, self.job.pattern_timeout.value)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command.
 
         Set the appropriate command line parameter with the specified value.
 
         Args:
             hosts (NodeSet): hosts to specify on the command line
-            path (str, optional): path to use when specifying the hosts through
-                a hostfile. Defaults to None. Not used.
-            slots (int, optional): number of slots per host to specify in the
-                optional hostfile. Defaults to None. Not used.
+            path (str, optional): not used. Defaults to None.
+            slots (int, optional): not used. Defaults to None.
+            hostfile (bool, optional): not used. Defaults to True.
         """
         self._hosts = hosts.copy()
 
@@ -1132,13 +1172,14 @@ class Clush(JobManager):
         commands = [super().__str__(), "-w {}".format(self.hosts), str(self.job)]
         return " ".join(commands)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
+    def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
         """Assign the hosts to use with the command (--hostfile).
 
         Args:
             hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): not used. Defaults to None.
             slots (int, optional): not used. Defaults to None.
+            hostfile (bool, optional): not used. Defaults to True.
         """
         self._hosts = hosts.copy()
 
@@ -1156,24 +1197,33 @@ class Clush(JobManager):
         else:
             self.env = EnvironmentVariables(env_vars)
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
         self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
 
-        if self.result.timeout:
+        if raise_exception and self.result.timeout:
             raise CommandFailure(
                 "Timeout detected running '{}' on {}".format(str(self.job), self.hosts))
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
-            raise CommandFailure(
-                "Bad words detected in '{}' output on {}".format(str(self.job), self.hosts))
+            if raise_exception:
+                raise CommandFailure(
+                    "Bad words detected in '{}' output on {}".format(str(self.job), self.hosts))
 
         return self.result
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,21 +23,36 @@
 #include "cli_internal.h"
 #include "rpc.h"
 
+int	dc_cont_proto_version;
+
 /**
  * Initialize container interface
  */
 int
 dc_cont_init(void)
 {
-	int rc;
+	int		rc;
+	uint32_t	ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 
-	/* TODO: issue a cart protocol query to an engine, then register either the
-	 * latest, or latest-1 version of the container RPC protocol. See dc_pool_init().
-	 */
-	rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
-				NULL, DAOS_CONT_MODULE);
+	dc_cont_proto_version = 0;
+	rc = daos_rpc_proto_query(cont_proto_fmt_v6.cpf_base, ver_array,
+				  2, &dc_cont_proto_version);
+	if (rc)
+		return rc;
+
+	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1) {
+		rc = daos_rpc_register(&cont_proto_fmt_v6, CONT_PROTO_CLI_COUNT,
+				       NULL, DAOS_CONT_MODULE);
+	} else if (dc_cont_proto_version == DAOS_CONT_VERSION) {
+		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
+				       NULL, DAOS_CONT_MODULE);
+	} else {
+		D_ERROR("%d version cont RPC not supported.\n", dc_cont_proto_version);
+		rc = -DER_PROTO;
+	}
 	if (rc != 0)
-		D_ERROR("failed to register cont RPCs: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to register %d version cont RPCs: "DF_RC"\n",
+			dc_cont_proto_version, DP_RC(rc));
 
 	return rc;
 }
@@ -50,9 +65,13 @@ dc_cont_fini(void)
 {
 	int rc;
 
-	rc = daos_rpc_unregister(&cont_proto_fmt_v7);
+	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1)
+		rc = daos_rpc_unregister(&cont_proto_fmt_v6);
+	else
+		rc = daos_rpc_unregister(&cont_proto_fmt_v7);
 	if (rc != 0)
-		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to unregister %d version cont RPCs: "DF_RC"\n",
+			dc_cont_proto_version, DP_RC(rc));
 }
 
 /*
@@ -161,13 +180,25 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
-	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
-		rc = daos_acl_uid_to_principal(uid, &owner);
-		if (rc != 0) {
-			D_ERROR("Failed to parse uid "DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_out, rc);
+	rc = daos_acl_uid_to_principal(uid, &owner);
+	if (rc != 0) {
+		D_ERROR("Failed to parse uid "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_out, rc);
+	}
+
+	if (daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
+		struct daos_prop_entry *owner_entry;
+
+		owner_entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_OWNER);
+		D_ASSERT(owner_entry != NULL);
+		if (strncmp(owner_entry->dpe_str, owner, DAOS_ACL_MAX_PRINCIPAL_LEN) != 0) {
+			D_ERROR("creating a container with an owner other than the current user is "
+				"not permitted\n");
+			D_GOTO(err_out, rc = -DER_INVAL);
 		}
 
+		D_FREE(owner); /* don't add owner to the prop array below if it's already there */
+	} else {
 		entries++;
 	}
 
@@ -944,6 +975,10 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, cont);
 	}
 
+	/* DAOS_COO_RO_MDSTATS introduced since 2.4 (protocol version 7) */
+	if (dc_cont_proto_version == 6)
+		cont->dc_capas &= ~DAOS_COO_RO_MDSTATS;
+
 	D_DEBUG(DB_MD, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool->dp_pool), args->cont ? : "<compat>",
 		DP_UUID(cont->dc_cont_hdl), args->flags);
@@ -1479,18 +1514,6 @@ dc_cont_set_prop(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
-	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
-	if (entry != NULL) {
-		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
-		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
-			rc = -DER_INVAL;
-			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
-				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
-				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
-			goto err;
-		}
-	}
-
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
@@ -1501,6 +1524,20 @@ dc_cont_set_prop(tse_task_t *task)
 	D_DEBUG(DB_MD, DF_CONT": setting props: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+			goto err_cont;
+		}
+		co_stat.dcs_pm_ver = dc_pool_get_version(pool);
+		entry->dpe_val = daos_prop_co_status_2_val( &co_stat);
+	}
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
@@ -2958,6 +2995,103 @@ dc_cont_create_snap(tse_task_t *task)
 }
 
 int
+dc_cont_snap_oit_create(tse_task_t *task)
+{
+	daos_cont_snap_oit_create_t *args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->name != NULL) {
+		D_ERROR("Named Snapshots not yet supported\n");
+		tse_task_complete(task, -DER_NOSYS);
+		return -DER_NOSYS;
+	}
+
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_CREATE, &args->epoch,
+			   0, task);
+}
+
+int
+dc_cont_snap_oit_destroy(tse_task_t *task)
+{
+	daos_cont_snap_oit_create_t *args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->name != NULL) {
+		D_ERROR("Named Snapshots not yet supported\n");
+		tse_task_complete(task, -DER_NOSYS);
+		return -DER_NOSYS;
+	}
+
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_DESTROY, &args->epoch,
+			   0, task);
+}
+
+struct get_oit_oid_arg {
+	/* eoa_req must always be the first member of epoch_op_arg */
+	struct cont_req_arg	 goo_req;
+	daos_obj_id_t		*goo_oid;
+};
+
+static int
+cont_get_oit_oid_req_complete(tse_task_t *task, void *data)
+{
+	struct get_oit_oid_arg			*arg = data;
+	struct cont_snap_oit_oid_get_out	*oit_out;
+	int rc;
+
+	rc = cont_req_complete(task, &arg->goo_req);
+	if (rc)
+		return rc;
+
+	oit_out = crt_reply_get(arg->goo_req.cra_rpc);
+	*arg->goo_oid = oit_out->ogo_oid;
+
+	return 0;
+}
+
+int dc_cont_snap_oit_oid_get(tse_task_t *task)
+{
+	daos_cont_snap_oit_oid_get_t	*dc_args;
+	struct cont_snap_oit_oid_get_in	*in;
+	struct get_oit_oid_arg		arg;
+	int				 rc;
+
+	dc_args = dc_task_get_args(task);
+	D_ASSERTF(dc_args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = cont_req_prepare(dc_args->coh, CONT_SNAP_OIT_OID_GET,
+			      daos_task2ctx(task), &arg.goo_req);
+	if (rc != 0)
+		goto out;
+
+	D_DEBUG(DB_MD, DF_CONT": op=%u; hdl="DF_UUID";\n",
+		DP_CONT(arg.goo_req.cra_pool->dp_pool_hdl,
+			arg.goo_req.cra_cont->dc_uuid), CONT_SNAP_OIT_OID_GET,
+		DP_UUID(arg.goo_req.cra_cont->dc_cont_hdl));
+
+	in = crt_req_get(arg.goo_req.cra_rpc);
+	in->ogi_epoch = dc_args->epoch;
+	arg.goo_oid = dc_args->oid;
+	rc = tse_task_register_comp_cb(task, cont_get_oit_oid_req_complete,
+				       &arg, sizeof(arg));
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_RPC, &arg.goo_req);
+		goto out;
+	}
+
+	crt_req_addref(arg.goo_req.cra_rpc);
+	return daos_rpc_send(arg.goo_req.cra_rpc, task);
+
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
 dc_cont_destroy_snap(tse_task_t *task)
 {
 	daos_cont_destroy_snap_t	*args;
@@ -3198,6 +3332,40 @@ dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf)
 		return -DER_NO_HDL;
 
 	*rf = dc->dc_props.dcp_redun_fac;
+	dc_cont_put(dc);
+
+	return 0;
+}
+
+int
+dc_cont_hdl2globalver(daos_handle_t coh, uint32_t *ver)
+{
+	struct dc_cont	*dc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	*ver = dc->dc_props.dcp_global_version;
+	dc_cont_put(dc);
+
+	return 0;
+}
+
+int
+dc_cont_oid2bid(daos_handle_t coh, daos_obj_id_t oid, uint32_t *bid)
+{
+	struct dc_cont	*dc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	if (dc->dc_props.dcp_global_version < 2)
+		*bid = 0;
+	else
+		*bid = d_hash_murmur64((unsigned char *)&oid,
+				       sizeof(oid), 0) % DAOS_OIT_BUCKET_MAX;
 	dc_cont_put(dc);
 
 	return 0;

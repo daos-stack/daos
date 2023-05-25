@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -193,6 +193,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			iv_prop->pip_perf_domain = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_SCRUB_MODE:
 			iv_prop->pip_scrub_mode = prop_entry->dpe_val;
 			break;
@@ -335,6 +338,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
+			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			prop_entry->dpe_val = iv_prop->pip_perf_domain;
 			break;
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->pip_svc_redun_fac;
@@ -847,9 +853,16 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
+
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1002,9 +1015,15 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 
 update_iv_cache:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);

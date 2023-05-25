@@ -224,8 +224,7 @@ vts_credits_init(struct credit_context *tsc)
 		memset(cred, 0, sizeof(*cred));
 		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
 		if (!cred->tc_vbuf) {
-			fprintf(stderr, "Cannt allocate buffer size=%d\n",
-				tsc->tsc_cred_vsize);
+			fprintf(stderr, "Cannot allocate buffer size=%d\n", tsc->tsc_cred_vsize);
 			return -1;
 		}
 	}

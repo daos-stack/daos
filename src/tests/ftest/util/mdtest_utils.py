@@ -87,7 +87,7 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
-        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "S1")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 

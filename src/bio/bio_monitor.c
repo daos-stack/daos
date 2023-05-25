@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -788,9 +788,22 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 
 /* Free all device health monitoring info */
 void
-bio_fini_health_monitoring(struct bio_blobstore *bb)
+bio_fini_health_monitoring(struct bio_xs_context *ctxt)
 {
+	struct bio_blobstore	*bb = ctxt->bxc_blobstore;
 	struct bio_dev_health	*bdh = &bb->bb_dev_health;
+	int			 rc;
+
+	/* Drain the inflight request before putting I/O channel */
+	D_ASSERT(bdh->bdh_inflights < 2);
+	if (bdh->bdh_inflights > 0) {
+		ctxt->bxc_blobstore = NULL;
+
+		D_INFO("Wait for health collecting done...\n");
+		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
+		D_ASSERT(rc == 0);
+		D_INFO("Health collecting done...\n");
+	}
 
 	/* Free NVMe admin passthru DMA buffers */
 	if (bdh->bdh_health_buf) {

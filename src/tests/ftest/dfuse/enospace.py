@@ -10,13 +10,13 @@ import errno
 from dfuse_test_base import DfuseTestBase
 
 
-class Enospace(DfuseTestBase):
+class DfuseEnospace(DfuseTestBase):
     """Dfuse ENOSPC File base class.
 
     :avocado: recursive
     """
 
-    def test_enospace(self):
+    def test_dfuse_enospace(self):
         """Jira ID: DAOS-8264.
 
         Test Description:
@@ -32,7 +32,7 @@ class Enospace(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuseenospace,test_enospace
+        :avocado: tags=DfuseEnospace,test_dfuse_enospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -53,9 +53,7 @@ class Enospace(DfuseTestBase):
             file_size = 0
             while True:
                 stat_pre = os.fstat(fd.fileno())
-                if stat_pre.st_size != file_size:
-                    self.log.info('file size is %d, %s', file_size, stat_pre)
-                self.assertTrue(stat_pre.st_size == file_size)
+                self.assertEqual(stat_pre.st_size, file_size, 'file size incorrect after write')
                 try:
                     fd.write(bytearray(write_size))
                     file_size += write_size
@@ -65,7 +63,9 @@ class Enospace(DfuseTestBase):
                     self.log.info('File write returned ENOSPACE')
                     stat_post = os.fstat(fd.fileno())
                     # Check that the failed write didn't change the file size.
-                    self.assertTrue(stat_pre.st_size == stat_post.st_size)
+                    self.assertEqual(stat_pre.st_size, stat_post.st_size,
+                                     'file size changed after enospace')
+
                     break
 
         # As the pool is smaller in size there will be no reserved space for metadata

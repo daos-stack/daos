@@ -11,19 +11,17 @@ import time
 import random
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, convert_list, stop_processes, get_display_size, \
-    run_pcmd
+from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
 from host_utils import get_local_host
 from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
-from run_utils import run_remote
+from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -305,10 +303,6 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage
 
         """
-        cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
-        cmd.debug.value = False
-
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -317,51 +311,78 @@ class DaosServerManager(SubprocessManager):
 
         if using_dcpm:
             # Prepare SCM storage
-            cmd.set_sub_command("scm")
-            cmd.sub_command_class.set_sub_command("prepare")
-            cmd.sub_command_class.sub_command_class.target_user.value = user
-            cmd.sub_command_class.sub_command_class.ignore_config.value = True
-            result = run_remote(
-                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
-            if not result.passed:
-                # Add some debug due to the failure
-                run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
-                run_remote(self.log, self._hosts, "ndctl list")
+            if not self.scm_prepare(target_user=user, ignore_config=True).passed:
                 raise ServerFailed("Error preparing dcpm storage")
+
         if using_nvme:
             # Prepare NVMe storage
-            cmd.set_sub_command("nvme")
-            cmd.sub_command_class.set_sub_command("prepare")
-            cmd.sub_command_class.sub_command_class.target_user.value = user
-            cmd.sub_command_class.sub_command_class.ignore_config.value = True
-            result = run_remote(
-                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
-            if not result.passed:
+            if not self.nvme_prepare(target_user=user, ignore_config=True).passed:
                 raise ServerFailed("Error preparing nvme storage")
 
+    def scm_prepare(self, **kwargs):
+        """Run daos_server scm prepare on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.ScmSubCommand.PrepareSubCommand object
+
+        Raises:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.set_command(("scm", "prepare"), **kwargs)
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(
-            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        result = run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        if not result.passed:
+            # Add some debug due to the failure
+            run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
+            run_remote(self.log, self._hosts, "ndctl list")
+        return result
 
-        # gratuitously lifted from pcmd() and get_current_state()
-        result = {}
-        stdouts = ""
-        for res in results:
-            stdouts += '\n'.join(res["stdout"] + [''])
-            if res["exit_status"] not in result:
-                result[res["exit_status"]] = NodeSet()
-            result[res["exit_status"]].add(res["hosts"])
+    def scm_reset(self, **kwargs):
+        """Run daos_server scm reset on the server hosts.
 
-        if len(result) > 1 or 0 not in result or \
-           (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
-            dev_type = "nvme"
-            if using_dcpm and using_nvme:
-                dev_type = "dcpm & nvme"
-            elif using_dcpm:
-                dev_type = "dcpm"
-            pcmd(self._hosts, "sudo -n ipmctl show -v -dimm")
-            pcmd(self._hosts, "ndctl list ")
-            raise ServerFailed("Error preparing {} storage".format(dev_type))
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.ScmSubCommand.ResetSubCommand object
+
+        Raises:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.set_command(("scm", "reset"), **kwargs)
+        self.log.info("Resetting DAOS server storage: %s", str(cmd))
+        return run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+
+    def nvme_prepare(self, **kwargs):
+        """Run daos_server nvme prepare on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        self.log.info("Preparing DAOS server storage: %s", str(cmd))
+        cmd.set_command(("nvme", "prepare"), **kwargs)
+        return run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -520,10 +541,11 @@ class DaosServerManager(SubprocessManager):
            The servers must have been previously formatted and started.
 
         Args:
-            hosts (list): List of servers to restart.
-            wait (bool): Whether or not to wait until the servers have joined.
+            hosts (NodeSet): hosts on which to restart the servers.
+            wait (bool, optional): Whether or not to wait until the servers have joined. Defaults to
+                False.
         """
-        orig_hosts = self.manager.hosts
+        orig_hosts = self.manager.hosts.copy()
         self.manager.assign_hosts(hosts)
         orig_pattern = self.manager.job.pattern
         orig_count = self.manager.job.pattern_count
@@ -788,7 +810,7 @@ class DaosServerManager(SubprocessManager):
         return data
 
     @fail_on(CommandFailure)
-    def stop_ranks(self, ranks, daos_log, force=False):
+    def stop_ranks(self, ranks, daos_log, force=False, copy=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
@@ -796,6 +818,7 @@ class DaosServerManager(SubprocessManager):
             daos_log (DaosLog): object for logging messages
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
+            copy (bool, optional): Copy dmg command. Defaults to False.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
@@ -807,7 +830,10 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
+        if copy:
+            self.dmg.copy().system_stop(ranks=list_to_str(value=ranks), force=force)
+        else:
+            self.dmg.system_stop(ranks=list_to_str(value=ranks), force=force)
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
@@ -851,14 +877,19 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        # Try to dump all server's ULTs stacks before kill.
-        result = stop_processes(self._hosts, regex)
-        if 0 in result and len(result) == 1:
-            print("No remote {} server processes killed (none found), done.".format(regex))
+        detected, running = stop_processes(self.log, self._hosts, regex)
+        if not detected:
+            self.log.info(
+                "No remote %s server processes killed on %s (none found), done.",
+                regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote server %s process on %s! Please investigate/report.***",
+                regex, running)
         else:
-            print(
-                "***At least one remote {} server process needed to be killed! "
-                "Please investigate/report.***".format(regex))
+            self.log.info(
+                "***At least one remote server %s process needed to be killed on %s! Please "
+                "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
@@ -908,8 +939,8 @@ class DaosServerManager(SubprocessManager):
 
         """
         rank_list = []
-        for rank in self._expected_states:
-            if self._expected_states[rank]["host"] in hosts:
+        for rank, rank_state in self._expected_states.items():
+            if rank_state["host"] in hosts:
                 rank_list.append(rank)
         return rank_list
 

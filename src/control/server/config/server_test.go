@@ -559,65 +559,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 		},
-		"insufficient hugepages set in config; bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0"),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
-		},
-		"insufficient hugepages set in config; emulated bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-							storage.NewTierConfig().
-								WithStorageClass("file").
-								WithBdevDeviceList("/tmp/daos-bdev").
-								WithBdevFileSize(16),
-						),
-					)
-			},
-			expErr: FaultConfigInsufficientHugePages(4096, 2048),
-		},
-		"insufficient hugepages set in config; no bdevs configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(2048).
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-						),
-					)
-			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(2048).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
-							WithScmMountPoint("/foo"),
-					),
-				),
-		},
 		"zero hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
@@ -897,7 +838,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -909,7 +850,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -921,7 +862,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+					return errors.Errorf("want 1 storage tier, got %d", nr)
 				}
 				return nil
 			},
@@ -933,7 +874,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
-					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
 				}
 				return nil
 			},
@@ -949,7 +890,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
-					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
 				}
 				want := storage.MustNewBdevBusRange("0x00-0x80")
 				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
@@ -1004,6 +945,18 @@ func TestServerConfig_Parsing(t *testing.T) {
 			inTxt:       "disable_vfio: true",
 			outTxt:      "enable_vmd: true",
 			expParseErr: FaultConfigVMDSettingDuplicate,
+		},
+		"additional empty storage tier": {
+			// Add empty storage tier to engine-0 and verify it is ignored.
+			inTxt:  "    bdev_busid_range: 0x80-0x8f",
+			outTxt: "  -",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
+				}
+				return nil
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1541,7 +1494,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			),
 			expNumaSet: []int{2, 1},
 		},
-		"multi engine with first_core set; detected affinities take precedence": {
+		"multi engine with first_core set; detected affinities overridden": {
 			cfg: baseSrvCfg().WithEngines(
 				engine.MockConfig().
 					WithServiceThreadCore(1).
@@ -1553,7 +1506,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					WithFabricProvider("ofi+verbs"),
 			),
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
-			expFabNumas: []int{1, 2},
+			expFabNumas: []int{0, 0},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

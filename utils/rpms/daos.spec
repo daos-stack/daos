@@ -5,6 +5,7 @@
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
+%global libfabric_max_version 1.18
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,8 +15,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       6%{?relval}%{?dist}
+Version:       2.3.107
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -27,7 +28,7 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel >= %{libfabric_version}, libfabric-devel < %{libfabric_max_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -58,9 +59,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -139,14 +142,16 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: numactl
 %{?systemd_requires}
 
 %description server
@@ -163,13 +168,9 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
+Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -453,6 +454,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -552,6 +554,25 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
+- Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
+
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
+* Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
+- Bump version to 2.3.107
+
+* Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
+- Add numactl requires for server package
+
+* Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
+- Bump version to be higher than TB5
+
 * Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
 - Update raft to 0.9.2-1.403.g3d20556
 

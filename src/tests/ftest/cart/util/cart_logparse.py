@@ -58,8 +58,8 @@ class LogRaw():
         return self.line
 
 
-# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class LogLine():
+    # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Class for parsing CaRT log lines
 
     This class implements a way of inspecting individual lines of a log
@@ -224,7 +224,7 @@ class LogLine():
         return '{}() {}'.format(self.function, ' '.join(fields))
 
     def endswith(self, item):
-        """Check is the line ends with a string.
+        """Check if the line ends with a string.
 
         This only matches on the actual string part of the message, not the timestamp/pid/faculty
         parts.
@@ -436,11 +436,9 @@ class StateIter():
 
         return line
 
-# pylint: disable=too-many-branches
 
-
-# pylint: disable=too-few-public-methods
 class LogIter():
+    # pylint: disable=too-many-branches,too-few-public-methods
     """Class for parsing CaRT log files
 
     This class implements a iterator for lines in a cart log file.  The iterator
@@ -661,4 +659,3 @@ class LogIter():
     def get_pids(self):
         """Return an array of pids appearing in the file"""
         return list(self._pids.keys())
-# pylint: enable=too-many-instance-attributes

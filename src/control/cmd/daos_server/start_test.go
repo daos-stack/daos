@@ -349,6 +349,14 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
 		},
+		"Trace": {
+			configFn: func(cfg *config.Server) *config.Server {
+				return cfg.WithControlLogMask(common.ControlLogLevelTrace)
+			},
+			logFnName: "Trace",
+			input:     "hello",
+			wantRe:    regexp.MustCompile(`hello`),
+		},
 		"Debug": {
 			configFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithControlLogMask(common.ControlLogLevelDebug)
@@ -357,11 +365,19 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello`),
 		},
+		"Notice": {
+			configFn: func(cfg *config.Server) *config.Server {
+				return cfg.WithControlLogMask(common.ControlLogLevelNotice)
+			},
+			logFnName: "Info",
+			input:     "hello",
+			wantRe:    regexp.MustCompile(`^$`),
+		},
 		"Error": {
 			configFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithControlLogMask(common.ControlLogLevelError)
 			},
-			logFnName: "Info",
+			logFnName: "Notice",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`^$`),
 		},

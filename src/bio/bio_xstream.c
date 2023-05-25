@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,12 +29,11 @@
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
-#define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
-#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
+#define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
+#define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
@@ -139,7 +138,7 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			goto out;
 		}
-#ifdef DAOS_RELEASE_BUILD
+#ifdef DAOS_BUILD_RELEASE
 		if (enable_rpc_srv) {
 			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
 			D_GOTO(out, rc = -DER_INVAL);
@@ -186,9 +185,13 @@ struct bio_faulty_criteria	glb_criteria;
 static inline void
 set_faulty_criteria(void)
 {
-	glb_criteria.fc_enabled = false;
-	glb_criteria.fc_max_io_errs = 5;
-	glb_criteria.fc_max_csum_errs = 5;
+	glb_criteria.fc_enabled = true;
+	glb_criteria.fc_max_io_errs = 10;
+	/*
+	 * FIXME: Don't enable csum error criterion for now, otherwise, targets
+	 *	  be unexpectedly down in CSUM tests.
+	 */
+	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
 	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
 	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
@@ -261,17 +264,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		return 0;
 	}
 
-	/*
-	 * Hugepages are not enough to sustain average I/O workload
-	 * (~1GB per xstream).
-	 */
-	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
-			mem_size, (mem_size / tgt_nr));
-		return -DER_INVAL;
-	}
-
 	if (nvme_conf && strlen(nvme_conf) > 0) {
 		fd = open(nvme_conf, O_RDONLY, 0600);
 		if (fd < 0)
@@ -283,6 +275,11 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	D_ASSERT(hugepage_size > 0);
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	if (bio_chk_cnt_max < DAOS_DMA_CHUNK_CNT_MIN) {
+		D_ERROR("%uMB hugepages are not enough for %u targets (256MB per target)\n",
+			mem_size, tgt_nr);
+		return -DER_INVAL;
+	}
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
 
@@ -294,7 +291,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
-	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	env = getenv("VOS_BDEV_CLASS");
@@ -303,8 +299,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
-	if (numa_node > 0)
+	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;
+	} else if (numa_node == -1) {
+		D_WARN("DMA buffer will be allocated from any NUMA node available\n");
+		bio_numa_node = SPDK_ENV_SOCKET_ID_ANY;
+	}
 
 	nvme_glb.bd_mem_size = mem_size;
 	nvme_glb.bd_nvme_conf = nvme_conf;
@@ -1270,7 +1270,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
 
 		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-			bio_fini_health_monitoring(ctxt->bxc_blobstore);
+			bio_fini_health_monitoring(ctxt);
 
 		ctxt->bxc_blobstore = NULL;
 	}

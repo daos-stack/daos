@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -653,7 +653,7 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	D_ASSERT(obj != NULL);
 	tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		"tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
+		" tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
 	if (nr == 0 || is_ec_parity_shard_by_tgt_off(tgt_off, obj_get_oca(obj))) {
 		obj_decref(obj);
 		return 0;
@@ -719,8 +719,16 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	rc = dc_task_schedule(task, true);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
+			DP_OID(obj->cob_md.omd_id), idx, shard);
+		for (i = 0; i < idx; i++)
+			D_ERROR("%d: iod_type %d, buffer size %zu iod_size %zu, unpacked iod_size "
+				"%zu, "DF_RC"\n", i, iods[i].iod_type,
+				sgls[i].sg_iovs[0].iov_buf_len, iods[i].iod_size,
+				io->ui_iods[i].iod_size, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
@@ -737,16 +745,29 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	rc = dc_task_schedule(verify_task, true);
-	if (rc)
+	if (rc) {
+		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
+			DP_OID(obj->cob_md.omd_id), idx, shard);
+		for (i = 0; i < idx; i++)
+			D_ERROR("%d: iod_type %d, buffer size %zu iod_size %zu, unpacked iod_size "
+				"%zu, "DF_RC"\n", i, iods[i].iod_type,
+				sgls[i].sg_iovs[0].iov_buf_len, iods[i].iod_size,
+				io->ui_iods[i].iod_size, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 	daos_fail_loc_set(0);
 
 	for (i = 0; i < idx; i++) {
 		if (sgls[i].sg_iovs[0].iov_len != sgls_verify[i].sg_iovs[0].iov_len ||
 		    memcmp(sgls[i].sg_iovs[0].iov_buf, sgls_verify[i].sg_iovs[0].iov_buf,
 			   sgls[i].sg_iovs[0].iov_len)) {
-			D_WARN(DF_OID" %d shard %u mismatch\n",
-			       DP_OID(obj->cob_md.omd_id), i, dova->current_shard);
+			char *ptr = sgls[i].sg_iovs[0].iov_buf;
+			char *verify_ptr = sgls_verify[i].sg_iovs[0].iov_buf;
+
+			D_ERROR(DF_OID" i %d shard %u mismatch sgl %d/%d verify %d/%d\n",
+				DP_OID(obj->cob_md.omd_id), i, dova->current_shard, (int)(*ptr),
+				(int)sgls[i].sg_iovs[0].iov_len, (int)(*verify_ptr),
+				(int)sgls_verify[i].sg_iovs[0].iov_len);
 
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
@@ -799,6 +820,7 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		oid.id_pub = obj->cob_md.omd_id;
 		oid.id_shard = start + i;
 		oid.id_layout_ver = obj->cob_layout_version;
+		oid.id_padding = 0;
 		while (!dova->eof) {
 			rc = dc_obj_verify_list(dova);
 			if (rc < 0) {

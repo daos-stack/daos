@@ -15,21 +15,21 @@ from getpass import getuser
 import socket
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
 from general_utils import run_command, DaosTestError
 from host_utils import get_local_host
 import slurm_utils
-from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
-    launch_snapshot, launch_exclude_reintegrate, \
+from run_utils import run_remote
+from soak_utils import ddhhmmss_format, add_pools, get_remote_dir, \
+    launch_snapshot, launch_exclude_reintegrate, launch_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline, display_job_failures
+    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
 
 
 class SoakTestBase(TestWithServers):
@@ -62,6 +62,8 @@ class SoakTestBase(TestWithServers):
         self.dfuse = []
         self.harasser_args = None
         self.harasser_loop_time = None
+        self.harassers = []
+        self.offline_harassers = []
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
@@ -71,6 +73,7 @@ class SoakTestBase(TestWithServers):
         self.sudo_cmd = None
         self.slurm_exclude_servers = True
         self.control = get_local_host()
+        self.enable_il = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -139,8 +142,6 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-            # display the failed job logs
-            display_job_failures(self)
 
         # verify reserved container data
         if self.resv_cont:
@@ -229,6 +230,11 @@ class SoakTestBase(TestWithServers):
             name = "REINTEGRATE"
             params = (self, pool[1], name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "extend-pool":
+            method = launch_extend
+            name = "EXTEND"
+            params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-stop":
             method = launch_server_stop_start
             name = "SVR_STOP"
@@ -244,10 +250,13 @@ class SoakTestBase(TestWithServers):
             name = "SVR_REINTEGRATE"
             params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "vmd-identify-check":
+            method = launch_vmd_identify_check
+            name = "VMD_LED_CHECK"
+            params = (self, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         else:
-            raise SoakTestError(
-                "<<FAILED: Harasser {} is not supported. ".format(
-                    harasser))
+            raise SoakTestError(f"<<FAILED: Harasser {harasser} is not supported. ")
 
         # start harasser
         job.start()
@@ -255,8 +264,7 @@ class SoakTestBase(TestWithServers):
         # Wait for harasser job to join
         job.join(timeout)
         if job.is_alive():
-            self.log.error(
-                "<< ERROR: harasser %s is alive, failed to join>>", job.name)
+            self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
             if name not in ["REBUILD", "SNAPSHOT"]:
                 job.terminate()
                 status_msg = "<<FAILED: {} has been terminated.".format(name)
@@ -321,8 +329,7 @@ class SoakTestBase(TestWithServers):
                     elif "fio" in job:
                         commands = create_fio_cmdline(self, job, pool)
                     elif "mdtest" in job:
-                        commands = create_mdtest_cmdline(
-                            self, job, pool, ppn, npj)
+                        commands = create_mdtest_cmdline(self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
                     elif "vpic" in job:
@@ -331,6 +338,8 @@ class SoakTestBase(TestWithServers):
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
+                    elif "datamover" in job:
+                        commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))
@@ -483,9 +492,8 @@ class SoakTestBase(TestWithServers):
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
-            "mkdir -p {}".format(self.soaktest_dir), self.srun_params)
+        result = run_remote(
+            self.log, self.hostlist_clients, "mkdir -p {}".format(self.soaktest_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: logfile directory not created on clients>>: {}".format(
@@ -539,14 +547,14 @@ class SoakTestBase(TestWithServers):
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
-        test_to = self.params.get("test_timeout", test_param + "*")
+        test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
-        single_test_pool = self.params.get(
-            "single_test_pool", test_param + "*", True)
+        single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
+        self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
         self.sudo_cmd = "sudo" if enable_sudo else ""
         if harassers:
             run_harasser = True
@@ -572,12 +580,10 @@ class SoakTestBase(TestWithServers):
             add_pools(self, ["pool_jobs"])
             self.log.info(
                 "Current pools: %s",
-                " ".join([pool.uuid for pool in self.pool]))
+                " ".join([pool.identifier for pool in self.pool]))
 
         # cleanup soak log directories before test on all nodes
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
-            "rm -rf {}".format(self.soak_dir), self.srun_params)
+        result = run_remote(self.log, self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed from clients>>: {}".format(
@@ -589,8 +595,7 @@ class SoakTestBase(TestWithServers):
                 result = run_command(cmd, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak directory {} was not removed>>".format(
-                        log_dir)) from error
+                    "<<FAILED: Soak directory {} was not removed>>".format(log_dir)) from error
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time
@@ -603,13 +608,7 @@ class SoakTestBase(TestWithServers):
             start_loop_time = time.time()
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
-                DDHHMMSS_format(self.end_time - time.time()))
-            if not single_test_pool:
-                # Create pool for jobs
-                add_pools(self, ["pool_jobs"])
-                self.log.info(
-                    "Current pools: %s",
-                    " ".join([pool.uuid for pool in self.pool]))
+                ddhhmmss_format(self.end_time - time.time()))
             # Initialize harassers
             if run_harasser:
                 if not harasserlist:
@@ -618,13 +617,22 @@ class SoakTestBase(TestWithServers):
                 self.harasser_args = {}
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
+            if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
+                ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
+                add_pools(self, ["pool_jobs"], ranks)
+            elif not single_test_pool:
+                add_pools(self, ["pool_jobs"])
+            elif single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
+                raise SoakTestError(
+                    "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
+            self.log.info("Current pools: %s", " ".join([pool.identifier for pool in self.pool]))
             try:
                 self.execute_jobs(job_list, self.pool[1])
             except SoakTestError as error:
                 self.fail(error)
             # Check space after jobs done
             for pool in self.pool:
-                self.dmg_command.pool_query(pool.uuid)
+                self.dmg_command.pool_query(pool.identifier)
             # Cleanup any dfuse mounts before destroying containers
             cleanup_dfuse(self)
             self.soak_errors.extend(self.destroy_containers(self.container))
@@ -635,7 +643,7 @@ class SoakTestBase(TestWithServers):
                 self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
-                " ".join([pool.uuid for pool in self.pool]))
+                " ".join([pool.identifier for pool in self.pool]))
             # Gather metrics data after jobs complete
             run_metrics_check(self)
             # Fail if the pool/containers did not clean up correctly
@@ -647,12 +655,12 @@ class SoakTestBase(TestWithServers):
                 break
             loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<LOOP %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
+                "<<LOOP %s completed in %s at %s>>", self.loop, ddhhmmss_format(
                     loop_time), time.ctime())
             # Initialize harasser loop time from first pass loop time
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
         self.log.info(
-            "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
+            "<<<<SOAK TOTAL TEST TIME = %s>>>>", ddhhmmss_format(
                 time.time() - self.start_time))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -205,10 +205,19 @@ class HwmCounter():
         self.__val -= val
 
 
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-locals
+# During shutdown ERROR messages that end with these strings are not reported as errors.
+SHUTDOWN_RC = ("DER_SHUTDOWN(-2017): 'Service should shut down'",
+               "DER_NOTLEADER(-2008): 'Not service leader'")
+
+# Functions that are never reported as errors.
+IGNORED_FUNCTIONS = ('sched_watchdog_post', 'rdb_timerd')
+
+
 class LogTest():
     """Log testing"""
+
+    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-locals
 
     def __init__(self, log_iter, quiet=False):
         self.quiet = quiet
@@ -216,6 +225,7 @@ class LogTest():
         self.hide_fi_calls = False
         self.fi_triggered = False
         self.fi_location = None
+        self.skip_suffixes = []
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
@@ -309,8 +319,8 @@ class LogTest():
             for cpid in client_pids:
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
-    # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
+        # pylint: disable=too-many-branches,too-many-nested-blocks
         """Check a pid from a single log file for consistency"""
         # Dict of active descriptors.
         active_desc = OrderedDict()
@@ -390,29 +400,31 @@ class LogTest():
                             # than daos, so allow ENOMEM as well as
                             # -DER_NOMEM
                             show = False
+                        elif line.get_msg().endswith(': 5 (HG_NOMEM)'):
+                            # Mercury uses hg error numbers, rather
+                            # than daos, so allow HG_NOMEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
-                        # Ignore the SWIM RPC opcode, as this often sends RPCs
-                        # that fail during shutdown.
+                        # Ignore the SWIM RPC opcode, as this often sends RPCs that fail during
+                        # shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    # Disable checking for a number of conditions, either
-                    # because these errors/lines are badly formatted or because
-                    # they're intermittent and we don't want noise in the test
-                    # results.
+                    # Disable checking for a number of conditions, either because these errors/lines
+                    # are badly formatted or because they're intermittent and we don't want noise in
+                    # the test results.
                     if line.fac == 'external':
                         show = False
-                    elif show and server_shutdown and (line.get_msg().endswith(
-                        "DER_SHUTDOWN(-2017): 'Service should shut down'")
-                            or line.get_msg().endswith(
-                                "DER_NOTLEADER(-2008): 'Not service leader'")):
+                    elif show and server_shutdown and any(map(line.get_msg().endswith,
+                                                              SHUTDOWN_RC)):
                         show = False
-                    elif show and line.function == 'rdb_stop':
+                    elif show and line.function in IGNORED_FUNCTIONS:
                         show = False
-                    elif show and line.function == 'sched_watchdog_post':
+                    if show and any(map(line.get_msg().endswith, self.skip_suffixes)):
                         show = False
                     if show:
-                        # Allow WARNING or ERROR messages, but anything higher
-                        # like assert should trigger a failure.
+                        # Allow WARNING or ERROR messages, but anything higher like assert should
+                        # trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:
                             show_line(line, 'HIGH', 'error in strict mode')
                         else:
@@ -571,7 +583,6 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-# pylint: enable=too-many-branches,too-many-nested-blocks
 
 
 class RpcReporting():

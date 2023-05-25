@@ -209,7 +209,7 @@
 #
 ## Set specific debug mask for daos_server (control plane).
 ## The mask specifies minimum level of message significance to pass to logger.
-## Currently supported values are DISABLED, ERROR, INFO and DEBUG.
+## Currently supported values are DISABLED, TRACE, DEBUG, INFO, NOTICE and ERROR.
 #
 ## default: INFO
 #control_log_mask: ERROR

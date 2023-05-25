@@ -359,7 +359,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			hn, _ := os.Hostname()
 			engine.OnAwaitFormat(createPublishFormatRequiredFunc(tly1.fakePublish, hn))
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+			ctx, cancel := context.WithTimeout(test.Context(t), time.Millisecond*100)
 			defer cancel()
 
 			gotErr := engine.awaitStorageReady(ctx, tc.skipMissingSB)

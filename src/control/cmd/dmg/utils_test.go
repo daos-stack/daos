@@ -81,3 +81,30 @@ func TestDmg_errIncompatFlags(t *testing.T) {
 		})
 	}
 }
+
+func TestDmg_singleHostFlag_UnmarshalFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		val    string
+		expErr error
+	}{
+		"empty": {
+			expErr: errors.New("single host"),
+		},
+		"single host": {
+			val: "localhost",
+		},
+		"multi host": {
+			val:    "host[1-2]",
+			expErr: errors.New("single host"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			flag := new(singleHostFlag)
+
+			err := flag.UnmarshalFlag(tc.val)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.val, flag.HostSet.String(), "")
+		})
+	}
+}

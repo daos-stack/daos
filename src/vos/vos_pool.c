@@ -22,8 +22,8 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <vos_layout.h>
-#include <vos_internal.h>
+#include "vos_layout.h"
+#include "vos_internal.h"
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
@@ -935,10 +935,8 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	uuid_copy(ukey.uuid, pool_id);
 	rc = pool_lookup(&ukey, &pool);
 	if (rc) {
+		D_ASSERT(rc == -DER_NONEXIST);
 		return rc;
-	} else if (pool->vp_dying) {
-		vos_pool_decref(pool);
-		return -DER_NONEXIST;
 	}
 
 	D_ASSERT(pool != NULL);
@@ -987,6 +985,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 			pool->vp_policy_desc.params[i] = p->params[i];
 
+		break;
+	case VOS_PO_CTL_SET_SPACE_RB:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		i = *((unsigned int *)param);
+		if (i >= 100 || i < 0) {
+			D_ERROR("Invalid space reserve ratio for rebuild. %d\n", i);
+			return -DER_INVAL;
+		}
+		pool->vp_space_rb = i;
 		break;
 	}
 

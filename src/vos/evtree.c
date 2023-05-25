@@ -1320,7 +1320,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	return 0;
 out:
-	D_ERROR("Failed to release entry: %s\n", d_errstr(rc));
+	D_ERROR("Failed to release entry: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1501,7 +1501,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
-				D_ERROR("destroy failed: %s\n", d_errstr(rc));
+				D_ERROR("destroy failed: " DF_RC "\n", DP_RC(rc));
 				goto out;
 			}
 
@@ -2721,7 +2721,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 						DF_RECT" overlaps with "DF_RECT
 						"\n", DP_RECT(rect),
 						DP_RECT(&rtmp));
-					rc = -DER_NO_PERM;
+					rc = -DER_VOS_PARTIAL_UPDATE;
 					goto out;
 				}
 				break; /* we can update the record in place */

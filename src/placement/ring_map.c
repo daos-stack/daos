@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1021,9 +1021,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			ring_map_dump(&rimap->rmp_map, true);
 
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
-
-		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				       remap_list, for_reint, -1, f_shard, l_shard,
+		determine_valid_spares(spare_tgt, md, spare_avail,
+				       remap_list, -1, f_shard, l_shard,
 				       NULL);
 	}
 
@@ -1103,7 +1102,7 @@ out:
 
 static int
 ring_obj_place(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
-	       unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
+	       unsigned int mode, struct daos_obj_shard_md *shard_md,
 	       struct pl_obj_layout **layout_pp)
 {
 	struct ring_obj_placement  rop;

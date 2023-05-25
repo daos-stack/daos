@@ -547,7 +547,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		}
 
 		if cfg.NrHugepages < minHugePages {
-			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
+			log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
+				"if this is not intentional update the 'nr_hugepages' config "+
+				"parameter or remove and it will be automatically calculated",
+				cfg.NrHugepages, minHugePages)
 		}
 	}
 
@@ -683,7 +686,23 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 	defaultAffinity := uint(0)
 
+	// Detect legacy mode by checking if first_core is being used.
+	legacyMode := false
+	for _, engineCfg := range cfg.Engines {
+		if engineCfg.ServiceThreadCore != 0 {
+			legacyMode = true
+			break
+		}
+	}
+
+	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
+		if legacyMode {
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
+			engineCfg.PinnedNumaNode = nil
+			continue
+		}
+
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
 		if err != nil {
 			if err != ErrNoAffinityDetected {
@@ -700,7 +719,7 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 		// detected NUMA node is zero, don't pin the engine to any NUMA node in order to
 		// enable the engine's legacy core allocation algorithm.
 		if len(cfg.Engines) == 1 && engineCfg.PinnedNumaNode == nil && numaAffinity == 0 {
-			log.Debug("enabling single-engine legacy core allocation algorithm")
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
 			continue
 		}
 
@@ -711,13 +730,6 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 				continue
 			}
 			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
-		}
-
-		// TODO: Remove this special case when we have removed first_core as an exposed config
-		// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
-		// so that the engine uses its legacy core allocation algorithm.
-		if engineCfg.ServiceThreadCore != 0 {
-			engineCfg.PinnedNumaNode = nil
 		}
 	}
 

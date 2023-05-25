@@ -420,9 +420,9 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
-			srv.mgmtSvc.startJoinLoop(ctx)
+			srv.mgmtSvc.startAsyncLoops(ctx)
 			registerLeaderSubscriptions(srv)
-			srv.log.Debugf("requesting sync GroupUpdate after leader change")
+			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
 			go func() {
 				for {
 					select {
@@ -545,7 +545,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(ctx)
+	fiSet, err := scanner.Scan(ctx, cfg.Fabric.Provider)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}

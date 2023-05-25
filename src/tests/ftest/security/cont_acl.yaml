@@ -19,7 +19,6 @@ server_config:
           scm_size: 4
 pool:
   scm_size: 138374182
-  control_method: dmg
 container:
   control_method: daos
 container_acl:

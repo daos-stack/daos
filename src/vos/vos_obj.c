@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <vos_internal.h>
+#include "vos_internal.h"
 
 /** Ensure the values of recx flags map to those exported by evtree */
 D_CASSERT((uint32_t)VOS_VIS_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
@@ -526,27 +526,27 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
-
-	if (rc == 0) {
+	if (rc == 0)
 		vos_ts_set_upgrade(ts_set);
-		if (daes != NULL) {
-			vos_dtx_post_handle(cont, daes, dces,
-					    dth->dth_dti_cos_count,
-					    false, false);
-			dth->dth_cos_done = 1;
-		}
-	} else if (daes != NULL) {
-		vos_dtx_post_handle(cont, daes, dces,
-				    dth->dth_dti_cos_count, false, true);
-		dth->dth_cos_done = 1;
-	}
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
 		vos_ts_set_update(ts_set, epr.epr_hi);
+	}
+
+	if (rc == 0)
+		vos_ts_set_wupdate(ts_set, epr.epr_hi);
+
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
-			vos_ts_set_wupdate(ts_set, epr.epr_hi);
+			dth->dth_cos_done = 1;
+		else
+			dth->dth_cos_done = 0;
+
+		if (daes != NULL)
+			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
+					    false, rc != 0);
 	}
 
 	D_FREE(daes);
@@ -621,8 +621,8 @@ out:
 	return rc;
 }
 
-int
-vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+static int
+vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
@@ -637,7 +637,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return 0;
 
 	if (rc) {
-		D_ERROR("Failed to hold object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to hold object: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -645,15 +645,27 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		goto out;
 
-	rc = vos_oi_delete(cont, obj->obj_id);
+	rc = vos_oi_delete(cont, obj->obj_id, only_delete_entry);
 	if (rc)
-		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
+		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
 
 	rc = umem_tx_end(umm, rc);
 
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
+}
+
+int
+vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	return vos_obj_delete_internal(coh, oid, false);
+}
+
+int
+vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	return vos_obj_delete_internal(coh, oid, true);
 }
 
 /* Delete a key in its parent tree.
@@ -736,7 +748,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound, false,
 			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)

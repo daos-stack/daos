@@ -48,6 +48,12 @@ func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode)
 	return nil
 }
 
+func isInvalidCert(err error) bool {
+	_, isCertErr := errors.Cause(err).(x509.CertificateInvalidError)
+
+	return isCertErr
+}
+
 func loadCertWithCustomCA(caRootPath, certPath, keyPath string, maxKeyPerm os.FileMode) (*tls.Certificate, *x509.CertPool, error) {
 	caPEM, err := LoadPEMData(caRootPath, MaxCertPerm)
 	if err != nil {
@@ -56,6 +62,8 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string, maxKeyPerm os.Fi
 			return nil, nil, FaultMissingCertFile(caRootPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(caRootPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(caRootPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load caRoot")
 		}
@@ -68,6 +76,8 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string, maxKeyPerm os.Fi
 			return nil, nil, FaultMissingCertFile(certPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(certPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(certPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load cert")
 		}
@@ -80,6 +90,8 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string, maxKeyPerm os.Fi
 			return nil, nil, FaultMissingCertFile(keyPath)
 		case os.IsPermission(err):
 			return nil, nil, FaultUnreadableCertFile(keyPath)
+		case isInvalidCert(err):
+			return nil, nil, FaultInvalidCertFile(keyPath, err)
 		default:
 			return nil, nil, errors.Wrapf(err, "could not load key")
 		}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +18,7 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos_types.h>
-#include <vos_obj.h>
+#include "vos_obj.h"
 #include <daos/checksum.h>
 
 #include "vos_internal.h"
@@ -197,6 +197,9 @@ cont_free_internal(struct vos_container *cont)
 			vea_hint_unload(cont->vc_hint_ctxt[i]);
 	}
 
+	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
+	d_tm_dec_gauge(vos_tls_get()->vtl_committed, cont->vc_dtx_committed_count);
+
 	D_FREE(cont);
 }
 
@@ -371,8 +374,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		cont->vc_cmt_dtx_indexed = 1;
 	else
 		cont->vc_cmt_dtx_indexed = 0;
+	cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
+	cont->vc_solo_dtx_epoch = d_hlc_get();
 	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */

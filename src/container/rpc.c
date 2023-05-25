@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +43,23 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_hi);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_daos_obj_id_t(crt_proc_t proc, crt_proc_op_t proc_op,
+		       daos_obj_id_t *oid)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &oid->lo);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &oid->hi);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -95,6 +112,10 @@ CRT_RPC_DEFINE(cont_snap_list, DAOS_ISEQ_CONT_SNAP_LIST,
 CRT_RPC_DEFINE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DEFINE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DEFINE(cont_snap_oit_oid_get, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET,
+		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
+CRT_RPC_DEFINE(cont_snap_oit_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DEFINE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
 CRT_RPC_DEFINE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)

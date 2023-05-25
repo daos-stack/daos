@@ -1,11 +1,10 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import re
-import uuid
 from enum import IntEnum
 
 from avocado.utils.process import CmdResult
@@ -123,6 +122,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
 
 class IorCommand(SubProcessCommand):
     # pylint: disable=too-many-instance-attributes
+    # pylint: disable=wrong-spelling-in-docstring
     """Defines a object for executing an IOR command.
 
     Example:
@@ -150,6 +150,7 @@ class IorCommand(SubProcessCommand):
         # Flags
         self.flags = FormattedParameter("{}")
 
+        # pylint: disable=wrong-spelling-in-comment
         # Optional arguments
         #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task
@@ -241,36 +242,23 @@ class IorCommand(SubProcessCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont_uuid=None):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool/str): DAOS test pool object or pool uuid/label
-            cont_uuid (str, optional): the container uuid. If not specified one
-                is generated. Defaults to None.
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.set_daos_pool_params(pool, display)
-        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_group.update(group, "dfs_group" if display else None)
-            self.dfs_cont.update(
-                cont_uuid if cont_uuid else str(uuid.uuid4()),
-                "dfs_cont" if display else None)
-
-    def set_daos_pool_params(self, pool, display=True):
-        """Set the IOR parameters that are based on a DAOS pool.
-
-        Args:
-            pool (TestPool/str): DAOS test pool object or pool uuid/label
-            display (bool, optional): print updated params. Defaults to True.
+            cont_uuid (str, optional): the container uuid or label. Defaults to None.
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             try:
-                dfs_pool = pool.pool.get_uuid_str()
+                dfs_pool = pool.identifier
             except AttributeError:
                 dfs_pool = pool
-            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
+            self.update_params(
+                dfs_group=group,
+                dfs_pool=dfs_pool,
+                dfs_cont=cont_uuid if cont_uuid else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.

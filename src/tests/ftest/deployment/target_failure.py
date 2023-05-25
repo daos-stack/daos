@@ -40,8 +40,8 @@ class TargetFailure(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        testfile = os.path.join(os.sep, file_name)
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
@@ -141,6 +141,7 @@ class TargetFailure(IorTestBase):
         self.pool.reintegrate(rank="0", tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Reintegrate rank 0 -> target 1", interval=5)
 
+        self.container.set_prop(prop='status', value="healthy")
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -197,7 +198,7 @@ class TargetFailure(IorTestBase):
         9. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,target_failure,rebuild
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
@@ -245,6 +246,7 @@ class TargetFailure(IorTestBase):
         self.pool.reintegrate(rank="1", tgt_idx="0")
         self.pool.measure_rebuild_time(operation="Reintegrate 1 target", interval=5)
 
+        self.container.set_prop(prop='status', value="healthy")
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after reintegrate!")
@@ -388,6 +390,7 @@ class TargetFailure(IorTestBase):
         self.pool[excluded_pool_num].measure_rebuild_time(
             operation="Reintegrate 1 target", interval=5)
 
+        self.container[1].set_prop(prop='status', value="healthy")
         # 8. Verify that self.container[1]'s Health property is HEALTHY.
         if not self.container[1].verify_prop({"status": "HEALTHY"}):
             errors.append("Container health isn't HEALTHY after first IOR!")

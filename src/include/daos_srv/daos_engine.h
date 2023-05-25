@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,10 +74,11 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	DAOS_SYS_TAG	= 1 << 0, /** only run on system xstream */
-	DAOS_TGT_TAG	= 1 << 1, /** only run on target xstream */
-	DAOS_OFF_TAG	= 1 << 2, /** only run on offload/helper xstream */
-	DAOS_SERVER_TAG	= 0xff,	  /** run on all xstream */
+	DAOS_SYS_TAG    = 1 << 0, /** only run on system xstream */
+	DAOS_TGT_TAG    = 1 << 1, /** only run on target xstream */
+	DAOS_RDB_TAG    = 1 << 2, /** only run on rdb xstream */
+	DAOS_OFF_TAG    = 1 << 3, /** only run on offload/helper xstream */
+	DAOS_SERVER_TAG = 0xff,   /** run on all xstream */
 };
 
 /* The module key descriptor for each xstream */
@@ -88,10 +89,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(int xs_id, int tgt_id);
+	void *(*dmk_init)(int tags, int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(void *data);
+	void (*dmk_fini)(int tags, void *data);
 };
 
 extern pthread_key_t dss_tls_key;
@@ -662,13 +663,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {

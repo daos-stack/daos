@@ -113,6 +113,7 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientConnectionTimedOut
 	ClientFormatRunningSystem
 	ClientRpcTimeout
 	ClientConfigVMDImbalance
@@ -130,7 +131,6 @@ const (
 	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -138,6 +138,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 )
 
@@ -168,7 +169,6 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
-	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
@@ -188,4 +188,5 @@ const (
 	SecurityUnknown Code = iota + 900
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
+	SecurityInvalidCert
 )

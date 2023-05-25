@@ -285,7 +285,7 @@ class Job():
                 writing xml files with different names and/or file locations. Defaults to None.
             html_enabled (str, optional): if set to 'on' results will be written to
                 {logdir}/results.html. Defaults to None.
-            html_output (_type_, optional): optional full path of an html file to generate.  Used
+            html_output (str, optional): optional full path of an html file to generate.  Used
                 for writing html files with different names and/or file locations. Defaults to None.
             log_dir (str, optional): directory in which to write the results.[xml|html] if
                 [xml|html]_enabled is set to 'on'. Defaults to None.
