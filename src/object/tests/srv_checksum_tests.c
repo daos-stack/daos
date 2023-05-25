@@ -1475,11 +1475,11 @@ key_verify(void **state)
 {
 	struct daos_csummer  *csummer;
 	daos_key_t            dkey = {0};
-	char                  dkey_buf[32];
-	struct dcs_csum_info *dkey_csum;
-	daos_iod_t            iods             = {0};
-	struct dcs_iod_csums *iod_csums;
-	char                  akey_buf[32];
+	char                  dkey_buf[32] = {0};
+	struct dcs_csum_info *dkey_csum = NULL;
+	daos_iod_t            iods  = {0};
+	struct dcs_iod_csums *iod_csums = NULL;
+	char                  akey_buf[32] = {0};
 
 	daos_csummer_init_with_type(&csummer, HASH_TYPE_CRC32, 4, 0);
 
