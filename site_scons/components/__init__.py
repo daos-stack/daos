@@ -384,12 +384,12 @@ def define_components(reqs):
 
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':
-        libcapstone_pkg = 'libcapstone-dev'
+        capstone_pkg = 'libcapstone-dev'
     elif os_name == 'openSUSE':
-        libcapstone_pkg = 'libcapstone-devel'
+        capstone_pkg = 'libcapstone-devel'
     else:
-        libcapstone_pkg = 'capstone-devel'
-    reqs.define('libcapstone', libs=['capstone'], headers=['capstone.h'], package=libcapstone_pkg)
+        capstone_pkg = 'capstone-devel'
+    reqs.define('capstone', libs=['capstone'], headers=['capstone.h'], package=capstone_pkg)
 
 
 __all__ = ['define_components']
