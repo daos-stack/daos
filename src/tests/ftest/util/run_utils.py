@@ -143,7 +143,7 @@ class RemoteCommandResult():
                     self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
         if timed_out:
             self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+                self.ResultData(command, 124, NodeSet.fromlist(timed_out), [], True))
 
     def log_output(self, log):
         """Log the command result.
