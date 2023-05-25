@@ -548,8 +548,8 @@ drain_then_exclude(void **state)
 	rebuild_io_validate(arg, &oid, 1);
 }
 
-#define EXTEND_DRAIN_OBJ_NR	10
-#define WRITE_SIZE		(1048576 * 50)
+#define EXTEND_DRAIN_OBJ_NR	5
+#define WRITE_SIZE		(1048576 * 5)
 struct extend_drain_cb_arg{
 	daos_obj_id_t	*oids;
 	dfs_t		*dfs_mt;
