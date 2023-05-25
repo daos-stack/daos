@@ -5,7 +5,7 @@ on:
 
 jobs:
   pylint:
-    name: Pylint check
+    name: Clang Format
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
@@ -18,7 +18,9 @@ jobs:
         run: clang-format --version
       - name: Pull via git
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
-      - name: Run pylint check.
+      - name: Run format check.
         run: git-clang-format ${{ github.event.pull_request.base.sha }}
       - name: Show diff.
         run: git diff
+      - name: Install docker image
+        uses: ./.github/actions/clang-format

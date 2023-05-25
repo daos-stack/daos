@@ -1,0 +1,5 @@
+name: 'Clang Format'
+description: 'Re-indent code to style guidelines'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
