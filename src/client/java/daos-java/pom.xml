@@ -392,18 +392,20 @@
 
   <profiles>
     <profile>
-      <id>java-11</id>
+	    <id>java-11</id>
+	    <activation>
+        <jdk>11</jdk>
+      </activation>
       <build>
         <plugins>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
-            <configuration>
+            <configuration combine.self="override">
               <compilerArgs>
                 <arg>-h</arg>
                 <arg>${project.basedir}/src/main/native/include</arg>
-                <arg>--add-exports</arg>
-                <arg>java.base/sun.nio.ch=ALL-UNNAMED</arg>
+                <arg>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</arg>
               </compilerArgs>
             </configuration>
           </plugin>
@@ -413,8 +415,8 @@
             <configuration>
               <failOnError>false</failOnError>
               <additionalJOptions>
-                <additionalJOption>-J--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</additionalJOption>
-                <additionalJOption>-J--add-exports=java.xml/jdk.xml.internal=ALL-UNNAMED</additionalJOption>
+                <additionalJOption>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</additionalJOption>
+                <additionalJOption>--add-exports=java.xml/jdk.xml.internal=ALL-UNNAMED</additionalJOption>
               </additionalJOptions>
             </configuration>
           </plugin>
