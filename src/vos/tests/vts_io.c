@@ -966,7 +966,7 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_cache_create(10, &occ);
 	assert_rc_equal(rc, 0);
 
-	tls             = vos_tls_get();
+	tls             = vos_tls_get(true);
 	old_cache       = tls->vtl_ocache;
 	tls->vtl_ocache = occ;
 

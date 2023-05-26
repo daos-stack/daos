@@ -71,7 +71,8 @@ static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
@@ -245,7 +246,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
 		  struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -512,7 +513,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth;
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
@@ -524,6 +525,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont == NULL)
 		return -DER_INVAL;
+
+	dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
@@ -580,6 +583,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 	uint64_t		 feats;
 	unsigned int		 acts;
 	int			 rc;
+	bool			 is_sysdb = !!iter->it_for_sysdb;
 
 	while (1) {
 		struct vos_obj_df *obj;
@@ -610,17 +614,15 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 					desc.id_agg_write = obj->vo_max_write;
 			}
 			acts = 0;
-			start_seq = vos_sched_seq();
-			dth = vos_dth_get();
-			if (dth != NULL)
-				vos_dth_set(NULL);
+			start_seq = vos_sched_seq(is_sysdb);
+			dth = vos_dth_get(is_sysdb);
+			vos_dth_set(NULL, is_sysdb);
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
 						&acts);
-			if (dth != NULL)
-				vos_dth_set(dth);
+			vos_dth_set(dth, is_sysdb);
 			if (rc != 0)
 				goto failed;
-			if (start_seq != vos_sched_seq())
+			if (start_seq != vos_sched_seq(is_sysdb))
 				acts |= VOS_ITER_CB_YIELD;
 			if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
 				    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
@@ -817,7 +819,7 @@ oi_iter_check_punch(daos_handle_t ih)
 	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
 		DP_UOID(oid));
 	/* Evict the object from cache */
-	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 				  oiter->oit_cont, oid);
 	if (rc != 0)
 		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
@@ -876,7 +878,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		 */
 
 		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 					  oiter->oit_cont, oid);
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",

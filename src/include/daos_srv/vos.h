@@ -1274,6 +1274,11 @@ int
 vos_dedup_verify(daos_handle_t ioh);
 
 struct sys_db *vos_db_get(void);
+
+/* return sysdb pool uuid */
+uuid_t *
+vos_db_pool_uuid(void);
+
 /**
  * Create the system DB in VOS
  * System DB is KV store that can support insert/delete/traverse
@@ -1487,5 +1492,18 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
  */
 int
 vos_obj_layout_upgrade(daos_handle_t hdl, daos_unit_oid_t oid, uint32_t layout_ver);
+
+/**
+ * Init standalone VOS TLS.
+ * \param[in]	tags
+ */
+int
+vos_standalone_tls_init(int tags);
+
+/**
+ * Finish standalone VOS TLS.
+ */
+void
+vos_standalone_tls_fini(void);
 
 #endif /* __VOS_API_H */

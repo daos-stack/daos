@@ -95,6 +95,7 @@ bool		dss_helper_pool;
 bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
+static bool		dss_shutting_down;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -120,7 +121,6 @@ struct dss_xstream_data {
 	/** barrier for all ULTs to enter handling loop */
 	ABT_cond		  xd_ult_barrier;
 	ABT_mutex		  xd_mutex;
-	struct dss_thread_local_storage *xd_dtc;
 };
 
 static struct dss_xstream_data	xstream_data;
@@ -1196,13 +1196,7 @@ enum {
 static void
 dss_sys_db_fini(void)
 {
-
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		vos_db_fini();
-		return;
-	}
-
-	lmm_db_fini();
+	vos_db_fini();
 }
 
 /**
@@ -1228,7 +1222,7 @@ dss_srv_fini(bool force)
 		dss_sys_db_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
-		dss_tls_fini(xstream_data.xd_dtc);
+		vos_standalone_tls_fini();
 		/* fall through */
 	case XD_INIT_TLS_REG:
 		pthread_key_delete(dss_tls_key);
@@ -1254,18 +1248,11 @@ static int
 dss_sys_db_init()
 {
 	int	 rc;
-	char	*lmm_db_path = NULL;
+	char	*sys_db_path = NULL;
 	char	*nvme_conf_path = NULL;
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = vos_db_init(dss_storage_path);
-		if (rc)
-			return rc;
-		rc = smd_init(vos_db_get());
-		if (rc)
-			vos_db_fini();
-		return rc;
-	}
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto db_init;
 
 	if (dss_nvme_conf == NULL) {
 		D_ERROR("nvme conf path not set\n");
@@ -1275,21 +1262,21 @@ dss_sys_db_init()
 	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
 	if (nvme_conf_path == NULL)
 		return -DER_NOMEM;
-	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
 	D_FREE(nvme_conf_path);
-	if (lmm_db_path == NULL) {
+	if (sys_db_path == NULL)
 		return -DER_NOMEM;
-	}
 
-	rc = lmm_db_init(lmm_db_path);
+db_init:
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
 	if (rc)
 		goto out;
 
-	rc = smd_init(lmm_db_get());
+	rc = smd_init(vos_db_get());
 	if (rc)
-		lmm_db_fini();
+		vos_db_fini();
 out:
-	D_FREE(lmm_db_path);
+	D_FREE(sys_db_path);
 
 	return rc;
 }
@@ -1344,8 +1331,8 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG, 0, -1);
-	if (!xstream_data.xd_dtc) {
+	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);
+	if (rc) {
 		D_ERROR("Not enough DRAM to initialize XS local storage.\n");
 		D_GOTO(failed, rc = -DER_NOMEM);
 	}
@@ -1387,10 +1374,20 @@ failed:
 	return rc;
 }
 
+bool
+dss_srv_shutting_down(void)
+{
+	/* from main thread */
+	if (dss_tls_get() == NULL)
+		return dss_shutting_down;
+
+	return dss_get_module_info()->dmi_srv_shutting_down;
+}
+
 static void
 set_draining(void *arg)
 {
-	dss_get_module_info()->dmi_srv_shutting_down = 1;
+	dss_get_module_info()->dmi_srv_shutting_down = true;
 }
 
 /*
@@ -1417,7 +1414,7 @@ dss_srv_set_shutting_down(void)
 		D_ASSERTF(rc == ABT_SUCCESS, "join task: %d\n", rc);
 	}
 
-	dss_get_module_info()->dmi_srv_shutting_down = 1;
+	dss_shutting_down = true;
 }
 
 void

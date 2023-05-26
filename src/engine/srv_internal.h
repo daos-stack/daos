@@ -270,15 +270,19 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
+	bool			 tls_set = dss_tls_get() ? true : false;
 #ifdef ULT_MMAP_STACK
-	struct dss_xstream *cur_dx = dss_current_xstream();
+	struct dss_xstream *cur_dx = NULL;
+
+	if (tls_set)
+		cur_dx = dss_current_xstream();
 
 	/* if possible,stack should be allocated from launching XStream pool */
 	if (cur_dx == NULL)
 		cur_dx = dx;
 #endif
 
-	if (sched_xstream_stopping())
+	if (tls_set && sched_xstream_stopping())
 		return -DER_SHUTDOWN;
 
 	/* Avoid bumping busy ts for internal periodically created ULTs */

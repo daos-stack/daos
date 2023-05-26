@@ -262,7 +262,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry **entryp,
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_handle *dth)
+		    const struct dtx_handle *dth, bool standalone)
 {
 	const struct dtx_id	*tx_id = NULL;
 	uint32_t		 size;
@@ -271,7 +271,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 					     VOS_COND_UPDATE_MASK |
 					     VOS_OF_COND_PER_AKEY;
 
-	vos_kh_clear();
+	vos_kh_clear(standalone);
 
 	*ts_set = NULL;
 	if (!dtx_is_valid_handle(dth)) {

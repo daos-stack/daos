@@ -11,6 +11,7 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include "bio_ut.h"
+#include <daos_srv/vos.h>
 
 static char		db_path[100];
 struct bio_ut_args	ut_args;
@@ -20,7 +21,7 @@ ut_fini(struct bio_ut_args *args)
 {
 	bio_xsctxt_free(args->bua_xs_ctxt);
 	smd_fini();
-	lmm_db_fini();
+	vos_db_fini();
 	bio_nvme_fini();
 	ABT_finalize();
 	daos_debug_fini();
@@ -63,12 +64,12 @@ ut_init(struct bio_ut_args *args)
 		goto out_abt;
 	}
 
-	rc = lmm_db_init_ex(db_path, "self_db", true, true);
+	rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc) {
-		D_ERROR("lmm DB init failed. "DF_RC"\n", DP_RC(rc));
+		D_ERROR("vos DB init failed. "DF_RC"\n", DP_RC(rc));
 		goto out_nvme;
 	}
-	db = lmm_db_get();
+	db = vos_db_get();
 
 	rc = smd_init(db);
 	D_ASSERT(rc == 0);
@@ -82,7 +83,7 @@ ut_init(struct bio_ut_args *args)
 	return 0;
 out_smd:
 	smd_fini();
-	lmm_db_fini();
+	vos_db_fini();
 out_nvme:
 	bio_nvme_fini();
 out_abt:

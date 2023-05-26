@@ -490,7 +490,7 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 		return -DER_BUSY; /** No more room in the set */
 
 	if (vos_ts_lookup(ts_set, idx, false, &entry)) {
-		vos_kh_clear();
+		vos_kh_clear(false);
 		expected_type = entry->te_info->ti_type;
 		D_ASSERT(expected_type == ts_set->ts_etype);
 		goto set_params;
@@ -498,8 +498,9 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 
 calc_hash:
 	if (ts_set->ts_etype > VOS_TS_TYPE_CONT) {
+		/* sysdb pool should not come here */
 		if (ts_set->ts_etype != VOS_TS_TYPE_OBJ) {
-			hash = vos_hash_get(rec, rec_size);
+			hash = vos_hash_get(rec, rec_size, false);
 		} else {
 			daos_unit_oid_t *oid = (daos_unit_oid_t *)rec;
 
@@ -640,13 +641,14 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  * \param[in]		cflags	Check/update flags
  * \param[in]		akey_nr	Number of akeys in operation
  * \param[in]		dth	Optional transaction handle
+ * \param[in]		standalone use standalone tls
  *
  * \return	0 on success, error otherwise.
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_handle *dth);
+		    const struct dtx_handle *dth, bool standalone);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed

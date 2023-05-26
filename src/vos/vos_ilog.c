@@ -44,8 +44,9 @@ static int
 vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 		    daos_epoch_t epoch, bool *same, void *args)
 {
-	struct dtx_handle	*dth = vos_dth_get();
-	uint32_t		 dtx = vos_dtx_get();
+	bool			 standalone = umm->umm_pool->up_store.store_standalone;
+	struct dtx_handle	*dth = vos_dth_get(standalone);
+	uint32_t		 dtx = vos_dtx_get(standalone);
 	daos_handle_t		 coh;
 
 	coh.cookie = (unsigned long)args;
@@ -372,7 +373,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -459,7 +460,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		struct vos_ts_set *ts_set, bool leaf, bool replay)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;

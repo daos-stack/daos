@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,6 +71,12 @@ db2vos(struct sys_db *db)
 	return container_of(db, struct vos_sys_db, db_pub);
 }
 
+uuid_t *
+vos_db_pool_uuid()
+{
+	return &vos_db.db_pool;
+}
+
 static void
 db_close(struct sys_db *db)
 {
@@ -124,13 +130,13 @@ db_open_create(struct sys_db *db, bool try_create)
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
 	if (try_create) {
 		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0,
-				     0, &vdb->db_poh);
+				     VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
 			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 	} else {
-		rc = vos_pool_open(vdb->db_file, vdb->db_pool, 0, &vdb->db_poh);
+		rc = vos_pool_open(vdb->db_file, vdb->db_pool, VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
 			/**
 			 * The access checks above should ensure the file
@@ -292,6 +298,7 @@ db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 	ip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	ip.ip_hdl	 = vdb->db_coh;
 	ip.ip_oid	 = vdb->db_obj;
+	ip.ip_flags	 = VOS_IT_SYSDB;
 
 	ta.ta_db	 = db;
 	ta.ta_table	 = table;

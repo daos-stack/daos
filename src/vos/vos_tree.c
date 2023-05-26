@@ -363,7 +363,8 @@ static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
-	struct dtx_handle	*dth	= vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth	= vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -580,13 +581,14 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	bio_addr_t		*addr = &irec->ir_ex_addr;
 	struct dtx_handle	*dth = NULL;
 	struct umem_rsrvd_act	*rsrvd_scm;
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
 	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	if (overwrite) {
-		dth = vos_dth_get();
+		dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 		if (dth == NULL)
 			return -DER_NO_PERM; /* Not allowed */
 	}
@@ -924,7 +926,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	int			 tmprc;
 
 	/** reset the saved hash */
-	vos_kh_clear();
+	vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
 
 	if (krecp != NULL)
 		*krecp = NULL;

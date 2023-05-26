@@ -94,6 +94,8 @@ enum vos_pool_open_flags {
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 	/** RDB pool */
 	VOS_POF_RDB	= (1 << 4),
+	/** SYS DB pool */
+	VOS_POF_SYSDB	= (1 << 5),
 };
 
 enum vos_oi_attr {
@@ -358,8 +360,10 @@ enum {
 	VOS_IT_FOR_DISCARD	= (1 << 7),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED	= (1 << 8),
+	/** Iterator is for SYSDB */
+	VOS_IT_SYSDB	= (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK		= (1 << 10) - 1,
 };
 
 typedef struct {
