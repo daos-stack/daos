@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,7 +48,7 @@ class BasicCheckout(PerformanceTestBase):
         self.log.info("Autotest start")
         daos_cmd = self.get_daos_command()
         try:
-            daos_cmd.pool_autotest(pool=self.pool.uuid)
+            daos_cmd.pool_autotest(pool=self.pool.identifier)
             self.log.info("daos pool autotest passed.")
         except CommandFailure as error:
             self.log.error("Error: %s", error)
