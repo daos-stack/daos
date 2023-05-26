@@ -36,11 +36,11 @@ daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
 }
 
 int
-daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
-	      daos_handle_t *oh, daos_event_t *ev)
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode, daos_handle_t *oh,
+	      daos_event_t *ev)
 {
 	tse_task_t *task;
-	int rc;
+	int         rc;
 
 	rc = dc_obj_open_task_create(coh, oid, mode, oh, ev, NULL, &task);
 	if (rc)
