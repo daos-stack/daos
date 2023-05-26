@@ -62,8 +62,7 @@ class TestResult():
         self.time_start = -1
         self.time_end = -1
         self.time_elapsed = -1
-        # To avoid a render exception if the status is never set, default to FAIL
-        self.status = self.FAIL
+        self.status = None
         self.fail_class = None
         self.fail_reason = None
         self.fail_count = 0
@@ -321,6 +320,21 @@ class Job():
         self.status = "COMPLETE"
 
 
+def sanitize_results(results):
+    """Ensure each test status is set and all failure attributes are set for test failures.
+
+    Args:
+        results (Results): the test results to sanitize
+    """
+    for test in results.tests:
+        if not test.status or test.status == TestResult.FAIL:
+            test.status = TestResult.FAIL
+            if not test.fail_class:
+                test.fail_class = 'Missing fail class'
+            if not test.fail_reason:
+                test.fail_reason = 'Missing fail reason'
+
+
 def create_xml(job, results):
     """Create a xml file for the specified test results.
 
@@ -334,7 +348,7 @@ def create_xml(job, results):
     # pylint: disable=import-outside-toplevel
     from avocado.plugins.xunit import XUnitResult
     result_xml = XUnitResult()
-    result_xml.render(results, job)
+    result_xml.render(sanitize_results(results), job)
 
 
 def create_html(job, results):
@@ -350,4 +364,4 @@ def create_html(job, results):
     # pylint: disable=import-outside-toplevel
     from avocado_result_html import HTMLResult
     result_html = HTMLResult()
-    result_html.render(results, job)
+    result_html.render(sanitize_results(results), job)
