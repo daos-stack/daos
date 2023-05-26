@@ -89,11 +89,12 @@ class NvmeEnospace(ServerFillUp):
         """
         # create container
         container = self.get_container(self.pool)
+        container.open()
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()
         ior_bg_cmd.get_params(self)
-        ior_bg_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
+        ior_bg_cmd.set_daos_params(self.server_group, self.pool, container.uuid)
         ior_bg_cmd.dfs_oclass.update(self.ior_cmd.dfs_oclass.value)
         ior_bg_cmd.api.update(self.ior_cmd.api.value)
         ior_bg_cmd.transfer_size.update(self.ior_scm_xfersize)
