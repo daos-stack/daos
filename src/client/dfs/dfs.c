@@ -4002,7 +4002,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -4053,7 +4053,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	args->iod	= &params->arr_iod;
 
 	daos_task_set_priv(task, params);
-	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
 		D_GOTO(err_params, rc = daos_der2errno(rc));
 
@@ -4063,7 +4063,8 @@ err_params:
 	D_FREE(params);
 err_task:
 	tse_task_complete(task, rc);
-	return rc;
+	/** the event is completed with the proper rc */
+	return 0;
 }
 
 int

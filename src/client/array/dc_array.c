@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1930,15 +1930,14 @@ dc_array_get_size(tse_task_t *task)
 	query_args->recx	= &kqp->recx;
 	query_args->max_epoch	= NULL;
 
-	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
-	if (rc != 0)
-		D_GOTO(err_task, rc);
-
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
 	cleanup = false;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &query_task);
 	if (rc == 0)
@@ -2006,15 +2005,14 @@ dc_array_stat(tse_task_t *task)
 	query_args->recx	= &kqp->recx;
 	query_args->max_epoch	= &args->stbuf->st_max_epoch;
 
-	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
-	if (rc != 0)
-		D_GOTO(err_task, rc);
-
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
 	cleanup = false;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &query_task);
 	if (rc == 0)
