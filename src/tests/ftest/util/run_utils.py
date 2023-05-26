@@ -154,13 +154,11 @@ class RemoteCommandResult():
         """
         for data in self.output:
             info = " timed out" if data.timeout else ""
-            if data.stdout and len(data.stdout) == 1:
+            if not data.stdout:
+                log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
+            elif len(data.stdout) == 1:
                 log.debug(
-                    "  %s (rc=%s)%s: %s",
-                    str(data.hosts), data.returncode, info, data.stdout[0])
-            elif not data.stdout:
-                log.debug(
-                    "  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout)
+                    "  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
             else:
                 log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
                 for line in data.stdout:
