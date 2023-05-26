@@ -157,12 +157,12 @@ class RemoteCommandResult():
             if data.stdout and len(data.stdout) == 1:
                 log.debug(
                     "  %s (rc=%s)%s: %s",
-                    str(data.hosts), info, data.returncode, data.stdout[0])
+                    str(data.hosts), data.returncode, info, data.stdout[0])
             elif not data.stdout:
                 log.debug(
-                    "  %s (rc=%s)%s: %s", str(data.hosts), info, data.returncode, data.stdout)
+                    "  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout)
             else:
-                log.debug("  %s (rc=%s)%s:", str(data.hosts), info, data.returncode)
+                log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
                 for line in data.stdout:
                     log.debug("    %s", line)
 
