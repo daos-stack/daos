@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -297,12 +297,15 @@ get_dkey_from_idx_tests(void **state)
 	while (SUCCESS(dv_get_dkey(coh, uoid, i, &dkey2))) {
 		assert_string_not_equal(dkey.iov_buf, dkey2.iov_buf);
 		i++;
+		daos_iov_free(&dkey2);
 	}
 
 	for (i = 0; i < 100; i++) {
 		assert_success(dv_get_dkey(coh, uoid, 0, &dkey2));
-		assert_string_equal(dkey.iov_buf, dkey2.iov_buf);
+		assert_key_equal(dkey, dkey2);
+		daos_iov_free(&dkey2);
 	}
+	daos_iov_free(&dkey);
 
 	vos_cont_close(coh);
 }
@@ -311,14 +314,12 @@ static void
 get_akey_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
-	daos_unit_oid_t uoid = {0};
-	int i;
-
-	daos_handle_t coh = DAOS_HDL_INVAL;
-	daos_key_t dkey = {0};
-
-	daos_key_t akey;
-	daos_key_t akey2;
+	daos_unit_oid_t		 uoid = {0};
+	int			 i;
+	daos_handle_t		 coh = DAOS_HDL_INVAL;
+	daos_key_t		 dkey = {0};
+	daos_key_t		 akey = {0};
+	daos_key_t		 akey2 = {0};
 
 	assert_rc_equal(-DER_INVAL, dv_get_akey(coh, uoid, &dkey, 0, &akey));
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
@@ -332,12 +333,16 @@ get_akey_from_idx_tests(void **state)
 	while (SUCCESS(dv_get_dkey(coh, uoid, i, &akey2))) {
 		assert_string_not_equal(akey.iov_buf, akey2.iov_buf);
 		i++;
+		daos_iov_free(&akey2);
 	}
 
 	for (i = 0; i < 100; i++) {
 		assert_success(dv_get_akey(coh, uoid, &dkey, 0, &akey2));
-		assert_string_equal(akey.iov_buf, akey2.iov_buf);
+		assert_memory_equal(akey.iov_buf, akey2.iov_buf, akey.iov_len);
+		daos_iov_free(&akey2);
 	}
+	daos_iov_free(&dkey);
+	daos_iov_free(&akey);
 
 	vos_cont_close(coh);
 }
@@ -362,6 +367,8 @@ get_recx_from_idx_tests(void **state)
 	assert_rc_equal(-DER_NONEXIST, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 	dv_get_akey(coh, uoid, &dkey, 0, &akey);
 	assert_success(dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
+	daos_iov_free(&dkey);
+	daos_iov_free(&akey);
 
 	vos_cont_close(coh);
 }
@@ -1017,6 +1024,8 @@ delete_path_parts_tests(void **state)
 	/* should still have the object */
 	assert_success(dv_get_object_oid(coh, 0, &uoid_test));
 	assert_oid_equal(vtp.vtp_oid.id_pub, uoid_test.id_pub);
+	daos_iov_free(&vtp.vtp_dkey);
+
 	dv_get_dkey(coh, vtp.vtp_oid, 0, &dkey_test);
 	assert_key_not_equal(vtp.vtp_dkey, dkey_test);
 
@@ -1029,10 +1038,15 @@ delete_path_parts_tests(void **state)
 	/* should still have the object and dkey */
 	assert_success(dv_get_object_oid(coh, 0, &uoid_test));
 	assert_oid_equal(vtp.vtp_oid.id_pub, uoid_test.id_pub);
+	daos_iov_free(&vtp.vtp_akey);
+
 	dv_get_dkey(coh, vtp.vtp_oid, 0, &dkey_test);
 	assert_key_equal(vtp.vtp_dkey, dkey_test);
 	dv_get_akey(coh, vtp.vtp_oid, &vtp.vtp_dkey, 0, &akey_test);
 	assert_key_not_equal(vtp.vtp_akey, akey_test);
+	daos_iov_free(&vtp.vtp_dkey);
+	daos_iov_free(&akey_test);
+	daos_iov_free(&dkey_test);
 
 	dv_cont_close(&coh);
 }

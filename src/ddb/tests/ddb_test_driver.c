@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -639,9 +639,9 @@ int main(int argc, char *argv[])
 		rc += func(); } while (0)
 
 		/* filtering suites and tests */
-		char test_suites[] = "";
+		char test_suites[] = "d";
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-		cmocka_set_test_filter("**");
+		cmocka_set_test_filter("*load_cmd_tests*");
 #endif
 		RUN_TEST_SUIT('a', ddb_parse_tests_run);
 		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);

@@ -799,16 +799,22 @@ itp_key_safe_str(char *buf, size_t buf_len)
 void
 itp_print_part_key(struct ddb_ctx *ctx, union itp_part_type *key_part)
 {
-	char buf[1024];
+	char	buf[DDB_MAX_PRITABLE_KEY];
+	d_iov_t *key_iov = &key_part->itp_key;
 
-	ddb_iov_to_printable_buf(&key_part->itp_key, buf, ARRAY_SIZE(buf));
-	if (ddb_can_print(&key_part->itp_key)) {
+	ddb_iov_to_printable_buf(key_iov, buf, ARRAY_SIZE(buf));
+	if (ddb_can_print(key_iov)) {
+		/* +1 to make sure there's room for a null terminator */
+		char key_str[key_part->itp_key.iov_len + 1];
+
+		memcpy(key_str, key_iov->iov_buf, key_iov->iov_len);
+		key_str[key_iov->iov_len] = '\0';
 		/* print the size with the string key if the size isn't strlen. That way
 		 * parsing the string into a valid key will work
 		 */
 		itp_key_safe_str(buf, ARRAY_SIZE(buf));
-		if (key_part->itp_key.iov_len != strlen((char *)key_part->itp_key.iov_buf))
-			ddb_printf(ctx, "%s{%lu}", buf, key_part->itp_key.iov_len);
+		if (key_iov->iov_len != strlen(key_str))
+			ddb_printf(ctx, "%s{%lu}", buf, key_iov->iov_len);
 		else
 			ddb_printf(ctx, "%s", buf);
 	} else {

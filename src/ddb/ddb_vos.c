@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -530,6 +530,7 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	param.ip_hdl = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
+	/* [todo-ryon]: uninitialized value */
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
 			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
 	dv_cont_close(&coh);
@@ -679,11 +680,11 @@ handle_obj(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 static int
 handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 {
-	struct ddb_key dkey = {0};
+	struct ddb_key	dkey = {0};
+	int		rc;
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_dkey_handler);
 	itp_set_dkey(&ctx->itp, &entry->ie_key, ctx->dkey_seen);
-	itp_unset_akey(&ctx->itp);
 
 	dkey.ddbk_path = &ctx->itp;
 	dkey.ddbk_idx = ctx->dkey_seen++;
@@ -695,13 +696,16 @@ handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	/* Restart the akey count for the dkey */
 	ctx->akey_seen = 0;
 
-	return ctx->handlers->ddb_dkey_handler(&dkey, ctx->handler_args);
+	rc = ctx->handlers->ddb_dkey_handler(&dkey, ctx->handler_args);
+	itp_unset_dkey(&ctx->itp);
+	return rc;
 }
 
 static int
 handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 {
-	struct ddb_key akey = {0};
+	struct ddb_key	akey = {0};
+	int		rc;
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_akey_handler);
 	itp_set_akey(&ctx->itp, &entry->ie_key, ctx->akey_seen);
@@ -717,7 +721,9 @@ handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	/* Restart the values seen for the akey */
 	ctx->value_seen = 0;
 
-	return ctx->handlers->ddb_akey_handler(&akey, ctx->handler_args);
+	rc = ctx->handlers->ddb_akey_handler(&akey, ctx->handler_args);
+	itp_unset_akey(&ctx->itp);
+	return rc;
 }
 
 static int
@@ -1417,7 +1423,7 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 	d_sg_list_t	sgl = {0};
 	uint64_t	flags = 0;
 	daos_handle_t	coh;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 0;
 	uint32_t	pool_ver = 0;
 	int		rc;
 
