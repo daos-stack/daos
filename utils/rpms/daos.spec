@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -558,6 +558,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 26 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.107-6
+- Add lmdb-devel and bio_ut for MD on SSD
+
 * Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
 - Add libcapstone-devel to deps of client-tests package
 
