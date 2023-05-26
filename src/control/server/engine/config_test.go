@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -76,7 +76,6 @@ func TestConfig_HasEnvVar(t *testing.T) {
 }
 
 func TestConfig_GetEnvVar(t *testing.T) {
-
 	for name, tc := range map[string]struct {
 		environment []string
 		key         string
@@ -481,6 +480,44 @@ func TestConfig_Validation(t *testing.T) {
 		"minimally-valid config should pass": {
 			cfg: validConfig(),
 		},
+		"invalid log mask in config": {
+			cfg:    validConfig().WithLogMask("DBGG"),
+			expErr: errUnknownLogLevel("DBGG"),
+		},
+		"empty DD_MASK env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK="),
+		},
+		"empty DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS="),
+		},
+		"invalid DD_MASK env in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=mgmt,grogu"),
+			expErr: errors.New("unknown name \"grogu\""),
+		},
+		"invalid DD_SUBSYS env in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=mgmt,mando"),
+			expErr: errors.New("unknown name \"mando\""),
+		},
+		"valid DD_MASK env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=REBUILD,PL,mgmt,epc"),
+		},
+		"valid DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=COMMON,misc,rpc"),
+		},
+		"valid 'all' DD_MASKs in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=all"),
+		},
+		"valid 'all' DD_SUBSYS in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=all"),
+		},
+		"invalid 'all' with another debug stream in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=all,PL"),
+			expErr: errLogNameAllWithOther,
+		},
+		"invalid 'all' with another subsystem in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=all,MEM"),
+			expErr: errLogNameAllWithOther,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
@@ -621,6 +658,49 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestConfig_EnvVarConflict(t *testing.T) {
+	logMask1 := "LOG_MASK_VALUE_1"
+	logMask2 := "LOG_MASK_VALUE_2"
+
+	for name, tc := range map[string]struct {
+		logMask    string
+		envLogMask string
+		expEnvMask string
+	}{
+		"log_mask takes precedence": {
+			logMask:    logMask1,
+			envLogMask: logMask2,
+			expEnvMask: logMask1,
+		},
+		"empty log_mask uses env": {
+			logMask:    "",
+			envLogMask: logMask2,
+			expEnvMask: logMask2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().
+				WithLogMask(tc.logMask).
+				WithEnvVars("D_LOG_MASK=" + tc.envLogMask)
+
+			wantEnv := []string{
+				"D_LOG_MASK=" + tc.expEnvMask,
+				"CRT_TIMEOUT=0",
+				"CRT_CTX_SHARE_ADDR=0",
+				"FI_OFI_RXM_USE_SRX=1",
+			}
+
+			gotEnv, err := cfg.CmdLineEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
 	}
 }
 

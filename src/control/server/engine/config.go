@@ -17,7 +17,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const maxHelperStreamCount = 2
+const (
+	maxHelperStreamCount = 2
+	envLogMasks          = "D_LOG_MASK"
+	envLogDbgStreams     = "DD_MASK"
+	envLogSubsystems     = "DD_SUBSYS"
+)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
@@ -133,6 +138,26 @@ func NewConfig() *Config {
 	}
 }
 
+// ReadLogDbgStreams extracts the value of DD_MASK from engine config env_vars.
+func (c *Config) ReadLogDbgStreams() (string, error) {
+	val, err := c.GetEnvVar(envLogDbgStreams)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
+// ReadLogSubsystems extracts the value of DD_SUBSYS from engine config env_vars.
+func (c *Config) ReadLogSubsystems() (string, error) {
+	val, err := c.GetEnvVar(envLogSubsystems)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
 	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
@@ -149,6 +174,22 @@ func (c *Config) Validate() error {
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {
 		return errors.Wrap(err, "validate engine log masks")
+	}
+
+	streams, err := c.ReadLogDbgStreams()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogStreams(streams); err != nil {
+		return errors.Wrap(err, "validate engine log debug streams")
+	}
+
+	subsystems, err := c.ReadLogSubsystems()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogSubsystems(subsystems); err != nil {
+		return errors.Wrap(err, "validate engine log subsystems")
 	}
 
 	return nil
@@ -255,14 +296,8 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 	}
 
 	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
-	for _, keyPair := range env {
-		keyValue := strings.SplitN(keyPair, "=", 2)
-		if keyValue[0] == name {
-			return keyValue[1], nil
-		}
-	}
 
-	return "", errors.Errorf("Undefined environment variable %q", name)
+	return common.FindEnvValue(env, name)
 }
 
 // WithEnvVars applies the supplied list of environment
@@ -426,6 +461,18 @@ func (c *Config) WithLogFile(logPath string) *Config {
 // WithLogMask sets the DAOS logging mask to be used by this instance.
 func (c *Config) WithLogMask(logMask string) *Config {
 	c.LogMask = logMask
+	return c
+}
+
+// WithLogStreams sets the DAOS logging debug streams to be used by this instance.
+func (c *Config) WithLogStreams(streams string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogDbgStreams, streams))
+	return c
+}
+
+// WithLogSubsystems sets the DAOS logging subsystems to be used by this instance.
+func (c *Config) WithLogSubsystems(subsystems string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogSubsystems, subsystems))
 	return c
 }
 
