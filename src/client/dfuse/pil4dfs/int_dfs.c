@@ -2753,11 +2753,15 @@ __openat_2(int dirfd, const char *path, int oflags)
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* Check whether path is NULL or not since application provides dirp */
 	if (path == NULL) {
 		errno = EFAULT;
 		return (-1);
 	}
+	_Pragma("GCC diagnostic pop")
+
 	if (next_openat_2 == NULL) {
 		next_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
 		D_ASSERT(next_openat_2 != NULL);
