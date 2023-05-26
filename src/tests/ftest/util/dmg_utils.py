@@ -461,11 +461,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self, masks=None, raise_exception=None):
+    def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
 
         Args:
             masks (str, optional): log masks to set. Defaults to None.
+            streams (str, optional): log debug streams to set. Defaults to None.
+            subsystems (str, optional): logging subsystems to enable. Defaults to None (interpreted
+                as enable all).
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
@@ -486,12 +489,9 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
 
-        kwargs = {
-            "masks": masks,
-        }
-
         return self._get_json_result(("server", "set-logmasks"),
-                                     raise_exception=raise_exception, **kwargs)
+                                     raise_exception=raise_exception, masks=masks, streams=streams,
+                                     subsystems=subsystems)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
