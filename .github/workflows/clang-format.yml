@@ -23,10 +23,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Pull via git
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
+      - name: git data
+        run: git log
+      - name: git diff...
+        run: git diff ${{ github.event.pull_request.base.sha }}...
+      - name: git diff
+        run: git diff ${{ github.event.pull_request.base.sha }}
+      - name: git diff...
+        run: git diff ${{ github.event.pull_request.base.ref }}...
+      - name: git diff
+        run: git diff ${{ github.event.pull_request.base.ref }}
       - name: Run check in docker
         uses: ./.github/actions/clang-format
         with:
-          target: ${{ github.event.pull_request.base.sha }}
+          target: ${{ github.event.pull_request.base.sha }}...
       - name: Export changes
         uses: actions/upload-artifact@v3
         if: failure()
