@@ -163,8 +163,7 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, namespace=POOL_NAMESPACE):
+    def __init__(self, context, dmg_command, label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -175,8 +174,6 @@ class TestPool(TestDaosApiBase):
                 value can be obtained by calling self.get_dmg_command() from a
                 test. It'll return the object with -l <Access Point host:port>
                 and --insecure.
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
                 There's a link between label_generator and label. If the label
@@ -184,7 +181,7 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__(namespace, cb_handler)
+        super().__init__(namespace)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
