@@ -24,6 +24,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var ErrTmpfsNoExtMDPath = errors.New("--use-tmpfs-scm will generate an md-on-ssd config and so " +
+	"--control-metadata-path must also be set")
+
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
 	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable locally-attached hardware devices"`
@@ -124,6 +127,10 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
+	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
+		return nil, ErrTmpfsNoExtMDPath
+	}
+
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
 	var ndc hardware.NetDevClass
@@ -175,6 +182,10 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 // parameters suitable to be used on the local host. Use the control API to generate config from
 // local scan results using the current process.
 func (cmd *configGenCmd) Execute(_ []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	cfg, err := cmd.confGen(ctx, getLocalFabric, getLocalStorage)
 	if err != nil {

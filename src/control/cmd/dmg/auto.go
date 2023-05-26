@@ -19,6 +19,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
+var ErrTmpfsNoExtMDPath = errors.New("--use-tmpfs-scm will generate an md-on-ssd config and so " +
+	"--control-metadata-path must also be set")
+
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
 	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
@@ -42,6 +45,10 @@ type configGenCmd struct {
 
 func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
+
+	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
+		return nil, ErrTmpfsNoExtMDPath
+	}
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 

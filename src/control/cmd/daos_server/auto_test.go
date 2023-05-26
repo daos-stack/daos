@@ -381,7 +381,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expErr: storage.FaultBdevConfigRolesNoControlMetadata,
+			expErr: ErrTmpfsNoExtMDPath,
 		},
 		"tmpfs scm; low mem": {
 			tmpfsSCM:        true,
