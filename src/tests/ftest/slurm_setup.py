@@ -174,7 +174,7 @@ class SlurmSetup():
         self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, user)
         self._mkdir(self.all_nodes, '/var/spool/slurmd')
         self._mkdir(self.all_nodes, '/var/spool/slurmctld')
-        self._mkdir(self.all_nodes, '/var/spool/slurm/d"')
+        self._mkdir(self.all_nodes, '/var/spool/slurm/d')
         self._mkdir(self.all_nodes, '/var/spool/slurm/ctld')
         self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', user)
         self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', user)
