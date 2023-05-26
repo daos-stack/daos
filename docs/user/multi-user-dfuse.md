@@ -4,7 +4,7 @@
 
 Multi user dfuse is an operating mode of dfuse where it is able to provide filesystem access to
 multiple users/groups on a node through the same dfuse daemon.  This can be used persistently on a
-node to provide data sharing and scratch style access or on-demand by specific users to allow others
+node to provide data sharing and scratch-style access or on-demand by specific users to allow others
 to access their data.
 
 ### Setup
@@ -104,8 +104,8 @@ $ sudo -u berlinda cat /crate/anthony/my-data new-file
 
 ## Interception library
 
-Use of the interception library with multi-user dfuse is supported with no change in configuration,
-however in the case where dfuse and the interception library are being run as different users then
+Use of the interception library with multi-user dfuse is supported with no change in configuration.
+However, in the case where dfuse and the interception library are being run as different users then
 the DAOS pool/container handles will not be shared across process boundaries.  In this case the
 interception library will itself call pool connect and container open leading to greater overhead in
 opening files.  This change should be seamless to the user.
