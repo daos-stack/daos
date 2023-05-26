@@ -605,6 +605,7 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 #define RPC_ADDREF(RPC) do {						\
 		int __ref;						\
 		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);	\
+		RPT_ADDREF(RPC, __ref, __func__, __LINE__);		\
 		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));	\
 		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
 	} while (0)
@@ -612,6 +613,7 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 #define RPC_DECREF(RPC) do {						\
 		int __ref;						\
 		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
+		RPT_DECREF(RPC, __ref, __func__, __LINE__);		\
 		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
 		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
 		if (__ref == 1)						\

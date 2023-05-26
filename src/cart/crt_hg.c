@@ -1270,6 +1270,439 @@ mem_free:
 	crt_rpc_priv_free(rpc_priv);
 }
 
+/* Maximum size of strings to copy in RPT (rpc private tracking)*/
+#define RPT_STRING_SIZE_MAX 50
+
+/* how many most recent log entries at most to keep per rpc_priv structure */
+#define RPT_MAX_LOG_ENTRIES 200
+
+/* how many most recent rpc_priv structures to keep around */
+#define RPT_MAX_ENTRIES 1000
+
+/* set to 0 to disable string copies -- faster */
+#define RPT_INCLUDE_STRINGS 1
+
+/* set to 0 to enable on servers too */
+#define RPT_CLIENT_ONLY 1
+
+enum rpt_op {
+	RPT_OP_ALLOC = 1,
+	RPT_OP_ADDREF = 2,
+	RPT_OP_DECREF = 3,
+	RPT_OP_FREE = 4,
+	RPT_OP_COMPLETED = 5,
+	RPT_OP_SEND =6,
+};
+
+struct rpt_alloc_data {
+	int size;
+	bool forward;
+	int opc;
+};
+
+struct rpt_ref_data {
+#if RPT_INCLUDE_STRINGS
+	char func_name[RPT_STRING_SIZE_MAX];
+#endif
+	int line;
+	int ref_count;
+};
+
+struct rpt_free_data {
+};
+
+struct rpt_completed_data {
+	int rc;
+};
+
+struct rpt_send_data {
+	int rank;
+	int tag;
+	int hg_rc;
+};
+
+union rpt_data {
+	struct rpt_alloc_data		_alloc;
+	struct rpt_ref_data		_ref;
+	struct rpt_free_data		_free;
+	struct rpt_completed_data	_completed;
+	struct rpt_send_data		_send;
+};
+
+struct rpt_log_entry {
+	struct timeval		tv;
+	enum rpt_op		op;
+	union rpt_data 		rpt_msg;
+	struct rpt_log_entry 	*next;
+	struct rpt_log_entry 	*prev;
+};
+
+struct rpt_entry {
+	struct timeval		tv_start;
+	uint64_t		addr;
+	pthread_mutex_t		log_mutex;
+	struct rpt_log_entry	*log_head;
+	struct rpt_log_entry	*log_tail;
+	int			num_log_entries;
+	struct rpt_entry	*next;
+	struct rpt_entry	*prev;
+};
+
+static struct rpt_entry *rpt_head;
+static struct rpt_entry *rpt_tail;
+static int rpt_num_entries;
+static pthread_mutex_t rpt_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
+static struct rpt_entry* __get_rpt_entry(struct crt_rpc_priv *rpc_priv)
+{
+	struct rpt_entry *entry = NULL;
+
+	D_MUTEX_LOCK(&rpt_mutex);
+	entry = rpt_head;
+
+	while (entry) {
+		if (entry->addr == (uint64_t)rpc_priv)
+			break;
+
+		entry = entry->next;
+	}
+	D_MUTEX_UNLOCK(&rpt_mutex);
+
+	return entry;
+}
+
+static struct rpt_entry* __create_rpt_entry(struct crt_rpc_priv *rpc_priv)
+{
+	struct rpt_entry *entry = NULL;
+
+	D_ALLOC_PTR(entry);
+
+	if (!entry) {
+		D_ERROR("Failed to alloc entry\n");
+		return entry;
+	}
+
+	entry->addr = (uint64_t)rpc_priv;
+	entry->log_head = NULL;
+	D_MUTEX_INIT(&entry->log_mutex, NULL);
+
+	gettimeofday(&entry->tv_start, NULL);
+
+	D_MUTEX_LOCK(&rpt_mutex);
+
+
+	entry->num_log_entries = 0;
+	entry->next = NULL;
+	entry->prev = NULL;
+
+	if (rpt_head == NULL) {
+		rpt_head = entry;
+		rpt_tail = entry;
+	} else {
+		rpt_head->prev = entry;
+		entry->next = rpt_head;
+		rpt_head = entry;
+	}
+
+	rpt_num_entries++;
+
+	if (rpt_num_entries > RPT_MAX_ENTRIES) {
+		struct rpt_entry	*to_del;
+		struct rpt_log_entry	*log_entry, *tmp_log_entry;
+
+		to_del = rpt_tail;
+
+		if (rpt_tail && rpt_tail->prev) {
+			rpt_tail->prev->next = NULL;
+			rpt_tail = rpt_tail->prev;
+			log_entry = to_del->log_head;
+
+			while (log_entry) {
+				tmp_log_entry = log_entry;
+				log_entry = log_entry->next;
+
+				D_FREE(tmp_log_entry);
+			}
+
+			D_FREE(to_del);
+			rpt_num_entries--;
+		}
+	}
+
+	D_MUTEX_UNLOCK(&rpt_mutex);
+
+	return entry;
+}
+
+
+static struct rpt_log_entry* __create_log_entry(struct rpt_entry* entry)
+{
+	struct rpt_log_entry *log_entry = NULL;
+
+	D_ALLOC_PTR(log_entry);
+
+	if (!log_entry) {
+		D_ERROR("Failed to alloc log entry\n");
+		return log_entry;
+	}
+
+	gettimeofday(&log_entry->tv, NULL);
+	D_MUTEX_LOCK(&entry->log_mutex);
+
+	log_entry->next = NULL;
+	log_entry->prev = NULL;
+
+	if (entry->log_head == NULL) {
+		entry->log_head = log_entry;
+		entry->log_tail = log_entry;
+	} else {
+		entry->log_head->prev = log_entry;
+		log_entry->next = entry->log_head;
+		entry->log_head = log_entry;
+	}
+
+	entry->num_log_entries++;
+
+	if (entry->num_log_entries > RPT_MAX_LOG_ENTRIES) {
+		/* TODO: add option to drain below certain size */
+		struct rpt_log_entry *log_to_del;
+
+		log_to_del = entry->log_tail;
+
+		if (entry->log_tail && entry->log_tail->prev) {
+			entry->log_tail->prev->next = NULL;
+
+			entry->log_tail = entry->log_tail->prev;
+
+			D_FREE(log_to_del);
+			entry->num_log_entries--;
+		}
+	}
+
+	D_MUTEX_UNLOCK(&entry->log_mutex);
+	return log_entry;
+}
+
+
+static struct rpt_log_entry* __get_next_log_entry(struct crt_rpc_priv *rpc_priv)
+{
+	struct rpt_entry	*entry;
+	struct rpt_log_entry	*log_entry;
+
+	entry = __get_rpt_entry(rpc_priv);
+
+	if (!entry)
+		entry = __create_rpt_entry(rpc_priv);
+
+	if (!entry)
+		return NULL;
+
+	log_entry = __create_log_entry(entry);
+
+	return log_entry;
+}
+
+void RPT_INIT(void)
+{
+	rpt_head = NULL;
+	rpt_tail = NULL;
+	rpt_num_entries = 0;
+}
+
+void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
+{
+	struct rpt_entry *entry;
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	entry = __get_rpt_entry(rpc_priv);
+	if (!entry) {
+		D_ERROR("entry for rpc_priv=%p not found\n", rpc_priv);
+		return;
+	}
+
+	D_MUTEX_LOCK(&entry->log_mutex);
+	log_entry = entry->log_head;
+
+
+	while (log_entry) {
+		union rpt_data *rpt_msg;
+		char *pr_op;
+
+		char msg[256];
+		char timestamp[256];
+
+		unsigned long long delta;
+
+
+		rpt_msg = &log_entry->rpt_msg;
+
+		delta = (log_entry->tv.tv_sec - entry->tv_start.tv_sec) * 1000000 +
+			(log_entry->tv.tv_usec - entry->tv_start.tv_usec);
+
+		sprintf(timestamp, "[ %.5f ][ %p ]", delta * 1.0 / 1000000.0, rpc_priv);
+
+		switch (log_entry->op) {
+		case RPT_OP_ALLOC:
+			pr_op = "ALLOCATION";
+			sprintf(msg, "OPC=0x%x forward=%d size=%d",
+				rpt_msg->_alloc.opc,
+				rpt_msg->_alloc.forward,
+				rpt_msg->_alloc.size);
+			break;
+		case RPT_OP_ADDREF:
+			pr_op = "ADDREF";
+			sprintf(msg, "refcount=%d (%s:%d)",
+				rpt_msg->_ref.ref_count,
+#if RPT_INCLUDE_STRINGS
+				rpt_msg->_ref.func_name,
+#else
+				"<<...removed...>>",
+#endif
+				rpt_msg->_ref.line);
+			break;
+		case RPT_OP_DECREF:
+			sprintf(msg, "refcount=%d (%s:%d)",
+				rpt_msg->_ref.ref_count,
+#if RPT_INCLUDE_STRINGS
+				rpt_msg->_ref.func_name,
+#else
+				"<<...removed...>>",
+#endif
+				rpt_msg->_ref.line);
+			pr_op = "DECREF";
+			break;
+		case RPT_OP_FREE:
+			pr_op = "FREE";
+			msg[0] = '\0';
+			break;
+		case RPT_OP_COMPLETED:
+			pr_op = "COMPLETED";
+			sprintf(msg, "rc=%d (%s)", rpt_msg->_completed.rc,
+				d_errstr(rpt_msg->_completed.rc));
+			break;
+		case RPT_OP_SEND:
+			pr_op = "SEND";
+			sprintf(msg, "hg_rc=%d destination: rank=%d tag=%d",
+				rpt_msg->_send.hg_rc,
+				rpt_msg->_send.rank,
+				rpt_msg->_send.tag);
+			break;
+		default:
+			pr_op = "UNKNOWN";
+			break;
+		}
+
+		D_ERROR("%s %s %s\n", timestamp, pr_op, msg);
+
+		log_entry = log_entry->next;
+	}
+
+	if (entry->num_log_entries == RPT_MAX_LOG_ENTRIES)
+		D_ERROR("...truncated. limit=%d...\n", RPT_MAX_LOG_ENTRIES);
+	D_ERROR("----------------------\n");
+	D_MUTEX_UNLOCK(&entry->log_mutex);
+}
+
+void RPT_ALLOC(struct crt_rpc_priv *rpc_priv, bool forward, int size, int opc)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_ALLOC;
+	log_entry->rpt_msg._alloc.forward = forward;
+	log_entry->rpt_msg._alloc.size = size;
+	log_entry->rpt_msg._alloc.opc = opc;
+}
+
+void RPT_SEND(struct crt_rpc_priv *rpc_priv, int rank, int tag, int hg_rc)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_SEND;
+	log_entry->rpt_msg._send.rank = rank;
+	log_entry->rpt_msg._send.tag= tag;
+	log_entry->rpt_msg._send.hg_rc = hg_rc;
+}
+
+void RPT_ADDREF(struct crt_rpc_priv *rpc_priv, int count, const char *func_name, int line)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_ADDREF;
+#if RPT_INCLUDE_STRINGS
+	strncpy(log_entry->rpt_msg._ref.func_name, func_name, RPT_STRING_SIZE_MAX-1);
+#endif
+	log_entry->rpt_msg._ref.line = line;
+	log_entry->rpt_msg._ref.ref_count = count;
+}
+
+void RTP_COMPLETED(struct crt_rpc_priv *rpc_priv, int rc)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_COMPLETED;
+	log_entry->rpt_msg._completed.rc = rc;
+}
+
+void RPT_DECREF(struct crt_rpc_priv *rpc_priv, int count, const char *func_name, int line)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_DECREF;
+#if RPT_INCLUDE_STRINGS
+	strncpy(log_entry->rpt_msg._ref.func_name, func_name, RPT_STRING_SIZE_MAX-1);
+#endif
+	log_entry->rpt_msg._ref.line = line;
+	log_entry->rpt_msg._ref.ref_count = count;
+}
+
+void RPT_FREE(struct crt_rpc_priv *rpc_priv)
+{
+	struct rpt_log_entry *log_entry;
+
+#if RPT_CLIENT_ONLY
+	if (crt_is_service())
+		return;
+#endif
+	log_entry = __get_next_log_entry(rpc_priv);
+
+	log_entry->op = RPT_OP_FREE;
+}
+
 /* the common completion callback for sending RPC request */
 static hg_return_t
 crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
@@ -1285,7 +1718,11 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_rpc_lock(rpc_priv);
 
 	rpc_pub = &rpc_priv->crp_pub;
+
+	RPT_DUMP(rpc_priv);
 	if (crt_rpc_completed(rpc_priv)) {
+		RPT_DUMP(rpc_priv);
+
 		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return rc;
@@ -1364,6 +1801,7 @@ out:
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
 			  DP_RC(crt_cbinfo.cci_rc));
 
+		RTP_COMPLETED(rpc_priv, rc);
 		rpc_priv->crp_complete_cb(&crt_cbinfo);
 	}
 
@@ -1388,11 +1826,16 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
+
+	RPT_SEND(rpc_priv, rpc_priv->crp_pub.cr_ep.ep_rank,
+		 rpc_priv->crp_pub.cr_ep.ep_tag, hg_ret);
+
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv,
 			  "HG_Forward failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 	} else {
+
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "sent to rank %d uri: %s\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
