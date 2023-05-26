@@ -145,10 +145,8 @@ class SlurmSetup():
         # Copy the munge key from the control node to the non-control nodes
         non_control = self.nodes.difference(self.control)
         self.log.debug('Copying the munge key to %s', non_control)
-        command = command_as_user(
-            get_clush_command(
-                non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}"),
-            self.root)
+        command = get_clush_command(
+            non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
         result = run_remote(self.log, self.control, command)
         if not result.passed:
             raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
