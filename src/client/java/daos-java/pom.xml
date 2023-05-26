@@ -392,8 +392,8 @@
 
   <profiles>
     <profile>
-	    <id>java-11</id>
-	    <activation>
+      <id>java-11</id>
+      <activation>
         <jdk>11</jdk>
       </activation>
       <build>
