@@ -8,7 +8,6 @@ import yaml
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from general_utils import pcmd
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -49,7 +48,7 @@ class ConfigGenerateRun(TestWithServers):
         # path needs to be set in that case.
         ext_md_path = ""
         if use_tmpfs_scm:
-            ext_md_path = os.path.join(self.test_dir, 'control_metadata')
+            ext_md_path = self.test_dir
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
@@ -88,8 +87,3 @@ class ConfigGenerateRun(TestWithServers):
         # would cause an error, so start it here.
         self.log.info("Restarting agents")
         self.start_agent_managers(force=agent_force)
-
-        # Remove the control plane metadata directory as contents need to be removed by a
-        # privileged user.
-        if ext_md_path != "":
-            pcmd(server_host, "sudo rm -fr {}".format(ext_md_path), True)
