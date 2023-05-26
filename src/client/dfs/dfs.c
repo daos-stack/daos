@@ -1867,7 +1867,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 
 	/** Add root object */
 	entry.oid = roots.cr_oids[1];
-	entry.mode = S_IFDIR | 0700; /* TODO: Should this use umask? */
+	entry.mode = S_IFDIR | 0755;
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		D_GOTO(err_super, rc = errno);
