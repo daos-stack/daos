@@ -325,6 +325,9 @@ def sanitize_results(results):
 
     Args:
         results (Results): the test results to sanitize
+
+    Returns:
+        Results: sanitized test results
     """
     for test in results.tests:
         if not test.status or test.status == TestResult.FAIL:
@@ -333,6 +336,7 @@ def sanitize_results(results):
                 test.fail_class = 'Missing fail class'
             if not test.fail_reason:
                 test.fail_reason = 'Missing fail reason'
+    return results
 
 
 def create_xml(job, results):
