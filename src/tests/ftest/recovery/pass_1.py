@@ -17,18 +17,104 @@ class Pass1Test(TestWithServers):
     :avocado: recursive
     """
 
+    def test_run_checker(self, inconsistency=None, policies=None):
+        """Run DAOS checker with kinds of options.
+
+        1. Enable check mode.
+        2. Run checker under dry-run mode.
+        3. Set repair policy as interaction.
+        4. Run checker under auto mode.
+        5. Reset repair policy as default.
+        6. Run checker under regular mode, that will repair the inconsistency.
+        7. Disable check mode.
+
+        Jira ID: DAOS-13047
+        """
+        errors = []
+
+        dmg_command = self.get_dmg_command()
+        # 1. Enable check mode.
+        dmg_command.check_enable()
+
+        # 2.1 Start checker with "dry-run" option.
+        # that will detect the inconsistency but not really fix it.
+        dmg_command.check_start(dry_run=True)
+
+        # 2.2 Query the checker.
+        query_msg = ""
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                query_msg = check_query_out["response"]["reports"][0]["msg"]
+                break
+            time.sleep(5)
+
+        # 2.3 Verify that the checker detected the inconsistency.
+        if inconsistency not in query_msg:
+            errors.append(
+                "Checker didn't detect the {} (1)! msg = {}".format(inconsistency, query_msg))
+            dmg_command.check_disable()
+            return errors
+
+        # 3. Set the repair policy to interaction.
+        dmg_command.check_set_policy(all_interactive=True)
+
+        # 4.1 start checker with "auto" option,
+        # that will detect the inconsistency but skip interaction.
+        dmg_command.check_start(auto="on")
+
+        # 4.2. Query the checker.
+        query_msg = ""
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                query_msg = check_query_out["response"]["reports"][0]["msg"]
+                break
+            time.sleep(5)
+
+        # 4.3 Verify that the checker detected the inconsistency.
+        if inconsistency not in query_msg:
+            errors.append(
+                "Checker didn't detect the {} (2)! msg = {}".format(inconsistency, query_msg))
+            dmg_command.check_disable()
+            return errors
+
+        # 5. Reset the repair policy to default.
+        dmg_command.check_set_policy(reset_defaults=True)
+
+        # 6.1 Start check with auto=off,
+        # that will find the dangling pool and remove it.
+        dmg_command.check_start(auto="off", policies=policies)
+
+        # 6.2 Query the checker.
+        query_msg = ""
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                query_msg = check_query_out["response"]["reports"][0]["msg"]
+                break
+            time.sleep(5)
+
+        # 6.3 Verify that the checker detected the dangling pool.
+        if inconsistency not in query_msg:
+            errors.append(
+                "Checker didn't detect the {} (3)! msg = {}".format(inconsistency, query_msg))
+
+        # 7. Disable check mode.
+        dmg_command.check_disable()
+
+        return errors
+
     def test_dangling_pool(self):
         """Test dangling pool.
 
         1. Create a pool.
-        2. Remove the pool from the pool service (PS) on engine by calling:
+        2. Remove the pool from the pool shards on engine by calling:
         dmg faults pool-svc <pool> CIC_POOL_NONEXIST_ON_ENGINE
         3. Show dangling pool entry by calling:
         dmg pool list --no-query
-        4. Enable and start the checker.
-        5. Query the checker and verify the message regarding dangling pool.
-        6. Disable the checker.
-        7. Verify that the dangling pool was removed. Call dmg pool list and it should
+        4. Run DAOS checker under kinds of mode.
+        5. Verify that the dangling pool was removed. Call dmg pool list and it should
         return an empty list.
 
         Jira ID: DAOS-11711
@@ -41,7 +127,7 @@ class Pass1Test(TestWithServers):
         # 1. Create a pool.
         self.pool = self.get_pool(connect=False)
 
-        # 2. Remove the pool from the pool service (PS) on engine.
+        # 2. Remove the pool shards on engine.
         dmg_command = self.get_dmg_command()
         dmg_command.faults_pool_svc(
             pool=self.pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
@@ -49,33 +135,13 @@ class Pass1Test(TestWithServers):
         # 3. Show dangling pool entry.
         pools = dmg_command.get_pool_list_labels(no_query=True)
         if self.pool.identifier not in pools:
-            self.fail("Dangling pool not found after removing pool from PS!")
+            self.fail("Dangling pool was not found!")
 
-        # 4. Enable and start the checker.
-        dmg_command.check_enable()
-        # Calling dmg check start will automatically fix the issue with the default
-        # option, which is to remove the dangling pool in this failure type.
-        dmg_command.check_start()
-
-        # 5. Query the checker.
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
-                break
-            time.sleep(5)
-
-        # Verify that the checker detected dangling pool.
         errors = []
-        if "dangling pool" not in query_msg:
-            errors.append(
-                "Checker didn't detect dangling pool! msg = {}".format(query_msg))
+        # 4. Run DAOS checker under kinds of mode.
+        errors = self.test_run_checker(inconsistency="dangling pool")
 
-        # 6. Call dmg check disable.
-        dmg_command.check_disable()
-
-        # 7. Verify that the dangling pool was removed.
+        # 5. Verify that the dangling pool was removed.
         pools = dmg_command.get_pool_list_labels()
         if pools:
             errors.append(f"Dangling pool was not removed! {pools}")
@@ -86,16 +152,14 @@ class Pass1Test(TestWithServers):
         report_errors(test=self, errors=errors)
 
     def run_checker_on_orphan_pool(self, policies=None):
-        """Run step 1 to 6 of the orphan pool tests.
+        """Run step 1 to 4 of the orphan pool tests.
 
         1. Create a pool.
         2. Remove the PS entry on management service (MS) by calling:
         dmg faults mgmt-svc pool <pool> CIC_POOL_NONEXIST_ON_MS
         3. At this point, MS doesn't recognize any pool, but it exists on engine (orphan
         pool). Call dmg pool list and verify that it doesn't return any pool.
-        4. Enable and start the checker. Use policies for trust MS test.
-        5. Query the checker and verify the message regarding orphan pool.
-        6. Disable the checker.
+        4. Run DAOS checker under kinds of mode.
 
         Args:
             policies (str): Policies used during dmg check start. Defaults to None.
@@ -118,30 +182,10 @@ class Pass1Test(TestWithServers):
             msg = f"MS recognized a pool after injecting CIC_POOL_NONEXIST_ON_MS! {pools}"
             self.fail(msg)
 
-        # 4. Enable and start the checker.
-        dmg_command.check_enable()
-        # Calling dmg check start will automatically fix the issue with the default
-        # option, which is to recreate the MS pool entry. We can specify policy to let the
-        # checker trust MS and remove the pool.
-        dmg_command.check_start(policies=policies)
-
-        # 5. Query the checker.
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
-                break
-            time.sleep(5)
-
-        # Verify that the checker detected orphan pool.
         errors = []
-        if "orphan pool" not in query_msg:
-            errors.append(
-                "Checker didn't detect orphan pool! msg = {}".format(query_msg))
-
-        # 6. Call dmg check disable.
-        dmg_command.check_disable()
+        # 4. Run DAOS checker under kinds of mode.
+        errors = self.test_run_checker(
+            inconsistency="orphan pool", policies=policies)
 
         return errors
 
@@ -165,19 +209,8 @@ class Pass1Test(TestWithServers):
 
         return errors
 
-    def test_orphan_pool_trus_ps(self):
+    def test_orphan_pool_trust_ps(self):
         """Test orphan pool with trust PS (default option).
-
-        1. Create a pool.
-        2. Remove the PS entry on management service (MS) by calling:
-        dmg faults mgmt-svc pool <pool> CIC_POOL_NONEXIST_ON_MS
-        3. At this point, MS doesn't recognize any pool, but it exists on engine (orphan
-        pool). Call dmg pool list and verify that it doesn't return any pool.
-        4. Enable and start the checker.
-        5. Query the checker and verify the message regarding orphan pool.
-        6. Disable the checker.
-        7. Verify that the orphan pool was reconstructed. Call dmg pool list and it
-        should return the pool created at step 1.
 
         Jira ID: DAOS-11712
 
@@ -187,10 +220,10 @@ class Pass1Test(TestWithServers):
         :avocado: tags=Pass1Test,test_orphan_pool_trust_ps
         """
         errors = []
-        # Run step 1 to 6.
+        # 4. Run DAOS checker under kinds of mode.
         errors = self.run_checker_on_orphan_pool()
 
-        # 7. Verify that the orphan pool was reconstructed.
+        # Verify that the orphan pool was reconstructed.
         dmg_command = self.get_dmg_command()
         pools = dmg_command.get_pool_list_labels()
         if self.pool.identifier not in pools:
@@ -198,20 +231,8 @@ class Pass1Test(TestWithServers):
 
         report_errors(test=self, errors=errors)
 
-    def test_orphan_pool_trus_ms(self):
+    def test_orphan_pool_trust_ms(self):
         """Test orphan pool with trust MS.
-
-        1. Create a pool.
-        2. Remove the PS entry on management service (MS) by calling:
-        dmg faults mgmt-svc pool <pool> CIC_POOL_NONEXIST_ON_MS
-        3. At this point, MS doesn't recognize any pool, but it exists on engine (orphan
-        pool). Call dmg pool list and verify that it doesn't return any pool.
-        4. Enable and start the checker with POOL_NONEXIST_ON_MS:CIA_TRUST_MS.
-        5. Query the checker and verify the message regarding orphan pool.
-        6. Disable the checker.
-        7. Verify that the orphan pool was removed. Call dmg pool list and it should
-        return empty.
-        8. Verify that the pool directory is removed from the mount point.
 
         Jira ID: DAOS-11712
 
@@ -221,17 +242,16 @@ class Pass1Test(TestWithServers):
         :avocado: tags=Pass1Test,test_orphan_pool_trust_ms
         """
         errors = []
-        # Run step 1 to 6 with the policies to trust MS during dmg check start.
         errors = self.run_checker_on_orphan_pool(
             policies="POOL_NONEXIST_ON_MS:CIA_TRUST_MS")
 
-        # 7. Verify that the orphan pool was removed.
+        # Verify that the orphan pool was destroyed.
         dmg_command = self.get_dmg_command()
         pools = dmg_command.get_pool_list_labels()
         if pools:
-            errors.append(f"Orphan pool was not removed! Pools = {pools}")
+            errors.append(f"Orphan pool was not destroyed! Pools = {pools}")
 
-        # 8. Verify that the pool directory is removed from the mount point.
+        # Verify that the pool directory is removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
         # Don't try to destroy the pool during tearDown.
@@ -242,16 +262,13 @@ class Pass1Test(TestWithServers):
     def test_lost_majority_ps_replicas(self):
         """Test lost the majority of PS replicas.
 
-        1. Create a pool with --nsvc=3. Rank 0, 1, and 2 will be service replicas.
+        1. Create a pool with --nsvc=3. Rank 0, 1, and 2 will be pool service replicas.
         2. Stop servers.
         3. Remove /mnt/daos/<pool_uuid>/rdb-pool from rank 0 and 2.
         4. Start servers.
-        5. Enable and start the checker. It should retrieve the rdb-pool on any of the two
-        ranks (except rank 1, which already has it).
-        6. Query the checker and verify the message
-        7. Disable the checker.
-        8. Try creating a container. The pool can be started, so it should succeed.
-        9. Show that rdb-pool are recovered. i.e., at least three out of four ranks
+        5. Run DAOS checker under kinds of mode.
+        6. Try creating a container. The pool can be started now, so create should succeed.
+        7. Show that rdb-pool are recovered. i.e., at least three out of four ranks
         should have rdb-pool.
 
         Jira ID: DAOS-12029
@@ -279,30 +296,12 @@ class Pass1Test(TestWithServers):
         # 4. Start servers.
         dmg_command.system_start()
 
-        # 5. Enable and start the checker.
-        dmg_command.check_enable()
-        # Calling dmg check start will automatically fix the issue with the default
-        # option, which is to retrieve the rdb-pool on any of the two ranks.
-        dmg_command.check_start()
-
-        # 6. Query the checker and verify the message
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
-                break
-            time.sleep(5)
-
         errors = []
-        if "corrupted pool without quorum" not in query_msg:
-            errors.append(
-                "Checker didn't detect orphan pool! msg = {}".format(query_msg))
+        # 5. Run DAOS checker under kinds of mode.
+        errors = self.test_run_checker(
+            inconsistency="corrupted pool without quorum")
 
-        # 7. Disable the checker.
-        dmg_command.check_disable()
-
-        # 8. Try creating a container. It should succeed.
+        # 6. Try creating a container. It should succeed.
         cont_create_success = False
         for _ in range(5):
             time.sleep(5)
@@ -318,7 +317,7 @@ class Pass1Test(TestWithServers):
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
 
-        # 9. Show that rdb-pool are recovered. i.e., at least three out of four ranks
+        # 7. Show that rdb-pool are recovered. i.e., at least three out of four ranks
         # should have rdb-pool.
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
@@ -336,18 +335,16 @@ class Pass1Test(TestWithServers):
         report_errors(test=self, errors=errors)
 
     def test_lost_all_rdb(self):
-        """Remove rdb-pool from all mount point from all nodes. Now the pool can’t be
+        """Remove rdb-pool from all mount point from all nodes. Now the pool cannot be
         recovered, so checker should remove it from both MS and engine.
 
         1. Create a pool.
         2. Stop servers.
         3. Remove /mnt/daos0/<pool_uuid>/rdb-pool from all ranks.
         4. Start servers.
-        5. Enable and start the checker. It should remove pool from MS and engine.
-        6. Query the checker and verify the message.
-        7. Disable the checker.
-        8. Check that the pool does not appear with dmg pool list.
-        9. Verify that the pool directory was removed from the mount point.
+        5. Run DAOS checker under kinds of mode.
+        6. Check that the pool does not appear with dmg pool list.
+        7. Verify that the pool directory was removed from the mount point.
 
         Jira ID: DAOS-12067
 
@@ -377,36 +374,17 @@ class Pass1Test(TestWithServers):
         # 4. Start servers.
         dmg_command.system_start()
 
-        # 5. Enable and start the checker.
-        dmg_command.check_enable()
-        # Calling dmg check start will automatically fix the issue with the default
-        # option, which is to discard the pool.
-        dmg_command.check_start()
-
-        # 6. Query the checker and verify the message.
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                if check_query_out["response"]["reports"]:
-                    query_msg = check_query_out["response"]["reports"][0]["msg"]
-                    break
-            time.sleep(5)
-
         errors = []
-        if "corrupted pool without quorum" not in query_msg:
-            errors.append(
-                "Checker didn't detect orphan pool! msg = {}".format(query_msg))
+        # 5. Run DAOS checker under kinds of mode.
+        errors = self.test_run_checker(
+            inconsistency="corrupted pool without quorum")
 
-        # 7. Disable the checker.
-        dmg_command.check_disable()
-
-        # 8. Check that the pool does not appear with dmg pool list.
+        # 6. Check that the pool does not appear with dmg pool list.
         pools = dmg_command.get_pool_list_all()
         if pools:
             errors.append(f"Pool still exists after running checker! {pools}")
 
-        # 9. Verify that the pool directory was removed from the mount point.
+        # 7. Verify that the pool directory was removed from the mount point.
         errors = self.verify_pool_dir_removed(errors=errors)
 
         # Don't try to destroy the pool during tearDown.
