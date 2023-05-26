@@ -33,7 +33,7 @@ from general_utils import \
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
-from run_utils import stop_processes
+from run_utils import stop_processes, run_remote, command_as_user
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -1319,9 +1319,10 @@ class TestWithServers(TestWithoutServers):
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        results = pcmd(all_hosts, "rm -fr {}".format(self.test_dir))
-        if 0 not in results or len(results) > 1:
-            errors.append("Error removing temporary test files")
+        result = run_remote(
+            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        if not result.passed:
+            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors
 
     def dump_engines_stacks(self, message):
