@@ -18,7 +18,6 @@
 #include <pthread.h>
 
 #include <gurt/common.h>
-#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
@@ -1214,13 +1213,14 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
  */
 
 static pthread_mutex_t hook_env_lock = PTHREAD_MUTEX_INITIALIZER;
-static char *(*real_getenv)(const char *) = NULL;
-static int (*real_putenv)(char *) = NULL;
-static int (*real_setenv)(const char *, const char *, int) = NULL;
-static int (*real_unsetenv)(const char *) = NULL;
-static int (*real_clearenv)(void) = NULL;
+static char *(*real_getenv)(const char *);
+static int (*real_putenv)(char *);
+static int (*real_setenv)(const char *, const char *, int);
+static int (*real_unsetenv)(const char *);
+static int (*real_clearenv)(void);
 
-char *getenv(const char *name) {
+char *getenv(const char *name)
+{
 	char *p;
 
 	D_MUTEX_LOCK(&hook_env_lock);
@@ -1231,12 +1231,12 @@ char *getenv(const char *name) {
 
 	p = real_getenv(name);
 	D_MUTEX_UNLOCK(&hook_env_lock);
-	fprintf(stderr, "getenv(%s) has been hooked\n", name);
 
 	return p;
 }
 
-int putenv(char *name) {
+int putenv(char *name)
+{
 	int rc;
 
 	D_MUTEX_LOCK(&hook_env_lock);
@@ -1247,12 +1247,12 @@ int putenv(char *name) {
 
 	rc = real_putenv(name);
 	D_MUTEX_UNLOCK(&hook_env_lock);
-	fprintf(stderr, "unsetenv(%s) has been hooked\n", name);
 
 	return rc;
 }
 
-int setenv(const char *name, const char *value, int overwrite) {
+int setenv(const char *name, const char *value, int overwrite)
+{
 	int rc;
 
 	D_MUTEX_LOCK(&hook_env_lock);
@@ -1263,12 +1263,12 @@ int setenv(const char *name, const char *value, int overwrite) {
 
 	rc = real_setenv(name, value, overwrite);
 	D_MUTEX_UNLOCK(&hook_env_lock);
-	fprintf(stderr, "setenv(%s, %s, %d) has been hooked\n", name, value, overwrite);
 
 	return rc;
 }
 
-int unsetenv(const char *name) {
+int unsetenv(const char *name)
+{
 	int rc;
 
 	D_MUTEX_LOCK(&hook_env_lock);
@@ -1279,12 +1279,12 @@ int unsetenv(const char *name) {
 
 	rc = real_unsetenv(name);
 	D_MUTEX_UNLOCK(&hook_env_lock);
-	fprintf(stderr, "unsetenv(%s) has been hooked\n", name);
 
 	return rc;
 }
 
-int clearenv(void) {
+int clearenv(void)
+{
 	int rc;
 
 	D_MUTEX_LOCK(&hook_env_lock);
@@ -1295,7 +1295,6 @@ int clearenv(void) {
 
 	rc = real_clearenv();
 	D_MUTEX_UNLOCK(&hook_env_lock);
-	fprintf(stderr, "clearenv() has been hooked\n");
 
 	return rc;
 }
