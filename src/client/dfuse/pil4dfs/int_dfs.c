@@ -890,7 +890,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* daos_init() is expensive to call. We call it only when necessary. */
 			rc = daos_init();
 			if (rc) {
-				D_ERROR("daos_init failed: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("daos_init failed: " DF_RC "\n", DP_RC(rc));
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -2515,7 +2515,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to query pool: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to query pool: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err, rc = daos_der2errno(rc));
 	}
 
@@ -2844,7 +2844,7 @@ out_readdir:
 	} else if (len_str < 0) {
 		D_ERROR("failed to allocate memory for full_path[].\n");
 		mydir->num_ents = 0;
-		errno = ENOMEM;
+		errno           = ENOMEM;
 		return NULL;
 	}
 	mydir->ents[mydir->num_ents].d_ino = FAKE_ST_INO(full_path);
@@ -5366,14 +5366,14 @@ out_err_ht:
 out_err_mt:
 	rc2 = daos_cont_close(dfs_list[idx].coh, NULL);
 	if (rc2 != 0)
-		D_ERROR("error in daos_cont_close(%s): " DF_RC "\n",
-			dfs_list[idx].fs_root, DP_RC(rc2));
+		D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[idx].fs_root,
+			DP_RC(rc2));
 
 out_err_cont_open:
 	rc2 = daos_pool_disconnect(dfs_list[idx].poh, NULL);
 	if (rc2 != 0)
-		D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
-			dfs_list[idx].fs_root, DP_RC(rc2));
+		D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n", dfs_list[idx].fs_root,
+			DP_RC(rc2));
 
 	return rc;
 }
@@ -5403,14 +5403,13 @@ finalize_dfs(void)
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
 		if (rc != 0) {
-			D_ERROR("error in dfs_umount(%s): %s\n",
-				dfs_list[i].fs_root, strerror(rc));
+			D_ERROR("error in dfs_umount(%s): %s\n", dfs_list[i].fs_root, strerror(rc));
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
-			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n",
-				dfs_list[i].fs_root, DP_RC(rc));
+			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[i].fs_root,
+				DP_RC(rc));
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
