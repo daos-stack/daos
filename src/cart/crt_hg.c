@@ -1312,7 +1312,12 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		break;
 	default:
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
-		rc = crt_hgret_2_der(hg_cbinfo->ret);
+
+		if (hg_cbinfo->ret)
+			rc = -DER_HG_SEND_FAILED;
+		else
+			rc = DER_SUCCESS;
+
 		hg_ret = hg_cbinfo->ret;
 		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: " DF_HG_RC ".\n",
 			  DP_HG_RC(hg_cbinfo->ret));
@@ -1352,11 +1357,6 @@ out:
 
 		crt_cbinfo.cci_rpc = rpc_pub;
 		crt_cbinfo.cci_arg = rpc_priv->crp_arg;
-
-		if (rc != DER_SUCCESS)
-			crt_cbinfo.cci_rc = -DER_HG_SEND_FAILED;
-		else
-			crt_cbinfo.cci_rc = DER_SUCCESS;
 
 		if (crt_cbinfo.cci_rc != 0)
 			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
