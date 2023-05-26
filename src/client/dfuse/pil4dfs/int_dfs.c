@@ -2801,6 +2801,8 @@ closedir(DIR *dirp)
 	if (!hook_enabled)
 		return next_closedir(dirp);
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* Check whether dirp is NULL or not since application provides dirp */
 	if (!dirp) {
 		if (bLog)
@@ -2808,6 +2810,7 @@ closedir(DIR *dirp)
 		errno = EINVAL;
 		return (-1);
 	}
+	_Pragma("GCC diagnostic pop")
 
 	fd = dirfd(dirp);
 	if (fd >= FD_DIR_BASE) {
@@ -4439,11 +4442,14 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	if (!hook_enabled)
 		return next_utimensat(dirfd, path, times, flags);
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* check path is NULL or not. path could be NULL since it is from application */
 	if (path == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
+	_Pragma("GCC diagnostic pop")
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
