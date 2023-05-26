@@ -182,6 +182,12 @@ vos_sched_seq(void)
 static inline uint64_t
 vos_sched_seq(void)
 {
+	struct dss_thread_local_storage *dss = dss_tls_get();
+
+	D_ASSERT(dss != NULL);
+	if (!(dss->dtls_tag & DAOS_TGT_TAG))
+		return 0;
+
 	return sched_cur_seq();
 }
 #endif

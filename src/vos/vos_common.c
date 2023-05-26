@@ -839,10 +839,7 @@ vos_self_fini_locked(void)
 		self_mode.self_xs_ctxt = NULL;
 	}
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		vos_db_fini();
-	else
-		lmm_db_fini();
+	vos_db_fini();
 	vos_self_nvme_fini();
 
 	if (self_mode.self_tls) {
@@ -906,23 +903,14 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		goto failed;
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		/* LMM DB path same as VOS DB path argument in self init case */
-		if (use_sys_db)
-			rc = lmm_db_init(db_path);
-		else
-			rc = lmm_db_init_ex(db_path, "self_db", true, true);
-		db = lmm_db_get();
-	} else {
-		if (use_sys_db)
-			rc = vos_db_init(db_path);
-		else
-			rc = vos_db_init_ex(db_path, "self_db", true, true);
-		db = vos_db_get();
-	}
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
 		goto failed;
 
+	db = vos_db_get();
 	rc = smd_init(db);
 	if (rc)
 		goto failed;

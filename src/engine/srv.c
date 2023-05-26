@@ -1196,13 +1196,7 @@ enum {
 static void
 dss_sys_db_fini(void)
 {
-
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		vos_db_fini();
-		return;
-	}
-
-	lmm_db_fini();
+	vos_db_fini();
 }
 
 /**
@@ -1254,18 +1248,11 @@ static int
 dss_sys_db_init()
 {
 	int	 rc;
-	char	*lmm_db_path = NULL;
+	char	*sys_db_path = NULL;
 	char	*nvme_conf_path = NULL;
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = vos_db_init(dss_storage_path);
-		if (rc)
-			return rc;
-		rc = smd_init(vos_db_get());
-		if (rc)
-			vos_db_fini();
-		return rc;
-	}
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto db_init;
 
 	if (dss_nvme_conf == NULL) {
 		D_ERROR("nvme conf path not set\n");
@@ -1275,21 +1262,21 @@ dss_sys_db_init()
 	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
 	if (nvme_conf_path == NULL)
 		return -DER_NOMEM;
-	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
 	D_FREE(nvme_conf_path);
-	if (lmm_db_path == NULL) {
+	if (sys_db_path == NULL)
 		return -DER_NOMEM;
-	}
 
-	rc = lmm_db_init(lmm_db_path);
+db_init:
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
 	if (rc)
 		goto out;
 
-	rc = smd_init(lmm_db_get());
+	rc = smd_init(vos_db_get());
 	if (rc)
-		lmm_db_fini();
+		vos_db_fini();
 out:
-	D_FREE(lmm_db_path);
+	D_FREE(sys_db_path);
 
 	return rc;
 }

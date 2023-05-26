@@ -573,6 +573,11 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB)
+		store.store_type = DAOS_MD_PMEM;
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
@@ -648,6 +653,11 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB)
+		store.store_type = DAOS_MD_PMEM;
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_open;
@@ -949,7 +959,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
-	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_id = umempobj_backend_type2class_id(ph->up_store.store_type);
 	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
@@ -1207,8 +1217,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = UMEM_CLASS_PMEM;
 	uma->uma_pool = ph;
+	uma->uma_id = umempobj_backend_type2class_id(uma->uma_pool->up_store.store_type);
 
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
