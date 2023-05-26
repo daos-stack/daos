@@ -114,9 +114,9 @@ Other consistency issues are handled differently between the two consistency mod
 
 ## Unified NameSpace (UNS)
 
-Many clients support links to other containers as a layer on top of dfs, where a directory in a
+Many clients support links to other containers as a layer on top of DFS, where a directory in a
 POSIX container is interpreted as a instruction to access the root of a separate container, in much
-the same way as symbolic links work on Unix.  dfs does not handle this directly, however the same
+the same way as symbolic links work on Unix.  DFS does not handle this directly, however the same
 mechanism for accessing paths in this way is common across several higher layers.
 
 ## DFuse (DAOS FUSE)
@@ -191,8 +191,8 @@ It is anticipated that in this mode DFuse will be configured to start at boot ti
 general purpose filesystem providing access to multiple users.
 
 Multi-user mode requires the fuse package to be reconfigured as it's disabled by default.  In order
-to run the setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf` which
-will need to be done as root and takes effect for all users on that node.
+to run the setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf`,
+which will need to be done as root and takes effect for all users on that node.
 
 ### Launching
 
