@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -219,8 +219,10 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
+Requires: libcapstone-devel
 %else
 Requires: Lmod
+Requires: capstone-devel
 %endif
 
 %description client-tests
@@ -550,8 +552,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed May 25 2023 Ryon Jensen <ryon.jensen@intel.com> 2.3.107-5
+* Wed May 25 2023 Ryon Jensen <ryon.jensen@intel.com> 2.3.107-6
 - Removed unnecessary test files
+
+* Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
+- Add libcapstone-devel to deps of client-tests package
 
 * Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
 - Add libcapstone as a new prerequisite package
