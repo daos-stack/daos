@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1004,7 +1004,7 @@ test_get_iod_csum_allocation_size(void **state)
 			 csum_size * 2, /* akey csum (1 for each iod_csum */
 			 daos_csummer_allocation_size(csummer, &iods[0], 2,
 						      true, NULL));
-	
+
 	/* Clean up */
 	daos_csummer_destroy(&csummer);
 }
