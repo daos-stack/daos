@@ -12,7 +12,13 @@
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <pthread.h>
+
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
@@ -1191,4 +1197,105 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
 	pointers->p_buf[pointers->p_len] = pointer;
 	pointers->p_len++;
 	return 0;
+}
+
+/**
+ * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
+ * functions from glibc.
+ * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
+ * so it will be the earliest to be loaded and will ensure the hook to be
+ * installed as early as possible and could prevent usage of LD_PRELOAD.
+ * The idea is to strengthen all the environment APIs by using a common lock.
+ *
+ * XXX this will address the main lack of multi-thread protection in the Glibc
+ * APIs but do not handle all unsafe use-cases (like the change/removal of an
+ * env var when its value address has already been grabbed by a previous
+ * getenv(), ...).
+ */
+
+static pthread_mutex_t hook_env_lock = PTHREAD_MUTEX_INITIALIZER;
+static char *(*real_getenv)(const char *) = NULL;
+static int (*real_putenv)(char *) = NULL;
+static int (*real_setenv)(const char *, const char *, int) = NULL;
+static int (*real_unsetenv)(const char *) = NULL;
+static int (*real_clearenv)(void) = NULL;
+
+char *getenv(const char *name) {
+	char *p;
+
+	D_MUTEX_LOCK(&hook_env_lock);
+	if (real_getenv == NULL) {
+		real_getenv = (char * (*)(const char *))dlsym(RTLD_NEXT, "getenv");
+		D_ASSERT(real_getenv != NULL);
+	}
+
+	p = real_getenv(name);
+	D_MUTEX_UNLOCK(&hook_env_lock);
+	fprintf(stderr, "getenv(%s) has been hooked\n", name);
+
+	return p;
+}
+
+int putenv(char *name) {
+	int rc;
+
+	D_MUTEX_LOCK(&hook_env_lock);
+	if (real_putenv == NULL) {
+		real_putenv = (int (*)(char *))dlsym(RTLD_NEXT, "putenv");
+		D_ASSERT(real_putenv != NULL);
+	}
+
+	rc = real_putenv(name);
+	D_MUTEX_UNLOCK(&hook_env_lock);
+	fprintf(stderr, "unsetenv(%s) has been hooked\n", name);
+
+	return rc;
+}
+
+int setenv(const char *name, const char *value, int overwrite) {
+	int rc;
+
+	D_MUTEX_LOCK(&hook_env_lock);
+	if (real_setenv == NULL) {
+		real_setenv = (int (*)(const char *, const char *, int))dlsym(RTLD_NEXT, "setenv");
+		D_ASSERT(real_setenv != NULL);
+	}
+
+	rc = real_setenv(name, value, overwrite);
+	D_MUTEX_UNLOCK(&hook_env_lock);
+	fprintf(stderr, "setenv(%s, %s, %d) has been hooked\n", name, value, overwrite);
+
+	return rc;
+}
+
+int unsetenv(const char *name) {
+	int rc;
+
+	D_MUTEX_LOCK(&hook_env_lock);
+	if (real_unsetenv == NULL) {
+		real_unsetenv = (int (*)(const char *))dlsym(RTLD_NEXT, "unsetenv");
+		D_ASSERT(real_unsetenv != NULL);
+	}
+
+	rc = real_unsetenv(name);
+	D_MUTEX_UNLOCK(&hook_env_lock);
+	fprintf(stderr, "unsetenv(%s) has been hooked\n", name);
+
+	return rc;
+}
+
+int clearenv(void) {
+	int rc;
+
+	D_MUTEX_LOCK(&hook_env_lock);
+	if (real_clearenv == NULL) {
+		real_clearenv = (int (*)(void))dlsym(RTLD_NEXT, "clearenv");
+		D_ASSERT(real_clearenv != NULL);
+	}
+
+	rc = real_clearenv();
+	D_MUTEX_UNLOCK(&hook_env_lock);
+	fprintf(stderr, "clearenv() has been hooked\n");
+
+	return rc;
 }
