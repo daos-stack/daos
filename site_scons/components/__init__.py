@@ -384,5 +384,15 @@ def define_components(reqs):
                 headers=['protobuf-c/protobuf-c.h'],
                 package='protobuf-c-devel')
 
+    os_name = dist[0].split()[0]
+    if os_name == 'Ubuntu':
+        capstone_pkg = 'libcapstone-dev'
+    elif os_name == 'openSUSE':
+        capstone_pkg = 'libcapstone-devel'
+    else:
+        capstone_pkg = 'capstone-devel'
+    reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
+                package=capstone_pkg)
+
 
 __all__ = ['define_components']
