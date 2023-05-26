@@ -57,11 +57,13 @@ message JoinResp {
 
 message LeaderQueryReq {
 	string sys = 1;		// System name.
+	string hosts = 2;	// hostset to query
 }
 
 message LeaderQueryResp {
 	string currentLeader = 1;
 	repeated string replicas = 2;
+	repeated string replicasOff = 3;
 }
 
 message GetAttachInfoReq {

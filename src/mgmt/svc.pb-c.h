@@ -180,10 +180,14 @@ struct  _Mgmt__LeaderQueryReq
    * System name.
    */
   char *sys;
+  /*
+   * hostset to query
+   */
+  char *hosts;
 };
 #define MGMT__LEADER_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__LeaderQueryResp
@@ -192,10 +196,12 @@ struct  _Mgmt__LeaderQueryResp
   char *currentleader;
   size_t n_replicas;
   char **replicas;
+  size_t n_replicasoff;
+  char **replicasoff;
 };
 #define MGMT__LEADER_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 struct  _Mgmt__GetAttachInfoReq

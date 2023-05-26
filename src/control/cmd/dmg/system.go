@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,6 +46,7 @@ type leaderQueryCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
+	ReplicasOff bool `short:"N" long:"off-replica" description:"Show not available Replicas only"`
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
@@ -69,8 +70,12 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, err)
 	}
 
-	cmd.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
-		strings.Join(resp.Replicas, ", "))
+	if cmd.ReplicasOff {
+		cmd.Infof("Replicas Off: %s\n", strings.Join(resp.ReplicasOff, ", "))
+	} else {
+		cmd.Infof("Current Leader: %s\n   Replica Set: %s\n  Replicas Off: %s\n", resp.Leader,
+			strings.Join(resp.Replicas, ", "), strings.Join(resp.ReplicasOff, ", "))
+	}
 
 	return nil
 }

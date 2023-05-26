@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -614,13 +614,15 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
+	sysRequest
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader   string `json:"CurrentLeader"`
-	Replicas []string
+	Leader      string `json:"CurrentLeader"`
+	Replicas    []string
+	ReplicasOff []string
 }
 
 // LeaderQuery requests the current Management Service leader and the set of
@@ -638,7 +640,24 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 	}
 
 	resp := new(LeaderQueryResp)
-	return resp, convertMSResponse(ur, resp)
+	if err = convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, "converting MS to LeaderQuery resp")
+	}
+
+	req.SetHostList(resp.Replicas)
+	ur, err = rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			resp.ReplicasOff = append(resp.ReplicasOff, hostResp.Addr)
+			continue
+		}
+	}
+
+	return resp, nil
 }
 
 // RanksReq contains the parameters for a system ranks request.
