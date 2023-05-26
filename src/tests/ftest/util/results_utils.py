@@ -62,7 +62,8 @@ class TestResult():
         self.time_start = -1
         self.time_end = -1
         self.time_elapsed = -1
-        self.status = None
+        # To avoid a render exception if the status is never set, default to FAIL
+        self.status = self.FAIL
         self.fail_class = None
         self.fail_reason = None
         self.fail_count = 0
