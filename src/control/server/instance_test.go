@@ -44,7 +44,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
-	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
 }
 
@@ -250,7 +250,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 
 func (mi *MockInstance) Run(_ context.Context, _ bool) {}
 
-func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank) error {
+func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
 	return mi.cfg.SetupRankErr
 }
 
@@ -278,7 +278,7 @@ func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.Member
 
 func (mi *MockInstance) requestStart(_ context.Context) {}
 
-func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController) ([]storage.NvmeController, error) {
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController, _ uint64, _ uint64) ([]storage.NvmeController, error) {
 	return []storage.NvmeController{}, nil
 }
 

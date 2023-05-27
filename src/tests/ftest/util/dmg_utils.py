@@ -90,14 +90,14 @@ class DmgCommand(DmgCommandBase):
         #         "HostFabric": {
         #           "Interfaces": [
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib1",
         #               "NumaNode": 1,
         #               "Priority": 0,
         #               "NetDevClass": 32
         #             },
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib0",
         #               "NumaNode": 0,
         #               "Priority": 1,
@@ -119,7 +119,6 @@ class DmgCommand(DmgCommandBase):
         #             }
         #           ],
         #           "Providers": [
-        #             "ofi+psm2",
         #             "ofi+verbs;ofi_rxm",
         #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
@@ -423,9 +422,16 @@ class DmgCommand(DmgCommandBase):
         #                   "rank": 0,
         #                   "total_bytes": 398358216704,
         #                   "avail_bytes": 0,
+        #                   "usable_bytes": 0
         #                   "cluster_size": 1073741824,
+        #                   "meta_size": 0,
+        #                   "meta_wal_size": 0,
+        #                   "rdb_size": 134217728,
+        #                   "rdb_wal_size": 268435456,
         #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0"
+        #                   "tr_addr": "0000:05:00.0",
+        #                   "roles": "data",
+        #                   "has_sys_xs": false
         #                 }
         #               ]
         #             }
@@ -445,6 +451,7 @@ class DmgCommand(DmgCommandBase):
         #                 "path": "/mnt/daos",
         #                 "total_bytes": 17179869184,
         #                 "avail_bytes": 0
+        #                 "usable_bytes": 0
         #               }
         #             }
         #           ],
@@ -812,12 +819,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1118,7 +1125,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False,
+                        control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
@@ -1130,9 +1138,11 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+                i.e. "ofi+tcp;ofi_rxm" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
+            control_metadata_path (str): External directory provided to store control
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1142,7 +1152,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=control_metadata_path)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

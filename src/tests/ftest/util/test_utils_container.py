@@ -238,19 +238,17 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None, daos_command=None, label_generator=None):
+    def __init__(self, pool, daos_command=None, label_generator=None):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             daos_command (DaosCommand, optional): daos command object. Defaults to None
             label_generator (LabelGenerator, optional): used to generate container label by adding
                 a number to self.label. Defaults to None
 
         """
-        super().__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*")
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -943,6 +941,26 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
+    def get_prop_values(self, *args, **kwargs):
+        """Get container property values by calling daos container get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
+
+        Returns:
+            list: a list of values matching the or specified property names.
+
+        """
+        values = []
+        self.log.info("Getting property values for container %s", self)
+        data = self.get_prop(*args, **kwargs)
+        if data['status'] != 0:
+            return values
+        for entry in data['response']:
+            values.append(entry['value'])
+        return values
+
     def verify_prop(self, expected_props):
         """Verify daos container get-prop returns expected values.
 
@@ -960,12 +978,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return True
 
     @fail_on(CommandFailure)
-    def list_snaps(self, *args, **kwargs):
+    def list_snaps(self):
         """Get container properties by calling daos container list-snaps.
-
-        Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_list_snaps
-            kwargs (dict, optional): named arguments to DaosCommand.container_list_snaps
 
         Returns:
             str: JSON output of daos container list-snaps
@@ -974,8 +988,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             CommandFailure: Raised from the daos command call
 
         """
-        return self.daos.container_list_snaps(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
 
     @fail_on(CommandFailure)
     def query(self, *args, **kwargs):

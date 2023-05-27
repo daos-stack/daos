@@ -256,9 +256,17 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 	 * verifying on client - simulates corruption over network
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH)) {
+		struct dcs_iod_csums	*tmp_iod_csum;
+
 		/** Got csum successfully from server. Now poison it!! */
-		args->iods_csums[0].ic_data->cs_csum[0]++;
-		D_ERROR("Corrupting csum on fetch\n");
+		for (i = 0; i < args->iod_nr; i++) {
+			tmp_iod_csum = &args->iods_csums[i];
+			if (tmp_iod_csum->ic_data != NULL &&
+			    tmp_iod_csum->ic_data->cs_csum != NULL) {
+				tmp_iod_csum->ic_data->cs_csum[0]++;
+				break;
+			}
+		}
 	}
 
 	singv_los = dc_rw_cb_singv_lo_get(args->iods, args->sgls, args->iod_nr, args->reasb_req);

@@ -178,7 +178,7 @@ class ServerFillUp(IorTestBase):
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
-        self.ior_local_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
 
         # Created new container or use the existing container for reading

@@ -4,6 +4,7 @@ usr/bin/evt_ctl
 usr/bin/pl_bench
 usr/bin/rdbt
 usr/bin/smd_ut
+usr/bin/bio_ut
 usr/bin/vea_ut
 usr/bin/vos_tests
 usr/bin/vea_stress
