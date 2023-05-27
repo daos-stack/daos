@@ -589,6 +589,7 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 
 	itp_to_vos_path(&itp, &vtp);
 	rc = dv_update(ctx->dc_poh, &vtp, &iov);
+	
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to update path: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
