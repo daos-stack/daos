@@ -23,7 +23,7 @@ uint32_t dtx_agg_thd_cnt_lo;
 uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
 uint32_t dtx_batched_ult_max;
-
+uint32_t dtx_exec_step_length;
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
@@ -1905,14 +1905,6 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 	}
 }
 
-/*
- * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
- * then we may have to split the dispatch process to multiple steps; otherwise, the
- * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
- * too much resource as to server maybe out of memory.
- */
-#define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
-
 struct dtx_ult_arg {
 	dtx_sub_func_t			 func;
 	void				*func_arg;
@@ -2063,8 +2055,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_drop_cond = 0;
 	dlh->dlh_forward_idx = 0;
 
-	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
-		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
+	if (sub_cnt > dtx_exec_step_length) {
+		dlh->dlh_forward_cnt = dtx_exec_step_length;
 		dlh->dlh_agg_cb = NULL;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
@@ -2122,7 +2114,7 @@ exec:
 	sub_cnt -= dlh->dlh_forward_cnt;
 	if (sub_cnt > 0) {
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
-		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
+		if (sub_cnt <= dtx_exec_step_length) {
 			dlh->dlh_forward_cnt = sub_cnt;
 			if (likely(dlh->dlh_delay_sub_cnt == 0))
 				dlh->dlh_agg_cb = agg_cb;

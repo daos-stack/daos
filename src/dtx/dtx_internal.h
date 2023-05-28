@@ -90,6 +90,18 @@ extern uint32_t dtx_agg_thd_cnt_up;
  */
 extern uint32_t dtx_agg_thd_cnt_lo;
 
+#define DTX_EXEC_STEP_LENGTH_MAX 1024
+#define DTX_EXEC_STEP_LENGTH_MIN 64
+#define DTX_EXEC_STEP_LENGTH_DEF 256
+
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory.
+ */
+extern uint32_t dtx_exec_step_length;
+
 /* The age unit is second. */
 #define DTX_AGG_THD_AGE_MAX	1830
 #define DTX_AGG_THD_AGE_MIN	210
