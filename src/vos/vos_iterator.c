@@ -731,7 +731,7 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
 	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
-		if (iter->it_parent != NULL || rc != 0 || iter->it_type <= VOS_ITER_OBJ ||
+		if (iter->it_parent == NULL || rc != 0 || iter->it_type <= VOS_ITER_OBJ ||
 		    anchors->ia_probe_level != 0)
 			return rc;
 		validate_rc = vos_iter_validate_internal(iter->it_parent);
