@@ -380,6 +380,17 @@ dtx_init(void)
 {
 	int	rc;
 
+	dtx_exec_step_length = DTX_EXEC_STEP_LENGTH_DEF;
+	d_getenv_int("DTX_EXEC_STEP_LENGTH", &dtx_exec_step_length);
+	if (dtx_exec_step_length < DTX_EXEC_STEP_LENGTH_MIN ||
+	    dtx_exec_step_length > DTX_EXEC_STEP_LENGTH_MAX) {
+		D_WARN("Invalid DTX exec step length %u, the valid range is [%u, %u], "
+		       "use the default value %u\n",
+		       dtx_exec_step_length, DTX_EXEC_STEP_LENGTH_MIN, DTX_EXEC_STEP_LENGTH_MAX,
+		       DTX_EXEC_STEP_LENGTH_DEF);
+		dtx_exec_step_length = DTX_EXEC_STEP_LENGTH_DEF;
+	}
+
 	dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
 	if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN || dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
