@@ -22,6 +22,7 @@ class MdtestEasy(PerformanceTestBase):
         :avocado: tags=performance,performance_mdtest,performance_mdtest_easy,performance_dfs
         :avocado: tags=MdtestEasy,test_performance_mdtest_easy_dfs_s1
         """
+        # Only for test.
         self.run_performance_mdtest(namespace="/run/mdtest_dfs_s1/*")
 
     def test_performance_mdtest_easy_dfs_ec_16p2g1(self):
