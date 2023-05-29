@@ -2551,11 +2551,22 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_INFO("Setting self rank to %d\n", rank);
+	D_INFO("Setting self rank to %u and minimum group version to %u\n", rank,
+	       group_version_min);
 
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");
 		return 0;
+	}
+
+	if (rank == CRT_NO_RANK) {
+		D_ERROR("Self rank should not be %u\n", CRT_NO_RANK);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (group_version_min == 0) {
+		D_ERROR("Minimum group version should not be zero\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
