@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 2
-timeout: 360  # Additional 180s timeout for each rank stopped
+timeout: 400  # Additional 180s timeout for each rank stopped
 timeouts:
   test_performance_mdtest_easy_dfs_rp_2gx_stop: 480
   test_performance_mdtest_easy_dfs_ec_16p2gx_stop: 480
@@ -16,7 +16,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: DEBUG,MEM=ERR
       bdev_class: nvme
       bdev_list: ["aaaa:aa:aa.a"]
       scm_class: dcpm
@@ -28,7 +28,7 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: DEBUG,MEM=ERR
       bdev_class: nvme
       bdev_list: ["bbbb:bb:bb.b"]
       scm_class: dcpm
