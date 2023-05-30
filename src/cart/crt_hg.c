@@ -1719,7 +1719,6 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	rpc_pub = &rpc_priv->crp_pub;
 
-	RPT_DUMP(rpc_priv);
 	if (crt_rpc_completed(rpc_priv)) {
 		RPT_DUMP(rpc_priv);
 
