@@ -429,9 +429,9 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 	for idx, ei := range instances {
 		eReq := *req // local per-engine copy
 
-		if ei.Index() != idx {
-			svc.Errorf("engine instance index %d doesn't match engine.Index %d", idx,
-				ei.Index())
+		if int(ei.Index()) != idx {
+			svc.log.Errorf("engine instance index %d doesn't match engine.Index %d",
+				idx, ei.Index())
 		}
 
 		if !ei.IsReady() {

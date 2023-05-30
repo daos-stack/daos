@@ -45,22 +45,25 @@ func (resp *SetEngineLogMasksResp) addHostResponse(hr *HostResponse) error {
 	}
 
 	hasErr := false
-	for _, strErr := range pbResp.GetErrors() {
+	hostErrStrs := pbResp.GetErrors()
+
+	for _, strErr := range hostErrStrs {
 		if strErr != "" {
 			hasErr = true
+			break
 		}
 	}
 
 	if hasErr {
-		msgEngines := make([]string, len(pbResp.GetErrors()))
-		for i, se := range pbResp.GetErrors() {
+		msgEngines := make([]string, len(hostErrStrs))
+		for i, se := range hostErrStrs {
 			if se == "" {
 				se = "updated"
 			}
-			msgEngines = append(msgEngines, fmt.Sprintf("engine-%d: %s", i, se))
+			msgEngines[i] = fmt.Sprintf("engine-%d: %s", i, se)
 		}
-
 		errEngines := errors.New(strings.Join(msgEngines, ", "))
+
 		if err := resp.addHostError(hr.Addr, errEngines); err != nil {
 			return errors.Wrap(err, "adding host error to response")
 		}
@@ -136,8 +139,15 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 	}
 
 	resp := new(SetEngineLogMasksResp)
-	for _, hostResp := range ur.Responses {
-		if err := resp.addHostResponse(hostResp); err != nil {
+	for _, hr := range ur.Responses {
+		if hr.Error != nil {
+			if err := resp.addHostError(hr.Addr, hr.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := resp.addHostResponse(hr); err != nil {
 			return nil, err
 		}
 	}

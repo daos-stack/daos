@@ -10,12 +10,86 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func Test_setLogMasksReqToPB(t *testing.T) {
+	masks := "ERR,mgmt=DEBUG"
+	badMasks := "ERR,mgmt=DEBUGX"
+	streams := "EPC,MEM"
+	badStreams := "EPC,MEMX"
+	subsystems := "hg,lm"
+	badSubsystems := "hg,lmx"
+
+	for name, tc := range map[string]struct {
+		inReq     *SetEngineLogMasksReq
+		expOutReq *ctlpb.SetLogMasksReq
+		expErr    error
+	}{
+		"reset all fields": {
+			inReq: &SetEngineLogMasksReq{},
+			expOutReq: &ctlpb.SetLogMasksReq{
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+		},
+		"set all fields": {
+			inReq: &SetEngineLogMasksReq{
+				Masks:      &masks,
+				Streams:    &streams,
+				Subsystems: &subsystems,
+			},
+			expOutReq: &ctlpb.SetLogMasksReq{
+				Masks:      masks,
+				Streams:    streams,
+				Subsystems: subsystems,
+			},
+		},
+		"bad masks": {
+			inReq: &SetEngineLogMasksReq{
+				Masks:      &badMasks,
+				Streams:    &streams,
+				Subsystems: &subsystems,
+			},
+			expErr: errors.New("unknown log level"),
+		},
+		"bad streams": {
+			inReq: &SetEngineLogMasksReq{
+				Masks:      &masks,
+				Streams:    &badStreams,
+				Subsystems: &subsystems,
+			},
+			expErr: errors.New("unknown name"),
+		},
+		"bad subsystems": {
+			inReq: &SetEngineLogMasksReq{
+				Masks:      &masks,
+				Streams:    &streams,
+				Subsystems: &badSubsystems,
+			},
+			expErr: errors.New("unknown name"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOutReq, gotErr := setLogMasksReqToPB(tc.inReq)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			opt := cmpopts.IgnoreUnexported(ctlpb.SetLogMasksReq{})
+			if diff := cmp.Diff(tc.expOutReq, gotOutReq, opt); diff != "" {
+				t.Fatalf("unexpected pb request (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func Test_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -85,8 +159,11 @@ func Test_SetEngineLogMasks(t *testing.T) {
 				},
 			},
 			expResponse: &SetEngineLogMasksResp{
-				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
-				HostStorage:    nil,
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host1",
+					Error: "failed",
+				}),
+				HostStorage: nil,
 			},
 		},
 		"single host; single engine; success": {
@@ -108,6 +185,28 @@ func Test_SetEngineLogMasks(t *testing.T) {
 				HostStorage: MockHostStorageMap(t, &MockStorageScan{
 					Hosts:    "host1",
 					HostScan: new(ctlpb.StorageScanResp),
+				}),
+			},
+		},
+		"single host; single engine; failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"not ready",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host1",
+					Error: "engine-0: not ready",
 				}),
 			},
 		},
@@ -151,176 +250,172 @@ func Test_SetEngineLogMasks(t *testing.T) {
 				},
 			},
 			expResponse: &SetEngineLogMasksResp{
-				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "engine-0: updated, engine-1: not ready"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host1",
+					Error: "engine-0: updated, engine-1: not ready",
+				}),
 			},
 		},
-		//		"nvme scan error": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: nvmeFailed,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "nvme scan failed"}),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1", noNvme}),
-		//			},
-		//		},
-		//		"scm and nvme scan error": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: bothFailed,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t,
-		//					&MockHostError{"host1", "nvme scan failed"},
-		//					&MockHostError{"host1", "scm scan failed"},
-		//				),
-		//				HostStorage: MockHostStorageMap(t, &MockSetLogMasks{"host1", noStorage}),
-		//			},
-		//		},
-		//		"no storage": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: noStorage,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1", noStorage}),
-		//			},
-		//		},
-		//		"single host": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: standard,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1", standard}),
-		//			},
-		//		},
-		//		"single host with namespaces": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: pmemA,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1", pmemA}),
-		//			},
-		//		},
-		//		"single host with space utilization": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: withSpaceUsage,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1", withSpaceUsage}),
-		//			},
-		//		},
-		//		"two hosts same scan": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: standard,
-		//						},
-		//						{
-		//							Addr: "host2",
-		//							// Use a newly-generated mock here to verify that
-		//							// non-hashable fields are ignored.
-		//							Message: MockServerScanResp(t, "standard"),
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage:    MockHostStorageMap(t, &MockSetLogMasks{"host1,host2", standard}),
-		//			},
-		//		},
-		//		"two hosts different scans": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: noNvme,
-		//						},
-		//						{
-		//							Addr:    "host2",
-		//							Message: noScm,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage: MockHostStorageMap(t,
-		//					&MockSetLogMasks{"host1", noNvme},
-		//					&MockSetLogMasks{"host2", noScm},
-		//				),
-		//			},
-		//		},
-		//		"two hosts different nvme capacity": {
-		//			mic: &MockInvokerConfig{
-		//				UnaryResponse: &UnaryResponse{
-		//					Responses: []*HostResponse{
-		//						{
-		//							Addr:    "host1",
-		//							Message: nvmeBasicA,
-		//						},
-		//						{
-		//							Addr:    "host2",
-		//							Message: nvmeBasicB,
-		//						},
-		//					},
-		//				},
-		//			},
-		//			expResponse: &SetLogMasksResp{
-		//				HostErrorsResp: MockHostErrorsResp(t),
-		//				HostStorage: MockHostStorageMap(t,
-		//					&MockSetLogMasks{"host1", nvmeBasicA},
-		//					&MockSetLogMasks{"host2", nvmeBasicB},
-		//				),
-		//			},
-		//		},
+		"single host; multiple engines; all engines fail": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"drpc fails",
+									"not ready",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host1",
+					Error: "engine-0: drpc fails, engine-1: not ready",
+				}),
+			},
+		},
+		"multiple hosts; multiple engines; all engines fail": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"drpc fails",
+									"not ready",
+								},
+							},
+						},
+						{
+							Addr: "host2",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"drpc fails",
+									"not ready",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host[1-2]",
+					Error: "engine-0: drpc fails, engine-1: not ready",
+				}),
+			},
+		},
+		"multiple hosts; multiple engines; most engines fail": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"",
+									"not ready",
+								},
+							},
+						},
+						{
+							Addr: "host2",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"drpc fails",
+									"not ready",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{
+						Hosts: "host1",
+						Error: "engine-0: updated, engine-1: not ready",
+					},
+					&MockHostError{
+						Hosts: "host2",
+						Error: "engine-0: drpc fails, engine-1: not ready",
+					}),
+			},
+		},
+		"multiple hosts; multiple engines; most engines succeed": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"drpc fails",
+									"",
+								},
+							},
+						},
+						{
+							Addr: "host2",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"",
+									"",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host1",
+					Error: "engine-0: drpc fails, engine-1: updated",
+				}),
+				HostStorage: MockHostStorageMap(t, &MockStorageScan{
+					Hosts:    "host2",
+					HostScan: new(ctlpb.StorageScanResp),
+				}),
+			},
+		},
+		"multiple hosts; multiple engines; all engines succeed": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"",
+									"",
+								},
+							},
+						},
+						{
+							Addr: "host2",
+							Message: &ctlpb.SetLogMasksResp{
+								Errors: []string{
+									"",
+									"",
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &SetEngineLogMasksResp{
+				HostStorage: MockHostStorageMap(t, &MockStorageScan{
+					Hosts:    "host[1-2]",
+					HostScan: new(ctlpb.StorageScanResp),
+				}),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
