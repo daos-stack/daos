@@ -1316,7 +1316,7 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 	else if (task->dst_rebuild_op == RB_OP_DRAIN)
 		*opc = RB_OP_REINT;
 	else
-		D_ASSERTF(0, "invalid opc %u\n", task->dst_rebuild_op);
+		*opc = RB_OP_NONE;
 
 	return false;
 }
@@ -1374,6 +1374,12 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			if (rc1 != 0)
 				D_ERROR("rebuild_status_completed_update, "DF_UUID" failed:"
 					DF_RC"\n", DP_UUID(task->dst_pool_uuid), DP_RC(rc1));
+
+			D_DEBUG(DB_REBUILD, DF_UUID" retry with %u\n",
+				DP_UUID(task->dst_pool_uuid), retry_opc);
+			if (retry_opc == RB_OP_NONE)
+				return rc1;
+
 			/* NB: Still need schedule the job to restore the pool map */
 		}
 

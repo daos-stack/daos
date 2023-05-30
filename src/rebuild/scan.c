@@ -736,12 +736,17 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				 &md, rpt, myrank, oid, param, acts);
 		break;
 	case RB_OP_UPGRADE:
-		rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
-				     arg->co_props.dcp_obj_version, &md, tgts, shards);
-		/* Then only upgrade the layout version */
-		if (rc == 0)
-			rc = vos_obj_layout_upgrade(param->ip_hdl, oid, rpt->rt_new_layout_ver);
-
+		if (oid.id_layout_ver < rpt->rt_new_layout_ver) {
+			rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
+					     arg->co_props.dcp_obj_version, &md, tgts, shards);
+			/* Then only upgrade the layout version */
+			if (rc == 0) {
+				rc = vos_obj_layout_upgrade(param->ip_hdl, oid,
+							    rpt->rt_new_layout_ver);
+				if (rc == 0)
+					*acts |= VOS_ITER_CB_DELETE;
+			}
+		}
 		break;
 	default:
 		D_ASSERT(0);
