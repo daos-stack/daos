@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,6 +93,7 @@ main(int argc, char **argv)
 			{"path", required_argument, NULL, 'p'},
 			{"delay", required_argument, NULL, 'D'},
 			{"meta", no_argument, NULL, 'M'},
+			{"meminfo", no_argument, NULL, 'm'},
 			{"type", no_argument, NULL, 'T'},
 			{"read", no_argument, NULL, 'r'},
 			{"reset", no_argument, NULL, 'e'},
@@ -100,7 +101,7 @@ main(int argc, char **argv)
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTrhe",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MmTrhe",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -136,6 +137,9 @@ main(int argc, char **argv)
 		case 'M':
 			show_meta = true;
 			break;
+		case 'm':
+			filter |= D_TM_MEMINFO;
+			break;
 		case 'T':
 			show_type = true;
 			break;
@@ -160,7 +164,7 @@ main(int argc, char **argv)
 		ops |= D_TM_ITER_READ;
 
 	if (filter == 0)
-		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
+		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
 			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
 
 	ctx = d_tm_open(srv_idx);

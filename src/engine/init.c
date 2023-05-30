@@ -687,7 +687,7 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
+	d_set_alloc_track_cb(dss_mem_total_alloc_track, dss_mem_total_free_track);
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,10 @@ struct lru_callbacks {
 	void	(*lru_on_init)(void *entry, uint32_t idx, void *arg);
 	/** Called on finalization of an entry */
 	void	(*lru_on_fini)(void *entry, uint32_t idx, void *arg);
+	/** Called on allocation of any LRU entries */
+	void	(*lru_on_alloc)(void *arg, daos_size_t size);
+	/** Called on free of any LRU entries */
+	void	(*lru_on_free)(void *arg, daos_size_t size);
 };
 
 struct lru_entry {
