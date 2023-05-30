@@ -4,6 +4,8 @@ provider: ofi+tcp;ofi_rxm
 disable_hugepages: true
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
+control_metadata:
+  path: /mnt/daos_control
 engines:
   -
     targets: 4
@@ -19,4 +21,3 @@ engines:
       -
         class: ram
         scm_mount: /mnt/daos
-        scm_size: 32

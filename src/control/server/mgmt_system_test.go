@@ -193,7 +193,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
-			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
+			sp := storage.NewProvider(log, 0, nil, nil, nil, nil, nil)
 			srv := newTestEngine(log, true, sp)
 
 			if err := harness.AddInstance(srv); err != nil {

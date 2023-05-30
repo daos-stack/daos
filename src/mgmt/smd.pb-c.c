@@ -1341,7 +1341,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[9] =
+static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[10] =
 {
   {
     "uuid",
@@ -1451,6 +1451,18 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[9] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "role_bits",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, role_bits),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__smd_device__field_indices_by_name[] = {
   6,   /* field[6] = avail_bytes */
@@ -1458,6 +1470,7 @@ static const unsigned ctl__smd_device__field_indices_by_name[] = {
   3,   /* field[3] = dev_state */
   4,   /* field[4] = led_state */
   8,   /* field[8] = rank */
+  9,   /* field[9] = role_bits */
   1,   /* field[1] = tgt_ids */
   5,   /* field[5] = total_bytes */
   2,   /* field[2] = tr_addr */
@@ -1466,7 +1479,7 @@ static const unsigned ctl__smd_device__field_indices_by_name[] = {
 static const ProtobufCIntRange ctl__smd_device__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 0, 10 }
 };
 const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
 {
@@ -1476,7 +1489,7 @@ const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
   "Ctl__SmdDevice",
   "ctl",
   sizeof(Ctl__SmdDevice),
-  9,
+  10,
   ctl__smd_device__field_descriptors,
   ctl__smd_device__field_indices_by_name,
   1,  ctl__smd_device__number_ranges,

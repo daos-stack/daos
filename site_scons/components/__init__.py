@@ -245,6 +245,8 @@ def define_common(reqs):
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
+    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
+
     reqs.define('event', libs=['event'], package='libevent-devel')
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
@@ -370,7 +372,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib'])
+                patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),

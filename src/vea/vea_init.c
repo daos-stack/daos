@@ -34,7 +34,7 @@ heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 	return nodea->ve_ext.vfe_blk_cnt > nodeb->ve_ext.vfe_blk_cnt;
 }
 
-struct d_binheap_ops heap_ops = {
+static struct d_binheap_ops heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= heap_node_cmp,

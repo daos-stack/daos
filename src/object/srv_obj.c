@@ -145,12 +145,11 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc == -DER_VOS_PARTIAL_UPDATE)
 				rc = -DER_NO_PERM;
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
-				 DLOG_DBG, DLOG_ERR,
-				 DF_UOID " %s end failed: "DF_RC"\n",
-				 DP_UOID(orwi->orw_oid),
-				 update ? "Update" : "Fetch", DP_RC(rc));
+				     rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				     rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				     rc == -DER_CHKPT_BUSY,
+				 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n",
+				 DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch", DP_RC(rc));
 			if (status == 0)
 				status = rc;
 		}
@@ -1089,7 +1088,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc);
+	bio_log_data_csum_err(bxc);
 }
 
 /**
@@ -1722,7 +1721,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		obj_log_csum_err();
 post:
 	time = daos_get_ntime();
-	rc = bio_iod_post(biod, rc);
+	rc = bio_iod_post_async(biod, rc);
 	bio_post_latency = daos_get_ntime() - time;
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
