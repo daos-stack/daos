@@ -8,8 +8,6 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"syscall"
 	"time"
 
@@ -424,18 +422,25 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New("nil request")
 	}
 
-	errs := []string{}
+	resp := new(ctlpb.SetLogMasksResp)
+	instances := svc.harness.Instances()
+	resp.Errors = make([]string, len(instances))
 
-	for idx, ei := range svc.harness.Instances() {
+	for idx, ei := range instances {
 		eReq := *req // local per-engine copy
 
+		if ei.Index() != idx {
+			svc.Errorf("engine instance index %d doesn't match engine.Index %d", idx,
+				ei.Index())
+		}
+
 		if !ei.IsReady() {
-			errs = append(errs, fmt.Sprintf("engine-%d: not ready", ei.Index()))
+			resp.Errors[idx] = "not ready"
 			continue
 		}
 
 		if err := updateSetLogMasksReq(svc.srvCfg.Engines[idx], &eReq); err != nil {
-			errs = append(errs, errors.Wrapf(err, "engine-%d", ei.Index()).Error())
+			resp.Errors[idx] = err.Error()
 			continue
 		}
 		svc.log.Debugf("setting engine %d log masks %q, streams %q and subsystems %q",
@@ -443,27 +448,20 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 
 		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, &eReq)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			resp.Errors[idx] = err.Error()
 			continue
 		}
 
 		engineResp := new(ctlpb.SetLogMasksResp)
 		if err = proto.Unmarshal(dresp.Body, engineResp); err != nil {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			resp.Errors[idx] = err.Error()
 			continue
 		}
 
 		if engineResp.Status != 0 {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(),
-				daos.Status(engineResp.Status)))
+			resp.Errors[idx] = daos.Status(engineResp.Status).Error()
 		}
 	}
-
-	if len(errs) > 0 {
-		return nil, errors.New(strings.Join(errs, ", "))
-	}
-
-	resp := new(ctlpb.SetLogMasksResp)
 
 	return resp, nil
 }

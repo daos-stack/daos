@@ -8,6 +8,8 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -30,14 +32,53 @@ type SetEngineLogMasksReq struct {
 // request.
 type SetEngineLogMasksResp struct {
 	HostErrorsResp
+	HostStorage HostStorageMap
 }
 
-// SetEngineLogMasks will send RPC to hostlist to request changes to log
-// level of all DAOS engines on each host in list.
-func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+// addHostResponse is responsible for validating the given HostResponse and adding it to the
+// SetEngineLogMaskResp. HostStorageSet will always be empty so the map will only ever have one
+// key for this response type.
+func (resp *SetEngineLogMasksResp) addHostResponse(hr *HostResponse) error {
+	pbResp, ok := hr.Message.(*ctlpb.SetLogMasksResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
+
+	hasErr := false
+	for _, strErr := range pbResp.GetErrors() {
+		if strErr != "" {
+			hasErr = true
+		}
+	}
+
+	if hasErr {
+		msgEngines := make([]string, len(pbResp.GetErrors()))
+		for i, se := range pbResp.GetErrors() {
+			if se == "" {
+				se = "updated"
+			}
+			msgEngines = append(msgEngines, fmt.Sprintf("engine-%d: %s", i, se))
+		}
+
+		errEngines := errors.New(strings.Join(msgEngines, ", "))
+		if err := resp.addHostError(hr.Addr, errEngines); err != nil {
+			return errors.Wrap(err, "adding host error to response")
+		}
+
+		return nil
+	}
+
+	if resp.HostStorage == nil {
+		resp.HostStorage = make(HostStorageMap)
+	}
+	if err := resp.HostStorage.Add(hr.Addr, new(HostStorage)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setLogMasksReqToPB(req *SetEngineLogMasksReq) (*ctlpb.SetLogMasksReq, error) {
 	pbReq := new(ctlpb.SetLogMasksReq)
 
 	if req.Masks == nil {
@@ -67,6 +108,21 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		pbReq.Subsystems = *req.Subsystems
 	}
 
+	return pbReq, nil
+}
+
+// SetEngineLogMasks will send RPC to hostlist to request changes to log
+// level of all DAOS engines on each host in list.
+func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	pbReq, err := setLogMasksReqToPB(req)
+	if err != nil {
+		return nil, err
+	}
+
 	pbReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, pbReq)
@@ -81,10 +137,8 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 
 	resp := new(SetEngineLogMasksResp)
 	for _, hostResp := range ur.Responses {
-		if hostResp.Error != nil {
-			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
-				return nil, err
-			}
+		if err := resp.addHostResponse(hostResp); err != nil {
+			return nil, err
 		}
 	}
 

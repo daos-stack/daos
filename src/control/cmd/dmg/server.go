@@ -65,8 +65,17 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 	}
 	if outErr.Len() > 0 {
 		cmd.Error(outErr.String())
-	} else {
-		cmd.Info("Engine log levels have been updated successfully.")
+	}
+
+	switch len(resp.HostStorage) {
+	case 0:
+	case 1:
+		for _, hss := range resp.HostStorage {
+			cmd.Infof("Engine log-masks updated successfully on the following hosts: %s",
+				hss.HostSet)
+		}
+	default:
+		return errors.New("unexpected number of keys in HostStorageMap")
 	}
 
 	return resp.Errors()
