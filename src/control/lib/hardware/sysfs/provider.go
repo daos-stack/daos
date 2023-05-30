@@ -396,7 +396,7 @@ func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
 
 	// Operational states as described in kernel docs:
 	// https://www.kernel.org/doc/html/latest/networking/operstates.html#tlv-ifla-operstate
-	state := hardware.NetDevStateUnknown
+	var state hardware.NetDevState
 	switch stateStr {
 	case "up":
 		state = hardware.NetDevStateReady

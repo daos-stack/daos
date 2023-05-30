@@ -48,11 +48,11 @@ func getCurrentUsername(t *testing.T) string {
 
 func TestDaosServer_prepareNVMe(t *testing.T) {
 	// bdev req parameters
-	testNrHugePages := 42
+	testNrHugepages := 42
 	// bdev mock commands
 	newPrepCmd := func() *prepareNVMeCmd {
 		pdc := &prepareNVMeCmd{
-			NrHugepages:  testNrHugePages,
+			NrHugepages:  testNrHugepages,
 			PCIBlockList: defaultMultiAddrList,
 		}
 		pdc.Args.PCIAllowList = defaultSingleAddrList
@@ -76,7 +76,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		"succeeds; user params": {
 			prepCmd: newPrepCmd(),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				EnableVMD:     true,
@@ -86,7 +86,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			prepCmd: newPrepCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
 			expPrepCall: &storage.BdevPrepareRequest{
 				TargetUser:    "bob",
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				PCIAllowList:  spaceSepMultiAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				EnableVMD:     true,
@@ -98,7 +98,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				PrepareErr: errors.New("backend prep setup failed"),
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				EnableVMD:     true,
@@ -117,7 +117,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			prepCmd:       newPrepCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    "root",
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
@@ -132,9 +132,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024),
+				WithNrHugepages(1024),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				EnableVMD:     true,
@@ -153,7 +153,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8))),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
 				EnableVMD: true,
@@ -172,10 +172,10 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8))),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 1024,
+				HugepageCount: 1024,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
@@ -205,10 +205,10 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 					}),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 1024,
+				HugepageCount: 1024,
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
@@ -222,7 +222,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.prepCmd == nil {
 				tc.prepCmd = &prepareNVMeCmd{}
@@ -236,7 +236,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			})
 
 			req := storage.BdevPrepareRequest{
-				HugePageCount: tc.prepCmd.NrHugepages,
+				HugepageCount: tc.prepCmd.NrHugepages,
 				TargetUser:    tc.prepCmd.TargetUser,
 				PCIAllowList:  tc.prepCmd.Args.PCIAllowList,
 				PCIBlockList:  tc.prepCmd.PCIBlockList,
@@ -357,7 +357,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024),
+				WithNrHugepages(1024),
 			expResetCall: &storage.BdevPrepareRequest{
 				PCIAllowList: defaultSingleAddrList,
 				PCIBlockList: spaceSepMultiAddrList,
@@ -378,7 +378,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8))),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expResetCall: &storage.BdevPrepareRequest{
 				EnableVMD: true,
@@ -398,7 +398,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8))),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expResetCall: &storage.BdevPrepareRequest{
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
@@ -431,7 +431,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 					}),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugePages(1024).
+				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expResetCall: &storage.BdevPrepareRequest{
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
@@ -448,7 +448,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.resetCmd == nil {
 				tc.resetCmd = &resetNVMeCmd{}
@@ -478,7 +478,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				t.Fatalf("unexpected number of prepare calls, want 1w got %d",
 					len(mbb.PrepareCalls))
 			}
-			if diff := cmp.Diff(storage.BdevPrepareRequest{CleanHugePagesOnly: true},
+			if diff := cmp.Diff(storage.BdevPrepareRequest{CleanHugepagesOnly: true},
 				mbb.PrepareCalls[0]); diff != "" {
 				t.Fatalf("unexpected clean hugepage calls (-want, +got):\n%s\n", diff)
 			}
@@ -592,7 +592,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanHugePagesOnly: true},
+				{CleanHugepagesOnly: true},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
@@ -629,7 +629,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 					EnableVMD:    true,
 					PCIAllowList: spaceSepMultiAddrList,
 				},
-				{CleanHugePagesOnly: true},
+				{CleanHugepagesOnly: true},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -659,7 +659,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			),
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanHugePagesOnly: true},
+				{CleanHugepagesOnly: true},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
@@ -696,7 +696,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msp := scm.NewMockProvider(log, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.scanCmd == nil {
 				tc.scanCmd = &scanNVMeCmd{}

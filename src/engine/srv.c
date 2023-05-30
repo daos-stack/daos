@@ -16,8 +16,10 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
+#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
 #include <daos_srv/bio.h>
@@ -341,7 +343,7 @@ dss_nvme_poll_ult(void *args)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct dss_xstream	*dx = dss_current_xstream();
 
-	D_ASSERT(dx->dx_main_xs);
+	D_ASSERT(dss_xstream_has_nvme(dx));
 	while (!dss_xstream_exiting(dx)) {
 		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
@@ -434,25 +436,6 @@ xs_id2type(unsigned int xs_id)
 		return DSS_XS_IOFW;
 	else
 		return DSS_XS_OFFLOAD;
-}
-
-/* Get target ID from xstream ID */
-static inline int
-xs_id2tgt(int xs_id)
-{
-	unsigned int helper_per_tgt;
-	unsigned int xs_type = xs_id2type(xs_id);
-
-	if (xs_type != DSS_XS_VOS && xs_type != DSS_XS_IOFW)
-		return -1;
-
-	if (dss_helper_pool)
-		return xs_id - dss_sys_xs_nr;
-
-	helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
-	D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 || helper_per_tgt == 2);
-
-	return (xs_id - dss_sys_xs_nr) / (helper_per_tgt + 1);
 }
 
 static inline bool
@@ -583,11 +566,13 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	if (dx->dx_main_xs) {
+	if (dss_xstream_has_nvme(dx)) {
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt,
+				      dmi->dmi_tgt_id < 0 ? BIO_SYS_TGT_ID : dmi->dmi_tgt_id,
+				      false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -669,8 +654,9 @@ dss_srv_handler(void *arg)
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
 	}
+
 nvme_fini:
-	if (dx->dx_main_xs)
+	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
@@ -804,7 +790,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	dx->dx_main_xs	= (xs_type == DSS_XS_VOS);
 	dx->dx_dsc_started = false;
 
-	dx->dx_tgt_id	= xs_id2tgt(xs_id);
+	dx->dx_tgt_id = dss_xs2tgt(xs_id);
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
@@ -1441,10 +1427,21 @@ enum {
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_SYS_DB,
-	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
 };
+
+static void
+dss_sys_db_fini(void)
+{
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		vos_db_fini();
+		return;
+	}
+
+	lmm_db_fini();
+}
 
 /**
  * Entry point to start up and shutdown the service
@@ -1465,11 +1462,8 @@ dss_srv_fini(bool force)
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
-	case XD_INIT_NVME:
-		bio_nvme_fini();
-		/* fall through */
 	case XD_INIT_SYS_DB:
-		vos_db_fini();
+		dss_sys_db_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
@@ -1492,6 +1486,50 @@ dss_srv_fini(bool force)
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
+}
+
+static int
+dss_sys_db_init()
+{
+	int	 rc;
+	char	*lmm_db_path = NULL;
+	char	*nvme_conf_path = NULL;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = vos_db_init(dss_storage_path);
+		if (rc)
+			return rc;
+		rc = smd_init(vos_db_get());
+		if (rc)
+			vos_db_fini();
+		return rc;
+	}
+
+	if (dss_nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_FREE(nvme_conf_path);
+	if (lmm_db_path == NULL) {
+		return -DER_NOMEM;
+	}
+
+	rc = lmm_db_init(lmm_db_path);
+	if (rc)
+		goto out;
+
+	rc = smd_init(lmm_db_get());
+	if (rc)
+		lmm_db_fini();
+out:
+	D_FREE(lmm_db_path);
+
+	return rc;
 }
 
 int
@@ -1551,21 +1589,13 @@ dss_srv_init(void)
 	}
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path);
+	rc = dss_sys_db_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize local DB: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
-			   dss_nvme_bypass_health_check);
-	if (rc != 0) {
-		D_ERROR("Failed to initialize nvme: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */
@@ -1792,4 +1822,16 @@ bool
 dss_has_enough_helper(void)
 {
 	return dss_tgt_offload_xs_nr > 0;
+}
+
+/**
+ * Miscellaneous routines
+ */
+void
+dss_bind_to_xstream_cpuset(int tgt_id)
+{
+	struct dss_xstream *dx;
+
+	dx = dss_get_xstream(DSS_MAIN_XS_ID(tgt_id));
+	(void)dss_xstream_set_affinity(dx);
 }

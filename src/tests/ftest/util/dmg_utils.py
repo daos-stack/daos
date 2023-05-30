@@ -461,11 +461,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self, masks=None, raise_exception=None):
+    def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
 
         Args:
             masks (str, optional): log masks to set. Defaults to None.
+            streams (str, optional): log debug streams to set. Defaults to None.
+            subsystems (str, optional): logging subsystems to enable. Defaults to None (interpreted
+                as enable all).
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
@@ -486,12 +489,9 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
 
-        kwargs = {
-            "masks": masks,
-        }
-
         return self._get_json_result(("server", "set-logmasks"),
-                                     raise_exception=raise_exception, **kwargs)
+                                     raise_exception=raise_exception, masks=masks, streams=streams,
+                                     subsystems=subsystems)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -812,12 +812,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1118,7 +1118,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False,
+                        control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
@@ -1133,6 +1134,8 @@ class DmgCommand(DmgCommandBase):
                 i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
+            control_metadata_path (str): External directory provided to store control
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1142,7 +1145,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=control_metadata_path)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

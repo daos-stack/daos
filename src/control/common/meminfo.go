@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package common
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -19,33 +20,35 @@ import (
 
 type GetMemInfoFn func() (*MemInfo, error)
 
-const (
-	// MinTargetHugePageSize is the minimum amount of hugepage space that
-	// can be requested for each target.
-	MinTargetHugePageSize = 1 << 30 // 1GiB
-	// ExtraHugePages is the number of extra hugepages to request beyond
-	// the minimum required, often one or two are not reported as available.
-	ExtraHugePages = 2
-)
-
 // MemInfo contains information about system hugepages.
 type MemInfo struct {
-	HugePagesTotal int `json:"hugepages_total"`
-	HugePagesFree  int `json:"hugepages_free"`
-	HugePagesRsvd  int `json:"hugepages_rsvd"`
-	HugePagesSurp  int `json:"hugepages_surp"`
-	HugePageSizeKb int `json:"hugepage_size_kb"`
-	MemTotal       int `json:"mem_total"`
-	MemFree        int `json:"mem_free"`
-	MemAvailable   int `json:"mem_available"`
+	HugepagesTotal  int `json:"hugepages_total" hash:"ignore"`
+	HugepagesFree   int `json:"hugepages_free" hash:"ignore"`
+	HugepagesRsvd   int `json:"hugepages_reserved" hash:"ignore"`
+	HugepagesSurp   int `json:"hugepages_surplus" hash:"ignore"`
+	HugepageSizeKiB int `json:"hugepage_size_kb"`
+	MemTotalKiB     int `json:"mem_total_kb"`
+	MemFreeKiB      int `json:"mem_free_kb" hash:"ignore"`
+	MemAvailableKiB int `json:"mem_available_kb" hash:"ignore"`
 }
 
-func (mi *MemInfo) HugePagesTotalMB() int {
-	return (mi.HugePagesTotal * mi.HugePageSizeKb) / 1024
+func (mi *MemInfo) Summary() string {
+	if mi == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
+		humanize.IBytes(uint64(mi.HugepageSizeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemTotalKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemFreeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)))
 }
 
-func (mi *MemInfo) HugePagesFreeMB() int {
-	return (mi.HugePagesFree * mi.HugePageSizeKb) / 1024
+func (mi *MemInfo) HugepagesTotalMB() int {
+	return (mi.HugepagesTotal * mi.HugepageSizeKiB) / 1024
+}
+
+func (mi *MemInfo) HugepagesFreeMB() int {
+	return (mi.HugepagesFree * mi.HugepageSizeKiB) / 1024
 }
 
 func parseInt(a string, i *int) {
@@ -69,13 +72,13 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 
 		switch keyVal[0] {
 		case "HugePages_Total":
-			parseInt(keyVal[1], &mi.HugePagesTotal)
+			parseInt(keyVal[1], &mi.HugepagesTotal)
 		case "HugePages_Free":
-			parseInt(keyVal[1], &mi.HugePagesFree)
+			parseInt(keyVal[1], &mi.HugepagesFree)
 		case "HugePages_Rsvd":
-			parseInt(keyVal[1], &mi.HugePagesRsvd)
+			parseInt(keyVal[1], &mi.HugepagesRsvd)
 		case "HugePages_Surp":
-			parseInt(keyVal[1], &mi.HugePagesSurp)
+			parseInt(keyVal[1], &mi.HugepagesSurp)
 		case "Hugepagesize", "MemTotal", "MemFree", "MemAvailable":
 			sf := strings.Fields(keyVal[1])
 			if len(sf) != 2 {
@@ -89,13 +92,13 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 
 			switch keyVal[0] {
 			case "Hugepagesize":
-				parseInt(sf[0], &mi.HugePageSizeKb)
+				parseInt(sf[0], &mi.HugepageSizeKiB)
 			case "MemTotal":
-				parseInt(sf[0], &mi.MemTotal)
+				parseInt(sf[0], &mi.MemTotalKiB)
 			case "MemFree":
-				parseInt(sf[0], &mi.MemFree)
+				parseInt(sf[0], &mi.MemFreeKiB)
 			case "MemAvailable":
-				parseInt(sf[0], &mi.MemAvailable)
+				parseInt(sf[0], &mi.MemAvailableKiB)
 			}
 		default:
 			continue
@@ -106,7 +109,7 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 }
 
 // GetMemInfo reads /proc/meminfo and returns information about
-// system hugepages and available memory (RAM).
+// system hugepages and memory (RAM).
 func GetMemInfo() (*MemInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -115,20 +118,4 @@ func GetMemInfo() (*MemInfo, error) {
 	defer f.Close()
 
 	return parseMemInfo(f)
-}
-
-// CalcMinHugePages returns the minimum number of hugepages that should be
-// requested for the given number of targets.
-func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
-	if numTargets < 1 {
-		return 0, errors.New("numTargets must be > 0")
-	}
-
-	hugepageSizeBytes := hugePageSizeKb * humanize.KiByte // KiB to B
-	if hugepageSizeBytes == 0 {
-		return 0, errors.New("invalid system hugepage size")
-	}
-	minHugePageBytes := MinTargetHugePageSize * numTargets
-
-	return minHugePageBytes / hugepageSizeBytes, nil
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -314,5 +314,44 @@ void ds_iv_fini(void);
 			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
 			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
+
+/**
+ * get the VOS target ID of xstream.
+ *
+ * \param[in]	xs_id	xstream ID
+ *
+ * \return		VOS target ID (-1 for system XS).
+ */
+static inline int
+dss_xs2tgt(int xs_id)
+{
+	D_ASSERTF(xs_id >= 0 && xs_id < DSS_XS_NR_TOTAL,
+		  "invalid xs_id %d, dss_tgt_nr %d, "
+		  "dss_tgt_offload_xs_nr %d.\n",
+		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
+	if (dss_helper_pool) {
+		if (xs_id < dss_sys_xs_nr ||
+		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
+			return -1;
+		return xs_id - dss_sys_xs_nr;
+	}
+
+	if (xs_id < dss_sys_xs_nr)
+		return -1;
+	return (xs_id - dss_sys_xs_nr) /
+	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
+}
+
+static inline bool
+dss_xstream_has_nvme(struct dss_xstream *dx)
+{
+
+	if (dx->dx_main_xs != 0)
+		return true;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
+		return true;
+
+	return false;
+}
 
 #endif /* __DAOS_SRV_INTERNAL__ */
