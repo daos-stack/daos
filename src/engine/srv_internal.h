@@ -54,6 +54,10 @@ struct sched_info {
 	unsigned int		 si_stop:1;
 };
 
+struct mem_stats {
+	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
+};
+
 /** Per-xstream configuration data */
 struct dss_xstream {
 	char			dx_name[DSS_XS_NAME_LEN];
@@ -80,6 +84,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool/list of free stacks */
 	struct stack_pool	*dx_sp;
@@ -151,6 +156,8 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
+void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);

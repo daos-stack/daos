@@ -1114,6 +1114,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh)
 {
 	struct dtx_leader_handle	*dlh;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_handle		*dth;
 	int				 rc;
 	int				 i;
@@ -1151,10 +1152,12 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
 		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
 
-	if (rc != 0)
+	if (rc != 0) {
 		D_FREE(dlh);
-	else
+	} else {
 		*p_dlh = dlh;
+		d_tm_inc_gauge(tls->dt_dtx_leader_total, 1);
+	}
 
 	return rc;
 }
@@ -1178,6 +1181,17 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	return dlh->dlh_result;
 };
 
+void
+dtx_entry_put(struct dtx_entry *dte)
+{
+	if (--(dte->dte_refs) == 0) {
+		struct dtx_tls	*tls = dtx_tls_get();
+
+		d_tm_dec_gauge(tls->dt_dtx_entry_total, 1);
+		D_FREE(dte);
+	}
+}
+
 /**
  * Stop the leader thandle.
  *
@@ -1192,6 +1206,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 {
 	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
 	size_t				 size;
@@ -1308,6 +1323,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	dte->dte_ver = dth->dth_ver;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
+	d_tm_inc_gauge(tls->dt_dtx_entry_total, 1);
 
 	/* Use the new created @dte instead of dth->dth_dte that will be
 	 * released after dtx_leader_end().
@@ -1419,6 +1435,7 @@ out:
 
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
+	d_tm_dec_gauge(tls->dt_dtx_leader_total, 1);
 
 	return result;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,6 +55,7 @@ static int
 obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	      struct daos_llink **llink_p)
 {
+	struct vos_tls		*tls = vos_tls_get();
 	struct vos_object	*obj;
 	struct obj_lru_key	*lkey;
 	struct vos_container	*cont;
@@ -74,7 +75,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 		D_GOTO(failed, rc = -DER_NOMEM);
 
 	init_object(obj, lkey->olk_oid, cont);
-
+	d_tm_inc_gauge(tls->vtl_obj_cnt, 1);
 	*llink_p = &obj->obj_llink;
 	rc = 0;
 failed:
@@ -123,9 +124,11 @@ static void
 obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
+	struct vos_tls		*tls = vos_tls_get();
 
 	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
 
+	d_tm_dec_gauge(tls->vtl_obj_cnt, 1);
 	obj = container_of(llink, struct vos_object, obj_llink);
 	clean_object(obj);
 	D_FREE(obj);
