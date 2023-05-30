@@ -1864,7 +1864,7 @@ out:
 #define GUARD_POST_PATTERN 0x5A
 #define GUARD_SIZE 1024
 
-unsigned char* GUARD_PRE_ALLOC(void)
+unsigned char *GUARD_PRE_ALLOC(void)
 {
 	unsigned char *pre_buff;
 
