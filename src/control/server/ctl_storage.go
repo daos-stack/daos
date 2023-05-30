@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -54,41 +55,25 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, miFn common.GetMemInfoFn) *StorageControlService {
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, ecs []*engine.Config) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(ecs) > 0 {
+		topCfg.ControlMetadata = ecs[0].Storage.ControlMetadata
+	}
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
 	}
 
 	return &StorageControlService{
-		log:             l,
-		storage:         sp,
+		log:             log,
 		instanceStorage: instanceStorage,
-		getMemInfo:      miFn,
+		storage:         storage.DefaultProvider(log, 0, topCfg),
+		getMemInfo:      common.GetMemInfo,
 	}
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
-		common.GetMemInfo,
-	)
-}
-
-// NewMockStorageControlService returns a StorageControlService with a mocked
-// storage provider consisting of the given sys, scm and bdev providers.
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.MockProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}, sys, scm, bdev),
-		func() (*common.MemInfo, error) {
-			return nil, nil
-		},
-	)
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
@@ -192,11 +177,14 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 
 		// Build slice of controllers in all tiers.
 		tierCtrlrs := make([]storage.NvmeController, 0)
+		msg := fmt.Sprintf("NVMe tiers for engine-%d:", ei.Index())
 		for _, tsr := range tsrs {
+			msg += fmt.Sprintf("\n\tTier-%d: %s", tsr.Tier, tsr.Result.Controllers)
 			for _, c := range tsr.Result.Controllers {
 				tierCtrlrs = append(tierCtrlrs, *c)
 			}
 		}
+		cs.log.Info(msg)
 
 		// If the engine is not running or we aren't interested in temporal
 		// statistics for the bdev devices then continue to next engine.

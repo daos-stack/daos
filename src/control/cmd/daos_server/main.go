@@ -96,7 +96,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			common.ScrubProxyVariables()
 		}
 		if opts.Debug {
-			log.SetLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 		}
 		if opts.JSONLog {
 			log.WithJSONOutput()
@@ -104,6 +104,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if opts.Syslog {
 			// Don't log debug stuff to syslog.
 			log.WithInfoLogger((&logging.DefaultInfoLogger{}).WithSyslogOutput())
+			log.WithNoticeLogger((&logging.DefaultNoticeLogger{}).WithSyslogOutput())
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 

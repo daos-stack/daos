@@ -100,6 +100,7 @@ soak_harassers:
   enable_drain: true
   # continue test if container destroy fails
   ignore_soak_errors: true
+  enable_intercept_lib: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -119,6 +120,8 @@ ior_harasser:
     - DFS
     - MPIIO
     - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
     - HDF5
   test_file: daos:/testFile
   flags: -v -w -W -r -R -F -k
@@ -139,6 +142,10 @@ ior_harasser:
     mount_dir: "/tmp/daos_dfuse/ior"
     disable_caching: true
 fio_harasser:
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   job_timeout: 20
   names:
     - global
@@ -182,8 +189,10 @@ mdtest_harasser:
     - 16
   test_dir: "/"
   api:
-    - 'DFS'
-    - 'POSIX'
+    - DFS
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   iteration: 1
   num_of_files_dirs: 3000
   pre_iter: 10

@@ -157,7 +157,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 		}
 
 		if opts.JSONLogs {
@@ -226,8 +226,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			// Create an additional set of loggers which append everything
 			// to the specified file.
 			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
+				WithNoticeLogger(logging.NewNoticeLogger("agent", f)).
 				WithInfoLogger(logging.NewInfoLogger("agent", f)).
-				WithDebugLogger(logging.NewDebugLogger(f))
+				WithDebugLogger(logging.NewDebugLogger(f)).
+				WithTraceLogger(logging.NewTraceLogger(f))
 		}
 
 		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {

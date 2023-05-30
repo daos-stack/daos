@@ -120,7 +120,6 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		} else {
 			status = int(daos.MiscError)
 		}
-		in = nil // response should be null if err isn't
 	}
 
 	data, err := json.MarshalIndent(struct {
@@ -263,12 +262,14 @@ and access control settings, along with system wide operations.`
 			// to the specified file.
 			log = log.
 				WithErrorLogger(logging.NewErrorLogger("dmg", f)).
+				WithNoticeLogger(logging.NewNoticeLogger("dmg", f)).
 				WithInfoLogger(logging.NewInfoLogger("dmg", f)).
-				WithDebugLogger(logging.NewDebugLogger(f))
+				WithDebugLogger(logging.NewDebugLogger(f)).
+				WithTraceLogger(logging.NewTraceLogger(f))
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 			log.Debug("debug output enabled")
 		}
 

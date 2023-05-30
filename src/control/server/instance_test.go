@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,7 +44,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
-	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
 }
 

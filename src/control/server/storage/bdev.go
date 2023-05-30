@@ -8,6 +8,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,6 +36,9 @@ import "C"
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
+	sysXSTgtID     = 1024
+	// Minimum amount of hugepage memory (in bytes) needed for each target.
+	memHugepageMinPerTarget = 1 << 30 // 1GiB
 )
 
 // JSON config file constants.
@@ -57,6 +61,14 @@ const (
 	AccelEngineDML   = C.NVME_ACCEL_DML
 	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
+)
+
+// Role assignments for NVMe SSDs related to type of storage (enables Metadata-on-SSD capability).
+const (
+	BdevRoleData = C.NVME_ROLE_DATA
+	BdevRoleMeta = C.NVME_ROLE_META
+	BdevRoleWAL  = C.NVME_ROLE_WAL
+	BdevRoleAll  = BdevRoleData | BdevRoleMeta | BdevRoleWAL
 )
 
 // NvmeDevState represents the operation state of an NVMe device.
@@ -237,6 +249,8 @@ type SmdDevice struct {
 	ClusterSize uint64        `json:"cluster_size"`
 	Health      *NvmeHealth   `json:"health"`
 	TrAddr      string        `json:"tr_addr"`
+	Roles       BdevRoles     `json:"roles"`
+	HasSysXS    bool          `json:"has_sys_xs"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -244,6 +258,63 @@ func (sd *SmdDevice) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("%+v", *sd)
+}
+
+// MarshalJSON handles the special case where native SmdDevice converts BdevRoles to bitmask in
+// proto SmdDevice type. Native BdevRoles type en/decodes to/from human readable JSON strings.
+func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+	if sd == nil {
+		return nil, errors.New("tried to marshal nil SmdDevice")
+	}
+
+	type toJSON SmdDevice
+	return json.Marshal(&struct {
+		RoleBits uint32 `json:"role_bits"`
+		*toJSON
+	}{
+		RoleBits: uint32(sd.Roles.OptionBits),
+		toJSON:   (*toJSON)(sd),
+	})
+}
+
+// UnmarshalJSON handles the special case where proto SmdDevice converts BdevRoles bitmask to
+// native BdevRoles type. Native BdevRoles type en/decodes to/from human readable JSON strings.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	type fromJSON SmdDevice
+	from := &struct {
+		RoleBits uint32 `json:"role_bits"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	if from.Roles.IsEmpty() && from.RoleBits != 0 {
+		sd.Roles.OptionBits = OptionBits(from.RoleBits)
+	}
+
+	seen := make(map[int32]bool)
+	newTgts := make([]int32, 0, len(sd.TargetIDs))
+	for _, i := range sd.TargetIDs {
+		if !seen[i] {
+			if i == sysXSTgtID {
+				sd.HasSysXS = true
+			} else {
+				newTgts = append(newTgts, i)
+			}
+			seen[i] = true
+		}
+	}
+	sd.TargetIDs = newTgts
+
+	return nil
 }
 
 // NvmeController represents a NVMe device controller which includes health
@@ -384,9 +455,9 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount      int
+		HugepageCount      int
 		HugeNodes          string
-		CleanHugePagesOnly bool
+		CleanHugepagesOnly bool
 		PCIAllowList       string
 		PCIBlockList       string
 		TargetUser         string
@@ -397,7 +468,7 @@ type (
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		NrHugePagesRemoved uint
+		NrHugepagesRemoved uint
 		VMDPrepared        bool
 	}
 
@@ -421,6 +492,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
+		DeviceRoles    BdevRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.
@@ -551,8 +623,8 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.
 // As the response contains controller references which may be shared elsewhere, copy them to avoid
-// accessing the same references in multiple code paths.
-func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
+// accessing the same references in multiple code paths and return a new BdevScanResponse objecst.
+func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) (*BdevScanResponse, error) {
 	oldCtrlrRefs := resp.Controllers
 	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
 
@@ -565,7 +637,7 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 		if addr.IsVMDBackingAddress() {
 			vmdAddr, err := addr.BackingToVMDAddress()
 			if err != nil {
-				return errors.Wrap(err, "converting pci address of vmd backing device")
+				return nil, errors.Wrap(err, "convert pci address of vmd backing device")
 			}
 			// If addr is a VMD backing address, use the VMD endpoint instead as that is the
 			// address that will be in the config.
@@ -579,9 +651,11 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
 		}
 	}
-	resp.Controllers = newCtrlrRefs
 
-	return nil
+	return &BdevScanResponse{
+		Controllers: newCtrlrRefs,
+		VMDEnabled:  resp.VMDEnabled,
+	}, nil
 }
 
 type BdevForwarder struct {
@@ -721,4 +795,20 @@ func (f *NVMeFirmwareForwarder) UpdateFirmware(req NVMeFirmwareUpdateRequest) (*
 	}
 
 	return res, nil
+}
+
+// CalcMinHugepages returns the minimum number of hugepages that should be
+// requested for the given number of targets.
+func CalcMinHugepages(hugepageSizeKb int, numTargets int) (int, error) {
+	if numTargets < 1 {
+		return 0, errors.New("numTargets must be > 0")
+	}
+
+	hugepageSizeBytes := hugepageSizeKb * humanize.KiByte // KiB to B
+	if hugepageSizeBytes == 0 {
+		return 0, errors.New("invalid system hugepage size")
+	}
+	minHugeMem := memHugepageMinPerTarget * numTargets
+
+	return minHugeMem / hugepageSizeBytes, nil
 }

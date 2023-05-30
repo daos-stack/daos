@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -320,6 +320,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != PO_COMP_TP_ROOT &&
+			    val != PO_COMP_TP_NODE &&
+			    val != PO_COMP_TP_RANK &&
+			    val != PO_COMP_TP_TARGET) {
+				D_ERROR("invalid perf domain "DF_U64".\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
 		case DAOS_PROP_PO_EC_PDA:
@@ -497,6 +507,15 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_CHECKPOINT_LAZY) {
+				D_ERROR("invalid checkpoint mode: " DF_U64 "\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
