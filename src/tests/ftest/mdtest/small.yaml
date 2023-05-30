@@ -4,11 +4,9 @@ hosts:
 timeout: 605
 server_config:
   name: daos_server
-<<<<<<< HEAD
-=======
   engines_per_host: 2
   crt_timeout: 60
-  engines:
+  servers:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
@@ -23,7 +21,6 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
->>>>>>> 48d2664b8 (DAOS-12725 cart: Set server-side cart timeout for ior tests. (#12129))
   transport_config:
     allow_insecure: True
 agent_config:
