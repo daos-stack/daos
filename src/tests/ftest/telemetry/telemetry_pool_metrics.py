@@ -132,7 +132,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=telemetry_pool_metrics,test_telemetry_pool_metrics
+        :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics
         """
 
         # create pool and container
@@ -187,3 +187,24 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 "got=%d, wait_in=[%d, %d]", name, self.dfs_oclass, val, min_val, max_val)
 
         self.log.info("------Test passed------")
+
+    def test_telemetry_pool_metrics_sanity_check(self):
+        """JIRA ID: DAOS-13146
+
+            Create a pool and check whether all the pool metrics listed
+            in the ENGINE_POOL_METRICS are valid.
+        Steps:
+            Create Pool
+            Get all the pool metrics and check for any errors.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=telemetry
+        :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics_sanity_check
+        """
+        # Create a Pool
+        self.add_pool(connect=False)
+        # Get all the default Pool Metrics and check for any errors.
+        # If errors are noticed, get_pool_metrics will report them and
+        # fail the test.
+        self.telemetry.get_pool_metrics()
+        self.log.info("Test Passed")

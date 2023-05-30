@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -338,6 +338,18 @@ dss_xs2tgt(int xs_id)
 		return -1;
 	return (xs_id - dss_sys_xs_nr) /
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
+}
+
+static inline bool
+dss_xstream_has_nvme(struct dss_xstream *dx)
+{
+
+	if (dx->dx_main_xs != 0)
+		return true;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
+		return true;
+
+	return false;
 }
 
 #endif /* __DAOS_SRV_INTERNAL__ */

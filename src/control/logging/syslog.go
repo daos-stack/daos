@@ -49,37 +49,29 @@ func (ll *LeveledLogger) WithSyslogOutput() *LeveledLogger {
 	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
-		if syslogger, ok := l.(syslogDebug); ok {
-			if dl, ok := syslogger.WithSyslogOutput().(DebugLogger); ok {
-				debugLoggers = append(debugLoggers, dl)
-			}
+		if dl, ok := l.(syslogDebug); ok {
+			debugLoggers = append(debugLoggers, dl.WithSyslogOutput())
 		}
 	}
 	ll.debugLoggers = debugLoggers
 
 	for _, l := range ll.infoLoggers {
-		if syslogger, ok := l.(syslogInfo); ok {
-			if il, ok := syslogger.WithSyslogOutput().(InfoLogger); ok {
-				infoLoggers = append(infoLoggers, il)
-			}
+		if il, ok := l.(syslogInfo); ok {
+			infoLoggers = append(infoLoggers, il.WithSyslogOutput())
 		}
 	}
 	ll.infoLoggers = infoLoggers
 
 	for _, l := range ll.noticeLoggers {
-		if syslogger, ok := l.(syslogNotice); ok {
-			if nl, ok := syslogger.WithSyslogOutput().(NoticeLogger); ok {
-				noticeLoggers = append(noticeLoggers, nl)
-			}
+		if nl, ok := l.(syslogNotice); ok {
+			noticeLoggers = append(noticeLoggers, nl.WithSyslogOutput())
 		}
 	}
 	ll.noticeLoggers = noticeLoggers
 
 	for _, l := range ll.errorLoggers {
-		if syslogger, ok := l.(syslogError); ok {
-			if el, ok := syslogger.WithSyslogOutput().(ErrorLogger); ok {
-				errorLoggers = append(errorLoggers, el)
-			}
+		if el, ok := l.(syslogError); ok {
+			errorLoggers = append(errorLoggers, el.WithSyslogOutput())
 		}
 	}
 	ll.errorLoggers = errorLoggers

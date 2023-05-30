@@ -1,0 +1,35 @@
+name: clang-format
+
+# Report style formatting changes.
+# Run git-clang-format on the contents of the PR against the target commit and display a diff of
+# any recommended changes.  Fail the job if any are recommended.
+#
+# Future work would be to have a way to apply these automatically which would require making and
+# pushing a new git commit so should be optional.
+#
+# Runs in a fedora docker container to get a recent clang-format version.
+
+on:
+  pull_request:
+
+jobs:
+  pylint:
+    name: Clang Format
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Pull via git
+        run: git fetch origin ${{ github.event.pull_request.base.sha }}
+      - name: Run check in docker
+        uses: ./.github/actions/clang-format
+        with:
+          target: ${{ github.event.pull_request.base.sha }}
+      - name: Export changes
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: format-patch-for-pr-${{ github.event.pull_request.number }}
+          path: auto-format-changes.diff

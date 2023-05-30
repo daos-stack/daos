@@ -562,12 +562,12 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int    __rc;                                                                       \
 		double timeout = 0;                                                                \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
-				(attr)->st_mode, (attr)->st_size);                                 \
 		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \
@@ -675,12 +675,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
-		if (entry.attr_timeout > 0) {                                                      \
-			(inode)->ie_stat = entry.attr;                                             \
+		if ((entry).attr_timeout > 0) {                                                    \
+			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
+				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
+				(entry).attr_timeout);                                             \
 		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(inode, "fuse_reply_entry() returned: %d (%s)", __rc,       \

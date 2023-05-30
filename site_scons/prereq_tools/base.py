@@ -530,8 +530,8 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk', 'spdk']
+        client_reqs = ['fuse', 'json-c', 'capstone']
+        server_reqs = ['pmdk', 'spdk', 'lmdb']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -1343,7 +1343,8 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
-                if not lib.endswith(".so"):
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]

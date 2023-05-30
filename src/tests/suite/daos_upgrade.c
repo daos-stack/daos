@@ -54,9 +54,9 @@ upgrade_ec_parity_rotate(void **state)
 	ioreq_fini(&req);
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G2, 0, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(new_arg->coh, OC_RP_3G2, 0, 0, arg->myrank);
 
-	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_io(new_arg, oids, OBJ_NR);
 
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -73,7 +73,7 @@ upgrade_ec_parity_rotate(void **state)
 	rebuild_pool_connect_internal(new_arg);
 	ioreq_init(&req, new_arg->coh, oid, DAOS_IOD_ARRAY, new_arg);
 	verify_ec_full(&req, new_arg->index, 0);
-	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_validate(new_arg, oids, OBJ_NR);
 	ioreq_fini(&req);
 
 	if (arg->myrank == 0) {
@@ -127,9 +127,8 @@ run_daos_upgrade_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests_only("DAOS_Rebuild_Simple", upgrade_tests,
-				     ARRAY_SIZE(upgrade_tests), sub_tests,
-				     sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS_upgrade", upgrade_tests, ARRAY_SIZE(upgrade_tests),
+				     sub_tests, sub_tests_size);
 
 	par_barrier(PAR_COMM_WORLD);
 
