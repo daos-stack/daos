@@ -764,11 +764,17 @@ server_init(int argc, char *argv[])
 	hlc_recovery_end(bound);
 	dss_set_start_epoch();
 
+	/* init nvme */
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_nvme_init, rc);
 	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
@@ -828,6 +834,8 @@ exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
 	dss_srv_fini(true);
+exit_nvme_init:
+	bio_nvme_fini();
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
@@ -880,6 +888,8 @@ server_fini(bool force)
 	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	bio_nvme_fini();
+	D_INFO("bio_nvme_fini() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
 	dss_module_unload_all();
@@ -1059,8 +1069,8 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
-				printf("Requires 1 or 2 tiers\n");
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 4) {
+				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
 			break;

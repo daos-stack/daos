@@ -45,6 +45,7 @@ dnf --nodocs install \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
+    lmdb-devel \
     lua-lmod \
     make \
     maven \
