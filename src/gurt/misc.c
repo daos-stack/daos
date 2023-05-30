@@ -1226,6 +1226,14 @@ char *getenv(const char *name)
 	D_MUTEX_LOCK(&hook_env_lock);
 	if (real_getenv == NULL) {
 		real_getenv = (char * (*)(const char *))dlsym(RTLD_NEXT, "getenv");
+		if (real_getenv == NULL) {
+			/* Glibc symbols could not be resolved !!... */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_getenv = (char * (*)(const char *))dlsym(handle, "getenv");
+		}
 		D_ASSERT(real_getenv != NULL);
 	}
 
@@ -1242,6 +1250,14 @@ int putenv(char *name)
 	D_MUTEX_LOCK(&hook_env_lock);
 	if (real_putenv == NULL) {
 		real_putenv = (int (*)(char *))dlsym(RTLD_NEXT, "putenv");
+		if (real_putenv == NULL) {
+			/* Glibc symbols could not be resolved !!... */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_putenv = (char * (*)(const char *))dlsym(handle, "getenv");
+		}
 		D_ASSERT(real_putenv != NULL);
 	}
 
@@ -1258,6 +1274,14 @@ int setenv(const char *name, const char *value, int overwrite)
 	D_MUTEX_LOCK(&hook_env_lock);
 	if (real_setenv == NULL) {
 		real_setenv = (int (*)(const char *, const char *, int))dlsym(RTLD_NEXT, "setenv");
+		if (real_setenv == NULL) {
+			/* Glibc symbols could not be resolved !!... */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_setenv = (char * (*)(const char *))dlsym(handle, "getenv");
+		}
 		D_ASSERT(real_setenv != NULL);
 	}
 
@@ -1274,6 +1298,14 @@ int unsetenv(const char *name)
 	D_MUTEX_LOCK(&hook_env_lock);
 	if (real_unsetenv == NULL) {
 		real_unsetenv = (int (*)(const char *))dlsym(RTLD_NEXT, "unsetenv");
+		if (real_unsetenv == NULL) {
+			/* Glibc symbols could not be resolved !!... */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_unsetenv = (char * (*)(const char *))dlsym(handle, "getenv");
+		}
 		D_ASSERT(real_unsetenv != NULL);
 	}
 
@@ -1290,6 +1322,14 @@ int clearenv(void)
 	D_MUTEX_LOCK(&hook_env_lock);
 	if (real_clearenv == NULL) {
 		real_clearenv = (int (*)(void))dlsym(RTLD_NEXT, "clearenv");
+		if (real_clearenv == NULL) {
+			/* Glibc symbols could not be resolved !!... */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_clearenv = (char * (*)(const char *))dlsym(handle, "getenv");
+		}
 		D_ASSERT(real_clearenv != NULL);
 	}
 
