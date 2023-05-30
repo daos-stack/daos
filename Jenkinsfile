@@ -97,24 +97,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
-        string(name: 'CI_LEAP15_TARGET',
-               defaultValue: '',
-               description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
-        string(name: 'CI_UBUNTU20.04_TARGET',
-               defaultValue: '',
-               description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on EL 8 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on Leap 15 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on Ubuntu 20 test stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
@@ -127,9 +109,6 @@ pipeline {
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
-        string(name: 'FUNCTIONAL_VM_LABEL',
-               defaultValue: 'ci_vm9',
-               description: 'Label to use for 9 VM functional tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium stage')
@@ -177,72 +156,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                    test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8')
-                stage('Functional on Leap 15.4') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on Leap 15.4')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on Ubuntu 20.04')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
