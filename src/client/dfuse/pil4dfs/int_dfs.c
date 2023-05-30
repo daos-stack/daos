@@ -108,13 +108,13 @@ static _Atomic uint32_t        daos_init_cnt;
  * too if "report" is true. Env variable "D_IL_REPORT=1" or "D_IL_REPORT=true" will set report
  * true.
  */
-static bool            report;
-static long int        page_size;
+static bool		report;
+static long int		page_size;
 
-static bool            daos_inited;
-static bool            daos_debug_inited;
-static int             num_dfs;
-static struct dfs_mt   dfs_list[MAX_DAOS_MT];
+static bool		daos_inited;
+static bool		daos_debug_inited;
+static int		num_dfs;
+static struct dfs_mt	dfs_list[MAX_DAOS_MT];
 
 static void
 discover_daos_mount(void);
@@ -713,8 +713,9 @@ retrieve_handles_from_fuse(int idx)
 	rc              = daos_pool_global2local(iov, &dfs_list[idx].poh);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY, "failed to create pool handle in daos_pool_global2local()"
-			": %d (%s)\n", errno_saved, strerror(errno_saved));
+		D_DEBUG(DB_ANY,
+			"failed to create pool handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
 		goto err;
 	}
 
@@ -722,8 +723,9 @@ retrieve_handles_from_fuse(int idx)
 	rc  = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to query container handle from dfuse with ioctl()"
-			": %d (%s)\n", errno_saved, strerror(errno_saved));
+		D_DEBUG(DB_ANY,
+			"failed to query container handle from dfuse with ioctl(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
 		goto err;
 	}
 	iov.iov_buf_len = hs_reply.fsr_cont_size;
@@ -731,8 +733,9 @@ retrieve_handles_from_fuse(int idx)
 	rc              = daos_cont_global2local(dfs_list[idx].poh, iov, &dfs_list[idx].coh);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY, "failed to create container handle in daos_pool_global2local()"
-			": %d (%s)\n", errno_saved, strerror(errno_saved));
+		D_DEBUG(DB_ANY,
+			"failed to create container handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
 		goto err;
 	}
 
@@ -749,8 +752,9 @@ retrieve_handles_from_fuse(int idx)
 	rc = dfs_global2local(dfs_list[idx].poh, dfs_list[idx].coh, 0, iov, &dfs_list[idx].dfs);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY, "failed to create DFS handle in daos_pool_global2local()"
-			": %d (%s)\n", errno_saved, strerror(errno_saved));
+		D_DEBUG(DB_ANY,
+			"failed to create DFS handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
 		goto err;
 	}
 
@@ -833,7 +837,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		return 0;
 	}
 
-	*full_path = NULL;
+	*full_path  = NULL;
 	*parent_dir = calloc(2, DFS_MAX_PATH);
 	if (*parent_dir == NULL)
 		goto out_oom;
@@ -1143,9 +1147,9 @@ init_fd_list(void)
 static int
 find_next_available_fd(struct file_obj *obj, int *new_fd)
 {
-	int i, idx = -1;
+	bool allocated		 = false;
+	int i, idx		 = -1;
 	struct file_obj *new_obj = NULL;
-	bool allocated = false;
 
 	if (obj == NULL) {
 		D_ALLOC_PTR(new_obj);
@@ -1194,9 +1198,9 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 static int
 find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 {
-	int i, idx = -1;
+	bool allocated	= false;
+	int i, idx	= -1;
 	struct dir_obj *new_obj;
-	bool allocated = false;
 
 	if (obj == NULL) {
 		D_ALLOC_PTR(new_obj);
@@ -1756,8 +1760,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_GOTO(out_error, rc = ENOMEM);
 		}
 		if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n",
-				ENAMETOOLONG, strerror(ENAMETOOLONG));
+			D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
+				strerror(ENAMETOOLONG));
 			free_dirfd(idx_dirfd);
 			D_GOTO(out_error, rc = ENAMETOOLONG);
 		}
@@ -3327,9 +3331,9 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_old, rc = ENOMEM);
 			rc = dfs_get_symlink_value(obj_old, symlink_value, &link_len);
 			if (link_len >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "link is too long. link_len = %" PRIu64
-					": %d (%s)\n", link_len, ENAMETOOLONG,
-					strerror(ENAMETOOLONG));
+				D_DEBUG(DB_ANY,
+					"link is too long. link_len = %" PRIu64 ": %d (%s)\n",
+					link_len, ENAMETOOLONG, strerror(ENAMETOOLONG));
 				D_GOTO(out_old, rc = ENAMETOOLONG);
 			}
 			if (rc)
@@ -3370,7 +3374,8 @@ rename(const char *old_name, const char *new_name)
 				if (byte_read != byte_to_write) {
 					close(fd);
 					/* Unexpected!!! */
-					D_DEBUG(DB_ANY, "dfs_read() failed to read %" PRIu64
+					D_DEBUG(DB_ANY,
+						"dfs_read() failed to read %" PRIu64
 						" bytes from %s: %d (%s)\n", byte_to_write,
 						old_name, EREMOTEIO, strerror(EREMOTEIO));
 					D_GOTO(out_old, rc = EREMOTEIO);
@@ -3471,9 +3476,9 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_err, rc = ENOMEM);
 			link_len_libc = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
 			if (link_len_libc >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "link is too long. link_len = %" PRIu64
-					": %d (%s)\n", link_len_libc, ENAMETOOLONG,
-					strerror(ENAMETOOLONG));
+				D_DEBUG(DB_ANY,
+					"link is too long. link_len = %" PRIu64	": %d (%s)\n",
+					link_len_libc, ENAMETOOLONG, strerror(ENAMETOOLONG));
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			} else if (link_len_libc < 0) {
 				errno_save = errno;
@@ -4874,10 +4879,10 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	/* Hint to turn off caching. */
 	if (advice == POSIX_FADV_DONTNEED)
 		return 0;
-/**
- *	if (report)
- *		D_ERROR("posix_fadvise() is not implemented yet.\n");
- */
+	/**
+	 *	if (report)
+	 *		D_ERROR("posix_fadvise() is not implemented yet.\n");
+	 */
 	errno = ENOTSUP;
 	return -1;
 }
@@ -4995,8 +5000,8 @@ update_cwd(void)
 	cwd = get_current_dir_name();
 
 	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n",
-			errno, strerror(errno));
+		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
+			strerror(errno));
 		abort();
 	} else {
 		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
@@ -5151,8 +5156,8 @@ init_myhook(void)
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
-		fprintf(stderr, "Error> daos_debug_init() failed: %d (%s)\n",
-			daos_der2errno(rc), strerror(daos_der2errno(rc)));
+		fprintf(stderr, "Error> daos_debug_init() failed: %d (%s)\n", daos_der2errno(rc),
+			strerror(daos_der2errno(rc)));
 	else
 		daos_debug_inited = true;
 
