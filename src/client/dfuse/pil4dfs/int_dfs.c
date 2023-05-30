@@ -282,7 +282,7 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	if (rc == ENOMEM)
 		rc = dfs_release(hdl->oh);
 	if (rc)
-		D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	D_FREE(hdl);
 }
 
@@ -596,19 +596,19 @@ discover_daos_mount(void)
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.");
+		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
 		return;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_POOL is not set.");
+		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
 		return;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.");
+		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
 		return;
 	}
 
@@ -645,7 +645,7 @@ discover_dfuse(void)
 			dfs_list[num_dfs].dfs_dir_hash = NULL;
 			dfs_list[num_dfs].len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (dfs_list[num_dfs].len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.");
+				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
 				continue;
 			}
 			atomic_store_relaxed(&dfs_list[num_dfs].inited, 0);
@@ -653,7 +653,7 @@ discover_dfuse(void)
 			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
 					 DFS_MAX_PATH - 1);
 			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
-				D_DEBUG(DB_ANY, "fs_root[] is too long. Skip this entry.");
+				D_DEBUG(DB_ANY, "fs_root[] is too long. Skip this entry.\n");
 				continue;
 			}
 			num_dfs++;
@@ -784,7 +784,6 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 	int rc;
 	struct duns_attr_t attr = {0};
 
-	/* The path does not start with "DAOS://". */
 	if (strncasecmp(path, "daos://", 7) != 0)
 		return false;
 
@@ -897,7 +896,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* daos_init() is expensive to call. We call it only when necessary. */
 			rc = daos_init();
 			if (rc) {
-				D_DEBUG(DB_ANY, "daos_init failed: " DF_RC "\n", DP_RC(rc));
+				D_ERROR("daos_init() failed: " DF_RC "\n", DP_RC(rc));
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -1326,7 +1325,7 @@ free_fd(int idx)
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
 		if (rc)
-			D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	}
 }
 
@@ -1364,7 +1363,7 @@ free_dirfd(int idx)
 		D_FREE(saved_obj->ents);
 		rc = dfs_release(saved_obj->dir);
 		if (rc)
-			D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct dir_obj. struct dir_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -1644,7 +1643,7 @@ out_readlink:
 		free(*full_path_out);
 		*full_path_out = NULL;
 	}
-	D_DEBUG(DB_ANY, "readlink() failed: %d (%s)\n", errno, strerror(errno));
+	D_ERROR("readlink() failed: %d (%s)\n", errno, strerror(errno));
 	return (-1);
 }
 
@@ -1769,8 +1768,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 		return (idx_dirfd + FD_DIR_BASE);
 	}
-	if (report)
-		atomic_fetch_add_relaxed(&num_open, 1);
+	atomic_fetch_add_relaxed(&num_open, 1);
 
 	rc = find_next_available_fd(NULL, &idx_fd);
 	if (rc)
@@ -1978,14 +1976,12 @@ pread(int fd, void *buf, size_t size, off_t offset)
 			       file_list[fd - FD_FILE_BASE]->file, &sgl,
 			       offset, &bytes_read, NULL);
 	if (rc) {
-		D_DEBUG(DB_ANY, "dfs_read(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc,
-			strerror(rc));
+		D_ERROR("dfs_read(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc, strerror(rc));
 		errno      = rc;
 		bytes_read = -1;
 	}
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_read, 1);
+	atomic_fetch_add_relaxed(&num_read, 1);
 
 	return (ssize_t)bytes_read;
 }
@@ -2052,13 +2048,12 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	rc          = dfs_write(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
 				file_list[fd - FD_FILE_BASE]->file, &sgl, offset, NULL);
 	if (rc) {
-		D_DEBUG(DB_ANY, "dfs_write(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc,
+		D_ERROR("dfs_write(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc,
 			strerror(rc));
 		errno = rc;
 		return (-1);
 	}
-	if (report)
-		atomic_fetch_add_relaxed(&num_write, 1);
+	atomic_fetch_add_relaxed(&num_write, 1);
 
 	return size;
 }
@@ -2088,13 +2083,12 @@ new_fxstat(int vers, int fd, struct stat *buf)
 	}
 
 	if (rc) {
-		D_DEBUG(DB_ANY, "dfs_ostat() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_ostat() failed: %d (%s)\n", rc, strerror(rc));
 		errno = rc;
 		rc    = -1;
 	}
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_stat, 1);
+	atomic_fetch_add_relaxed(&num_stat, 1);
 
 	return 0;
 }
@@ -2120,8 +2114,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
-	if (report)
-		atomic_fetch_add_relaxed(&num_stat, 1);
+	atomic_fetch_add_relaxed(&num_stat, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
@@ -2168,8 +2161,7 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
-	if (report)
-		atomic_fetch_add_relaxed(&num_stat, 1);
+	atomic_fetch_add_relaxed(&num_stat, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, stat_buf);
@@ -2321,8 +2313,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_seek, 1);
+	atomic_fetch_add_relaxed(&num_seek, 1);
 
 	switch (whence) {
 	case SEEK_SET:
@@ -2491,7 +2482,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
-		D_DEBUG(DB_ANY, "Failed to query pool: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to query pool: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err, rc = daos_der2errno(rc));
 	}
 
@@ -2547,8 +2538,7 @@ opendir(const char *path)
 		FREE(parent_dir);
 		return next_opendir(path);
 	}
-	if (report)
-		atomic_fetch_add_relaxed(&num_opendir, 1);
+	atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		/* dfs_lookup() is needed for root dir */
@@ -2621,8 +2611,7 @@ fdopendir(int fd)
 	}
 	if (!hook_enabled || fd < FD_DIR_BASE)
 		return next_fdopendir(fd);
-	if (report)
-		atomic_fetch_add_relaxed(&num_opendir, 1);
+	atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	return (DIR *)(dir_list[fd - FD_DIR_BASE]);
 }
@@ -2779,12 +2768,12 @@ new_readdir(DIR *dirp)
 		return next_readdir(dirp);
 
 	if (mydir->fd < FD_DIR_BASE) {
+		/* Not suppose to be here */
 		D_DEBUG(DB_ANY, "readdir() failed: %d (%s)\n", EINVAL, strerror(EINVAL));
 		errno = EINVAL;
 		return NULL;
 	}
-	if (report)
-		atomic_fetch_add_relaxed(&num_readdir, 1);
+	atomic_fetch_add_relaxed(&num_readdir, 1);
 
 	if (mydir->num_ents)
 		goto out_readdir;
@@ -2918,8 +2907,7 @@ mkdir(const char *path, mode_t mode)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
-	if (report)
-		atomic_fetch_add_relaxed(&num_mkdir, 1);
+	atomic_fetch_add_relaxed(&num_mkdir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		D_GOTO(out_err, rc = EEXIST);
@@ -3001,8 +2989,7 @@ rmdir(const char *path)
 		D_GOTO(out_err, rc);
 	if (!is_target_path)
 		goto out_org;
-	if (report)
-		atomic_fetch_add_relaxed(&num_rmdir, 1);
+	atomic_fetch_add_relaxed(&num_rmdir, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
@@ -3149,7 +3136,7 @@ out_org:
 out_release:
 	rc2 = dfs_release(obj);
 	if (rc2)
-		D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc2, strerror(rc2));
+		D_ERROR("dfs_release() failed: %d (%s)\n", rc2, strerror(rc2));
 
 out_err:
 	FREE(parent_dir);
@@ -3212,8 +3199,7 @@ write_all(int fd, const void *buf, size_t count)
 				/* out of space. Quit immediately. */
 				return -1;
 			errno_save = errno;
-			D_DEBUG(DB_ANY, "write_all() failed: %d (%s)\n", errno_save,
-				strerror(errno_save));
+			D_ERROR("write_all() failed: %d (%s)\n", errno_save, strerror(errno_save));
 			errno = errno_save;
 			return -1;
 		}
@@ -3268,8 +3254,7 @@ rename(const char *old_name, const char *new_name)
 	if (is_target_path1 == 0 && is_target_path2 == 0)
 		goto out_org;
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_rename, 1);
+	atomic_fetch_add_relaxed(&num_rename, 1);
 
 	if (is_target_path1 && is_target_path2) {
 		/* Both old and new are on DAOS */
@@ -3366,8 +3351,7 @@ rename(const char *old_name, const char *new_name)
 					      stat_old.st_size - byte_left, &byte_read, NULL);
 				if (rc != 0) {
 					close(fd);
-					D_DEBUG(DB_ANY, "dfs_read() failed: %d (%s)\n", rc,
-						strerror(rc));
+					D_ERROR("dfs_read() failed: %d (%s)\n", rc, strerror(rc));
 					errno = rc;
 					D_GOTO(out_old, rc);
 				}
@@ -3483,8 +3467,7 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			} else if (link_len_libc < 0) {
 				errno_save = errno;
-				D_DEBUG(DB_ANY, "readlink() failed: %d (%s)\n", errno,
-					strerror(errno));
+				D_ERROR("readlink() failed: %d (%s)\n", errno, strerror(errno));
 				D_GOTO(out_err, rc = errno_save);
 			}
 
@@ -3571,7 +3554,7 @@ out_old:
 	errno_save = rc;
 	rc = dfs_release(obj_old);
 	if (rc)
-		D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	errno = errno_save;
 	return (-1);
 
@@ -3583,7 +3566,7 @@ out_new:
 	errno_save = rc;
 	rc = dfs_release(obj_new);
 	if (rc)
-		D_DEBUG(DB_ANY, "dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	errno = errno_save;
 	return (-1);
 
@@ -3835,8 +3818,7 @@ new_unlink(const char *path)
 	if (!is_target_path)
 		goto out_org;
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_unlink, 1);
+	atomic_fetch_add_relaxed(&num_unlink, 1);
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
@@ -3882,8 +3864,7 @@ unlinkat(int dirfd, const char *path, int flags)
 			D_GOTO(out_err, rc);
 		if (!is_target_path)
 			goto out_org;
-		if (report)
-			atomic_fetch_add_relaxed(&num_unlink, 1);
+		atomic_fetch_add_relaxed(&num_unlink, 1);
 
 		rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 		if (rc)
@@ -4186,7 +4167,7 @@ utime(const char *path, const struct utimbuf *times)
 	else
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
-		D_DEBUG(DB_ANY, "fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
+		D_ERROR("fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
 		D_GOTO(out_err, rc);
 	}
 
@@ -4258,7 +4239,7 @@ utimes(const char *path, const struct timeval times[2])
 	else
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
-		D_DEBUG(DB_ANY, "fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
+		D_ERROR("fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
 		D_GOTO(out_err, rc);
 	}
 
@@ -4277,7 +4258,7 @@ utimes(const char *path, const struct timeval times[2])
 
 	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
-		D_DEBUG(DB_ANY, "dfs_osetattr() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("dfs_osetattr() failed: %d (%s)\n", rc, strerror(rc));
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
 	}
@@ -4657,12 +4638,12 @@ dup2(int oldfd, int newfd)
 		if (fd < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
-			D_DEBUG(DB_ANY, "failed to get a fd from kernel: %d (%s)\n", errno_save,
+			D_ERROR("failed to get a fd from kernel: %d (%s)\n", errno_save,
 				strerror(errno_save));
 			errno = errno_save;
 			return (-1);
 		} else if (fd != newfd) {
-			D_DEBUG(DB_ANY, "failed to get the desired fd in dup2(): %d (%s)\n", EBUSY,
+			D_ERROR("failed to get the desired fd in dup2(): %d (%s)\n", EBUSY,
 				strerror(EBUSY));
 			errno = EBUSY;
 			return (-1);
@@ -4747,8 +4728,7 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	if (!hook_enabled || fd < FD_FILE_BASE)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
-	if (report)
-		atomic_fetch_add_relaxed(&num_mmap, 1);
+	atomic_fetch_add_relaxed(&num_mmap, 1);
 
 	addr_ret = next_mmap(addr, length, prot, flags | MAP_ANONYMOUS, -1, offset);
 	if (addr_ret == MAP_FAILED)
@@ -5324,25 +5304,25 @@ init_dfs(int idx)
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh,
 			      NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_ANY, "failed to connect pool: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to connect pool: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
 	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
 			    NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_ANY, "failed to open container: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to open container: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err_cont_open, rc);
 	}
 	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
 	if (rc != 0) {
-		D_DEBUG(DB_ANY, "failed to mount dfs:  %d (%s)\n", rc, strerror(rc));
+		D_ERROR("failed to mount dfs:  %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_err_mt, rc);
 	}
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
-		D_DEBUG(DB_ANY, "failed to create hash table: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to create hash table: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
 
@@ -5351,19 +5331,19 @@ init_dfs(int idx)
 out_err_ht:
 	rc2 = dfs_umount(dfs_list[idx].dfs);
 	if (rc2 != 0)
-		D_DEBUG(DB_ANY, "error in dfs_umount(%s): %d (%s)\n", dfs_list[idx].fs_root, rc2,
+		D_ERROR("error in dfs_umount(%s): %d (%s)\n", dfs_list[idx].fs_root, rc2,
 			strerror(rc2));
 
 out_err_mt:
 	rc2 = daos_cont_close(dfs_list[idx].coh, NULL);
 	if (rc2 != 0)
-		D_DEBUG(DB_ANY, "error in daos_cont_close(%s): " DF_RC "\n", dfs_list[idx].fs_root,
+		D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[idx].fs_root,
 			DP_RC(rc2));
 
 out_err_cont_open:
 	rc2 = daos_pool_disconnect(dfs_list[idx].poh, NULL);
 	if (rc2 != 0)
-		D_DEBUG(DB_ANY, "error in daos_pool_disconnect(%s): " DF_RC "\n",
+		D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
 			dfs_list[idx].fs_root, DP_RC(rc2));
 
 	return rc;
@@ -5388,25 +5368,25 @@ finalize_dfs(void)
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
 		if (rc != 0) {
-			D_DEBUG(DB_ANY, "error in d_hash_table_destroy(%s): " DF_RC "\n",
+			D_ERROR("error in d_hash_table_destroy(%s): " DF_RC "\n",
 				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
 		if (rc != 0) {
-			D_DEBUG(DB_ANY, "error in dfs_umount(%s): %d (%s)\n", dfs_list[i].fs_root,
+			D_ERROR("error in dfs_umount(%s): %d (%s)\n", dfs_list[i].fs_root,
 				rc, strerror(rc));
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_ANY, "error in daos_cont_close(%s): " DF_RC "\n",
+			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n",
 				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_ANY, "error in daos_pool_disconnect(%s): " DF_RC "\n",
+			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
 				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
@@ -5419,7 +5399,7 @@ finalize_dfs(void)
 		for (j = 0; j < init_cnt; j++) {
 			rc = daos_fini();
 			if (rc != 0)
-				D_DEBUG(DB_ANY, "daos_fini() failed: " DF_RC "\n", DP_RC(rc));
+				D_ERROR("daos_fini() failed: " DF_RC "\n", DP_RC(rc));
 		}
 	}
 	if (daos_debug_inited)
