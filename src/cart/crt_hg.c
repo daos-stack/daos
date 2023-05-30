@@ -1436,7 +1436,7 @@ static struct rpt_entry *__create_rpt_entry(struct crt_rpc_priv *rpc_priv)
 }
 
 
-static struct rpt_log_entry *__create_log_entry(struct rpt_entry* entry)
+static struct rpt_log_entry* __create_log_entry(struct rpt_entry* entry)
 {
 	struct rpt_log_entry *log_entry = NULL;
 
@@ -1485,7 +1485,7 @@ static struct rpt_log_entry *__create_log_entry(struct rpt_entry* entry)
 }
 
 
-static struct rpt_log_entry *__get_next_log_entry(struct crt_rpc_priv *rpc_priv)
+static struct rpt_log_entry* __get_next_log_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry	*entry;
 	struct rpt_log_entry	*log_entry;
