@@ -707,8 +707,6 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
-				/* Skip the pool if failed to register to MS. */
-				cpr->cpr_skip = 1;
 			} else {
 				cbk->cb_statistics.cs_repaired++;
 				cpr->cpr_exist_on_ms = 1;
@@ -738,8 +736,6 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
-		/* If ignore the orphan pool, then skip subsequent check. */
-		cpr->cpr_skip = 1;
 		break;
 	default:
 		/*
@@ -755,7 +751,6 @@ interact:
 			/* Ignore the inconsistency if admin does not want interaction. */
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			cpr->cpr_skip = 1;
 		} else {
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
@@ -806,8 +801,6 @@ report:
 
 	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
-		/* Skip the orphan if failed to interact with admin for further action. */
-		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -832,8 +825,6 @@ ignore:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		cbk->cb_statistics.cs_ignored++;
-		/* If ignore the orphan pool, then skip subsequent check. */
-		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -866,8 +857,6 @@ ignore:
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
-				/* Skip the pool if failed to register to MS. */
-				cpr->cpr_skip = 1;
 			} else {
 				cbk->cb_statistics.cs_repaired++;
 				cpr->cpr_exist_on_ms = 1;
@@ -1857,6 +1846,11 @@ chk_leader_need_stop(struct chk_instance *ins)
 		}
 
 		if (!dangling) {
+			/*
+			 * "ci_stopping" means that the user wants to stop checker for some pools.
+			 * But the specified pools may be not in checking. "ci_pool_stopped" means
+			 * the checker for some pools are really stopped.
+			 */
 			if (ins->ci_pool_stopped) {
 				D_ASSERT(ins->ci_stopping);
 				return 0;
@@ -2325,7 +2319,7 @@ reset:
 	if (rc != 0)
 		goto out;
 
-	ins->ci_start_flags |= CSF_RESET_ALL;
+	ins->ci_start_flags = CSF_RESET_ALL;
 	if (pool_nr <= 0)
 		ins->ci_start_flags |= CSF_ORPHAN_POOL;
 
@@ -2334,8 +2328,7 @@ reset:
 	cbk->cb_version = DAOS_CHK_VERSION;
 
 init:
-	rc = chk_prop_prepare(leader, flags | prop->cp_flags, phase,
-			      policy_nr, policies, rank_list, prop);
+	rc = chk_prop_prepare(leader, flags, phase, policy_nr, policies, rank_list, prop);
 	if (rc != 0)
 		goto out;
 
@@ -2768,10 +2761,10 @@ remote:
 		goto out_stop_pools;
 	}
 
-	D_INFO("Leader %s check with api_flags %x, phase %d, leader %u, flags %x, gen "
-	       DF_X64": rc %d\n",
-	       (flags & CHK__CHECK_FLAG__CF_RESET || ins->ci_start_flags & CSF_RESET_ALL) ?
-	       "start" : "resume", api_flags, phase, myrank, ins->ci_start_flags, cbk->cb_gen, rc);
+	D_INFO("Leader %s check with api_flags %x, phase %d, leader %u, flags %x, gen " DF_X64
+	       ": rc %d\n",
+	       chk_is_ins_reset(ins, flags) ? "start" : "resume", api_flags, phase, myrank,
+	       ins->ci_start_flags, cbk->cb_gen, rc);
 
 	chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
 	chk_pools_dump(&ins->ci_pool_list, c_pool_nr > 0 ? c_pool_nr : pool_nr,
@@ -2821,7 +2814,7 @@ out_exit:
 	ins->ci_starting = 0;
 
 	/* Notify the control plane that the check (re-)starts from the scratch. */
-	if (flags & CHK__CHECK_FLAG__CF_RESET || ins->ci_start_flags & CSF_RESET_ALL)
+	if (chk_is_ins_reset(ins, flags))
 		rc = 1;
 
 	if (c_pools != NULL && c_pools != pools)
