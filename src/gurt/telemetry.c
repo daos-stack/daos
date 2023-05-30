@@ -1700,6 +1700,32 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 }
 
 /**
+ * Decrement the given counter by the specified \a value
+ *
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	value	Increments the counter by this \a value
+ */
+void
+d_tm_dec_counter(struct d_tm_node_t *metric, uint64_t value)
+{
+	if (unlikely(metric == NULL))
+		return;
+
+	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.\n", metric->dtn_name);
+		return;
+	}
+
+	d_tm_node_lock(metric);
+	if (unlikely(metric->dtn_metric->dtm_data.value < value))
+		metric->dtn_metric->dtm_data.value = 0;
+	else
+		metric->dtn_metric->dtm_data.value -= value;
+	d_tm_node_unlock(metric);
+}
+
+/**
  * Increment the given counter by the specified \a value
  *
  * \param[in]	metric	Pointer to the metric
