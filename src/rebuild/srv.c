@@ -1042,6 +1042,9 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
 
+	if (rpt->rt_global_dtx_wait_cond)
+		ABT_cond_free(&rpt->rt_global_dtx_wait_cond);
+
 	D_FREE(rpt);
 }
 
@@ -2093,7 +2096,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
 		rpt->rt_pool->sp_reintegrating--;
 	}
+
 	ABT_mutex_lock(rpt->rt_lock);
+	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
 	D_ASSERT(rpt->rt_refcount > 0);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
@@ -2343,6 +2348,10 @@ rpt_create(struct ds_pool *pool, uint32_t master_rank, uint32_t pm_ver,
 		D_GOTO(free, rc = dss_abterr2der(rc));
 
 	rc = ABT_cond_create(&rpt->rt_fini_cond);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(free, rc = dss_abterr2der(rc));
+
+	rc = ABT_cond_create(&rpt->rt_global_dtx_wait_cond);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
 
