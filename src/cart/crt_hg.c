@@ -1862,7 +1862,7 @@ out:
 
 #define GUARD_PRE_PATTERN 0xE1
 #define GUARD_POST_PATTERN 0x5A
-#define GUARD_SIZE 1024
+#define GUARD_SIZE 64
 
 unsigned char *GUARD_PRE_ALLOC(void)
 {
