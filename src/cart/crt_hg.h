@@ -199,4 +199,14 @@ int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		     crt_bulk_opid_t *opid, bool bind);
 
+unsigned char* GUARD_PRE_ALLOC(void);
+void GUARD_POST_ALLOC(struct crt_rpc_priv *rpc_priv, unsigned char *pre);
+void GUARD_FREE(struct crt_rpc_priv *rpc_priv);
+
+void guard_check(struct crt_rpc_priv *rpc_priv, const char *name, int line);
+
+#define GUARD_CHECK(rpc) guard_check(rpc, __func__, __LINE__)
+
+
+
 #endif /* __CRT_MERCURY_H__ */

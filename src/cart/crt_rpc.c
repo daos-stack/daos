@@ -415,6 +415,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 {
 	struct crt_rpc_priv	*rpc_priv;
 	struct crt_opc_info	*opc_info;
+	unsigned char		*pre_buff;
 	int			rc = 0;
 
 	D_ASSERT(priv_allocated != NULL);
@@ -435,12 +436,18 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	pre_buff = GUARD_PRE_ALLOC();
+
 	if (forward)
 		D_ALLOC(rpc_priv, opc_info->coi_input_offset);
 	else
 		D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+
 	if (rpc_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+
+	GUARD_POST_ALLOC(rpc_priv, pre_buff);
 
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_forward = forward;
@@ -483,6 +490,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
+	GUARD_FREE(rpc_priv);
 	D_FREE(rpc_priv);
 }
 
