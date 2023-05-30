@@ -87,14 +87,11 @@ class NvmeEnospace(ServerFillUp):
         args:
             event(obj): Event indicator to stop IOR read.
         """
-        # create container
-        container = self.get_container(self.pool)
-        container.open()
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()
         ior_bg_cmd.get_params(self)
-        ior_bg_cmd.set_daos_params(self.server_group, self.pool, container.uuid)
+        ior_bg_cmd.set_daos_params(self.server_group, self.pool, None)
         ior_bg_cmd.dfs_oclass.update(self.ior_cmd.dfs_oclass.value)
         ior_bg_cmd.api.update(self.ior_cmd.api.value)
         ior_bg_cmd.transfer_size.update(self.ior_scm_xfersize)
@@ -105,6 +102,10 @@ class NvmeEnospace(ServerFillUp):
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_bg_cmd)
 
+        # create container
+        container = self.get_container(self.pool)
+
+        job_manager.job.dfs_cont.update(container.uuid)
         env = ior_bg_cmd.get_default_env(str(job_manager))
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(1)
