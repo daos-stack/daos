@@ -288,8 +288,7 @@ described above.
 !!! note
     The RPM installation is preferred for production scenarios. Manual
     installation is most appropriate for development and predeployment
-    proof-of-concept scenarios, as it does not provide the same level
-    of security provided by the RPM installation method.
+    proof-of-concept scenarios.
 
 ### Memory Lock Limits
 
