@@ -496,11 +496,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				       ts_set);
 		if (obj != NULL) {
 			if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
-				if (DAOS_ON_VALGRIND)
-					rc = umem_tx_xadd_ptr(vos_cont2umm(cont),
-							      &obj->obj_df->vo_max_write,
-							      sizeof(obj->obj_df->vo_max_write),
-							      POBJ_XADD_NO_SNAPSHOT);
+				rc = umem_tx_xadd_ptr(
+				    vos_cont2umm(cont), &obj->obj_df->vo_max_write,
+				    sizeof(obj->obj_df->vo_max_write), UMEM_XADD_NO_SNAPSHOT);
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
@@ -537,7 +535,7 @@ reset:
 	if (rc == 0)
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
 			dth->dth_cos_done = 1;
@@ -1570,6 +1568,7 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
+	struct umem_instance	*umem;
 	struct bio_iov		*biov = &it_entry->ie_biov;
 
 	D_ASSERT(bio_iov2buf(biov) == NULL);
@@ -1583,13 +1582,13 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
-	 * size in bio_read().
+	 * size in vos_media_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
-	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
-	D_ASSERT(bioc != NULL);
+	bioc = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 
-	return bio_read(bioc, biov->bi_addr, iov_out);
+	return vos_media_read(bioc, umem, biov->bi_addr, iov_out);
 }
 
 static int

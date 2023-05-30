@@ -44,7 +44,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
-	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
 }
 

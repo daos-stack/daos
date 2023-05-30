@@ -644,13 +644,11 @@ obj_get_shard(void *data, int idx)
 static inline bool
 obj_retry_error(int err)
 {
-	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
-	       daos_crt_network_error(err);
+	return err == -DER_TIMEDOUT || err == -DER_STALE || err == -DER_INPROGRESS ||
+	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
+	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
+	       err == -DER_CHKPT_BUSY || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t
