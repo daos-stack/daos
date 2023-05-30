@@ -108,13 +108,13 @@ static _Atomic uint32_t        daos_init_cnt;
  * too if "report" is true. Env variable "D_IL_REPORT=1" or "D_IL_REPORT=true" will set report
  * true.
  */
-static bool		report;
-static long int		page_size;
+static bool             report;
+static long int         page_size;
 
-static bool		daos_inited;
-static bool		daos_debug_inited;
-static int		num_dfs;
-static struct dfs_mt	dfs_list[MAX_DAOS_MT];
+static bool             daos_inited;
+static bool             daos_debug_inited;
+static int              num_dfs;
+static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
 static void
 discover_daos_mount(void);
@@ -1147,8 +1147,8 @@ init_fd_list(void)
 static int
 find_next_available_fd(struct file_obj *obj, int *new_fd)
 {
-	bool allocated		 = false;
-	int i, idx		 = -1;
+	bool	allocated = false;
+	int	i, idx = -1;
 	struct file_obj *new_obj = NULL;
 
 	if (obj == NULL) {
@@ -1198,8 +1198,8 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 static int
 find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 {
-	bool allocated	= false;
-	int i, idx	= -1;
+	bool	allocated = false;
+	int	i, idx	= -1;
 	struct dir_obj *new_obj;
 
 	if (obj == NULL) {
@@ -3376,8 +3376,9 @@ rename(const char *old_name, const char *new_name)
 					/* Unexpected!!! */
 					D_DEBUG(DB_ANY,
 						"dfs_read() failed to read %" PRIu64
-						" bytes from %s: %d (%s)\n", byte_to_write,
-						old_name, EREMOTEIO, strerror(EREMOTEIO));
+						" bytes from %s: %d (%s)\n",
+						byte_to_write, old_name, EREMOTEIO,
+						strerror(EREMOTEIO));
 					D_GOTO(out_old, rc = EREMOTEIO);
 				}
 
