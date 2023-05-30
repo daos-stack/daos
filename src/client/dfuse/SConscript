@@ -65,7 +65,6 @@ def build_client_libs_shared(env, prereqs):
         il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
 
     pil4dfsenv = env.Clone()
-    pil4dfsenv.AppendUnique(CFLAGS='-Wno-error=nonnull-compare')
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
