@@ -46,7 +46,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			IsMountedBool: true,
 		}
 		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, sysprov.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
+		mp := storage.NewProvider(log, 0, &cfg.Storage, sysprov.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil, nil)
 		ei := NewEngineInstance(log, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
@@ -81,5 +81,48 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if i._superblock.UUID == mi._superblock.UUID {
 			t.Fatal("second instance has same superblock as first")
 		}
+	}
+}
+
+func TestServer_Instance_superblockPath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *engine.Config
+		expPath string
+	}{
+		"control metadata configured": {
+			cfg: engine.MockConfig().
+				WithSystemName(t.Name()).
+				WithStorageControlMetadataPath("/etc/daos").
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("/mnt/scm"),
+				),
+			expPath: "/etc/daos/daos_control/engine1/superblock",
+		},
+		"fall back to scm": {
+			cfg: engine.MockConfig().
+				WithSystemName(t.Name()).
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("/mnt/scm1"),
+				),
+			expPath: "/mnt/scm1/superblock",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			sp := storage.NewProvider(log, 1, &tc.cfg.Storage, nil, nil, nil, nil)
+			ei := newTestEngine(log, false, sp, tc.cfg)
+
+			result := ei.superblockPath()
+
+			test.AssertEqual(t, tc.expPath, result, "")
+		})
 	}
 }

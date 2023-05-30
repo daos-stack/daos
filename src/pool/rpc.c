@@ -285,6 +285,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_RP_PDA:
 			bits |= DAOS_PO_QUERY_PROP_RP_PDA;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			bits |= DAOS_PO_QUERY_PROP_PERF_DOMAIN;
+			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;
 			break;
@@ -320,6 +323,15 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
 			bits |= DAOS_PO_QUERY_PROP_OBJ_VERSION;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_MODE;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

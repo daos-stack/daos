@@ -1117,6 +1117,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
 						{
+							Number: propWithVal("perf_domain", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{255},
+						},
+						{
 							Number: propWithVal("scrub", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
 						},
@@ -1136,6 +1140,18 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("svc_list", "").Number,
 							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
 						},
+						{
+							Number: propWithVal("checkpoint", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
+						},
+						{
+							Number: propWithVal("checkpoint_freq", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{10000},
+						},
+						{
+							Number: propWithVal("checkpoint_thresh", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{20},
+						},
 					},
 				}),
 			},
@@ -1143,10 +1159,14 @@ func TestPoolGetProp(t *testing.T) {
 				ID: test.MockUUID(),
 			},
 			expResp: []*daos.PoolProperty{
+				propWithVal("checkpoint", "timed"),
+				propWithVal("checkpoint_freq", "10000"),
+				propWithVal("checkpoint_thresh", "20"),
 				propWithVal("ec_cell_sz", "4096"),
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
