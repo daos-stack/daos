@@ -1332,9 +1332,9 @@ union rpt_data {
 struct rpt_log_entry {
 	struct timeval		tv;
 	enum rpt_op		op;
-	union rpt_data 		rpt_msg;
-	struct rpt_log_entry 	*next;
-	struct rpt_log_entry 	*prev;
+	union rpt_data		rpt_msg;
+	struct rpt_log_entry	*next;
+	struct rpt_log_entry	*prev;
 };
 
 struct rpt_entry {
@@ -1354,7 +1354,7 @@ static int rpt_num_entries;
 static pthread_mutex_t rpt_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-static struct rpt_entry* __get_rpt_entry(struct crt_rpc_priv *rpc_priv)
+static struct rpt_entry *__get_rpt_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry *entry = NULL;
 
@@ -1372,7 +1372,7 @@ static struct rpt_entry* __get_rpt_entry(struct crt_rpc_priv *rpc_priv)
 	return entry;
 }
 
-static struct rpt_entry* __create_rpt_entry(struct crt_rpc_priv *rpc_priv)
+static struct rpt_entry *__create_rpt_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry *entry = NULL;
 
@@ -1436,7 +1436,7 @@ static struct rpt_entry* __create_rpt_entry(struct crt_rpc_priv *rpc_priv)
 }
 
 
-static struct rpt_log_entry* __create_log_entry(struct rpt_entry* entry)
+static struct rpt_log_entry *__create_log_entry(struct rpt_entry* entry)
 {
 	struct rpt_log_entry *log_entry = NULL;
 
@@ -1485,7 +1485,7 @@ static struct rpt_log_entry* __create_log_entry(struct rpt_entry* entry)
 }
 
 
-static struct rpt_log_entry* __get_next_log_entry(struct crt_rpc_priv *rpc_priv)
+static struct rpt_log_entry *__get_next_log_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry	*entry;
 	struct rpt_log_entry	*log_entry;
