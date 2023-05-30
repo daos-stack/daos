@@ -143,7 +143,22 @@ class TelemetryUtils():
         "engine_dmabuff_grab_retries_max",
         "engine_dmabuff_grab_retries_mean",
         "engine_dmabuff_grab_retries_min",
-        "engine_dmabuff_grab_retries_stddev"]
+        "engine_dmabuff_grab_retries_stddev",
+        "engine_dmabuff_wal_sz",
+        "engine_dmabuff_wal_sz_max",
+        "engine_dmabuff_wal_sz_mean",
+        "engine_dmabuff_wal_sz_min",
+        "engine_dmabuff_wal_sz_stddev",
+        "engine_dmabuff_wal_qd",
+        "engine_dmabuff_wal_qd_max",
+        "engine_dmabuff_wal_qd_mean",
+        "engine_dmabuff_wal_qd_min",
+        "engine_dmabuff_wal_qd_stddev",
+        "engine_dmabuff_wal_waiters",
+        "engine_dmabuff_wal_waiters_max",
+        "engine_dmabuff_wal_waiters_mean",
+        "engine_dmabuff_wal_waiters_min",
+        "engine_dmabuff_wal_waiters_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",

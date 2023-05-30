@@ -195,6 +195,18 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	return 1;
 }
 
+static inline uint8_t
+isclr_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		if (isset(bitmap, index))
+			return 0;
+
+	return 1;
+}
+
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
@@ -202,6 +214,15 @@ clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);
+}
+
+static inline void
+setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		setbit(bitmap, index);
 }
 
 static inline unsigned int
@@ -780,6 +801,7 @@ enum {
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
 #define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
+#define DAOS_NVME_WAL_TX_LOST		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x54)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)

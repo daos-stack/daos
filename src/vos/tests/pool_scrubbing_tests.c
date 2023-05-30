@@ -984,7 +984,7 @@ main(int argc, char *argv[])
 	int rc;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
-	rc = vos_self_init("/mnt/daos", false, 0);
+	rc = vos_self_init("/mnt/daos", false, BIO_STANDALONE_TGT_ID);
 	if (rc != 0) {
 		print_error("Error initializing VOS instance: "DF_RC"\n",
 			    DP_RC(rc));

@@ -19,6 +19,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
+var ErrTmpfsNoExtMDPath = errors.New("--use-tmpfs-scm will generate an md-on-ssd config and so " +
+	"--control-metadata-path must also be set")
+
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
 	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
@@ -31,16 +34,21 @@ type configGenCmd struct {
 	hostListCmd
 	jsonOutputCmd
 
-	AccessPoints string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	SCMOnly      bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
-	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
-	UseTmpfsSCM  bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
+	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
+	NetProvider     string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
+
+	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
+		return nil, ErrTmpfsNoExtMDPath
+	}
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
@@ -56,13 +64,14 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 
 	req := control.ConfGenerateRemoteReq{
 		ConfGenerateReq: control.ConfGenerateReq{
-			Log:          cmd.Logger,
-			NrEngines:    cmd.NrEngines,
-			SCMOnly:      cmd.SCMOnly,
-			NetClass:     ndc,
-			NetProvider:  cmd.NetProvider,
-			AccessPoints: accessPoints,
-			UseTmpfsSCM:  cmd.UseTmpfsSCM,
+			Log:             cmd.Logger,
+			NrEngines:       cmd.NrEngines,
+			SCMOnly:         cmd.SCMOnly,
+			NetClass:        ndc,
+			NetProvider:     cmd.NetProvider,
+			AccessPoints:    accessPoints,
+			UseTmpfsSCM:     cmd.UseTmpfsSCM,
+			ExtMetadataPath: cmd.ExtMetadataPath,
 		},
 		Client: cmd.ctlInvoker,
 	}
