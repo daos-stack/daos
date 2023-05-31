@@ -84,12 +84,12 @@ class MSMembershipTest(TestWithServers):
 
         1. Stop rank 1.
         2. Set rank 1 to AdminExcluded state by calling dmg system exclude --ranks=1.
-        3. Verify that the rank 1 state is AdminExluded by calling dmg system query.
+        3. Verify that the rank 1 state is AdminExcluded by calling dmg system query.
         4. Verify that the checker can be run with AdminExcluded state by calling enable,
         start, query, and disable. Verify that none of the commands returns error.
         5. Disable AdminExcluded by calling dmg system clear-exclude --ranks=1
         6. Verify that the rank 1 state is Excluded.
-        7. Start rank 1 for clean up. (At this point, its state is "Excluded".)
+        7. Start both of the servers for cleanup.
 
         Jira ID: DAOS-11704
 
@@ -107,7 +107,7 @@ class MSMembershipTest(TestWithServers):
         # 2. Set rank 1 to AdminExcluded state.
         dmg_command.system_exclude(ranks="1", rank_hosts=None)
 
-        # 3. Verify that the rank 1 state is AdminExluded.
+        # 3. Verify that the rank 1 state is AdminExcluded.
         query_out = dmg_command.system_query()
         admin_excluded_found = False
         rank_1_state = None
@@ -147,7 +147,7 @@ class MSMembershipTest(TestWithServers):
         if not excluded_found:
             errors.append("Rank 1 state is not Excluded! {}".format(rank_1_state))
 
-        # 7. Start rank 1 for cleanup.
-        dmg_command.system_start(ranks="1")
+        # 7. Start both of the servers for cleanup.
+        dmg_command.system_start()
 
         report_errors(test=self, errors=errors)
