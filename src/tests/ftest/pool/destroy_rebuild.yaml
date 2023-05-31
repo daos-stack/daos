@@ -23,8 +23,3 @@ pool:
   control_method: dmg
   pool_query_timeout: 30
   svcn: 7
-testparams:
-  rank_to_kill:
-    - 0
-    - 1
-    - 4

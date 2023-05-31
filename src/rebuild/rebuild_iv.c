@@ -163,9 +163,20 @@ static int
 rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		       d_sg_list_t *src, int ref_rc, void **priv)
 {
+	struct rebuild_tgt_pool_tracker *rpt;
 	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	int rc = 0;
+
+	rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver,
+			 src_iv->riv_rebuild_gen);
+	if (rpt == NULL)
+		return 0;
+
+	if (rpt->rt_leader_term != src_iv->riv_leader_term) {
+		rpt_put(rpt);
+		return 0;
+	}
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
@@ -176,18 +187,6 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
 	    dst_iv->riv_stable_epoch || dst_iv->riv_dtx_resyc_version) {
-		struct rebuild_tgt_pool_tracker *rpt;
-
-		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver,
-				 src_iv->riv_rebuild_gen);
-		if (rpt == NULL)
-			return 0;
-
-		if (rpt->rt_leader_term != src_iv->riv_leader_term) {
-			rpt_put(rpt);
-			return 0;
-		}
-
 		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
 			src_iv->riv_rebuild_gen, src_iv->riv_leader_term,

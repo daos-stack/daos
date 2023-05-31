@@ -683,6 +683,18 @@ int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
+ * Delete an object in OI table, this object is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data migration protocol.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	ID of the object being deleted
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid);
+
+/**
  * Delete a dkey or akey, the key is unaccessible at any epoch after deletion.
  * This function is not part of DAOS data model API, it is only used by data
  * migration protocol and system database.
@@ -1394,5 +1406,17 @@ get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 int
 vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
 		   daos_anchor_t *anchor);
+
+/**
+ * Upgrade object layout version for the object
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	Object ID
+ * \param[in]	layout_ver	the new layout version of the object.
+ *
+ * \return 0 on success, error otherwise.
+ *
+ */
+int
+vos_obj_layout_upgrade(daos_handle_t hdl, daos_unit_oid_t oid, uint32_t layout_ver);
 
 #endif /* __VOS_API_H */
