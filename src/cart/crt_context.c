@@ -1665,9 +1665,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	 * Call progress once before processing timeouts in case
 	 * any replies are pending in the queue
 	 */
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 		D_ERROR("crt_hg_progress failed with %d\n", rc);
 		return rc;
@@ -1695,9 +1693,7 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 				hg_timeout = timeout;
 		}
 
-		D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 			D_ERROR("crt_hg_progress failed with %d\n", rc);
 			return rc;
