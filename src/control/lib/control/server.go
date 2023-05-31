@@ -19,8 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
-// SetEngineLogMasksReq contains the inputs for the set engine log level
-// request.
+// SetEngineLogMasksReq contains the inputs for the set engine log level request.
 type SetEngineLogMasksReq struct {
 	unaryRequest
 	Masks      *string `json:"masks"`
@@ -28,8 +27,7 @@ type SetEngineLogMasksReq struct {
 	Subsystems *string `json:"subsystems"`
 }
 
-// SetEngineLogMasksResp contains the results of a set engine log level
-// request.
+// SetEngineLogMasksResp contains the results of a set engine log level request.
 type SetEngineLogMasksResp struct {
 	HostErrorsResp
 	HostStorage HostStorageMap
@@ -81,6 +79,8 @@ func (resp *SetEngineLogMasksResp) addHostResponse(hr *HostResponse) error {
 	return nil
 }
 
+// Set reset flags if parameters have not been supplied in the input request and dereference values
+// if they have after validating.
 func setLogMasksReqToPB(req *SetEngineLogMasksReq) (*ctlpb.SetLogMasksReq, error) {
 	pbReq := new(ctlpb.SetLogMasksReq)
 
@@ -114,8 +114,8 @@ func setLogMasksReqToPB(req *SetEngineLogMasksReq) (*ctlpb.SetLogMasksReq, error
 	return pbReq, nil
 }
 
-// SetEngineLogMasks will send RPC to hostlist to request changes to log
-// level of all DAOS engines on each host in list.
+// SetEngineLogMasks will send RPC to hostlist to request changes to log level of all DAOS engines
+// on each host in list.
 func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
