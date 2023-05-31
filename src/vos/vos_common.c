@@ -16,9 +16,11 @@
 #include <daos/rpc.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <daos/sys_db.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/smd.h>
 #include "vos_internal.h"
 
 struct vos_self_mode {
@@ -176,7 +178,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
-	struct vos_rsrvd_scm	*scm;
+	struct umem_rsrvd_act	*scm;
 	int			 rc;
 	int			 i;
 
@@ -253,8 +255,8 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts,
-	   bool started, int err)
+	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
+	   bool started, struct bio_desc *biod, int err)
 {
 	struct dtx_handle	*dth = dth_in;
 	struct vos_dtx_act_ent	*dae;
@@ -302,7 +304,10 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	vos_dth_set(NULL);
 
-	err = umem_tx_end(vos_cont2umm(cont), err);
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
+		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);
+	else
+		err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
 	if (dtx_is_valid_handle(dth_in)) {
@@ -506,7 +511,7 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
-	rc = vos_pool_settings_init();
+	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
 		return rc;
@@ -570,7 +575,9 @@ vos_mod_fini(void)
 static inline int
 vos_metrics_count(void)
 {
-	return vea_metrics_count();
+	return vea_metrics_count() +
+	       (sizeof(struct vos_agg_metrics) + sizeof(struct vos_space_metrics) +
+		sizeof(struct vos_chkpt_metrics)) / sizeof(struct d_tm_node_t *);
 }
 
 static void
@@ -585,6 +592,7 @@ vos_metrics_free(void *data)
 
 #define VOS_AGG_DIR	"vos_aggregation"
 #define VOS_SPACE_DIR	"vos_space"
+#define VOS_RH_DIR	"vos_rehydration"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -607,6 +615,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	struct vos_pool_metrics		*vp_metrics;
 	struct vos_agg_metrics		*vam;
 	struct vos_space_metrics	*vsm;
+	struct vos_rh_metrics		*brm;
 	char				desc[40];
 	int				i, rc;
 
@@ -624,6 +633,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	vam = &vp_metrics->vp_agg_metrics;
 	vsm = &vp_metrics->vp_space_metrics;
+	brm = &vp_metrics->vp_rh_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -695,6 +705,9 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* Metrics related to VOS checkpointing */
+	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
+
 	/* VOS space SCM used metric */
 	rc = d_tm_add_metric(&vsm->vsm_scm_used, D_TM_GAUGE, "SCM space used", "bytes",
 			     "%s/%s/scm_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
@@ -709,6 +722,32 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
+
+	/* Initialize metrics for vos file rehydration */
+	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
+			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
+			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
+			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
+			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
+			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
 
 	return vp_metrics;
 }
@@ -734,10 +773,6 @@ struct dss_module vos_srv_module =  {
 static void
 vos_self_nvme_fini(void)
 {
-	if (self_mode.self_xs_ctxt != NULL) {
-		bio_xsctxt_free(self_mode.self_xs_ctxt);
-		self_mode.self_xs_ctxt = NULL;
-	}
 	if (self_mode.self_nvme_init) {
 		bio_nvme_fini();
 		self_mode.self_nvme_init = false;
@@ -752,7 +787,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
+vos_self_nvme_init(const char *vos_path)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -779,11 +814,11 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 	} else {
 		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
 
@@ -791,7 +826,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 		goto out;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 out:
 	D_FREE(nvme_conf);
 	return rc;
@@ -800,8 +834,16 @@ out:
 static void
 vos_self_fini_locked(void)
 {
+	if (self_mode.self_xs_ctxt != NULL) {
+		bio_xsctxt_free(self_mode.self_xs_ctxt);
+		self_mode.self_xs_ctxt = NULL;
+	}
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		vos_db_fini();
+	else
+		lmm_db_fini();
 	vos_self_nvme_fini();
-	vos_db_fini();
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
@@ -828,23 +870,24 @@ vos_self_fini(void)
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 }
 
+#define LMMDB_PATH	"/var/daos/"
+
 int
 vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
 {
-	char	*evt_mode;
-	int	 rc = 0;
+	char		*evt_mode;
+	int		 rc = 0;
+	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	rc = ABT_init(0, NULL);
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
-	}
+	if (rc != 0)
+		goto out;
 
 	vos_start_epoch = 0;
 
@@ -852,25 +895,44 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 	self_mode.self_tls = vos_tls_init(DAOS_TGT_TAG, 0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
+		goto out;
 	}
 #endif
+	if (nvme_init) {
+		rc = vos_self_nvme_init(db_path);
+		if (rc)
+			goto failed;
+	}
+
 	rc = vos_mod_init();
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
-	if (use_sys_db)
-		rc = vos_db_init(db_path);
-	else
-		rc = vos_db_init_ex(db_path, "self_db", true, true);
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		/* LMM DB path same as VOS DB path argument in self init case */
+		if (use_sys_db)
+			rc = lmm_db_init(db_path);
+		else
+			rc = lmm_db_init_ex(db_path, "self_db", true, true);
+		db = lmm_db_get();
+	} else {
+		if (use_sys_db)
+			rc = vos_db_init(db_path);
+		else
+			rc = vos_db_init_ex(db_path, "self_db", true, true);
+		db = vos_db_get();
+	}
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
-	if (nvme_init) {
-		rc = vos_self_nvme_init(db_path, tgt_id);
-		if (rc)
-			D_GOTO(failed, rc);
+	rc = smd_init(db);
+	if (rc)
+		goto failed;
+
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
+	if (rc) {
+		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
+		goto failed;
 	}
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");

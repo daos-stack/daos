@@ -58,6 +58,7 @@ vts_alloc_gen_fname(char **fname)
 
 	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
 	if (rc < 0) {
+		*fname = NULL;
 		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
 		return rc;
 	}
@@ -77,9 +78,11 @@ vts_pool_fallocate(char **fname)
 	fd = open(*fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
 	if (fd < 0) {
 		ret = -ENOMEM;
+		free(*fname);
+		*fname = NULL;
 		goto exit;
 	}
-	ret = fallocate(fd, 0, 0, VPOOL_16M);
+	ret = fallocate(fd, 0, 0, VPOOL_256M);
 
 exit:
 	return ret;
@@ -333,7 +336,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init(vos_path, false, -1);
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

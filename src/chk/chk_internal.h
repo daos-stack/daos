@@ -16,6 +16,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/object.h>
+#include <daos/sys_db.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/pool.h>

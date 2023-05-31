@@ -1572,6 +1572,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 	struct smd_pool_info	*pool_info = NULL;
 	daos_size_t		 blob_size;
 	struct dv_sync_cb_args	*args = cb_args;
+	enum smd_dev_type	 st = SMD_DEV_TYPE_DATA; /* FIXME: support other types? */
 	int			 rc;
 
 	D_ASSERT(args != NULL);
@@ -1581,7 +1582,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		args->sync_rc = -DER_UNKNOWN;
 		return;
 	}
-	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id);
+	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id, st);
 	smd_dev_set_state(info->dsi_dev_id, SMD_DEV_NORMAL);
 	if (rc == -DER_EXIST)
 		D_INFO("tgt_id(%d) already mapped to dev_id("DF_UUID")",
@@ -1600,19 +1601,20 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		 */
 		blob_size = info->dsi_cluster_nr * info->dsi_cluster_size;
 	} else {
-		blob_size = pool_info->spi_blob_sz;
+		blob_size = pool_info->spi_blob_sz[st];
 		smd_pool_free_info(pool_info);
 	}
 
 	/* Try to delete the target first */
-	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id);
+	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id, st);
 	if (!SUCCESS(rc)) {
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
 		rc = 0;
 	}
 
-	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, blob_size);
+	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
+			      info->dsi_hdr->bbh_blob_id, st, blob_size);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;

@@ -64,10 +64,16 @@ class CsumErrorLog(DaosCoreBase):
                 if 'tgt_ids' not in device or 'uuid' not in device:
                     self.fail(
                         'Missing uuid and/or tgt_ids info from dmg storage query list devices')
+                if 'role_bits' not in device:
+                    self.fail(
+                        'Missing role bits info from dmg storage query list devices')
                 self.log.info(
                     "Host %s device: uuid=%s, targets=%s", host, device['uuid'], device['tgt_ids'])
                 if not device['tgt_ids']:
                     self.log.info('Skipping device without targets on %s', device['uuid'])
+                    continue
+                if not int(device['role_bits']) & 1:
+                    self.log.info('Skipping device without data on %s', device['uuid'])
                     continue
                 if not device['uuid']:
                     self.fail("Device uuid undefined")

@@ -12,7 +12,6 @@
 
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
-#include <libpmemobj.h>
 #include <daos/btree.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
@@ -21,15 +20,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "ilog.h"
 
-/**
- * Typed Layout named using Macros from libpmemobj
- * for root object.  We don't need to define the TOIDs for
- * other VOS structures because VOS uses umem_off_t for internal
- * pointers rather than using typed allocations.
- */
-POBJ_LAYOUT_BEGIN(vos_pool_layout);
-POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_END(vos_pool_layout);
+/** Layout name for vos pool */
+#define VOS_POOL_LAYOUT         "vos_pool_layout"
 
 struct vos_gc_bin_df {
 	/** address of the first(oldest) bag */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -201,7 +201,16 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			       dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+		if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver &&
+		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
+			D_DEBUG(DB_REBUILD, DF_UUID" signal global wait cond\n",
+				DP_UUID(src_iv->riv_pool_uuid));
+			ABT_mutex_lock(rpt->rt_lock);
+			ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
+			ABT_mutex_unlock(rpt->rt_lock);
+		}
 		rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
+
 		rpt_put(rpt);
 	}
 
