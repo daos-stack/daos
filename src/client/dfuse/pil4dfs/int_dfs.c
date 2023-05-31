@@ -4643,6 +4643,7 @@ dup2(int oldfd, int newfd)
 			errno = errno_save;
 			return (-1);
 		} else if (fd != newfd) {
+			close(fd);
 			D_ERROR("failed to get the desired fd in dup2(): %d (%s)\n", EBUSY,
 				strerror(EBUSY));
 			errno = EBUSY;
