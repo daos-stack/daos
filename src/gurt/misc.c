@@ -1280,7 +1280,7 @@ int setenv(const char *name, const char *value, int overwrite)
 
 			handle = dlopen("libc.so.6", RTLD_LAZY);
 			D_ASSERT(handle != NULL);
-			real_setenv = (int (*)(const char *, const char *, int))dlsym(RTLD_NEXT,
+			real_setenv = (int (*)(const char *, const char *, int))dlsym(handle,
 				      "setenv");
 		}
 		D_ASSERT(real_setenv != NULL);
@@ -1305,7 +1305,7 @@ int unsetenv(const char *name)
 
 			handle = dlopen("libc.so.6", RTLD_LAZY);
 			D_ASSERT(handle != NULL);
-			real_unsetenv = (int (*)(const char *))dlsym(RTLD_NEXT, "unsetenv");
+			real_unsetenv = (int (*)(const char *))dlsym(handle, "unsetenv");
 		}
 		D_ASSERT(real_unsetenv != NULL);
 	}
@@ -1329,7 +1329,7 @@ int clearenv(void)
 
 			handle = dlopen("libc.so.6", RTLD_LAZY);
 			D_ASSERT(handle != NULL);
-			real_clearenv = (int (*)(void))dlsym(RTLD_NEXT, "clearenv");
+			real_clearenv = (int (*)(void))dlsym(handle, "clearenv");
 		}
 		D_ASSERT(real_clearenv != NULL);
 	}
