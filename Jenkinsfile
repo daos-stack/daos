@@ -41,7 +41,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME.startsWith('md-on-ssd-testing') ? 'H 12 * * *' : '')
+        cron(env.BRANCH_NAME == 'md-on-ssd-testing' ? 'H 12 * * *' : '')
     }
 
     environment {
