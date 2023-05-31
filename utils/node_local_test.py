@@ -1048,14 +1048,21 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd, check=True):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
 
-        Looks like valgrind and libpil4dfs.so do not work together sometime.
-        Disable valgrind at this moment. Will revisit this issue later.
+        If container is supplied setup the environment to access that container, using a temporary
+        directory as a "mount point" and run the command from that directory so that paths can be
+        relative.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime. Disable valgrind at
+        this moment. Will revisit this issue later.
         """
+        if container is not None:
+            assert isinstance(container, DaosCont)
+
         cmd_env = get_base_env()
 
         with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
@@ -1068,10 +1075,21 @@ class DaosServer():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd_env['D_IL_REPORT'] = '1'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        if container is not None:
+            # Create a temporary directory for the mount point, this will be removed as it goes out
+            # scope so keep as a local for the rest of the function.
+            # pylint: disable-next=consider-using-with
+            tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
+            cwd = tmp_dir.name
+            cmd_env['DAOS_MOUNT_POINT'] = cwd
+            cmd_env['DAOS_POOL'] = container.pool.id()
+            cmd_env['DAOS_CONTAINER'] = container.id()
+        else:
+            cwd = None
 
         print('Run command: ')
         print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
                             env=cmd_env, check=False)
         print(rc)
 
@@ -3790,6 +3808,13 @@ class PosixTests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+    def test_pil4dfs_no_dfuse(self):
+        """Test pil4dfs with no fuse instance"""
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/bin/sh', '.'], container=self.container)
+        rc = self.server.run_daos_client_cmd_pil4dfs(['ls'], container=self.container)
+        print(rc.stdout)
+        assert rc.stdout == b'sh\n', rc
 
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
