@@ -125,7 +125,8 @@ class MSMembershipTest(TestWithServers):
             dmg_command.check_enable()
             dmg_command.check_start()
             dmg_command.check_query()
-            dmg_command.check_disable()
+            # We need to start after calling dmg system clear-exclude, so don't start now.
+            dmg_command.check_disable(start=False)
         except CommandFailure as error:
             msg = f"dmg check command failed! {error}"
             errors.append(msg)
