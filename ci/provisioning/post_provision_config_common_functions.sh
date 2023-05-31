@@ -273,11 +273,6 @@ post_provision_config_nodes() {
         return 1
     fi
 
-    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-        # Remove OPA and install MOFED
-        install_mofed
-    fi
-
     if [ -n "$INST_REPOS" ]; then
         local repo
         for repo in $INST_REPOS; do
@@ -307,6 +302,11 @@ post_provision_config_nodes() {
         if ! rpm -q "$LSB_RELEASE"; then
             retry_dnf 360 install "$LSB_RELEASE"
         fi
+    fi
+
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+        # Remove OPA and install MOFED
+        install_mofed
     fi
 
     # shellcheck disable=SC2001
