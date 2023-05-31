@@ -1363,7 +1363,6 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary.
 
         """
-
         return self._get_json_result(
             ("check", "set-policy"), reset_defaults=reset_defaults,
             all_interactive=all_interactive, policies=policies)
