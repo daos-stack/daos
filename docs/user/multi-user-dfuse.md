@@ -16,8 +16,9 @@ users on a node.  Only root can enable this, but once set it applies to all user
 ## Recommended use-case
 
 Persistent multi user dfuse instances make sense on login nodes to allow permanent access to DAOS
-for multiple users without the overhead of spinning up per-user instances on login. It allows better
-use of kernel resources, is easier to administer and more flexibile than per-user dfuse processes.
+for multiple users without the overhead of spinning up per-user instances of dfuse on login. It
+allows better use of kernel resources, is easier to administer and more flexibile than per-user
+dfuse processes.
 
 To set this up it is assumed that the system admins will create a dedicated unix account for this
 and configure systemd on login/compile nodes to start dfuse as part of the boot sequence for the
@@ -35,8 +36,9 @@ appropriate ACLs need to be set on both DAOS pools and containers.  DFuse is lik
 client in this regard and when running multi-user dfuse then it is likely that the user dfuse is
 running as does not own all the pools and containers it will be serving.
 
-ACLs required for pools is the 'r' permission on any pool for the user running dfuse.  This
-administrator may choose to set this when creating pools.
+All pools whose containers are served through this multi-user dfuse mount need a pool ACL that
+grants 'r' permissions to the user that is running the multi-user dfuse process. The administrator
+may choose to set this when creating pools.
 
 It is possible for a user to run multi-user dfuse and to do so purely to expose data in their own
 containers to other users. In this case the user running dfuse is the same as the user owning the
@@ -47,12 +49,11 @@ containers so no modification of ACLs is required.
 For containers the 'r', 't' and 'w' permissions are required on the container for the user running
 dfuse.  When containers are created though the `daos` command using a path which resides in a
 multi-user dfuse mount then these ACLs are set automatically and this is reported to the user.
-(TODO: Check this is reported).
 
 If a container is created using a path not backed by multi-user dfuse - for example, on a per-user
 dfuse instance or where a `path` option is not provided at all - then in order for anyone to access
 the container the user will need to add this permission themselves.  This includes the user that
-owns the pool. Without the dfuse users being able to access the container it cannot serve the
+owns the pool. Without the dfuse user being able to access the container it cannot serve the
 contents, even to the container owner.  This applies equally well to containers where the Unified
 Namespace link is created after the container itself is created.
 
@@ -75,7 +76,7 @@ Example:
 
 ### Setup user to serve dfuse and create containers, mount points etc.
 ```bash
-$ sudo -u dserve dmg --insecure pool create root_pool --size 1g
+$ sudo -u dserve dmg pool create root_pool --size 1g
 $ sudo -u dserve daos cont create --type POSIX root_pool root_container
 $ sudo mkdir /crate
 $ sudo chown dserve.dserve /crate
@@ -91,7 +92,7 @@ $ sudo -u dserve dfuse --multi-user /crate root_pool root_container
 $ sudo mkdir -m 0700 /crate/anthony
 $ sudo chown anthony.anthony /crate/anthony
 $ sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
-$ sudo -u dserve dmg --insecure pool update-acl anthony_pool -e "A::dserve@:r"
+$ sudo -u dserve dmg pool update-acl anthony_pool -e "A::dserve@:r"
 $ sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool --type POSIX
 $ sudo -u anthony chmod 755 /crate/anthony
 $ sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"

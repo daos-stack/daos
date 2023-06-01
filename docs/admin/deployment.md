@@ -1599,5 +1599,5 @@ Multi-user dfuse makes use of the `allow_other` fuse mount option which allows r
 other than the user running dfuse.  For reasons of safety this option is disabled by default for
 fuse and must be enabled by root before any user can use it.  To allow this then root must add or
 uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
-does not do this automatically. An administrator must set this option on login nodes if they want to
-provide a persistent multi-user dfuse service.
+does not do this automatically. An administrator must set this option on all nodes on which they
+want to provide a persistent multi-user dfuse service.
