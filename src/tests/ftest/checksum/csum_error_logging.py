@@ -46,7 +46,7 @@ class CsumErrorLog(DaosCoreBase):
 
     @fail_on(CommandFailure)
     def test_csum_error_logging(self):
-        """Jira ID: DAOS-3927
+        """Jira ID: DAOS-3927.
 
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
