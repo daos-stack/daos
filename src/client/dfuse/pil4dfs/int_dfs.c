@@ -623,13 +623,13 @@ discover_daos_mount(void)
 	num_dfs++;
 }
 
+#define MNT_TYPE_FUSE	"fuse.daos"
 static void
 discover_dfuse(void)
 {
 	FILE          *fp;
-	const char     mnt_type_fuse[] = "fuse.daos";
 	struct mntent *fs_entry;
-	char          *pt_end;
+	struct dfs_mt *pt_dfs_mt;
 
 	num_dfs = 0;
 
@@ -641,27 +641,25 @@ discover_dfuse(void)
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
-		if (strncmp(fs_entry->mnt_type, mnt_type_fuse, sizeof(mnt_type_fuse)) == 0) {
-			dfs_list[num_dfs].dfs_dir_hash = NULL;
-			dfs_list[num_dfs].len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
-			if (dfs_list[num_dfs].len_fs_root >= DFS_MAX_PATH) {
+		pt_dfs_mt = &dfs_list[num_dfs];
+		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
+			pt_dfs_mt->dfs_dir_hash = NULL;
+			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
+			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
 				continue;
 			}
-			atomic_store_relaxed(&dfs_list[num_dfs].inited, 0);
-			dfs_list[num_dfs].pool         = NULL;
-			pt_end = stpncpy(dfs_list[num_dfs].fs_root, fs_entry->mnt_dir,
-					 DFS_MAX_PATH - 1);
-			if ((long int)(pt_end - dfs_list[num_dfs].fs_root) >= (DFS_MAX_PATH - 1)) {
-				D_DEBUG(DB_ANY, "fs_root[] is too long. Skip this entry.\n");
-				continue;
-			}
+			atomic_init(&(pt_dfs_mt->inited), 0);
+			pt_dfs_mt->pool         = NULL;
+			/* The length of fs_entry->mnt_dir[] has been checked already. */
+			strncpy(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root + 1);
 			num_dfs++;
 		}
 	}
 
 	endmntent(fp);
 }
+#undef MNT_TYPE_FUSE
 
 static int
 retrieve_handles_from_fuse(int idx)
