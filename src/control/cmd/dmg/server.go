@@ -59,23 +59,15 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, resp.Errors())
 	}
 
-	var outErr strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+	var out, outErr strings.Builder
+	if err := pretty.PrintSetEngineLogMasksResp(resp, &out, &outErr); err != nil {
 		return err
 	}
 	if outErr.Len() > 0 {
 		cmd.Error(outErr.String())
 	}
-
-	switch len(resp.HostStorage) {
-	case 0:
-	case 1:
-		for _, hss := range resp.HostStorage {
-			cmd.Infof("Engine log-masks updated successfully on the following hosts: %s",
-				hss.HostSet)
-		}
-	default:
-		return errors.New("unexpected number of keys in HostStorageMap")
+	if out.Len() > 0 {
+		cmd.Info(out.String())
 	}
 
 	return resp.Errors()
