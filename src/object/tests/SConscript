@@ -3,11 +3,11 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv')
 
     unit_env = denv.Clone()
 
-    prereqs.require(unit_env, 'pmdk', headers_only=True)
+    unit_env.require('pmdk', headers_only=True)
 
     unit_env.Append(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     unit_env.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
