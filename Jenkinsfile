@@ -41,13 +41,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME.startsWith('md-on-ssd-testing') ? 'H 12 * * 0' : '')
+        cron(env.BRANCH_NAME == 'md-on-ssd-testing' ? 'H 12 * * *' : '')
     }
 
     environment {
@@ -72,7 +66,7 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: 'always_passes',
+               defaultValue: 'pr daily_regression',
                description: 'Test-tag to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
                defaultValue: 'auto_md_on_ssd',
