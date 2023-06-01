@@ -676,7 +676,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
