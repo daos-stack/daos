@@ -46,7 +46,7 @@ type leaderQueryCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	ReplicasOff bool `short:"N" long:"off-replica" description:"Show not available Replicas only"`
+	DownReplicas bool `short:"N" long:"down-replicas" description:"Show Down Replicas only"`
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
@@ -70,11 +70,11 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, err)
 	}
 
-	if cmd.ReplicasOff {
-		cmd.Infof("Replicas Off: %s\n", strings.Join(resp.ReplicasOff, ", "))
+	if cmd.DownReplicas {
+		cmd.Infof("Unresponsive Replicas: %s\n", strings.Join(resp.DownReplicas, ", "))
 	} else {
-		cmd.Infof("Current Leader: %s\n   Replica Set: %s\n  Replicas Off: %s\n", resp.Leader,
-			strings.Join(resp.Replicas, ", "), strings.Join(resp.ReplicasOff, ", "))
+		cmd.Infof("Current Leader: %s\n   Replica Set: %s\n  Unresponsive Replicas: %s\n", resp.Leader,
+			strings.Join(resp.Replicas, ", "), strings.Join(resp.DownReplicas, ", "))
 	}
 
 	return nil

@@ -1178,12 +1178,12 @@ static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "replicasOff",
+    "DownReplicas",
     3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__LeaderQueryResp, n_replicasoff),
-    offsetof(Mgmt__LeaderQueryResp, replicasoff),
+    offsetof(Mgmt__LeaderQueryResp, n_downreplicas),
+    offsetof(Mgmt__LeaderQueryResp, downreplicas),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -1191,9 +1191,9 @@ static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors
   },
 };
 static const unsigned mgmt__leader_query_resp__field_indices_by_name[] = {
+  2,   /* field[2] = DownReplicas */
   0,   /* field[0] = currentLeader */
   1,   /* field[1] = replicas */
-  2,   /* field[2] = replicasOff */
 };
 static const ProtobufCIntRange mgmt__leader_query_resp__number_ranges[1 + 1] =
 {

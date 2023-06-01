@@ -620,9 +620,9 @@ type LeaderQueryReq struct {
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader      string `json:"CurrentLeader"`
-	Replicas    []string
-	ReplicasOff []string
+	Leader       string `json:"CurrentLeader"`
+	Replicas     []string
+	DownReplicas []string
 }
 
 // LeaderQuery requests the current Management Service leader and the set of
@@ -652,7 +652,7 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
-			resp.ReplicasOff = append(resp.ReplicasOff, hostResp.Addr)
+			resp.DownReplicas = append(resp.DownReplicas, hostResp.Addr)
 			continue
 		}
 	}

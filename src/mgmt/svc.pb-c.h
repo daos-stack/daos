@@ -196,8 +196,8 @@ struct  _Mgmt__LeaderQueryResp
   char *currentleader;
   size_t n_replicas;
   char **replicas;
-  size_t n_replicasoff;
-  char **replicasoff;
+  size_t n_downreplicas;
+  char **downreplicas;
 };
 #define MGMT__LEADER_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
