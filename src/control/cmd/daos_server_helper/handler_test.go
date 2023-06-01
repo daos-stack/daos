@@ -40,6 +40,232 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
+func TestDaosAdmin_MetadataMountHandler(t *testing.T) {
+	mountReqPayload, err := json.Marshal(storage.MetadataMountRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		provider   *storage.MockMetadataProvider
+		expPayload *storage.MountResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataMount",
+			},
+			expErr: nilPayloadErr,
+		},
+		"mount failed": {
+			req: &pbin.Request{
+				Method:  "MetadataMount",
+				Payload: mountReqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				MountErr: errors.New("mock Mount"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Mount"),
+		},
+		"mount success": {
+			req: &pbin.Request{
+				Method:  "MetadataMount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &storage.MountResponse{},
+		},
+		"unmount failed": {
+			req: &pbin.Request{
+				Method:  "MetadataUnmount",
+				Payload: mountReqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				UnmountErr: errors.New("mock Unmount"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Unmount"),
+		},
+		"unmount success": {
+			req: &pbin.Request{
+				Method:  "MetadataUnmount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &storage.MountResponse{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{
+					MountRes:   &storage.MountResponse{},
+					UnmountRes: &storage.MountResponse{},
+				}
+			}
+
+			handler := &metadataMountHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &storage.MountResponse{}
+			}
+			expectPayload(t, resp, &storage.MountResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_MetadataFormatHandler(t *testing.T) {
+	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+		DataPath: "datapath",
+		OwnerUID: 100,
+		OwnerGID: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req      *pbin.Request
+		provider *storage.MockMetadataProvider
+		expErr   *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"format failed": {
+			req: &pbin.Request{
+				Method:  "MetadataFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				FormatErr: errors.New("mock Format"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Format"),
+		},
+		"format success": {
+			req: &pbin.Request{
+				Method:  "MetadataFormat",
+				Payload: reqPayload,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{}
+			}
+
+			handler := &metadataFormatHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestDaosAdmin_MetadataNeedsFormatHandler(t *testing.T) {
+	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+		DataPath: "datapath",
+		OwnerUID: 100,
+		OwnerGID: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req      *pbin.Request
+		provider *storage.MockMetadataProvider
+		expRes   bool
+		expErr   *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataNeedsFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"format check failed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				NeedsFormatErr: errors.New("mock NeedsFormat"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock NeedsFormat"),
+		},
+		"format needed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				NeedsFormatRes: true,
+			},
+			expRes: true,
+		},
+		"format not needed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{}
+			}
+
+			handler := &metadataFormatHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+
+			var result bool
+			if err := json.Unmarshal(resp.Payload, &result); err != nil {
+				t.Fatal(err)
+			}
+			test.AssertEqual(t, tc.expRes, result, "")
+		})
+	}
+}
+
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
