@@ -454,8 +454,7 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 
 		engineResp := new(ctlpb.SetLogMasksResp)
 		if err = proto.Unmarshal(dresp.Body, engineResp); err != nil {
-			resp.Errors[idx] = err.Error()
-			continue
+			return nil, err
 		}
 
 		if engineResp.Status != 0 {

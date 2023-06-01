@@ -1013,12 +1013,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		"dRPC resp junk": {
 			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
 			junkResp: true,
-			expResp: &ctlpb.SetLogMasksResp{
-				Errors: []string{
-					"proto: cannot parse invalid wire-format data",
-					"proto: cannot parse invalid wire-format data",
-				},
-			},
+			expErr:   errors.New("invalid wire-format data"),
 		},
 		"missing superblock": { // shouldn't matter in this case
 			req:         &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
