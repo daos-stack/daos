@@ -1224,7 +1224,7 @@ static void bind_libc_symbol(void **real_ptr_addr, const char* name)
 {
 	void *real_temp;
 
-	if (atomic_load_relaxed(real_ptr_addr) == NULL) {
+	if (atomic_load_relaxed((ATOMIC void **)real_ptr_addr) == NULL) {
 		/* libc should be already loaded ... */
 		real_temp = dlsym(RTLD_NEXT, name);
 		if (real_temp == NULL) {
@@ -1236,7 +1236,7 @@ static void bind_libc_symbol(void **real_ptr_addr, const char* name)
 			real_temp = dlsym(handle, name);
 			D_ASSERT(real_temp != NULL);
 		}
-		atomic_store_relaxed(real_ptr_addr, real_temp);
+		atomic_store_relaxed((ATOMIC void **)real_ptr_addr, real_temp);
 	}
 }
 
