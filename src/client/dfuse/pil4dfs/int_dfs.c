@@ -85,7 +85,7 @@ struct dfs_mt {
 
 	_Atomic uint32_t     inited;
 	char                *pool, *cont;
-	char                 fs_root[DFS_MAX_PATH];
+	char                *fs_root;
 };
 
 static _Atomic uint64_t        num_read;
@@ -649,17 +649,20 @@ discover_dfuse(void)
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
 				continue;
 			}
-			atomic_init(&(pt_dfs_mt->inited), 0);
+			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			/* The length of fs_entry->mnt_dir[] has been checked already. */
+			D_ALLOC(pt_dfs_mt->fs_root, DFS_MAX_PATH);
+			if (pt_dfs_mt->fs_root == NULL)
+				continue;
 			strncpy(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root + 1);
 			num_dfs++;
 		}
 	}
 
 	endmntent(fp);
-}
 #undef MNT_TYPE_FUSE
+}
 
 static int
 retrieve_handles_from_fuse(int idx)
@@ -5389,6 +5392,7 @@ finalize_dfs(void)
 				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
+		D_FREE(dfs_list[i].fs_root);
 	}
 
 	if (daos_inited) {
