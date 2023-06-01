@@ -51,8 +51,9 @@ server_config:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
-        - FI_LOG_LEVEL=warn
+        - FI_LOG_LEVEL=debug
         - D_LOG_STDERR_IN_LOG=1
+        - UCX_LOG_LEVEL=debug
       storage: auto
     1:
       pinned_numa_node: 1
@@ -65,8 +66,9 @@ server_config:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
-        - FI_LOG_LEVEL=warn
+        - FI_LOG_LEVEL=debug
         - D_LOG_STDERR_IN_LOG=1
+        - UCX_LOG_LEVEL=debug
       storage: auto
   transport_config:
     allow_insecure: true
@@ -77,6 +79,10 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: true
+client:
+  env_vars:
+    - FI_LOG_LEVEL=debug
+    - UCX_LOG_LEVEL=debug
 daos_tests:
   num_clients:
     test_daos_degraded_mode: 1
