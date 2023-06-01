@@ -82,9 +82,14 @@ d_realpath(const char *path, char *resolved_path)
 }
 
 void *
-d_aligned_alloc(size_t alignment, size_t size)
+d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
-	return aligned_alloc(alignment, size);
+	void *buf = aligned_alloc(alignment, size);
+
+	if (!zero || buf == NULL)
+		return buf;
+	memset(buf, 0, size);
+	return buf;
 }
 
 int

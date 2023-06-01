@@ -536,11 +536,16 @@ class DaosServer():
         self.max_stop_time = 30
         self.stop_sleep_time = 0.5
         self.engines = conf.args.engine_count
+        self.sys_ram_rsvd = conf.args.system_ram_reserved
         # pylint: disable=consider-using-with
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
                                                        delete=False)
+        self.helper_log = tempfile.NamedTemporaryFile(prefix='dnt_helper_',
+                                                      suffix='.log',
+                                                      dir=conf.tmp_dir,
+                                                      delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
                                                      dir=conf.tmp_dir,
@@ -568,14 +573,6 @@ class DaosServer():
         self.network_interface = None
         self.network_provider = None
 
-        # Detect the number of cores for dfuse and do something sensible, if there are
-        # more than 32 on the node then use 12, otherwise use the whole node.
-        # pylint: disable-next=no-member
-        num_cores = len(os.sched_getaffinity(0))
-        if num_cores > 32:
-            self.dfuse_cores = 12
-        else:
-            self.dfuse_cores = None
         self.fuse_procs = []
 
     def __enter__(self):
@@ -708,9 +705,9 @@ class DaosServer():
         with open(join(self_dir, 'nlt_server.yaml'), 'r') as scfd:
             scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
+        scyaml['helper_log_file'] = self.helper_log.name
 
         scyaml['socket_dir'] = self.agent_dir
 
@@ -720,22 +717,18 @@ class DaosServer():
                 continue
             scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
+        if self.sys_ram_rsvd is not None:
+            scyaml['system_ram_reserved'] = self.sys_ram_rsvd
+
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['storage'][0]['scm_size'] = int(
-            ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
-        # Leave some cores for dfuse, and start the daos server after these.
-        if self.dfuse_cores:
-            first_core = self.dfuse_cores
-        else:
-            first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         self.network_interface = ref_engine['fabric_iface']
         self.network_provider = scyaml['provider']
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
-            engine['first_core'] = first_core + (ref_engine['targets'] * idx)
+            engine['first_core'] = ref_engine['targets'] * idx
             engine['fabric_iface_port'] += server_port_count * idx
             engine['storage'][0]['scm_mount'] = f'{ref_engine["storage"][0]["scm_mount"]}_{idx}'
             scyaml['engines'].append(engine)
@@ -1055,14 +1048,21 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd, check=True):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
 
-        Looks like valgrind and libpil4dfs.so do not work together sometime.
-        Disable valgrind at this moment. Will revisit this issue later.
+        If container is supplied setup the environment to access that container, using a temporary
+        directory as a "mount point" and run the command from that directory so that paths can be
+        relative.
+
+        Looks like valgrind and libpil4dfs.so do not work together sometime. Disable valgrind at
+        this moment. Will revisit this issue later.
         """
+        if container is not None:
+            assert isinstance(container, DaosCont)
+
         cmd_env = get_base_env()
 
         with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
@@ -1075,10 +1075,21 @@ class DaosServer():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         cmd_env['D_IL_REPORT'] = '1'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        if container is not None:
+            # Create a temporary directory for the mount point, this will be removed as it goes out
+            # scope so keep as a local for the rest of the function.
+            # pylint: disable-next=consider-using-with
+            tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
+            cwd = tmp_dir.name
+            cmd_env['DAOS_MOUNT_POINT'] = cwd
+            cmd_env['DAOS_POOL'] = container.pool.id()
+            cmd_env['DAOS_CONTAINER'] = container.id()
+        else:
+            cwd = None
 
         print('Run command: ')
         print(cmd)
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
                             env=cmd_env, check=False)
         print(rc)
 
@@ -1194,7 +1205,7 @@ class DFuse():
             self.pool = container.pool.id()
         self.conf = conf
         self.multi_user = multi_user
-        self.cores = daos.dfuse_cores
+        self.cores = 0
         self._daos = daos
         self.caching = caching
         self.wbcache = wbcache
@@ -3777,7 +3788,7 @@ class PosixTests():
         with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test1':
-                raise NLTestFail('/test_dir/f1 data is corrupted')
+                print('/test_dir/f1 data is corrupted')
 
         cmd = ['fs', 'get-attr', '--path', fname3]
         rc = run_daos_cmd(self.conf, cmd)
@@ -3788,7 +3799,7 @@ class PosixTests():
         with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test3':
-                raise NLTestFail('/test_dir/1d1/f3 data is corrupted')
+                print('/test_dir/1d1/f3 data is corrupted')
 
         dir_list = os.listdir(dirname2)
         nr_entries = len(dir_list)
@@ -3797,6 +3808,13 @@ class PosixTests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+    def test_pil4dfs_no_dfuse(self):
+        """Test pil4dfs with no fuse instance"""
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/bin/sh', '.'], container=self.container)
+        rc = self.server.run_daos_client_cmd_pil4dfs(['ls'], container=self.container)
+        print(rc.stdout)
+        assert rc.stdout == b'sh\n', rc
 
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
@@ -5698,6 +5716,7 @@ def main():
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')

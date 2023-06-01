@@ -98,6 +98,7 @@ message SmdDevice {
 	uint64 avail_bytes = 7;		// blobstore clusters available bytes
 	uint64 cluster_size = 8;	// blobstore cluster size in bytes
 	uint32 rank = 9;		// DAOS I/O Engine using controller
+	uint32 role_bits = 10;		// Device active roles (bitmask)
 }
 
 message SmdDevReq {}
