@@ -65,16 +65,18 @@ class CsumErrorLog(DaosCoreBase):
             for device in devices:
                 for entry in ('uuid', 'tgt_ids', 'role_bits', 'roles'):
                     if entry not in device:
-                        self.fail(f'Missing {entry} info from dmg storage query list devices')
+                        self.fail(
+                            'Missing {} info from dmg storage query list devices'.format(entry))
                 self.log.info(
                     'Host %s device: uuid=%s, targets=%s, role=%s, role_bits=%s',
                     host, device['uuid'], device['tgt_ids'], device['roles'], device['role_bits'])
                 if not device['tgt_ids']:
-                    self.log_step(f"Skipping device without targets on {device['uuid']}")
+                    self.log_step('Skipping device without targets on {}'.format(device['uuid']))
                     continue
                 if device['roles'] and not int(device['role_bits']) & 1:
                     self.log_step(
-                        f"Skipping {device['role_bits']} device without data on {device['uuid']}")
+                        'Skipping {} device without data on {}'.format(
+                            device['role_bits'], device['uuid']))
                     continue
                 if not device['uuid']:
                     self.fail('Device uuid undefined')
