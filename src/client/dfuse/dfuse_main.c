@@ -10,6 +10,9 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
+#include <sys/types.h>
+#include <hwloc.h>
+
 #define D_LOGFAC DD_FAC(dfuse)
 
 #include "dfuse.h"
@@ -19,7 +22,6 @@
 #include "daos_uns.h"
 
 #include <gurt/common.h>
-
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
  * is used to detect abnormal exit.
@@ -465,21 +467,40 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
-	/* If the number of threads hasn't been set on the command line then query the CPUSET
-	 * which will either return the number of cores on the node or the size of the allocated
-	 * cpuset.  Ideally we'd restrict to 16 threads here if no cpuset exists however the
-	 * getaffinity call does not expose that information.
+	/* If the number of threads has been specified on the command line then use that, otherwise
+	 * check CPU binding.  If bound to a number of cores then launch that number of threads,
+	 * if not bound them limit to 16.
 	 */
 	if (dfuse_info->di_threaded && !have_thread_count) {
-		cpu_set_t cpuset;
+		struct hwloc_topology *hwt;
+		hwloc_const_cpuset_t   hw;
+		int                    total;
+		int                    allowed;
 
-		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
-		if (rc != 0) {
-			printf("Failed to get cpuset information\n");
-			D_GOTO(out_debug, rc = -DER_INVAL);
-		}
+		rc = hwloc_topology_init(&hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
 
-		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
+		rc = hwloc_topology_load(hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		hw = hwloc_topology_get_complete_cpuset(hwt);
+
+		total = hwloc_bitmap_weight(hw);
+
+		rc = hwloc_get_cpubind(hwt, (struct hwloc_bitmap_s *)hw, HWLOC_CPUBIND_PROCESS);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		allowed = hwloc_bitmap_weight(hw);
+
+		hwloc_topology_destroy(hwt);
+
+		if (total == allowed)
+			dfuse_info->di_thread_count = min(allowed, 16);
+		else
+			dfuse_info->di_thread_count = allowed;
 	}
 
 	/* Reserve one thread for each daos event queue */

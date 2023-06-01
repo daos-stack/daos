@@ -1098,6 +1098,7 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 	oh->doh_linear_read     = true;
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
+	atomic_init(&oh->doh_readdir_number, 0);
 	atomic_init(&oh->doh_write_count, 0);
 }
 
@@ -1105,6 +1106,10 @@ void
 dfuse_ie_init(struct dfuse_inode_entry *ie)
 {
 	atomic_init(&ie->ie_ref, 1);
+	atomic_init(&ie->ie_open_count, 0);
+	atomic_init(&ie->ie_open_write_count, 0);
+	atomic_init(&ie->ie_il_count, 0);
+	atomic_init(&ie->ie_readdir_number, 0);
 }
 
 void

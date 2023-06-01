@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,7 +76,7 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 {
 	int	rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+	D_ASSERT(umem_tx_inprogress(umm) ||
 		 umm->umm_id == UMEM_CLASS_VMEM);
 
 	if (hint == NULL)

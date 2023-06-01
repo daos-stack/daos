@@ -38,7 +38,7 @@ pool_create_all(void **state)
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(),
 			     arg->group, NULL /* tgts */,
-			     128 * 1024 * 1024 /* minimal size */,
+			     256 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
@@ -377,7 +377,7 @@ pool_create_and_destroy_retry(void **state)
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(),
 			     arg->group, NULL /* tgts */,
-			     128 * 1024 * 1024 /* minimal size */,
+			     256 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);

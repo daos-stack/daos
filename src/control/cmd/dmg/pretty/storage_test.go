@@ -1392,6 +1392,8 @@ host1
 									Rank:      0,
 									NvmeState: storage.NvmeStateNew,
 									LedState:  storage.LedStateNormal,
+									HasSysXS:  true,
+									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
 								},
 								{
 									UUID:      test.MockUUID(1),
@@ -1400,6 +1402,7 @@ host1
 									Rank:      0,
 									NvmeState: storage.NvmeStateFaulty,
 									LedState:  storage.LedStateFaulty,
+									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
 								},
 								{
 									UUID:      test.MockUUID(2),
@@ -1408,6 +1411,8 @@ host1
 									Rank:      1,
 									NvmeState: storage.NvmeDevState(99),
 									LedState:  storage.LedStateUnknown,
+									HasSysXS:  true,
+									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
 								},
 								{
 									UUID:      test.MockUUID(3),
@@ -1416,6 +1421,7 @@ host1
 									Rank:      1,
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateIdentify,
+									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
 								},
 							},
 						},
@@ -1428,13 +1434,13 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NEW LED:OFF
+      Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
+      Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
+      Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
+      Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
 		"list-devices (none found)": {
@@ -1469,6 +1475,7 @@ host1
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateNormal,
 									Health:    mockController.HealthStats,
+									Roles:     storage.BdevRoles{storage.BdevRoleAll},
 								},
 							},
 						},
@@ -1481,7 +1488,7 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
+      Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s
