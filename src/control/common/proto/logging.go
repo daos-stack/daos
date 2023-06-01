@@ -120,7 +120,7 @@ func Debug(msg proto.Message) string {
 			fmt.Fprintf(&bld, " %s:%s", p.Label, p.State)
 		}
 	case *mgmtpb.JoinResp:
-		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t)", m, m.Rank, m.State, m.LocalJoin)
+		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t) map:%d", m, m.Rank, m.State, m.LocalJoin, m.MapVersion)
 	case *mgmtpb.GetAttachInfoResp:
 		msRanks := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(m.MsRanks))
 		uriRanks := ranklist.NewRankSet()
