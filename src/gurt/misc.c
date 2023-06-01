@@ -18,6 +18,7 @@
 #include <pthread.h>
 
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
@@ -1212,33 +1213,52 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
  * getenv(), ...).
  */
 
-static pthread_mutex_t hook_env_lock = PTHREAD_MUTEX_INITIALIZER;
-static char *(*real_getenv)(const char *);
-static int (*real_putenv)(char *);
-static int (*real_setenv)(const char *, const char *, int);
-static int (*real_unsetenv)(const char *);
-static int (*real_clearenv)(void);
+static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+static char *(* ATOMIC real_getenv)(const char *);
+static int (* ATOMIC real_putenv)(char *);
+static int (* ATOMIC real_setenv)(const char *, const char *, int);
+static int (* ATOMIC real_unsetenv)(const char *);
+static int (* ATOMIC real_clearenv)(void);
+
+static void bind_libc_symbol(void **real_ptr_addr, const char* name)
+{
+	void *real_temp;
+
+	if (atomic_load_relaxed(real_ptr_addr) == NULL) {
+		/* libc should be already loaded ... */
+		real_temp = dlsym(RTLD_NEXT, name);
+		if (real_temp == NULL) {
+			/* try after loading libc now */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_temp = dlsym(handle, name);
+			D_ASSERT(real_temp != NULL);
+		}
+		atomic_store_relaxed(real_ptr_addr, real_temp);
+	}
+}
+
+static pthread_once_t init_real_symbols_flag = PTHREAD_ONCE_INIT;
+
+static void init_real_symbols(void)
+{
+	bind_libc_symbol((void **)&real_getenv, "getenv");
+	bind_libc_symbol((void **)&real_putenv, "putenv");
+	bind_libc_symbol((void **)&real_setenv, "setenv");
+	bind_libc_symbol((void **)&real_unsetenv, "unsetenv");
+	bind_libc_symbol((void **)&real_clearenv, "clearenv");
+}
 
 char *getenv(const char *name)
 {
 	char *p;
 
-	D_MUTEX_LOCK(&hook_env_lock);
-	if (real_getenv == NULL) {
-		real_getenv = (char * (*)(const char *))dlsym(RTLD_NEXT, "getenv");
-		if (real_getenv == NULL) {
-			/* Glibc symbols could not be resolved !!... */
-			void *handle;
-
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-			real_getenv = (char * (*)(const char *))dlsym(handle, "getenv");
-		}
-		D_ASSERT(real_getenv != NULL);
-	}
-
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_RDLOCK(&hook_env_lock);
 	p = real_getenv(name);
-	D_MUTEX_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return p;
 }
@@ -1247,22 +1267,10 @@ int putenv(char *name)
 {
 	int rc;
 
-	D_MUTEX_LOCK(&hook_env_lock);
-	if (real_putenv == NULL) {
-		real_putenv = (int (*)(char *))dlsym(RTLD_NEXT, "putenv");
-		if (real_putenv == NULL) {
-			/* Glibc symbols could not be resolved !!... */
-			void *handle;
-
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-			real_putenv = (int (*)(char *))dlsym(handle, "putenv");
-		}
-		D_ASSERT(real_putenv != NULL);
-	}
-
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
 	rc = real_putenv(name);
-	D_MUTEX_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
 }
@@ -1271,23 +1279,10 @@ int setenv(const char *name, const char *value, int overwrite)
 {
 	int rc;
 
-	D_MUTEX_LOCK(&hook_env_lock);
-	if (real_setenv == NULL) {
-		real_setenv = (int (*)(const char *, const char *, int))dlsym(RTLD_NEXT, "setenv");
-		if (real_setenv == NULL) {
-			/* Glibc symbols could not be resolved !!... */
-			void *handle;
-
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-			real_setenv = (int (*)(const char *, const char *, int))dlsym(handle,
-				      "setenv");
-		}
-		D_ASSERT(real_setenv != NULL);
-	}
-
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
 	rc = real_setenv(name, value, overwrite);
-	D_MUTEX_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
 }
@@ -1296,22 +1291,10 @@ int unsetenv(const char *name)
 {
 	int rc;
 
-	D_MUTEX_LOCK(&hook_env_lock);
-	if (real_unsetenv == NULL) {
-		real_unsetenv = (int (*)(const char *))dlsym(RTLD_NEXT, "unsetenv");
-		if (real_unsetenv == NULL) {
-			/* Glibc symbols could not be resolved !!... */
-			void *handle;
-
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-			real_unsetenv = (int (*)(const char *))dlsym(handle, "unsetenv");
-		}
-		D_ASSERT(real_unsetenv != NULL);
-	}
-
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
 	rc = real_unsetenv(name);
-	D_MUTEX_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
 }
@@ -1320,22 +1303,10 @@ int clearenv(void)
 {
 	int rc;
 
-	D_MUTEX_LOCK(&hook_env_lock);
-	if (real_clearenv == NULL) {
-		real_clearenv = (int (*)(void))dlsym(RTLD_NEXT, "clearenv");
-		if (real_clearenv == NULL) {
-			/* Glibc symbols could not be resolved !!... */
-			void *handle;
-
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-			real_clearenv = (int (*)(void))dlsym(handle, "clearenv");
-		}
-		D_ASSERT(real_clearenv != NULL);
-	}
-
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
 	rc = real_clearenv();
-	D_MUTEX_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
 }
