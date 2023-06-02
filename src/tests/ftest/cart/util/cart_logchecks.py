@@ -122,7 +122,7 @@ class InodeHandle(DLogEntity):
     def add_line(self, line):
         """Record a line for the handle"""
         if self.dentry is not None:
-            if line.function == 'dfuse_cb_getattr':
+            if line.function == 'dfuse_cb_getattr' and line.get_field(2) == 'Returning':
                 self.getattr_calls += 1
                 self.size = int(line.get_field(9))
                 return
