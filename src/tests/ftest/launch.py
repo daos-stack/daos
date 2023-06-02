@@ -2886,7 +2886,7 @@ class Launch():
                 self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return 1024
 
-            # Remove latest symlink directory to avoid inclusion in the jenkins build artifacts
+            # Remove latest symlink directory to avoid inclusion in the Jenkins build artifacts
             try:
                 run_local(logger, f'rm -fr {test_logs_lnk}')
             except RunException:
