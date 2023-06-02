@@ -553,6 +553,8 @@ class StorageInfo():
             self._raise_error(f'Error: Invalid storage type \'{tier_0_type}\'')
 
         pmem_list = {}
+        bdev_list = {}
+
         if tier_0_type == self.TIER_0_TYPES[0] and self.pmem_devices:
             # Sort the detected devices and place then in lists by NUMA node
             numa_devices = self._get_numa_devices(self.pmem_devices)
@@ -588,7 +590,6 @@ class StorageInfo():
             self._log.debug('  NVMe/VMD tier_placement: %s', tier_placement)
             tiers += max(tier_placement)
 
-            bdev_list = {}
             for device_set in device_sets:
                 tier = tier_placement.pop(0)
                 for engine, device in enumerate(device_set):
@@ -600,7 +601,7 @@ class StorageInfo():
             self._log.debug('  NVMe/VMD bdev_list:      %s', bdev_list)
 
         lines = ['server_config:']
-        if control_metadata:
+        if control_metadata and bdev_list:
             lines.append('  control_metadata:')
             lines.append(f'    path: {control_metadata}')
         lines.append('  engines:')
