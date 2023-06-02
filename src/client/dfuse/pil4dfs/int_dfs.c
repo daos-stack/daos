@@ -623,15 +623,9 @@ discover_daos_mount(void)
 		return;
 	}
 
-	/* The length of fs_root has been checked already.
-	 * Use strndup() here. D_STRNDUP() leads to NLT errors.
-	 * Not sure whether it is due to D_FREE() called in destructor function or not.
-	 */
-	dfs_list[num_dfs].fs_root = strndup(fs_root, len_fs_root);
-	if (dfs_list[num_dfs].fs_root == NULL) {
-		D_DEBUG(DB_ANY, "strndup() failed: %d (%s)\n", errno, strerror(errno));
+	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
+	if (dfs_list[num_dfs].fs_root == NULL)
 		return;
-	}
 
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
@@ -679,16 +673,9 @@ discover_dfuse(void)
 
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
-			/* The length of fs_entry->mnt_dir[] has been checked already.
-			 * Use strndup() here. D_STRNDUP() leads to NLT errors. Not sure
-			 * whether it is due to D_FREE() called in destructor function or not.
-			 */
-			pt_dfs_mt->fs_root = strndup(fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL) {
-				D_DEBUG(DB_ANY, "strndup() failed: %d (%s)\n", errno,
-					strerror(errno));
+			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
+			if (pt_dfs_mt->fs_root == NULL)
 				continue;
-			}
 			num_dfs++;
 		}
 	}
@@ -5316,6 +5303,7 @@ finalize_myhook(void)
 	close_all_duped_fd();
 	close_all_fd();
 	close_all_dirfd();
+
 	finalize_dfs();
 
 	D_MUTEX_DESTROY(&lock_dfs);
@@ -5325,6 +5313,9 @@ finalize_myhook(void)
 	D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
 	uninstall_hook();
+
+	if (daos_debug_inited)
+		daos_debug_fini();
 }
 
 static int
@@ -5387,23 +5378,16 @@ static void
 finalize_dfs(void)
 {
 	int       rc, i;
-	char     *path_mt;
-	char     *path_dup;
-	char      invalid_path[] = "invalid_path";
 	d_list_t *rlink = NULL;
 
-	D_ALLOC(path_dup, DFS_MAX_PATH);
-	for (i = 0; i < num_dfs; i++) {
-		if (path_dup) {
-			path_mt = path_dup;
-			strncpy(path_mt, dfs_list[i].fs_root, dfs_list[i].len_fs_root + 1);
-		} else {
-			path_mt = invalid_path;
-		}
-		free(dfs_list[i].fs_root);
+	/* Disable interception */
+	hook_enabled = 0;
 
-		if (dfs_list[i].dfs_dir_hash == NULL)
+	for (i = 0; i < num_dfs; i++) {
+		if (dfs_list[i].dfs_dir_hash == NULL) {
+			D_FREE(dfs_list[i].fs_root);
 			continue;
+		}
 
 		while (1) {
 			rlink = d_hash_rec_first(dfs_list[i].dfs_dir_hash);
@@ -5414,28 +5398,30 @@ finalize_dfs(void)
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
 		if (rc != 0) {
-			D_ERROR("error in d_hash_table_destroy(%s): " DF_RC "\n", path_mt,
-				DP_RC(rc));
+			D_ERROR("error in d_hash_table_destroy(%s): " DF_RC "\n",
+				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
 		if (rc != 0) {
-			D_ERROR("error in dfs_umount(%s): %d (%s)\n", path_mt, rc, strerror(rc));
+			D_ERROR("error in dfs_umount(%s): %d (%s)\n", dfs_list[i].fs_root, rc,
+				strerror(rc));
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
-			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", path_mt, DP_RC(rc));
+			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[i].fs_root,
+				DP_RC(rc));
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != 0) {
-			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n", path_mt,
-				DP_RC(rc));
+			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
+				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
 		}
+		D_FREE(dfs_list[i].fs_root);
 	}
-	D_FREE(path_dup);
 
 	if (daos_inited) {
 		uint32_t init_cnt, j;
@@ -5447,6 +5433,4 @@ finalize_dfs(void)
 				D_ERROR("daos_fini() failed: " DF_RC "\n", DP_RC(rc));
 		}
 	}
-	if (daos_debug_inited)
-		daos_debug_fini();
 }
