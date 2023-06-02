@@ -68,6 +68,11 @@ struct crt_grp_priv {
 	 */
 	uint32_t		 gp_membs_ver;
 	/*
+	 * The minimum version of the group. This is set by crt_rank_self_set
+	 * to the version in which we join system.
+	 */
+	uint32_t		 gp_membs_ver_min;
+	/*
 	 * this structure contains the circular list of member ranks.
 	 * It's used to store SWIM related information and should strictly
 	 * correspond to members in gp_membs.

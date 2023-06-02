@@ -428,7 +428,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.cleanup_queue()
         self.pool = pool
         self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
