@@ -724,7 +724,7 @@ retrieve_handles_from_fuse(int idx)
 	iov.iov_buf = buff;
 
 	/* Max size of ioctl is 16k */
-	if (hs_reply->fsr_pool_size < (16 * 1024)) {
+	if (hs_reply.fsr_pool_size < (16 * 1024)) {
 		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH,
 			   hs_reply.fsr_pool_size);
 		rc  = ioctl(fd, cmd, iov.iov_buf);
