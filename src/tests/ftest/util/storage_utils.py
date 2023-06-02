@@ -620,7 +620,7 @@ class StorageInfo():
                 else:
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
-                    if not pmem_list:
+                    if control_metadata:
                         lines.append(
                             f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
