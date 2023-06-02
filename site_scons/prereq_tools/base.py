@@ -1033,7 +1033,7 @@ class _Component():
             if not fname.startswith(f"{self.name}_"):
                 continue
             found = False
-            for key in patches.keys():
+            for key in patches:
                 if fname in key:
                     found = True
                     break
