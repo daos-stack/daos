@@ -83,13 +83,14 @@ class MSMembershipTest(TestWithServers):
         rank is down.
 
         1. Stop rank 1.
-        2. Set rank 1 to AdminExcluded state by calling dmg system exclude --ranks=1.
-        3. Verify that the rank 1 state is AdminExcluded by calling dmg system query.
-        4. Verify that the checker can be run with AdminExcluded state by calling enable,
+        2. Set rank 1 to AdminExcluded by calling dmg system exclude --ranks=1 and verify
+        the state has been changed.
+        3. Verify that the checker can be run with AdminExcluded state by calling enable,
         start, query, and disable. Verify that none of the commands returns error.
-        5. Disable AdminExcluded by calling dmg system clear-exclude --ranks=1
-        6. Verify that the rank 1 state is Excluded.
-        7. Start both of the servers for cleanup.
+        4. Disable AdminExcluded of rank 1 by calling dmg system clear-exclude --ranks=1
+        and verify the state has been changed.
+        5. Servers haven't been started, so update the expected state of rank 0 for
+        cleanup.
 
         Jira ID: DAOS-11704
 
@@ -104,50 +105,26 @@ class MSMembershipTest(TestWithServers):
         # 1. Stop rank 1.
         dmg_command.system_stop(ranks="1")
 
-        # 2. Set rank 1 to AdminExcluded state.
-        dmg_command.system_exclude(ranks="1", rank_hosts=None)
+        # 2. Set rank 1 to AdminExcluded and verify the state has been changed.
+        self.server_managers[-1].system_exclude(ranks=[1], daos_log=self.log)
 
-        # 3. Verify that the rank 1 state is AdminExcluded.
-        query_out = dmg_command.system_query()
-        admin_excluded_found = False
-        rank_1_state = None
-        for member in query_out["response"]["members"]:
-            if member["rank"] == 1:
-                rank_1_state = member["state"]
-                if rank_1_state == "adminexcluded":
-                    admin_excluded_found = True
-                break
-        if not admin_excluded_found:
-            self.fail("Rank 1 state is not AdminExcluded!: {}".format(rank_1_state))
-
-        # 4. Verify that the checker can be run with AdminExcluded state.
+        # 3. Verify that the checker can be run with AdminExcluded state.
         try:
             dmg_command.check_enable()
             dmg_command.check_start()
             dmg_command.check_query()
-            # We need to start after calling dmg system clear-exclude, so don't start now.
+            # We need to start after calling dmg system clear-exclude, otherwise the start
+            # command will hang.
             dmg_command.check_disable(start=False)
         except CommandFailure as error:
             msg = f"dmg check command failed! {error}"
             errors.append(msg)
 
-        # 5. Disable AdminExcluded of rank 1.
-        dmg_command.system_clear_exclude(ranks="1", rank_hosts=None)
+        # 4. Disable AdminExcluded of rank 1 and verify the state has been changed.
+        self.server_managers[-1].system_clear_exclude(ranks=[1], daos_log=self.log)
 
-        # 6. Verify that the rank 1 state is Excluded.
-        query_out = dmg_command.system_query()
-        excluded_found = False
-        rank_1_state = None
-        for member in query_out["response"]["members"]:
-            if member["rank"] == 1:
-                rank_1_state = member["state"]
-                if rank_1_state == "excluded":
-                    excluded_found = True
-                break
-        if not excluded_found:
-            errors.append("Rank 1 state is not Excluded! {}".format(rank_1_state))
-
-        # 7. Start both of the servers for cleanup.
-        dmg_command.system_start()
+        # 5. Servers haven't been started, so update the expected state of rank 0 for
+        # cleanup.
+        self.server_managers[-1].update_expected_states(0, ['stopped'])
 
         report_errors(test=self, errors=errors)

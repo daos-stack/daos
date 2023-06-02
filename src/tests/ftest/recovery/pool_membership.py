@@ -19,8 +19,10 @@ class PoolMembershipTest(TestWithServers):
     """
 
     def get_rank_to_free(self):
-        """Call dmg storage query usage for all servers and return free space
-        (avail_bytes) for each rank as dictionary.
+        """Get the free space for each engine rank.
+
+        Call dmg storage query usage for all servers and return free space (avail_bytes)
+        for each rank as dictionary.
 
         Returns:
             dict: Key is rank and value is free space of the rank in bytes as int.
@@ -60,10 +62,12 @@ class PoolMembershipTest(TestWithServers):
         :avocado: tags=recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
-        # 1. Create a pool on rank 0.
+        # 1. Create a pool.
+        self.log_step("Creating a pool (dmg pool create)")
         pool = self.get_pool(connect=False, target_list="0")
 
         # 2. Call dmg storage query usage to store the default space utilization.
+        self.log_step("Collecting free space for each rank (dmg storage query usage)")
         rank_to_free_orig = self.get_rank_to_free()
         self.log.info("rank_to_free_orig = %s", rank_to_free_orig)
 
@@ -74,6 +78,7 @@ class PoolMembershipTest(TestWithServers):
 
         # 3-1. Determine source host and destination host. Source host is where rank 0 is.
         # Destination host is the other host.
+        self.log_step("Determine source host and destination host")
         src_host = dst_host = NodeSet(self.server_managers[0].get_host(0))
         rank = 1
         while rank < self.server_managers[0].engines and dst_host == src_host:
@@ -107,6 +112,7 @@ class PoolMembershipTest(TestWithServers):
                         dst_rank = scm_namespace["mount"]["rank"]
 
         # 4. Stop servers.
+        self.log_step("Stop servers.")
         self.server_managers[0].system_stop()
 
         # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
@@ -114,7 +120,7 @@ class PoolMembershipTest(TestWithServers):
 
         # 5-1. Since we're running rsync as user, update the mode of the source pool
         # directory to 777.
-        self.log.info("Update mode of the source pool directory.")
+        self.log_step("Update mode of the source pool directory.")
         chmod_cmd = (f"sudo chmod 777 {src_mount}; "
                      f"sudo chmod -R 777 {src_mount}/{pool.uuid.lower()}")
         if not run_remote(log=self.log, hosts=src_host, command=chmod_cmd).passed:
@@ -122,21 +128,21 @@ class PoolMembershipTest(TestWithServers):
 
         # 5-2. Update mode of the destination mount point to 777 so that we can send the
         # pool files.
-        self.log.info("Update mode of the destination mount point.")
+        self.log_step("Update mode of the destination mount point.")
         chmod_cmd = f"sudo chmod 777 {dst_mount}"
         if not run_remote(log=self.log, hosts=dst_host, command=chmod_cmd).passed:
             self.fail(f"Following command failed on {dst_host}! {chmod_cmd}")
 
         # 5-3. Since we're sending each file (vos-0 to 7 + rdb-pool) one at a time, we need
         # to create the destination fake pool directory first.
-        self.log.info("Create a fake pool directory at the destination mount point.")
+        self.log_step("Create a fake pool directory at the destination mount point.")
         mkdir_cmd = f"sudo mkdir {dst_mount}/{pool.uuid.lower()}"
         if not run_remote(log=self.log, hosts=dst_host, command=mkdir_cmd).passed:
             self.fail(f"Following command failed on {dst_host}! {mkdir_cmd}")
 
         # 5-4. Update mode of the destination pool directory to 777 so that we can send
         # the pool files.
-        self.log.info("Update mode of the fake pool directory at destination.")
+        self.log_step("Update mode of the fake pool directory at destination.")
         chmod_cmd = f"sudo chmod 777 {dst_mount}/{pool.uuid.lower()}"
         if not run_remote(log=self.log, hosts=dst_host, command=chmod_cmd).passed:
             self.fail(f"Following command failed on {dst_host}! {chmod_cmd}")
@@ -158,9 +164,8 @@ class PoolMembershipTest(TestWithServers):
         # e.g., For a 2TB pool with 8 targets per engine, each vos file size is about 7G
         # (rdb-pool is smaller). If we run a simple rsync, which runs serially, it takes
         # 1 min 50 sec. However, if we run them in parallel, it's reduced to 24 sec.
-        self.log.info(
-            "Copy pool files from %s:%s to %s:%s.", src_host, src_mount, dst_host,
-            dst_mount)
+        self.log_step(
+            f"Copy pool files from {src_host}:{src_mount} to {dst_host}:{dst_mount}.")
         xargs_rsync_cmd = (f"ls {src_mount}/{pool.uuid.lower()} | "
                            f"xargs --max-procs=8 -I% "
                            f"rsync -avz {src_mount}/{pool.uuid.lower()}/% "
@@ -169,6 +174,7 @@ class PoolMembershipTest(TestWithServers):
             self.fail(f"Following command failed on {src_host}! {xargs_rsync_cmd}")
 
         # 6. Enable and start the checker.
+        self.log_step("Enable and start the checker.")
         dmg_command.check_enable()
         dmg_command.check_start()
 
@@ -187,10 +193,12 @@ class PoolMembershipTest(TestWithServers):
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
         # 8. Disable the checker.
+        self.log_step("Disable and start the checker.")
         dmg_command.check_disable()
 
         # 9. Call dmg storage query usage to verify that the pool usage is back to the
         # original value.
+        self.log_step("Verify that the pool usage is back to the original value.")
         rank_to_free_fixed = self.get_rank_to_free()
         self.log.info("rank_to_free_fixed = %s", rank_to_free_fixed)
         dst_free_orig = rank_to_free_orig[dst_rank]
