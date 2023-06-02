@@ -237,9 +237,9 @@ class LogTest():
         if not self.quiet and not self._common_shown:
             self._show_common_logs()
 
-    def add_tracer(self, cb, facs):
+    def add_tracer(self, callback, facs):
         """Add a tracer for later use"""
-        self._tracers.append((cb, facs))
+        self._tracers.append((callback, facs))
 
     def save_log_line(self, line):
         """Record a single line of logging"""

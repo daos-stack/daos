@@ -227,7 +227,7 @@ class ReaddirTracer():
         print('\n'.join(self._reports))
         print('Root is:')
         print(self.root)
-        pprint.PrettyPrinter(indent=2, sort_dicts=False, compact=True).pprint(self.root)
+        pprint.PrettyPrinter(indent=2, compact=True).pprint(self.root)
 
     def add_line(self, line):
         """Parse a new line"""
