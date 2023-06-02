@@ -1181,6 +1181,20 @@ func TestStorage_Config_Validate(t *testing.T) {
 			},
 			expErr: FaultBdevConfigRolesNoControlMetadata,
 		},
+		"no bdevs configured but control_metadata path specified": {
+			cfg: Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/",
+				},
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
+						WithScmMountPoint("/mnt/daos"),
+				},
+			},
+			expErr: FaultBdevConfigControlMetadataNoRoles,
+		},
 		"no roles configured but control_metadata path specified": {
 			cfg: Config{
 				ControlMetadata: ControlMetadata{
@@ -1223,19 +1237,6 @@ func TestStorage_Config_Validate(t *testing.T) {
 			},
 			expVosEnv:           "NVME",
 			expConfigOutputPath: "/daos_control/engine0/daos_nvme.conf",
-		},
-		"no bdevs with control_metadata path": {
-			cfg: Config{
-				ControlMetadata: ControlMetadata{
-					Path: "/",
-				},
-				Tiers: TierConfigs{
-					NewTierConfig().
-						WithStorageClass("ram").
-						WithScmRamdiskSize(16).
-						WithScmMountPoint("/mnt/daos"),
-				},
-			},
 		},
 		"no bdevs without control_metadata path": {
 			cfg: Config{
