@@ -23,7 +23,7 @@ type dumpAttachInfoCmd struct {
 	ctlInvokerCmd
 	Output      string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
 	JSON        bool   `short:"j" long:"json" description:"Enable JSON output"`
-	ProviderIdx uint   `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
+	ProviderIdx *uint  `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
@@ -57,7 +57,12 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ranks, err := getServiceRanksForProviderIdx(resp, int(cmd.ProviderIdx))
+	providerIdx := cmd.cfg.ProviderIdx
+	if cmd.ProviderIdx != nil {
+		providerIdx = *cmd.ProviderIdx
+	}
+
+	ranks, err := getServiceRanksForProviderIdx(resp, int(providerIdx))
 	if err != nil {
 		return err
 	}
