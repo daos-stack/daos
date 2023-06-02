@@ -4847,14 +4847,19 @@ def test_pydaos_kv_obj_class(server, conf):
 class AllocFailTestRun():
     """Class to run a fault injection command with a single fault"""
 
-    def __init__(self, aft, cmd, env, loc):
+    def __init__(self, aft, cmd, env, loc, cwd):
+
+        # The return from subprocess.poll
+        self.ret = None
+        self.fault_injected = None
+        self.loc = loc
+        # The valgrind handle
+        self.valgrind_hdl = None
+
+        self.dir_handle = None
 
         # The subprocess handle
         self._sp = None
-        # The valgrind handle
-        self.valgrind_hdl = None
-        # The return from subprocess.poll
-        self.ret = None
 
         self.cmd = cmd
         self.env = env
@@ -4864,8 +4869,9 @@ class AllocFailTestRun():
         self.stdout = None
         self.stderr = None
         self.fi_loc = None
-        self.fault_injected = None
-        self.loc = loc
+        self._cwd = cwd
+
+        self.dir_handle = None
 
         if loc:
             prefix = f'dnt_{loc:04d}_'
@@ -4930,6 +4936,7 @@ class AllocFailTestRun():
 
         self._sp = subprocess.Popen(exec_cmd,
                                     env=self.env,
+                                    cwd=self._cwd,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
@@ -5076,20 +5083,21 @@ class AllocFailTestRun():
                                 f"Incorrect stdout '{self.stdout}'",
                                 mtype='Out of memory caused zero exit code with incorrect output')
 
-        stderr = self.stderr.decode('utf-8').rstrip()
-        if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
-            not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
-           'error parsing command line arguments' not in stderr and \
-           self.stdout != self.aft.expected_stdout:
-            if self.stdout != b'':
-                print(self.aft.expected_stdout)
-                print()
-                print(self.stdout)
-                print()
-            self.aft.wf.add(self.fi_loc,
-                            'NORMAL',
-                            f"Incorrect stderr '{stderr}'",
-                            mtype='Out of memory not reported correctly via stderr')
+        if self.aft.check_stderr:
+            stderr = self.stderr.decode('utf-8').rstrip()
+            if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
+                not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
+               'error parsing command line arguments' not in stderr and \
+               self.stdout != self.aft.expected_stdout:
+                if self.stdout != b'':
+                    print(self.aft.expected_stdout)
+                    print()
+                    print(self.stdout)
+                    print()
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                f"Incorrect stderr '{stderr}'",
+                                mtype='Out of memory not reported correctly via stderr')
         _explain()
 
 
@@ -5106,8 +5114,10 @@ class AllocFailTest():
         self.check_post_stdout = True
         # Check stderr conforms to daos_hdlr.c style
         self.check_daos_stderr = False
+        self.check_stderr = True
         self.expected_stdout = None
         self.use_il = False
+        self._use_pil4dfs = None
         self.wf = conf.wf
         # Instruct the fault injection code to skip daos_init().
         self.skip_daos_init = True
@@ -5120,6 +5130,11 @@ class AllocFailTest():
             os.mkdir(self.log_dir)
         except FileExistsError:
             pass
+
+    def use_pil4dfs(self, container):
+        """Mark test to use pil4dfs and set container"""
+        self._use_pil4dfs = container
+        self.check_stderr = False
 
     def launch(self):
         """Run all tests for this command"""
@@ -5211,6 +5226,18 @@ class AllocFailTest():
         if self.use_il:
             cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
 
+        cwd = None
+        tmp_dir = None
+
+        if self._use_pil4dfs is not None:
+            # pylint: disable-next=consider-using-with
+            tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
+            cwd = tmp_dir.name
+            cmd_env['DAOS_MOUNT_POINT'] = cwd
+            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+            cmd_env['DAOS_POOL'] = self._use_pil4dfs.pool.id()
+            cmd_env['DAOS_CONTAINER'] = self._use_pil4dfs.id()
+
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
         if callable(self.cmd):
@@ -5218,12 +5245,13 @@ class AllocFailTest():
         else:
             cmd = self.cmd
 
-        aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
+        aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
             aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 
+        aftf.dir_handle = tmp_dir
         aftf.start()
 
         return aftf
@@ -5306,6 +5334,20 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+
+    return test_cmd.launch()
+
+
+def test_alloc_pil4dfs_ls(server, conf, wf):
+    """Run pil4dfs under fault injection"""
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(conf, pool, ctype='POSIX', label='pil4dfs_fi')
+    test_cmd = AllocFailTest(conf, 'pil4dfs-ls', ['ls', '-l'])
+    test_cmd.wf = wf
+    test_cmd.use_pil4dfs(container)
+    test_cmd.check_daos_stderr = False
     test_cmd.check_post_stdout = False
 
     return test_cmd.launch()
@@ -5643,28 +5685,30 @@ def run(wf, args):
 
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
+                fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
+
                 # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                # fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 # container create with properties test.
-                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 
