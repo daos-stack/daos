@@ -10,7 +10,7 @@ timeouts:
 
 # DAOS-12750 NOTE External tools used by DAOS are creating sparse files (e.g. daos_system.db) which
 # could eventually be compacted when a pool is created.  To manage this, we add 9 MiB to the 17MiB
-# which are keep for the tmpfs metadata and the space reserved for the control plane DB.
+# which will be kept for the tmpfs metadata and the space reserved for the control plane DB.
 test_one_pool:
   delta: 27262976             # 26Mib
 

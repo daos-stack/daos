@@ -194,8 +194,8 @@ class PoolCreateAllTestBase(TestWithServers):
     def check_pool_recycling(self, pool_count, scm_delta_bytes, nvme_delta_bytes=None):
         """Check the pool creation and destruction.
 
-        Create and destroy an arbitrary number of times a pool.  At each iteration check if the size
-        of the created pools are always the same.
+        Create and destroy a 100% pool for an arbitrary number of times.  At each iteration check if
+        the size of the created pools are always the same.
 
         Args:
             pool_count (int): Number of pool to create and destroy.
@@ -245,7 +245,7 @@ class PoolCreateAllTestBase(TestWithServers):
                 msg="Pool {} with invalid NVMe size".format(index))
 
     def check_pool_distribution(self, scm_delta_bytes, nvme_delta_bytes=None):
-        """Check if the storage used on each hosts is more or less uniform.
+        """Check if the storage used on each host is more or less uniform.
 
         Check if the difference of SCM and NVMe storage space used, by a pool on each engine, is
         acceptable.
@@ -306,7 +306,7 @@ class PoolCreateAllTestBase(TestWithServers):
     def check_pool_half_storage(self, scm_delta_bytes, nvme_delta_bytes=None):
         """Check the creation of one pool with half of the usable storage capacity.
 
-        Create a pool with half the capacity of all servers.  Check the size of of the pool created
+        Create a pool with half the capacity of all servers.  Check the size of the pool created
         compared to the initial usable size.
 
         Args:
