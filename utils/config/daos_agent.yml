@@ -75,7 +75,7 @@
 #disable_caching: true
 
 ## Automatically expire the agent's remote cache after a period of time defined in
-## minutes. It wil refresh the data the next time it is requested.
+## minutes. It will refresh the data the next time it is requested.
 #
 ## default: 0 (never expires)
 #cache_expiration: 30
