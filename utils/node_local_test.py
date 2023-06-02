@@ -4849,8 +4849,6 @@ class AllocFailTestRun():
 
     def __init__(self, aft, cmd, env, loc):
 
-        # pylint: disable=consider-using-with
-
         # The subprocess handle
         self._sp = None
         # The valgrind handle
@@ -4873,11 +4871,12 @@ class AllocFailTestRun():
             prefix = f'dnt_{loc:04d}_'
         else:
             prefix = 'dnt_reference_'
-        self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                                    suffix='.log',
-                                                    dir=self.aft.log_dir,
-                                                    delete=False).name
-        self.env['D_LOG_FILE'] = self.log_file
+        with tempfile.NamedTemporaryFile(prefix=prefix,
+                                         suffix='.log',
+                                         dir=self.aft.log_dir,
+                                         delete=False) as log_file:
+            self.log_file = log_file.name
+            self.env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
         cmd_text = ' '.join(self.cmd)
@@ -4959,8 +4958,19 @@ class AllocFailTestRun():
         This is where all the checks are performed.
         """
         def _explain():
-            self.aft.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
-            self.aft.conf.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
+
+            if self.aft.conf.tmp_dir:
+                log_dir = self.aft.conf.tmp_dir
+            else:
+                log_dir = '/tmp'
+
+            short_log_file = self.log_file
+
+            if short_log_file.startswith(self.log_file):
+                short_log_file = short_log_file[len(log_dir) + 1:]
+
+            self.aft.wf.explain(self.fi_loc, short_log_file, fi_signal)
+            self.aft.conf.wf.explain(self.fi_loc, short_log_file, fi_signal)
         # Put in a new-line.
         print()
         self.returncode = rc
@@ -5006,9 +5016,6 @@ class AllocFailTestRun():
         if not self.fault_injected:
             _explain()
             return
-        if not self.aft.check_stderr:
-            _explain()
-            return
 
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
@@ -5025,7 +5032,7 @@ class AllocFailTestRun():
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 f"Unable to check stderr because of exit code '{rc}'",
-                                mtype='Unrecognised error')
+                                mtype='Crash preventing check')
                 _explain()
                 return
 
@@ -5057,12 +5064,12 @@ class AllocFailTestRun():
 
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                f"Unexpected stderr '{line}'",
-                                mtype='Unrecognised error')
+                                f"Malformed stderr '{line}'",
+                                mtype='Malformed stderr')
             _explain()
             return
 
-        if self.returncode == 0:
+        if self.returncode == 0 and self.aft.check_post_stdout:
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
@@ -5070,7 +5077,8 @@ class AllocFailTestRun():
                                 mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("(-1009): Out of memory") and \
+        if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
+            not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
@@ -5094,8 +5102,6 @@ class AllocFailTest():
         self.cmd = cmd
         self.description = desc
         self.prefix = True
-        # Check stderr from commands where faults were injected.
-        self.check_stderr = True
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
         # Check stderr conforms to daos_hdlr.c style
@@ -5245,9 +5251,9 @@ def test_dfuse_start(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'dfuse', cmd)
     test_cmd.wf = wf
+    test_cmd.skip_daos_init = False
     test_cmd.check_daos_stderr = True
-    test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
+    test_cmd.check_post_stdout = False  # Checked.
 
     rc = test_cmd.launch()
     os.rmdir(mount_point)
@@ -5260,37 +5266,47 @@ def test_alloc_fail_copy(server, conf, wf):
     This test will create a new uuid per iteration, and the test will then try to create a matching
     container so this is potentially resource intensive.
 
-    There are lots of errors in the stdout/stderr of this command which we need to work through but
-    are not yet checked for.
+    Create an initial container to copy from so this is testing reading as well as writing
+
+    Note this test will run without the destination containers existing but afterwards they
+    might with various stages of completion, running just this test in a loop without wiping
+    the containers between runs will exercise different code-paths and probably fail at some
+    point due to the destination container existing but being invalid.  A longer term aim
+    would be to run this test with the destination containers existing but valid (which tests
+    punch) or to have it check that if a test failed then new container was removed as part
+    of the command.  Checking for existing but invalid containers is not covered but this test
+    is probably not the best place for that.
     """
-    # pylint: disable=consider-using-with
-
-    pool = server.get_test_pool_obj()
-    src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-    sub_dir = join(src_dir.name, 'new_dir')
-    os.mkdir(sub_dir)
-    for idx in range(5):
-        with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
-            ofd.write('hello')
-
-    os.symlink('broken', join(sub_dir, 'broken_s'))
-    os.symlink('file.0', join(sub_dir, 'link'))
 
     def get_cmd(cont_id):
         return [join(conf['PREFIX'], 'bin', 'daos'),
                 'filesystem',
                 'copy',
                 '--src',
-                src_dir.name,
+                f'daos://{pool.id()}/aft_base',
                 '--dst',
                 f'daos://{pool.id()}/container_{cont_id}']
 
+    pool = server.get_test_pool_obj()
+    with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(5):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        os.symlink('broken', join(sub_dir, 'broken_s'))
+        os.symlink('file.0', join(sub_dir, 'link'))
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', src_dir,
+                                 '--dst', f'daos://{pool.id()}/aft_base'])
+        assert rc.returncode == 0, rc
+
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
-    test_cmd.skip_daos_init = False
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     return test_cmd.launch()
 
@@ -5314,8 +5330,6 @@ def test_alloc_cont_create(server, conf, wf):
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
     test_cmd.check_post_stdout = False
-    test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = False
 
     return test_cmd.launch()
 
@@ -5340,7 +5354,6 @@ def test_alloc_fail_cont_create(server, conf):
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = False
 
     rc = test_cmd.launch()
     dfuse.stop()
@@ -5367,7 +5380,6 @@ def test_alloc_fail_cat(server, conf):
 
     test_cmd = AllocFailTest(conf, 'il-cat', ['cat', target_file])
     test_cmd.use_il = True
-    test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
 
     rc = test_cmd.launch()
@@ -5406,7 +5418,6 @@ def test_alloc_fail_il_cp(server, conf):
 
     test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
     test_cmd.use_il = True
-    test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
 
     rc = test_cmd.launch()
@@ -5452,7 +5463,7 @@ def test_fi_get_prop(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
     test_cmd.wf = wf
-    test_cmd.check_stderr = False
+    test_cmd.check_post_stdout = False  # Checked.
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5481,7 +5492,6 @@ def test_fi_get_attr(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5505,7 +5515,6 @@ def test_fi_cont_query(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
@@ -5529,7 +5538,6 @@ def test_fi_cont_check(server, conf, wf):
 
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     container.destroy()
