@@ -10,6 +10,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
+import glob
 import json
 import logging
 import os
@@ -2847,44 +2848,16 @@ class Launch():
 
         # Update the results.xml file with the new functional test class name
         if jenkinslog:
-            xml_file = os.path.join(new_test_logs_dir, "results.xml")
-            logger.debug("Updating the 'classname' field in the %s", xml_file)
-            try:
-                with open(xml_file, encoding="utf-8") as xml_buffer:
-                    xml_data = xml_buffer.read()
-            except OSError:
-                message = f"Error reading {xml_file}"
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            xml_file = os.path.join(new_test_logs_dir, 'results.xml')
+            launchable_xml = os.path.join(new_test_logs_dir, 'xunit1_results.xml')
+            if not self._update_xml(
+                    xml_file, f'FTEST_{test.directory}', launchable_xml, test.test_file):
                 return 1024
 
-            # Save it for the Launchable [de-]mangle
-            org_xml_data = xml_data
-
-            # First, mangle the in-place file for Jenkins to consume
-            xml_data = re.sub("classname=\"", f"classname=\"FTEST_{test.directory}.", xml_data)
-            try:
-                with open(xml_file, "w", encoding="utf-8") as xml_buffer:
-                    xml_buffer.write(xml_data)
-            except OSError:
-                message = f"Error writing {xml_file}"
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return 1024
-
-            # Now mangle (or rather unmangle back to canonical xunit1 format)
-            # another copy for Launchable
-            xml_file = xml_file[0:-11] + "xunit1_results.xml"
-            logger.debug("Updating the xml data for the Launchable %s file", xml_file)
-            xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
-            new_name = rf'\1\2\3 file="{test.test_file}"'
-            xml_data = re.sub(org_name, new_name, xml_data)
-            try:
-                with open(xml_file, "w", encoding="utf-8") as xml_buffer:
-                    xml_buffer.write(xml_data)
-            except OSError:
-                message = f"Error writing {xml_file}"
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return 1024
+            # Update any cmocka xml results
+            for cmocka_xml in glob.glob('test-results/*/data/*.xml', root_dir=new_test_logs_dir):
+                if not self._update_xml(cmocka_xml, f'FTEST_{test.directory}.{test.test_file}'):
+                    return 1024
 
             # Remove latest symlink directory to avoid inclusion in the Jenkins build artifacts
             try:
@@ -2895,6 +2868,50 @@ class Launch():
                 return 1024
 
         return 0
+
+    def _update_xml(self, xml_file, name, launchable_xml=None, test_file=None):
+        """Update the classname information in the test result xml.
+
+        Args:
+            xml_file (str): the xml file to modify
+            name (str): the new classname to use in the xml file
+            launchable_xml (str, optional): name of launchable result xml file to generate
+            test_file (str, optional): test file name for launchable result xml file
+
+        Returns:
+            bool: True if successful; False if an error was detected
+        """
+        logger.debug("Updating the 'classname' field in the %s", xml_file)
+        try:
+            with open(xml_file, encoding="utf-8") as xml_buffer:
+                xml_data = xml_buffer.read()
+        except OSError:
+            message = f"Error reading {xml_file}"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return False
+
+        try:
+            with open(xml_file, "w", encoding="utf-8") as xml_buffer:
+                xml_buffer.write(re.sub("classname=\"", f"classname=\"{name}.", xml_data))
+        except OSError:
+            message = f"Error writing {xml_file}"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return False
+
+        if launchable_xml and test_file:
+            # Create an copy of the xml for Launchable processing
+            logger.debug("Updating the xml data for the Launchable %s file", launchable_xml)
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
+            new_name = rf'\1\2\3 file="{test_file}"'
+            try:
+                with open(xml_file, "w", encoding="utf-8") as xml_buffer:
+                    xml_buffer.write(re.sub(org_name, new_name, xml_data))
+            except OSError:
+                message = f"Error writing {xml_file}"
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                return False
+
+        return True
 
     def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.

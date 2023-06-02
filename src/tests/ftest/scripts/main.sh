@@ -200,25 +200,10 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 # shellcheck disable=SC2086,SC2090
-if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]} --name "${STAGE_NAME}"; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
 fi
-
-# daos_test uses cmocka framework which generates a set of xml of its own.
-# Post-processing the xml files here to put them in proper categories
-# for publishing in Jenkins
-TEST_DIRS=("daos_test" "checksum")
-
-for test_dir in "${TEST_DIRS[@]}"; do
-    COMP="FTEST_${test_dir}"
-    if [[ "${LAUNCH_OPT_ARGS}" == *"--repeat="* ]]; then
-        FILES=("${logs_prefix}/ftest/avocado/job-results/${test_dir}"/*/*/test-results/*/data/*.xml)
-    else
-        FILES=("${logs_prefix}/ftest/avocado/job-results/${test_dir}"/*/test-results/*/data/*.xml)
-    fi
-    ./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
-done
 
 exit $rc
