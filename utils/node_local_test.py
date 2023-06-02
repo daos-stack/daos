@@ -4857,21 +4857,18 @@ class AllocFailTestRun():
         self.valgrind_hdl = None
 
         self.dir_handle = None
-
-        # The subprocess handle
-        self._sp = None
-
-        self.cmd = cmd
-        self.env = env
-        self.aft = aft
-        self._fi_file = None
-        self.returncode = None
         self.stdout = None
-        self.stderr = None
-        self.fi_loc = None
-        self._cwd = cwd
+        self.returncode = None
 
-        self.dir_handle = None
+        # The subprocess handle and other private data.
+        self._sp = None
+        self._cmd = cmd
+        self._env = env
+        self._aft = aft
+        self._fi_file = None
+        self._stderr = None
+        self._fi_loc = None
+        self._cwd = cwd
 
         if loc:
             prefix = f'dnt_{loc:04d}_'
@@ -4879,13 +4876,13 @@ class AllocFailTestRun():
             prefix = 'dnt_reference_'
         with tempfile.NamedTemporaryFile(prefix=prefix,
                                          suffix='.log',
-                                         dir=self.aft.log_dir,
+                                         dir=self._aft.log_dir,
                                          delete=False) as log_file:
             self.log_file = log_file.name
-            self.env['D_LOG_FILE'] = self.log_file
+            self._env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
-        cmd_text = ' '.join(self.cmd)
+        cmd_text = ' '.join(self._cmd)
         res = f"Fault injection test of '{cmd_text}'\n"
         res += f'Fault injection location {self.loc}\n'
         if self.valgrind_hdl:
@@ -4898,8 +4895,8 @@ class AllocFailTestRun():
         if self.stdout:
             res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
 
-        if self.stderr:
-            res += f'\nSTDERR:{self.stderr.decode("utf-8").strip()}'
+        if self._stderr:
+            res += f'\nSTDERR:{self._stderr.decode("utf-8").strip()}'
         return res
 
     def start(self):
@@ -4917,7 +4914,7 @@ class AllocFailTestRun():
                                            'interval': self.loc,
                                            'max_faults': 1})
 
-            if self.aft.skip_daos_init:
+            if self._aft.skip_daos_init:
                 faults['fault_config'].append({'id': 101, 'probability_x': 1})
 
         # pylint: disable=consider-using-with
@@ -4926,16 +4923,16 @@ class AllocFailTestRun():
         self._fi_file.write(yaml.dump(faults, encoding='utf=8'))
         self._fi_file.flush()
 
-        self.env['D_FI_CONFIG'] = self._fi_file.name
+        self._env['D_FI_CONFIG'] = self._fi_file.name
 
         if self.valgrind_hdl:
             exec_cmd = self.valgrind_hdl.get_cmd_prefix()
-            exec_cmd.extend(self.cmd)
+            exec_cmd.extend(self._cmd)
         else:
-            exec_cmd = self.cmd
+            exec_cmd = self._cmd
 
         self._sp = subprocess.Popen(exec_cmd,
-                                    env=self.env,
+                                    env=self._env,
                                     cwd=self._cwd,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
@@ -4966,8 +4963,8 @@ class AllocFailTestRun():
         """
         def _explain():
 
-            if self.aft.conf.tmp_dir:
-                log_dir = self.aft.conf.tmp_dir
+            if self._aft.conf.tmp_dir:
+                log_dir = self._aft.conf.tmp_dir
             else:
                 log_dir = '/tmp'
 
@@ -4976,13 +4973,13 @@ class AllocFailTestRun():
             if short_log_file.startswith(self.log_file):
                 short_log_file = short_log_file[len(log_dir) + 1:]
 
-            self.aft.wf.explain(self.fi_loc, short_log_file, fi_signal)
-            self.aft.conf.wf.explain(self.fi_loc, short_log_file, fi_signal)
+            self._aft.wf.explain(self._fi_loc, short_log_file, fi_signal)
+            self._aft.conf.wf.explain(self._fi_loc, short_log_file, fi_signal)
         # Put in a new-line.
         print()
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
-        self.stderr = self._sp.stderr.read()
+        self._stderr = self._sp.stderr.read()
 
         show_memleaks = True
 
@@ -4996,27 +4993,27 @@ class AllocFailTestRun():
 
         try:
             if self.loc:
-                wf = self.aft.wf
+                wf = self._aft.wf
             else:
                 wf = None
-            self.fi_loc = log_test(self.aft.conf,
-                                   self.log_file,
-                                   show_memleaks=show_memleaks,
-                                   quiet=True,
-                                   skip_fi=True,
-                                   leak_wf=wf)
+            self._fi_loc = log_test(self._aft.conf,
+                                    self.log_file,
+                                    show_memleaks=show_memleaks,
+                                    quiet=True,
+                                    skip_fi=True,
+                                    leak_wf=wf)
             self.fault_injected = True
-            assert self.fi_loc
+            assert self._fi_loc
         except NLTestNoFi:
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
             assert self.returncode == 0, self
 
-            if self.aft.check_post_stdout:
-                assert self.stderr == b''
-                if self.aft.expected_stdout is not None:
-                    assert self.stdout == self.aft.expected_stdout
+            if self._aft.check_post_stdout:
+                assert self._stderr == b''
+                if self._aft.expected_stdout is not None:
+                    assert self.stdout == self._aft.expected_stdout
             self.fault_injected = False
         if self.valgrind_hdl:
             self.valgrind_hdl.convert_xml()
@@ -5029,21 +5026,21 @@ class AllocFailTestRun():
         # this format.  There may be multiple lines and the two styles may be mixed.
         # These checks will report an error against the line of code that introduced the "leak"
         # which may well only have a loose correlation to where the error was reported.
-        if self.aft.check_daos_stderr:
+        if self._aft.check_daos_stderr:
 
             # The go code will report a stacktrace in some cases on segfault or double-free
             # and these will obviously not be the expected output but are obviously an error,
             # to avoid filling the results with lots of warnings about stderr just include one
             # to say the check is disabled.
             if rc in (-6, -11):
-                self.aft.wf.add(self.fi_loc,
-                                'NORMAL',
-                                f"Unable to check stderr because of exit code '{rc}'",
-                                mtype='Crash preventing check')
+                self._aft.wf.add(self._fi_loc,
+                                 'NORMAL',
+                                 f"Unable to check stderr because of exit code '{rc}'",
+                                 mtype='Crash preventing check')
                 _explain()
                 return
 
-            stderr = self.stderr.decode('utf-8').rstrip()
+            stderr = self._stderr.decode('utf-8').rstrip()
             for line in stderr.splitlines():
 
                 # This is what the go code uses.
@@ -5063,41 +5060,41 @@ class AllocFailTestRun():
                     continue
 
                 if 'DER_UNKNOWN' in line:
-                    self.aft.wf.add(self.fi_loc,
-                                    'HIGH',
-                                    f"Incorrect stderr '{line}'",
-                                    mtype='Invalid error code used')
+                    self._aft.wf.add(self._fi_loc,
+                                     'HIGH',
+                                     f"Incorrect stderr '{line}'",
+                                     mtype='Invalid error code used')
                     continue
 
-                self.aft.wf.add(self.fi_loc,
-                                'NORMAL',
-                                f"Malformed stderr '{line}'",
-                                mtype='Malformed stderr')
+                self._aft.wf.add(self._fi_loc,
+                                 'NORMAL',
+                                 f"Malformed stderr '{line}'",
+                                 mtype='Malformed stderr')
             _explain()
             return
 
-        if self.returncode == 0 and self.aft.check_post_stdout:
-            if self.stdout != self.aft.expected_stdout:
-                self.aft.wf.add(self.fi_loc,
-                                'NORMAL',
-                                f"Incorrect stdout '{self.stdout}'",
-                                mtype='Out of memory caused zero exit code with incorrect output')
+        if self.returncode == 0 and self._aft.check_post_stdout:
+            if self.stdout != self._aft.expected_stdout:
+                self._aft.wf.add(self._fi_loc,
+                                 'NORMAL',
+                                 f"Incorrect stdout '{self.stdout}'",
+                                 mtype='Out of memory caused zero exit code with incorrect output')
 
-        if self.aft.check_stderr:
-            stderr = self.stderr.decode('utf-8').rstrip()
+        if self._aft.check_stderr:
+            stderr = self._stderr.decode('utf-8').rstrip()
             if stderr != '' and not stderr.endswith('(-1009): Out of memory') and \
                 not stderr.endswith(': errno 12 (Cannot allocate memory)') and \
                'error parsing command line arguments' not in stderr and \
-               self.stdout != self.aft.expected_stdout:
+               self.stdout != self._aft.expected_stdout:
                 if self.stdout != b'':
-                    print(self.aft.expected_stdout)
+                    print(self._aft.expected_stdout)
                     print()
                     print(self.stdout)
                     print()
-                self.aft.wf.add(self.fi_loc,
-                                'NORMAL',
-                                f"Incorrect stderr '{stderr}'",
-                                mtype='Out of memory not reported correctly via stderr')
+                self._aft.wf.add(self._fi_loc,
+                                 'NORMAL',
+                                 f"Incorrect stderr '{stderr}'",
+                                 mtype='Out of memory not reported correctly via stderr')
         _explain()
 
 
@@ -5340,11 +5337,33 @@ def test_alloc_fail_copy(server, conf, wf):
 
 
 def test_alloc_pil4dfs_ls(server, conf, wf):
-    """Run pil4dfs under fault injection"""
+    """Run pil4dfs under fault injection
+
+    Create a pool and populate a subdir with a number of entries, files, symlink (broken and not)
+    and another subdir.  Run 'ls' on this to see the output.
+    """
     pool = server.get_test_pool_obj()
 
     container = create_cont(conf, pool, ctype='POSIX', label='pil4dfs_fi')
-    test_cmd = AllocFailTest(conf, 'pil4dfs-ls', ['ls', '-l'])
+
+    with tempfile.TemporaryDirectory(prefix='pil4_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(5):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        os.mkdir(join(sub_dir, 'new_dir'))
+        os.symlink('broken', join(sub_dir, 'broken_s'))
+        os.symlink('file.0', join(sub_dir, 'link'))
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', f'{src_dir}/new_dir',
+                                 '--dst', f'daos://{pool.id()}/{container.id()}'])
+        print(rc)
+        assert rc.returncode == 0, rc
+
+    test_cmd = AllocFailTest(conf, 'pil4dfs-ls', ['ls', '-l', 'new_dir/'])
     test_cmd.wf = wf
     test_cmd.use_pil4dfs(container)
     test_cmd.check_daos_stderr = False
