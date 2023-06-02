@@ -1249,7 +1249,12 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 			/** just try fetching entry to open the file */
 			daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_array_close(file->oh, NULL);
+			int rc2;
+
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2 == -DER_NOMEM)
+				daos_array_close(file->oh, NULL);
+
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			return rc;
 		} else {
@@ -1622,25 +1627,30 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 
 	/** check if SB info exists */
 	if (iods[MAGIC_IDX].iod_size == 0) {
-		D_ERROR("SB does not exist.\n");
-		D_GOTO(err, rc = ENOENT);
+		rc = ENOENT;
+		D_ERROR("SB does not exist: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (magic != DFS_SB_MAGIC) {
-		D_ERROR("SB MAGIC verification failed.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("SB MAGIC verification failed: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	/** check version compatibility */
 	if (iods[SB_VER_IDX].iod_size != sizeof(sb_ver) || sb_ver > DFS_SB_VERSION) {
-		D_ERROR("Incompatible SB version.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Incompatible SB version: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
 	    layout_ver > DFS_LAYOUT_VERSION) {
-		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Incompatible DFS Layout version %d: %d (%s)\n", layout_ver, rc,
+			strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	D_DEBUG(DB_ALL, "DFS Container Layout version: %d\n", layout_ver);
@@ -1964,9 +1974,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 		attr = &local;
 
 	if (attr->da_props) {
-		merged_props = daos_prop_merge(attr->da_props, label_prop);
-		if (merged_props == NULL)
-			D_GOTO(out_prop, rc = ENOMEM);
+		rc = daos_prop_merge2(attr->da_props, label_prop, &merged_props);
+		if (rc != 0)
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
 		orig = attr->da_props;
 		attr->da_props = merged_props;
 	} else {
@@ -4019,8 +4029,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
-	if (obj == NULL)
+	if (obj == NULL) {
+		D_FREE(entry.value);
 		return ENOMEM;
+	}
 
 	strncpy(obj->name, name, len + 1);
 	oid_cp(&obj->parent_oid, parent->oid);
@@ -4103,7 +4115,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
-			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+			D_ERROR("daos_obj_open() Failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -4586,7 +4598,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to read from array object: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -4637,7 +4649,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	args->iod	= &params->arr_iod;
 
 	daos_task_set_priv(task, params);
-	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
 		D_GOTO(err_params, rc = daos_der2errno(rc));
 
@@ -4647,7 +4659,8 @@ err_params:
 	D_FREE(params);
 err_task:
 	tse_task_complete(task, rc);
-	return rc;
+	/** the event is completed with the proper rc */
+	return 0;
 }
 
 int

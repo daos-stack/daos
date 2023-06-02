@@ -659,16 +659,13 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 out:
 	if (rpc_out->excl_grp_ver > 0) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (grp_priv->gp_membs_ver > 0 && rpc_out->excl_grp_ver > grp_priv->gp_membs_ver) {
+		if (grp_priv->gp_membs_ver_min > 0 &&
+		    rpc_out->excl_grp_ver > grp_priv->gp_membs_ver_min) {
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 			struct crt_swim_target	*cst;
 			uint64_t		 incarnation = 0;
 
-			/*
-			 * I'm excluded. TODO: Strictly speaking, we should
-			 * compare rpc_out->excl_grp_ver with the group version
-			 * at which we joined the system.
-			 */
+			/* I'm excluded. */
 			D_WARN("excluded in group version %u (self %u)\n", rpc_out->excl_grp_ver,
 			       grp_priv->gp_membs_ver);
 			crt_swim_csm_lock(csm);

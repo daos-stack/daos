@@ -245,6 +245,8 @@ def define_common(reqs):
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
+    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
+
     reqs.define('event', libs=['event'], package='libevent-devel')
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
@@ -370,7 +372,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib'])
+                patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
@@ -381,6 +383,16 @@ def define_components(reqs):
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
                 package='protobuf-c-devel')
+
+    os_name = dist[0].split()[0]
+    if os_name == 'Ubuntu':
+        capstone_pkg = 'libcapstone-dev'
+    elif os_name == 'openSUSE':
+        capstone_pkg = 'libcapstone-devel'
+    else:
+        capstone_pkg = 'capstone-devel'
+    reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
+                package=capstone_pkg)
 
 
 __all__ = ['define_components']

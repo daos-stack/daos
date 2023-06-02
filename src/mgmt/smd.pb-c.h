@@ -245,10 +245,14 @@ struct  _Ctl__SmdDevice
    * DAOS I/O Engine using controller
    */
   uint32_t rank;
+  /*
+   * Device active roles (bitmask)
+   */
+  uint32_t role_bits;
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__LED_STATE__OFF, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__LED_STATE__OFF, 0, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq

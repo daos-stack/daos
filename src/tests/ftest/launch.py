@@ -123,7 +123,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -767,9 +768,8 @@ class Launch():
             try:
                 logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.xml file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.xml file: %s", str(error))
             else:
                 if not os.path.exists(results_xml_path):
                     logger.error("results.xml does not exist: %s", results_xml_path)
@@ -779,9 +779,8 @@ class Launch():
             try:
                 logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.html file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.html file: %s", str(error))
             else:
                 if not os.path.exists(results_html_path):
                     logger.error("results.html does not exist: %s", results_html_path)
@@ -1115,12 +1114,12 @@ class Launch():
 
         except ValueError as error:
             if not list_tests:
-                raise LaunchException("Error setting test environment") from error
+                raise LaunchException("Error setting test environment:", str(error)) from error
 
         except IOError as error:
             if error.errno == errno.ENOENT:
                 if not list_tests:
-                    raise LaunchException("Error setting test environment") from error
+                    raise LaunchException("Error setting test environment:", str(error)) from error
 
         return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
@@ -1465,6 +1464,12 @@ class Launch():
         #                             'filter' in the device description. If generating automatic
         #                             storage extra files, use a 'class: dcpm' first storage tier.
         #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
         #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
         #                             found to exist on all server hosts. If a 'filter' is specified
         #                             use it to find devices with the 'filter' in the device
@@ -1485,6 +1490,7 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
+        control_metadata = None
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1502,6 +1508,13 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_0_type = "ram"
+                max_nvme_tiers = 5
+                control_metadata = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], 'control_metadata')
+
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
@@ -1517,7 +1530,8 @@ class Launch():
 
         # Generate storage configuration extra yaml files if requested
         self._add_auto_storage_yaml(
-            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers)
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers,
+            control_metadata)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1539,7 +1553,7 @@ class Launch():
             test.set_yaml_info(args.include_localhost)
 
     def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
-                               max_nvme_tiers):
+                               max_nvme_tiers, control_metadata):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1549,6 +1563,8 @@ class Launch():
             scm_size (int): scm_size to use with ram storage tiers
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD.
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1573,7 +1589,8 @@ class Launch():
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
+                        control_metadata)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
@@ -2040,7 +2057,9 @@ class Launch():
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
         user_dir = os.environ["DAOS_TEST_USER_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
+        hosts = test.host_info.all_hosts
+        hosts.add(self.local_host)
+        logger.debug("Setting up '%s' on %s:", test_dir, hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
@@ -2052,7 +2071,7 @@ class Launch():
         for directory in self.RESULTS_DIRS:
             commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
-            if not run_remote(logger, test.host_info.all_hosts, command).passed:
+            if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2984,6 +3003,11 @@ def main():
         "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
         "\t\twith the 'filter' in the device description. If generating automatic storage extra",
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
         "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
@@ -3063,7 +3087,8 @@ def main():
         action="store",
         help="Detect available disk options for replacing the devices specified in the server "
              "storage yaml configuration file. Supported options include:  auto[:filter], "
-             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",
@@ -3106,13 +3131,6 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "--scm_size",
-        action="store",
-        default=16,
-        type=int,
-        help="the scm_size value to use in each server engine tier 0 ram storage config when "
-             "generating an automatic storage config (test yaml includes 'storage: auto').")
-    parser.add_argument(
         "--scm_mount",
         action="store",
         default="/mnt/daos",
@@ -3124,6 +3142,14 @@ def main():
         "-ss", "--slurm_setup",
         action="store_true",
         help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "--scm_size",
+        action="store",
+        default=0,
+        type=int,
+        help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
+             "config when generating an automatic storage config (test yaml includes 'storage: "
+             "auto'). Set value to '0' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",

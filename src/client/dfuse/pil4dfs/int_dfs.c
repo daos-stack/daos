@@ -25,6 +25,7 @@
 #include <mntent.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <sys/ucontext.h>
 
 #include <daos/debug.h>
 #include <gurt/list.h>
@@ -172,6 +173,50 @@ struct fd_dup2 {
 	int fd_src, fd_dest;
 	bool dest_closed;
 };
+
+/* Add the data structure for statx_timestamp and statx
+ * since they are not defined under CentOS 7.9.
+ * https://man7.org/linux/man-pages/man2/statx.2.html
+ */
+#ifndef __statx_defined
+struct statx_timestamp {
+	int64_t  tv_sec;
+	uint32_t tv_nsec;
+};
+
+struct statx {
+	uint32_t stx_mask;        /* Mask of bits indicating filled fields */
+	uint32_t stx_blksize;     /* Block size for filesystem I/O */
+	uint64_t stx_attributes;  /* Extra file attribute indicators */
+	uint32_t stx_nlink;       /* Number of hard links */
+	uint32_t stx_uid;         /* User ID of owner */
+	uint32_t stx_gid;         /* Group ID of owner */
+	uint32_t stx_mode;        /* File type and mode */
+	uint64_t stx_ino;         /* Inode number */
+	uint64_t stx_size;        /* Total size in bytes */
+	uint64_t stx_blocks;      /* Number of 512B blocks allocated */
+	uint64_t stx_attributes_mask; /* Mask to show what's supported in stx_attributes */
+
+	/* The following fields are file timestamps */
+	struct statx_timestamp stx_atime;  /* Last access */
+	struct statx_timestamp stx_btime;  /* Creation */
+	struct statx_timestamp stx_ctime;  /* Last status change */
+	struct statx_timestamp stx_mtime;  /* Last modification */
+
+	/* If this file represents a device, then the next two fields contain the ID of
+	 * the device
+	 */
+	uint32_t stx_rdev_major;  /* Major ID */
+	uint32_t stx_rdev_minor;  /* Minor ID */
+
+	/* The next two fields contain the ID of the device
+	 * containing the filesystem where the file resides
+	 */
+	uint32_t stx_dev_major;   /* Major ID */
+	uint32_t stx_dev_minor;   /* Minor ID */
+	uint64_t stx_mnt_id;      /* Mount ID */
+};
+#endif
 
 /* working dir of current process */
 static char            cur_dir[DFS_MAX_PATH] = "";
@@ -1558,13 +1603,8 @@ query_fd_forward_dest(int fd_src)
 static int
 allocate_a_fd_from_kernel(void)
 {
-	struct timespec times_loc;
-	char            file_name[128];
-
-	clock_gettime(CLOCK_REALTIME, &times_loc);
-	snprintf(file_name, sizeof(file_name) - 1, "dummy_%ld_%ld", times_loc.tv_sec,
-		 times_loc.tv_nsec);
-	return memfd_create(file_name, 0);
+	/* Just use open() to allocate a fd from kernel. Not going to read the file. */
+	return open("/proc/self/maps", O_RDONLY);
 }
 
 static void
@@ -2713,11 +2753,15 @@ __openat_2(int dirfd, const char *path, int oflags)
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* Check whether path is NULL or not since application provides dirp */
 	if (path == NULL) {
 		errno = EFAULT;
 		return (-1);
 	}
+	_Pragma("GCC diagnostic pop")
+
 	if (next_openat_2 == NULL) {
 		next_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
 		D_ASSERT(next_openat_2 != NULL);
@@ -2761,6 +2805,8 @@ closedir(DIR *dirp)
 	if (!hook_enabled)
 		return next_closedir(dirp);
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* Check whether dirp is NULL or not since application provides dirp */
 	if (!dirp) {
 		if (bLog)
@@ -2768,6 +2814,7 @@ closedir(DIR *dirp)
 		errno = EINVAL;
 		return (-1);
 	}
+	_Pragma("GCC diagnostic pop")
 
 	fd = dirfd(dirp);
 	if (fd >= FD_DIR_BASE) {
@@ -3480,6 +3527,8 @@ rename(const char *old_name, const char *new_name)
 		}
 		/* New_name was removed, now create a new one from the old one */
 		switch (type_old) {
+			ssize_t link_len_libc;
+
 		case S_IFLNK:
 			D_ALLOC(symlink_value, DFS_MAX_PATH);
 			if (symlink_value == NULL) {
@@ -3487,12 +3536,13 @@ rename(const char *old_name, const char *new_name)
 					D_ERROR("failed to allocate memory for symlink_value");
 				D_GOTO(out_err, rc = ENOMEM);
 			}
-			link_len = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
-			if (link_len >= DFS_MAX_PATH) {
+			link_len_libc = readlink(old_name, symlink_value, DFS_MAX_PATH - 1);
+			if (link_len_libc >= DFS_MAX_PATH) {
 				if (bLog)
-					D_ERROR("link is too long. link_len = %" PRIu64, link_len);
+					D_ERROR("link is too long. link_len = %" PRIu64,
+						link_len_libc);
 				D_GOTO(out_err, rc = ENAMETOOLONG);
-			} else if (link_len < 0) {
+			} else if (link_len_libc < 0) {
 				if (bLog)
 					D_ERROR("readlink failed: %s", strerror(errno));
 				D_GOTO(out_err, rc = errno);
@@ -4396,11 +4446,14 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	if (!hook_enabled)
 		return next_utimensat(dirfd, path, times, flags);
 
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
 	/* check path is NULL or not. path could be NULL since it is from application */
 	if (path == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
+	_Pragma("GCC diagnostic pop")
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
@@ -4464,6 +4517,17 @@ futimens(int fd, const struct timespec times[2])
 
 	return 0;
 }
+
+/* The macro was added to fix the compiling issue on CentOS 7.9.
+ * Those issues could be resolved by adding -D_FILE_OFFSET_BITS=64, however
+ * this flag causes other issues too.
+ */
+#ifndef F_ADD_SEALS
+#define F_OFD_GETLK	36
+#define F_OFD_SETLK	37
+#define F_OFD_SETLKW	38
+#define F_ADD_SEALS	1033
+#endif
 
 static int
 new_fcntl(int fd, int cmd, ...)
@@ -4667,8 +4731,6 @@ dup2(int oldfd, int newfd)
 			return fd;
 		else
 			return idx;
-	} else {
-		next_dup2(oldfd, newfd);
 	}
 	return -1;
 }
@@ -5034,7 +5096,7 @@ sig_handler(int code, siginfo_t *siginfo, void *ctx)
 	int                     rc, fd, idx_map;
 	d_iov_t                 iov;
 	d_sg_list_t             sgl;
-	struct ucontext_t      *context = (struct ucontext_t *)ctx;
+	ucontext_t             *context = (ucontext_t *)ctx;
 
 	if (code != SIGSEGV)
 		return old_segv.sa_sigaction(code, siginfo, context);

@@ -1350,6 +1350,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
 	int i;
+	int j;
 	int rc = 0;
 
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
@@ -1368,9 +1369,17 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	 */
 
 	if (mrone->mo_iods_num_from_parity > 0) {
+		daos_epoch_t min_eph = DAOS_EPOCH_MAX;
+
+		for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
+			for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++)
+				min_eph = min(min_eph,
+					      mrone->mo_iods_update_ephs_from_parity[i][j]);
+		}
+
 		rc = __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods_from_parity,
 						 mrone->mo_iods_num_from_parity,
-						 mrone->mo_min_epoch,
+						 min_eph,
 						 DIOF_FOR_MIGRATION | DIOF_EC_RECOV_FROM_PARITY,
 						 ds_cont);
 		if (rc > 0)
@@ -1384,7 +1393,6 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	 */
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t	iod;
-		int		j;
 
 		for (j = 0; j < mrone->mo_iods[i].iod_nr; j++) {
 			iod = mrone->mo_iods[i];
