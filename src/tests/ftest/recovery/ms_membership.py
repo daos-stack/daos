@@ -80,7 +80,7 @@ class MSMembershipTest(TestWithServers):
 
     def test_enable_disable_admin_excluded(self):
         """Test dmg system exclude and clear-exclude.
-        
+
         Test admin can enable and disable the rank state to AdminExcluded when the rank is
         down.
 
