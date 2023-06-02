@@ -1003,7 +1003,6 @@ class _Component():
         """Remove / and https:// from path"""
         return "".join(path.split("://")[-1].split("/")[1:])
 
-
     def _resolve_patches(self):
         """Parse the patches variable"""
         patchnum = 1
