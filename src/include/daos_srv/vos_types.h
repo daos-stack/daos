@@ -93,8 +93,10 @@ enum vos_pool_open_flags {
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 	/** Caller does VEA flush periodically */
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	/** RDB pool */
+	VOS_POF_RDB	= (1 << 4),
 	/** Open the pool for daos check query, that will bypass EXEL flags. */
-	VOS_POF_FOR_CHECK_QUERY = (1 << 4),
+	VOS_POF_FOR_CHECK_QUERY = (1 << 5),
 };
 
 enum vos_oi_attr {

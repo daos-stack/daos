@@ -128,7 +128,7 @@ type Config struct {
 	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
-	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
 }
 
@@ -165,12 +165,16 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
+	if c.TargetCount == 0 {
+		return errors.New("target count must be nonzero")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
 	if err := c.Storage.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {
@@ -328,7 +332,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
-	c.Storage.Tiers = c.Storage.Tiers[:]
+	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
 	return c
 }
@@ -366,6 +370,18 @@ func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
 // WithStorageNumaNodeIndex sets the NUMA node index to be used by this instance.
 func (c *Config) WithStorageNumaNodeIndex(nodeIndex uint) *Config {
 	c.Storage.NumaNodeIndex = nodeIndex
+	return c
+}
+
+// WithStorageControlMetadataPath sets the metadata path to be used by this instance.
+func (c *Config) WithStorageControlMetadataPath(path string) *Config {
+	c.Storage.ControlMetadata.Path = path
+	return c
+}
+
+// WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
+func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
+	c.Storage.ControlMetadata.DevicePath = device
 	return c
 }
 
@@ -483,9 +499,9 @@ func (c *Config) WithMemSize(memsize int) *Config {
 	return c
 }
 
-// WithHugePageSize sets the configured hugepage size on this instance.
-func (c *Config) WithHugePageSize(hugepagesz int) *Config {
-	c.HugePageSz = hugepagesz
+// WithHugepageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugepageSize(hugepagesz int) *Config {
+	c.HugepageSz = hugepagesz
 	return c
 }
 
@@ -512,5 +528,11 @@ func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Confi
 // WithIndex sets the I/O Engine instance index.
 func (c *Config) WithIndex(i uint32) *Config {
 	c.Index = i
+	return c.WithStorageIndex(i)
+}
+
+// WithStorageIndex sets the I/O Engine instance index in the storage struct.
+func (c *Config) WithStorageIndex(i uint32) *Config {
+	c.Storage.EngineIdx = uint(i)
 	return c
 }

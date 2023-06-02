@@ -128,8 +128,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	NVME_SYS(vps) = POOL_NVME_SYS(pool);
 
 	/* Query SCM used space */
-	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
-			     "stats.heap.curr_allocated", &scm_used);
+	rc = umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
 	if (rc) {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
@@ -395,9 +394,7 @@ vos_space_update_metrics(struct vos_pool *pool)
 	if (vpm->vp_space_metrics.vsm_scm_used) {
 		daos_size_t	scm_used;
 		int		rc;
-
-		rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
-				     "stats.heap.curr_allocated", &scm_used);
+		rc = umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
 		if (rc) {
 			rc = umem_tx_errno(rc);
 			D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",

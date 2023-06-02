@@ -812,12 +812,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1158,7 +1158,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False,
+                        control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
@@ -1173,6 +1174,8 @@ class DmgCommand(DmgCommandBase):
                 i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
+            control_metadata_path (str): External directory provided to store control
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1182,7 +1185,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=control_metadata_path)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

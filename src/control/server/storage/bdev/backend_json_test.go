@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,15 +28,29 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	mockMntpt := "/mock/mnt/daos"
 	tierID := 84
 	host, _ := os.Hostname()
+	disabledRoleBits := 0
+	namePostfix := func(i, r int) string {
+		return fmt.Sprintf("%s_%d_%d_%d", host, i, tierID, r)
+	}
+	nvmeName := func(i, roleBits int) string {
+		return fmt.Sprintf("Nvme_%s", namePostfix(i, roleBits))
+	}
+	aioName := func(i, roleBits int) string {
+		return fmt.Sprintf("AIO_%s", namePostfix(i, roleBits))
+	}
 
-	multiCtrlrConfs := func() []*SpdkSubsystemConfig {
+	multiCtrlrConfs := func(roleBits ...int) []*SpdkSubsystemConfig {
+		rbs := disabledRoleBits
+		if len(roleBits) > 0 {
+			rbs = roleBits[0]
+		}
 		return append(defaultSpdkConfig().Subsystems[0].Configs,
 			[]*SpdkSubsystemConfig{
 				{
 					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
+						DeviceName:       nvmeName(0, rbs),
 						TransportAddress: test.MockPCIAddr(1),
 					},
 				},
@@ -44,7 +58,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
+						DeviceName:       nvmeName(1, rbs),
 						TransportAddress: test.MockPCIAddr(2),
 					},
 				},
@@ -60,6 +74,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		class              storage.Class
 		fileSizeGB         int
 		devList            []string
+		devRoles           int
 		enableVmd          bool
 		vosEnv             string
 		enableHotplug      bool
@@ -79,10 +94,11 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			devList:        []string{"not a pci address"},
 			expValidateErr: errors.New("valid PCI addresses"),
 		},
-		"multiple controllers": {
+		"multiple controllers; roles enabled": {
 			class:       storage.ClassNvme,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			expBdevCfgs: multiCtrlrConfs(),
+			devRoles:    storage.BdevRoleAll,
+			expBdevCfgs: multiCtrlrConfs(storage.BdevRoleAll),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
@@ -121,17 +137,18 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},
 			expValidateErr: errors.New("requires non-zero bdev_size"),
 		},
-		"AIO file class; multiple files; non-zero file size": {
+		"AIO file class; multiple files; non-zero file size; roles enabled": {
 			class:      storage.ClassFile,
 			fileSizeGB: 1,
 			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
+			devRoles:   storage.BdevRoleAll,
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
-							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
+							DeviceName: aioName(0, storage.BdevRoleAll),
 							Filename:   "/path/to/myfile",
 						},
 					},
@@ -139,7 +156,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
-							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
+							DeviceName: aioName(1, storage.BdevRoleAll),
 							Filename:   "/path/to/myotherfile",
 						},
 					},
@@ -154,14 +171,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
-							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
+							DeviceName: aioName(0, disabledRoleBits),
 							Filename:   "/dev/sdb",
 						},
 					},
 					{
 						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
-							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
+							DeviceName: aioName(1, disabledRoleBits),
 							Filename:   "/dev/sdc",
 						},
 					},
@@ -207,6 +224,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(tc.devList...),
 					FileSize:   tc.fileSizeGB,
 					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
+					DeviceRoles: storage.BdevRoles{
+						storage.OptionBits(tc.devRoles),
+					},
 				},
 			}
 			if tc.class != "" {
@@ -222,15 +242,22 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithStorageClass("dcpm").
-						WithScmDeviceList("foo").
+						WithStorageClass("ram").
+						WithScmRamdiskSize(16).
 						WithScmMountPoint(mockMntpt),
 					cfg,
 				).
 				WithStorageEnableHotplug(tc.enableHotplug).
+				WithTargetCount(8).
 				WithPinnedNumaNode(0).
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
+
+			if tc.devRoles != 0 {
+				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{
+					Path: "/opt/daos_md",
+				}
+			}
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			test.CmpErr(t, tc.expValidateErr, gotValidateErr)

@@ -99,7 +99,7 @@ engine_fini(struct credit_context *tsc)
 static int
 engine_init(struct credit_context *tsc)
 {
-	return vos_self_init(tsc->tsc_pmem_path, false, -1);
+	return vos_self_init(tsc->tsc_pmem_path, false, BIO_STANDALONE_TGT_ID);
 }
 
 struct io_engine vos_engine = {
