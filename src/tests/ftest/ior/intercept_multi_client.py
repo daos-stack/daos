@@ -30,4 +30,4 @@ class IorInterceptMultiClient(IorInterceptTestBase):
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
         :avocado: tags=IorInterceptMultiClient,test_ior_intercept_multi_client
         """
-        self.run_il_perf_check()
+        self.run_il_perf_check('libioil.so')

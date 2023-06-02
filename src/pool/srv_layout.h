@@ -68,11 +68,15 @@ extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
 extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
-extern d_iov_t ds_pool_prop_scrub_mode;	/* uint64_t */
+extern d_iov_t ds_pool_prop_perf_domain;	/* uint32_t */
+extern d_iov_t ds_pool_prop_scrub_mode;		/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_thresh;	/* uint64_t */
 extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
 extern d_iov_t ds_pool_prop_obj_version;	/* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uin32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

@@ -903,6 +903,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	int			 rc = 0;
 	int			 rc1;
 	int			 count;
+	int			 i;
 	bool			 drop;
 
 	D_INIT_LIST_HEAD(&head);
@@ -1175,6 +1176,9 @@ next:
 out:
 	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
 				       drr_link)) != NULL) {
+		for (i = 0; i < drr->drr_count; i++)
+			dtx_dsp_free(drr->drr_cb_args[i]);
+
 		D_FREE(drr->drr_cb_args);
 		D_FREE(drr->drr_dti);
 		D_FREE(drr->drr_flags);

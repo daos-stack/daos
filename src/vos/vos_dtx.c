@@ -1724,7 +1724,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	DAE_INDEX(dae) = dbd->dbd_index;
 	if (DAE_INDEX(dae) > 0) {
 		rc = umem_tx_xadd_ptr(umm, umem_off2ptr(umm, dae->dae_df_off),
-				      sizeof(struct vos_dtx_act_ent_df), POBJ_XADD_NO_SNAPSHOT);
+				      sizeof(struct vos_dtx_act_ent_df), UMEM_XADD_NO_SNAPSHOT);
 		if (rc != 0)
 			return rc;
 
@@ -1971,7 +1971,7 @@ again:
 		if (dce != NULL) {
 			rc = umem_tx_xadd_ptr(umm, &dbd->dbd_committed_data[j],
 					      sizeof(struct vos_dtx_cmt_ent_df),
-					      POBJ_XADD_NO_SNAPSHOT);
+					      UMEM_XADD_NO_SNAPSHOT);
 			if (rc != 0)
 				D_GOTO(out, fatal = true);
 
@@ -2615,9 +2615,9 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		       obj->obj_sync_epoch, epoch, DP_UOID(oid));
 
 		obj->obj_sync_epoch = epoch;
-		pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
+		umem_atomic_copy(vos_cont2umm(cont),
 				       &obj->obj_df->vo_sync, &epoch,
-				       sizeof(obj->obj_df->vo_sync));
+				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
 	vos_obj_release(occ, obj, false);
@@ -2917,7 +2917,7 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	/* This will abort the transaction and callback to vos_dtx_cleanup_internal(). */
-	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
 }
 
 int
