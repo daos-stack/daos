@@ -12,6 +12,7 @@ from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
 from general_utils import get_log_file
+from duns_utils import format_path
 
 
 def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
@@ -260,13 +261,13 @@ class IorCommand(SubProcessCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None):
+    def set_daos_params(self, group, pool, cont):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool/str): DAOS test pool object or pool uuid/label
-            cont_uuid (str, optional): the container uuid or label. Defaults to None.
+            cont (str): the container uuid or label
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             try:
@@ -276,7 +277,7 @@ class IorCommand(SubProcessCommand):
             self.update_params(
                 dfs_group=group,
                 dfs_pool=dfs_pool,
-                dfs_cont=cont_uuid if cont_uuid else None)
+                dfs_cont=cont)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -352,8 +353,7 @@ class IorCommand(SubProcessCommand):
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             if self.dfs_pool.value is not None:
-                env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
-                                                                self.dfs_cont.value)
+                env["DAOS_UNS_PREFIX"] = format_path(self.dfs_pool.value, self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
                     env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
         return env
