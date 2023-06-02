@@ -129,6 +129,44 @@ class TestResult():
         # Increase the elapsed time by the delta between the last start call and this end call
         self.time_elapsed += self.time_end - self._time_split
 
+    def update(self, status, fail_class, fail_reason, exc_info=None):
+        """Update the test result.
+
+        Args:
+            status (str): TestResult status to set.
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if self.status is None:
+                self.status = status
+            return
+
+        if self.fail_count == 0 or self.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            self.status = status
+            self.fail_class = fail_class
+            self.fail_reason = fail_reason
+            if exc_info is not None:
+                try:
+                    # pylint: disable=import-outside-toplevel
+                    from avocado.utils.stacktrace import prepare_exc_info
+                    self.traceback = prepare_exc_info(exc_info)
+                except Exception:       # pylint: disable=broad-except
+                    pass
+
+        if self.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
+            plural = "s" if self.fail_count > 1 else ""
+            fail_reason = self.fail_reason.split(" (+")[0:1]
+            fail_reason.append(f"{self.fail_count} other failure{plural})")
+            self.fail_reason = " (+".join(fail_reason)
+
+        self.fail_count += 1
+
 
 class Results():
     # pylint: disable=too-few-public-methods
