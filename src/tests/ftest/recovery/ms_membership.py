@@ -79,8 +79,10 @@ class MSMembershipTest(TestWithServers):
         dmg_command.system_start(ranks="1")
 
     def test_enable_disable_admin_excluded(self):
-        """Test admin can enable and disable the rank state to AdminExcluded when the
-        rank is down.
+        """Test dmg system exclude and clear-exclude.
+        
+        Test admin can enable and disable the rank state to AdminExcluded when the rank is
+        down.
 
         1. Stop rank 1.
         2. Set rank 1 to AdminExcluded by calling dmg system exclude --ranks=1 and verify
