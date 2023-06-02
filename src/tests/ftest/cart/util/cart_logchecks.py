@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""LogTest Plugin for reporint relationships between descriptors"""
+"""LogTest Plugin for reporting relationships between descriptors"""
 
 import pprint
 
@@ -10,8 +10,7 @@ import pprint
 class DLogEntity(dict):
     """A log entity from DAOS logging"""
 
-    # pylint: disable=too-few-public-methods
-    def __init__(self, line):
+    def __init__(self, line):  # pylint: disable=unused-argument
         self.quiet = False
         self.logging_functions = set()
         self.deleted = False
@@ -188,7 +187,6 @@ class NullHandle(DLogEntity):
         self.quiet = True
         self['type'] = dname
 
-    # pylint: disable=too-few-public-methods
     def add_line(self, _line):
         """Record a line for the handle"""
 
@@ -203,7 +201,6 @@ class NullHandle(DLogEntity):
 class RootHandle(DLogEntity):
     """Root of everything"""
 
-    # pylint: disable=too-few-public-methods
     def __init__(self, line):
         super().__init__(line)
         self.line = line
@@ -236,6 +233,7 @@ class ReaddirTracer():
         """Parse a new line"""
         def new_desc():
             """Create a new object"""
+            # pylint: disable=too-many-return-statements
             if line.get_field(2) == 'Registered':
                 dtype = line.get_field(4)
                 if not dtype.endswith("'"):
