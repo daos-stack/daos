@@ -16,11 +16,13 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -325,6 +327,169 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	return resp, nil
 }
 
+func (c *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
+	// Format control metadata first, if needed
+	if needs, err := c.storage.ControlMetadataNeedsFormat(); err != nil {
+		return false, errors.Wrap(err, "detecting if metadata format is needed")
+	} else if needs || reformat {
+		engineIdxs := make([]uint, len(instances))
+		for i, eng := range instances {
+			engineIdxs[i] = uint(eng.Index())
+		}
+
+		c.log.Debug("formatting control metadata storage")
+		if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
+			return false, errors.Wrap(err, "formatting control metadata storage")
+		}
+
+		return true, nil
+	}
+
+	c.log.Debug("no control metadata format needed")
+	return false, nil
+}
+
+func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getMemInfo func() (*common.MemInfo, error)) error {
+	if scmCfgs[0].Class != storage.ClassRam {
+		return nil
+	}
+
+	var memRamdisks uint64
+	for _, sc := range scmCfgs {
+		memRamdisks += uint64(sc.Scm.RamdiskSize) * humanize.GiByte
+	}
+
+	mi, err := getMemInfo()
+	if err != nil {
+		return errors.Wrap(err, "retrieving system meminfo")
+	}
+	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+
+	if err := checkMemForRamdisk(log, memRamdisks, memAvail); err != nil {
+		return errors.Wrap(err, "check ram available for all tmpfs")
+	}
+
+	return nil
+}
+
+type formatScmReq struct {
+	log        logging.Logger
+	reformat   bool
+	instances  []Engine
+	getMemInfo func() (*common.MemInfo, error)
+}
+
+func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
+	needFormat := make(map[int]bool)
+	scmCfgs := make(map[int]*storage.TierConfig)
+	allNeedFormat := true
+
+	for idx, ei := range req.instances {
+		needs, err := ei.GetStorage().ScmNeedsFormat()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "detecting if SCM format is needed")
+		}
+		if !needs {
+			allNeedFormat = false
+		}
+		needFormat[idx] = needs
+
+		scmCfg, err := ei.GetStorage().GetScmConfig()
+		if err != nil || scmCfg == nil {
+			return nil, nil, errors.Wrap(err, "retrieving SCM config")
+		}
+		scmCfgs[idx] = scmCfg
+	}
+
+	if allNeedFormat {
+		// Check available RAM is sufficient before formatting SCM on engines.
+		if err := checkTmpfsMem(req.log, scmCfgs, req.getMemInfo); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	scmChan := make(chan *ctlpb.ScmMountResult, len(req.instances))
+	errored := make(map[int]string)
+	skipped := make(map[int]bool)
+	formatting := 0
+
+	for idx, ei := range req.instances {
+		if needFormat[idx] || req.reformat {
+			formatting++
+			go func(e Engine) {
+				scmChan <- e.StorageFormatSCM(ctx, req.reformat)
+			}(ei)
+
+			continue
+		}
+
+		resp.Mrets = append(resp.Mrets, &ctlpb.ScmMountResult{
+			Instanceidx: uint32(idx),
+			Mntpoint:    scmCfgs[idx].Scm.MountPoint,
+			State: &ctlpb.ResponseState{
+				Info: "SCM is already formatted",
+			},
+		})
+
+		skipped[idx] = true
+	}
+
+	for formatting > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case scmResult := <-scmChan:
+			formatting--
+			state := scmResult.GetState()
+			if state.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+				errored[int(scmResult.GetInstanceidx())] = state.GetError()
+			}
+			resp.Mrets = append(resp.Mrets, scmResult)
+		}
+	}
+
+	return errored, skipped, nil
+}
+
+type formatNvmeReq struct {
+	log         logging.Logger
+	instances   []Engine
+	errored     map[int]string
+	skipped     map[int]bool
+	mdFormatted bool
+}
+
+func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) {
+	// Allow format to complete on one instance even if another fails
+	// TODO: perform bdev format in parallel
+	for idx, ei := range req.instances {
+		_, hasError := req.errored[idx]
+		_, skipped := req.skipped[idx]
+		if hasError || (skipped && !req.mdFormatted) {
+			// if scm errored or was already formatted, indicate skipping bdev format
+			ret := ei.newCret(storage.NilBdevAddress, nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
+			resp.Crets = append(resp.Crets, ret)
+			continue
+		}
+
+		// SCM formatted correctly on this instance, format NVMe
+		cResults := ei.StorageFormatNVMe()
+		if cResults.HasErrors() {
+			req.errored[idx] = cResults.Errors()
+			resp.Crets = append(resp.Crets, cResults...)
+			continue
+		}
+
+		if err := ei.GetStorage().WriteNvmeConfig(ctx, req.log); err != nil {
+			req.errored[idx] = err.Error()
+			cResults = append(cResults, ei.newCret("", err))
+		}
+
+		resp.Crets = append(resp.Crets, cResults...)
+	}
+}
+
 // StorageFormat delegates to Storage implementation's Format methods to prepare
 // storage for use by DAOS data plane.
 //
@@ -338,66 +503,44 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp := new(ctlpb.StorageFormatResp)
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
-	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
+	mdFormatted := false
 
-	// TODO: enable per-instance formatting
-	formatting := 0
-	for _, ei := range instances {
-		formatting++
-		go func(e Engine) {
-			scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
-		}(ei)
+	if len(instances) == 0 {
+		return resp, nil
 	}
 
-	instanceErrored := make(map[uint32]string)
-	for formatting > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case scmResult := <-scmChan:
-			formatting--
-			state := scmResult.GetState()
-			if state.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-				instanceErrored[scmResult.GetInstanceidx()] = state.GetError()
-			}
-			resp.Mrets = append(resp.Mrets, scmResult)
-		}
+	mdFormatted, err := c.formatMetadata(instances, req.Reformat)
+	if err != nil {
+		return nil, err
 	}
 
-	// allow format to complete on one instance even if another fail
-	// TODO: perform bdev format in parallel
-	for _, ei := range instances {
-		if _, hasError := instanceErrored[ei.Index()]; hasError {
-			// if scm errored, indicate skipping bdev format
-			ret := ei.newCret(storage.NilBdevAddress, nil)
-			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
-			resp.Crets = append(resp.Crets, ret)
-			continue
-		}
-
-		// SCM formatted correctly on this instance, format NVMe
-		cResults := ei.StorageFormatNVMe()
-		if cResults.HasErrors() {
-			instanceErrored[ei.Index()] = cResults.Errors()
-			resp.Crets = append(resp.Crets, cResults...)
-			continue
-		}
-
-		if err := ei.GetStorage().WriteNvmeConfig(ctx, c.log); err != nil {
-			instanceErrored[ei.Index()] = err.Error()
-			cResults = append(cResults, ei.newCret("", err))
-		}
-
-		resp.Crets = append(resp.Crets, cResults...)
+	fsr := formatScmReq{
+		log:        c.log,
+		reformat:   req.Reformat,
+		instances:  instances,
+		getMemInfo: c.getMemInfo,
 	}
+	instanceErrors, instanceSkips, err := formatScm(ctx, fsr, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	fnr := formatNvmeReq{
+		log:         c.log,
+		instances:   instances,
+		errored:     instanceErrors,
+		skipped:     instanceSkips,
+		mdFormatted: mdFormatted,
+	}
+	formatNvme(ctx, fnr, resp)
 
 	// Notify storage ready for instances formatted without error.
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	for _, ei := range instances {
-		if msg, hasError := instanceErrored[ei.Index()]; hasError {
-			c.log.Errorf("instance %d: %s", ei.Index(), msg)
+	for idx, ei := range instances {
+		if msg, hasError := instanceErrors[idx]; hasError {
+			c.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
 		ei.NotifyStorageReady()
@@ -419,7 +562,7 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 
 	prepReq := storage.BdevPrepareRequest{
 		// zero as hugepages already allocated on start-up
-		HugePageCount: 0,
+		HugepageCount: 0,
 		TargetUser:    cu.Username,
 		PCIAllowList:  req.PciAddr,
 		Reset_:        false,

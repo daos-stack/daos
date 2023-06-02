@@ -1944,15 +1944,14 @@ dc_array_get_size(tse_task_t *task)
 	query_args->recx	= &kqp->recx;
 	query_args->max_epoch	= NULL;
 
-	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
-	if (rc != 0)
-		D_GOTO(err_task, rc);
-
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
 	cleanup = false;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &query_task);
 	if (rc == 0)
@@ -2020,15 +2019,14 @@ dc_array_stat(tse_task_t *task)
 	query_args->recx	= &kqp->recx;
 	query_args->max_epoch	= &args->stbuf->st_max_epoch;
 
-	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
-	if (rc != 0)
-		D_GOTO(err_task, rc);
-
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
-
 	cleanup = false;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &query_task);
 	if (rc == 0)
@@ -2113,13 +2111,14 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);
+	if (iod->iod_recxs == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
 	iod->iod_recxs[0].rx_idx = record_i + 1;
 	iod->iod_recxs[0].rx_nr = num_records;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
-			      NULL, &io_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free_reqs, rc);
 
 	io_arg = daos_task_get_args(io_task);
 	io_arg->oh	= oh;
@@ -2129,10 +2128,9 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	io_arg->iods	= iod;
 	io_arg->sgls	= sgl;
 
-	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free_reqs, rc);
 
 	rc = tse_task_register_deps(task, 1, &io_task);
 	if (rc)
@@ -2143,8 +2141,11 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	tse_task_list_add(io_task, task_list);
 
 	return rc;
-err:
+free_reqs:
+	D_FREE(iod->iod_recxs);
+free:
 	D_FREE(params);
+err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;

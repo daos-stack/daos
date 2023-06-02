@@ -986,11 +986,12 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 		D_GOTO(out_client_buf, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
-			""DF_U64" required).\n", glob->iov_buf_len,
-			glob_buf_size);
+		rc = -DER_TRUNC;
+		D_ERROR("Larger glob buffer needed (" DF_U64 " bytes provided, " DF_U64
+			" required) " DF_RC "\n",
+			glob->iov_buf_len, glob_buf_size, DP_RC(rc));
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_client_buf, rc = -DER_TRUNC);
+		D_GOTO(out_client_buf, rc);
 	}
 	glob->iov_len = glob_buf_size;
 

@@ -1872,12 +1872,14 @@ crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t
  * Set self rank.
  *
  * \param[in] rank              Rank to set on self.
+ * \param[in] group_version_min Minimum group version, that is, the version in
+ *                              which we join the system.
  *
  * \return                      DER_SUCCESS on success, negative value on
  *                              failure.
  */
 int
-crt_rank_self_set(d_rank_t rank);
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min);
 
 /**
  * Retrieve URI of the requested rank:tag pair.

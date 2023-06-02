@@ -225,6 +225,7 @@ class LogTest():
         self.hide_fi_calls = False
         self.fi_triggered = False
         self.fi_location = None
+        self.skip_suffixes = []
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
@@ -418,6 +419,8 @@ class LogTest():
                                                               SHUTDOWN_RC)):
                         show = False
                     elif show and line.function in IGNORED_FUNCTIONS:
+                        show = False
+                    if show and any(map(line.get_msg().endswith, self.skip_suffixes)):
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher like assert should

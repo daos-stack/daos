@@ -292,9 +292,19 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH)) {
+		struct dcs_iod_csums	*tmp_iod_csum;
+
 		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
+		for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+			tmp_iod_csum = &iods_csums[i];
+			if (tmp_iod_csum->ic_data != NULL &&
+			    tmp_iod_csum->ic_data->cs_csum != NULL) {
+				tmp_iod_csum->ic_data->cs_csum[0]++;
+				break;
+			}
+		}
+	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
@@ -352,9 +362,18 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 		}
 
-		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		if (singv_lo != NULL)
-			singv_lo->cs_cell_align = 1;
+		singv_lo = (singv_los == NULL || iod->iod_type == DAOS_IOD_ARRAY) ?
+			   NULL : &singv_los[i];
+		if (singv_lo != NULL) {
+			/* Single-value csum layout not needed for short single value that only
+			 * stored on one data shard.
+			 */
+			if (obj_ec_singv_one_tgt(iod->iod_size, NULL,
+						 &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca))
+				singv_lo = NULL;
+			else
+				singv_lo->cs_cell_align = 1;
+		}
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
