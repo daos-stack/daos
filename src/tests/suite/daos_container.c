@@ -24,6 +24,7 @@ co_create(void **state)
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
 	daos_handle_t	 coh;
+	daos_handle_t	 poh_inval = DAOS_HDL_INVAL;
 	daos_cont_info_t info;
 	daos_event_t	 ev;
 	char		 str[37];
@@ -54,12 +55,26 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
 		print_message("container opened\n");
 	}
 
 	if (arg->hdl_share)
 		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
+	/** query container */
+	print_message("querying container %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
+	print_message("container queried\n");
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** close container */
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
@@ -86,6 +101,50 @@ co_create(void **state)
 		}
 		print_message("container destroyed\n");
 	}
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - create container */
+	if (arg->myrank == 0) {
+		print_message("creating container with invalid pool %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = daos_cont_create(poh_inval, &uuid, NULL, arg->async ? &ev : NULL);
+		if (arg->async)
+			assert_rc_equal(rc, 0);
+		else
+			assert_rc_equal(rc, -DER_NO_HDL);
+		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
+	}
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - query container */
+	print_message("querying stale container handle %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+	if (arg->async)
+		assert_rc_equal(rc, 0);
+	else
+		assert_rc_equal(rc, -DER_NO_HDL);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - close container */
+	print_message("closing stale container handle %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	if (arg->async)
+		assert_rc_equal(rc, 0);
+	else
+		assert_rc_equal(rc, -DER_NO_HDL);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
 }
 
 #define BUFSIZE 10
@@ -3520,8 +3579,9 @@ setup(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-    {"CONT1: create/open/close/destroy container", co_create, async_disable, test_case_teardown},
-    {"CONT2: create/open/close/destroy container (async)", co_create, async_enable,
+    {"CONT1: create/open/query/close/destroy container", co_create, async_disable,
+     test_case_teardown},
+    {"CONT2: create/open/query/close/destroy container (async)", co_create, async_enable,
      test_case_teardown},
     {"CONT3: container handle local2glocal and global2local", co_create, hdl_share_enable,
      test_case_teardown},

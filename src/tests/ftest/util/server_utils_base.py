@@ -145,29 +145,38 @@ class DaosServerCommand(YamlCommand):
 
     @property
     def using_nvme(self):
-        """Is the daos command setup to use NVMe devices.
+        """Is the server command setup to use NVMe devices.
 
         Returns:
             bool: True if NVMe devices are configured; False otherwise
 
         """
-        value = False
         if self.yaml is not None and hasattr(self.yaml, "using_nvme"):
-            value = self.yaml.using_nvme
-        return value
+            return self.yaml.using_nvme
+        return False
 
     @property
     def using_dcpm(self):
-        """Is the daos command setup to use SCM devices.
+        """Is the server command setup to use SCM devices.
 
         Returns:
             bool: True if SCM devices are configured; False otherwise
 
         """
-        value = False
         if self.yaml is not None and hasattr(self.yaml, "using_dcpm"):
-            value = self.yaml.using_dcpm
-        return value
+            return self.yaml.using_dcpm
+        return False
+
+    @property
+    def using_control_metadata(self):
+        """Is the server command setup to use a control plane metadata.
+
+        Returns:
+            bool: True if a control metadata path is being used; False otherwise
+        """
+        if self.yaml is not None and hasattr(self.yaml, "using_control_metadata"):
+            return self.yaml.using_control_metadata
+        return False
 
     @property
     def engine_params(self):
@@ -177,10 +186,21 @@ class DaosServerCommand(YamlCommand):
             list: a list of YamlParameters for each server engine
 
         """
-        engine_params = []
         if self.yaml is not None and hasattr(self.yaml, "engine_params"):
-            engine_params = self.yaml.engine_params
-        return engine_params
+            return self.yaml.engine_params
+        return []
+
+    @property
+    def control_metadata(self):
+        """Get the control plane metadata configuration parameters.
+
+        Returns:
+            ControlMetadataParameters: the control plane metadata configuration parameters or None
+                if not defined.
+        """
+        if self.yaml is not None and hasattr(self.yaml, "metadata_params"):
+            return self.yaml.metadata_params
+        return None
 
     def get_engine_values(self, name):
         """Get the value of the specified attribute name for each engine.

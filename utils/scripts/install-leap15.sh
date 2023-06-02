@@ -32,6 +32,7 @@ dnf --nodocs install \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
+    libcapstone-devel \
     libevent-devel \
     libiscsi-devel \
     libjson-c-devel \
@@ -44,6 +45,7 @@ dnf --nodocs install \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
+    lmdb-devel \
     lua-lmod \
     make \
     maven \

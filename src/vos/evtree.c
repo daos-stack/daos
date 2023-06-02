@@ -1428,7 +1428,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	umem_off_t		 nd_off;
 	bool                     leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf));
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -3256,10 +3256,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (csum_buf_size > 0) {
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
-		} else {
-			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size);
 		}
+		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 
@@ -4055,6 +4053,7 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 
 {
 	int			 rc = 0;
+	bool                     end = false;
 
 	if (root->tr_feats == feats)
 		return 0;
@@ -4064,18 +4063,18 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 		return -DER_INVAL;
 	}
 
-	if (DAOS_ON_VALGRIND) {
+	if (!umem_tx_inprogress(umm)) {
 		rc = umem_tx_begin(umm, NULL);
 		if (rc != 0)
 			return rc;
-		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
-				      POBJ_XADD_NO_SNAPSHOT);
+		end = true;
 	}
+	rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats), UMEM_XADD_NO_SNAPSHOT);
 
 	if (rc == 0)
 		root->tr_feats = feats;
 
-	if (DAOS_ON_VALGRIND)
+	if (end)
 		rc = umem_tx_end(umm, rc);
 
 	return rc;

@@ -1859,7 +1859,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (dcsr->dcsr_sgls != NULL && rc > (DAOS_BULK_LIMIT >> 2)) {
+			if (dcsr->dcsr_sgls != NULL &&
+			    (rc > (DAOS_BULK_LIMIT >> 2) ||
+			     (obj_is_ec(obj) && !dcsr->dcsr_reasb->orr_single_tgt))) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1942,7 +1944,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			D_GOTO(out, rc = grp_idx);
 
 		if (obj_is_ec(obj) && dcsr->dcsr_reasb != NULL)
-			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
+			bit_map = dcsr->dcsr_reasb->tgt_bitmap;
 		else
 			bit_map = NIL_BITMAP;
 
