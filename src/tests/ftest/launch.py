@@ -2870,13 +2870,13 @@ class Launch():
         return 0
 
     def _update_xml(self, xml_file, name, launchable_xml=None, test_file=None):
-        """Update the classname information in the test result xml.
+        """Update the class name information in the test result xml.
 
         Args:
             xml_file (str): the xml file to modify
-            name (str): the new classname to use in the xml file
-            launchable_xml (str, optional): name of launchable result xml file to generate
-            test_file (str, optional): test file name for launchable result xml file
+            name (str): the new class name to use in the xml file
+            launchable_xml (str, optional): name of Launchable result xml file to generate
+            test_file (str, optional): test file name for Launchable result xml file
 
         Returns:
             bool: True if successful; False if an error was detected
