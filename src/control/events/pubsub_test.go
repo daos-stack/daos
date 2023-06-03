@@ -35,9 +35,7 @@ func (tly *tally) OnEvent(_ context.Context, evt *RASEvent) {
 	tly.Lock()
 	defer tly.Unlock()
 
-	if len(tly.rx) < tly.expectedRx {
-		tly.rx = append(tly.rx, evt.String())
-	}
+	tly.rx = append(tly.rx, evt.String())
 	if len(tly.rx) == tly.expectedRx {
 		close(tly.finished)
 	}
