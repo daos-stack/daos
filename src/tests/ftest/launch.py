@@ -2855,7 +2855,7 @@ class Launch():
                 return 1024
 
             # Update any cmocka xml results
-            for cmocka_xml in glob.glob('test-results/*/data/*.xml', root_dir=new_test_logs_dir):
+            for cmocka_xml in glob.glob(f'{new_test_logs_dir}/test-results/*/data/*.xml'):
                 if not self._update_xml(cmocka_xml, f'FTEST_{test.directory}.{test.test_file}'):
                     return 1024
 
