@@ -8,6 +8,8 @@ control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 transport_config:
   allow_insecure: true
+control_metadata:
+  path: /var/daos/config # Location to store control-plane metadata in MD-on-SSD mode.
 
 telemetry_port: 9191
 
@@ -45,7 +47,6 @@ engines:
         class: ram
         scm_size: 50       # assuming 3% metadata, 50GB RAM for 1.6TB NVMe data
         scm_mount: /mnt/daos
-
       -
         # Omit all bdev_roles to use the default assignments.
         class: nvme
