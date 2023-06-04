@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -244,7 +244,7 @@ func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
 
 		evt1 := mockSwimRankDeadEvt(1, 1)
 		debounceType := evt1.ID
-		debounceCooldown := 10 * time.Millisecond
+		debounceCooldown := 25 * time.Millisecond
 		tally := newTally(3)
 
 		ps.Subscribe(RASTypeStateChange, tally)
