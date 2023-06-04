@@ -34,11 +34,11 @@ class DdbTest(TestWithServers):
         If there are multiple VOS files, returns the first file obtained by "ls".
 
         Returns:
-            str: VOS file path such as /mnt/daos/<pool_uuid>/vos-0
+            str: VOS file path such as /mnt/daos0/<pool_uuid>/vos-0
 
         """
         hosts = NodeSet(self.hostlist_servers[0])
-        vos_path = os.path.join("/mnt/daos", self.pool.uuid.lower())
+        vos_path = os.path.join("/mnt/daos0", self.pool.uuid.lower())
         command = " ".join(["sudo", "ls", vos_path])
         cmd_out = run_pcmd(hosts=hosts, command=command)
 
@@ -49,7 +49,7 @@ class DdbTest(TestWithServers):
                 self.log.info("vos_file: %s", file)
                 return file
 
-        self.fail("vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
+        self.fail("vos file wasn't found in /mnt/daos0/{}".format(self.pool.uuid.lower()))
 
         return None  # to appease pylint
 
@@ -75,10 +75,10 @@ class DdbTest(TestWithServers):
         self.add_pool()
         self.add_container(pool=self.pool)
 
-        # Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         ddb_command = DdbCommand(
             server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-            mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
+            mount_point="/mnt/daos0", pool_uuid=self.pool.uuid,
             vos_file=self.get_vos_file_path())
 
         errors = []
@@ -254,7 +254,7 @@ class DdbTest(TestWithServers):
 
         1. Create a pool and a container. Insert objects, dkeys, and akeys.
         2. Stop the server to use ddb.
-        3. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        3. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         4. Call ddb rm to remove the akey.
         5. Restart the server to use the API.
         6. Reset the object, container, and pool to use the API after server restart.
@@ -309,7 +309,7 @@ class DdbTest(TestWithServers):
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            server_host=host, path=self.bin, mount_point="/mnt/daos0",
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 4. Call ddb rm to remove the akey.
@@ -411,7 +411,7 @@ class DdbTest(TestWithServers):
         1. Create a pool and a container.
         2. Insert one object with one dkey with the API.
         3. Stop the server to use ddb.
-        4. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        4. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         5. Load new data into [0]/[0]/[0]/[0]
         6. Restart the server.
         7. Reset the object, container, and pool to use the API.
@@ -451,7 +451,7 @@ class DdbTest(TestWithServers):
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            server_host=host, path=self.bin, mount_point="/mnt/daos0",
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Load new data into [0]/[0]/[0]/[0]
@@ -508,7 +508,7 @@ class DdbTest(TestWithServers):
         1. Create a pool and a container.
         2. Insert one object with one dkey with API.
         3. Stop the server to use ddb.
-        4. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        4. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         5. Dump the two akeys to files.
         6. Verify the content of the files.
         7. Restart the server for the cleanup.
@@ -539,7 +539,7 @@ class DdbTest(TestWithServers):
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            server_host=host, path=self.bin, mount_point="/mnt/daos0",
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Dump the two akeys to files.
