@@ -192,13 +192,20 @@ func (ps *PubSub) debounceEvent(event *RASEvent) bool {
 
 	key := ctrl.keyFn(event)
 	if lastSeen, found := ps.dbncEvts[event.ID][key]; found {
-		if ctrl.cooldown == 0 || time.Since(lastSeen) < ctrl.cooldown {
+		interval := ctrl.cooldown
+		last := time.Since(lastSeen)
+		if interval == 0 || last < interval {
 			ps.dbncEvts.updateLastSeen(event.ID, key)
+			ps.log.Debugf("last seen %s ago (ignore) cooldown: %s", last, interval)
 			return true
+		} else {
+			ps.log.Debugf("debounce interval exceeded (lastSeen %s > %s) for %q",
+				last, interval, key)
 		}
 	}
 
 	ps.dbncEvts.updateLastSeen(event.ID, key)
+	ps.log.Debugf("event accepted")
 	return false
 }
 

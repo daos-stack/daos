@@ -203,6 +203,7 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	ps := NewPubSub(test.Context(t), log)
+	defer ps.Close()
 
 	evt1 := mockSwimRankDeadEvt(1, 1)
 	debounceType := evt1.ID
@@ -234,32 +235,42 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 }
 
 func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+	test := func(t *testing.T, iter int) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
 
-	ps := NewPubSub(test.Context(t), log)
+		ps := NewPubSub(test.Context(t), log)
+		defer ps.Close()
 
-	evt1 := mockSwimRankDeadEvt(1, 1)
-	debounceType := evt1.ID
-	debounceCooldown := 10 * time.Millisecond
-	tally := newTally(3)
+		evt1 := mockSwimRankDeadEvt(1, 1)
+		debounceType := evt1.ID
+		debounceCooldown := 10 * time.Millisecond
+		tally := newTally(3)
 
-	ps.Subscribe(RASTypeStateChange, tally)
-	ps.Debounce(debounceType, debounceCooldown, func(ev *RASEvent) string {
-		return fmt.Sprintf("%d:%x", ev.Rank, ev.Incarnation)
-	})
+		ps.Subscribe(RASTypeStateChange, tally)
+		ps.Debounce(debounceType, debounceCooldown, func(ev *RASEvent) string {
+			return fmt.Sprintf("%d:%x", ev.Rank, ev.Incarnation)
+		})
 
-	// We should only see this event three times, after the cooldown
-	// timer expires on each loop.
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 16; j++ {
-			ps.Publish(evt1)
+		// We should only see this event three times, after the cooldown
+		// timer expires on each loop.
+		for i := 0; i < 3; i++ {
+			log.Debugf("start loop %d", i+1)
+			for j := 0; j < 16; j++ {
+				ps.Publish(evt1)
+			}
+			log.Debugf("sleep for cooldown")
+			time.Sleep(debounceCooldown)
 		}
-		time.Sleep(debounceCooldown)
+
+		<-tally.finished
+
+		log.Debugf("test iteration %d", iter)
+		test.AssertStringsEqual(t, []string{evt1.String(), evt1.String(), evt1.String()},
+			tally.getRx(), "unexpected slice of received events")
 	}
 
-	<-tally.finished
-
-	test.AssertStringsEqual(t, []string{evt1.String(), evt1.String(), evt1.String()},
-		tally.getRx(), "unexpected slice of received events")
+	for tn := 0; tn < 4000; tn++ {
+		test(t, tn)
+	}
 }
