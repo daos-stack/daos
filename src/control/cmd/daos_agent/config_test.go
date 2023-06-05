@@ -178,28 +178,3 @@ transport_config:
 		})
 	}
 }
-
-/*func TestAgent_Config_CacheRefreshInterval(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfgInterval uint
-		expResult   time.Duration
-	}{
-		"zero": {},
-		"5 min": {
-			cfgInterval: 5,
-			expResult:   5 * time.Minute,
-		},
-		"1 hour": {
-			cfgInterval: 60,
-			expResult:   time.Hour,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			cfg := &Config{
-				CacheRefreshIntervalMinutes: tc.cfgInterval,
-			}
-			test.AssertEqual(t, tc.expResult, cfg.CacheRefreshInterval(), "")
-		})
-	}
-}
-*/
