@@ -238,19 +238,17 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None, daos_command=None, label_generator=None):
+    def __init__(self, pool, daos_command=None, label_generator=None):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             daos_command (DaosCommand, optional): daos command object. Defaults to None
             label_generator (LabelGenerator, optional): used to generate container label by adding
                 a number to self.label. Defaults to None
 
         """
-        super().__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*")
         self.pool = pool
 
         self.object_qty = BasicParameter(None)

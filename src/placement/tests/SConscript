@@ -10,7 +10,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'isal')
+    denv.require('isal')
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
 
