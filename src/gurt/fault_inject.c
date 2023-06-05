@@ -161,9 +161,8 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	struct d_fault_attr_t *fault_attr;
 	char                  *fa_argument = NULL;
 	bool                   should_free = true;
-	struct d_fault_attr   *new_rec     = NULL;
-	struct d_fault_attr   *rec         = NULL;
-	d_list_t              *rlink       = NULL;
+	struct d_fault_attr   *new_rec;
+	d_list_t              *rlink;
 	int                    rc          = DER_SUCCESS;
 
 	D_ALLOC_PTR(new_rec);
@@ -189,6 +188,8 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 		D_DEBUG(DB_ALL, "new fault id: %u added.\n", fault_id);
 		should_free = false;
 	} else {
+		struct d_fault_attr *rec;
+
 		rec = fa_link2ptr(rlink);
 		D_ASSERT(rec->fa_attr.fa_id == fault_id);
 		fault_attr = &rec->fa_attr;
@@ -499,9 +500,7 @@ d_fi_gdata_destroy(void)
 
 	rc = d_hash_table_destroy_inplace(&d_fi_gdata.dfg_fa_table, true /* force */);
 	if (rc != 0) {
-		D_ERROR("failed to destroy fault attr data. force: %d, "
-			"d_hash_table_destroy_inplace failed, rc: %d\n",
-			true, rc);
+		D_ERROR("d_hash_table_destroy_inplace() failed, rc: %d\n", rc);
 	}
 	D_RWLOCK_DESTROY(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata.dfg_refcount = 0;
@@ -792,13 +791,11 @@ d_fault_attr_err_code(uint32_t fault_id)
 void
 d_fault_inject_thread_enable(bool enabled)
 {
-	return;
 }
 
 void
 d_fault_inject_thread_default_enable(bool enabled)
 {
-	return;
 }
 
 #endif /* FAULT_INJECT */
