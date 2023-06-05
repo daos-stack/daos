@@ -16,7 +16,7 @@ fi
 echo '========='
 pwd
 if [ -e "install/lib/daos/TESTING/ftest/avocado/job-results/${STAGE_NAME}" ]; then
-    mv "install/lib/daos/TESTING/ftest/avocado/job-results/${STAGE_NAME}" "${STAGE_NAME}"
+    mv "install/lib/daos/TESTING/ftest/avocado/job-results/${STAGE_NAME}" "."
 else
     echo "No avocado job-results found!"
     ls -al install/lib/daos/TESTING/ftest/avocado/job-results
