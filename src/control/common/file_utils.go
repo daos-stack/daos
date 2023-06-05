@@ -276,7 +276,7 @@ func NormalizePath(p string) (np string, err error) {
 	return
 }
 
-// HasPrefixPath reports whether if sub parameter path is a prefix of the base parameter one.
+// HasPrefixPath reports whether sub parameter path is a prefix of the base parameter one.
 func HasPrefixPath(base, sub string) (bool, error) {
 	var err error
 

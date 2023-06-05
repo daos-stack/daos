@@ -589,9 +589,9 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 type (
 	MockStorageConfig struct {
-		TotalBytes  uint64
-		AvailBytes  uint64
-		UsableBytes uint64
+		TotalBytes  uint64 // RAW size of the device
+		AvailBytes  uint64 // Available raw storage
+		UsableBytes uint64 // Effective storage available for data
 		NvmeState   *storage.NvmeDevState
 	}
 
