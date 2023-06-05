@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <setjmp.h>
 #include <cmocka.h>
 #include <daos/common.h>
 #include <daos/object.h>
@@ -34,11 +35,10 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
-#define VPOOL_16M	(16ULL << 20)
+#define VPOOL_256M	(256ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
 #define VPOOL_3G	(3ULL << 30)
-#define VPOOL_10G	(10ULL << 30)
 
 #define VPOOL_SIZE	VPOOL_3G
 
@@ -49,6 +49,13 @@ extern char	vos_path[STORAGE_PATH_LEN+1];
 extern int	gc;
 extern bool	g_force_checksum;
 extern bool	g_force_no_zero_copy;
+
+/**
+ * The last key stored in vos/tests/vts_io.c
+ * It can be used for punching or overwrite
+ */
+extern char	last_dkey[];
+extern char	last_akey[];
 
 enum vts_ops_type {
 	CREAT,
@@ -130,6 +137,7 @@ int run_ts_tests(const char *cfg);
 int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
+int run_wal_tests(const char *cfg);
 int
 run_vos_command(const char *arg0, const char *cmd);
 

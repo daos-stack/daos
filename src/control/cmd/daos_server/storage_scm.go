@@ -90,7 +90,7 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	case storage.ScmStateUnknown:
 		return errors.New("failed to report state")
 	case storage.ScmNoModules:
-		return storage.FaultScmNoModules
+		return storage.FaultScmNoPMem
 	case storage.ScmNoRegions:
 		return errors.New("failed to create regions")
 	case storage.ScmFreeCap:
@@ -174,7 +174,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	case storage.ScmNoRegions:
 		cmd.Info("PMem has been reset successfully!")
 	case storage.ScmNoModules:
-		return storage.FaultScmNoModules
+		return storage.FaultScmNoPMem
 	default:
 		return errors.Errorf("unexpected state %q after scm reset", state)
 	}

@@ -34,10 +34,9 @@ class AgentFailure(IorTestBase):
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(
-            group=self.server_group, pool=self.pool, cont_uuid=self.container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        testfile = os.path.join(os.sep, file_name)
+        ior_cmd.update_params(test_file=testfile)
 
         # We need to provide hostnames to the util files with NodeSet.
         clients_nodeset = NodeSet.fromlist(clients)
@@ -72,7 +71,7 @@ class AgentFailure(IorTestBase):
         journalctl --system -t daos_agent --since <before> --until <after>
         This step verifies that DAOS, or daos_agent process in this case, prints useful
         logs for the user to troubleshoot the issue, which in this case the application
-        can’t be used.
+        can't be used.
         6. Restart daos_agent.
         7. Run IOR again. It should succeed this time without any error. This step
         verifies that DAOS can recover from the fault with minimal human intervention.

@@ -109,7 +109,7 @@ def define_mercury(reqs):
         reqs.define('rt', libs=['rt'])
 
     reqs.define('psm2',
-                retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
+                retriever=GitRepoRetriever('https://github.com/cornelisnetworks/opa-psm2.git'),
                 # psm2 hard-codes installing into /usr/...
                 commands=[['sed',
                            '-i',
@@ -126,12 +126,15 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
                  '--disable-opx',
                  '--without-gdrcopy']
+
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
     else:
@@ -241,6 +244,8 @@ def define_common(reqs):
     reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
+
+    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
 
@@ -367,7 +372,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib'])
+                patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
@@ -378,6 +383,16 @@ def define_components(reqs):
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
                 package='protobuf-c-devel')
+
+    os_name = dist[0].split()[0]
+    if os_name == 'Ubuntu':
+        capstone_pkg = 'libcapstone-dev'
+    elif os_name == 'openSUSE':
+        capstone_pkg = 'libcapstone-devel'
+    else:
+        capstone_pkg = 'capstone-devel'
+    reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
+                package=capstone_pkg)
 
 
 __all__ = ['define_components']

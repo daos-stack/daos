@@ -8,7 +8,6 @@ package hostlist_test
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -99,13 +98,13 @@ func TestHostList_Create(t *testing.T) {
 			expUniqCount: 3,
 		},
 		"tab delimited": {
-			startList:    fmt.Sprintf("node1\tnode2\tnode3"),
+			startList:    "node1\tnode2\tnode3",
 			expRawOut:    "node[1-3]",
 			expUniqOut:   "node[1-3]",
 			expUniqCount: 3,
 		},
 		"mixed delimiters": {
-			startList:    fmt.Sprintf("node1\tnode2 node3,node4"),
+			startList:    "node1\tnode2 node3,node4",
 			expRawOut:    "node[1-4]",
 			expUniqOut:   "node[1-4]",
 			expUniqCount: 4,

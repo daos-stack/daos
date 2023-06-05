@@ -12,6 +12,7 @@
 
 #include <sys/stat.h>
 #include <daos_srv/vos.h>
+#include <daos/sys_db.h>
 #include "vos_internal.h"
 
 /* Reserved system pool and container UUIDs
@@ -425,7 +426,7 @@ vos_db_fini(void)
 		if (vos_db.db_destroy_db) {
 			int rc;
 
-			rc = vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+			rc = vos_pool_destroy_ex(vos_db.db_file, vos_db.db_pool, 0);
 			if (rc != 0)
 				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);
