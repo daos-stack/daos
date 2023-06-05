@@ -173,8 +173,9 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	}
 
 	resp := &mgmtpb.JoinResp{
-		State: mgmtpb.JoinResp_IN,
-		Rank:  member.Rank.Uint32(),
+		State:      mgmtpb.JoinResp_IN,
+		Rank:       member.Rank.Uint32(),
+		MapVersion: joinResponse.MapVersion,
 	}
 
 	// If the rank is local to the MS leader, then we need to wire up at least
@@ -188,7 +189,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		}
 		srv := srvs[0]
 
-		if err := srv.SetupRank(ctx, joinResponse.Member.Rank); err != nil {
+		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion); err != nil {
 			return nil, errors.Wrap(err, "SetupRank on local instance failed")
 		}
 	}

@@ -160,9 +160,10 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set rank to %u\n", req->rank);
+	D_INFO("Received request to set rank to %u and map_version to %u\n", req->rank,
+	       req->map_version);
 
-	rc = crt_rank_self_set(req->rank);
+	rc = crt_rank_self_set(req->rank, req->map_version);
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));

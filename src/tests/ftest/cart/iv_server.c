@@ -1268,7 +1268,7 @@ int main(int argc, char **argv)
 	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	assert(rc == 0);
 
 	grp = crt_group_lookup(IV_GRP_NAME);
