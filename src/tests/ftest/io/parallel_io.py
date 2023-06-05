@@ -8,6 +8,7 @@ import threading
 import subprocess  # nosec
 import time
 from getpass import getuser
+import os
 
 
 from exception_utils import CommandFailure
@@ -246,10 +247,9 @@ class ParallelIo(FioBase, IorTestBase):
                     self.fail("Failed to {}".format(cmd))
 
                 # run ior on all containers
-                test_file = dfuse_cont_dir + "/testfile"
-                self.ior_cmd.test_file.update(test_file)
+                self.ior_cmd.test_file.update(os.path.join(dfuse_cont_dir, 'testfile'))
                 self.ior_cmd.set_daos_params(
-                    self.server_group, pool, self.container[cont_num].uuid)
+                    self.server_group, pool, self.container[cont_num].identifier)
                 thread = threading.Thread(
                     target=self.run_ior,
                     args=(self.get_ior_job_manager_command(), processes, None,

@@ -292,7 +292,7 @@ int main(int argc, char **argv)
 	if (!grp)
 		error_exit();
 
-	rc = crt_rank_self_set(g_my_rank);
+	rc = crt_rank_self_set(g_my_rank, 1 /* group_version_min */);
 	if (rc != 0)
 		error_exit();
 

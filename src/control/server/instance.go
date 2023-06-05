@@ -178,10 +178,10 @@ func (ei *EngineInstance) removeSocket() error {
 	return nil
 }
 
-func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, error) {
+func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, uint32, error) {
 	superblock := ei.getSuperblock()
 	if superblock == nil {
-		return ranklist.NilRank, false, errors.New("nil superblock while determining rank")
+		return ranklist.NilRank, false, 0, errors.New("nil superblock while determining rank")
 	}
 
 	r := ranklist.NilRank
@@ -204,11 +204,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
-		return ranklist.NilRank, false, err
+		return ranklist.NilRank, false, 0, err
 	}
 	switch resp.State {
 	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
-		return ranklist.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+		return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = ranklist.Rank(resp.Rank)
 
@@ -222,11 +222,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		superblock.URI = ready.GetUri()
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
-			return ranklist.NilRank, resp.LocalJoin, err
+			return ranklist.NilRank, resp.LocalJoin, 0, err
 		}
 	}
 
-	return r, resp.LocalJoin, nil
+	return r, resp.LocalJoin, resp.MapVersion, nil
 }
 
 func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
@@ -263,7 +263,7 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		ei.log.Error(err.Error()) // nonfatal
 	}
 
-	r, localJoin, err := ei.determineRank(ctx, ready)
+	r, localJoin, mapVersion, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
@@ -274,11 +274,11 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	return ei.SetupRank(ctx, r)
+	return ei.SetupRank(ctx, r, mapVersion)
 }
 
-func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank) error {
-	if err := ei.callSetRank(ctx, rank); err != nil {
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
 
@@ -290,8 +290,8 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank) err
 	return nil
 }
 
-func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
