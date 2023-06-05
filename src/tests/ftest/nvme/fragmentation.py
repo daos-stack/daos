@@ -60,7 +60,8 @@ class NvmeFragmentation(TestWithServers):
             # Define the arguments for the ior_runner_thread method
             ior_cmd = IorCommand()
             ior_cmd.get_params(self)
-            ior_cmd.set_daos_params(self.server_group, self.pool)
+            cont_label = self.label_generator.get_label('cont')
+            ior_cmd.set_daos_params(self.server_group, self.pool, cont_label)
             ior_cmd.dfs_oclass.update(oclass)
             ior_cmd.api.update(api)
             ior_cmd.transfer_size.update(test[0])
@@ -69,8 +70,6 @@ class NvmeFragmentation(TestWithServers):
 
             # Define the job manager for the IOR command
             job_manager = get_job_manager(self, job=ior_cmd)
-            cont_label = self.label_generator.get_label('cont')
-            job_manager.job.dfs_cont.update(cont_label)
             env = ior_cmd.get_default_env(str(job_manager))
             job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
             job_manager.assign_processes(processes)
@@ -86,7 +85,7 @@ class NvmeFragmentation(TestWithServers):
         # Destroy the container created by thread
         for cont_label in cont_list:
             try:
-                daos_cmd.container_destroy(pool=self.pool.uuid, cont=cont_label)
+                daos_cmd.container_destroy(pool=self.pool.identifier, cont=cont_label)
             except CommandFailure as error:
                 results.put("FAIL - {}".format(error))
 
@@ -106,7 +105,7 @@ class NvmeFragmentation(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fragmentation,test_nvme_fragmentation
+        :avocado: tags=NvmeFragmentation,test_nvme_fragmentation
         """
         num_repeat = self.params.get("num_repeat", '/run/ior/*')
         num_parallel_job = self.params.get("num_parallel_job", '/run/ior/*')
