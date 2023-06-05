@@ -1277,7 +1277,7 @@ mem_free:
 #define RPT_MAX_LOG_ENTRIES 200
 
 /* how many most recent rpc_priv structures to keep around */
-#define RPT_MAX_ENTRIES 1000
+#define RPT_MAX_ENTRIES 2000
 
 /* set to 0 to disable string copies -- faster */
 #define RPT_INCLUDE_STRINGS 1
@@ -1286,12 +1286,13 @@ mem_free:
 #define RPT_CLIENT_ONLY 1
 
 enum rpt_op {
+	RPT_OP_NONE = 0,
 	RPT_OP_ALLOC = 1,
 	RPT_OP_ADDREF = 2,
 	RPT_OP_DECREF = 3,
 	RPT_OP_FREE = 4,
 	RPT_OP_COMPLETED = 5,
-	RPT_OP_SEND =6,
+	RPT_OP_SEND = 6,
 };
 
 struct rpt_alloc_data {
@@ -1333,40 +1334,42 @@ struct rpt_log_entry {
 	struct timeval		tv;
 	enum rpt_op		op;
 	union rpt_data		rpt_msg;
-	struct rpt_log_entry	*next;
-	struct rpt_log_entry	*prev;
 };
 
 struct rpt_entry {
 	struct timeval		tv_start;
 	uint64_t		addr;
 	pthread_mutex_t		log_mutex;
-	struct rpt_log_entry	*log_head;
-	struct rpt_log_entry	*log_tail;
+
+
+	struct rpt_log_entry	log_entry[RPT_MAX_LOG_ENTRIES];
 	int			num_log_entries;
-	struct rpt_entry	*next;
-	struct rpt_entry	*prev;
+	int			log_head;
+	int			log_tail;
 };
 
-static struct rpt_entry *rpt_head;
-static struct rpt_entry *rpt_tail;
+static struct rpt_entry rpt[RPT_MAX_ENTRIES];
 static int rpt_num_entries;
+static int rpt_head;
+static int rpt_tail;
 static pthread_mutex_t rpt_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 static struct rpt_entry *__get_rpt_entry(struct crt_rpc_priv *rpc_priv)
 {
-	struct rpt_entry *entry = NULL;
+	struct rpt_entry	*entry = NULL;
+	int			i;
 
 	D_MUTEX_LOCK(&rpt_mutex);
-	entry = rpt_head;
 
-	while (entry) {
+	/* Walk the list backwards as rpc_priv is likely the most recent */
+	for (i = 0; i < rpt_num_entries; i++) {
+		entry = &rpt[(RPT_MAX_ENTRIES + rpt_head - i - 1) % RPT_MAX_ENTRIES];
+
 		if (entry->addr == (uint64_t)rpc_priv)
 			break;
-
-		entry = entry->next;
 	}
+
 	D_MUTEX_UNLOCK(&rpt_mutex);
 
 	return entry;
@@ -1376,59 +1379,22 @@ static struct rpt_entry *__create_rpt_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry *entry = NULL;
 
-	D_ALLOC_PTR(entry);
-
-	if (!entry) {
-		D_ERROR("Failed to alloc entry\n");
-		return entry;
-	}
-
-	entry->addr = (uint64_t)rpc_priv;
-	entry->log_head = NULL;
-	D_MUTEX_INIT(&entry->log_mutex, NULL);
-
-	gettimeofday(&entry->tv_start, NULL);
-
 	D_MUTEX_LOCK(&rpt_mutex);
 
-
-	entry->num_log_entries = 0;
-	entry->next = NULL;
-	entry->prev = NULL;
-
-	if (rpt_head == NULL) {
-		rpt_head = entry;
-		rpt_tail = entry;
-	} else {
-		rpt_head->prev = entry;
-		entry->next = rpt_head;
-		rpt_head = entry;
+	if (rpt_num_entries == RPT_MAX_ENTRIES) {
+		rpt[rpt_tail].addr = 0x0;
+		rpt_tail = (rpt_tail + 1) % RPT_MAX_ENTRIES;
+		rpt_num_entries--;
 	}
 
+	entry = &rpt[rpt_head];
+	rpt_head = (rpt_head + 1) % RPT_MAX_ENTRIES;
 	rpt_num_entries++;
 
-	if (rpt_num_entries > RPT_MAX_ENTRIES) {
-		struct rpt_entry	*to_del;
-		struct rpt_log_entry	*log_entry, *tmp_log_entry;
-
-		to_del = rpt_tail;
-
-		if (rpt_tail && rpt_tail->prev) {
-			rpt_tail->prev->next = NULL;
-			rpt_tail = rpt_tail->prev;
-			log_entry = to_del->log_head;
-
-			while (log_entry) {
-				tmp_log_entry = log_entry;
-				log_entry = log_entry->next;
-
-				D_FREE(tmp_log_entry);
-			}
-
-			D_FREE(to_del);
-			rpt_num_entries--;
-		}
-	}
+	entry->addr = (uint64_t)rpc_priv;
+	D_MUTEX_INIT(&entry->log_mutex, NULL);
+	gettimeofday(&entry->tv_start, NULL);
+	entry->num_log_entries = 0;
 
 	D_MUTEX_UNLOCK(&rpt_mutex);
 
@@ -1436,56 +1402,30 @@ static struct rpt_entry *__create_rpt_entry(struct crt_rpc_priv *rpc_priv)
 }
 
 
-static struct rpt_log_entry* __create_log_entry(struct rpt_entry* entry)
+static struct rpt_log_entry *__create_log_entry(struct rpt_entry *entry)
 {
 	struct rpt_log_entry *log_entry = NULL;
 
-	D_ALLOC_PTR(log_entry);
-
-	if (!log_entry) {
-		D_ERROR("Failed to alloc log entry\n");
-		return log_entry;
-	}
-
-	gettimeofday(&log_entry->tv, NULL);
 	D_MUTEX_LOCK(&entry->log_mutex);
 
-	log_entry->next = NULL;
-	log_entry->prev = NULL;
-
-	if (entry->log_head == NULL) {
-		entry->log_head = log_entry;
-		entry->log_tail = log_entry;
-	} else {
-		entry->log_head->prev = log_entry;
-		log_entry->next = entry->log_head;
-		entry->log_head = log_entry;
+	if (entry->num_log_entries == RPT_MAX_LOG_ENTRIES) {
+		entry->log_entry[entry->log_tail].op = RPT_OP_NONE;
+		entry->log_tail = (entry->log_tail + 1) % RPT_MAX_LOG_ENTRIES;
+		entry->num_log_entries--;
 	}
 
+	log_entry = &(entry->log_entry[entry->log_head]);
+	entry->log_head = (entry->log_head + 1) % RPT_MAX_LOG_ENTRIES;
 	entry->num_log_entries++;
 
-	if (entry->num_log_entries > RPT_MAX_LOG_ENTRIES) {
-		/* TODO: add option to drain below certain size */
-		struct rpt_log_entry *log_to_del;
-
-		log_to_del = entry->log_tail;
-
-		if (entry->log_tail && entry->log_tail->prev) {
-			entry->log_tail->prev->next = NULL;
-
-			entry->log_tail = entry->log_tail->prev;
-
-			D_FREE(log_to_del);
-			entry->num_log_entries--;
-		}
-	}
+	gettimeofday(&log_entry->tv, NULL);
 
 	D_MUTEX_UNLOCK(&entry->log_mutex);
 	return log_entry;
 }
 
 
-static struct rpt_log_entry* __get_next_log_entry(struct crt_rpc_priv *rpc_priv)
+static struct rpt_log_entry *__get_next_log_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry	*entry;
 	struct rpt_log_entry	*log_entry;
@@ -1505,8 +1445,8 @@ static struct rpt_log_entry* __get_next_log_entry(struct crt_rpc_priv *rpc_priv)
 
 void RPT_INIT(void)
 {
-	rpt_head = NULL;
-	rpt_tail = NULL;
+	rpt_head = 0;
+	rpt_tail = 0;
 	rpt_num_entries = 0;
 }
 
@@ -1514,6 +1454,7 @@ void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry *entry;
 	struct rpt_log_entry *log_entry;
+	int i;
 
 #if RPT_CLIENT_ONLY
 	if (crt_is_service())
@@ -1526,19 +1467,18 @@ void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
 	}
 
 	D_MUTEX_LOCK(&entry->log_mutex);
-	log_entry = entry->log_head;
 
-
-	while (log_entry) {
+	for (i = 0; i < entry->num_log_entries; i++) {
 		union rpt_data *rpt_msg;
 		char *pr_op;
-
 		char msg[256];
 		char timestamp[256];
-
 		unsigned long long delta;
 
+		msg[0] = '\0';
 
+		log_entry = &(entry->log_entry[(RPT_MAX_LOG_ENTRIES + entry->log_head - i - 1)
+			    % RPT_MAX_LOG_ENTRIES]);
 		rpt_msg = &log_entry->rpt_msg;
 
 		delta = (log_entry->tv.tv_sec - entry->tv_start.tv_sec) * 1000000 +
@@ -1599,7 +1539,6 @@ void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
 
 		D_ERROR("%s %s %s\n", timestamp, pr_op, msg);
 
-		log_entry = log_entry->next;
 	}
 
 	if (entry->num_log_entries == RPT_MAX_LOG_ENTRIES)
@@ -1636,7 +1575,7 @@ void RPT_SEND(struct crt_rpc_priv *rpc_priv, int rank, int tag, int hg_rc)
 
 	log_entry->op = RPT_OP_SEND;
 	log_entry->rpt_msg._send.rank = rank;
-	log_entry->rpt_msg._send.tag= tag;
+	log_entry->rpt_msg._send.tag = tag;
 	log_entry->rpt_msg._send.hg_rc = hg_rc;
 }
 
