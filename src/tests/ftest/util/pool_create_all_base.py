@@ -8,7 +8,6 @@ import sys
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
-from exception_utils import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -42,11 +41,8 @@ class PoolCreateAllTestBase(TestWithServers):
         Returns:
             tuple: SCM and NVMe usable space.
         """
-        try:
-            self.log.info("Retrieving available size")
-            result = self.dmg.storage_query_usage()
-        except CommandFailure as error:
-            self.fail("dmg command failed: {}".format(error))
+        self.log.info("Retrieving available size")
+        result = self.dmg.storage_query_usage()
 
         scm_engine_bytes = sys.maxsize
         nvme_engine_bytes = sys.maxsize
@@ -86,11 +82,12 @@ class PoolCreateAllTestBase(TestWithServers):
 
         Args:
             scm_delta_bytes (int): Oversubscribing storage space to add to the SCM storage.
-            nvme_delta_bytes (int): Oversubscribing storage space to add to the NVMe storage.
-            ranks (list): List of rank used for creating pools.
+            nvme_delta_bytes (int, optional): Oversubscribing storage space to add to the NVMe
+                storage.  Defaults to None.
+            ranks (list, optional): List of rank used for creating pools.  Defaults to None.
         """
         pool_count = 4 if nvme_delta_bytes is None else 5
-        self.add_pool_qty(pool_count, namespace="/run/pool/*", create=False)
+        self.add_pool_qty(pool_count, create=False)
         pool_idx = len(self.pool) - pool_count
 
         self.log.info("Creating a pool with all the available storage: size=100%")
@@ -200,7 +197,8 @@ class PoolCreateAllTestBase(TestWithServers):
         Args:
             pool_count (int): Number of pool to create and destroy.
             scm_delta_bytes (int): Allowed difference of the SCM pool storage.
-            nvme_delta_bytes (int): Allowed difference of the NVMe pool storage.
+            nvme_delta_bytes (int, optional): Allowed difference of the NVMe pool storage.  Defaults
+                to None.
         """
 
         self.add_pool_qty(pool_count, namespace="/run/pool/*", create=False)
@@ -252,13 +250,11 @@ class PoolCreateAllTestBase(TestWithServers):
 
         Args:
             scm_delta_bytes (int): Allowed difference of SCM storage size used on each engine.
-            nvme_delta_byets (int): Allowed difference of NVMe storage size used on each engine.
+            nvme_delta_bytes (int, optional): Allowed difference of NVMe storage size used on each
+                engine.  Defaults to None.
         """
-        try:
-            self.log.info("Retrieving available size")
-            result = self.server_managers[0].dmg.storage_query_usage()
-        except CommandFailure as error:
-            self.fail("dmg command failed: {}".format(error))
+        self.log.info("Retrieving available size")
+        result = self.server_managers[0].dmg.storage_query_usage()
 
         scm_used_bytes = [sys.maxsize, 0]
         if nvme_delta_bytes is not None:
