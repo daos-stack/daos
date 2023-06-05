@@ -272,36 +272,26 @@ func (c *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 	return rdbSize, nil
 }
 
-type deviceSizeStat struct {
-	clusterPerTarget uint64 // Number of usable SPDK clusters for each target
-	devs             []*struct {
-		nvmeCtlr *ctl.NvmeController
-		smdIdx   int
-	}
-}
-
 type deviceToAdjust struct {
 	ctlr *ctl.NvmeController
 	idx  int
 	rank uint32
 }
 
+type deviceSizeStat struct {
+	clusterPerTarget uint64 // Number of usable SPDK clusters for each target
+	devs             []*deviceToAdjust
+}
+
 // Add a device to the input map of device to which the usable size have to be adjusted
-func (c *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat, devToAdjust deviceToAdjust, dataClusterCount uint64) {
+func (c *ControlService) addDeviceToAdjust(devsStat map[uint32]*deviceSizeStat, devToAdjust *deviceToAdjust, dataClusterCount uint64) {
 	dev := devToAdjust.ctlr.GetSmdDevices()[devToAdjust.idx]
 	if devsStat[devToAdjust.rank] == nil {
 		devsStat[devToAdjust.rank] = &deviceSizeStat{
 			clusterPerTarget: math.MaxUint64,
 		}
 	}
-	devsStat[devToAdjust.rank].devs = append(devsStat[devToAdjust.rank].devs,
-		&struct {
-			nvmeCtlr *ctl.NvmeController
-			smdIdx   int
-		}{
-			nvmeCtlr: devToAdjust.ctlr,
-			smdIdx:   devToAdjust.idx,
-		})
+	devsStat[devToAdjust.rank].devs = append(devsStat[devToAdjust.rank].devs, devToAdjust)
 	targetCount := uint64(len(dev.GetTgtIds()))
 	clusterPerTarget := dataClusterCount / targetCount
 	c.log.Tracef("SMD device %s (rank %d, ctlr %s) added to the list of device to adjust",
@@ -421,7 +411,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetRoleBits() == 0 {
 				c.log.Tracef("No meta-data stored on SMD device %s (rank %d, ctlr %s)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
-				c.addDeviceToAdjust(devsStat, devToAdjust, dataClusterCount)
+				c.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount)
 				continue
 			}
 
@@ -433,17 +423,17 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				continue
 			}
 			dataClusterCount -= subtrClusterCount
-			c.addDeviceToAdjust(devsStat, devToAdjust, dataClusterCount)
+			c.addDeviceToAdjust(devsStat, &devToAdjust, dataClusterCount)
 		}
 	}
 
 	for rank, item := range devsStat {
 		for _, dev := range item.devs {
-			smdDev := dev.nvmeCtlr.GetSmdDevices()[dev.smdIdx]
+			smdDev := dev.ctlr.GetSmdDevices()[dev.idx]
 			targetCount := uint64(len(smdDev.GetTgtIds()))
 			smdDev.UsableBytes = targetCount * item.clusterPerTarget * smdDev.GetClusterSize()
 			c.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) to %s (%d bytes)",
-				smdDev.GetUuid(), rank, dev.nvmeCtlr.GetPciAddr(),
+				smdDev.GetUuid(), rank, dev.ctlr.GetPciAddr(),
 				humanize.Bytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
 		}
 	}
