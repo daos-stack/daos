@@ -3794,6 +3794,19 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 				res: false,
 				msg: "unknown PCI device"},
 		},
+		"find VMD device": {
+			input: DataInput{
+				tierCfgs: storage.TierConfigs{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList("0000:04:06.3"),
+				},
+				nvmeCtlr: &ctl.NvmeController{
+					PciAddr: "040603:02:00.0",
+				},
+			},
+			output: ExpectedOutput{res: true},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

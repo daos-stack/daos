@@ -11,6 +11,7 @@ import (
 	"math"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -170,10 +171,31 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 
+// Check if a PCI is a VMD address
+func isVmdAddress(addr string) bool {
+	subAddrs := strings.Split(addr, ":")
+	return "0000" != subAddrs[0] && subAddrs[2] == "00.0"
+}
+
+// Convert a VMD address into a PCI address
+func vmdToPci(vmdAddr string) string {
+	pciAddr := "0000:" + vmdAddr[0:2] + ":" + vmdAddr[2:4] + "." + vmdAddr[4:6]
+	if pciAddr[11] == '0' {
+		pciAddr = pciAddr[0:11] + pciAddr[12:]
+	}
+	return pciAddr
+
+}
+
 // Returns the engine configuration managing the given NVMe controller
 func (c *ControlService) getEngineCfgFromNvmeCtl(nc *ctl.NvmeController) (*engine.Config, error) {
 	var engineCfg *engine.Config
+
 	pciAddr := nc.PciAddr
+	if isVmdAddress(pciAddr) {
+		pciAddr = vmdToPci(pciAddr)
+	}
+
 	for index := range c.srvCfg.Engines {
 		if engineCfg != nil {
 			break
