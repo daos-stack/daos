@@ -7,7 +7,7 @@ hosts:
     12_server:
       test_servers: server-[1-6]
   test_clients: 2
-timeout: 1600
+timeout: 1000
 setup:
   start_agents_once: false
   start_servers_once: false
