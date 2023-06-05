@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,7 @@
 /**
  * \file
  *
- * This file is part of gurt, it contains variables and functions for the  fault
- * injection feature.
+ * This file is part of gurt, it contains variables and functions for the  fault injection feature.
  */
 
 #ifndef __FAULT_INJECT__
@@ -33,35 +32,28 @@ extern "C" {
 extern unsigned int           d_fault_inject;
 extern unsigned int           d_fault_config_file;
 
-/* Location used for inecting memory allocation failures into D_ALLOC
- * uses fault_id 0
- */
+/* Location used for inecting memory allocation failures into D_ALLOC uses fault_id 0 */
 extern struct d_fault_attr_t *d_fault_attr_mem;
 
-/* DFuse uses fault id 100 to force shutdown rather than mount after initialization
- * is complete.
+/* DFuse uses fault id 100 to force shutdown rather than mount after initialization is complete.
  *
- * daos_init uses fault id 101 to disable memory faults for the duration of daos_init
- * so that fault injection testing can avoid replicating coverage across multiple tests.
+ * daos_init uses fault id 101 to disable memory faults for the duration of daos_init so that fault
+ * injection testing can avoid replicating coverage across multiple tests.
  *
  * Other fault ids used by daos_engine are defined in src/include/daos/common.h
  */
 
 struct d_fault_attr_t {
-	/**
-	 * config id, used to select configuration from the fault_inject config
-	 * file
-	 */
+	/** config id, used to select configuration from the fault_inject config file */
 	uint32_t           fa_id;
 	/**
-	 * inject faults every n-th occurrence. If interval is set to 5 and
-	 * probability is set to 20, fault injection only occurs on every 5-th
-	 * hit of fault_id with a 20% probability.
+	 * inject faults every n-th occurrence. If interval is set to 5 and probability is set to
+	 * 20, fault injection only occurs on every 5-th hit of fault_id with a 20% probability.
 	 */
 	uint32_t           fa_interval;
 	/**
-	 * max number of faults to inject. 0 means unlimited. After max_faults
-	 * is reached, no faults will be injected for fault_id.
+	 * max number of faults to inject. 0 means unlimited. After max_faults is reached, no faults
+	 * will be injected for fault_id.
 	 */
 	uint64_t           fa_max_faults;
 	/** counter of injected faults */
@@ -72,13 +64,11 @@ struct d_fault_attr_t {
 	char              *fa_argument;
 	/** spin lock to protect this struct */
 	pthread_spinlock_t fa_lock;
-	/**
-	 * the error code to inject. Can be retrieved by d_fault_attr_err_code()
-	 */
+	/** the error code to inject. Can be retrieved by d_fault_attr_err_code() */
 	int32_t            fa_err_code;
 	/**
-	 * state for nrand48. this allows each injection point has its own
-	 * independent random number sequence.
+	 * state for nrand48. this allows each injection point has its own independent random number
+	 * sequence.
 	 */
 	unsigned short     fa_rand_state[3];
 	/**
@@ -94,8 +84,7 @@ struct d_fault_attr_t {
 };
 
 /**
- * Initialize the fault injection framework, injection attributes are read from
- * the config file
+ * Initialize the fault injection framework, injection attributes are read from the config file
  *
  * \return                   DER_SUCCESS on success, negative value on error
  */
@@ -136,7 +125,7 @@ void
 d_fault_inject_thread_enable(bool enabled);
 
 /**
- * Enable/disable per thread for threads which haven't called d_fault_inject_thread_enable()
+ * Enable/disable per thread for threads which haven't called d_fault_inject_thread_enable().
  * Default value here can be set via 'thread_default' in the input file.
  */
 void
@@ -145,10 +134,7 @@ d_fault_inject_thread_default_enable(bool enabled);
 bool
 d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
 
-/**
- * use this macro to determine if a fault should be injected at a specific call
- * site
- */
+/** use this macro to determine if a fault should be injected at a specific call site */
 #define D_SHOULD_FAIL(fault_attr)                                                                  \
 	({                                                                                         \
 		bool __rb;                                                                         \
