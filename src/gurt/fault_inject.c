@@ -163,7 +163,7 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	bool                   should_free = true;
 	struct d_fault_attr   *new_rec;
 	d_list_t              *rlink;
-	int                    rc          = DER_SUCCESS;
+	int                    rc = DER_SUCCESS;
 
 	D_ALLOC_PTR(new_rec);
 	if (new_rec == NULL)
