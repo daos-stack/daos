@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import contextlib
 import re
 
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from general_utils import get_journalctl, journalctl_time
+from general_utils import get_journalctl, journalctl_time, wait_for_result
 from run_utils import run_remote
 
 
@@ -19,15 +18,6 @@ class ControlLogEntry(TestWithServers):
 
     :avocado: recursive
     """
-
-    def sleep(self, seconds):
-        """Sleep for some time.
-
-        Args:
-            seconds (int): number of seconds to sleep for
-        """
-        self.log.info('Sleeping for %s seconds', seconds)
-        time.sleep(seconds)
 
     @contextlib.contextmanager
     def verify_journalctl(self, expected_messages):
@@ -38,7 +28,6 @@ class ControlLogEntry(TestWithServers):
         """
         t_before = journalctl_time()
         yield
-        self.sleep(5)  # Give journalctl time to flush
         t_after = journalctl_time()
         self._verify_journalctl(t_before, t_after, expected_messages)
 
@@ -52,28 +41,38 @@ class ControlLogEntry(TestWithServers):
         """
         self.log_step('Verify journalctl output between {} and {}'.format(since, until))
 
-        # Get the journalctl in the time-frame
-        results = get_journalctl(
-            hosts=self.hostlist_servers, since=since, until=until,
-            journalctl_type="daos_server")
+        not_found = set(expected_messages)
+        journalctl_per_hosts = []
 
-        # Convert the journalctl to a dict of hosts : output
-        journalctl_per_hosts = {}
-        for result in results:
-            journalctl_per_hosts[str(result['hosts'])] = result['data']
+        def _search():
+            """Look for each message in any host's journalctl."""
+            journalctl_results = get_journalctl(
+                hosts=self.hostlist_servers, since=since, until=until,
+                journalctl_type="daos_server")
 
-        # For simplicity, look for each message in any host's journalctl
-        not_found = []
+            # Convert the journalctl to a dict of hosts : output
+            journalctl_per_hosts.append({})
+            for result in journalctl_results:
+                journalctl_per_hosts[-1][str(result['hosts'])] = result['data']
+
+            for message in not_found.copy():
+                if any(map(re.compile(message).search, journalctl_per_hosts[-1].values())):
+                    not_found.remove(message)
+
+            return len(not_found) == 0
+
+        # Wait up to 5 seconds for journalctl to contain the messages
+        wait_for_result(None, _search, timeout=5, delay=1)
+
+        # Print the status of each message
         for message in expected_messages:
-            self.log.info('  Looking for %s', message)
-            if any(map(re.compile(message).search, journalctl_per_hosts.values())):
-                self.log.info('    FOUND')
+            if message in not_found:
+                self.log.info('  NOT FOUND: %s', message)
             else:
-                not_found.append(message)
-                self.log.info('    NOT FOUND')
+                self.log.info('      FOUND: %s', message)
 
         # Print the journalctl in an easy-to-read format
-        for hosts, output in sorted(journalctl_per_hosts.items()):
+        for hosts, output in sorted(journalctl_per_hosts[-1].items()):
             self.log.debug('journalctl for %s:', hosts)
             for line in output.splitlines():
                 self.log.debug('  %s', line)
@@ -178,9 +177,7 @@ class ControlLogEntry(TestWithServers):
         expected = [fr'rank {rank}.*exited with 0' for rank in stop_ranks] \
             + [fr'process.*started on rank {rank}' for rank in stop_ranks]
         with self.verify_journalctl(expected):
-            for rank in stop_ranks:
-                dmg.system_stop(ranks=str(rank))
-                dmg.system_start(ranks=str(rank))
-                self.sleep(5)
+            self.server_managers[0].stop_ranks(stop_ranks, self.d_log)
+            self.server_managers[0].start_ranks(stop_ranks, self.d_log)
 
         self.log_step('Test passed')
