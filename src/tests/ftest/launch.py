@@ -2057,7 +2057,9 @@ class Launch():
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
         user_dir = os.environ["DAOS_TEST_USER_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
+        hosts = test.host_info.all_hosts
+        hosts.add(self.local_host)
+        logger.debug("Setting up '%s' on %s:", test_dir, hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
@@ -2069,7 +2071,7 @@ class Launch():
         for directory in self.RESULTS_DIRS:
             commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
-            if not run_remote(logger, test.host_info.all_hosts, command).passed:
+            if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128

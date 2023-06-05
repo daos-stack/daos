@@ -259,7 +259,7 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		ei.log.Error(err.Error()) // nonfatal
 	}
 
-	r, localJoin, map_version, err := ei.determineRank(ctx, ready)
+	r, localJoin, mapVersion, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	return ei.SetupRank(ctx, r, map_version)
+	return ei.SetupRank(ctx, r, mapVersion)
 }
 
 func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {

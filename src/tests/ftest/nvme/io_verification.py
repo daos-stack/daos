@@ -77,12 +77,16 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.label_generator.get_label('cont'))
+                container = self.get_container(self.pool)
+                container.open()  # Workaround for pydaos handles
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
                 self.verify_pool_size(size_before_ior, self.processes)
+
+                # Destroy the container
+                container.destroy()
 
             # destroy pool
             self.pool.destroy()
@@ -132,8 +136,8 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.label_generator.get_label('cont'))
+                container = self.get_container(self.pool)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Stop all servers
@@ -150,6 +154,9 @@ class NvmeIoVerification(IorTestBase):
                 # read all the data written before server restart
                 self.ior_cmd.flags.update(self.ior_flag_read)
                 self.run_ior(self.job_manager, self.ior_processes)
+
+                # destroy the container
+                container.destroy()
 
             # destroy pool
             self.pool.destroy()
