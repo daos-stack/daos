@@ -235,30 +235,42 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 }
 
 func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
-	test := func(t *testing.T, iter int) {
+	test := func(t *testing.T, iter int) bool {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)
 
 		ps := NewPubSub(test.Context(t), log)
 		defer ps.Close()
 
-		evt1 := mockSwimRankDeadEvt(1, 1)
-		debounceType := evt1.ID
+		debounceType := RASSwimRankDead
 		debounceCooldown := 25 * time.Millisecond
 		tally := newTally(3)
 
 		ps.Subscribe(RASTypeStateChange, tally)
 		ps.Debounce(debounceType, debounceCooldown, func(ev *RASEvent) string {
-			return fmt.Sprintf("%d:%x", ev.Rank, ev.Incarnation)
+			// Debounce should match all events sent in test.
+			return fmt.Sprintf("%d", ev.Rank)
 		})
 
-		// We should only see this event three times, after the cooldown
-		// timer expires on each loop.
+		// Send 16 (var j) events per incarnation (var i). We should only see this event
+		// three times as a new event will only be registered after the cooldown timer
+		// expires at the end of each incarnation loop iteration.
 		for i := 0; i < 3; i++ {
 			log.Debugf("start loop %d", i+1)
+
+			e := mockSwimRankDeadEvt(1, uint32(i+1))
+			t := time.Now()
 			for j := 0; j < 16; j++ {
-				ps.Publish(evt1)
+				l := time.Since(t)
+				if l > debounceCooldown {
+					// Test loop was stalled, print warning
+					log.Noticef("test loop stalled for %s, restart iteration", l)
+					return true
+				}
+				t = time.Now()
+				ps.Publish(e)
 			}
+
 			log.Debugf("sleep for cooldown")
 			time.Sleep(debounceCooldown)
 		}
@@ -266,11 +278,21 @@ func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
 		<-tally.finished
 
 		log.Debugf("test iteration %d", iter)
-		test.AssertStringsEqual(t, []string{evt1.String(), evt1.String(), evt1.String()},
-			tally.getRx(), "unexpected slice of received events")
+
+		// Expect one message from each incarnation loop, other repeated messages for the
+		// same incarnation should get ignored by debounce Logic.
+		test.AssertStringsEqual(t, []string{
+			mockSwimRankDeadEvt(1, 1).String(),
+			mockSwimRankDeadEvt(1, 2).String(),
+			mockSwimRankDeadEvt(1, 3).String(),
+		}, tally.getRx(), "unexpected slice of received events")
+
+		return false
 	}
 
-	for tn := 0; tn < 4000; tn++ {
-		test(t, tn)
+	for tn := 0; tn < 4096; tn++ {
+		if restart := test(t, tn); restart {
+			tn--
+		}
 	}
 }

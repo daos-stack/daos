@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -196,11 +196,11 @@ func (ps *PubSub) debounceEvent(event *RASEvent) bool {
 		last := time.Since(lastSeen)
 		if interval == 0 || last < interval {
 			ps.dbncEvts.updateLastSeen(event.ID, key)
-			ps.log.Debugf("last seen %s ago (ignore) cooldown: %s", last, interval)
+			ps.log.Debugf("ignored as %s since last", last)
 			return true
 		} else {
-			ps.log.Debugf("debounce interval exceeded (lastSeen %s > %s) for %q",
-				last, interval, key)
+			ps.log.Debugf("debounce interval exceeded (lastSeen %s > %s)",
+				last, interval)
 		}
 	}
 
