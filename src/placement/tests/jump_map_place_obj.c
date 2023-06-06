@@ -2335,10 +2335,11 @@ placement_test_teardown(void **state)
 	return 0;
 }
 
-#define WIP(dsc, test) { "WIP PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, \
-			  test, placement_test_setup, placement_test_teardown }
-#define T(dsc, test) { "PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, test, \
-			  placement_test_setup, placement_test_teardown }
+#define T(dsc, test)                                                                               \
+	{                                                                                          \
+		.name = "PLACEMENT " STR(__COUNTER__) " (" #test "): " dsc, .test_func = test,     \
+		.setup_func = placement_test_setup, .teardown_func = placement_test_teardown       \
+	}
 
 static const struct CMUnitTest tests[] = {
 	/* Standard configurations */

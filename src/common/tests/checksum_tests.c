@@ -1872,8 +1872,11 @@ csum_test_teardown(void **state)
 	return 0;
 }
 
-#define TEST(dsc, test) { dsc, test, csum_test_setup, \
-				csum_test_teardown }
+#define TEST(dsc, test)                                                                            \
+	{                                                                                          \
+		.name = dsc, .test_func = test, .setup_func = csum_test_setup,                     \
+		.teardown_func = csum_test_teardown                                                \
+	}
 
 static const struct CMUnitTest tests[] = {
 	TEST("CSUM01: Test initialize and destroy checksummer",

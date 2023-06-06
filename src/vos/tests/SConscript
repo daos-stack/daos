@@ -17,6 +17,7 @@ def scons():
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
+    tenv.AppendIfSupported(CCFLAGS=['-Wno-missing-field-initializers'])
 
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
                     tenv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',

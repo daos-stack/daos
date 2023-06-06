@@ -76,12 +76,13 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	      __func__, ptr, ##__VA_ARGS__)
 
 /** Internal macro for saving the log, checking it, and printing, if enabled */
-#define _D_LOG_CHECK(func, saved_mask, mask, ...)			\
-	do {								\
-		(saved_mask) = d_log_check(mask);			\
-									\
-		if (saved_mask)						\
-			func(saved_mask, ##__VA_ARGS__);		\
+#define _D_LOG_CHECK(func, saved_mask, mask, ...)                                                  \
+	do {                                                                                       \
+		(saved_mask) = d_log_check(mask);                                                  \
+                                                                                                   \
+		if (saved_mask) {                                                                  \
+			func(saved_mask, ##__VA_ARGS__);                                           \
+		}                                                                                  \
 	} while (0)
 
 /**

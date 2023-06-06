@@ -562,14 +562,17 @@ int
 main(int argc, char **argv)
 {
 	static const struct CMUnitTest umem_tests[] = {
-	    {"UMEM001: Test null flags pmem", test_invalid_flags, setup_pmem, teardown_pmem},
-	    {"UMEM002: Test null flags vmem", test_invalid_flags, setup_vmem, teardown_vmem},
-	    {"UMEM003: Test alloc pmem", test_alloc, setup_pmem, teardown_pmem},
-	    {"UMEM004: Test alloc vmem", test_alloc, setup_vmem, teardown_vmem},
-	    {"UMEM005: Test page cache", test_page_cache, NULL, NULL},
-	    {"UMEM006: Test page cache many pages", test_many_pages, NULL, NULL},
-	    {"UMEM007: Test page cache many writes", test_many_writes, NULL, NULL},
-	    {NULL, NULL, NULL, NULL}};
+	    {"UMEM001: Test null flags pmem", .test_func = test_invalid_flags,
+	     .setup_func = setup_pmem, .teardown_func = teardown_pmem},
+	    {"UMEM002: Test null flags vmem", .test_func = test_invalid_flags,
+	     .setup_func = setup_vmem, .teardown_func = teardown_vmem},
+	    {"UMEM003: Test alloc pmem", .test_func = test_alloc, .setup_func = setup_pmem,
+	     .teardown_func = teardown_pmem},
+	    {"UMEM004: Test alloc vmem", .test_func = test_alloc, .setup_func = setup_vmem,
+	     .teardown_func = teardown_vmem},
+	    {"UMEM005: Test page cache", .test_func = test_page_cache},
+	    {"UMEM006: Test page cache many pages", .test_func = test_many_pages},
+	    {"UMEM007: Test page cache many writes", .test_func = test_many_writes}};
 
 	d_register_alt_assert(mock_assert);
 

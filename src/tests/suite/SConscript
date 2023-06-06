@@ -81,6 +81,7 @@ def scons():
     dfusetest = dfuse_env.d_program(File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 
+    denv.AppendIfSupported(CCFLAGS=['-Wno-missing-field-initializers'])
     denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])

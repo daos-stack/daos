@@ -155,16 +155,13 @@ static void test_process_sgl_span_iov_with_diff_requests(void **state)
 }
 
 static const struct CMUnitTest tests[] = {
-	{"SGL01: Processing an SGL",
-		test_sgl_get_bytes_with_single_iov,           NULL, NULL},
-	{"SGL02: Processing a more complicated SGL",
-		test_sgl_get_bytes_with_multiple_iovs,        NULL, NULL},
-	{"SGL02.5: Exceed SGL length",
-		test_sgl_get_bytes_trying_to_exceed_len,      NULL, NULL},
-	{"SGL03: More SGL processing",
-		test_completely_process_sgl,                  NULL, NULL},
-	{"SGL04: SGL processing, spanning iovs",
-		test_process_sgl_span_iov_with_diff_requests, NULL, NULL},
+    {.name = "SGL01: Processing an SGL", .test_func = test_sgl_get_bytes_with_single_iov},
+    {.name      = "SGL02: Processing a more complicated SGL",
+     .test_func = test_sgl_get_bytes_with_multiple_iovs},
+    {.name = "SGL02.5: Exceed SGL length", .test_func = test_sgl_get_bytes_trying_to_exceed_len},
+    {.name = "SGL03: More SGL processing", .test_func = test_completely_process_sgl},
+    {.name      = "SGL04: SGL processing, spanning iovs",
+     .test_func = test_process_sgl_span_iov_with_diff_requests},
 };
 
 int

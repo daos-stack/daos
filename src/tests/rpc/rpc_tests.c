@@ -230,8 +230,11 @@ int rpc_test_setup(void **state)
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
-#define	TS(test_fn) \
-	{ "RPC_" STR(__COUNTER__)": " #test_fn, test_fn, rpc_test_setup, NULL }
+#define TS(test_fn)                                                                                \
+	{                                                                                          \
+		.name = "RPC_" STR(__COUNTER__) ": " #test_fn, .test_func = test_fn,               \
+		.setup_func = rpc_test_setup                                                       \
+	}
 
 /* Test list */
 static const struct CMUnitTest rpc_tests[] = {

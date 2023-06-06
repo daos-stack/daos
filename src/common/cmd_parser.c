@@ -14,8 +14,8 @@
 /**
  * Release a line buffer returned by readline
  */
-void
-static freeline(char *line)
+static void
+freeline(char *line)
 {
 	D_FREE(line);
 }

@@ -1033,7 +1033,7 @@ again:
 		return EINVAL;
 	}
 
-	while (p_Offset_2Dots > 0) {
+	while (p_Offset_2Dots != NULL) {
 		pMax = p_Offset_2Dots + 4;
 		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
 			if (*p_Back == '/') {
@@ -1078,8 +1078,7 @@ remove_dot_and_cleanup(char path[], int len)
 	/* the length of path[] is already checked in the caller of this function. */
 
 	p_Offset_Dots = strstr(path, "/./");
-
-	while (p_Offset_Dots > 0) {
+	while ((p_Offset_Dots != NULL)) {
 		p_Offset_Dots[0] = 0;
 		p_Offset_Dots[1] = 0;
 		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
@@ -1089,7 +1088,7 @@ remove_dot_and_cleanup(char path[], int len)
 
 	/* replace "//" with "/" */
 	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash > 0) {
+	while (p_Offset_Slash != NULL) {
 		p_Offset_Slash[0] = 0;
 		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
 		if (p_Offset_Slash == NULL)

@@ -1125,7 +1125,7 @@ static int
 run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 {
 	const struct CMUnitTest btree_test[] = {
-		{test_name, ts_group, NULL, NULL},
+	    {.name = test_name, .test_func = ts_group},
 	};
 
 	test_group_args = args;

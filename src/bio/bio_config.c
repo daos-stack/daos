@@ -84,16 +84,18 @@ json_value(struct spdk_json_val *key)
 	return key->type == SPDK_JSON_VAL_NAME ? key + 1 : NULL;
 }
 
-static struct spdk_json_object_decoder
-subsystem_decoders[] = {
-	{"subsystem", offsetof(struct json_config_ctx, subsystem_name), cap_string},
-	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
-};
+static struct spdk_json_object_decoder subsystem_decoders[] = {
+    {.name        = "subsystem",
+     .offset      = offsetof(struct json_config_ctx, subsystem_name),
+     .decode_func = cap_string},
+    {.name        = "config",
+     .offset      = offsetof(struct json_config_ctx, config),
+     .decode_func = cap_array_or_null}};
 
-static struct spdk_json_object_decoder
-daos_data_decoders[] = {
-	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
-};
+static struct spdk_json_object_decoder daos_data_decoders[] = {
+    {.name        = "config",
+     .offset      = offsetof(struct json_config_ctx, config),
+     .decode_func = cap_array_or_null}};
 
 struct
 config_entry {
@@ -101,11 +103,14 @@ config_entry {
 	struct spdk_json_val	*params;
 };
 
-static struct spdk_json_object_decoder
-config_entry_decoders[] = {
-	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
-	{"params", offsetof(struct config_entry, params), cap_object, true}
-};
+static struct spdk_json_object_decoder config_entry_decoders[] = {
+    {.name        = "method",
+     .offset      = offsetof(struct config_entry, method),
+     .decode_func = spdk_json_decode_string},
+    {.name        = "params",
+     .offset      = offsetof(struct config_entry, params),
+     .decode_func = cap_object,
+     .optional    = true}};
 
 struct busid_range_info {
 	uint8_t	begin;
@@ -115,10 +120,13 @@ struct busid_range_info {
 /* PCI address bus-ID range to be used to filter hotplug events */
 struct busid_range_info hotplug_busid_range = {};
 
-static struct spdk_json_object_decoder
-busid_range_decoders[] = {
-	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
-	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
+static struct spdk_json_object_decoder busid_range_decoders[] = {
+    {.name        = "begin",
+     .offset      = offsetof(struct busid_range_info, begin),
+     .decode_func = spdk_json_decode_uint8},
+    {.name        = "end",
+     .offset      = offsetof(struct busid_range_info, end),
+     .decode_func = spdk_json_decode_uint8},
 };
 
 struct accel_props_info {
@@ -129,10 +137,13 @@ struct accel_props_info {
 /* Acceleration properties to specify engine to use and optional capabilities to enable */
 struct accel_props_info accel_props = {};
 
-static struct spdk_json_object_decoder
-accel_props_decoders[] = {
-	{"accel_engine", offsetof(struct accel_props_info, engine), spdk_json_decode_string},
-	{"accel_opts", offsetof(struct accel_props_info, opt_mask), spdk_json_decode_uint16},
+static struct spdk_json_object_decoder accel_props_decoders[] = {
+    {.name        = "accel_engine",
+     .offset      = offsetof(struct accel_props_info, engine),
+     .decode_func = spdk_json_decode_string},
+    {.name        = "accel_opts",
+     .offset      = offsetof(struct accel_props_info, opt_mask),
+     .decode_func = spdk_json_decode_uint16},
 };
 
 struct rpc_srv_info {
@@ -143,10 +154,13 @@ struct rpc_srv_info {
 /* Settings to enable an SPDK JSON-RPC server to run in current process */
 struct rpc_srv_info rpc_srv_settings = {};
 
-static struct spdk_json_object_decoder
-rpc_srv_decoders[] = {
-	{"enable", offsetof(struct rpc_srv_info, enable), spdk_json_decode_bool},
-	{"sock_addr", offsetof(struct rpc_srv_info, sock_addr), spdk_json_decode_string},
+static struct spdk_json_object_decoder rpc_srv_decoders[] = {
+    {.name        = "enable",
+     .offset      = offsetof(struct rpc_srv_info, enable),
+     .decode_func = spdk_json_decode_bool},
+    {.name        = "sock_addr",
+     .offset      = offsetof(struct rpc_srv_info, sock_addr),
+     .decode_func = spdk_json_decode_string},
 };
 
 static int

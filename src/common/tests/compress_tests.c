@@ -189,8 +189,11 @@ compress_test_teardown(void **state)
 	return 0;
 }
 
-#define TEST(dsc, test) { dsc, test, compress_test_setup, \
-				compress_test_teardown }
+#define TEST(dsc, test)                                                                            \
+	{                                                                                          \
+		.name = dsc, .test_func = test, .setup_func = compress_test_setup,                 \
+		.teardown_func = compress_test_teardown                                            \
+	}
 
 static const struct CMUnitTest tests[] = {
 	TEST("COMPRESS01: Test lz4 compression basic functions",

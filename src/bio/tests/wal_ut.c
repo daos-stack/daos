@@ -872,14 +872,14 @@ wal_ut_holes(void **state)
 }
 
 static const struct CMUnitTest wal_uts[] = {
-	{ "single tx commit/replay", wal_ut_single, NULL, NULL},
-	{ "single tx with many acts", wal_ut_many_acts, NULL, NULL},
-	{ "single tx with large payload", wal_ut_large_payload, NULL, NULL},
-	{ "multiple tx commit/replay", wal_ut_multi, NULL, NULL},
-	{ "replay after checkpoint", wal_ut_checkpoint, NULL, NULL},
-	{ "wal log wraps once", wal_ut_wrap, NULL, NULL},
-	{ "wal log wraps many", wal_ut_wrap_many, NULL, NULL},
-	{ "holes on replay", wal_ut_holes, NULL, NULL},
+    {.name = "single tx commit/replay", .test_func = wal_ut_single},
+    {.name = "single tx with many acts", .test_func = wal_ut_many_acts},
+    {.name = "single tx with large payload", .test_func = wal_ut_large_payload},
+    {.name = "multiple tx commit/replay", .test_func = wal_ut_multi},
+    {.name = "replay after checkpoint", .test_func = wal_ut_checkpoint},
+    {.name = "wal log wraps once", .test_func = wal_ut_wrap},
+    {.name = "wal log wraps many", .test_func = wal_ut_wrap_many},
+    {.name = "holes on replay", .test_func = wal_ut_holes},
 };
 
 static int

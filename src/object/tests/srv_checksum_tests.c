@@ -1425,8 +1425,11 @@ sct_teardown(void **state)
 }
 
 /* Convenience macro for unit tests */
-#define	TA(desc, test_fn) \
-	{ desc, test_fn, sct_setup, sct_teardown }
+#define TA(desc, test_fn)                                                                          \
+	{                                                                                          \
+		.name = desc, .test_func = test_fn, .setup_func = sct_setup,                       \
+		.teardown_func = sct_teardown                                                      \
+	}
 
 static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY01: Whole extent requested",
@@ -1530,8 +1533,11 @@ update_fetch_sv(void **state)
 	dcs_csum_info_list_fini(&from_vos_begin_list);
 }
 
-#define	TS(desc, test_fn) \
-	{ "SRV_CSUM_SV" desc, test_fn, sct_setup, sct_teardown }
+#define TS(desc, test_fn)                                                                          \
+	{                                                                                          \
+		.name = "SRV_CSUM_SV" desc, .test_func = test_fn, .setup_func = sct_setup,         \
+		.teardown_func = sct_teardown                                                      \
+	}
 
 static const struct CMUnitTest sv_tests[] = {
 	TS("01: Various scenarios for update/fetch with fault injection",

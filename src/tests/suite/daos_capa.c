@@ -509,22 +509,28 @@ update_ro(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
-
 static const struct CMUnitTest capa_tests[] = {
-	{ "CAPA1: query pool with invalid pool handle",
-	  query, NULL, test_case_teardown},
-	{ "CAPA2: create container with invalid pool handle",
-	  create, NULL, test_case_teardown},
-	{ "CAPA3: destroy container with invalid pool handle",
-	  destroy, NULL, test_case_teardown},
-	{ "CAPA4: open container with invalid pool handle",
-	  open, NULL, test_case_teardown},
-	{ "CAPA5: update/fetch with invalid pool handle",
-	  io_invalid_poh, NULL, test_case_teardown},
-	{ "CAPA6: update/fetch with invalid container handle",
-	  io_invalid_coh, NULL, test_case_teardown},
-	{ "CAPA7: update with read-only container handle",
-	  update_ro, NULL, test_case_teardown},
+    {.name          = "CAPA1: query pool with invalid pool handle",
+     .test_func     = query,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA2: create container with invalid pool handle",
+     .test_func     = create,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA3: destroy container with invalid pool handle",
+     .test_func     = destroy,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA4: open container with invalid pool handle",
+     .test_func     = open,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA5: update/fetch with invalid pool handle",
+     .test_func     = io_invalid_poh,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA6: update/fetch with invalid container handle",
+     .test_func     = io_invalid_coh,
+     .teardown_func = test_case_teardown},
+    {.name          = "CAPA7: update with read-only container handle",
+     .test_func     = update_ro,
+     .teardown_func = test_case_teardown},
 };
 
 static int

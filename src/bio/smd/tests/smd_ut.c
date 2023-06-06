@@ -541,9 +541,9 @@ ut_dev_replace(void **state)
 }
 
 static const struct CMUnitTest smd_uts[] = {
-	{ "smd_ut_device", ut_device, NULL, NULL},
-	{ "smd_ut_pool", ut_pool, NULL, NULL},
-	{ "smd_ut_dev_replace", ut_dev_replace, NULL, NULL},
+    {.name = "smd_ut_device", .test_func = ut_device},
+    {.name = "smd_ut_pool", .test_func = ut_pool},
+    {.name = "smd_ut_dev_replace", .test_func = ut_dev_replace},
 };
 
 static void

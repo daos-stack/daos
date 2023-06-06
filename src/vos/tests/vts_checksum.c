@@ -879,8 +879,11 @@ int vts_csum_teardown(void **state)
 	return 0;
 }
 
-#define	VOS(desc, test_fn) \
-	{ "VOS_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown}
+#define VOS(desc, test_fn)                                                                         \
+	{                                                                                          \
+		.name = "VOS_CSUM" desc, .test_func = test_fn, .setup_func = vts_csum_setup,       \
+		.teardown_func = vts_csum_teardown                                                 \
+	}
 
 static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	VOS("01: Single chunk", update_fetch_csum_for_array_1),
@@ -897,8 +900,12 @@ static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	VOS("12: Mark corrupted: Array Value", mark_extent_corrupted),
 };
 
-#define	EVT(desc, test_fn) \
-	{ "EVT_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown}
+#define EVT(desc, test_fn)                                                                         \
+	{                                                                                          \
+		.name = "EVT_CSUM" desc, .test_func = test_fn, .setup_func = vts_csum_setup,       \
+		.teardown_func = vts_csum_teardown                                                 \
+	}
+
 static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("01: Some EVT Checksum Helper Functions",
 		evt_csum_helper_functions_tests),

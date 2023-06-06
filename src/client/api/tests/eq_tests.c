@@ -1283,17 +1283,11 @@ eq_ut_teardown(void **state)
 }
 
 static const struct CMUnitTest eq_uts[] = {
-	{ "EQ_Test_1", eq_test_1, NULL, NULL},
-	{ "EQ_Test_2", eq_test_2, NULL, NULL},
-	{ "EQ_Test_3", eq_test_3, NULL, NULL},
-	{ "EQ_Test_4", eq_test_4, NULL, NULL},
-	{ "EQ_Test_5", eq_test_5, NULL, NULL},
-	{ "EQ_Test_6", eq_test_6, NULL, NULL},
-	{ "EQ_Test_7", eq_test_7, NULL, NULL},
-	{ "EQ_Test_8", eq_test_8, NULL, NULL},
-	{ "EQ_Test_9", eq_test_9, NULL, NULL},
-	{ "EQ_Test_10", eq_test_10, NULL, NULL}
-};
+    {.name = "EQ_Test_1", .test_func = eq_test_1}, {.name = "EQ_Test_2", .test_func = eq_test_2},
+    {.name = "EQ_Test_3", .test_func = eq_test_3}, {.name = "EQ_Test_4", .test_func = eq_test_4},
+    {.name = "EQ_Test_5", .test_func = eq_test_5}, {.name = "EQ_Test_6", .test_func = eq_test_6},
+    {.name = "EQ_Test_7", .test_func = eq_test_7}, {.name = "EQ_Test_8", .test_func = eq_test_8},
+    {.name = "EQ_Test_9", .test_func = eq_test_9}, {.name = "EQ_Test_10", .test_func = eq_test_10}};
 
 int main(int argc, char **argv)
 {

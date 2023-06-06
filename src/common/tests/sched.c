@@ -1353,17 +1353,16 @@ sched_ut_teardown(void **state)
 }
 
 static const struct CMUnitTest sched_uts[] = {
-	{ "SCHED_Test_1", sched_test_1, NULL, NULL},
-	{ "SCHED_Test_2", sched_test_2, NULL, NULL},
-	{ "SCHED_Test_3", sched_test_3, NULL, NULL},
-	{ "SCHED_Test_4", sched_test_4, NULL, NULL},
-	{ "SCHED_Test_5", sched_test_5, NULL, NULL},
-	{ "SCHED_Test_6", sched_test_6, NULL, NULL},
-	{ "SCHED_Test_7", sched_test_7, NULL, NULL},
-	{ "SCHED_Test_8", sched_test_8, NULL, NULL},
-	{ "SCHED_Test_9", sched_test_9, NULL, NULL},
-	{ "SCHED_Test_10", sched_test_10, NULL, NULL}
-};
+    {.name = "SCHED_Test_1", .test_func = sched_test_1},
+    {.name = "SCHED_Test_2", .test_func = sched_test_2},
+    {.name = "SCHED_Test_3", .test_func = sched_test_3},
+    {.name = "SCHED_Test_4", .test_func = sched_test_4},
+    {.name = "SCHED_Test_5", .test_func = sched_test_5},
+    {.name = "SCHED_Test_6", .test_func = sched_test_6},
+    {.name = "SCHED_Test_7", .test_func = sched_test_7},
+    {.name = "SCHED_Test_8", .test_func = sched_test_8},
+    {.name = "SCHED_Test_9", .test_func = sched_test_9},
+    {.name = "SCHED_Test_10", .test_func = sched_test_10}};
 
 int main(int argc, char **argv)
 {
