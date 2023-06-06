@@ -8,6 +8,10 @@
  */
 #define D_LOGFAC	DD_FAC(hg)
 
+#include <fcntl.h>
+#include <inttypes.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include "crt_internal.h"
 
 /*
@@ -1333,6 +1337,7 @@ union rpt_data {
 struct rpt_log_entry {
 	struct timeval		tv;
 	enum rpt_op		op;
+	uint32_t		tid;
 	union rpt_data		rpt_msg;
 };
 
@@ -1358,6 +1363,7 @@ static pthread_mutex_t rpt_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct rpt_entry *__get_rpt_entry(struct crt_rpc_priv *rpc_priv)
 {
 	struct rpt_entry	*entry = NULL;
+	struct rpt_entry	*ret_entry = NULL;
 	int			i;
 
 	D_MUTEX_LOCK(&rpt_mutex);
@@ -1366,13 +1372,15 @@ static struct rpt_entry *__get_rpt_entry(struct crt_rpc_priv *rpc_priv)
 	for (i = 0; i < rpt_num_entries; i++) {
 		entry = &rpt[(RPT_MAX_ENTRIES + rpt_head - i - 1) % RPT_MAX_ENTRIES];
 
-		if (entry->addr == (uint64_t)rpc_priv)
+		if (entry->addr == (uint64_t)rpc_priv) {
+			ret_entry = entry;
 			break;
+		}
 	}
 
 	D_MUTEX_UNLOCK(&rpt_mutex);
 
-	return entry;
+	return ret_entry;
 }
 
 static struct rpt_entry *__create_rpt_entry(struct crt_rpc_priv *rpc_priv)
@@ -1419,6 +1427,7 @@ static struct rpt_log_entry *__create_log_entry(struct rpt_entry *entry)
 	entry->num_log_entries++;
 
 	gettimeofday(&log_entry->tv, NULL);
+	log_entry->tid = (uint32_t)syscall(SYS_gettid);
 
 	D_MUTEX_UNLOCK(&entry->log_mutex);
 	return log_entry;
@@ -1537,7 +1546,7 @@ void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
 			break;
 		}
 
-		D_ERROR("%s %s %s\n", timestamp, pr_op, msg);
+		D_ERROR("%s [%d] %s %s\n", timestamp, log_entry->tid, pr_op, msg);
 
 	}
 
@@ -1545,6 +1554,8 @@ void RPT_DUMP(struct crt_rpc_priv *rpc_priv)
 		D_ERROR("...truncated. limit=%d...\n", RPT_MAX_LOG_ENTRIES);
 	D_ERROR("----------------------\n");
 	D_MUTEX_UNLOCK(&entry->log_mutex);
+
+	D_ASSERT(0);
 }
 
 void RPT_ALLOC(struct crt_rpc_priv *rpc_priv, bool forward, int size, int opc)
