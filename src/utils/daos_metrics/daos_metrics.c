@@ -52,10 +52,10 @@ print_usage(const char *prog_name)
 	       "--gauge, -g\n"
 	       "\tInclude gauges\n"
 	       "--read, -r\n"
-               "\tInclude timestamp of when metric was read\n"
-               "--reset, -e\n"
-               "\tReset all metrics to zero\n",
- 		prog_name);
+		"\tInclude timestamp of when metric was read\n"
+		"--reset, -e\n"
+		"\tReset all metrics to zero\n",
+		prog_name);
 }
 
 int
