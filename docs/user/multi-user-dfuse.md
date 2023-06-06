@@ -69,38 +69,52 @@ permitted.  It is therefore possible for users be able to access POSIX data acro
 seamlessly where permissions is granted only at the POSIX file/directory layer.
 
 Consider the following example: dfuse is configured to run in the recommended manner, with two users
-Anthony and Berlinda who use it to share data, yet Berlinda does not have ACL permissions to read
-Anthony's data - only POSIX permissions.
+Anthony and Berlinda who use it to share data, yet Berlinda does not have ACL read access
+Anthony's pool or container - only POSIX permissions.
 
 Example:
 
 ### Setup user to serve dfuse and create containers, mount points etc.
-```bash
+```
 $ sudo -u dserve dmg pool create root_pool --size 1g
 $ sudo -u dserve daos cont create --type POSIX root_pool root_container
-$ sudo mkdir /crate
-$ sudo chown dserve.dserve /crate
+$ sudo mkdir /daos
+$ sudo chown dserve.dserve /daos
 ```
 
 ### Run dfuse, this should be done via systemd to be automatically mounted at boot time.
-```bash
-$ sudo -u dserve dfuse --multi-user /crate root_pool root_container
+```
+$ sudo -u dserve dfuse --multi-user /daos root_pool root_container
 ```
 
 ### Create a directory for anthony to own, and create a pool for him.
-```bash
-$ sudo mkdir -m 0700 /crate/anthony
-$ sudo chown anthony.anthony /crate/anthony
+```
+$ sudo mkdir -m 0700 /daos/anthony
+$ sudo chown anthony.anthony /daos/anthony
 $ sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
 $ sudo dmg pool update-acl anthony_pool -e "A::dserve@:r"
-$ sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool my-data --type POSIX
-$ sudo -u anthony chmod 755 /crate/anthony
-$ sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"
+$ sudo dmg pool get-acl anthony_pool
+# Owner: anyhony@
+# Owner Group: anthony@
+# Entries:
+A::OWNER@:rw
+A::dserve@:r
+A:G:GROUP@:rw
+$ sudo -u anthony daos cont create --path /daos/anthony/my-data anthony_pool my-data --type POSIX
+$ sudo -u anthony daos container get-acl --path /daos/anthony/my-data
+# Owner: anthony@
+# Owner Group: anthony@
+# Entries:
+A::OWNER@:rwdtTaAo
+A::dserve@:rwt
+A:G:GROUP@:rwtT
+$ sudo -u anthony chmod 755 /daos/anthony
+$ sudo -u anthony sh -c "echo hello-world > /daos/anthony/my-data/new-file"
 ```
 
 ### Now read the file.
-```bash
-$ sudo -u berlinda cat /crate/anthony/my-data/new-file
+```
+$ sudo -u berlinda cat /daos/anthony/my-data/new-file
 ```
 
 ## Interception library
