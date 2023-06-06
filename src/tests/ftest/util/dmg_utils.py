@@ -1021,8 +1021,8 @@ class DmgCommand(DmgCommandBase):
         # Example JSON output:
         # {
         #   "response": {
-        #     "CurrentLeader": "127.0.0.1:10001",
-        #     "Replicas": [
+        #     "current_leader": "127.0.0.1:10001",
+        #     "replicas": [
         #       "127.0.0.1:10001"
         #     ]
         #   },
