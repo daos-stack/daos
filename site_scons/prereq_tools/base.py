@@ -998,6 +998,11 @@ class _Component():
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
 
+    @staticmethod
+    def _sanitize_patch_path(path):
+        """Remove / and https:// from path"""
+        return "".join(path.split("://")[-1].split("/")[1:])
+
     def _resolve_patches(self):
         """Parse the patches variable"""
         patchnum = 1
@@ -1013,7 +1018,7 @@ class _Component():
             if "https://" not in raw:
                 patches[raw] = patch_subdir
                 continue
-            patch_name = f'{self.name}_patch_{patchnum:d}'
+            patch_name = f'{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
@@ -1023,6 +1028,20 @@ class _Component():
                         '-o', patch_path, raw]]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
+        # Remove old patches
+        for fname in os.listdir(self.patch_path):
+            if not fname.startswith(f"{self.name}_"):
+                continue
+            found = False
+            for key in patches:
+                if fname in key:
+                    found = True
+                    break
+            if not found:
+                old_patch = os.path.join(self.patch_path, fname)
+                print(f"Removing old, unused patch file {old_patch}")
+                os.unlink(old_patch)
+
         return patches
 
     def get(self):
