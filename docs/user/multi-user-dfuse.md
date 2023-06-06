@@ -92,15 +92,15 @@ $ sudo -u dserve dfuse --multi-user /crate root_pool root_container
 $ sudo mkdir -m 0700 /crate/anthony
 $ sudo chown anthony.anthony /crate/anthony
 $ sudo dmg pool create -u anyhony -g anthony anthony_pool --size 1g
-$ sudo -u dserve dmg pool update-acl anthony_pool -e "A::dserve@:r"
-$ sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool --type POSIX
+$ sudo dmg pool update-acl anthony_pool -e "A::dserve@:r"
+$ sudo -u anthony daos cont create --path /crate/anthony/my-data anthony_pool my-data --type POSIX
 $ sudo -u anthony chmod 755 /crate/anthony
 $ sudo -u anthony sh -c "echo hello-world > /crate/anthony/my-data/new-file"
 ```
 
 ### Now read the file.
 ```bash
-$ sudo -u berlinda cat /crate/anthony/my-data new-file
+$ sudo -u berlinda cat /crate/anthony/my-data/new-file
 ```
 
 ## Interception library
