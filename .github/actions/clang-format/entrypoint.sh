@@ -1,21 +1,16 @@
 #!/bin/sh
 
-set -e
-
 git config --global --add safe.directory /github/workspace
-
-set +e
-
-# Show what would be changed as a diff.
-git-clang-format "${INPUT_TARGET}" --diffstat
 
 # Fix any formatting.
 git-clang-format "${INPUT_TARGET}"
 
+git diff
+
 # Now revert any changes to auto-generated files.
-find . -name *.pb-c.c -exec git checkout '{}' \;
-find . -name *.pb-c.h -exec git checkout '{}' \;
-find . -name *.proto -exec git checkout '{}' \;
+find . -name "*.pb-c.c" -exec git checkout --quiet ./'{}' \;
+find . -name "*.pb-c.h" -exec git checkout --quiet ./'{}' \;
+find . -name "*.proto" -exec git checkout --quiet ./'{}' \;
 
 git diff > auto-format-changes.diff
 
