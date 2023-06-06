@@ -74,9 +74,9 @@ The configuration file location can be specified on the command line
 (`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_server.yml)
 and example configuration files in the
-[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+[examples](https://github.com/daos-stack/daos/tree/release/2.4/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
@@ -90,14 +90,14 @@ file for reference, and the location will be written to the log.
 The example configuration file lists the default empty configuration, listing
 all the options (living documentation of the config file). Live examples are
 available at
-<https://github.com/daos-stack/daos/tree/master/utils/config/examples>
+<https://github.com/daos-stack/daos/tree/release/2.4/utils/config/examples>
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
 line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
 Refer to the example configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_server.yml)
 for latest information and examples.
 
 #### Auto Generate Configuration File
@@ -643,7 +643,7 @@ To set the addresses of which DAOS Servers to task, provide either:
 - `-l <hostlist>` on the commandline when invoking, or
 
 - `hostlist: <hostlist>` in the control configuration file
-  [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+  [`daos_control.yml`](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_control.yml)
 
 Where `<hostlist>` represents a slurm-style hostlist string e.g.
 `foo-1[28-63],bar[256-511]`.
@@ -1094,9 +1094,9 @@ For class == "nvme", the following parameters should be populated:
   will assign them.  Otherwise all roles must be assigned to a tier.
 
 See the sample configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_server.yml)
 and example configuration files in the
-[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+[examples](https://github.com/daos-stack/daos/tree/release/2.4/utils/config/examples)
 directory for more details.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
@@ -1462,7 +1462,7 @@ is used unless the `ExecStart` line in the `daos_agent.service` file is
 modified to include the `-o` option.
 
 Parameter descriptions are specified in the sample
-[daos\_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
+[daos\_agent.yml](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_agent.yml)
 file, which will also get installed into `/etc/daos/daos_agent.yml`
 during the installation of the daos-client RPM.
 
@@ -1578,11 +1578,11 @@ the `[Service]` section before reloading systemd and restarting the
 
 [^1]: https://github.com/intel/ipmctl
 
-[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
+[^2]: https://github.com/daos-stack/daos/tree/release/2.4/utils/config
 
 [^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
 
-[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+[^4]: https://github.com/daos-stack/daos/tree/release/2.4/src/control/README.md
 
 [^5]: https://github.com/pmem/ndctl/issues/130
 
