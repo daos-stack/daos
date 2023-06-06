@@ -52,10 +52,10 @@ struct ioil_global {
 
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
-	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
-	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
-	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
+	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
+	ATOMIC uint64_t iog_read_count;  /**< Number of read operations intercepted */
+	ATOMIC uint64_t iog_write_count; /**< Number of write operations intercepted */
+	ATOMIC uint64_t iog_fstat_count; /**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
@@ -482,8 +482,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		if (rc != 0) {
 			rc = errno;
 
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  rc, strerror(rc));
+			DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 			goto out;
 		}
 		errno = 0;
@@ -503,8 +502,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		if (rc != 0) {
 			rc = errno;
 
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  rc, strerror(rc));
+			DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 			goto out;
 		}
 	}
@@ -514,8 +512,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 
 	rc = daos_pool_global2local(iov, &pool->iop_poh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use pool handle "DF_RC,
-				  DP_RC(rc));
+		DFUSE_LOG_WARNING("Failed to use pool handle: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 out:

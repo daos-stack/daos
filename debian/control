@@ -32,6 +32,7 @@ Build-Depends: debhelper (>= 10),
                libraft-dev (= 0.9.1-1401.gc18bcb8),
                python3-tabulate,
                liblz4-dev,
+               liblmdb-dev,
                libcapstone-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/
@@ -114,7 +115,8 @@ Multi-Arch: same
 Depends: python (>=3.8), python3, python-yaml, python3-yaml,
          ${shlibs:Depends}, ${misc:Depends},
          daos-client (= ${binary:Version}),
-	 daos-admin (= ${binary:Version})
+         daos-admin (= ${binary:Version}),
+         libcapstone-dev
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

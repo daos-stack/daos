@@ -17,7 +17,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos0
-          scm_size: 20
     1:
       pinned_numa_node: 1
       targets: 4
@@ -29,7 +28,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos1
-          scm_size: 20
 pool:
   control_method: dmg
   size: 12G

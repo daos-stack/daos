@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
+    Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'uuid', 'pthread',
@@ -12,7 +12,7 @@ def scons():
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
 
-    prereqs.require(tenv, 'argobots')
+    tenv.require('argobots')
 
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -21,7 +21,7 @@ def scons():
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
                     tenv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',
                     'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
-                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c',
+                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c', 'vts_wal.c',
                     '../../object/srv_csum.c', '../../object/srv_io_map.c']
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])

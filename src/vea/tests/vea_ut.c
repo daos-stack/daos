@@ -405,7 +405,6 @@ ut_setup(struct vea_ut_args *test_args)
 {
 	daos_size_t pool_size = (50 << 20); /* 50MB */
 	struct umem_attr uma = {0};
-	PMEMoid root;
 	void *root_addr;
 	int rc, i;
 
@@ -415,17 +414,17 @@ ut_setup(struct vea_ut_args *test_args)
 	unlink(pool_file);
 
 	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_pool = pmemobj_create(pool_file, "vea_ut",
-					     pool_size, 0666);
+	uma.uma_pool = umempobj_create(pool_file, "vea_ut", 0,
+					     pool_size, 0666, NULL);
 	if (uma.uma_pool == NULL) {
 		fprintf(stderr, "create pmemobj pool error\n");
 		return -1;
 	}
 
-	root = pmemobj_root(uma.uma_pool,
+	root_addr = umempobj_get_rootptr(uma.uma_pool,
 			    sizeof(struct vea_space_df) +
 			    sizeof(struct vea_hint_df) * IO_STREAM_CNT);
-	if (OID_IS_NULL(root)) {
+	if (root_addr == NULL) {
 		fprintf(stderr, "get root error\n");
 		rc = -1;
 		goto error;
@@ -438,7 +437,6 @@ ut_setup(struct vea_ut_args *test_args)
 	}
 
 
-	root_addr = pmemobj_direct(root);
 	test_args->vua_md = root_addr;
 	root_addr += sizeof(struct vea_space_df);
 
@@ -455,7 +453,7 @@ ut_setup(struct vea_ut_args *test_args)
 	umem_init_txd(&test_args->vua_txd);
 	return 0;
 error:
-	pmemobj_close(uma.uma_pool);
+	umempobj_close(uma.uma_pool);
 	test_args->vua_umm.umm_pool = NULL;
 
 	return rc;
@@ -514,7 +512,7 @@ ut_teardown(struct vea_ut_args *test_args)
 	}
 
 	if (test_args->vua_umm.umm_pool != NULL) {
-		pmemobj_close(test_args->vua_umm.umm_pool);
+		umempobj_close(test_args->vua_umm.umm_pool);
 		test_args->vua_umm.umm_pool = NULL;
 	}
 	umem_fini_txd(&test_args->vua_txd);
