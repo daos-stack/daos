@@ -371,7 +371,8 @@ def find_command(source, pattern, depth, other=None):
         str: the find command
 
     """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    command = [
+        "find", f"'{source}'", "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
     if isinstance(other, list):
         command.extend(other)
     elif isinstance(other, str):

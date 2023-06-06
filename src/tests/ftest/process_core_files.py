@@ -103,7 +103,7 @@ class CoreFileProcessing():
                         continue
                     if os.path.splitext(core_name)[-1] == ".bz2":
                         # Decompress the file
-                        command = ["lbzip2", "-d", "-v", os.path.join(core_dir, core_name)]
+                        command = ["lbzip2", "-d", "-v", f"'{os.path.join(core_dir, core_name)}'"]
                         run_local(self.log, " ".join(command))
                         core_name = os.path.splitext(core_name)[0]
                     exe_name = self._get_exe_name(os.path.join(core_dir, core_name))
@@ -115,17 +115,17 @@ class CoreFileProcessing():
                     else:
                         corefiles_processed += 1
                     self.log.debug(
-                        "Successfully processed core file %s", os.path.join(core_dir, core_name))
+                        "Successfully processed core file '%s'", os.path.join(core_dir, core_name))
                 except Exception as error:      # pylint: disable=broad-except
                     self.log.error(error)
                     self.log.debug("Stacktrace", exc_info=True)
                     self.log.error(
-                        "Failed to process core file %s", os.path.join(core_dir, core_name))
+                        "Failed to process core file '%s'", os.path.join(core_dir, core_name))
                     errors += 1
                 finally:
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
-                        self.log.debug("Removing %s", core_file)
+                        self.log.debug("Removing '%s'", core_file)
                         os.remove(core_file)
         # remove any core file generated post core processing on the local node
         errors += self.delete_gdb_core_files()
@@ -149,12 +149,12 @@ class CoreFileProcessing():
         core_full = os.path.join(core_dir, core_name)
         stack_trace_file = os.path.join(core_dir, f"{core_name}.stacktrace")
 
-        self.log.debug("Generating a stacktrace from the %s core file from %s", core_full, host)
-        run_local(self.log, " ".join(['ls', '-l', core_full]))
+        self.log.debug("Generating a stacktrace from the '%s' core file from %s", core_full, host)
+        run_local(self.log, " ".join(['ls', '-l', f"'{core_full}'"]))
 
         try:
             command = [
-                "gdb", f"-cd={core_dir}",
+                "gdb", f"-cd='{core_dir}'",
                 "-ex", "'set pagination off'",
                 "-ex", "'thread apply all bt full'",
                 "-ex", "detach",
@@ -190,7 +190,7 @@ class CoreFileProcessing():
 
         """
         self.log.debug("Extracting the executable name from %s", core_file)
-        command = ["gdb", "-c", core_file, "-ex", "'info proc exe'", "-ex", "quit"]
+        command = ["gdb", "-c", f"'{core_file}'", "-ex", "'info proc exe'", "-ex", "quit"]
         result = run_local(self.log, " ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
@@ -386,7 +386,7 @@ class CoreFileProcessing():
             return 1
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
 
-        self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
+        self.log.debug("Deleting core.gdb.*.* core files located in '%s'", core_path)
         other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
         try:
             run_local(

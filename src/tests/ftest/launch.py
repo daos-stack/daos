@@ -600,7 +600,8 @@ class Launch():
         self.mode = mode
 
         self.avocado = AvocadoInfo()
-        self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
+        clean_name = self.name.lower().replace('.', '-').replace(' ', '_')
+        self.class_name = f"FTEST_launch.launch-{clean_name}"
         self.logdir = None
         self.logfile = None
         self.tests = []
@@ -2724,21 +2725,22 @@ class Launch():
             sudo_command = ""
 
         # Create a temporary remote directory - should already exist, see _setup_test_directory()
-        command = f"mkdir -p {tmp_copy_dir}"
+        command = f"mkdir -p '{tmp_copy_dir}'"
         if not run_remote(logger, hosts, command).passed:
-            message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
+            message = f"Error creating temporary remote copy directory '{tmp_copy_dir}'"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
-        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' {tmp_copy_dir}/"
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
         if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
-            message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
+            message = f"Error moving files to temporary remote copy directory '{tmp_copy_dir}'"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-w", str(hosts), "-pv", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
+        command = ["clush", "-w", str(hosts), "-pv", "--rcopy", f"'{tmp_copy_dir}'", "--dest",
+                   f"'{rcopy_dest}'"]
         return_code = 0
         try:
             run_local(logger, " ".join(command), check=True, timeout=timeout)
@@ -2750,9 +2752,9 @@ class Launch():
 
         finally:
             # Remove the temporary remote directory on each host
-            command = f"{sudo_command}rm -fr {tmp_copy_dir}"
+            command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
             if not run_remote(logger, hosts, command).passed:
-                message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
+                message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return_code = 16
 
