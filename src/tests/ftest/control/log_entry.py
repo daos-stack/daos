@@ -62,7 +62,7 @@ class ControlLogEntry(TestWithServers):
             return len(not_found) == 0
 
         # Wait up to 5 seconds for journalctl to contain the messages
-        wait_for_result(None, _search, timeout=5, delay=1)
+        wait_for_result(self.log, _search, timeout=5, delay=1)
 
         # Print the status of each message
         for message in expected_messages:
