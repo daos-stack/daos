@@ -28,18 +28,16 @@ class ControlLogEntry(TestWithServers):
         """
         t_before = journalctl_time()
         yield
-        t_after = journalctl_time()
-        self._verify_journalctl(t_before, t_after, expected_messages)
+        self._verify_journalctl(t_before, expected_messages)
 
-    def _verify_journalctl(self, since, until, expected_messages):
+    def _verify_journalctl(self, since, expected_messages):
         """Verify journalctl contains one or more messages.
 
         Args:
             since (str): start time for journalctl
-            until (str): end time for journalctl
             expected_messages (list): list of regular expressions to look for
         """
-        self.log_step('Verify journalctl output between {} and {}'.format(since, until))
+        self.log_step('Verify journalctl output since {}'.format(since))
 
         not_found = set(expected_messages)
         journalctl_per_hosts = []
@@ -47,7 +45,7 @@ class ControlLogEntry(TestWithServers):
         def _search():
             """Look for each message in any host's journalctl."""
             journalctl_results = get_journalctl(
-                hosts=self.hostlist_servers, since=since, until=until,
+                hosts=self.hostlist_servers, since=since, until=journalctl_time(),
                 journalctl_type="daos_server")
 
             # Convert the journalctl to a dict of hosts : output
