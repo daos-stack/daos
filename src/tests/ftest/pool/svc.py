@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -135,7 +135,8 @@ class PoolSvc(TestWithServers):
 
                 # Verify the pool leader has changed
                 pool_leader = self.check_leader(pool_leader, True)
-                non_leader_ranks.remove(pool_leader)
+                for rank in [pool_leader] + self.server_managers[0].management_service_ranks:
+                    non_leader_ranks.remove(rank)
 
                 if svc_params[1] == 5:
                     # Stop a pool non-leader

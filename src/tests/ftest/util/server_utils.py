@@ -157,6 +157,26 @@ class DaosServerManager(SubprocessManager):
         """
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
+    @property
+    def management_service_hosts(self):
+        """Get the hosts running the management service.
+
+        Returns:
+            NodeSet: the hosts running the management service
+
+        """
+        return NodeSet(self.get_config_value('access_points'))
+
+    @property
+    def management_service_ranks(self):
+        """Get the ranks running the management service.
+
+        Returns:
+            list: a list of ranks (int) running the management service
+
+        """
+        return self.get_host_ranks(self.management_service_hosts)
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
