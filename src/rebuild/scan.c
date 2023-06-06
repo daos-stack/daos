@@ -447,7 +447,6 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 	 */
 	max_shards = num_rebuild_tgts > LOCAL_ARRAY_SIZE ? num_rebuild_tgts :
 							   LOCAL_ARRAY_SIZE;
-
 	/* Default to using the provided stack arrays */
 	*tgts = tgt_stack_array;
 	*shards = shard_stack_array;
@@ -619,9 +618,14 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget,
-						      oid.id_shard);
+		/* If there are further targets failure during reintegration/extend/drain,
+		 * rebuild will choose replacement targets for the impacted objects anyway,
+		 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
+		 */
+		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank,
+						      mytarget, oid.id_shard,
+						      rpt->rt_rebuild_op == RB_OP_RECLAIM ?
+						      false : true);
 		pl_obj_layout_free(layout);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;

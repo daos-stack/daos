@@ -471,14 +471,26 @@ out:
 }
 
 void
-ds_rebuild_running_query(uuid_t pool_uuid, uint32_t *upper_ver)
+ds_rebuild_running_query(uuid_t pool_uuid, uint32_t *upper_ver, daos_epoch_t *stable_eph,
+			 uint32_t *generation)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 
-	*upper_ver = 0;
+	if (upper_ver)
+		*upper_ver = 0;
+	if (stable_eph)
+		*stable_eph = 0;
+	if (generation)
+		*generation = -1;
 	rpt = rpt_lookup(pool_uuid, -1, -1);
-	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort)
-		*upper_ver = rpt->rt_rebuild_ver;
+	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort) {
+		if (stable_eph)
+			*stable_eph = rpt->rt_stable_epoch;
+		if (upper_ver)
+			*upper_ver = rpt->rt_rebuild_ver;
+		if (generation)
+			*generation = rpt->rt_rebuild_gen;
+	}
 	if (rpt)
 		rpt_put(rpt);
 }
@@ -1896,9 +1908,14 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			 unsigned int tgts_cnt, daos_rebuild_opc_t rebuild_op)
 {
 	daos_epoch_t	eph = crt_hlc_get();
+	daos_epoch_t	current_eph;
 	unsigned int	i;
 	int		rc;
 
+	/* If this rebuild task schedule is due to PS leader switch, then let's
+	 * use the stable epoch from current running rebuild task.
+	 */
+	ds_rebuild_running_query(pool->sp_uuid, NULL, &current_eph, NULL);
 	for (i = 0; i < tgts_cnt; i++) {
 		struct pool_target		*tgt = &tgts[i];
 		struct pool_target_id		tgt_id;
@@ -1910,17 +1927,21 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 
 		if (rebuild_op == RB_OP_EXCLUDE || rebuild_op == RB_OP_DRAIN) {
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
-						 eph, &id_list, rebuild_op, 0);
+						 current_eph == 0 ? eph : current_eph,
+						 &id_list, rebuild_op, 0);
 		} else {
+			daos_rebuild_opc_t new_op = rebuild_op;
+
 			D_ASSERT(rebuild_op == RB_OP_REINT);
 			/* For new target, let's turn to EXTEND command to match
 			 * the original action.
 			 */
 			if (tgt->ta_comp.co_fseq <= 1)
-				rebuild_op = RB_OP_EXTEND;
+				new_op = RB_OP_EXTEND;
 
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
-						 eph, &id_list, rebuild_op, 0);
+						 current_eph == 0 ? eph : current_eph,
+						 &id_list, new_op, 0);
 		}
 		if (rc) {
 			D_ERROR(DF_UUID" schedule op %d ver %d failed: "
@@ -2068,8 +2089,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	/* destroy the migrate_tls of 0-xstream */
-	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM)
-		ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	d_list_del_init(&rpt->rt_list);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
