@@ -89,10 +89,11 @@ class SlurmSetup():
         self.log.info("Installing slurm packages")
         return install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root).passed
 
-    def update_config(self, partition):
+    def update_config(self, slurm_user, partition):
         """Update the slurm config.
 
         Args:
+            slurm_user (str): user to define in the slurm config file
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -107,14 +108,8 @@ class SlurmSetup():
         for source in self.EXAMPLE_FILES:
             self._copy_file(self.all_nodes, source, os.path.splitext(source)[0])
 
-        # Update the config file on all hosts with the slurm control node
-        self._update_slurm_config_control_node()
-
-        # Update the config file on all hosts with the each node's socket/core/thread information
-        self._update_slurm_config_sys_info()
-
-        # Update the config file on all hosts with the partition information
-        self._update_slurm_config_partitions(partition)
+        # Update the config file on all hosts
+        self._update_slurm_config(slurm_user, partition)
 
     def start_munge(self, user):
         """Start munge.
@@ -242,32 +237,79 @@ class SlurmSetup():
             raise SlurmSetupException(
                 f'Error copying {source} to {destination} on {str(result.failed_hosts)}')
 
-    def _update_slurm_config_control_node(self):
-        """Update the slurm control node assignment in the slurm config file.
+    def _update_slurm_config(self, slurm_user, partition):
+        """Update the slurm config file.
+
+        Args:
+            slurm_user (str): user to define in the slurm config file
+            partition (str): name of the slurm partition to include in the configuration
 
         Raises:
-            SlurmSetupException: if there is a problem updating the lurm control node assignment in
-                the slurm config file
+            SlurmSetupException: if there is a problem modifying slurm config file
         """
-        self.log.debug(
-            'Updating the slurm control node in the %s config file on %s',
-            self.SLURM_CONF, self.all_nodes)
+        # Update the config file with the slurm cluster name
+        self._modify_slurm_config_file(
+            'slurm cluster name', self.all_nodes, 's/ClusterName=cluster/ClusterName=ci_cluster/g',
+            self.root)
+
+        # Update the config file with the slurm user
+        self._modify_slurm_config_file(
+            'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
+            self.root)
+
+        # Update the config file with the removal of the NodeName entry
+        self._modify_slurm_config_file(
+            'node name', self.all_nodes, 's/NodeName/#NodeName/g', self.root)
+
+        # Update the config file with the slurm epilog file
+        self._modify_slurm_config_file(
+            'epilog file', self.all_nodes, 's#EpilogSlurmctld=#EpilogSlurmctld={EPILOG_FILE}#g',
+            self.root)
+
+        # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
             command = f'grep {control_keyword} {self.SLURM_CONF}'
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
-                command = command_as_user(
-                    f'sed -i -e \'s/{control_keyword}=linux0/{control_keyword}={str(self.control)}'
-                    f'/g\' {self.SLURM_CONF}', self.root)
-                mod_results = run_remote(self.log, results.passed_hosts, command)
-                if mod_results.failed_hosts:
-                    raise SlurmSetupException(
-                        f'Error updating the slurm control node in the {self.SLURM_CONF} config '
-                        f'file on {mod_results.failed_hosts}')
-                not_updated.remove(mod_results.passed_hosts)
+                not_updated.remove(
+                    self._modify_slurm_config_file(
+                        'slurm control node', results.passed_hosts,
+                        f's/{control_keyword}=linux0/{control_keyword}={str(self.control)}/g',
+                        self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
+
+        # Update the config file with each node's socket/core/thread information
+        self._update_slurm_config_sys_info()
+
+        # Update the config file with the partition information
+        self._update_slurm_config_partitions(partition)
+
+    def _modify_slurm_config_file(self, description, hosts, replacement, user=None):
+        """Replace text in the slurm configuration file.
+
+        Args:
+            description (str): what is being modified in the slurm config file
+            hosts (NodeSet): hosts on which to modify the slurm config file
+            replacement (str): what text to replace
+            user (str, optional): user to use when running the sed command. Defaults to None.
+
+        Raises:
+            SlurmSetupException: if there is a problem modifying slurm config file
+
+        Returns:
+            NodSet: hosts on which the command succeeded
+        """
+        self.log.debug(
+            'Updating the %s in the %s config file on %s', description, self.SLURM_CONF, hosts)
+        command = command_as_user(f'sed -i -e \'{replacement}\' {self.SLURM_CONF}', user)
+        result = run_remote(self.log, hosts, command)
+        if result.failed_hosts:
+            raise SlurmSetupException(
+                f'Error updating {description} in the {self.SLURM_CONF} config '
+                f'file on {result.failed_hosts}')
+        return result.passed_hosts
 
     def _update_slurm_config_sys_info(self):
         """Update the slurm config files with hosts socket/core/thread information.
@@ -499,7 +541,7 @@ def main():
 
     # Edit the slurm conf files
     try:
-        slurm_setup.update_config(args.partition)
+        slurm_setup.update_config(args.user, args.partition)
     except SlurmSetupException as error:
         logger.error(str(error))
         sys.exit(1)
