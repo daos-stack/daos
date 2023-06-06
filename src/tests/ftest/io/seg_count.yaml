@@ -1,19 +1,17 @@
 hosts:
-  test_servers: 8
-  test_clients: 2
+  test_servers: 4
+  test_clients: 4
 timeout: 2000
 server_config:
   name: daos_server
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
+    1:
+      storage: auto
 pool:
-  scm_size: 60000000000
-  svcn: 3
+  size: 60gb
   control_method: dmg
 ior:
   client_processes: !mux
