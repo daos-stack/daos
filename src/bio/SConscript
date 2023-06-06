@@ -38,9 +38,6 @@ def scons():
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
-    if prereqs.test_requested():
-        SConscript('tests/SConscript', exports='denv')
-
 
 if __name__ == "SCons.Script":
     scons()
