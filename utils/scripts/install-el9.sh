@@ -13,6 +13,7 @@ set -e
 dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
+    capstone-devel \
     clang \
     clang-tools-extra \
     cmake \
@@ -43,6 +44,7 @@ dnf --nodocs install \
     libtool-ltdl-devel \
     libunwind-devel \
     libuuid-devel \
+    lmdb-devel \
     libyaml-devel \
     lz4-devel \
     make \

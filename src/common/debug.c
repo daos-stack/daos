@@ -90,6 +90,10 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_SRV_BULK_CACHE,
 	},
 	{
+		.iob_bit	= IOBP_WAL_COMMIT,
+		.iob_str	= IOBP_ENV_WAL_COMMIT,
+	},
+	{
 		.iob_bit	= IOBP_OFF,
 		.iob_str	= NULL,
 	},
@@ -163,6 +167,9 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	logfile = getenv(D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
+		logfile = NULL;
+	} else if (!strncmp(logfile, "/dev/null", 9)) {
+		/* Don't set up logging or log to stdout if the log file is /dev/null */
 		logfile = NULL;
 	}
 

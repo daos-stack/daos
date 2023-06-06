@@ -29,7 +29,7 @@ cleanup(void)
 	gc_wait();
 }
 
-static void
+void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	     daos_size_t iod_size, daos_recx_t *recx, char *buf)
@@ -84,7 +84,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
-static void
+void
 fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	    uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	    daos_size_t iod_size, daos_recx_t *recx, char *buf)

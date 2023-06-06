@@ -147,10 +147,10 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			if _, err := svc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
 				t.Fatal(err)
 			}
+
 			poolUUID := test.MockPoolUUID(1)
 			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
 			defer lock.Release()
-
 			if err := svc.sysdb.AddPoolService(ctx, &system.PoolService{
 				PoolUUID: poolUUID,
 				State:    tc.state,
@@ -286,7 +286,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 					)
 			}
 			svc := newTestMgmtSvc(t, log)
-			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil)
+			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil, nil)
 			svc.harness.instances[0] = newTestEngine(log, false, sp, engineCfg)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
@@ -303,10 +303,10 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 
 	for name, tc := range map[string]struct {
 		mgmtSvc       *mgmtSvc
@@ -471,7 +471,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := test.Context(t)
@@ -490,7 +490,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
-					nil, nil, nil)
+					nil, nil, nil, nil)
 				srv := NewEngineInstance(log, mp, nil, r)
 				srv.ready.SetTrue()
 
@@ -503,14 +503,14 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
-					events.NewPubSub(test.Context(t), log))
+					events.NewPubSub(ctx, log))
+				tc.mgmtSvc.startAsyncLoops(ctx)
 			}
 
 			numMembers := tc.memberCount
 			if numMembers < 1 {
 				numMembers = 2
 			}
-			tc.mgmtSvc.log = log
 			for i := 0; i < numMembers; i++ {
 				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
 					t.Fatal(err)
@@ -558,7 +558,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 				WithStorageClass("nvme").
 				WithBdevDeviceList("foo", "bar"),
 		)
-	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)
+	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
 	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
 
 	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
@@ -623,7 +623,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	})
 
 	gotReq := new(mgmtpb.PoolCreateReq)
-	if err := proto.Unmarshal(dc.calls[0].Body, gotReq); err != nil {
+	if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {
 		t.Fatal(err)
 	}
 
@@ -639,10 +639,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 	testPoolService := &system.PoolService{
 		PoolLabel: "test-pool",
 		PoolUUID:  uuid.MustParse(mockUUID),
@@ -925,13 +925,12 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 
 			numMembers := 8
 			for i := 0; i < numMembers; i++ {
@@ -1022,10 +1021,10 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 	scmAllocation := uint64(1)
 	nvmeAllocation := uint64(2)
 	testPoolService := &system.PoolService{
@@ -1089,13 +1088,12 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if tc.setupMockDrpc == nil {
@@ -1128,10 +1126,10 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -1190,13 +1188,12 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if tc.setupMockDrpc == nil {
@@ -1225,10 +1222,10 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -1283,13 +1280,12 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if tc.setupMockDrpc == nil {
@@ -1740,11 +1736,11 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 
-	allRanksDown := newTestMgmtSvc(t, testLog)
+	allRanksDown := newTestMgmtSvc(t, log)
 	downRanksPool := test.MockUUID(9)
 	addTestPools(t, allRanksDown.sysdb, downRanksPool)
 	if err := allRanksDown.membership.UpdateMemberStates(system.MemberResults{
@@ -1812,13 +1808,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 			addTestPools(t, tc.mgmtSvc.sysdb, mockUUID)
 
 			if tc.setupMockDrpc == nil {
@@ -2069,10 +2064,10 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
-	notAP := newTestMgmtSvc(t, testLog)
+	notAP := newTestMgmtSvc(t, log)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -2127,13 +2122,12 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
-			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if tc.setupMockDrpc == nil {

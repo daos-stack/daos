@@ -10,6 +10,9 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
+#include <sys/types.h>
+#include <hwloc.h>
+
 #define D_LOGFAC DD_FAC(dfuse)
 
 #include "dfuse.h"
@@ -19,7 +22,6 @@
 #include "daos_uns.h"
 
 #include <gurt/common.h>
-
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
  * is used to detect abnormal exit.
@@ -267,7 +269,9 @@ show_help(char *name)
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
 	    "	   --disable-caching	Disable all caching\n"
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
-	    "	-o options		mount style options string"
+	    "	-o options		mount style options string\n"
+	    "\n"
+	    "      --multi-user		Run dfuse in multi user mode\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -469,21 +473,40 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
-	/* If the number of threads hasn't been set on the command line then query the CPUSET
-	 * which will either return the number of cores on the node or the size of the allocated
-	 * cpuset.  Ideally we'd restrict to 16 threads here if no cpuset exists however the
-	 * getaffinity call does not expose that information.
+	/* If the number of threads has been specified on the command line then use that, otherwise
+	 * check CPU binding.  If bound to a number of cores then launch that number of threads,
+	 * if not bound them limit to 16.
 	 */
 	if (dfuse_info->di_threaded && !have_thread_count) {
-		cpu_set_t cpuset;
+		struct hwloc_topology *hwt;
+		hwloc_const_cpuset_t   hw;
+		int                    total;
+		int                    allowed;
 
-		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
-		if (rc != 0) {
-			printf("Failed to get cpuset information\n");
-			D_GOTO(out_debug, rc = -DER_INVAL);
-		}
+		rc = hwloc_topology_init(&hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
 
-		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
+		rc = hwloc_topology_load(hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		hw = hwloc_topology_get_complete_cpuset(hwt);
+
+		total = hwloc_bitmap_weight(hw);
+
+		rc = hwloc_get_cpubind(hwt, (struct hwloc_bitmap_s *)hw, HWLOC_CPUBIND_PROCESS);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		allowed = hwloc_bitmap_weight(hw);
+
+		hwloc_topology_destroy(hwt);
+
+		if (total == allowed)
+			dfuse_info->di_thread_count = min(allowed, 16);
+		else
+			dfuse_info->di_thread_count = allowed;
 	}
 
 	/* Reserve one thread for each daos event queue */
@@ -531,8 +554,8 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
-			       rc, strerror(rc));
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
+			       strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -541,7 +564,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path (%d) %s\n", rc, strerror(rc));
+			printf("Error reading attr from path: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
@@ -557,8 +580,8 @@ main(int argc, char **argv)
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
-		       rc, strerror(rc));
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned: %d (%s)", rc,
+		       strerror(rc));
 	if (rc == 0) {
 		if (pool_name[0]) {
 			printf("Pool specified multiple ways\n");
@@ -583,14 +606,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* DUNS may have logged this already but won't have printed anything */
-		printf("Error resolving mount point (%d) %s\n", rc, strerror(rc));
+		printf("Error resolving mount point: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	/* Connect to a pool. */
 	rc = dfuse_pool_connect(fs_handle, pool_name, &dfp);
 	if (rc != 0) {
-		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
@@ -599,7 +622,7 @@ main(int argc, char **argv)
 	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
-		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 

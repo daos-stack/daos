@@ -254,6 +254,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					sysp,
 					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+					nil,
 				)
 
 				idx := uint32(i)

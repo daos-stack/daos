@@ -27,6 +27,7 @@ apt-get install \
     kmod \
     libaio-dev \
     libboost-dev \
+    libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
     libfuse3-dev \
@@ -42,6 +43,7 @@ apt-get install \
     libtool-bin \
     libunwind-dev \
     libyaml-dev \
+    liblmdb-dev \
     locales \
     maven \
     numactl \
