@@ -200,13 +200,24 @@ struct crt_rpc_priv {
 static inline void
 crt_rpc_lock(struct crt_rpc_priv *rpc_priv)
 {
-	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+	int rc;
+
+
+	rc = pthread_mutex_lock(&rpc_priv->crp_mutex);
+
+	if (rc != 0)
+		RPT_DUMP(rpc_priv);
 }
 
 static inline void
 crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 {
-	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+	int rc;
+
+	rc = pthread_mutex_unlock(&rpc_priv->crp_mutex);
+
+	if (rc != 0)
+		RPT_DUMP(rpc_priv);
 }
 
 #define CRT_PROTO_INTERNAL_VERSION 4
