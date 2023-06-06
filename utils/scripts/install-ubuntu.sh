@@ -43,6 +43,7 @@ apt-get install \
     libtool-bin \
     libunwind-dev \
     libyaml-dev \
+    liblmdb-dev \
     locales \
     maven \
     numactl \

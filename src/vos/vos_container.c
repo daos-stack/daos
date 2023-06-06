@@ -588,6 +588,12 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
+	rc = vos_flush_wal_header(pool);
+	if (rc) {
+		D_ERROR("Failed to flush WAL header. "DF_RC"\n", DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
+
 	rc = umem_tx_begin(vos_pool2umm(pool), NULL);
 	if (rc) {
 		D_ERROR("Failed to start pmdk transaction: "DF_RC"\n",

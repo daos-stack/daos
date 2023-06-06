@@ -8,12 +8,13 @@
  *
  * rdb: Raft Integration
  *
- * Each replica employs four daemon ULTs:
+ * Each replica employs four or five daemon ULTs:
  *
  *   ~ rdb_timerd(): Call raft_periodic() periodically.
  *   ~ rdb_recvd(): Process RPC replies received.
  *   ~ rdb_callbackd(): Invoke user dc_step_{up,down} callbacks.
  *   ~ rdb_compactd(): Compact polled entries by calling rdb_lc_aggregate().
+ *   ~ rdb_checkpointd(): Checkpoint RDB pool (MD on SSD only).
  *
  * rdb uses its own last applied index, which always equal to the last
  * committed index, instead of using raft's version.
@@ -1093,10 +1094,18 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 		goto out_replicas;
 	}
 
-	if (entry->type == RAFT_LOGTYPE_ADD_NODE)
+	if (entry->type == RAFT_LOGTYPE_ADD_NODE) {
 		rc = d_rank_list_append(replicas, rank);
-	else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE)
+	} else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE) {
+		/* never expect 1->0 in practice, right? But protect against double-free. */
+		bool replicas_freed = (replicas->rl_nr == 1);
+
 		rc = d_rank_list_del(replicas, rank);
+		if (replicas_freed) {
+			D_ASSERT(rc == -DER_NOMEM);
+			replicas = NULL;
+		}
+	}
 	if (rc != 0)
 		goto out_replicas;
 

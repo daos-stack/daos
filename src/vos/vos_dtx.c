@@ -830,6 +830,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		D_ASSERT(dtx_is_valid_handle(dth));
 		D_ASSERT(dth->dth_solo);
 
+		dae = dth->dth_ent;
+		D_ASSERT(dae != NULL);
+
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = dth->dth_epoch;
 	}
@@ -843,6 +846,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	*dce_p = dce;
 	dce = NULL;
 
+	dae->dae_committing = 1;
+
 	if (epoch != 0)
 		goto out;
 
@@ -851,8 +856,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		*fatal = true;
 		goto out;
 	}
-
-	dae->dae_committing = 1;
 
 	D_ASSERT(dae_p != NULL);
 	*dae_p = dae;
@@ -1173,8 +1176,20 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (dtx_is_valid_handle(dth) && dae == dth->dth_ent)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
+	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
+		if (entry & DTX_LID_SOLO_FLAG && dae->dae_committing) {
+			D_DEBUG(DB_IO, "Hit in-committing solo DTX "DF_DTI", "DF_X64":"DF_X64"\n",
+				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), cont->vc_solo_dtx_epoch);
+
+			/* For solo 'committing' DTX, do not return ALB_AVAILABLE_CLEAN. Otherwise,
+			 * it will misguide the caller as fake 'committed', but related data may
+			 * be invisible to the subsequent fetch until become real 'committed'.
+			 */
+			return dtx_inprogress(dae, dth, false, false, 7);
+		}
+
 		return ALB_AVAILABLE_CLEAN;
+	}
 
 	if (vos_dae_is_abort(dae))
 		return ALB_UNAVAILABLE;
@@ -1724,7 +1739,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	DAE_INDEX(dae) = dbd->dbd_index;
 	if (DAE_INDEX(dae) > 0) {
 		rc = umem_tx_xadd_ptr(umm, umem_off2ptr(umm, dae->dae_df_off),
-				      sizeof(struct vos_dtx_act_ent_df), POBJ_XADD_NO_SNAPSHOT);
+				      sizeof(struct vos_dtx_act_ent_df), UMEM_XADD_NO_SNAPSHOT);
 		if (rc != 0)
 			return rc;
 
@@ -1971,7 +1986,7 @@ again:
 		if (dce != NULL) {
 			rc = umem_tx_xadd_ptr(umm, &dbd->dbd_committed_data[j],
 					      sizeof(struct vos_dtx_cmt_ent_df),
-					      POBJ_XADD_NO_SNAPSHOT);
+					      UMEM_XADD_NO_SNAPSHOT);
 			if (rc != 0)
 				D_GOTO(out, fatal = true);
 
@@ -2615,9 +2630,9 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		       obj->obj_sync_epoch, epoch, DP_UOID(oid));
 
 		obj->obj_sync_epoch = epoch;
-		pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
+		umem_atomic_copy(vos_cont2umm(cont),
 				       &obj->obj_df->vo_sync, &epoch,
-				       sizeof(obj->obj_df->vo_sync));
+				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
 	vos_obj_release(occ, obj, false);
@@ -2917,7 +2932,7 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	/* This will abort the transaction and callback to vos_dtx_cleanup_internal(). */
-	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
 }
 
 int

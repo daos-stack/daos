@@ -162,7 +162,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -179,6 +179,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
+					DeviceRoles: storage.BdevRoles{
+						OptionBits: storage.OptionBits(storage.BdevRoleAll),
+					},
 				},
 			},
 			expOut: `
@@ -217,7 +220,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_7",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -225,7 +228,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_7",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -282,7 +285,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -290,7 +293,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -364,7 +367,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -372,7 +375,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -437,7 +440,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -445,7 +448,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -512,7 +515,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -569,7 +572,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -643,7 +646,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"

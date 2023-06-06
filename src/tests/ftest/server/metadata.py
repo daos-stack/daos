@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import traceback
-import uuid
 import time
 
 from avocado.core.exceptions import TestFail
@@ -16,12 +15,13 @@ from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(manager, uuids):
-    """IOR run for each UUID provided.
+def run_ior_loop(test, manager, loops):
+    """Run IOR multiple times.
 
     Args:
+        test (Test): the test object
         manager (str): mpi job manager command
-        uuids (list): list of container UUIDs
+        loops (int): number of times to run IOR
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -29,8 +29,9 @@ def run_ior_loop(manager, uuids):
     """
     results = []
     errors = []
-    for index, cont_uuid in enumerate(uuids):
-        manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
+    for index in range(loops):
+        cont = test.label_generator.get_label('cont')
+        manager.job.dfs_cont.update(cont, "ior.dfs_cont")
 
         t_start = time.time()
 
@@ -40,7 +41,7 @@ def run_ior_loop(manager, uuids):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, len(uuids), cont_uuid, error))
+                    ior_mode, index, loops, cont, error))
         finally:
             t_end = time.time()
             ior_cmd_time = t_end - t_start
@@ -48,7 +49,7 @@ def run_ior_loop(manager, uuids):
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
     return results
 
 
@@ -371,10 +372,6 @@ class ObjectMetadata(TestWithServers):
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
-        list_of_uuid_lists = [
-            [str(uuid.uuid4()) for _ in range(files_per_thread)]
-            for _ in range(total_ior_threads)]
-
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
@@ -386,7 +383,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool)
+                ior_cmd.set_daos_params(self.server_group, self.pool, None)
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
@@ -400,10 +397,8 @@ class ObjectMetadata(TestWithServers):
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
-                    manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index])
-                self.log.info(
-                    "Created %s thread %s with container uuids %s", operation,
-                    index, list_of_uuid_lists[index])
+                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)

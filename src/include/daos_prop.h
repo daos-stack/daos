@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,6 +127,12 @@ enum daos_pool_props {
 	 * The pool performance domain
 	 */
 	DAOS_PROP_PO_PERF_DOMAIN,
+	/** Checkpoint mode, only applicable to MD_ON_SSD */
+	DAOS_PROP_PO_CHECKPOINT_MODE,
+	/** Frequency of timed checkpoint in seconds, default is 5 */
+	DAOS_PROP_PO_CHECKPOINT_FREQ,
+	/** WAL usage threshold to trigger checkpoint, default is 50% */
+	DAOS_PROP_PO_CHECKPOINT_THRESH,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -204,8 +210,24 @@ enum {
 
 /* Checksum Scrubbing Defaults */
 #define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+
 #define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
 #define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
+
+/** Checkpoint strategy */
+enum {
+	DAOS_CHECKPOINT_DISABLED = 0,
+	DAOS_CHECKPOINT_TIMED,
+	DAOS_CHECKPOINT_LAZY,
+};
+
+#define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5  /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1  /* 1 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MAX       (1 << 20) /* 1 million seconds */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
@@ -647,6 +669,19 @@ daos_prop_free(daos_prop_t *prop);
  */
 int
 daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	out_prop	New properties - may override old entries
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.

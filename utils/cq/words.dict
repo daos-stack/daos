@@ -162,6 +162,7 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
@@ -202,6 +203,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
