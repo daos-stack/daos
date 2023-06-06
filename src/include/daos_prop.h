@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -669,6 +669,19 @@ daos_prop_free(daos_prop_t *prop);
  */
 int
 daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	out_prop	New properties - may override old entries
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
