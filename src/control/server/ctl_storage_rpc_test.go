@@ -3821,7 +3821,7 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 			},
 			output: ExpectedOutput{
 				res: false,
-				msg: "unknown PCI device",
+				msg: "Invalid PCI address",
 			},
 		},
 	} {
