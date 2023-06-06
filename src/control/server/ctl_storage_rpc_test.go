@@ -3787,12 +3787,13 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 			input: DataInput{
 				tierCfgs: newTierCfgs(5),
 				nvmeCtlr: &ctl.NvmeController{
-					PciAddr: test.MockPCIAddr(666),
+					PciAddr: test.MockPCIAddr(13),
 				},
 			},
 			output: ExpectedOutput{
 				res: false,
-				msg: "unknown PCI device"},
+				msg: "unknown PCI device",
+			},
 		},
 		"find VMD device": {
 			input: DataInput{
@@ -3806,6 +3807,22 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{res: true},
+		},
+		"Invalid address": {
+			input: DataInput{
+				tierCfgs: storage.TierConfigs{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList("0000:04:06.3"),
+				},
+				nvmeCtlr: &ctl.NvmeController{
+					PciAddr: "666",
+				},
+			},
+			output: ExpectedOutput{
+				res: false,
+				msg: "unknown PCI device",
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3828,7 +3845,7 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 				fmt.Sprintf("Invalid engine config: wait nil"))
 			test.AssertTrue(t,
 				strings.Contains(err.Error(), tc.output.msg),
-				fmt.Sprintf("missing message: %q", tc.output.msg))
+				fmt.Sprintf("Invalid error message: %q not contains %q", err, tc.output.msg))
 		})
 	}
 }

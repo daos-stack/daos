@@ -11,7 +11,6 @@ import (
 	"math"
 	"os/user"
 	"strconv"
-	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -23,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -171,30 +171,20 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 
-// Check if a PCI is a VMD address
-func isVmdAddress(addr string) bool {
-	subAddrs := strings.Split(addr, ":")
-	return "0000" != subAddrs[0] && subAddrs[2] == "00.0"
-}
-
-// Convert a VMD address into a PCI address
-func vmdToPci(vmdAddr string) string {
-	pciAddr := "0000:" + vmdAddr[0:2] + ":" + vmdAddr[2:4] + "." + vmdAddr[4:6]
-	if pciAddr[11] == '0' {
-		pciAddr = pciAddr[0:11] + pciAddr[12:]
-	}
-	return pciAddr
-
-}
-
 // Returns the engine configuration managing the given NVMe controller
 func (c *ControlService) getEngineCfgFromNvmeCtl(nc *ctl.NvmeController) (*engine.Config, error) {
 	var engineCfg *engine.Config
 
-	pciAddr := nc.PciAddr
-	if isVmdAddress(pciAddr) {
-		pciAddr = vmdToPci(pciAddr)
+	pciAddr, err := hardware.NewPCIAddress(nc.GetPciAddr())
+	if err != nil {
+		return nil, errors.Errorf("Invalid PCI address: %s", err)
 	}
+	if pciAddr.IsVMDBackingAddress() {
+		if pciAddr, err = pciAddr.BackingToVMDAddress(); err != nil {
+			return nil, errors.Errorf("Invalid VMD address: %s", err)
+		}
+	}
+	ctlrAddr := pciAddr.String()
 
 	for index := range c.srvCfg.Engines {
 		if engineCfg != nil {
@@ -211,7 +201,7 @@ func (c *ControlService) getEngineCfgFromNvmeCtl(nc *ctl.NvmeController) (*engin
 			}
 
 			for _, devName := range tierCfg.Bdev.DeviceList.Devices() {
-				if devName == pciAddr {
+				if devName == ctlrAddr {
 					engineCfg = c.srvCfg.Engines[index]
 					break
 				}
