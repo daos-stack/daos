@@ -90,14 +90,14 @@ class DmgCommand(DmgCommandBase):
         #         "HostFabric": {
         #           "Interfaces": [
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib1",
         #               "NumaNode": 1,
         #               "Priority": 0,
         #               "NetDevClass": 32
         #             },
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib0",
         #               "NumaNode": 0,
         #               "Priority": 1,
@@ -119,7 +119,6 @@ class DmgCommand(DmgCommandBase):
         #             }
         #           ],
         #           "Providers": [
-        #             "ofi+psm2",
         #             "ofi+verbs;ofi_rxm",
         #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
@@ -1131,7 +1130,7 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+                i.e. "ofi+tcp;ofi_rxm" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control
