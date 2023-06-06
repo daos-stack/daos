@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -228,6 +228,7 @@ func getAddrFI(name string) (addrFI, error) {
 
 func (n *NUMAFabric) validateDevice(fi *FabricInterface) error {
 	if n.getAddrInterface == nil {
+		n.log.Debug("setting real getAddrInterface")
 		n.getAddrInterface = getAddrFI
 	}
 

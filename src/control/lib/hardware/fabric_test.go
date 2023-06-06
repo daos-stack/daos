@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1344,6 +1344,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 				),
 				test.CmpOptIgnoreFieldAnyType("log"),
 				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
+				cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1444,9 +1445,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
 			builders: []FabricInterfaceSetBuilder{
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
 			},
 			expErr: errors.New("no fabric interfaces found"),
 		},
@@ -1542,9 +1543,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			},
 			providers: []string{"ofi+tcp"},
 			builders: []FabricInterfaceSetBuilder{
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
 			},
 			expBuildersChanged: true,
 			expResult: NewFabricInterfaceSet(
@@ -1706,11 +1707,11 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 			if !tc.expBuildersChanged {
 				for _, b := range tc.builders {
-					mock, ok := b.(*mockFabricInterfaceSetBuilder)
+					mock, ok := b.(*MockFabricInterfaceSetBuilder)
 					if !ok {
 						t.Fatalf("bad test setup: test builders aren't mocks")
 					}
-					test.AssertEqual(t, 1, mock.buildPartCalled, "")
+					test.AssertEqual(t, 1, mock.BuildPartCalled, "")
 				}
 			}
 		})
@@ -1804,6 +1805,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
 		test.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

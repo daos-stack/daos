@@ -9,7 +9,6 @@ package main
 import (
 	"context"
 	"net"
-	"os"
 	"sync"
 	"testing"
 
@@ -18,7 +17,9 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -40,575 +41,211 @@ func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
 }
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
-	testSrvResp := func() *mgmtpb.GetAttachInfoResp {
-		return &mgmtpb.GetAttachInfoResp{
-			RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-				{
-					Rank: 0,
-					Uri:  "uri0",
-				},
-				{
-					Rank: 1,
-					Uri:  "uri1",
-				},
-				{
-					Rank: 3,
-					Uri:  "uri3",
-				},
-			},
-			SecondaryRankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-				{
-					Rank:        0,
-					Uri:         "uri4-sec",
-					ProviderIdx: 2,
-				},
-				{
-					Rank:        1,
-					Uri:         "uri5-sec",
-					ProviderIdx: 2,
-				},
-				{
-					Rank:        3,
-					Uri:         "uri6-sec",
-					ProviderIdx: 2,
-				},
-				{
-					Rank:        0,
-					Uri:         "uri0-sec",
-					ProviderIdx: 1,
-				},
-				{
-					Rank:        1,
-					Uri:         "uri1-sec",
-					ProviderIdx: 1,
-				},
-				{
-					Rank:        3,
-					Uri:         "uri3-sec",
-					ProviderIdx: 1,
-				},
-			},
-			MsRanks: []uint32{0, 1, 3},
-			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+verbs",
-				NetDevClass: uint32(hardware.Infiniband),
-			},
-			SecondaryClientNetHints: []*mgmtpb.ClientNetHint{
-				{
-					Provider:    "ofi+tcp",
-					NetDevClass: uint32(hardware.Infiniband),
-					ProviderIdx: 1,
-				},
-				{
-					Provider:    "badidx",
-					NetDevClass: uint32(hardware.Ether),
-					ProviderIdx: 0, // bad for secondary
-				},
-			},
-		}
+	testSys := "test_sys"
+	testResp := &control.GetAttachInfoResp{
+		System:       "dontcare",
+		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
+		MSRanks:      []uint32{0, 1, 2, 3},
+		ClientNetHint: control.ClientNetworkHint{
+			Provider:    "ofi+tcp",
+			NetDevClass: uint32(hardware.Ether),
+		},
 	}
 
-	priResp := func(fi, domain string) *mgmtpb.GetAttachInfoResp {
-		withHint := testSrvResp()
-		withHint.ClientNetHint.Interface = fi
-		withHint.ClientNetHint.Domain = domain
+	testFIS := hardware.NewFabricInterfaceSet(
+		&hardware.FabricInterface{
+			Name:          "test0",
+			NetInterfaces: common.NewStringSet("test0"),
+			DeviceClass:   hardware.Ether,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+		},
+		&hardware.FabricInterface{
+			Name:          "dev1",
+			NetInterfaces: common.NewStringSet("test1"),
+			DeviceClass:   hardware.Ether,
+			NUMANode:      1,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+		})
 
-		return withHint
+	testFabric := NUMAFabricFromScan(test.Context(t), logging.NewCommandLineLogger(), testFIS)
+	testFabric.getAddrInterface = mockGetAddrInterface
+
+	reqBytes := func(req *mgmtpb.GetAttachInfoReq) []byte {
+		t.Helper()
+		bytes, err := proto.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bytes
 	}
 
-	secResp := func(fi, domain string) *mgmtpb.GetAttachInfoResp {
-		return &mgmtpb.GetAttachInfoResp{
-			RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-				{
-					Rank:        0,
-					Uri:         "uri0-sec",
-					ProviderIdx: 1,
-				},
-				{
-					Rank:        1,
-					Uri:         "uri1-sec",
-					ProviderIdx: 1,
-				},
-				{
-					Rank:        3,
-					Uri:         "uri3-sec",
-					ProviderIdx: 1,
-				},
-			},
-			MsRanks: []uint32{0, 1, 3},
-			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+tcp",
-				NetDevClass: uint32(hardware.Infiniband),
-				Interface:   fi,
-				Domain:      domain,
-				ProviderIdx: 1,
-			},
+	respWith := func(in *control.GetAttachInfoResp, iface, domain string) *mgmtpb.GetAttachInfoResp {
+		t.Helper()
+		out := new(mgmtpb.GetAttachInfoResp)
+		if err := convert.Types(in, out); err != nil {
+			t.Fatal(err)
 		}
+		out.ClientNetHint.Interface = iface
+		out.ClientNetHint.Domain = domain
+		return out
 	}
 
 	for name, tc := range map[string]struct {
-		reqIface    string
-		reqDomain   string
-		providerIdx uint
-		numaNode    int
-		rpcResp     *control.HostResponse
-		expResp     *mgmtpb.GetAttachInfoResp
-		expErr      error
+		sysName           string
+		mockGetAttachInfo getAttachInfoFn
+		mockFabricScan    fabricScanFn
+		mockGetNetIfaces  func() ([]net.Interface, error)
+		numaGetter        *mockNUMAProvider
+		reqBytes          []byte
+		expResp           *mgmtpb.GetAttachInfoResp
+		expErr            error
 	}{
-		"RPC error": {
-			rpcResp: &control.HostResponse{
-				Error: errors.New("mock RPC"),
-			},
-			expErr: errors.New("mock RPC"),
+		"junk req": {
+			reqBytes: []byte("garbage"),
+			expErr:   errors.New("unmarshal"),
 		},
-		"no provider hint": {
-			rpcResp: &control.HostResponse{
-				Message: &mgmtpb.GetAttachInfoResp{
-					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-						{
-							Rank: 0,
-							Uri:  "uri0",
-						},
-					},
-					MsRanks: []uint32{0},
-					ClientNetHint: &mgmtpb.ClientNetHint{
-						NetDevClass: uint32(hardware.Infiniband),
-					},
-				},
-			},
-			expErr: errors.New("no provider"),
+		"non-matching system name": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: "bad"}),
+			expResp:  &mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)},
 		},
-		"no provider match": {
-			rpcResp: &control.HostResponse{
-				Message: &mgmtpb.GetAttachInfoResp{
-					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-						{
-							Rank: 0,
-							Uri:  "uri0",
-						},
-					},
-					MsRanks: []uint32{0},
-					ClientNetHint: &mgmtpb.ClientNetHint{
-						Provider:    "notreal",
-						NetDevClass: uint32(hardware.Infiniband),
-					},
-				},
-			},
-			expErr: errors.New("no suitable fabric interface"),
+		"get NUMA fails": {
+			reqBytes:   reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
+			numaGetter: &mockNUMAProvider{GetNUMANodeIDForPIDErr: errors.New("mock get NUMA")},
+			expErr:     errors.New("mock get NUMA"),
 		},
-		"primary provider": {
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"getAttachInfo fails": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				return nil, errors.New("mock GetAttachInfo")
 			},
-			expResp: priResp("fi0", "d0"),
+			expErr: errors.New("mock GetAttachInfo"),
 		},
-		"secondary provider": {
-			providerIdx: 1,
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"waitFabricReady fails": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
+			mockGetNetIfaces: func() ([]net.Interface, error) {
+				return nil, errors.New("mock get net ifaces")
 			},
-			expResp: secResp("fi0", "fi0"),
+			expErr: errors.New("mock get net ifaces"),
 		},
-		"client req iface and domain": {
-			reqIface:  "fi1",
-			reqDomain: "d1",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"scan fabric fails": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
+			mockFabricScan: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+				return nil, errors.New("mock fabric scan")
 			},
-			expResp: priResp("fi1", "d1"),
+			expErr: errors.New("mock fabric scan"),
 		},
-		"client req secondary provider": {
-			reqIface:    "fi1",
-			reqDomain:   "fi1",
-			providerIdx: 1,
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expResp: secResp("fi1", "fi1"),
+		"success": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
+			expResp:  respWith(testResp, "test1", "dev1"),
 		},
-		"client req iface for secondary provider": {
-			reqIface:  "fi1",
-			reqDomain: "fi1",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expResp: secResp("fi1", "fi1"),
+		"no sys succeeds": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			expResp:  respWith(testResp, "test1", "dev1"),
 		},
-		"client req iface only": {
-			reqIface: "fi1",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"incompatible error": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				return nil, &fault.Fault{Code: code.ServerWrongSystem}
 			},
-			expResp: secResp("fi1", "fi1"),
+			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)},
 		},
-		"client req domain-only ignored": {
-			reqDomain: "d2",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"bad cert error": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				return nil, &fault.Fault{Code: code.SecurityInvalidCert}
 			},
-			expResp: priResp("fi0", "d0"),
+			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)},
 		},
-		"client req provider mismatch ignored": {
-			reqIface:    "fi1",
-			reqDomain:   "d1",
-			providerIdx: 1,
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
+		"MS connection error": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				return nil, errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 			},
-			expResp: secResp("fi1", "d1"),
-		},
-		"client req iface/domain mismatch ignored": {
-			reqIface:  "fi0",
-			reqDomain: "d2",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expResp: priResp("fi0", "d2"),
-		},
-		"client req iface not found ignored": {
-			reqIface: "notreal",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expResp: priResp("notreal", "notreal"),
-		},
-		"client req iface idx malformed": {
-			reqIface: "bad1",
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expErr: errors.New("not a secondary provider"),
-		},
-		"config provider idx out of range": {
-			providerIdx: 5,
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expErr: errors.New("out of range"),
-		},
-		"malformed hint at sec provider idx": {
-			providerIdx: 2,
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expErr: errors.New("provider index"),
+			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			testFabric := &NUMAFabric{
+			if tc.numaGetter == nil {
+				tc.numaGetter = &mockNUMAProvider{
+					GetNUMANodeIDForPIDResult: 1,
+				}
+			}
+
+			if tc.mockGetAttachInfo == nil {
+				tc.mockGetAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					return testResp, nil
+				}
+			}
+
+			if tc.mockFabricScan == nil {
+				tc.mockFabricScan = func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+					return testFabric, nil
+				}
+			}
+
+			if tc.mockGetNetIfaces == nil {
+				tc.mockGetNetIfaces = func() ([]net.Interface, error) {
+					ifaces := []net.Interface{}
+					for _, dev := range testFIS.NetDevices() {
+						ifaces = append(ifaces, net.Interface{Name: dev})
+					}
+					return ifaces, nil
+				}
+			}
+
+			mod := &mgmtModule{
 				log: log,
-				numaMap: map[int][]*FabricInterface{
-					0: {
+				sys: testSys,
+				cache: newTestInfoCache(t, log, testInfoCacheParams{
+					mockGetAttachInfo: tc.mockGetAttachInfo,
+					mockScanFabric:    tc.mockFabricScan,
+				}),
+				numaGetter: tc.numaGetter,
+				devClassGetter: &hardware.MockNetDevClassProvider{
+					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
 						{
-							Name:        "fi0",
-							Domain:      "d0",
-							NetDevClass: hardware.Infiniband,
-							hw: &hardware.FabricInterface{
-								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
-							},
-						},
-						{
-							Name:        "fi0",
-							NetDevClass: hardware.Infiniband,
-							hw: &hardware.FabricInterface{
-								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
-							},
-						},
-					},
-					1: {
-						{
-							Name:        "fi1",
-							Domain:      "d1",
-							NetDevClass: hardware.Infiniband,
-							hw: &hardware.FabricInterface{
-								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
-							},
-						},
-						{
-							Name:        "fi1",
-							NetDevClass: hardware.Infiniband,
-							hw: &hardware.FabricInterface{
-								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
-							},
-						},
-						{
-							Name:        "bad1",
-							NetDevClass: hardware.Ether,
-							hw: &hardware.FabricInterface{
-								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "badidx"}),
-							},
+							NDC: hardware.Ether,
 						},
 					},
 				},
-			}
-
-			sysName := "dontcare"
-			mod := &mgmtModule{
-				log:        log,
-				sys:        sysName,
-				fabricInfo: newTestFabricCache(t, log, testFabric),
-				attachInfo: newAttachInfoCache(log, true),
-				ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
-					Sys: sysName,
-					UnaryResponse: &control.UnaryResponse{
-						Responses: []*control.HostResponse{tc.rpcResp},
+				devStateGetter: &hardware.MockNetDevStateProvider{
+					GetStateReturn: []hardware.MockNetDevStateResult{
+						{
+							State: hardware.NetDevStateReady,
+						},
 					},
-				}),
-				providerIdx: tc.providerIdx,
+				},
+				netIfaces: tc.mockGetNetIfaces,
 			}
 
-			resp, err := mod.getAttachInfo(context.Background(), tc.numaNode,
-				&mgmtpb.GetAttachInfoReq{
-					Sys:       sysName,
-					Interface: tc.reqIface,
-					Domain:    tc.reqDomain,
-				})
+			respBytes, err := mod.handleGetAttachInfo(test.Context(t), tc.reqBytes, 123)
 
 			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expResp == nil {
+				if respBytes == nil {
+					return
+				}
+				t.Fatalf("expected nil response, got bytes: %+v", respBytes)
+			}
+
+			resp := new(mgmtpb.GetAttachInfoResp)
+			err = proto.Unmarshal(respBytes, resp)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
 				mgmtpb.GetAttachInfoResp{},
 				mgmtpb.GetAttachInfoResp_RankUri{},
 				mgmtpb.ClientNetHint{},
 			)); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
+				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
 	}
-}
-
-func TestAgent_mgmtModule_getAttachInfo_cacheResp(t *testing.T) {
-	testResps := []*mgmtpb.GetAttachInfoResp{
-		{
-			MsRanks: []uint32{0, 1, 3},
-			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+tcp",
-				NetDevClass: uint32(hardware.Ether),
-			},
-		},
-		{
-			MsRanks: []uint32{0},
-			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+tcp",
-				NetDevClass: uint32(hardware.Ether),
-			},
-		},
-		{
-			MsRanks: []uint32{2, 3},
-			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+tcp",
-				NetDevClass: uint32(hardware.Ether),
-			},
-		},
-	}
-
-	hostResps := func(resps []*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
-		result := []*control.HostResponse{}
-
-		for _, r := range resps {
-			result = append(result, &control.HostResponse{
-				Message: r,
-			})
-		}
-
-		return result
-	}
-
-	testFI := fabricInterfacesFromHardware(&hardware.FabricInterface{
-		Name:          "test0",
-		NetInterfaces: common.NewStringSet("test0"),
-		DeviceClass:   hardware.Ether,
-		Providers:     testFabricProviderSet("ofi+tcp"),
-	})
-
-	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
-		withHint := new(mgmtpb.GetAttachInfoResp)
-		withHint = proto.Clone(resp).(*mgmtpb.GetAttachInfoResp)
-		withHint.ClientNetHint.Interface = testFI[0].Name
-		withHint.ClientNetHint.Domain = testFI[0].Name
-
-		return withHint
-	}
-
-	unaryResps := func(hostResps []*control.HostResponse) []*control.UnaryResponse {
-		ur := make([]*control.UnaryResponse, 0, len(hostResps))
-		for _, hr := range hostResps {
-			ur = append(ur, &control.UnaryResponse{
-				Responses: []*control.HostResponse{hr},
-			})
-		}
-		return ur
-	}
-
-	type attachInfoResult struct {
-		resp *mgmtpb.GetAttachInfoResp
-		err  error
-	}
-
-	for name, tc := range map[string]struct {
-		cacheDisabled bool
-		rpcResps      []*control.HostResponse
-		expResult     []attachInfoResult
-	}{
-		"error": {
-			rpcResps: []*control.HostResponse{
-				{
-					Error: errors.New("host response"),
-				},
-			},
-			expResult: []attachInfoResult{
-				{
-					err: errors.New("host response"),
-				},
-			},
-		},
-		"incompatible fault": {
-			rpcResps: []*control.HostResponse{
-				{
-					Error: &fault.Fault{
-						Code: code.ServerWrongSystem,
-					},
-				},
-			},
-			expResult: []attachInfoResult{
-				{
-					resp: &mgmtpb.GetAttachInfoResp{
-						Status: int32(daos.ControlIncompatible),
-					},
-				},
-			},
-		},
-		"certificate fault": {
-			rpcResps: []*control.HostResponse{
-				{
-					Error: &fault.Fault{
-						Code: code.SecurityInvalidCert,
-					},
-				},
-			},
-			expResult: []attachInfoResult{
-				{
-					resp: &mgmtpb.GetAttachInfoResp{
-						Status: int32(daos.BadCert),
-					},
-				},
-			},
-		},
-		"connection fault": {
-			rpcResps: []*control.HostResponse{
-				{
-					Error: &fault.Fault{
-						Code: code.ClientConnectionRefused,
-					},
-				},
-			},
-			expResult: []attachInfoResult{
-				{
-					resp: &mgmtpb.GetAttachInfoResp{
-						Status: int32(daos.Unreachable),
-					},
-				},
-			},
-		},
-		"cache disabled": {
-			cacheDisabled: true,
-			rpcResps:      hostResps(testResps),
-			expResult: []attachInfoResult{
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[1]),
-				},
-				{
-					resp: hintResp(testResps[2]),
-				},
-			},
-		},
-		"cache": {
-			rpcResps: hostResps(testResps),
-			expResult: []attachInfoResult{
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[0]),
-				},
-				{
-					resp: hintResp(testResps[0]),
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			sysName := "dontcare"
-			mockInvokerCfg := &control.MockInvokerConfig{
-				Sys:              sysName,
-				UnaryResponseSet: []*control.UnaryResponse{},
-			}
-
-			for _, rpcResp := range tc.rpcResps {
-				mockInvokerCfg.UnaryResponseSet = append(mockInvokerCfg.UnaryResponseSet,
-					&control.UnaryResponse{
-						Responses: []*control.HostResponse{rpcResp},
-					},
-				)
-			}
-
-			mod := &mgmtModule{
-				log: log,
-				sys: sysName,
-				fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
-					log: log,
-					numaMap: map[int][]*FabricInterface{
-						0: testFI,
-					},
-				}),
-				attachInfo: newAttachInfoCache(log, !tc.cacheDisabled),
-				ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
-					Sys:              sysName,
-					UnaryResponseSet: unaryResps(tc.rpcResps),
-				}),
-				numaGetter: &mockNUMAProvider{},
-			}
-
-			reqBytes, err := proto.Marshal(&mgmtpb.GetAttachInfoReq{
-				Sys: sysName,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			for i, exp := range tc.expResult {
-				t.Logf("iteration %d\n", i)
-				respBytes, err := mod.handleGetAttachInfo(test.Context(t), reqBytes, int32(os.Getpid()))
-
-				test.CmpErr(t, exp.err, err)
-
-				var resp mgmtpb.GetAttachInfoResp
-				if err := proto.Unmarshal(respBytes, &resp); err != nil {
-					t.Fatal(err)
-				}
-
-				if exp.resp == nil {
-					if respBytes == nil {
-						return
-					}
-					t.Fatalf("expected nil response, got:\n%+v\n", &resp)
-				}
-
-				if diff := cmp.Diff(exp.resp, &resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
-					t.Fatalf("-want, +got:\n%s", diff)
-				}
-			}
-		})
-	}
-
 }
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
@@ -616,38 +253,57 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	sysName := "dontcare"
-
-	mod := &mgmtModule{
-		log: log,
-		sys: sysName,
-		fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
-			log: log,
-			numaMap: map[int][]*FabricInterface{
-				0: fabricInterfacesFromHardware(&hardware.FabricInterface{
-					Name:          "test0",
-					NetInterfaces: common.NewStringSet("test0"),
-					DeviceClass:   hardware.Ether,
-					Providers:     testFabricProviderSet("ofi+tcp"),
-				}),
-			},
-		}),
-		attachInfo: newAttachInfoCache(log, true),
-		ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
-			Sys: sysName,
-			UnaryResponse: &control.UnaryResponse{
-				Responses: []*control.HostResponse{
-					{
-						Message: &mgmtpb.GetAttachInfoResp{
-							MsRanks: []uint32{0, 1, 3},
-							ClientNetHint: &mgmtpb.ClientNetHint{
-								Provider:    "ofi+tcp",
-								NetDevClass: uint32(hardware.Ether),
-							},
+	ctlInvoker := control.NewMockInvoker(log, &control.MockInvokerConfig{
+		Sys: sysName,
+		UnaryResponse: &control.UnaryResponse{
+			Responses: []*control.HostResponse{
+				{
+					Message: &mgmtpb.GetAttachInfoResp{
+						MsRanks: []uint32{0, 1, 3},
+						ClientNetHint: &mgmtpb.ClientNetHint{
+							Provider:    "ofi+tcp",
+							NetDevClass: uint32(hardware.Ether),
 						},
 					},
 				},
 			},
-		}),
+		},
+	})
+	ic := newTestInfoCache(t, log, testInfoCacheParams{
+		ctlInvoker: ctlInvoker,
+		mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+			fis := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+				Name:          "test0",
+				NetInterfaces: common.NewStringSet("test0"),
+				Providers:     testFabricProviderSet("ofi+tcp"),
+				DeviceClass:   hardware.Ether,
+			})
+			nf := NUMAFabricFromScan(test.Context(t), log, fis)
+			nf.getAddrInterface = mockGetAddrInterface
+			return nf, nil
+		},
+		mockGetAttachInfo: control.GetAttachInfo,
+	})
+
+	mod := &mgmtModule{
+		log:        log,
+		sys:        sysName,
+		cache:      ic,
+		ctlInvoker: ctlInvoker,
+		devClassGetter: &hardware.MockNetDevClassProvider{
+			GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+				{
+					NDC: hardware.Ether,
+				},
+			},
+		},
+		devStateGetter: &hardware.MockNetDevStateProvider{
+			GetStateReturn: []hardware.MockNetDevStateResult{
+				{
+					State: hardware.NetDevStateReady,
+				},
+			},
+		},
 	}
 
 	var wg sync.WaitGroup
@@ -834,6 +490,53 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getInfoCache func(logging.Logger) *InfoCache
+		expErr       error
+	}{
+		"nil cache": {
+			getInfoCache: func(_ logging.Logger) *InfoCache { return nil },
+			expErr:       errors.New("nil"),
+		},
+		"caches disabled": {
+			getInfoCache: func(log logging.Logger) *InfoCache {
+				return newTestInfoCache(t, log, testInfoCacheParams{
+					disableFabricCache:     true,
+					disableAttachInfoCache: true,
+				})
+			},
+			expErr: errors.New("disabled"),
+		},
+		"nothing cached": {
+			getInfoCache: func(log logging.Logger) *InfoCache {
+				return newTestInfoCache(t, log, testInfoCacheParams{
+					mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+						return nil, errors.New("shouldn't call getAttachInfo")
+					},
+					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+						return nil, errors.New("shouldn't call fabric scan")
+					},
+				})
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log:   log,
+				cache: tc.getInfoCache(log),
+			}
+
+			err := mod.RefreshCache(test.Context(t))
+
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
