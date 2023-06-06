@@ -18,7 +18,7 @@ size_t ctl__bio_health_req__get_packed_size
                      (const Ctl__BioHealthReq *message)
 {
   assert(message->base.descriptor == &ctl__bio_health_req__descriptor);
- return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+  return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
 }
 size_t ctl__bio_health_req__pack
                      (const Ctl__BioHealthReq *message,

@@ -6,8 +6,6 @@ git config --global --add safe.directory /github/workspace
 echo "Applying code formatting"
 git-clang-format "${INPUT_TARGET}"
 
-git diff
-
 echo "Reverting any suggestions made to generated files"
 # Now revert any changes to auto-generated files.
 find . -name "*.pb-c.c" -exec git checkout --quiet ./'{}' \;
