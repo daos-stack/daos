@@ -442,6 +442,17 @@ func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
 	}
 }
 
+// Addresses returns a hardware.PCIAddressSet pointer to controller addresses.
+func (ncs *NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
+	pas := hardware.MustNewPCIAddressSet()
+	for _, c := range *ncs {
+		if err := pas.AddStrings(c.PciAddr); err != nil {
+			return nil, err
+		}
+	}
+	return pas, nil
+}
+
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
 type NvmeAioDevice struct {
 	Path string `json:"path"`

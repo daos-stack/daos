@@ -21,24 +21,17 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// getVMD returns VMD endpoint address when provided string is a VMD backing device PCI address.
-// If the input string is not a VMD backing device PCI address, hardware.ErrNotVMDBackingAddress
-// is returned.
-func getVMD(inAddr string) (*hardware.PCIAddress, error) {
-	addr, err := hardware.NewPCIAddress(inAddr)
-	if err != nil {
-		return nil, errors.Wrap(err, "controller pci address invalid")
-	}
-
-	return addr.BackingToVMDAddress()
-}
-
 // mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
 func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storage.NvmeControllers, error) {
 	vmds := make(map[string]storage.NvmeControllers)
 
 	for _, ctrlr := range foundCtrlrs {
-		vmdAddr, err := getVMD(ctrlr.PciAddr)
+		addr, err := hardware.NewPCIAddress(ctrlr.PciAddr)
+		if err != nil {
+			return nil, errors.Wrap(err, "controller pci address invalid")
+		}
+
+		vmdAddr, err := addr.BackingToVMDAddress()
 		if err != nil {
 			if err == hardware.ErrNotVMDBackingAddress {
 				continue
@@ -61,8 +54,13 @@ func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storag
 func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hardware.PCIAddressSet, error) {
 	vmds := make(map[string]*hardware.PCIAddressSet)
 
-	for _, ctrlr := range foundCtrlrs {
-		vmdAddr, err := getVMD(ctrlr.PciAddr)
+	ctrlrAddrs, err := foundCtrlrs.Addresses()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range ctrlrAddrs.Addresses() {
+		vmdAddr, err := addr.BackingToVMDAddress()
 		if err != nil {
 			if err == hardware.ErrNotVMDBackingAddress {
 				continue
@@ -75,7 +73,7 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 		}
 
 		// add backing device address to vmd address key in map
-		if err := vmds[vmdAddr.String()].AddStrings(ctrlr.PciAddr); err != nil {
+		if err := vmds[vmdAddr.String()].Add(addr); err != nil {
 			return nil, err
 		}
 	}
