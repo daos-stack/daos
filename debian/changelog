@@ -1,8 +1,14 @@
-daos (2.3.107-8) unstable; urgency=medium
+daos (2.5.100-2) unstable; urgency=medium
   [ Wang Shilong ]
   * Remove lmdb-devel for MD on SSD
 
  -- Wang Shilong <shilong.wang@intel.com> Wed,  7 Jun 2023 07:58:00 -0600
+
+daos (2.5.100-1) unstable; urgency=medium
+    [ Jeff Olivier ]
+    * Bump release to 2.5.100
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 06 Jun 2023 16:40:00 -0600
 
 daos (2.3.107-7) unstable; urgency=medium
   [ Jerome Soumagne ]
