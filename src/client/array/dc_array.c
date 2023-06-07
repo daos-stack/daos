@@ -1858,7 +1858,7 @@ struct key_query_props {
 	char			akey_val;
 	daos_recx_t		recx;
 	daos_size_t		*size;
-	daos_size_t		max_epoch;
+	daos_epoch_t		max_epoch;
 	tse_task_t		*ptask;
 };
 
@@ -1867,8 +1867,7 @@ free_query_cb(tse_task_t *task, void *data)
 {
 	struct key_query_props *props = *((struct key_query_props **)data);
 
-	if (props->array)
-		array_decref(props->array);
+	array_decref(props->array);
 	D_FREE(props);
 	return 0;
 }
@@ -1942,7 +1941,7 @@ dc_array_get_size(tse_task_t *task)
 	query_args->dkey	= &kqp->dkey;
 	query_args->akey	= &kqp->akey;
 	query_args->recx	= &kqp->recx;
-	query_args->max_epoch	= NULL;
+	query_args->max_epoch	= &kqp->max_epoch;
 
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
