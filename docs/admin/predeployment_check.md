@@ -30,7 +30,7 @@ $ sudo reboot
 
 !!! note
     To force SPDK to use UIO rather than VFIO at daos_server runtime, set
-    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
 !!! warning
@@ -153,7 +153,7 @@ All those parameters can be made persistent in /etc/sysctl.conf by adding a new
 sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
-For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
+For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/release/2.4/Documentation/librdmacm.md)
 
 ### Firewall
 
@@ -305,9 +305,9 @@ failures.
 
 For RPM installations, the `daos_server` and `daos_agent` services will typically be
 launched by `systemd` and its `LimitMEMLOCK` limit is set to `infinity` in the
-[`daos_server.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+[`daos_server.service`](https://github.com/daos-stack/daos/blob/release/2.4/utils/systemd/daos_server.service)
 and
-[`daos_agent.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_agent.service)
+[`daos_agent.service`](https://github.com/daos-stack/daos/blob/release/2.4/utils/systemd/daos_agent.service)
 unit files.
 (Note that values set in `/etc/security/limits.conf` are ignored by services
 launched through `systemd`.)

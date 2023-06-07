@@ -87,6 +87,6 @@ After UCX support has been enabled by installing the `mercury-ucx`
 package, the network provider must be changed in the DAOS server's
 configuration file (`/etc/daos/daos_server.yml`).
 A sample YML file is available on
-[github](https://github.com/daos-stack/daos/blob/master/utils/config/examples/daos_server_ucx.yml).
+[github](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/examples/daos_server_ucx.yml).
 The recommended setting for UCX is `provider: ucx+dc_x`.
 
