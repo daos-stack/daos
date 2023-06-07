@@ -683,11 +683,13 @@ discover_dfuse(void)
 	endmntent(fp);
 }
 
+#define NAME_LEN 128
+
 static int
 retrieve_handles_from_fuse(int idx)
 {
 	struct dfuse_hs_reply hs_reply;
-	int                   fd, cmd, rc, errno_saved;
+	int                   fd, cmd, rc, errno_saved, read_size;
 	d_iov_t               iov = {};
 	char                  *buff = NULL;
 	size_t                buff_size;
@@ -720,14 +722,52 @@ retrieve_handles_from_fuse(int idx)
 	}
 
 	iov.iov_buf = buff;
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
-	rc  = ioctl(fd, cmd, iov.iov_buf);
-	if (rc != 0) {
-		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to query pool handle from dfuse with ioctl(): %d (%s)\n",
-			errno_saved, strerror(errno_saved));
-		goto err;
+
+	/* Max size of ioctl is 16k */
+	if (hs_reply.fsr_pool_size < (16 * 1024)) {
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH,
+			   hs_reply.fsr_pool_size);
+		rc  = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY,
+				"failed to query pool handle from dfuse with ioctl(): %d (%s)\n",
+				errno_saved, strerror(errno_saved));
+			goto err;
+		}
+	} else {
+		char fname[NAME_LEN];
+		FILE *tmp_file;
+
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
+		errno = 0;
+		rc = ioctl(fd, cmd, fname);
+		if (rc != 0) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY, "ioctl call on %d failed: %d (%s)\n", fd, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
+		errno = 0;
+		tmp_file = fopen(fname, "rb");
+		if (tmp_file == NULL) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY, "fopen(%s) failed: %d (%s)\n", fname, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
+		read_size = fread(iov.iov_buf, 1, hs_reply.fsr_pool_size, tmp_file);
+		fclose(tmp_file);
+		unlink(fname);
+		if (read_size != hs_reply.fsr_pool_size) {
+			errno_saved = EAGAIN;
+			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
+				hs_reply.fsr_pool_size, read_size, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
 	}
+
 	iov.iov_buf_len = hs_reply.fsr_pool_size;
 	iov.iov_len     = iov.iov_buf_len;
 	rc              = daos_pool_global2local(iov, &dfs_list[idx].poh);
