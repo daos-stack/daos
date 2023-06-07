@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -556,6 +556,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jun  7 2023 Wang Shilong <shilong.wang@intel.com> 2.3.107-8
+- Remove lmdb-devel for MD on SSD
+
 * Mon Jun  5 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-7
 - Remove libfabric pinning and allow for 1.18 builds
 
