@@ -1141,8 +1141,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 		return -1;		/* nothing doing */
 	facno = 0;		/* make sure it gets init'd */
 	rv = 0;
-	tmp = 0;
-	reset_caches(false);
+	tmp   = 0;
 	while (m) {
 		/* note current chunk, and advance m to the next one */
 		current = m;
@@ -1243,6 +1242,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 			}
 		}
 	}
+	reset_caches(false);
 	return rv;
 }
 
