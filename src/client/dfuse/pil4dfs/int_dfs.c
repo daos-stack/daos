@@ -116,9 +116,9 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
-static void
+static int
 discover_daos_mount(void);
-static void
+static int
 discover_dfuse(void);
 static int
 retrieve_handles_from_fuse(int idx);
@@ -573,59 +573,64 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
-static void
+static int
 discover_daos_mount(void)
 {
-	int   idx, len_fs_root;
+	int   idx, len_fs_root, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
 	/* Find the list of dfuse from /proc/mounts */
-	discover_dfuse();
+	rc = discover_dfuse();
+	if (rc)
+		D_DEBUG(DB_ANY, "discover_dfuse() failed: %d (%s)\n", rc, strerror(rc));
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
-		return;
+		goto out;
 
 	if (num_dfs >= MAX_DAOS_MT) {
 		D_WARN("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
-		return;
+		goto out;
 	}
 
 	if (access(fs_root, R_OK)) {
 		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
 			strerror(errno));
-		return;
+		goto out;
 	}
 
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		return;
+		goto out;
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
-		return;
+		goto out;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
-		return;
+		goto out;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
-		return;
+		goto out;
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
-	if (dfs_list[num_dfs].fs_root == NULL)
-		return;
+	if (dfs_list[num_dfs].fs_root == NULL) {
+		if (num_dfs == 0 && rc == 0)
+			rc = ENOMEM;
+		goto out;
+	}
 
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
@@ -633,12 +638,22 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
+
+out:
+	if (num_dfs == 0) {
+		D_DEBUG(DB_ANY, "There is no any DFS mount point found.\n");
+		if (rc != 0)
+			return rc;
+	}
+
+	return 0;
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
-static void
+static int
 discover_dfuse(void)
 {
+	int            rc;
 	FILE          *fp;
 	struct mntent *fs_entry;
 	struct dfs_mt *pt_dfs_mt;
@@ -648,8 +663,9 @@ discover_dfuse(void)
 	fp = setmntent("/proc/self/mounts", "r");
 
 	if (fp == NULL) {
+		rc = errno;
 		D_ERROR("failed to open /proc/self/mounts: %d (%s)\n", errno, strerror(errno));
-		return;
+		return rc;
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
@@ -681,6 +697,7 @@ discover_dfuse(void)
 	}
 
 	endmntent(fp);
+	return 0;
 }
 
 static int
