@@ -159,7 +159,8 @@ func Test_Convert_SmdDevice(t *testing.T) {
 	}
 	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","tgt_ids":[5,6,7,8],` +
 		`"dev_state":"EVICTED","led_state":"ON","rank":0,"total_bytes":0,"avail_bytes":0,` +
-		`"cluster_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
+		`"usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"rdb_size":0,` +
+		`"rdb_wal_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
 		`"has_sys_xs":true}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to be human readable (-want, +got):\n%s\n", diff)

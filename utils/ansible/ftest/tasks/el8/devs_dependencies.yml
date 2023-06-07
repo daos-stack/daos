@@ -10,7 +10,7 @@
 - name: Install DAOS building dependencies
   remote_user: root
   command:
-    dnf builddep -y "{{ playbook_dir }}/file/daos.spec"
+    dnf builddep --nobest --assumeyes "{{ playbook_dir }}/file/daos.spec"
   args:
     warn: false
   register: dnf_result
