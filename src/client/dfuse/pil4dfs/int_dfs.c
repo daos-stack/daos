@@ -640,13 +640,10 @@ discover_daos_mount(void)
 	num_dfs++;
 
 out:
-	if (num_dfs == 0) {
+	if (num_dfs == 0)
 		D_DEBUG(DB_ANY, "There is no any DFS mount point found.\n");
-		if (rc != 0)
-			return rc;
-	}
 
-	return 0;
+	return rc;
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
