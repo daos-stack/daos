@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -80,13 +81,34 @@ type mockDrpcCall struct {
 	Body   []byte
 }
 
+func (c *mockDrpcCall) String() string {
+	return fmt.Sprintf("%s: (%v)", c.Method, c.Body)
+}
+
+type mockDrpcCalls struct {
+	sync.RWMutex
+	calls []*mockDrpcCall
+}
+
+func (c *mockDrpcCalls) add(call *mockDrpcCall) {
+	c.Lock()
+	defer c.Unlock()
+	c.calls = append(c.calls, call)
+}
+
+func (c *mockDrpcCalls) get() []*mockDrpcCall {
+	c.RLock()
+	defer c.RUnlock()
+	return c.calls
+}
+
 // mockDrpcClient is a mock of the DomainSocketClient interface
 type mockDrpcClient struct {
 	sync.Mutex
 	cfg              mockDrpcClientConfig
 	CloseCallCount   int
 	SendMsgInputCall *drpc.Call
-	calls            []*mockDrpcCall
+	calls            mockDrpcCalls
 }
 
 func (c *mockDrpcClient) IsConnected() bool {
@@ -106,7 +128,7 @@ func (c *mockDrpcClient) Close() error {
 }
 
 func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
-	for _, call := range c.calls {
+	for _, call := range c.calls.get() {
 		methods = append(methods, call.Method)
 	}
 	return
@@ -118,12 +140,12 @@ func (c *mockDrpcClient) SendMsg(_ context.Context, call *drpc.Call) (*drpc.Resp
 	if err != nil {
 		return nil, err
 	}
-	c.calls = append(c.calls, &mockDrpcCall{method, call.Body})
+	c.calls.add(&mockDrpcCall{method, call.Body})
 
 	<-time.After(c.cfg.ResponseDelay)
 
 	if len(c.cfg.SendMsgResponseList) > 0 {
-		idx := len(c.calls) - 1
+		idx := len(c.calls.get()) - 1
 		if idx < 0 {
 			idx = 0
 		}
@@ -201,7 +223,7 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
 	srv := newTestEngine(log, true, provider)
 
@@ -212,7 +234,11 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 
 	db := raft.MockDatabase(t, log)
 	ms := system.MockMembership(t, log, db, mockTCPResolver)
-	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(test.Context(t), log))
+	ctx := test.Context(t)
+	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
+	svc.batchInterval = 100 * time.Microsecond // Speed up tests
+	svc.startAsyncLoops(ctx)
+	return svc
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -220,7 +246,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
 	for i := 0; i < count; i++ {
 		srv := newTestEngine(log, i == 0 && isAP, provider)

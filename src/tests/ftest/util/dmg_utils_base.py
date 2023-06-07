@@ -226,6 +226,8 @@ class DmgCommandBase(YamlCommand):
                 self.net_class = FormattedParameter("--net-class={}", None)
                 self.net_provider = FormattedParameter("--net-provider={}", None)
                 self.use_tmpfs_scm = FormattedParameter("--use-tmpfs-scm", False)
+                self.control_metadata_path = FormattedParameter(
+                    "--control-metadata-path={}", None)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
@@ -507,8 +509,12 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg server set-logmasks command object."""
                 super().__init__("/run/dmg/server/set-logmasks/*", "set-logmasks")
                 # Set log masks for a set of facilities to a given level.
-                # Syntax is identical to the 'D_LOG_MASK' environment variable.
-                self.masks = FormattedParameter("{}", None)
+                # Masks syntax is identical to the 'D_LOG_MASK' environment variable.
+                self.masks = FormattedParameter("-m {}", None)
+                # Streams syntax is identical to the 'DD_MASK' environment variable.
+                self.streams = FormattedParameter("-d {}", None)
+                # Subsystems syntax is identical to the 'DD_SUBSYS' environment variable.
+                self.subsystems = FormattedParameter("-s {}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,26 +33,22 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	if cfg == nil {
-		cfg = config.DefaultServer().WithEngines(
-			engine.MockConfig().WithTargetCount(1),
-		)
+		cfg = config.DefaultServer().WithEngines(engine.MockConfig().WithTargetCount(1))
 	}
 
 	// share sys provider between engines to be able to access to same mock config data
-	sp := system.NewMockSysProvider(log, smsc)
-	mounter := mount.NewProvider(log, sp)
+	sysProv := system.NewMockSysProvider(log, smsc)
+	mounter := mount.NewProvider(log, sysProv)
+	scmProv := scm.NewProvider(log, scm.NewMockBackend(smbc), sysProv, mounter)
+	bdevProv := bdev.NewMockProvider(log, bmbc)
 
-	ctx := test.Context(t)
+	mscs := NewMockStorageControlService(log, cfg.Engines, sysProv, scmProv, bdevProv, nil)
+
 	cs := &ControlService{
-		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-			sp,
-			scm.NewProvider(log, scm.NewMockBackend(smbc), sp, mounter),
-			bdev.NewMockProvider(log, bmbc)),
-		harness: &EngineHarness{
-			log: log,
-		},
-		events: events.NewPubSub(ctx, log),
-		srvCfg: cfg,
+		StorageControlService: *mscs,
+		harness:               &EngineHarness{log: log},
+		events:                events.NewPubSub(test.Context(t), log),
+		srvCfg:                cfg,
 	}
 
 	for idx, ec := range cfg.Engines {
@@ -61,11 +57,10 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			trc.Running.SetTrue()
 		}
 		runner := engine.NewTestRunner(trc, ec)
+		storProv := storage.MockProvider(log, 0, &ec.Storage, sysProv, scmProv, bdevProv,
+			nil)
 
-		sp := storage.MockProvider(log, 0, &ec.Storage, sp,
-			scm.NewProvider(log, scm.NewMockBackend(smbc), sp, mounter),
-			bdev.NewMockProvider(log, bmbc))
-		ei := NewEngineInstance(log, sp, nil, runner)
+		ei := NewEngineInstance(log, storProv, nil, runner)
 		ei.setSuperblock(&Superblock{
 			Rank: ranklist.NewRankPtr(uint32(idx)),
 		})
@@ -75,19 +70,6 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		if err := cs.harness.AddInstance(ei); err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	return cs
-}
-
-func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *system.MockSysConfig) *ControlService {
-	cs := mockControlService(t, log, cfg, bmbc, smbc, smsc)
-
-	// don't set a superblock and init with a stopped test runner
-	for i, e := range cs.harness.instances {
-		ei := e.(*EngineInstance)
-		ei.setSuperblock(nil)
-		ei.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}
 
 	return cs

@@ -28,6 +28,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -192,7 +193,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
-			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
+			sp := storage.NewProvider(log, 0, nil, nil, nil, nil, nil)
 			srv := newTestEngine(log, true, sp)
 
 			if err := harness.AddInstance(srv); err != nil {
@@ -1902,7 +1903,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
@@ -1912,9 +1913,10 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status: 0,
-				Rank:   curMember.Rank.Uint32(),
-				State:  mgmtpb.JoinResp_IN,
+				Status:     0,
+				Rank:       curMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				MapVersion: 2,
 			},
 		},
 		"rejoining host; NilRank": {
@@ -1924,7 +1926,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
@@ -1934,9 +1936,10 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status: 0,
-				Rank:   curMember.Rank.Uint32(),
-				State:  mgmtpb.JoinResp_IN,
+				Status:     0,
+				Rank:       curMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				MapVersion: 2,
 			},
 		},
 		"new host (non local)": {
@@ -1945,7 +1948,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
@@ -1956,10 +1959,11 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status:    0,
-				Rank:      newMember.Rank.Uint32(),
-				State:     mgmtpb.JoinResp_IN,
-				LocalJoin: false,
+				Status:     0,
+				Rank:       newMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				LocalJoin:  false,
+				MapVersion: 2,
 			},
 		},
 		"new host (local)": {
@@ -1970,7 +1974,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
-				MapVersion: 2,
+				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
@@ -1981,10 +1985,11 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status:    0,
-				Rank:      newMember.Rank.Uint32(),
-				State:     mgmtpb.JoinResp_IN,
-				LocalJoin: true,
+				Status:     0,
+				Rank:       newMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				LocalJoin:  true,
+				MapVersion: 2,
 			},
 		},
 	} {
@@ -1998,9 +2003,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			curCopy.Rank = ranklist.NilRank // ensure that db.data.NextRank is incremented
 
 			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
-
-			ctx := test.Context(t)
-			svc.startBatchLoops(ctx)
 
 			if tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -2027,11 +2029,9 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			peerCtx := peer.NewContext(ctx, &peer.Peer{Addr: peerAddr})
+			peerCtx := peer.NewContext(test.Context(t), &peer.Peer{Addr: peerAddr})
 
 			setupMockDrpcClient(svc, tc.guResp, nil)
-			ei := svc.harness.instances[0].(*EngineInstance)
-			mdc := ei._drpcClient.(*mockDrpcClient)
 
 			gotResp, gotErr := svc.Join(peerCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -2039,8 +2039,28 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				return
 			}
 
+			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			if tc.expGuReq == nil {
+				return
+			}
+
+			ei := svc.harness.instances[0].(*EngineInstance)
+			mdc := ei._drpcClient.(*mockDrpcClient)
 			gotGuReq := new(mgmtpb.GroupUpdateReq)
-			if err := proto.Unmarshal(mdc.calls[len(mdc.calls)-1].Body, gotGuReq); err != nil {
+			calls := mdc.calls.get()
+			// wait for GroupUpdate
+			for ; ; calls = mdc.calls.get() {
+				if len(calls) == 0 {
+					continue
+				}
+				if calls[len(calls)-1].Method == drpc.MethodGroupUpdate {
+					break
+				}
+			}
+			if err := proto.Unmarshal(calls[len(calls)-1].Body, gotGuReq); err != nil {
 				t.Fatal(err)
 			}
 			cmpOpts := cmp.Options{
@@ -2049,10 +2069,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

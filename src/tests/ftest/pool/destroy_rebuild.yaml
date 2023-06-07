@@ -17,14 +17,9 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 134217728
   control_method: dmg
   pool_query_timeout: 30
   svcn: 7
-testparams:
-  rank_to_kill:
-    - 0
-    - 1
-    - 4

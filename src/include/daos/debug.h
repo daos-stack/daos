@@ -108,6 +108,8 @@ enum {
 	IOBP_NVME		= (1 << 3),
 	/** bypass bulk handle cache */
 	IOBP_SRV_BULK_CACHE	= (1 << 4),
+	/** bypass WAL commit */
+	IOBP_WAL_COMMIT		= (1 << 5),
 };
 
 /**
@@ -121,6 +123,7 @@ enum {
 #define IOBP_ENV_TARGET		"target"
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
+#define IOBP_ENV_WAL_COMMIT	"wal_commit"
 
 extern unsigned int daos_io_bypass;
 

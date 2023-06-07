@@ -412,6 +412,38 @@ any `--nsvc` options. This property cannot yet be changed afterward.
 See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
+### Properties for Controlling Checkpoints (Metadata on SSD only)
+
+Checkpointing is a background process that flushes VOS metadata from the ephemeral
+copy to the metadata blob storing the VOS file, enabling Write Ahead Log (WAL) space
+to be reclaimed.  These properties are available to allow a user experiment with
+timing of checkpointing.  They are experimental and may be removed in future versions
+of DAOS.
+
+#### Checkpoint policy (checkpoint)
+
+This property controls how checkpoints are triggered for each target.  When enabled,
+checkpointing will always trigger if there is space pressure in the WAL. There are
+three supported options:
+
+* "timed"       : Checkpointing is also triggered periodically (default option).
+* "lazy"        : Checkpointing is only triggered when there is WAL space pressure.
+* "disabled"    : Checkpointing is disabled.  WAL space may be exhausted.
+
+#### Checkpoint frequency (checkpoint\_freq)
+
+This property controls how often checkpoints are triggered. It is only relevant
+if the checkpoint policy is "timed". The value is specified in seconds in the
+range [1, 1000000] with a default of 5.  Values outside the range are
+automatically adjusted.
+
+#### Checkpoint threshold (checkpoint\_thresh)
+
+This property controls the percentage of WAL usage to automatically trigger a checkpoint.
+It is not relevant when the checkpoint policy is "disabled". The value is specified
+as a percentage in the range [10-75] with a default of 50. Values outside the range are
+automatically adjusted.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
@@ -596,6 +628,8 @@ This allows the drained entity to continue to perform I/O while the rebuild
 operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
+Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
+it will return -DER_BUSY.
 
 To drain a target from a pool:
 
@@ -615,6 +649,8 @@ and reintegrate the affected engines or targets to restore the pool to its
 original state.
 The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire engine rank by omitting the list.
+Reintegrate operation is not allowed if there are other ongoing rebuild operations,
+otherwise it will return -DER_BUSY.
 
 ```
 $ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
@@ -665,6 +701,8 @@ An operator can choose to extend a pool to include ranks not currently in the
 pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
+Extend operation is not allowed if there are other ongoing rebuild operations,
+otherwise it will return -DER_BUSY.
 
 ```
 $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -43,6 +44,7 @@ runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
 disable_caching: true
+cache_expiration: 30
 disable_auto_evict: true
 transport_config:
   allow_insecure: true
@@ -128,6 +130,7 @@ transport_config:
 				LogFile:          "/home/frodo/logfile",
 				LogLevel:         common.ControlLogLevelDebug,
 				DisableCache:     true,
+				CacheExpiration:  refreshMinutes(30 * time.Minute),
 				DisableAutoEvict: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,

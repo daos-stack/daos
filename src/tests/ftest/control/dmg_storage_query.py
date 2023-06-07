@@ -4,12 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import re
+
 import avocado
 
 from control_test_base import ControlTestBase
 from dmg_utils import get_storage_query_pool_info, get_storage_query_device_info
 from exception_utils import CommandFailure
-from general_utils import list_to_str
+from general_utils import list_to_str, dict_to_str
 
 
 class DmgStorageQuery(ControlTestBase):
@@ -22,11 +24,31 @@ class DmgStorageQuery(ControlTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for dmg storage query."""
-        super().setUp()
-        self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
-        self.targets = self.server_managers[-1].get_config_value("targets")
+    def get_bdev_info(self):
+        """Get information about the server storage bdev configuration.
+
+        Returns:
+            list: a list of dictionaries including information for each bdev device included in the
+                storage configuration
+        """
+        targets = self.server_managers[-1].get_config_value('targets')
+        bdev_tiers = 0
+        bdev_info = []
+        for engine in self.server_managers[-1].manager.job.yaml.engine_params:
+            for index, tier in enumerate(engine.storage.storage_tiers):
+                if tier.storage_class.value == 'nvme':
+                    bdev_tiers += 1
+                    for item, device in enumerate(tier.bdev_list.value):
+                        bdev_info.append(
+                            {'bdev': device,
+                             'roles': ','.join(tier.bdev_roles.value or []),
+                             'tier': index,
+                             'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
+
+        self.log.info('Detected NVMe devices in config')
+        for bdev in bdev_info:
+            self.log.info('  %s', dict_to_str(bdev, items_joiner=':'))
+        return bdev_info
 
     def check_dev_state(self, device_info, state):
         """Check the state of the device.
@@ -48,7 +70,7 @@ class DmgStorageQuery(ControlTestBase):
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_devices(self):
         """
-        JIRA ID: DAOS-3925
+        JIRA ID: DAOS-3925, DAOS-13011
 
         Test Description: Test 'dmg storage query list-devices' command.
 
@@ -57,19 +79,49 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
+        self.log_step('Determining server storage config')
+        expected_bdev_info = self.get_bdev_info()
+
         # Get the storage device information, parse and check devices info
         device_info = get_storage_query_device_info(self.dmg)
 
         # Check if the number of devices match the config
-        msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(device_info), msg)
+        self.log_step('Verify storage device count')
+        if len(expected_bdev_info) != len(device_info):
+            self.fail(
+                'Number of devices ({}) do not match server config ({})'.format(
+                    len(device_info), len(expected_bdev_info)))
 
         # Check that number of targets match the config
-        targets = 0
+        self.log_step('Verify storage device targets and roles')
+        errors = 0
         for device in device_info:
-            targets += len(device['tgt_ids'])
-        if self.targets != targets:
-            self.fail("Wrong number of targets found: {}".format(targets))
+            self.log.info('Verifying device %s', device['tr_addr'])
+            messages = []
+            for bdev in expected_bdev_info:
+                # Convert the bdev address (e.g., '0000:85:05.5') to a VMD-style tr_addr (e.g.,
+                # '850505:') by splitting the bdev address on either ':' or '.' and joining the
+                # last three elements as double digit hex characters.
+                bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
+                    *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
+                if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
+                    for key in ('tgt_ids', 'roles'):
+                        messages.append(
+                            '{}:   detected={}, expected={}'.format(key, device[key], bdev[key]))
+                        if device[key] != bdev[key]:
+                            messages[-1] += ' <= ERROR'
+                            errors += 1
+            if not messages:
+                bdev_ids = list(bdev['bdev'] for bdev in expected_bdev_info)
+                messages.append('No match found in storage config: {} <= ERROR'.format(bdev_ids))
+                errors += 1
+
+        for message in messages:
+            self.log.info('  %s', message)
+
+        if errors:
+            self.fail('Errors detected verifying storage devices: {}'.format(errors))
+        self.log.info('Test passed')
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):
@@ -83,6 +135,8 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
+        targets = self.server_managers[-1].get_config_value('targets')
+
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
@@ -96,15 +150,15 @@ class DmgStorageQuery(ControlTestBase):
                     "Incorrect pool UUID for %s: detected=%s", str(self.pool), pool['uuid'])
                 errors += 1
                 continue
-            if self.targets != len(pool['tgt_ids']):
+            if targets != len(pool['tgt_ids']):
                 self.log.info(
                     "Incorrect number of targets for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['tgt_ids']), self.targets)
+                    str(self.pool), len(pool['tgt_ids']), targets)
                 errors += 1
-            if self.targets != len(pool['blobs']):
+            if targets != len(pool['blobs']):
                 self.log.info(
                     "Incorrect number of blobs for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['blobs']), self.targets)
+                    str(self.pool), len(pool['blobs']), targets)
                 errors += 1
         if errors:
             self.fail(

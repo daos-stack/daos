@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,9 +16,15 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 message SetLogMasksReq {
 	string sys = 1; // DAOS system name
 	string masks = 2; // set log masks for a set of facilities to a given level
+	string streams = 3; // enable specific set of debug streams to log
+	string subsystems = 4; // enable logging of specific subsystems
+	bool reset_masks = 5; // reset log-masks to engine log_mask value in config
+	bool reset_streams = 6; // reset debug-streams to DD_MASK env value in config
+	bool reset_subsystems = 7; // reset enabled-subsystems to DD_SUBSYS env value in config
 }
 
 // SetEngineLogMasksResp returns results of attempts to set engine log masks.
 message SetLogMasksResp {
-	int32 status = 1; // DAOS error code
+	int32 status = 1; // DAOS error code returned from dRPC
+	repeated string errors = 2; // per-instance error strings
 }
