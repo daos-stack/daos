@@ -166,7 +166,7 @@ class DaosServerManager(SubprocessManager):
             NodeSet: the hosts running the management service
 
         """
-        return NodeSet(self.get_config_value('access_points'))
+        return NodeSet.fromlist(self.get_config_value('access_points'))
 
     @property
     def management_service_ranks(self):
