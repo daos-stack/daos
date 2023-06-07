@@ -422,9 +422,16 @@ class DmgCommand(DmgCommandBase):
         #                   "rank": 0,
         #                   "total_bytes": 398358216704,
         #                   "avail_bytes": 0,
+        #                   "usable_bytes": 0
         #                   "cluster_size": 1073741824,
+        #                   "meta_size": 0,
+        #                   "meta_wal_size": 0,
+        #                   "rdb_size": 134217728,
+        #                   "rdb_wal_size": 268435456,
         #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0"
+        #                   "tr_addr": "0000:05:00.0",
+        #                   "roles": "data",
+        #                   "has_sys_xs": false
         #                 }
         #               ]
         #             }
@@ -444,6 +451,7 @@ class DmgCommand(DmgCommandBase):
         #                 "path": "/mnt/daos",
         #                 "total_bytes": 17179869184,
         #                 "avail_bytes": 0
+        #                 "usable_bytes": 0
         #               }
         #             }
         #           ],
