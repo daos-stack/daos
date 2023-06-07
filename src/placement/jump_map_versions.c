@@ -195,7 +195,7 @@ static void
 __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 		struct pool_target **target, uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_full,
 		uint8_t *dom_cur_grp_used, uint8_t *tgts_used, int shard_num,
-		bool exclude_new, pool_comp_type_t fdom_lvl)
+		bool exclude_new, pool_comp_type_t fdom_lvl, uint32_t grp_size)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
@@ -317,9 +317,12 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 						      start_dom, end_dom, exclude_new);
 			if (range_set) {
 				if (top == -1) {
-					if (curr_pd != root_pos) {
-						/* all domains within the PD are full, ignore the
-						 * PD restrict.
+					if (curr_pd != root_pos && grp_size > 1) {
+						/* All domains within the PD are full, ignore the
+						 * PD restrict. For non-replica (grp_size 1) case,
+						 * keep the PD restrict until all targets under the
+						 * domain range has been used up (see above check
+						 * for dom_full bitmap).
 						 */
 						D_DEBUG(DB_PL, "PD[%d] all doms are full, weak the "
 							"PD restrict\n",
@@ -371,9 +374,9 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 			D_ASSERTF(isclr(dom_full, start_dom + selected_dom), "selected_dom %u\n",
 				  selected_dom);
 			/* Mark this domain as used */
-			D_DEBUG(DB_PL, "selected dom %d\n", start_dom + selected_dom);
 			if (curr_dom == curr_pd && curr_pd != root_pos)
 				setbit(dom_used, (int)(curr_dom - root_pos));
+			D_DEBUG(DB_PL, "selected dom %d\n", start_dom + selected_dom);
 			setbit(dom_used, start_dom + selected_dom);
 			setbit(dom_cur_grp_used, start_dom + selected_dom);
 			D_ASSERT(top < MAX_STACK - 1);
@@ -514,7 +517,8 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 static void
 get_target_v1(struct pool_domain *root, struct pool_domain *curr_pd, struct pool_target **target,
 	      uint64_t key, uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used,
-	      uint8_t *tgts_used, int shard_num, uint32_t allow_status, pool_comp_type_t fdom_lvl)
+	      uint8_t *tgts_used, int shard_num, uint32_t allow_status, pool_comp_type_t fdom_lvl,
+	      uint32_t grp_size)
 {
 	struct pool_target	*found = NULL;
 	bool			exclude_new = true;
@@ -531,7 +535,7 @@ get_target_v1(struct pool_domain *root, struct pool_domain *curr_pd, struct pool
 
 	while (found == NULL) {
 		__get_target_v1(root, curr_pd, &found, key, dom_used, dom_full, dom_cur_grp_used,
-				tgts_used, shard_num, exclude_new, fdom_lvl);
+				tgts_used, shard_num, exclude_new, fdom_lvl, grp_size);
 		if (found == NULL)
 			reset_dom_cur_grp_v1(root, dom_cur_grp_used, dom_full, tgts_used,
 					     exclude_new, fdom_lvl);
@@ -776,7 +780,7 @@ void
 get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layout_ver,
 	   struct pool_target **target, uint64_t key, uint8_t *dom_used, uint8_t *dom_full,
 	   uint8_t *dom_cur_grp_used, uint8_t *tgts_used, int shard_num, uint32_t allow_status,
-	   pool_comp_type_t fdom_lvl, uint32_t *spare_left, bool *spare_avail)
+	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail)
 {
 	switch(layout_ver) {
 	case 0:
@@ -791,7 +795,7 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 		break;
 	case 1:
 		get_target_v1(root, curr_pd, target, key, dom_used, dom_full, dom_cur_grp_used,
-			      tgts_used, shard_num, allow_status, fdom_lvl);
+			      tgts_used, shard_num, allow_status, fdom_lvl, grp_size);
 		if (spare_avail)
 			*spare_avail = true;
 		break;
