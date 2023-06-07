@@ -111,8 +111,10 @@ int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 /* Device health stats from nvme_stats */
 struct mgmt_bio_health {
-	struct nvme_stats		mb_dev_state;
-	uuid_t				mb_devid;
+	struct nvme_stats	mb_dev_state;
+	uuid_t			mb_devid;
+	uint64_t		mb_meta_size;
+	uint64_t		mb_rdb_size;
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
