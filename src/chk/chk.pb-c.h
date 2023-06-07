@@ -452,11 +452,22 @@ struct  _Chk__CheckReport
    */
   size_t n_act_msgs;
   char **act_msgs;
+  /*
+   * Report was generated in dryrun mode (no changes made).
+   */
+  protobuf_c_boolean         dryrun;
 };
-#define CHK__CHECK_REPORT__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&chk__check_report__descriptor) \
-    , 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL }
-
+#define CHK__CHECK_REPORT__INIT                                                                    \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&chk__check_report__descriptor)                            \
+		, 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE,                                         \
+		    CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0,                             \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,              \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,              \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,              \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,              \
+		    (char *)protobuf_c_empty_string, 0, NULL, 0, NULL, 0, NULL, 0                  \
+	}
 
 /* Chk__CheckReport methods */
 void   chk__check_report__init

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -136,15 +136,17 @@ message CheckQueryResp {
 	// can be processed in parallel, so the instance phase for different pools may
 	// be different, see CheckQueryPool::phase.
 	chk.CheckScanPhase ins_phase = 3;
+	// Dryrun indicates that the checker is running in dry-run mode (i.e. no changes made).
+	bool                    dryrun = 4;
 	// Inconsistency statistics during the phases range
 	// [CSP_PREPARE, CSP_POOL_LIST] for the whole system.
-	CheckQueryInconsist inconsistency = 4;
+	CheckQueryInconsist     inconsistency = 5;
 	// Time information for the whole system if applicable.
-	CheckQueryTime time = 5;
+	CheckQueryTime          time = 6;
 	// Per pool based query result for the phases since CSP_POOL_MBS.
-	repeated CheckQueryPool pools = 6;
+	repeated CheckQueryPool pools = 7;
 	// Inconsistency reports to be displayed
-	repeated chk.CheckReport reports = 7;
+	repeated chk.CheckReport reports = 8;
 }
 
 // For 'dmg check set-policy'

@@ -531,6 +531,7 @@ type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
+	DryRun    bool                 `json:"dryrun"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
@@ -571,6 +572,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	resp := &SystemCheckQueryResp{
 		Status:    SystemCheckStatus(pbResp.GetInsStatus()),
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
+		DryRun:    pbResp.GetDryrun(),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
 	}

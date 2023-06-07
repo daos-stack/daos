@@ -67,7 +67,7 @@ struct chk_list_pool {
 
 typedef int (*chk_query_head_cb_t)(uint32_t ins_status, uint32_t ins_phase,
 				   struct chk_statistics *inconsistency, struct chk_time *time,
-				   size_t n_pools, void *buf);
+				   size_t n_pools, bool dryrun, void *buf);
 
 typedef int (*chk_query_pool_cb_t)(struct chk_query_pool_shard *shard, uint32_t idx, void *buf);
 

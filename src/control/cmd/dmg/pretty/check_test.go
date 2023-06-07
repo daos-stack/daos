@@ -36,11 +36,12 @@ DAOS System Checker Info
   No results found.
 `,
 		},
-		"(verbose) 2 pools being checked": {
+		"(verbose) 2 pools being checked in dry-run mode": {
 			resp: &control.SystemCheckQueryResp{
 				Status:    control.SystemCheckStatusRunning,
 				ScanPhase: control.SystemCheckScanPhaseContainerList,
 				StartTime: checkTime,
+				DryRun:    true,
 				Pools: map[string]*control.SystemCheckPoolInfo{
 					"pool-1": {
 						UUID:      "pool-1",
@@ -59,6 +60,7 @@ DAOS System Checker Info
 			verbose: true,
 			expOut: `
 DAOS System Checker Info
+  NOTICE: System checker is running in dry-run mode. No changes will be made.
   Current status: RUNNING (started at: 2023-03-20T10:07:00.000-05:00)
   Current phase: CONT_LIST (Comparing container list on PS and storage nodes)
   Checking 2 pools
@@ -125,6 +127,7 @@ No reports to display.
 							Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
 							Msg:      "message 3",
 							PoolUuid: "pool-3",
+							Dryrun:   true,
 						},
 					},
 					{
@@ -142,13 +145,13 @@ No reports to display.
 			expOut: `
 DAOS System Checker Info
   Current status: COMPLETED
-  Current phase: DSP_DONE (Check completed)
+  Current phase: DONE (Check completed)
   Checked 4 pools
 
 Per-Pool Checker Info:
-  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
   Pool pool-5: 0 ranks, status: CPS_UNCHECKED, phase: CSP_PREPARE
 
 Inconsistency Reports:
@@ -164,6 +167,7 @@ Inconsistency Reports:
   Pool:       pool-2
   Resolution: TRUST_MS
 
+  Dry run:    True
   ID:         0x3
   Class:      POOL_LESS_SVC_WITHOUT_QUORUM
   Message:    message 3

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,11 +73,11 @@ out:
 }
 
 int
-chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result,
-		  d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,
-		  uuid_t *cont, char *cont_label, daos_unit_oid_t *obj,
-		  daos_key_t *dkey, daos_key_t *akey, char *msg, uint32_t option_nr,
-		  uint32_t *options, uint32_t detail_nr, d_sg_list_t *details)
+chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result, d_rank_t rank,
+		  uint32_t target, uuid_t *pool, char *pool_label, uuid_t *cont, char *cont_label,
+		  daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
+		  uint32_t option_nr, uint32_t *options, uint32_t detail_nr, d_sg_list_t *details,
+		  bool dryrun)
 {
 	Chk__CheckReport	  report = CHK__CHECK_REPORT__INIT;
 	time_t			  tm = time(NULL);
@@ -89,6 +89,7 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 	report.result = result;
 	report.rank = rank;
 	report.target = target;
+	report.dryrun = dryrun;
 
 	if (pool != NULL && !uuid_is_null(*pool)) {
 		D_ASPRINTF(report.pool_uuid, DF_UUIDF, DP_UUID(*pool));

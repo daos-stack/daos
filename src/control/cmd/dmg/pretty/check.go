@@ -69,6 +69,9 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 		return
 	}
 
+	if resp.DryRun {
+		fmt.Fprintln(out, "  NOTICE: System checker is running in dry-run mode. No changes will be made.")
+	}
 	statusMsg := fmt.Sprintf("Current status: %s", resp.Status)
 	if resp.Status > control.SystemCheckStatusInit && resp.Status < control.SystemCheckStatusCompleted {
 		statusMsg += fmt.Sprintf(" (started at: %s)", common.FormatTime(resp.StartTime))
@@ -112,6 +115,9 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 	fmt.Fprintln(out, "Inconsistency Reports:")
 	for _, report := range resp.Reports {
 		cls := control.SystemCheckFindingClass(report.Class)
+		if report.Dryrun {
+			fmt.Fprintln(iw, "Dry run:    True")
+		}
 		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
 		fmt.Fprintf(iw, "Class:      %s\n", cls)
 		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)

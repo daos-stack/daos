@@ -3064,6 +3064,7 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int				 rc;
 	int				 i;
 	bool				 skip;
+	bool                             dryrun = false;
 
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
@@ -3125,8 +3126,9 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		}
 	}
 
-	rc = head_cb(cbk->cb_ins_status, cbk->cb_phase, &cbk->cb_statistics, &cbk->cb_time,
-		     cqa->cqa_count, buf);
+	dryrun = ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN;
+	rc     = head_cb(cbk->cb_ins_status, cbk->cb_phase, &cbk->cb_statistics, &cbk->cb_time,
+			 cqa->cqa_count, dryrun, buf);
 	if (rc != 0)
 		goto out;
 
@@ -3290,6 +3292,7 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	struct chk_rank_rec	*crr = NULL;
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
+	bool                     dryrun = false;
 	int			 rc;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
@@ -3340,11 +3343,12 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 			cpr->cpr_on_leader = 1;
 	}
 
-	rc = chk_report_upcall(cru->cru_gen, *seq, cru->cru_cla, cru->cru_act, cru->cru_result,
-			       cru->cru_rank, cru->cru_target, cru->cru_pool, cru->cru_pool_label,
-			       cru->cru_cont, cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
-			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
-			       cru->cru_detail_nr, cru->cru_details);
+	dryrun = ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN;
+	rc     = chk_report_upcall(cru->cru_gen, *seq, cru->cru_cla, cru->cru_act, cru->cru_result,
+				   cru->cru_rank, cru->cru_target, cru->cru_pool, cru->cru_pool_label,
+				   cru->cru_cont, cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
+				   cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
+				   cru->cru_detail_nr, cru->cru_details, dryrun);
 
 log:
 	if (rc != 0) {

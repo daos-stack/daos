@@ -2656,13 +2656,14 @@ out:
 
 static int
 ds_chk_query_head_cb(uint32_t ins_status, uint32_t ins_phase, struct chk_statistics *inconsistency,
-		     struct chk_time *time, size_t n_pools, void *buf)
+		     struct chk_time *time, size_t n_pools, bool dryrun, void *buf)
 {
 	Mgmt__CheckQueryResp	*resp = buf;
 	int			 rc = 0;
 
 	resp->ins_status = ins_status;
 	resp->ins_phase = ins_phase;
+	resp->dryrun     = dryrun;
 
 	rc = ds_chk_copy_inconsistency(&resp->inconsistency, inconsistency);
 	if (resp->inconsistency == NULL)

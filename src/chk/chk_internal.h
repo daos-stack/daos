@@ -774,11 +774,12 @@ int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank,
 
 /* chk_updcall.c */
 
-int chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,
-		      uuid_t *cont, char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey,
-		      daos_key_t *akey, char *msg, uint32_t option_nr, uint32_t *options,
-		      uint32_t detail_nr, d_sg_list_t *details);
+int
+chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result, d_rank_t rank,
+		  uint32_t target, uuid_t *pool, char *pool_label, uuid_t *cont, char *cont_label,
+		  daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
+		  uint32_t option_nr, uint32_t *options, uint32_t detail_nr, d_sg_list_t *details,
+		  bool dryrun);
 
 /* chk_vos.c */
 
