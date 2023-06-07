@@ -672,6 +672,12 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 	if (rc)
 		goto delete_data;
 
+	/**
+	 * XXX DAOS-12750: At this time the WAL size can not be manually defined and thus wal_sz is
+	 * always equal to zero.  However, if such feature is added, then the computation of the
+	 * wal_sz in the function bio_get_dev_state_internal() (located in file bio/bio_monitor.c)
+	 * should be updated accordingly.
+	 */
 	if (wal_sz == 0 || wal_sz < default_cluster_sz())
 		wal_sz = default_wal_sz(meta_sz);
 

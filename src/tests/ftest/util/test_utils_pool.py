@@ -163,8 +163,7 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, namespace=POOL_NAMESPACE):
+    def __init__(self, context, dmg_command, label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -175,8 +174,6 @@ class TestPool(TestDaosApiBase):
                 value can be obtained by calling self.get_dmg_command() from a
                 test. It'll return the object with -l <Access Point host:port>
                 and --insecure.
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
                 There's a link between label_generator and label. If the label
@@ -184,7 +181,7 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__(namespace, cb_handler)
+        super().__init__(namespace)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -767,25 +764,17 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
-    def set_property(self, prop_name=None, prop_value=None):
+    def set_property(self, prop_name, prop_value):
         """Set Property.
 
         It sets property for a given pool uuid using dmg.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to
-                None, which uses the TestPool.prop_name.value
-            prop_value (str, optional): value to be set for the property.
-                Defaults to None, which uses the TestPool.prop_value.value
+            prop_name (str): pool property name
+            prop_value (str): value to be set for the property
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.identifier)
-
-            # If specific values are not provided, use the class values
-            if prop_name is None:
-                prop_name = self.prop_name.value
-            if prop_value is None:
-                prop_value = self.prop_value.value
             properties = ":".join([prop_name, prop_value])
             self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 
@@ -861,52 +850,6 @@ class TestPool(TestDaosApiBase):
              val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self._check_info(checks)
-
-    def check_pool_space(self, ps_free_min=None, ps_free_max=None,
-                         ps_free_mean=None, ps_ntargets=None, ps_padding=None):
-        # pylint: disable=unused-argument
-        """Check the pool info space attributes.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Args:
-            ps_free_min (list, optional): minimum free space per device.
-                Defaults to None.
-            ps_free_max (list, optional): maximum free space per device.
-                Defaults to None.
-            ps_free_mean (list, optional): mean free space per device.
-                Defaults to None.
-            ps_ntargets (int, optional): number of targets. Defaults to None.
-            ps_padding (int, optional): space padding. Defaults to None.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Returns:
-            bool: True if at least one expected value is specified and all the
-                specified values match; False otherwise
-
-        """
-        self.get_info()
-        checks = []
-        for key in ("ps_free_min", "ps_free_max", "ps_free_mean"):
-            val = locals()[key]
-            if isinstance(val, list):
-                for index, item in val:
-                    checks.append((
-                        "{}[{}]".format(key, index),
-                        getattr(self.info.pi_space, key)[index],
-                        item))
-        for key in ("ps_ntargets", "ps_padding"):
-            val = locals()[key]
-            if val is not None:
-                checks.append((key, getattr(self.info.pi_space, key), val))
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -1087,19 +1030,6 @@ class TestPool(TestDaosApiBase):
                         'used': tier['total'] - tier['free']}
         return rank_target_tier_space
 
-    def get_pool_rebuild_status(self):
-        """Get the pool info rebuild status attributes as a dictionary.
-
-        Returns:
-            dict: a dictionary of lists of the rebuild status attributes
-
-        """
-        self.get_info()
-        keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_state",
-            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
-        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
-
     def get_pool_free_space(self, device="scm"):
         """Get SCM or NVME free space.
 
@@ -1149,13 +1079,6 @@ class TestPool(TestDaosApiBase):
         self.log.info(
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
-
-    def display_pool_rebuild_status(self):
-        """Display the pool info rebuild status attributes."""
-        status = self.get_pool_rebuild_status()
-        self.log.info(
-            "Pool rebuild status: %s",
-            ", ".join(["{}={}".format(key, status[key]) for key in sorted(status)]))
 
     def pool_percentage_used(self):
         """Get the pool storage used % for SCM and NVMe.

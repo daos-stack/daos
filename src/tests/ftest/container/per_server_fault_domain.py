@@ -51,8 +51,7 @@ class PerServerFaultDomainTest(IorTestBase):
         self.container = self.get_container(pool=self.pool, properties=properties)
 
         # Run IOR to write some data to the container.
-        self.ior_cmd.set_daos_params(
-            group=self.server_group, pool=self.pool, cont_uuid=self.container.identifier)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
         manager = self.get_ior_job_manager_command()
         self.run_ior(manager=manager, processes=1)
 

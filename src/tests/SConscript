@@ -11,7 +11,7 @@ def build_dts_library(env, dc_credit):
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
 
 
-def build_tests(prereqs, env):
+def build_tests(env):
     """build the tests"""
     Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
@@ -25,7 +25,7 @@ def build_tests(prereqs, env):
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'isal')
+    denv.require('argobots', 'protobufc', 'pmdk', 'isal')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
@@ -100,7 +100,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
-    build_tests(prereqs, denv)
+    build_tests(denv)
 
     if not base_env_mpi:
         return

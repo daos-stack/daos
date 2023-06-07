@@ -93,7 +93,7 @@ daos_tests:
     test_daos_object_array: 1
     test_daos_array: 1
     test_daos_kv: 1
-    test_daos_capability: 1
+    test_daos_capability: 2
     test_daos_epoch_recovery: 1
     test_daos_md_replication: 2
     test_daos_rebuild_simple: 1
