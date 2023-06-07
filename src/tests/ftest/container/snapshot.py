@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import traceback
-import random
 
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError, c_uuid_to_str
 
@@ -166,7 +165,7 @@ class Snapshot(TestWithServers):
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  b"<<<---" + get_random_bytes(random.randint(1, data_size))  # nosec
+                  b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
         try:
             obj = self.container.write_an_obj(thedata,
                                               len(thedata) + 1,
@@ -338,7 +337,7 @@ class Snapshot(TestWithServers):
             ss_number += 1
             thedata = b"--->>>Happy Daos Snapshot Testing " + \
                 str(ss_number).encode("utf-8") + \
-                b"<<<---" + get_random_bytes(random.randint(1, data_size))  # nosec
+                b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj = self.container.write_an_obj(thedata,
@@ -373,7 +372,7 @@ class Snapshot(TestWithServers):
             self.log.info("=(2.%s)Committing %d additional transactions to "
                           "the same KV.", ss_number, more_transactions)
             while more_transactions:
-                size = random.randint(1, 250) + 1  # nosec
+                size = self.random.randint(1, 250) + 1
                 new_data = get_random_bytes(size)
                 try:
                     new_obj = self.container.write_an_obj(

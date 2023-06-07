@@ -3,7 +3,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import socket
 import time
 
@@ -84,7 +83,7 @@ class ManagementServiceFailover(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", replica_count)
-        replicas = NodeSet.fromlist(random.sample(list(self.hostlist_servers), replica_count))
+        replicas = NodeSet.fromlist(self.random.sample(list(self.hostlist_servers), replica_count))
         server_groups = {
             self.server_group:
                 {
