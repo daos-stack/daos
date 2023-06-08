@@ -764,17 +764,23 @@ ts_test_fini(void **state)
 	return 0;
 }
 
-
-
 static const struct CMUnitTest ts_tests[] = {
-	{ "VOS600.1: LRU array test", lru_array_test, init_lru_test,
-		finalize_lru_test},
-	{ "VOS600.2: LRU array stress", lru_array_stress_test, init_lru_test,
-		finalize_lru_test},
-	{ "VOS600.3: LRU multi-level array", lru_array_multi_test,
-		init_lru_multi_test, finalize_lru_test},
-	{ "VOS600.4: VOS timestamp allocation test", ilog_test_ts_get,
-		ts_test_init, ts_test_fini},
+    {.name          = "VOS600.1: LRU array test",
+     .test_func     = lru_array_test,
+     .setup_func    = init_lru_test,
+     .teardown_func = finalize_lru_test},
+    {.name          = "VOS600.2: LRU array stress",
+     .test_func     = lru_array_stress_test,
+     .setup_func    = init_lru_test,
+     .teardown_func = finalize_lru_test},
+    {.name          = "VOS600.3: LRU multi-level array",
+     .test_func     = lru_array_multi_test,
+     .setup_func    = init_lru_multi_test,
+     .teardown_func = finalize_lru_test},
+    {.name          = "VOS600.4: VOS timestamp allocation test",
+     .test_func     = ilog_test_ts_get,
+     .setup_func    = ts_test_init,
+     .teardown_func = ts_test_fini},
 };
 
 int

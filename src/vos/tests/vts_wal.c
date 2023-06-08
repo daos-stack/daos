@@ -1108,23 +1108,25 @@ wal_io_multiple_objects_ovwr(void **state)
 }
 
 static const struct CMUnitTest wal_tests[] = {
-    {"WAL01: Basic pool/cont create/destroy test", wal_tst_01, NULL, NULL},
+    {.name = "WAL01: Basic pool/cont create/destroy test", .test_func = wal_tst_01},
 };
 
 static const struct CMUnitTest wal_kv_basic_tests[] = {
-    {"WAL10: Basic SV/EV small/large update/fetch/verify", wal_kv_basic, NULL, NULL},
-    {"WAL11: Basic SV/EV large TX update/fetch/verify", wal_kv_large, NULL, NULL},
+    {.name = "WAL10: Basic SV/EV small/large update/fetch/verify", .test_func = wal_kv_basic},
+    {.name = "WAL11: Basic SV/EV large TX update/fetch/verify", .test_func = wal_kv_large},
 };
 
 static const struct CMUnitTest wal_io_tests[] = {
-    {"WAL20: Update/fetch/verify test", wal_io_multiple_refills, NULL, NULL},
-    {"WAL21: 10K update/fetch/verify test", wal_io_multiple_updates, NULL, NULL},
-    {"WAL22: Objects Update(overwrite)/fetch test", wal_io_multiple_objects_ovwr, NULL, NULL},
-    {"WAL23: Objects Update/fetch test", wal_io_multiple_objects, NULL, NULL},
+    {.name = "WAL20: Update/fetch/verify test", .test_func = wal_io_multiple_refills},
+    {.name = "WAL21: 10K update/fetch/verify test", .test_func = wal_io_multiple_updates},
+    {.name      = "WAL22: Objects Update(overwrite)/fetch test",
+     .test_func = wal_io_multiple_objects_ovwr},
+    {.name = "WAL23: Objects Update/fetch test", .test_func = wal_io_multiple_objects},
 };
 
 static const struct CMUnitTest wal_io_int_tests[] = {
-    {"WAL24: Key query punch with subsequent update", wal_io_query_key_punch_update, NULL, NULL},
+    {.name      = "WAL24: Key query punch with subsequent update",
+     .test_func = wal_io_query_key_punch_update},
 };
 
 int
