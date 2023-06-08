@@ -7,7 +7,6 @@
 import os
 
 TEST_SRC = ['test_gurt.c', 'test_gurt_telem_producer.c']
-TEST_SRC = []
 
 
 def scons():

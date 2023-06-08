@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,11 +16,11 @@
 static D_LIST_HEAD(g_error_reg_list);
 
 struct d_error_reg {
-	d_list_t		er_link;
-	int			er_base;
-	int			er_limit;
-	const char * const	*er_strings;
-	const char *const       *er_strerror;
+	d_list_t           er_link;
+	int                er_base;
+	int                er_limit;
+	const char *const *er_strings;
+	const char *const *er_strerror;
 };
 
 #define D_DEFINE_COMP_ERRSTR(name, base)                                                           \
@@ -39,10 +39,9 @@ struct d_error_reg {
 
 D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 
-#define D_ADD_LIST(name, base)					\
-		d_list_add_tail(&g_##name##_errreg.er_link, &g_error_reg_list);
+#define D_ADD_LIST(name, base) d_list_add_tail(&g_##name##_errreg.er_link, &g_error_reg_list);
 
-#define D_ERR_BUF_SIZE 32
+#define D_ERR_BUF_SIZE         32
 
 static __attribute__((constructor)) void
 d_err_init(void)
