@@ -644,6 +644,7 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 	}
 
 	var bsr BdevScanResponse
+	scanOrCache := "scanned"
 	if direct {
 		req := BdevScanRequest{
 			DeviceList: bdevs,
@@ -658,10 +659,10 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 		if cache == nil {
 			cache = &BdevScanResponse{}
 		}
-		log.Debugf("using controllers from cache %q", cache.Controllers)
 		bsr = *cache
+		scanOrCache = "cached"
 	}
-	log.Debugf("bdevs in cfg: %s, scanned: %+v (direct=%v)", bdevs, bsr, direct)
+	log.Debugf("bdevs in cfg: %s, %s: %+v", bdevs, scanOrCache, bsr)
 
 	// Build slice of bdevs-per-tier from the entire scan response.
 
@@ -685,7 +686,7 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 		if err != nil {
 			return nil, errors.Wrap(err, "get controller pci addresses")
 		}
-		cpas, err = cpas.BackingToVMDAddresses(log)
+		cpas, err = cpas.BackingToVMDAddresses()
 		if err != nil {
 			return nil, errors.Wrap(err, "convert backing device to vmd domain addresses")
 		}

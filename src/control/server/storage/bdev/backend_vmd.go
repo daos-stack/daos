@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -219,11 +219,11 @@ func vmdFilterAddresses(log logging.Logger, inReq *storage.BdevPrepareRequest, v
 	// are what we are using for filters and these are VMD endpoint addresses.
 	// FIXME: This imposes a limitation in that individual backing devices cannot be allowed or
 	//        blocked independently, see if this can be mitigated against.
-	inAllowList, err = inAllowList.BackingToVMDAddresses(log)
+	inAllowList, err = inAllowList.BackingToVMDAddresses()
 	if err != nil {
 		return
 	}
-	inBlockList, err = inBlockList.BackingToVMDAddresses(log)
+	inBlockList, err = inBlockList.BackingToVMDAddresses()
 	if err != nil {
 		return
 	}
