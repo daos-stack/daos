@@ -182,7 +182,8 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 				       &new_rec->fa_link);
 	if (rlink == &new_rec->fa_link) {
 		fault_attr = &new_rec->fa_attr;
-		rc         = D_SPIN_INIT(&fault_attr->fa_lock, PTHREAD_PROCESS_PRIVATE);
+
+		rc = D_SPIN_INIT(&fault_attr->fa_lock, PTHREAD_PROCESS_PRIVATE);
 		if (rc != DER_SUCCESS)
 			D_GOTO(out_unlock, rc);
 		D_DEBUG(DB_ALL, "new fault id: %u added.\n", fault_id);
