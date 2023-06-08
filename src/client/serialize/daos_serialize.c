@@ -550,7 +550,7 @@ deserialize_str(hid_t file_id, char **str, const char *prop_str)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	buf_size = H5Tget_size(attr_dtype);
-	if (buf_size <= 0) {
+	if (buf_size == 0) {
 		D_ERROR("failed to get size of datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
@@ -640,7 +640,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dtype_size = H5Tget_size(attr_dtype);
-	if (attr_dtype_size < 0) {
+	if (attr_dtype_size == 0) {
 		D_ERROR("failed to get attribute type size\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
