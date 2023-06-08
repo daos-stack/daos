@@ -228,7 +228,6 @@ func getAddrFI(name string) (addrFI, error) {
 
 func (n *NUMAFabric) validateDevice(fi *FabricInterface) error {
 	if n.getAddrInterface == nil {
-		n.log.Debug("setting real getAddrInterface")
 		n.getAddrInterface = getAddrFI
 	}
 

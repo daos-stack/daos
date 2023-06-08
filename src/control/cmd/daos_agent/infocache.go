@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -34,19 +36,15 @@ type fabricScanFn func(ctx context.Context, providers ...string) (*NUMAFabric, e
 // NewInfoCache creates a new InfoCache with appropriate parameters set.
 func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryInvoker, cfg *Config) *InfoCache {
 	ic := &InfoCache{
-		log:           log,
-		ignoreIfaces:  cfg.ExcludeFabricIfaces,
-		client:        client,
-		cache:         cache.NewItemCache(log),
-		getAttachInfo: control.GetAttachInfo,
-		fabricScan: func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
-			scanner := hwprov.DefaultFabricScanner(log)
-			fis, err := scanner.Scan(ctx, provs...)
-			if err != nil {
-				return nil, err
-			}
-			return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
-		},
+		log:            log,
+		ignoreIfaces:   cfg.ExcludeFabricIfaces,
+		client:         client,
+		cache:          cache.NewItemCache(log),
+		getAttachInfo:  control.GetAttachInfo,
+		fabricScan:     getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
+		netIfaces:      net.Interfaces,
+		devClassGetter: hwprov.DefaultNetDevClassProvider(log),
+		devStateGetter: hwprov.DefaultNetDevStateProvider(log),
 	}
 
 	if cfg.DisableCache {
@@ -64,6 +62,16 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 	}
 
 	return ic
+}
+
+func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricScanner) fabricScanFn {
+	return func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
+		fis, err := scanner.Scan(ctx, provs...)
+		if err != nil {
+			return nil, err
+		}
+		return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
+	}
 }
 
 type cacheItem struct {
@@ -196,8 +204,12 @@ type InfoCache struct {
 	cache                   *cache.ItemCache
 	fabricCacheDisabled     atm.Bool
 	attachInfoCacheDisabled atm.Bool
-	getAttachInfo           getAttachInfoFn
-	fabricScan              fabricScanFn
+
+	getAttachInfo  getAttachInfoFn
+	fabricScan     fabricScanFn
+	netIfaces      func() ([]net.Interface, error)
+	devClassGetter hardware.NetDevClassProvider
+	devStateGetter hardware.NetDevStateProvider
 
 	client            control.UnaryInvoker
 	attachInfoRefresh time.Duration
@@ -343,7 +355,7 @@ func (c *InfoCache) GetFabricDevice(ctx context.Context, params *FabricIfacePara
 	if c == nil {
 		return nil, errors.New("InfoCache is nil")
 	}
-	nf, err := c.getNUMAFabric(ctx, params.Provider)
+	nf, err := c.getNUMAFabric(ctx, params.DevClass, params.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -358,14 +370,20 @@ func (c *InfoCache) GetFabricDevice(ctx context.Context, params *FabricIfacePara
 	return nf.GetDevice(params)
 }
 
-func (c *InfoCache) getNUMAFabric(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetDevClass, providers ...string) (*NUMAFabric, error) {
 	if !c.IsFabricCacheEnabled() {
 		c.log.Debug("NUMAFabric not cached, rescanning")
+		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
+			return nil, err
+		}
 		return c.fabricScan(ctx, providers...)
 	}
 
 	createItem := func() (cache.Item, error) {
 		c.log.Debug("NUMAFabric cache miss")
+		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
+			return nil, err
+		}
 		return newCachedFabricInfo(c.log, c.fabricScan), nil
 	}
 
@@ -381,6 +399,31 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, providers ...string) (*NU
 	}
 
 	return cfi.lastResults, nil
+}
+
+func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
+	ifaces, err := c.netIfaces()
+	if err != nil {
+		return errors.Wrap(err, "getting net interfaces")
+	}
+
+	var needIfaces []string
+	for _, iface := range ifaces {
+		devClass, err := c.devClassGetter.GetNetDevClass(iface.Name)
+		if err != nil {
+			return errors.Wrapf(err, "getting device class for %s", iface.Name)
+		}
+		if devClass == netDevClass {
+			needIfaces = append(needIfaces, iface.Name)
+		}
+	}
+
+	return hardware.WaitFabricReady(ctx, c.log, hardware.WaitFabricReadyParams{
+		StateProvider:  c.devStateGetter,
+		FabricIfaces:   needIfaces,
+		IgnoreUnusable: true,
+		IterationSleep: time.Second,
+	})
 }
 
 // Refresh forces any enabled, refreshable caches to re-fetch their content immediately.
