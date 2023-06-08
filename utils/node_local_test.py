@@ -4870,6 +4870,9 @@ class AllocFailTestRun():
         self._fi_loc = None
         self._cwd = cwd
 
+        if cmd[0].endswith('daos'):
+            self._env['D_STDERR'] = 'CRIT'
+
         if loc:
             prefix = f'dnt_{loc:04d}_'
         else:
