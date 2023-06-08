@@ -158,7 +158,8 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid, bxc);
+	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid,
+			       bxc, mbh->mb_meta_size, mbh->mb_rdb_size);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;

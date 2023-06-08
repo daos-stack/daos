@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
-import random
 
 from pydaos.raw import DaosApiError
 
@@ -22,8 +21,7 @@ class PoolAPIAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
-    @staticmethod
-    def create_data_set():
+    def create_data_set(self):
         """Create the large attribute dictionary.
 
         Returns:
@@ -32,7 +30,7 @@ class PoolAPIAttributeTest(TestWithServers):
         """
         data_set = {}
         for index in range(1024):
-            size = random.randint(1, 100)  # nosec
+            size = self.random.randint(1, 100)
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
@@ -109,7 +107,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=large_pool_attribute,test_pool_large_attributes
+        :avocado: tags=PoolAPIAttributeTest,test_pool_large_attributes
         """
         self.add_pool()
         attr_dict = self.create_data_set()
@@ -138,7 +136,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=sync_pool_attribute,test_pool_attributes
+        :avocado: tags=PoolAPIAttributeTest,test_pool_attributes
         """
         self.add_pool()
         expected_for_param = []
@@ -214,7 +212,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=async_pool_attribute,test_pool_attribute_async
+        :avocado: tags=PoolAPIAttributeTest,test_pool_attribute_async
         """
         self.add_pool()
 

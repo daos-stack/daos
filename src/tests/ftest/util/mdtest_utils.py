@@ -1,11 +1,10 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
-import uuid
 import re
 
 from command_utils_base import FormattedParameter
@@ -82,7 +81,7 @@ class MdtestCommand(ExecutableCommand):
         #  --dfs.dir_oclass=STRING       DAOS directory object class
         #  --dfs.prefix=STRING           Mount prefix
 
-        self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
+        self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
@@ -108,31 +107,18 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool): DAOS test pool object
-            cont_uuid (str, optional): the container uuid. If not specified one
-                is generated. Defaults to None.
-            display (bool, optional): print updated params. Defaults to True.
+            cont (str): the container uuid or label
         """
-        self.set_daos_pool_params(pool, display)
-        self.dfs_group.update(group, "dfs_group" if display else None)
-        self.dfs_cont.update(
-            cont_uuid if cont_uuid else str(uuid.uuid4()),
-            "dfs_cont" if display else None)
-
-    def set_daos_pool_params(self, pool, display=True):
-        """Set the Mdtest parameters that are based on a DAOS pool.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.dfs_pool_uuid.update(
-            pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+        self.update_params(
+            dfs_group=group,
+            dfs_pool=pool.identifier,
+            dfs_cont=cont)
 
     def get_default_env(self, manager_cmd, log_file=None):
         """Get the default environment settings for running mdtest.
@@ -148,10 +134,9 @@ class MdtestCommand(ExecutableCommand):
         env = self.env.copy()
         env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
         env["MPI_LIB"] = '""'
-        env["FI_PSM2_DISCONNECT"] = "1"
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            env["DAOS_POOL"] = self.dfs_pool_uuid.value
+            env["DAOS_POOL"] = self.dfs_pool.value
             env["DAOS_CONT"] = self.dfs_cont.value
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
 

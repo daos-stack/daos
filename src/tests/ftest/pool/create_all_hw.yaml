@@ -9,7 +9,35 @@ hosts:
 timeouts:
   test_one_pool: 240
   test_two_pools: 320
-  test_recycle_pools: 640
+  test_recycle_pools: 1000
+
+test_one_pool:
+  deltas:
+    scm: 18874368       # 18MiB
+    nvme: 1048576       # 1MiB
+
+test_recycle_pools:
+  pool_count: 50
+  deltas:
+    scm: 18874368       # 18MiB
+    nvme: 0             # 0MiB
+
+  test_two_pools:
+    scm: 18874368       # 18MiB
+    nvme: 1048576       # 1MiB
+
+test_two_pools:
+  deltas:
+    pool_half:
+      scm: 18874368     # 18MiB
+      nvme: 1048576     # 1MiB
+    pool_full:
+      scm: 18874368     # 18MiB
+      nvme: 1048576     # 1MiB
+    distribution:
+      # DAOS-12750 NOTE metadata such as DAOS RDB (1GiB) are not recorded on all engines.
+      scm: 2147483648   # 2GiB
+      nvme: 0
 
 # Mux the number of targets per engine (1-4) with both engines using the same number of targets
 server_configurations: !mux
@@ -118,13 +146,13 @@ server_configurations: !mux
             1:
               class: nvme
               bdev_list: ["bbbb:bb:bb.b"]
-  server_config_4_target:
+  server_config_5_target:
     server_config:
       name: daos_server
       engines_per_host: 2
       engines:
         0:
-          targets: 4
+          targets: 5
           pinned_numa_node: 0
           nr_xs_helpers: 1
           fabric_iface: ib0
@@ -139,7 +167,7 @@ server_configurations: !mux
               class: nvme
               bdev_list: ["aaaa:aa:aa.a"]
         1:
-          targets: 4
+          targets: 5
           pinned_numa_node: 1
           nr_xs_helpers: 1
           fabric_iface: ib1
