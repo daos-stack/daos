@@ -50,7 +50,7 @@ d_err_init(void)
 }
 
 const char *
-d_errstr(enum daos_error_number errnum)
+d_errstr(int errnum)
 {
 	struct d_error_reg *entry;
 
@@ -73,7 +73,7 @@ out:
 }
 
 const char *
-d_errdesc(enum daos_error_number errnum)
+d_errdesc(int errnum)
 {
 	struct d_error_reg *entry;
 	static char         buf[D_ERR_BUF_SIZE];

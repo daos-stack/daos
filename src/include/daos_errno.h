@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -271,6 +271,7 @@ extern "C" {
 	DER_ERR_##name##_BASE = (base),                                                            \
 	D_FOREACH_##name##_ERR(D_DEFINE_ERRNO) DER_ERR_##name##_LIMIT,
 
+/** The actual error codes */
 enum daos_error_number {
 	/** Return value representing success */
 	DER_SUCCESS = 0,
@@ -286,7 +287,7 @@ enum daos_error_number {
  * \return	String value for error code or DER_UNKNOWN
  */
 const char *
-d_errstr(enum daos_error_number errnum);
+d_errstr(int errnum);
 
 /** Return an error description string associated with a registered gurt errno.
  *
@@ -296,7 +297,7 @@ d_errstr(enum daos_error_number errnum);
  * 			number is unknown.
  */
 const char *
-d_errdesc(enum daos_error_number errnum);
+d_errdesc(int errnum);
 
 /** @}
  */
