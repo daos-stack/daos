@@ -134,19 +134,20 @@ class PoolSvc(TestWithServers):
                 self.pool.wait_for_rebuild_to_end(interval=1)
 
                 # Verify the pool leader has changed
+                self.log.info("Original pool_leader= %s", pool_leader)
+                self.log.info("Pool svc_ranks after pool_leader stopped= %s", non_leader_ranks)
                 pool_leader = self.check_leader(pool_leader, True)
-                for rank in [pool_leader] + self.server_managers[0].management_service_ranks:
+                mgmt_service_ranks = self.server_managers[0].management_service_ranks
+                self.log.info("New pool_leader= %s", pool_leader)
+                self.log.info("Management_service_ranks= %s", mgmt_service_ranks)
+                for rank in [pool_leader] + mgmt_service_ranks:
                     if rank in non_leader_ranks:
                         non_leader_ranks.remove(rank)
-                self.log.info("pool_leader= %s", pool_leader)
                 self.log.info(
-                    "management_service_ranks= %s",
-                    self.server_managers[0].management_service_ranks)
-                self.log.info(
-                    "After excluded management_service_rank, non_leader_ranks= %s",
+                    "After excluded new leader + management_service_ranks, non_leader_ranks= %s",
                     non_leader_ranks)
 
-                if svc_params[1] == 5:
+                if svc_params[1] == 5 and non_leader_ranks:
                     # Stop a pool non-leader
                     non_leader = non_leader_ranks[-1]
                     self.log.info(
