@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 5
+  test_servers: 6
 server_config:
   name: daos_server
   engines_per_host: 1
