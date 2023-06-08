@@ -85,7 +85,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 struct dfuse_inode_entry;
 
-
 /* Preread.
  *
  * If a file is opened when caching is on but the file is not cached and the size small enough
