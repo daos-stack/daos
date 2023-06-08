@@ -593,6 +593,7 @@ class RpcReporting():
     known_functions = frozenset({'crt_hg_req_send',
                                  'crt_hg_req_destroy',
                                  'crt_rpc_complete',
+                                 'crt_rpc_complete_and_unlock',
                                  'crt_rpc_priv_alloc',
                                  'crt_rpc_handler_common',
                                  'crt_req_send',
@@ -614,6 +615,8 @@ class RpcReporting():
             return
 
         if line.is_new_rpc():
+            if line.descriptor in self._current_opcodes:
+                return
             rpc_state = 'ALLOCATED'
             opcode = line.get_field(-4)
             if opcode == 'per':
