@@ -1228,6 +1228,10 @@ def create_fio_cmdline(self, job_spec, pool):
         fio_cmd.update(
             "global", "rw", rw_val,
             "fio --name=global --rw")
+        if self.enable_il and api == "POSIX-LIBPIL4DFS":
+            fio_cmd.update(
+                "global", "engine", "sync",
+                "fio --name=global --engine")
         cmds = []
         # add start dfuse cmds; api is always POSIX
         fio_cmd.api.update("POSIX")
