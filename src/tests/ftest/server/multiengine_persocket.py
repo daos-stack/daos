@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import base64
 import traceback
 
@@ -32,8 +31,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-    @staticmethod
-    def create_data_set(num_attributes):
+    def create_data_set(self, num_attributes):
         """Create the large attribute dictionary.
 
         Args:
@@ -44,7 +42,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10)  # nosec
+            size = self.random.randint(1, 10)
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
