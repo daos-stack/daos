@@ -100,7 +100,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 				DisableVFIO:  rdc.DisableVFIO,
 				Reset_:       true,
 			}
-			errNVMe = resetNVMe(req, &rdc.nvmeCmd, scs.NvmePrepare)
+			errNVMe = resetNVMe(cmd.Logger, req, &rdc, scs.NvmePrepare)
 		}
 	} else {
 		if doSCM {

@@ -349,97 +349,6 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			},
 		},
-		"config parameters ignored; settings exist": {
-			resetCmd: newResetCmd(),
-			cfg: new(config.Server).
-				WithEngines(engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(8)))).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: defaultSingleAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				EnableVMD:    true,
-				Reset_:       true,
-			},
-		},
-		"config parameters ignored; set ignore-config in cmd": {
-			resetCmd: new(resetNVMeCmd).WithIgnoreConfig(true),
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(7))),
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(8))),
-			).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024).
-				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				EnableVMD: true,
-				Reset_:    true,
-			},
-		},
-		"config parameters applied; disable vmd": {
-			resetCmd: &resetNVMeCmd{},
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(7))),
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(test.MockPCIAddr(8))),
-			).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024).
-				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
-				Reset_:       true,
-			},
-		},
-		"config parameters applied; disable vfio": {
-			resetCmd: newResetCmd(),
-			cfg:      new(config.Server).WithDisableVFIO(true),
-			expErr:   errors.New("can not be disabled if running as non-root"),
-		},
-		"config parameters applied; legacy storage": {
-			resetCmd: &resetNVMeCmd{},
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(7)),
-						},
-					}),
-				engine.NewConfig().
-					WithLegacyStorage(engine.LegacyStorage{
-						BdevClass: storage.ClassNvme,
-						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(8)),
-						},
-					}),
-			).
-				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024).
-				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
-				Reset_:       true,
-			},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -456,7 +365,6 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			tc.resetCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
-			tc.resetCmd.config = tc.cfg
 			tc.resetCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
@@ -469,7 +377,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			}
 
-			gotErr := resetNVMe(req, &tc.resetCmd.nvmeCmd, scs.NvmePrepare)
+			gotErr := resetNVMe(log, req, tc.resetCmd, scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()

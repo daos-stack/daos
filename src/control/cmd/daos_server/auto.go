@@ -100,7 +100,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		//                 bindings.
 
 		req := storage.BdevPrepareRequest{Reset_: true}
-		if err := resetNVMe(req, nc, svc.NvmePrepare); err != nil {
+		if err := resetNVMe(log, req, nc, svc.NvmePrepare); err != nil {
 			return nil, errors.Wrap(err, "nvme reset after fetching local storage failed, "+
 				"try cmd again with --skip-prep after performing a manual nvme reset")
 		}

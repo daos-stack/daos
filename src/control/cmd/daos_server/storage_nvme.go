@@ -13,7 +13,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -253,11 +256,13 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 }
 
 type resetNVMeCmd struct {
-	nvmeCmd
-	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
-	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
-	Args         struct {
+	cmdutil.LogCmd  `json:"-"`
+	helperLogCmd    `json:"-"`
+	iommuCheckerCmd `json:"-"`
+	PCIBlockList    string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	TargetUser      string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO     bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
+	Args            struct {
 		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Comma-separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
 	} `positional-args:"yes"`
 }
@@ -277,13 +282,8 @@ func (cmd *resetNVMeCmd) WithPCIAllowList(al string) *resetNVMeCmd {
 	return cmd
 }
 
-func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
-	cmd.IgnoreConfig = b
-	return cmd
-}
-
-func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend nvmePrepareResetFn) error {
-	cmd.Debug("Reset locally-attached NVMe storage...")
+func resetNVMe(log logging.Logger, resetReq storage.BdevPrepareRequest, iommuChecker hardware.IOMMUDetector, resetBackend nvmePrepareResetFn) error {
+	log.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
 		CleanHugepagesOnly: true,
@@ -292,29 +292,26 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	msg := "cleanup hugepages before nvme reset"
 
 	if resp, err := resetBackend(cleanReq); err != nil {
-		cmd.Errorf("%s", errors.Wrap(err, msg))
+		log.Errorf("%s", errors.Wrap(err, msg))
 	} else {
-		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+		log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+	// Pass nil for cfg arg as none to process on reset.
+	if err := processNVMePrepReq(log, nil, iommuChecker, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
 	resetReq.HugepageCount = 0
 
-	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
+	log.Debugf("nvme reset request parameters: %+v", resetReq)
 
-	// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-	//                 controllers (as specified in the server config file) then the backing
-	//                 devices of the unselected VMD controllers will be bound to no driver
-	//                 and therefore inaccessible from both OS and SPDK. Workaround is to run
-	//                 nvme scan --ignore-config to reset driver bindings.
+	// SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD controllers
+	//            (as specified in the server config file) then the backing devices of the
+	//            unselected VMD controllers will be bound to no driver and therefore
+	//            inaccessible from both OS and SPDK. As a result, the default operation is to
+	//            ignore any configuration file and not apply any PCI_ALLOWED list (although
+	//            the option can be applied manually if required).
 
 	// Reset NVMe device access.
 	_, err := resetBackend(resetReq)
@@ -323,9 +320,13 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 }
 
 func (cmd *resetNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
+	}
+	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
@@ -339,7 +340,7 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 		Reset_:       true,
 	}
 
-	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
+	return resetNVMe(cmd.Logger, req, cmd, scs.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
@@ -402,7 +403,7 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePr
 			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
 			Reset_:       true,
 		}
-		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
+		if err := resetNVMe(cmd.Logger, req, &cmd.nvmeCmd, prepResetBackend); err != nil {
 			return errors.Wrap(err,
 				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
 		}
