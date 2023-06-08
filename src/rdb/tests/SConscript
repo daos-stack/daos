@@ -3,10 +3,10 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'libdaos_tgts')
+    Import('denv', 'libdaos_tgts')
 
     tenv = denv.Clone()
-    prereqs.require(tenv, 'isal')
+    tenv.require('isal')
 
     # rdbt server
     librdbt = tenv.d_library('rdbt', ['rdb_test.c', 'rpc.c'], install_off='../..')

@@ -720,9 +720,8 @@ class DaosServerInformation():
         Returns:
             dict: a dictionary of network information for the host, e.g.
                     {
-                        1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
-                        2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
-                        3: {"fabric_iface": ib0, "provider": "ofi+tcp"},
+                        1: {"fabric_iface": ib0, "provider": "ofi+verbs"},
+                        2: {"fabric_iface": ib0, "provider": "ofi+tcp"},
                     }
 
         """
