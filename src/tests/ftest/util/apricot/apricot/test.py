@@ -11,6 +11,7 @@ import json
 import re
 import sys
 from time import time
+import random
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -140,6 +141,11 @@ class Test(avocadoTest):
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
+
+        # Random generator that could be seeded for reproducibility
+        seed = random.randrange(sys.maxsize)  # nosec
+        self.log.info("Test.random seed = %s", seed)
+        self.random = random.Random(seed)
 
     def setUp(self):
         """Set up each test case."""

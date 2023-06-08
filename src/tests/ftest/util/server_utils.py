@@ -910,6 +910,33 @@ class DaosServerManager(SubprocessManager):
         random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
+    def start_ranks(self, ranks, daos_log):
+        """Start the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks to start
+            daos_log (DaosLog): object for logging messages
+
+        Raises:
+            CommandFailure: if there is an issue running dmg system start
+
+        Returns:
+            dict: a dictionary of host ranks and their unique states.
+
+        """
+        msg = "Start DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+        daos_log.info(msg)
+
+        # Start desired ranks using dmg
+        result = self.dmg.system_start(ranks=list_to_str(value=ranks))
+
+        # Update the expected status of the started ranks
+        self.update_expected_states(ranks, ["joined"])
+
+        return result
+
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
