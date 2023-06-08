@@ -123,6 +123,13 @@ func (p *Provider) ControlMetadataPath() string {
 	return p.scmMetadataPath()
 }
 
+func (p *Provider) GetControlMetadata() *ControlMetadata {
+	if p == nil {
+		return nil
+	}
+	return &p.engineStorage.ControlMetadata
+}
+
 func (p *Provider) scmMetadataPath() string {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
