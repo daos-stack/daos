@@ -1233,7 +1233,6 @@ def create_fio_cmdline(self, job_spec, pool):
         fio_cmd.api.update("POSIX")
         # Connect to the pool, create container and then start dfuse
         add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
-        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
         log_name = "{}_{}_{}_{}_{}_{}".format(
             job_spec, api, blocksize, size, rw_val, file_dir_oclass[0])
 
