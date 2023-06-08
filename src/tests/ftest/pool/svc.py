@@ -137,6 +137,13 @@ class PoolSvc(TestWithServers):
                 pool_leader = self.check_leader(pool_leader, True)
                 for rank in [pool_leader] + self.server_managers[0].management_service_ranks:
                     non_leader_ranks.remove(rank)
+                self.log.info("pool_leader= %s", pool_leader)
+                self.log.info(
+                    "management_service_ranks= %s",
+                    self.server_managers[0].management_service_ranks)
+                self.log.info(
+                    "After excluded management_service_rank, non_leader_ranks= %s",
+                    non_leader_ranks)
 
                 if svc_params[1] == 5:
                     # Stop a pool non-leader
