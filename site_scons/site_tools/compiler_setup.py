@@ -4,10 +4,12 @@ from SCons.Script import GetOption, Exit
 from SCons.Script import Configure
 
 
-DESIRED_FLAGS = ['-Wno-gnu-designator',
-                 '-Wno-missing-braces',
-                 '-fstack-usage',
+DESIRED_FLAGS = ['-fstack-usage',
+                 '-Wno-sign-compare',
+                 '-Wno-unused-parameter',
                  '-Wno-ignored-attributes',
+                 '-Wno-missing-field-initializers',
+                 '-Wno-implicit-fallthrough',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
@@ -48,10 +50,7 @@ def _base_setup(env):
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.
-    env.Append(CCFLAGS=['-g',
-                        '-Wshadow',
-                        '-Wall',
-                        '-fpic'])
+    env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 

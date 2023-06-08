@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +14,8 @@
 /**
  * Release a line buffer returned by readline
  */
-void
-static freeline(char *line)
+static void
+freeline(char *line)
 {
 	D_FREE(line);
 }
