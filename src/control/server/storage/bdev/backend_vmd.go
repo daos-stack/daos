@@ -216,9 +216,8 @@ func vmdFilterAddresses(log logging.Logger, inReq *storage.BdevPrepareRequest, v
 	}
 
 	// Convert any VMD backing device addresses to endpoint addresses as the input vmdPCIAddrs
-	// are what we are using for filters and these are VMD endpoint addresses.
-	// FIXME: This imposes a limitation in that individual backing devices cannot be allowed or
-	//        blocked independently, see if this can be mitigated against.
+	// are what we are using for filters and these are VMD endpoint addresses. This imposes a
+	// limitation in that individual backing devices cannot be allowed or blocked independently.
 	inAllowList, err = inAllowList.BackingToVMDAddresses()
 	if err != nil {
 		return
