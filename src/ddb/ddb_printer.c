@@ -6,20 +6,17 @@
 
 #include "ddb_printer.h"
 
-#define DF_IDX "[%d]"
-#define DP_IDX(idx) idx
-
 static void
 print_indent(struct ddb_ctx *ctx, int c)
 {
 	int i;
 
 	for (i = 0; i < c; i++)
-		ddb_print(ctx, "    ");
+		ddb_print(ctx, " ");
 }
 
-static bool
-can_print(d_iov_t *iov)
+bool
+ddb_can_print(d_iov_t *iov)
 {
 	char	*str = iov->iov_buf;
 	uint32_t len = iov->iov_len;
@@ -46,7 +43,7 @@ ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len)
 	if (iov->iov_len == 0 || iov->iov_buf == NULL)
 		return 0;
 
-	if (can_print(iov))
+	if (ddb_can_print(iov))
 		return snprintf(buf, buf_len, "%.*s", (int)iov->iov_len, (char *)iov->iov_buf);
 
 	switch (iov->iov_len) {
@@ -90,37 +87,6 @@ ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len)
 	}
 }
 
-static void
-print_path_key(struct ddb_ctx *ctx, d_iov_t *iov, uint32_t max_len)
-{
-	char buf[max_len];
-
-	ddb_iov_to_printable_buf(iov, buf, max_len);
-	if (can_print(iov))
-		ddb_printf(ctx, "/%s", buf);
-	else
-		ddb_printf(ctx, "/{%s}", buf);
-}
-
-void
-vtp_print(struct ddb_ctx *ctx, struct dv_tree_path *vt_path, bool include_new_line)
-{
-	if (dv_has_cont(vt_path))
-		ddb_printf(ctx, "/"DF_UUIDF"", DP_UUID(vt_path->vtp_cont));
-	if (dv_has_obj(vt_path))
-		ddb_printf(ctx, "/"DF_UOID"",  DP_UOID(vt_path->vtp_oid));
-	if (dv_has_dkey(vt_path))
-		print_path_key(ctx, &vt_path->vtp_dkey, 32);
-	if (dv_has_akey(vt_path))
-		print_path_key(ctx, &vt_path->vtp_akey, 32);
-
-	if (vt_path->vtp_recx.rx_nr > 0)
-		ddb_printf(ctx, "/{%lu-%lu}", vt_path->vtp_recx.rx_idx,
-			   vt_path->vtp_recx.rx_idx + vt_path->vtp_recx.rx_nr - 1);
-	if (include_new_line)
-		ddb_print(ctx, "/\n");
-}
-
 void
 ddb_print_cont(struct ddb_ctx *ctx, struct ddb_cont *cont)
 {
@@ -150,7 +116,7 @@ ddb_print_key(struct ddb_ctx *ctx, struct ddb_key *key, uint32_t indent)
 	ddb_iov_to_printable_buf(&key->ddbk_key, buf, buf_len);
 
 	print_indent(ctx, indent);
-	if (can_print(&key->ddbk_key)) {
+	if (ddb_can_print(&key->ddbk_key)) {
 		ddb_printf(ctx, DF_IDX" '%s' (%lu)%s\n",
 			   DP_IDX(key->ddbk_idx),
 			   buf,
@@ -185,6 +151,14 @@ ddb_print_array(struct ddb_ctx *ctx, struct ddb_array *array, uint32_t indent)
 		   array->ddba_recx.rx_idx,
 		   array->ddba_recx.rx_idx + array->ddba_recx.rx_nr - 1,
 		   array->ddba_record_size);
+}
+
+void
+ddb_print_path(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t indent)
+{
+	print_indent(ctx, indent);
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "\n");
 }
 
 void

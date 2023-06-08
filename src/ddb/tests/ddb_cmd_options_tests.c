@@ -72,11 +72,13 @@ ls_options_parsing(void **state)
 	test_run_cmd(&info, "ls", "path");
 	assert_non_null(options->path);
 	assert_false(options->recursive);
+	assert_false(options->details);
 
 	/* test all options and arguments */
-	test_run_cmd(&info, "ls", "-r", "path");
+	test_run_cmd(&info, "ls", "-r", "-d", "path");
 	assert_non_null(options->path);
 	assert_true(options->recursive);
+	assert_true(options->details);
 }
 
 static void

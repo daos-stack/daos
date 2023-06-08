@@ -40,10 +40,11 @@ static int
 ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 		uint32_t argc, char **argv)
 {
-	char		 *options_short = "r";
+	char		 *options_short = "rd";
 	int		  index = 0, opt;
 	struct option	  options_long[] = {
 		{ "recursive", no_argument, NULL, 'r' },
+		{ "details", no_argument, NULL, 'd' },
 		{ NULL }
 	};
 
@@ -56,6 +57,9 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 		switch (opt) {
 		case 'r':
 			cmd_args->recursive = true;
+			break;
+		case 'd':
+			cmd_args->details = true;
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -896,6 +900,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -r, --recursive\n");
 	ddb_print(ctx, "\tRecursively list the contents of the path\n");
+	ddb_print(ctx, "    -d, --details\n");
+	ddb_print(ctx, "\tList more details of items in path\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: open */

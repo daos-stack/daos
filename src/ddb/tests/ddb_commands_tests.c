@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,6 +41,7 @@ fake_write_file(const char *path, d_iov_t *contents)
  * Test Functions
  * -----------------------------------------------
  */
+
 static void
 quit_cmd_tests(void **state)
 {
@@ -66,15 +67,20 @@ ls_cmd_tests(void **state)
 	assert_success(ddb_run_ls(&ctx, &opt));
 
 	/* At least each container should be printed */
+	assert_success(ddb_run_ls(&ctx, &opt));
 	assert_true(ARRAY_SIZE(g_uuids) <= dvt_fake_print_called);
 
-	/* With recursive set, every item in the tree should be printed */
+	/* With recursive set, every item in the tree should be printed, this gets huge so turn
+	 * off storing it in the fake print buffer.
+	 */
+	dvt_fake_print_just_count = true;
 	opt.recursive = true;
 	items_in_tree = ARRAY_SIZE(g_uuids) * ARRAY_SIZE(g_oids) *
 			ARRAY_SIZE(g_dkeys) * ARRAY_SIZE(g_akeys);
 	dvt_fake_print_called = 0;
 	assert_success(ddb_run_ls(&ctx, &opt));
 	assert_true(items_in_tree <= dvt_fake_print_called);
+	dvt_fake_print_just_count = false;
 
 	/* pick a specific oid - each dkey should be printed */
 	opt.path = "[0]/[0]";
@@ -82,13 +88,39 @@ ls_cmd_tests(void **state)
 	assert_success(ddb_run_ls(&ctx, &opt));
 	assert_true(ARRAY_SIZE(g_dkeys) <= dvt_fake_print_called);
 
+	/* printing a recx works */
+	dvt_fake_print_called = 0;
+	opt.path = "/[0]/[0]/[0]/[0]/[0]";
+	opt.recursive = true;
+	assert_success(ddb_run_ls(&ctx, &opt));
+
 	/* invalid paths ... */
 	opt.path = buf;
 
 	sprintf(buf, "%s", g_invalid_uuid_str);
-	assert_rc_equal(-DER_NONEXIST, ddb_run_ls(&ctx, &opt));
+	assert_invalid(ddb_run_ls(&ctx, &opt));
 	sprintf(buf, "%s/"DF_OID"/", g_uuids_str[0], DP_OID(g_invalid_oid.id_pub));
-	assert_rc_equal(-DER_NONEXIST, ddb_run_ls(&ctx, &opt));
+	assert_invalid(ddb_run_ls(&ctx, &opt));
+	dvt_fake_print_reset();
+
+	opt.path = "/[0]/[1]/dkey-3";
+	opt.recursive = true;
+	assert_success(ddb_run_ls(&ctx, &opt));
+	assert_printed_contains("dkey-3");
+
+	opt.path = "/[0]";
+	opt.recursive = false;
+	/* The output of this command will show which object ID to use for the next one. Can
+	 * use g_verbose=true; to see output. Right now kind of manual, but when json output is
+	 * implemented, might be able to automate this a little better.
+	 */
+	assert_success(ddb_run_ls(&ctx, &opt));
+	dvt_fake_print_reset();
+	opt.path = "/[0]/[0]";
+	assert_success(ddb_run_ls(&ctx, &opt));
+	g_verbose = false;
+	assert_printed_contains("/12345678-1234-1234-1234-123456789001/"
+				"281479271743488.4294967296.0.0");
 }
 
 static void
@@ -108,9 +140,9 @@ dump_value_cmd_tests(void **state)
 
 	/* path must be complete (to a value) */
 	opt.path = "[0]";
-	assert_invalid(ddb_run_value_dump(&ctx, &opt));
+	assert_rc_equal(ddb_run_value_dump(&ctx, &opt), -DDBER_INCOMPLETE_PATH_VALUE);
 
-	/* Path is complete, but needs destination */
+	/* Path is complete, no destination means will dump to screen */
 	opt.path = "[0]/[0]/[0]/[1]";
 	assert_success(ddb_run_value_dump(&ctx, &opt));
 
@@ -204,15 +236,15 @@ rm_cmd_tests(void **state)
 	opt.path = "[0]";
 	assert_success(ddb_run_rm(&g_ctx, &opt));
 	assert_string_equal(dvt_fake_print_buffer,
-			    "/12345678-1234-1234-1234-123456789001 deleted\n");
+			    "CONT: (/[0]) /12345678-1234-1234-1234-123456789001 deleted\n");
 }
 
 static void
 load_cmd_tests(void **state)
 {
 	struct value_load_options	opt = {0};
-	char			buf[256];
-	daos_unit_oid_t		new_oid = g_oids[0];
+	char				buf[256];
+	daos_unit_oid_t			new_oid = g_oids[0];
 
 	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 
@@ -226,17 +258,16 @@ load_cmd_tests(void **state)
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new 'a' key */
-	opt.dst = "/[0]/[0]/[0]/'a-new-key'";
+	opt.dst = "/[0]/[0]/[0]/a-new-key";
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new 'd' key */
-	opt.dst = "/[0]/[0]/'a-new-key'/'a-new-key'";
+	opt.dst = "/[0]/[0]/a-new-key/a-new-key";
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new object */
 	new_oid.id_pub.lo = 999;
-	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_uuids_str[3],
-		DP_OID(new_oid.id_pub));
+	sprintf(buf, "%s/"DF_UOID"/dkey_new/akey_new", g_uuids_str[3], DP_UOID(new_oid));
 	opt.dst = buf;
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
@@ -261,7 +292,7 @@ load_cmd_tests(void **state)
 	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_invalid_uuid_str,
 		DP_OID(g_oids[0].id_pub));
 	opt.dst = buf;
-	assert_rc_equal(-DER_NONEXIST, ddb_run_value_load(&g_ctx, &opt));
+	assert_rc_equal(-DDBER_INVALID_CONT, ddb_run_value_load(&g_ctx, &opt));
 }
 
 static void

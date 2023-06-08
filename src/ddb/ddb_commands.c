@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 #include "ddb_vos.h"
 #include "ddb_printer.h"
 #include "daos.h"
+#include "ddb_tree_path.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
@@ -81,23 +82,26 @@ struct ls_ctx {
 	bool		 has_obj;
 	bool		 has_dkey;
 	bool		 has_akey;
+	bool		 print_details;
 };
 
 #define DF_IDX "[%d]"
 #define DP_IDX(idx) idx
 
 static int
-init_path(daos_handle_t poh, char *path, struct dv_tree_path_builder *vtp)
+init_path(struct ddb_ctx *ctx, char *path, struct dv_indexed_tree_path *itp)
 {
 	int rc;
 
-	rc = ddb_vtp_init(poh, path, vtp);
-	if (!SUCCESS(rc))
-		return rc;
+	memset(itp, 0, sizeof(*itp));
 
-	rc = dv_path_verify(vtp);
+	rc = itp_parse(path, itp);
 	if (!SUCCESS(rc))
-		return rc;
+		return itp_handle_path_parse_error(ctx, rc);
+
+	rc = dv_path_verify(ctx->dc_poh, itp);
+	if (!SUCCESS(rc))
+		return itp_handle_path_parse_error(ctx, rc);
 	return 0;
 }
 
@@ -107,7 +111,10 @@ ls_cont_handler(struct ddb_cont *cont, void *args)
 	struct ls_ctx *ctx = args;
 
 	ctx->has_cont = true;
-	ddb_print_cont(ctx->ctx, cont);
+	if (ctx->print_details)
+		ddb_print_cont(ctx->ctx, cont);
+	else
+		ddb_print_path(ctx->ctx, cont->ddbc_path, 0);
 
 	return 0;
 }
@@ -118,8 +125,10 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 	struct ls_ctx		*ctx = args;
 
 	ctx->has_obj = true;
-
-	ddb_print_obj(ctx->ctx, obj, ctx->has_cont);
+	if (ctx->print_details)
+		ddb_print_obj(ctx->ctx, obj, ctx->has_cont);
+	else
+		ddb_print_path(ctx->ctx, obj->ddbo_path, ctx->has_cont);
 
 	return 0;
 }
@@ -127,10 +136,14 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 static int
 ls_dkey_handler(struct ddb_key *key, void *args)
 {
-	struct ls_ctx *ctx = args;
+	struct ls_ctx	*ctx = args;
+	int		 indent = ctx->has_cont + ctx->has_obj;
 
 	ctx->has_dkey = true;
-	ddb_print_key(ctx->ctx, key, ctx->has_cont + ctx->has_obj);
+	if (ctx->print_details)
+		ddb_print_key(ctx->ctx, key, indent);
+	else
+		ddb_print_path(ctx->ctx, key->ddbk_path, indent);
 
 	return 0;
 }
@@ -138,10 +151,14 @@ ls_dkey_handler(struct ddb_key *key, void *args)
 static int
 ls_akey_handler(struct ddb_key *key, void *args)
 {
-	struct ls_ctx *ctx = args;
+	struct ls_ctx	*ctx = args;
+	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey;
 
 	ctx->has_akey = true;
-	ddb_print_key(ctx->ctx, key, ctx->has_cont + ctx->has_obj + ctx->has_dkey);
+	if (ctx->print_details)
+		ddb_print_key(ctx->ctx, key, indent);
+	else
+		ddb_print_path(ctx->ctx, key->ddbk_path, indent);
 
 	return 0;
 }
@@ -149,19 +166,26 @@ ls_akey_handler(struct ddb_key *key, void *args)
 static int
 ls_sv_handler(struct ddb_sv *val, void *args)
 {
-	struct ls_ctx *ctx = args;
+	struct ls_ctx	*ctx = args;
+	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey;
 
-	ddb_print_sv(ctx->ctx, val, ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey);
+	if (ctx->print_details)
+		ddb_print_sv(ctx->ctx, val, indent);
+	else
+		ddb_print_path(ctx->ctx, val->ddbs_path, indent);
 	return 0;
 }
 
 static int
 ls_array_handler(struct ddb_array *val, void *args)
 {
-	struct ls_ctx *ctx = args;
+	struct ls_ctx	*ctx = args;
+	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey;
 
-	ddb_print_array(ctx->ctx, val,
-			ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey);
+	if (ctx->print_details)
+		ddb_print_array(ctx->ctx, val, indent);
+	else
+		ddb_print_path(ctx->ctx, val->ddba_path, indent);
 	return 0;
 }
 
@@ -178,26 +202,40 @@ int
 ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 {
 	int rc;
-	struct dv_tree_path_builder vtp = {0};
+	struct dv_indexed_tree_path itp = {0};
+	struct dv_tree_path vtp;
 	struct ls_ctx lsctx = {0};
 
 	if (daos_handle_is_inval(ctx->dc_poh)) {
 		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
 		return -DER_NONEXIST;
 	}
-	rc = init_path(ctx->dc_poh, opt->path, &vtp);
+	rc = init_path(ctx, opt->path, &itp);
+
 	if (!SUCCESS(rc))
 		return rc;
-	if (!SUCCESS(ddb_vtp_verify(ctx->dc_poh, &vtp.vtp_path))) {
+
+	itp_to_vos_path(&itp, &vtp);
+
+	ddb_print(ctx, "Listing contents of '");
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "'\n");
+	if (!SUCCESS(ddb_vtp_verify(ctx->dc_poh, &vtp))) {
 		ddb_print(ctx, "Not a valid path\n");
+		itp_free(&itp);
 		return -DER_NONEXIST;
 	}
 
-	vtp_print(ctx, &vtp.vtp_path, true);
+	if (itp_has_recx_complete(&itp)) {
+		itp_free(&itp);
+		/* recx doesn't actually have anything under it. */
+		return 0;
+	}
+	lsctx.print_details = opt->details;
 	lsctx.ctx = ctx;
-	rc = dv_iterate(ctx->dc_poh, &vtp.vtp_path, opt->recursive, &handlers, &lsctx);
+	rc = dv_iterate(ctx->dc_poh, &vtp, opt->recursive, &handlers, &lsctx, &itp);
 
-	ddb_vtp_fini(&vtp);
+	itp_free(&itp);
 
 	return rc;
 }
@@ -227,7 +265,7 @@ ddb_run_superblock_dump(struct ddb_ctx *ctx)
 
 struct dump_value_args {
 	struct ddb_ctx			*dva_ctx;
-	struct dv_tree_path		*dva_vtp;
+	struct dv_indexed_tree_path	*dva_vtp;
 	char				*dva_dst_path;
 };
 
@@ -240,7 +278,8 @@ print_value_cb(void *cb_args, d_iov_t *value)
 
 	if (value->iov_len == 0) {
 		ddb_print(ctx, "No value at: ");
-		vtp_print(ctx, args->dva_vtp, true);
+		itp_print_full(ctx, args->dva_vtp);
+		ddb_print(ctx, "\n");
 		return 0;
 	}
 
@@ -260,7 +299,9 @@ write_file_value_cb(void *cb_args, d_iov_t *value)
 
 	if (value->iov_len == 0) {
 		ddb_print(ctx, "No value at: ");
-		vtp_print(ctx, args->dva_vtp, true);
+		itp_print_full(ctx, args->dva_vtp);
+		ddb_print(ctx, "\n");
+
 		return 0;
 	}
 
@@ -273,7 +314,8 @@ write_file_value_cb(void *cb_args, d_iov_t *value)
 int
 ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 {
-	struct dv_tree_path_builder	vtp = {.vtp_poh = ctx->dc_poh};
+	struct dv_indexed_tree_path	itp = {0};
+	struct dv_tree_path		vtp;
 	struct dump_value_args		dva = {0};
 	dv_dump_value_cb		cb = NULL;
 	int				rc;
@@ -283,16 +325,17 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->path, &vtp);
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
 
-	vtp_print(ctx, &vtp.vtp_path, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
-	if (!dvp_is_complete(&vtp.vtp_path)) {
+	if (!itp_has_value(&itp)) {
 		ddb_errorf(ctx, "Path [%s] is incomplete.\n", opt->path);
-		ddb_vtp_fini(&vtp);
-		return -DER_INVAL;
+		itp_free(&itp);
+		return -DDBER_INCOMPLETE_PATH_VALUE;
 	}
 
 	if (opt->dst && strlen(opt->dst) > 0)
@@ -302,9 +345,12 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 
 	dva.dva_dst_path = opt->dst;
 	dva.dva_ctx = ctx;
-	dva.dva_vtp = &vtp.vtp_path;
-	rc = dv_dump_value(ctx->dc_poh, &vtp.vtp_path, cb, &dva);
-	ddb_vtp_fini(&vtp);
+	dva.dva_vtp = &itp;
+
+	itp_to_vos_path(&itp, &vtp);
+
+	rc = dv_dump_value(ctx->dc_poh, &vtp, cb, &dva);
+	itp_free(&itp);
 
 	return rc;
 }
@@ -322,8 +368,7 @@ dump_ilog_entry_cb(void *cb_arg, struct ddb_ilog_entry *entry)
 int
 ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt)
 {
-	struct dv_tree_path_builder	 vtpb = {0};
-	struct dv_tree_path		*vtp = &vtpb.vtp_path;
+	struct dv_indexed_tree_path	 itp = {0};
 	daos_handle_t			 coh;
 	int				 rc;
 
@@ -332,37 +377,38 @@ ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
-	vtp_print(ctx, vtp, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
-	if (!dv_has_cont(vtp)) {
+	if (!itp_has_cont(&itp)) {
 		ddb_error(ctx, ilog_path_required_error_message);
 		return -DER_INVAL;
 	}
 
-	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
 	if (!SUCCESS(rc)) {
-		ddb_vtp_fini(&vtpb);
+		itp_free(&itp);
 		return rc;
 	}
 
-	if (dv_has_akey(vtp)) {
-		rc = dv_get_key_ilog_entries(coh, vtp->vtp_oid, &vtp->vtp_dkey, &vtp->vtp_akey,
+	if (itp_has_akey(&itp)) {
+		rc = dv_get_key_ilog_entries(coh, *itp_oid(&itp), itp_dkey(&itp), itp_akey(&itp),
 					     dump_ilog_entry_cb, ctx);
-	} else if (dv_has_dkey(vtp)) {
-		rc = dv_get_key_ilog_entries(coh, vtp->vtp_oid, &vtp->vtp_dkey, NULL,
+	} else if (itp_has_dkey(&itp)) {
+		rc = dv_get_key_ilog_entries(coh, *itp_oid(&itp), itp_dkey(&itp), NULL,
 					     dump_ilog_entry_cb, ctx);
-	} else if (dv_has_obj(vtp)) {
-		rc = dv_get_obj_ilog_entries(coh, vtpb.vtp_path.vtp_oid, dump_ilog_entry_cb, ctx);
+	} else if (itp_has_obj(&itp)) {
+		rc = dv_get_obj_ilog_entries(coh, *itp_oid(&itp), dump_ilog_entry_cb, ctx);
 	} else {
 		ddb_error(ctx, ilog_path_required_error_message);
 		rc = -DER_INVAL;
 	}
 
 	dv_cont_close(&coh);
-	ddb_vtp_fini(&vtpb);
+	itp_free(&itp);
 
 	return rc;
 }
@@ -397,35 +443,36 @@ committed_cb(struct dv_dtx_committed_entry *entry, void *cb_arg)
 int
 ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 {
-	struct dv_tree_path_builder	vtp;
+	struct dv_indexed_tree_path	itp;
 	int				rc;
 	daos_handle_t			coh;
 	bool				both = !(opt->committed ^ opt->active);
 	struct dtx_cb_args	args = {.ctx = ctx, .entry_count = 0};
 
-	rc = init_path(ctx->dc_poh, opt->path, &vtp);
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
 
-	if (!dv_has_cont(&vtp.vtp_path)) {
+	if (!itp_has_cont(&itp)) {
 		ddb_error(ctx, "Path to object is required.\n");
-		ddb_vtp_fini(&vtp);
+		itp_free(&itp);
 		return -DER_INVAL;
 	}
 
-	rc = dv_cont_open(ctx->dc_poh, vtp.vtp_path.vtp_cont, &coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
 	if (!SUCCESS(rc)) {
-		ddb_vtp_fini(&vtp);
+		itp_free(&itp);
 		return rc;
 	}
 
-	vtp_print(ctx, &vtp.vtp_path, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
 	if (both || opt->active) {
 		ddb_print(ctx, "Active Transactions:\n");
 		rc = dv_dtx_get_act_table(coh, active_dtx_cb, &args);
 		if (!SUCCESS(rc)) {
-			ddb_vtp_fini(&vtp);
+			itp_free(&itp);
 			return rc;
 		}
 		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
@@ -435,14 +482,14 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 		ddb_print(ctx, "Committed Transactions:\n");
 		rc = dv_dtx_get_cmt_table(coh, committed_cb, &args);
 		if (!SUCCESS(rc)) {
-			ddb_vtp_fini(&vtp);
+			itp_free(&itp);
 			return rc;
 		}
 		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
-	ddb_vtp_fini(&vtp);
+	itp_free(&itp);
 
 	return 0;
 }
@@ -450,7 +497,8 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 int
 ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 {
-	struct dv_tree_path_builder	vtpb;
+	struct dv_indexed_tree_path	itp;
+	struct dv_tree_path		vtp;
 	int				rc;
 
 	if (!ctx->dc_write_mode) {
@@ -458,24 +506,25 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
+	rc = init_path(ctx, opt->path, &itp);
 
 	if (!SUCCESS(rc))
 		return rc;
+	itp_to_vos_path(&itp, &vtp);
 
-	rc = dv_delete(ctx->dc_poh, &vtpb.vtp_path);
+	rc = dv_delete(ctx->dc_poh, &vtp);
 
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Error: "DF_RC"\n", DP_RC(rc));
-		ddb_vtp_fini(&vtpb);
+		itp_free(&itp);
 
 		return rc;
 	}
 
-	vtp_print(ctx, &vtpb.vtp_path, false);
+	itp_print_full(ctx, &itp);
 	ddb_print(ctx, " deleted\n");
 
-	ddb_vtp_fini(&vtpb);
+	itp_free(&itp);
 
 	return 0;
 }
@@ -483,7 +532,8 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 int
 ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 {
-	struct dv_tree_path_builder	pb;
+	struct dv_indexed_tree_path	itp = {0};
+	struct dv_tree_path		vtp = {0};
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;
@@ -493,24 +543,20 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->dst, &pb);
-	if (rc == -DER_NONEXIST) {
-		/* It's okay that the path doesn't exist as long as the container does */
-		if (pb.vtp_cont_verified)
-			rc = 0;
-	}
+	rc = init_path(ctx, opt->dst, &itp);
 
 	if (!SUCCESS(rc)) {
-		ddb_error(ctx, "Invalid VOS path\n");
-		D_GOTO(done, rc);
+		/* It's okay that the path doesn't exist as long as the container does */
+		if (itp_has_cont_complete(&itp)) {
+			rc = 0;
+		} else {
+			D_ERROR("Must at least have a valid container\n");
+			return -DDBER_INVALID_CONT;
+		}
 	}
 
-	if (!dvp_is_complete(&pb.vtp_path)) {
-		ddb_error(ctx, "Invalid path");
-		D_GOTO(done, rc = -DER_INVAL);
-	}
-
-	vtp_print(ctx, &pb.vtp_path, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
 	if (!ctx->dc_io_ft.ddb_get_file_exists(opt->src)) {
 		ddb_errorf(ctx, "Unable to access '%s'\n", opt->src);
@@ -526,7 +572,7 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 		D_GOTO(done, rc);
 	}
 
-	rc = ctx->dc_io_ft.ddb_read_file(opt->src, &iov);
+	rc = (int)ctx->dc_io_ft.ddb_read_file(opt->src, &iov);
 	if (rc < 0) {
 		ddb_errorf(ctx, "System error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
@@ -535,7 +581,8 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 		D_GOTO(done, rc = -DER_UNKNOWN);
 	}
 
-	rc = dv_update(ctx->dc_poh, &pb.vtp_path, &iov);
+	itp_to_vos_path(&itp, &vtp);
+	rc = dv_update(ctx->dc_poh, &vtp, &iov);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to update path: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
@@ -543,7 +590,7 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 
 done:
 	daos_iov_free(&iov);
-	ddb_vtp_fini(&pb);
+	itp_free(&itp);
 
 	if (SUCCESS(rc))
 		ddb_printf(ctx, "Successfully loaded file '%s'\n", opt->src);
@@ -554,10 +601,9 @@ done:
 static int
 process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 {
-	struct dv_tree_path_builder	 vtpb = {0};
-	daos_handle_t			 coh = {0};
-	int				 rc;
-	struct dv_tree_path		*vtp = &vtpb.vtp_path;
+	struct dv_indexed_tree_path	itp = {0};
+	daos_handle_t			coh = {0};
+	int				rc;
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -569,37 +615,38 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, path, &vtpb);
+	rc = init_path(ctx, path, &itp);
+
 	if (!SUCCESS(rc))
 		return rc;
-	vtp_print(ctx, vtp, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
-	if (!dv_has_cont(vtp)) {
+	if (!itp_has_cont(&itp)) {
 		ddb_error(ctx, ilog_path_required_error_message);
 		return -DER_INVAL;
 	}
 
-	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
 	if (!SUCCESS(rc)) {
-		ddb_vtp_fini(&vtpb);
+		itp_free(&itp);
 		return rc;
 	}
 
-	if (dv_has_akey(vtp)) {
-		rc = dv_process_key_ilog_entries(coh, vtp->vtp_oid, &vtp->vtp_dkey,
-						 &vtp->vtp_akey, op);
-
-	} else if (dv_has_dkey(vtp)) {
-		rc = dv_process_key_ilog_entries(coh, vtp->vtp_oid, &vtp->vtp_dkey, NULL, op);
-	} else if (dv_has_obj(vtp)) {
-		rc = dv_process_obj_ilog_entries(coh, vtp->vtp_oid, op);
+	if (itp_has_akey(&itp)) {
+		rc = dv_process_key_ilog_entries(coh, *itp_oid(&itp), itp_dkey(&itp),
+						 itp_akey(&itp), op);
+	} else if (itp_has_dkey(&itp)) {
+		rc = dv_process_key_ilog_entries(coh, *itp_oid(&itp), itp_dkey(&itp), NULL, op);
+	} else if (itp_has_obj(&itp)) {
+		rc = dv_process_obj_ilog_entries(coh, *itp_oid(&itp), op);
 	} else {
 		ddb_error(ctx, ilog_path_required_error_message);
 		rc = -DER_INVAL;
 	}
 
 	dv_cont_close(&coh);
-	ddb_vtp_fini(&vtpb);
+	itp_free(&itp);
 
 	if (SUCCESS(rc))
 		ddb_print(ctx, "Done\n");
@@ -624,10 +671,9 @@ ddb_run_ilog_commit(struct ddb_ctx *ctx, struct ilog_commit_options *opt)
 int
 ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 {
-	struct dv_tree_path_builder	 vtpb = {0};
-	struct dv_tree_path		*vtp = &vtpb.vtp_path;
-	daos_handle_t			 coh = {0};
-	int				 rc;
+	struct dv_indexed_tree_path	itp = {0};
+	daos_handle_t			coh = {0};
+	int				rc;
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -639,15 +685,16 @@ ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
-	vtp_print(ctx, &vtpb.vtp_path, true);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
 
-	if (!dv_has_cont(vtp))
+	if (!itp_has_cont(&itp))
 		D_GOTO(done, rc = -DER_INVAL);
 
-	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
 
@@ -659,7 +706,7 @@ ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 	rc = 0;
 
 done:
-	ddb_vtp_fini(&vtpb);
+	itp_free(&itp);
 	dv_cont_close(&coh);
 	return rc;
 }
@@ -836,7 +883,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 
 /* Information used while modifying a dtx active entry */
 struct dtx_modify_args {
-	struct dv_tree_path_builder	 vtpb;
+	struct dv_indexed_tree_path	 itp;
 	struct dtx_id			 dti;
 	daos_handle_t			 coh;
 };
@@ -845,22 +892,22 @@ struct dtx_modify_args {
 static int
 dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_modify_args *args)
 {
-	struct dv_tree_path	*vtp;
-	int			 rc;
+	int				 rc;
+	struct dv_indexed_tree_path	*itp = &args->itp;
 
-	rc = init_path(ctx->dc_poh, path, &args->vtpb);
+	rc = init_path(ctx, path, itp);
 	if (!SUCCESS(rc))
 		D_GOTO(error, rc);
-	vtp = &args->vtpb.vtp_path;
 
-	vtp_print(ctx, vtp, true);
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "\n");
 
-	if (!dv_has_cont(vtp)) {
+	if (!itp_has_cont(itp)) {
 		ddb_error(ctx, "Path to container is required\n");
 		D_GOTO(error, rc = -DER_INVAL);
 	}
 
-	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &args->coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &args->coh);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to open container: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(error, rc);
@@ -875,7 +922,7 @@ dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_mo
 
 error:
 	dv_cont_close(&args->coh);
-	ddb_vtp_fini(&args->vtpb);
+	itp_free(itp);
 	return rc;
 }
 
@@ -883,7 +930,7 @@ static void
 dtx_modify_fini(struct dtx_modify_args *args)
 {
 	dv_cont_close(&args->coh);
-	ddb_vtp_fini(&args->vtpb);
+	itp_free(&args->itp);
 }
 
 int
