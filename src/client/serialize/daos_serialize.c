@@ -607,15 +607,16 @@ out:
 int
 deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
-	hid_t                      status = 0;
-	int                        rc     = 0;
-	int                        ndims  = 0;
-	htri_t                     roots_exist;
-	hid_t                      cont_attr   = -1;
-	hid_t                      attr_dtype  = -1;
-	hid_t                      attr_dspace = -1;
-	hsize_t                    attr_dims[1];
-	struct daos_prop_co_roots *roots = NULL;
+	hid_t				status = 0;
+	int				rc = 0;
+	int				ndims = 0;
+	htri_t				roots_exist;
+	hid_t				cont_attr = -1;
+	hid_t				attr_dtype = -1;
+	hid_t				attr_dspace = -1;
+	hsize_t				attr_dims[1];
+	size_t				attr_dtype_size;
+	struct daos_prop_co_roots	*roots = NULL;
 
 	/* First check if the roots attribute exists. */
 	roots_exist = H5Aexists(file_id, prop_str);
@@ -636,6 +637,11 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
 		D_ERROR("failed to get attribute type\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	attr_dtype_size = H5Tget_size(attr_dtype);
+	if (attr_dtype_size < 0) {
+		D_ERROR("failed to get attribute type size\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Aget_space(cont_attr);
