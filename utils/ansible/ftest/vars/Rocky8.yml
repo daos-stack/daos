@@ -55,6 +55,7 @@ daos_server_deps:
     - compat-hwloc1
     - dpdk
     - ipmctl
+    - libfabric
     - libipmctl
     - libpmemobj
     - libuuid
