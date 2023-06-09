@@ -212,6 +212,8 @@ type NvmeHealth struct {
 	NandBytesWritten        uint64 `json:"nand_bytes_written"`
 	HostBytesWritten        uint64 `json:"host_bytes_written"`
 	ClusterSize             uint64 `json:"cluster_size"`
+	MetaWalSize             uint64 `json:"meta_wal_size"`
+	RdbWalSize              uint64 `json:"rdb_wal_size"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -246,7 +248,12 @@ type SmdDevice struct {
 	Rank        ranklist.Rank `json:"rank"`
 	TotalBytes  uint64        `json:"total_bytes"`
 	AvailBytes  uint64        `json:"avail_bytes"`
+	UsableBytes uint64        `json:"usable_bytes"`
 	ClusterSize uint64        `json:"cluster_size"`
+	MetaSize    uint64        `json:"meta_size"`
+	MetaWalSize uint64        `json:"meta_wal_size"`
+	RdbSize     uint64        `json:"rdb_size"`
+	RdbWalSize  uint64        `json:"rdb_wal_size"`
 	Health      *NvmeHealth   `json:"health"`
 	TrAddr      string        `json:"tr_addr"`
 	Roles       BdevRoles     `json:"roles"`
@@ -333,6 +340,9 @@ type NvmeController struct {
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
 func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
+	if nc == nil {
+		return
+	}
 	for _, exstDev := range nc.SmdDevices {
 		if newDev.UUID == exstDev.UUID {
 			*exstDev = *newDev
@@ -345,6 +355,9 @@ func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
 
 // Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
+	if nc == nil {
+		return 0
+	}
 	for _, n := range nc.Namespaces {
 		tb += n.Size
 	}
@@ -433,6 +446,17 @@ func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
 			*ncs = append(*ncs, &newCtrlr)
 		}
 	}
+}
+
+// Addresses returns a hardware.PCIAddressSet pointer to controller addresses.
+func (ncs NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
+	pas := hardware.MustNewPCIAddressSet()
+	for _, c := range ncs {
+		if err := pas.AddStrings(c.PciAddr); err != nil {
+			return nil, err
+		}
+	}
+	return pas, nil
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
