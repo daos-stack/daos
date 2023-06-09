@@ -4870,9 +4870,6 @@ class AllocFailTestRun():
         self._fi_loc = None
         self._cwd = cwd
 
-        if cmd[0].endswith('daos'):
-            self._env['D_STDERR'] = 'CRIT'
-
         if loc:
             prefix = f'dnt_{loc:04d}_'
         else:
@@ -5244,6 +5241,11 @@ class AllocFailTest():
             cmd = self.cmd(loc)
         else:
             cmd = self.cmd
+
+        # Disable logging to stderr from the daos tool, the two streams are both checked already
+        # but have different formats.
+        if os.path.basename(cmd[0]) == 'daos':
+            cmd_env['DD_STDERR'] = 'CRIT'
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
