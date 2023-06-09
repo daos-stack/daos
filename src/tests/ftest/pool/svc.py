@@ -147,7 +147,10 @@ class PoolSvc(TestWithServers):
                     "After excluded new leader + management_service_ranks, non_leader_ranks= %s",
                     non_leader_ranks)
 
-                if svc_params[1] == 5 and non_leader_ranks:
+                if svc_params[1] == 5:
+                    if not non_leader_ranks:
+                        self.fail(
+                            "Pool non_leader_ranks is empty, unable to perform 2nd rank stop.")
                     # Stop a pool non-leader
                     non_leader = non_leader_ranks[-1]
                     self.log.info(
