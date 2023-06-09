@@ -41,12 +41,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
-             env.BRANCH_NAME.startsWith('provider-testing') ? 'H 4 * * 6' : '')
+        cron(env.BRANCH_NAME == 'provider-testing-ucx' ? 'TZ=UTC\n0 2 * * 6' : '')
     }
 
     environment {
@@ -74,6 +69,11 @@ pipeline {
                defaultValue: 'pr daily_regression',
                description: 'Test-tag to use for the Functional Hardware stages of this run ' +
                             '(i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestNvme',
+               defaultValue: '',
+               description: 'The launch.py --nvme argument to use for the Functional test ' +
+                            'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
+                            '0000:81:00.0, etc.)')
         string(name: 'TestRepeat',
                defaultValue: '',
                description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
