@@ -822,6 +822,7 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
+                            cobertura coberturaReportFile: 'nlt-coverage.xml'
                             job_status_update()
                         }
                     }
