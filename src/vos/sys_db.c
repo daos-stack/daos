@@ -298,7 +298,7 @@ db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 	ip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	ip.ip_hdl	 = vdb->db_coh;
 	ip.ip_oid	 = vdb->db_obj;
-	ip.ip_flags	 = VOS_IT_SYSDB;
+	ip.ip_flags	 = VOS_IT_FOR_SYSDB;
 
 	ta.ta_db	 = db;
 	ta.ta_table	 = table;

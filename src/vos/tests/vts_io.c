@@ -224,7 +224,7 @@ setup_io(void **state)
 	srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
 
-	table = vos_ts_table_get();
+	table = vos_ts_table_get(true);
 	if (table == NULL)
 		return -1;
 
@@ -236,7 +236,7 @@ int
 teardown_io(void **state)
 {
 	struct io_test_args	*arg = *state;
-	struct vos_ts_table	*table = vos_ts_table_get();
+	struct vos_ts_table	*table = vos_ts_table_get(true);
 	int			 rc;
 
 	if (table) {

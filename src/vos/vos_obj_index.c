@@ -133,9 +133,12 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct oi_delete_arg	*del_arg = args;
 	daos_handle_t		 coh = { 0 };
 	int			 rc;
+	struct vos_pool		*pool;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
+	D_ASSERT(tins->ti_priv);
+	pool = (struct vos_pool *)tins->ti_priv;
 	/* Normally it should delete both ilog and vo_tree, but during upgrade
 	 * the new OID (with new layout version) will share the same ilog and
 	 * vos_tree with the old OID (with old layout version), so it will only
@@ -153,10 +156,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			return rc;
 		}
 
-		vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+		vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ, pool->vp_sysdb);
 	}
 
-	D_ASSERT(tins->ti_priv);
 
 	if (del_arg != NULL)
 		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
@@ -555,6 +557,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->oit_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->oit_iter.it_for_migration = 1;
+	if (param->ip_flags & VOS_IT_FOR_SYSDB)
+		oiter->oit_iter.it_for_sysdb = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
@@ -609,7 +613,8 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 				/* Upgrading case, set it to latest known epoch */
 				if (obj->vo_max_write == 0)
 					vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-							     &desc.id_agg_write);
+							     &desc.id_agg_write,
+							     !!iter->it_for_sysdb);
 				else
 					desc.id_agg_write = obj->vo_max_write;
 			}
@@ -722,7 +727,7 @@ oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_exist
 	/* Upgrading case, set it to latest known epoch */
 	if (obj->vo_max_write == 0)
 		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-				     &ent->ie_last_update);
+				     &ent->ie_last_update, oiter->oit_iter.it_for_sysdb);
 	else
 		ent->ie_last_update = obj->vo_max_write;
 

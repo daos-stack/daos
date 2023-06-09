@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -313,7 +313,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	if (!vos_ts_in_tx(ts_set))
 		return;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	for (i = 0; i < ts_set->ts_init_count; i++) {
 		set_entry = &ts_set->ts_entries[i];

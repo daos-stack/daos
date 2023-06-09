@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -214,17 +214,17 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 	}
 	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth,
-				 param->ip_flags & VOS_IT_SYSDB);
+				 param->ip_flags & VOS_IT_FOR_SYSDB);
 	if (rc != 0)
 		goto out;
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 
-	old = vos_dth_get(param->ip_flags & VOS_IT_SYSDB);
-	vos_dth_set(dth, param->ip_flags & VOS_IT_SYSDB);
+	old = vos_dth_get(param->ip_flags & VOS_IT_FOR_SYSDB);
+	vos_dth_set(dth, param->ip_flags & VOS_IT_FOR_SYSDB);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
-	vos_dth_set(old, param->ip_flags & VOS_IT_SYSDB);
+	vos_dth_set(old, param->ip_flags & VOS_IT_FOR_SYSDB);
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
 				"\n", dict->id_name, DP_RC(rc));

@@ -278,6 +278,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh;
 	int			 gc;
 	int			 rc;
+	struct vos_pool		*pool;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -290,14 +291,14 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
+	pool = (struct vos_pool *)tins->ti_priv;
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
-			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	coh = vos_cont2hdl(args);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, coh, gc,
-			   rec->rec_off, 0);
+	return gc_add_item(pool, coh, gc, rec->rec_off, 0);
 }
 
 static int

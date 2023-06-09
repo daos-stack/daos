@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -234,7 +234,7 @@ static inline bool
 vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
 		       struct vos_ts_entry **entryp)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(false);
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	void			*entry;
 	struct vos_ts_set_entry	 set_entry = {0};
@@ -317,7 +317,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -378,7 +378,7 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	if (reset)
 		ts_set->ts_init_count--;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -592,9 +592,9 @@ vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
  * \param[in]	type	Type of the object
  */
 static inline void
-vos_ts_evict(uint32_t *idx, uint32_t type)
+vos_ts_evict(uint32_t *idx, uint32_t type, bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
 
 	if (ts_table == NULL)
 		return;
@@ -603,9 +603,10 @@ vos_ts_evict(uint32_t *idx, uint32_t type)
 }
 
 static inline bool
-vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
+vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp,
+		  bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
 	struct vos_ts_info      *info;
 
 	if (ts_table == NULL)

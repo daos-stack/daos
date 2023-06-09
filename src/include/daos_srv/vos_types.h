@@ -361,7 +361,7 @@ enum {
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED	= (1 << 8),
 	/** Iterator is for SYSDB */
-	VOS_IT_SYSDB	= (1 << 9),
+	VOS_IT_FOR_SYSDB	= (1 << 9),
 	/** Mask for all flags */
 	VOS_IT_MASK		= (1 << 10) - 1,
 };

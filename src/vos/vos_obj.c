@@ -857,7 +857,8 @@ key_iter_fill(struct vos_krec_df *krec, struct vos_obj_iter *oiter, bool check_e
 	ent->ie_epoch = epr.epr_hi;
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
-	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
+	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update,
+			     !!oiter->it_iter.it_for_sysdb);
 
 	return 0;
 }
@@ -902,7 +903,8 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 				ts_type = VOS_TS_TYPE_DKEY;
 			else
 				ts_type = VOS_TS_TYPE_AKEY;
-			vos_ilog_last_update(&krec->kr_ilog, ts_type, &desc.id_agg_write);
+			vos_ilog_last_update(&krec->kr_ilog, ts_type, &desc.id_agg_write,
+					     !!oiter->it_iter.it_for_sysdb);
 		}
 
 		acts = 0;
@@ -1620,7 +1622,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_obj_iter	*oiter;
 	struct vos_container	*cont;
-	struct dtx_handle	*dth = vos_dth_get(param->ip_flags & VOS_IT_SYSDB);
+	struct dtx_handle	*dth = vos_dth_get(param->ip_flags & VOS_IT_FOR_SYSDB);
 	daos_epoch_t		 bound;
 	int			 rc;
 
@@ -1646,7 +1648,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (param->ip_flags & VOS_IT_SYSDB)
+	if (param->ip_flags & VOS_IT_FOR_SYSDB)
 		oiter->it_iter.it_for_sysdb = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
@@ -1815,7 +1817,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 {
 	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
-	struct dtx_handle	*dth = vos_dth_get(info->ii_flags & VOS_IT_SYSDB);
+	struct dtx_handle	*dth = vos_dth_get(info->ii_flags & VOS_IT_FOR_SYSDB);
 	daos_epoch_t		 bound;
 	struct evt_desc_cbs	 cbs;
 	struct evt_filter	 filter = {0};
@@ -1845,7 +1847,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (info->ii_flags & VOS_IT_SYSDB)
+	if (info->ii_flags & VOS_IT_FOR_SYSDB)
 		oiter->it_iter.it_for_sysdb = 1;
 
 	switch (type) {

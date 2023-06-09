@@ -659,17 +659,17 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
 }
 
 void
-vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone)
 {
 	uint32_t	*idx;
 
 	idx = ilog_ts_idx_get(ilog);
 
-	return vos_ts_evict(idx, type);
+	return vos_ts_evict(idx, type, standalone);
 }
 
 void
-vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc, bool standalone)
 {
 	struct vos_ts_entry	*se_entry = NULL;
 	struct vos_wts_cache	*wcache;
@@ -680,7 +680,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
 	D_ASSERT(epc != NULL);
 	idx = ilog_ts_idx_get(ilog);
 
-	found = vos_ts_peek_entry(idx, type, &se_entry);
+	found = vos_ts_peek_entry(idx, type, &se_entry, standalone);
 	if (found) {
 		D_ASSERT(se_entry != NULL);
 		wcache = &se_entry->te_w_cache;

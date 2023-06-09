@@ -93,9 +93,9 @@ vos_txd_get(bool standalone)
 }
 
 static inline struct vos_ts_table *
-vos_ts_table_get(void)
+vos_ts_table_get(bool standalone)
 {
-	return vos_tls_get(false)->vtl_ts_table;
+	return vos_tls_get(standalone)->vtl_ts_table;
 }
 
 static inline void
