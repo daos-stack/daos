@@ -1232,7 +1232,7 @@ static void bind_libc_symbol(void **real_ptr_addr, const char *name)
 	/* XXX __atomic_*() built-ins are used to avoid the need to cast
 	 * each of the ATOMIC pointers of functions, that seems to be
 	 * required to make Intel compiler happy ...
-	 */ 
+	 */
 	if (__atomic_load_n(real_ptr_addr, __ATOMIC_RELAXED) == NULL) {
 		/* libc should be already loaded ... */
 		real_temp = dlsym(RTLD_NEXT, name);
