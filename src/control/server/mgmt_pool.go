@@ -7,6 +7,7 @@
 package server
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"time"
@@ -905,6 +906,16 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	resp := &mgmtpb.PoolQueryResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
+	}
+
+	ps, err := svc.getPoolService(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+
+	resp.State = ps.State.String()
+	if resp.DisabledTargets > 0 {
+		resp.State = fmt.Sprintf("%s-%s", resp.State, "Degraded")
 	}
 
 	return resp, nil

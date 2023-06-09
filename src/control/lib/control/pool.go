@@ -429,6 +429,7 @@ type (
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
 		Status int32  `json:"status"`
+		State  string `json:"state"`
 		UUID   string `json:"uuid"`
 		PoolInfo
 	}
@@ -1047,6 +1048,9 @@ type (
 
 		// Usage contains pool usage statistics for each storage tier.
 		Usage []*PoolTierUsage `json:"usage"`
+
+		// PoolRebuildStatus contains detailed information about the pool rebuild process.
+		RebuildStat string `json:"rebuild"`
 	}
 )
 
@@ -1200,6 +1204,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		p.PoolLayoutVer = resp.PoolLayoutVer
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
+		p.RebuildStat = fmt.Sprintf("%s", resp.Rebuild.State)
 	}
 
 	sort.Slice(resp.Pools, func(i int, j int) bool {

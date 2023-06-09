@@ -358,6 +358,7 @@ type PoolListCmd struct {
 	jsonOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
 	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -374,9 +375,16 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	initialResp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
+	}
+
+	// If rebuild-only pools requested, remove the pools which are idle state
+	// and only display the pools which has been rebuild.
+	resp := new(control.ListPoolsResp)
+	if err := pretty.UpdateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
+		return err
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -384,7 +392,7 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose, cmd.NoQuery); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
