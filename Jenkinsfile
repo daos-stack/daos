@@ -19,7 +19,7 @@
 /* groovylint-disable-next-line CompileStatic, VariableName */
 String base_branch = 'release/2.4'
 // For master, this is just some wildly high number
-next_version = '1000'
+next_version = '2.5'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
