@@ -189,7 +189,7 @@ export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
 
-launch_node_args="-ts ${TEST_NODES}"
+node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     # Currently the 'Functional Hardware 24' uses a cluster that has 8 hosts configured to run
     # daos engines and the remaining hosts are configured to be clients. Use separate -ts and -tc
@@ -197,13 +197,32 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
     server_nodes=$(IFS=','; echo "${test_node_list[*]:0:8}")
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
-    launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
+    node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
-# shellcheck disable=SC2086,SC2090
-if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]} --name "${STAGE_NAME}"; then
-    rc=${PIPESTATUS[0]}
-else
-    rc=0
-fi
+
+# Run launch.py multiple times if a sequence of tags (tags separated by a '+') is specified
+IFS='+' read -ra TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
+index=0
+rc=0
+for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"
+    # shellcheck disable=SC2153
+    mapfile -t TAGS <<< "${TEST_TAG_SEQ}"
+    if [ $index -eq 0 ]; then
+        # First sequence of tags run with arguments provided by the user
+        name=${STAGE_NAME}
+    elif [ $index -eq 1 ]; then
+        # Additional sequences of tags are ALWAYS run with servers using MD on SSD mode
+        LAUNCH_OPT_ARGS="${LAUNCH_OPT_ARGS} --nvme=auto_md_on_ssd"
+        name="${STAGE_NAME} MD on SSD"
+    else
+        echo "More than two sequences of functional test tags not supported"
+        continue
+    fi
+
+    # shellcheck disable=SC2086,SC2090
+    if ! ./launch.py --mode ci --name ${name} ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
+        rc=$((rc|{PIPESTATUS[0]}))
+    fi
+done
 
 exit $rc

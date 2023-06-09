@@ -35,7 +35,7 @@ class ConfigGenerateRun(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=control,dmg_config_generate,md_on_ssd
         :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
         num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")

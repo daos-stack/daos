@@ -280,7 +280,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=daos_test,daos_core_test,md_on_ssd
         :avocado: tags=DaosCoreTest,test_daos_md_replication
         """
         self.run_subtest()
@@ -296,7 +296,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=daos_test,daos_core_test,md_on_ssd
         :avocado: tags=DaosCoreTest,test_daos_rebuild_simple
         """
         self.run_subtest()

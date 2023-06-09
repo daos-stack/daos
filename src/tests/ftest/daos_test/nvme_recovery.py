@@ -23,7 +23,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_1
         """
         self.run_subtest()
@@ -39,7 +39,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_2
         """
         self.run_subtest()
@@ -55,7 +55,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_3
         """
         self.run_subtest()
@@ -71,7 +71,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_4
         """
         self.run_subtest()
@@ -87,7 +87,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_5
         """
         self.run_subtest()
@@ -100,7 +100,7 @@ class DaosCoreTestNvme(DaosCoreBase):
             daos_test NVMe recovery test
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=unittest,nvme
+        :avocado: tags=unittest,nvme,md_on_ssd
         :avocado: tags=DaosCoreTestNvme,daos_test,daos_core_test_nvme,test_daos_nvme_recovery_6
         """
         self.run_subtest()

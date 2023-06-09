@@ -124,7 +124,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_restart
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
@@ -157,7 +157,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_restart_posix
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
@@ -208,7 +208,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_replay_snapshots
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
@@ -261,7 +261,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_replay_attributes
         """
         containers = []
@@ -346,7 +346,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_replay_no_check_pointing
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
@@ -390,7 +390,7 @@ class ReplayTests(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=server,replay
+        :avocado: tags=server,replay,md_on_ssd
         :avocado: tags=ReplayTests,test_replay_check_pointing
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)

@@ -265,7 +265,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=control,dmg_config_generate,md_on_ssd
         :avocado: tags=ConfigGenerateOutput,test_tmpfs_scm_config
         """
         # Get necessary storage and network info.
