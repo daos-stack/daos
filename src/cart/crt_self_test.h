@@ -7,8 +7,6 @@
 #ifndef __CRT_SELF_TEST_H__
 #define __CRT_SELF_TEST_H__
 
-
-
 /*
  * List of supported self-test strategies:
  *
@@ -123,9 +121,9 @@
  */
 
 #define CRT_ST_BUF_ALIGN_DEFAULT (-1)
-#define CRT_ST_BUF_ALIGN_MIN (0)
+#define CRT_ST_BUF_ALIGN_MIN     (0)
 /** Maximum alignment must be one less than a power of two */
-#define CRT_ST_BUF_ALIGN_MAX (255)
+#define CRT_ST_BUF_ALIGN_MAX     (255)
 
 enum crt_st_msg_type {
 	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,
@@ -140,9 +138,9 @@ struct crt_st_session_params {
 	uint32_t num_buffers;
 	union {
 		struct {
-			enum crt_st_msg_type send_type: 2;
-			enum crt_st_msg_type reply_type: 2;
-			int16_t buf_alignment: 16;
+			enum crt_st_msg_type send_type     : 2;
+			enum crt_st_msg_type reply_type    : 2;
+			int16_t              buf_alignment : 16;
 		};
 		uint32_t flags;
 	};
@@ -169,18 +167,18 @@ enum crt_st_status {
  */
 
 struct crt_st_send_id_iov {
-	int64_t		session_id;
-	d_iov_t		buf;
+	int64_t session_id;
+	d_iov_t buf;
 };
 
 struct crt_st_send_id_iov_bulk {
-	int64_t		session_id;
-	d_iov_t		buf;
-	crt_bulk_t	bulk_hdl;
+	int64_t    session_id;
+	d_iov_t    buf;
+	crt_bulk_t bulk_hdl;
 };
 
 struct crt_st_send_id_bulk {
-	int64_t session_id;
+	int64_t    session_id;
 	crt_bulk_t bulk_hdl;
 };
 
@@ -190,67 +188,61 @@ struct crt_st_start_params {
 	 * Array of rank (uint32_t) and tag (uint32_t) pairs
 	 * num_endpts = endpts.len / 8
 	 */
-	d_iov_t endpts;
-	uint32_t rep_count;
-	uint32_t max_inflight;
-	uint32_t send_size;
-	uint32_t reply_size;
+	d_iov_t        endpts;
+	uint32_t       rep_count;
+	uint32_t       max_inflight;
+	uint32_t       send_size;
+	uint32_t       reply_size;
 	union {
 		struct {
-			enum crt_st_msg_type send_type: 2;
-			enum crt_st_msg_type reply_type: 2;
-			int16_t buf_alignment: 16;
+			enum crt_st_msg_type send_type     : 2;
+			enum crt_st_msg_type reply_type    : 2;
+			int16_t              buf_alignment : 16;
 		};
 		uint32_t flags;
 	};
 };
 
 struct st_latency {
-	int64_t val;
+	int64_t  val;
 	uint32_t rank;
 	uint32_t tag;
-	int32_t cci_rc;
+	int32_t  cci_rc;
 };
 
 static inline crt_opcode_t
-crt_st_compute_opcode(enum crt_st_msg_type send_type,
-		      enum crt_st_msg_type reply_type)
+crt_st_compute_opcode(enum crt_st_msg_type send_type, enum crt_st_msg_type reply_type)
 {
 	D_ASSERT(send_type >= 0 && send_type < 4);
 	D_ASSERT(reply_type >= 0 && reply_type < 4);
 	D_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
 	D_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
 
-	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
-					 CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,
-					 CRT_OPC_SELF_TEST_BOTH_BULK,
-					 -1 },
-				       { CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
-					 CRT_OPC_SELF_TEST_BOTH_IOV,
-					 CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
-					 -1 },
-				       { -1, -1, -1, -1 },
-				       { CRT_OPC_SELF_TEST_BOTH_BULK,
-					 CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
-					 CRT_OPC_SELF_TEST_BOTH_BULK,
-					 -1 } };
+	crt_opcode_t opcodes[4][4] = {
+	    {CRT_OPC_SELF_TEST_BOTH_EMPTY, CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,
+	     CRT_OPC_SELF_TEST_BOTH_BULK, -1},
+	    {CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY, CRT_OPC_SELF_TEST_BOTH_IOV,
+	     CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK, -1},
+	    {-1, -1, -1, -1},
+	    {CRT_OPC_SELF_TEST_BOTH_BULK, CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
+	     CRT_OPC_SELF_TEST_BOTH_BULK, -1}};
 
 	return opcodes[send_type][reply_type];
 }
 
-static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
+static inline void *
+crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
 {
-	void *returnptr;
+	void    *returnptr;
 	uint32_t offset;
 
 	if (buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
 		return base;
 
-	D_ASSERT(buf_alignment >= CRT_ST_BUF_ALIGN_MIN &&
-		 buf_alignment <= CRT_ST_BUF_ALIGN_MAX);
+	D_ASSERT(buf_alignment >= CRT_ST_BUF_ALIGN_MIN && buf_alignment <= CRT_ST_BUF_ALIGN_MAX);
 
-	offset = (buf_alignment - (((size_t)base) & CRT_ST_BUF_ALIGN_MAX)) %
-		(CRT_ST_BUF_ALIGN_MAX + 1);
+	offset =
+	    (buf_alignment - (((size_t)base) & CRT_ST_BUF_ALIGN_MAX)) % (CRT_ST_BUF_ALIGN_MAX + 1);
 
 	returnptr = ((char *)base) + offset;
 
@@ -261,16 +253,27 @@ static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
 	return returnptr;
 }
 
-void crt_self_test_service_init(void);
-void crt_self_test_service_finit(void);
-void crt_self_test_client_init(void);
-void crt_self_test_client_fini(void);
-void crt_self_test_init(void);
-void crt_self_test_fini(void);
-void crt_self_test_msg_handler(crt_rpc_t *rpc_req);
-void crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
-void crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
-void crt_self_test_start_handler(crt_rpc_t *rpc_req);
-void crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
+void
+crt_self_test_service_init(void);
+void
+crt_self_test_service_finit(void);
+void
+crt_self_test_client_init(void);
+void
+crt_self_test_client_fini(void);
+void
+crt_self_test_init(void);
+void
+crt_self_test_fini(void);
+void
+crt_self_test_msg_handler(crt_rpc_t *rpc_req);
+void
+crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
+void
+crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
+void
+crt_self_test_start_handler(crt_rpc_t *rpc_req);
+void
+crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */

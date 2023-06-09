@@ -15,18 +15,17 @@
  * Query specific tree topo's number of children, child rank number, or parent
  * rank number.
  */
-int crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			   d_rank_list_t *exclude_ranks, int tree_topo,
-			   d_rank_t grp_root, d_rank_t grp_self,
-			   uint32_t *nchildren);
-int crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			  bool filter_invert, d_rank_list_t *filter_ranks,
-			  int tree_topo, d_rank_t grp_root, d_rank_t grp_self,
-			  d_rank_list_t **children_rank_list, bool *ver_match);
-int crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			d_rank_list_t *exclude_ranks, int tree_topo,
-			d_rank_t grp_root, d_rank_t grp_self,
-			d_rank_t *parent_rank);
+int
+crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
+		       d_rank_list_t *exclude_ranks, int tree_topo, d_rank_t grp_root,
+		       d_rank_t grp_self, uint32_t *nchildren);
+int
+crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver, bool filter_invert,
+		      d_rank_list_t *filter_ranks, int tree_topo, d_rank_t grp_root,
+		      d_rank_t grp_self, d_rank_list_t **children_rank_list, bool *ver_match);
+int
+crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver, d_rank_list_t *exclude_ranks,
+		    int tree_topo, d_rank_t grp_root, d_rank_t grp_self, d_rank_t *parent_rank);
 
 /*
  * all specific tree type's calculations are based on group rank number.
@@ -45,29 +44,25 @@ int crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
  *    tree_rank  = (group_rank - group_root + group_size) % (group_size)
  *    group_rank = (tree_rank + group_root) % (group_size)
  */
-typedef int (*crt_topo_get_children_cnt_t)(uint32_t grp_size,
-					   uint32_t branch_ratio,
-					   uint32_t grp_root,
-					   uint32_t grp_self,
+typedef int (*crt_topo_get_children_cnt_t)(uint32_t grp_size, uint32_t branch_ratio,
+					   uint32_t grp_root, uint32_t grp_self,
 					   uint32_t *nchildren);
-typedef int (*crt_topo_get_children_t)(uint32_t grp_size, uint32_t branch_ratio,
-				       uint32_t grp_root, uint32_t grp_self,
-				       uint32_t *children);
-typedef int (*crt_topo_get_parent_t)(uint32_t grp_size, uint32_t branch_ratio,
-				     uint32_t grp_root, uint32_t grp_self,
-				     uint32_t *parent);
+typedef int (*crt_topo_get_children_t)(uint32_t grp_size, uint32_t branch_ratio, uint32_t grp_root,
+				       uint32_t grp_self, uint32_t *children);
+typedef int (*crt_topo_get_parent_t)(uint32_t grp_size, uint32_t branch_ratio, uint32_t grp_root,
+				     uint32_t grp_self, uint32_t *parent);
 
 struct crt_topo_ops {
-	crt_topo_get_children_cnt_t	to_get_children_cnt;
-	crt_topo_get_children_t		to_get_children;
-	crt_topo_get_parent_t		to_get_parent;
+	crt_topo_get_children_cnt_t to_get_children_cnt;
+	crt_topo_get_children_t     to_get_children;
+	crt_topo_get_parent_t       to_get_parent;
 };
 
-extern struct crt_topo_ops	 crt_flat_ops;
-extern struct crt_topo_ops	 crt_kary_ops;
-extern struct crt_topo_ops	 crt_knomial_ops;
+extern struct crt_topo_ops  crt_flat_ops;
+extern struct crt_topo_ops  crt_kary_ops;
+extern struct crt_topo_ops  crt_knomial_ops;
 
-extern struct crt_topo_ops	*crt_tops[];
+extern struct crt_topo_ops *crt_tops[];
 
 /* some simple helpers */
 static inline int
@@ -85,18 +80,17 @@ crt_tree_ratio(int tree_topo)
 static inline bool
 crt_tree_topo_valid(int tree_topo)
 {
-	int	tree_type, tree_ratio;
-	bool	valid;
+	int  tree_type, tree_ratio;
+	bool valid;
 
-	tree_type = crt_tree_type(tree_topo);
+	tree_type  = crt_tree_type(tree_topo);
 	tree_ratio = crt_tree_ratio(tree_topo);
 	if (tree_type >= CRT_TREE_MIN && tree_type <= CRT_TREE_MAX &&
-	    (tree_type == CRT_TREE_FLAT || (tree_ratio >= CRT_TREE_MIN_RATIO &&
-					   tree_ratio <= CRT_TREE_MAX_RATIO))) {
+	    (tree_type == CRT_TREE_FLAT ||
+	     (tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO))) {
 		valid = true;
 	} else {
-		D_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n",
-			tree_type, tree_ratio);
+		D_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n", tree_type, tree_ratio);
 		valid = false;
 	}
 

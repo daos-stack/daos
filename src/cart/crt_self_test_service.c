@@ -3,53 +3,53 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(st)
+#define D_LOGFAC DD_FAC(st)
 
 #include <pthread.h>
 #include "crt_internal.h"
 
-#define ISBULK(type) ((type) == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
-		      (type) == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
+#define ISBULK(type)                                                                               \
+	((type) == CRT_SELF_TEST_MSG_TYPE_BULK_GET || (type) == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
 
 /* Very simple buffer entries that can be formed into a stack or list */
 struct st_buf_entry {
-	struct st_buf_entry	*next;
+	struct st_buf_entry *next;
 
 	/* Session this buffer entry belongs to */
-	struct st_session	*session;
+	struct st_session   *session;
 
 	/* Payload */
-	char			*buf;
+	char                *buf;
 
 	/* Length of the buf array */
-	size_t			 buf_len;
+	size_t               buf_len;
 
 	/* Local bulk handle for this buf - only valid if session uses bulk */
-	crt_bulk_t		 bulk_hdl;
+	crt_bulk_t           bulk_hdl;
 
 	/* Scatter-gather list with one iov buffer */
-	d_sg_list_t		 sg_list;
-	d_iov_t			 sg_iov;
+	d_sg_list_t          sg_list;
+	d_iov_t              sg_iov;
 };
 
 struct st_session {
 	/** Session ID. Note that session ID's must be unique */
-	int64_t session_id;
+	int64_t                      session_id;
 
 	/** Reference count, one session be destroyed when dropped to 0 */
-	int64_t session_refcnt;
+	int64_t                      session_refcnt;
 
 	/** Parameters for the session (send size, reply size, etc.) */
-	struct crt_st_session_params	 params;
+	struct crt_st_session_params params;
 
 	/** List of free buffers associated with this session */
-	struct st_buf_entry		*buf_list;
+	struct st_buf_entry         *buf_list;
 
 	/** Lock to protect the list head pointer */
-	pthread_spinlock_t		 buf_list_lock;
+	pthread_spinlock_t           buf_list_lock;
 
 	/** Pointer to the next session in the session list */
-	struct st_session		*next;
+	struct st_session           *next;
 };
 
 /**
@@ -67,9 +67,9 @@ static struct st_session *g_session_list;
  *
  * Controls modification of the overall list of sessions
  */
-static pthread_rwlock_t g_all_session_lock;
+static pthread_rwlock_t   g_all_session_lock;
 
-static int64_t g_last_session_id;
+static int64_t            g_last_session_id;
 
 /**
  * Finds a session in the g_session_list based on its session_id.
@@ -85,8 +85,8 @@ static int64_t g_last_session_id;
  * either the head of the list (g_session_list) or a pointer to the .next
  * element of the preceding st_session in the list
  */
-static struct st_session *find_session(int64_t session_id,
-				       struct st_session ***prev_ptr)
+static struct st_session *
+find_session(int64_t session_id, struct st_session ***prev_ptr)
 {
 	struct st_session **prev = &g_session_list;
 
@@ -106,7 +106,8 @@ static struct st_session *find_session(int64_t session_id,
  * Frees the session pointed to by the provided pointer, and sets the caller's
  * pointer to NULL
  */
-static void free_session(struct st_session **session)
+static void
+free_session(struct st_session **session)
 {
 	struct st_buf_entry *free_entry;
 
@@ -154,14 +155,14 @@ decref_session(struct st_session *session)
 		free_session(&session);
 }
 
-static int alloc_buf_entry(struct st_buf_entry **const return_entry,
-		    const struct st_session *session,
-		    crt_context_t crt_ctx)
+static int
+alloc_buf_entry(struct st_buf_entry **const return_entry, const struct st_session *session,
+		crt_context_t crt_ctx)
 {
-	size_t			 alloc_buf_len;
-	size_t			 test_buf_len;
-	struct st_buf_entry	*new_entry;
-	int			 ret;
+	size_t               alloc_buf_len;
+	size_t               test_buf_len;
+	struct st_buf_entry *new_entry;
+	int                  ret;
 
 	D_ASSERT(return_entry != NULL);
 	/* No returned buffer yet */
@@ -173,8 +174,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	 * big enough to receive the message AND send the response
 	 */
 	if (ISBULK(session->params.send_type))
-		test_buf_len = max(session->params.send_size,
-				   session->params.reply_size);
+		test_buf_len = max(session->params.send_size, session->params.reply_size);
 	else
 		test_buf_len = session->params.reply_size;
 
@@ -221,20 +221,17 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	 * comes time to actually do a bulk transfer
 	 */
 	new_entry->sg_list.sg_iovs = &new_entry->sg_iov;
-	new_entry->sg_list.sg_nr = 1;
+	new_entry->sg_list.sg_nr   = 1;
 	d_iov_set(&new_entry->sg_iov,
-		    crt_st_get_aligned_ptr(new_entry->buf,
-					   session->params.buf_alignment),
-		    test_buf_len);
+		  crt_st_get_aligned_ptr(new_entry->buf, session->params.buf_alignment),
+		  test_buf_len);
 
 	/* If this session will use bulk, initialize a bulk descriptor */
-	if (ISBULK(session->params.send_type)
-	    || ISBULK(session->params.reply_type)) {
-		crt_bulk_perm_t perms = ISBULK(session->params.send_type) ?
-					CRT_BULK_RW : CRT_BULK_RO;
+	if (ISBULK(session->params.send_type) || ISBULK(session->params.reply_type)) {
+		crt_bulk_perm_t perms =
+		    ISBULK(session->params.send_type) ? CRT_BULK_RW : CRT_BULK_RO;
 
-		ret = crt_bulk_create(crt_ctx, &new_entry->sg_list,
-				      perms, &new_entry->bulk_hdl);
+		ret = crt_bulk_create(crt_ctx, &new_entry->sg_list, perms, &new_entry->bulk_hdl);
 		if (ret != 0) {
 			D_ERROR("crt_bulk_create failed; ret=%d\n", ret);
 			D_FREE(new_entry->buf);
@@ -251,23 +248,27 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	return 0;
 }
 
-void crt_self_test_service_init(void)
+void
+crt_self_test_service_init(void)
 {
 	D_RWLOCK_INIT(&g_all_session_lock, NULL);
 }
 
-void crt_self_test_service_fini(void)
+void
+crt_self_test_service_fini(void)
 {
 	D_RWLOCK_DESTROY(&g_all_session_lock);
 }
 
-void crt_self_test_init(void)
+void
+crt_self_test_init(void)
 {
 	crt_self_test_service_init();
 	crt_self_test_client_init();
 }
 
-void crt_self_test_fini(void)
+void
+crt_self_test_fini(void)
 {
 	crt_self_test_service_fini();
 	crt_self_test_client_fini();
@@ -276,12 +277,12 @@ void crt_self_test_fini(void)
 void
 crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 {
-	struct crt_st_session_params	*args;
-	struct st_session		*new_session = NULL;
-	int64_t				*reply_session_id;
-	int64_t				 session_id;
-	uint32_t			 i;
-	int				 ret;
+	struct crt_st_session_params *args;
+	struct st_session            *new_session = NULL;
+	int64_t                      *reply_session_id;
+	int64_t                       session_id;
+	uint32_t                      i;
+	int                           ret;
 
 	/* Get pointers to the arguments and response buffers */
 	args = crt_req_get(rpc_req);
@@ -304,8 +305,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		D_GOTO(send_rpc, *reply_session_id = -1);
 
 	/* Initialize the new session */
-	ret = D_SPIN_INIT(&new_session->buf_list_lock,
-				PTHREAD_PROCESS_PRIVATE);
+	ret = D_SPIN_INIT(&new_session->buf_list_lock, PTHREAD_PROCESS_PRIVATE);
 	D_ASSERT(ret == 0);
 
 	/* Copy the session parameters */
@@ -332,7 +332,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		}
 
 		/* Push this new entry onto the head of the stack */
-		new_entry->next = new_session->buf_list;
+		new_entry->next       = new_session->buf_list;
 		new_session->buf_list = new_entry;
 	}
 
@@ -369,8 +369,8 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	} else {
 		/* Success - found an unused session ID */
 		new_session->session_id = session_id;
-		g_last_session_id = session_id;
-		*reply_session_id = session_id;
+		g_last_session_id       = session_id;
+		*reply_session_id       = session_id;
 
 		/* Add the new session to the list of open sessions */
 		new_session->next = g_session_list;
@@ -395,11 +395,11 @@ send_rpc:
 void
 crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 {
-	int64_t			*args;
-	struct st_session	*del_session;
-	struct st_session	**prev;
-	int64_t			 session_id;
-	int			 ret;
+	int64_t            *args;
+	struct st_session  *del_session;
+	struct st_session **prev;
+	int64_t             session_id;
+	int                 ret;
 
 	args = crt_req_get(rpc_req);
 	D_ASSERT(args != NULL);
@@ -431,14 +431,13 @@ send_rpc:
 		D_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
 }
 
-void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
-				  struct st_buf_entry *buf_entry,
-				  int do_decref)
+void
+crt_self_test_msg_send_reply(crt_rpc_t *rpc_req, struct st_buf_entry *buf_entry, int do_decref)
 {
-	d_iov_t				*res;
-	int				 ret;
-	struct st_session		*session = NULL;
-	struct crt_st_session_params	*params = NULL;
+	d_iov_t                      *res;
+	int                           ret;
+	struct st_session            *session = NULL;
+	struct crt_st_session_params *params  = NULL;
 
 	/* Grab some shorter aliases */
 	if (buf_entry != NULL) {
@@ -447,17 +446,14 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 		params = &session->params;
 	}
 
-	if (buf_entry != NULL &&
-	    params->reply_type == CRT_SELF_TEST_MSG_TYPE_IOV) {
+	if (buf_entry != NULL && params->reply_type == CRT_SELF_TEST_MSG_TYPE_IOV) {
 		/* Get the IOV reply handle */
 		res = crt_reply_get(rpc_req);
 		D_ASSERT(res != NULL);
 
 		/* Set the reply buffer */
-		d_iov_set(res,
-			 crt_st_get_aligned_ptr(buf_entry->buf,
-						params->buf_alignment),
-			 params->reply_size);
+		d_iov_set(res, crt_st_get_aligned_ptr(buf_entry->buf, params->buf_alignment),
+			  params->reply_size);
 	}
 
 	ret = crt_reply_send(rpc_req);
@@ -472,7 +468,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 		/************* LOCK: session->buf_list_lock *************/
 		D_SPIN_LOCK(&session->buf_list_lock);
 
-		buf_entry->next = session->buf_list;
+		buf_entry->next   = session->buf_list;
 		session->buf_list = buf_entry;
 
 		D_SPIN_UNLOCK(&session->buf_list_lock);
@@ -493,9 +489,10 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 }
 
-int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
+int
+crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 {
-	struct st_buf_entry	*buf_entry;
+	struct st_buf_entry *buf_entry;
 
 	D_ASSERT(cb_info);
 	D_ASSERT(cb_info->bci_arg);
@@ -508,18 +505,18 @@ int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	if (cb_info->bci_rc != 0)
 		D_ERROR("BULK_GET failed; bci_rc=%d\n", cb_info->bci_rc);
 
-	crt_self_test_msg_send_reply(cb_info->bci_bulk_desc->bd_rpc,
-				     buf_entry, 1);
+	crt_self_test_msg_send_reply(cb_info->bci_bulk_desc->bd_rpc, buf_entry, 1);
 
 	return 0;
 }
 
-int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
+int
+crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 {
-	struct crt_bulk_desc	 bulk_desc_out;
-	struct crt_bulk_desc	*bulk_desc_in;
-	struct st_buf_entry	*buf_entry;
-	int			 ret;
+	struct crt_bulk_desc  bulk_desc_out;
+	struct crt_bulk_desc *bulk_desc_in;
+	struct st_buf_entry  *buf_entry;
+	int                   ret;
 
 	D_ASSERT(cb_info);
 	D_ASSERT(cb_info->bci_arg);
@@ -530,31 +527,26 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 	if (cb_info->bci_rc != 0)
 		D_ERROR("BULK_GET failed; bci_rc=%d\n", cb_info->bci_rc);
 
-	buf_entry = cb_info->bci_arg;
+	buf_entry    = cb_info->bci_arg;
 	bulk_desc_in = cb_info->bci_bulk_desc;
 
-	if (buf_entry->session->params.reply_type ==
-			CRT_SELF_TEST_MSG_TYPE_BULK_PUT) {
-		bulk_desc_out.bd_rpc = bulk_desc_in->bd_rpc;
-		bulk_desc_out.bd_bulk_op = CRT_BULK_PUT;
+	if (buf_entry->session->params.reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT) {
+		bulk_desc_out.bd_rpc        = bulk_desc_in->bd_rpc;
+		bulk_desc_out.bd_bulk_op    = CRT_BULK_PUT;
 		bulk_desc_out.bd_remote_hdl = bulk_desc_in->bd_remote_hdl;
 		bulk_desc_out.bd_remote_off = 0;
-		bulk_desc_out.bd_local_hdl = bulk_desc_in->bd_local_hdl;
-		bulk_desc_out.bd_local_off = 0;
-		bulk_desc_out.bd_len = buf_entry->session->params.reply_size;
+		bulk_desc_out.bd_local_hdl  = bulk_desc_in->bd_local_hdl;
+		bulk_desc_out.bd_local_off  = 0;
+		bulk_desc_out.bd_len        = buf_entry->session->params.reply_size;
 
-		ret = crt_bulk_transfer(&bulk_desc_out,
-					crt_self_test_msg_bulk_put_cb,
-					buf_entry, NULL);
+		ret = crt_bulk_transfer(&bulk_desc_out, crt_self_test_msg_bulk_put_cb, buf_entry,
+					NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
-			crt_self_test_msg_send_reply(bulk_desc_in->bd_rpc,
-						     NULL, 1);
+			D_ERROR("self-test service BULK_GET failed; ret=%d\n", ret);
+			crt_self_test_msg_send_reply(bulk_desc_in->bd_rpc, NULL, 1);
 		}
 	} else {
-		crt_self_test_msg_send_reply(cb_info->bci_bulk_desc->bd_rpc,
-					     buf_entry, 1);
+		crt_self_test_msg_send_reply(cb_info->bci_bulk_desc->bd_rpc, buf_entry, 1);
 	}
 
 	return 0;
@@ -563,11 +555,11 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 void
 crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 {
-	void			*args;
-	struct st_buf_entry	*buf_entry = NULL;
-	struct st_session	*session;
-	int64_t			 session_id;
-	int			 ret;
+	void                *args;
+	struct st_buf_entry *buf_entry = NULL;
+	struct st_session   *session;
+	int64_t              session_id;
+	int                  ret;
 
 	D_ASSERT(rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_EMPTY ||
 		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV ||
@@ -629,8 +621,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 		return;
 	}
 	if (rpc_req->cr_opc !=
-		crt_st_compute_opcode(session->params.send_type,
-				      session->params.reply_type)) {
+	    crt_st_compute_opcode(session->params.send_type, session->params.reply_type)) {
 		D_ERROR("Opcode / self-test session params mismatch\n");
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return;
@@ -675,11 +666,11 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			 * allocation while a test is running
 			 */
 
-			ret = alloc_buf_entry(&buf_entry, session,
-					      rpc_req->cr_ctx);
+			ret = alloc_buf_entry(&buf_entry, session, rpc_req->cr_ctx);
 			if (ret != 0) {
 				D_ERROR("Failed to allocate buf_entry;"
-					" ret=%d\n", ret);
+					" ret=%d\n",
+					ret);
 				return;
 			}
 
@@ -689,56 +680,46 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 
 	if (session->params.send_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
 		struct crt_bulk_desc bulk_desc;
-		crt_bulk_t bulk_remote_hdl =
-			((struct crt_st_send_id_bulk *)args)->bulk_hdl;
+		crt_bulk_t bulk_remote_hdl = ((struct crt_st_send_id_bulk *)args)->bulk_hdl;
 
 		D_ASSERT(bulk_remote_hdl != CRT_BULK_NULL);
 		D_ASSERT(buf_entry->bulk_hdl != CRT_BULK_NULL);
 		D_ASSERT(rpc_req != NULL);
 
-		bulk_desc.bd_rpc = rpc_req;
-		bulk_desc.bd_bulk_op = CRT_BULK_GET;
+		bulk_desc.bd_rpc        = rpc_req;
+		bulk_desc.bd_bulk_op    = CRT_BULK_GET;
 		bulk_desc.bd_remote_hdl = bulk_remote_hdl;
 		bulk_desc.bd_remote_off = 0;
-		bulk_desc.bd_local_hdl = buf_entry->bulk_hdl;
-		bulk_desc.bd_local_off = 0;
-		bulk_desc.bd_len = session->params.send_size;
+		bulk_desc.bd_local_hdl  = buf_entry->bulk_hdl;
+		bulk_desc.bd_local_off  = 0;
+		bulk_desc.bd_len        = session->params.send_size;
 
-		ret = crt_bulk_transfer(&bulk_desc,
-					crt_self_test_msg_bulk_get_cb,
-					buf_entry, NULL);
+		ret = crt_bulk_transfer(&bulk_desc, crt_self_test_msg_bulk_get_cb, buf_entry, NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
+			D_ERROR("self-test service BULK_GET failed; ret=%d\n", ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 			return;
 		}
-	} else if (session->params.reply_type ==
-		   CRT_SELF_TEST_MSG_TYPE_BULK_PUT) {
+	} else if (session->params.reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT) {
 		struct crt_bulk_desc bulk_desc;
-		crt_bulk_t bulk_remote_hdl = CRT_BULK_NULL;
+		crt_bulk_t           bulk_remote_hdl = CRT_BULK_NULL;
 
 		if (session->params.send_type == CRT_SELF_TEST_MSG_TYPE_IOV)
-			bulk_remote_hdl = ((struct crt_st_send_id_iov_bulk *)
-					   args)->bulk_hdl;
+			bulk_remote_hdl = ((struct crt_st_send_id_iov_bulk *)args)->bulk_hdl;
 		else
-			bulk_remote_hdl = ((struct crt_st_send_id_bulk *)
-					   args)->bulk_hdl;
+			bulk_remote_hdl = ((struct crt_st_send_id_bulk *)args)->bulk_hdl;
 
-		bulk_desc.bd_rpc = rpc_req;
-		bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+		bulk_desc.bd_rpc        = rpc_req;
+		bulk_desc.bd_bulk_op    = CRT_BULK_PUT;
 		bulk_desc.bd_remote_hdl = bulk_remote_hdl;
 		bulk_desc.bd_remote_off = 0;
-		bulk_desc.bd_local_hdl = buf_entry->bulk_hdl;
-		bulk_desc.bd_local_off = 0;
-		bulk_desc.bd_len = buf_entry->session->params.reply_size;
+		bulk_desc.bd_local_hdl  = buf_entry->bulk_hdl;
+		bulk_desc.bd_local_off  = 0;
+		bulk_desc.bd_len        = buf_entry->session->params.reply_size;
 
-		ret = crt_bulk_transfer(&bulk_desc,
-					crt_self_test_msg_bulk_put_cb,
-					buf_entry, NULL);
+		ret = crt_bulk_transfer(&bulk_desc, crt_self_test_msg_bulk_put_cb, buf_entry, NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
+			D_ERROR("self-test service BULK_GET failed; ret=%d\n", ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 			return;
 		}
