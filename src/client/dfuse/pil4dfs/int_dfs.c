@@ -606,8 +606,7 @@ discover_daos_mount(void)
 	if (access(fs_root, R_OK)) {
 		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
 			strerror(errno));
-		rc = EACCES;
-		goto out;
+		D_GOTO(out, rc = EACCES);
 	}
 
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
@@ -619,28 +618,24 @@ discover_daos_mount(void)
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
-		rc = ENAMETOOLONG;
-		goto out;
+		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
-		rc = EINVAL;
-		goto out;
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
-		rc = EINVAL;
-		goto out;
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL) {
-		rc = ENOMEM;
-		goto out;
+		D_GOTO(out, rc = ENOMEM);
 	}
 
 	dfs_list[num_dfs].pool         = pool;
@@ -652,7 +647,7 @@ discover_daos_mount(void)
 
 out:
 	if (num_dfs == 0)
-		D_DEBUG(DB_ANY, "There are not any DFS mounts found.\n");
+		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
 
 	return rc;
 }
@@ -691,9 +686,7 @@ discover_dfuse(void)
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
-				if (rc == 0)
-					rc = ENAMETOOLONG;
-				continue;
+				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
 				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
@@ -704,15 +697,13 @@ discover_dfuse(void)
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL) {
-				if (rc == 0)
-					rc = ENOMEM;
-				continue;
-			}
+			if (pt_dfs_mt->fs_root == NULL)
+				D_GOTO(out, rc = ENOMEM);
 			num_dfs++;
 		}
 	}
 
+out:
 	endmntent(fp);
 	return rc;
 }
@@ -5214,6 +5205,10 @@ init_myhook(void)
 			report = false;
 	}
 
+	discover_daos_mount();
+	if (num_dfs == 0)
+		return;
+
 	update_cwd();
 	rc = D_MUTEX_INIT(&lock_dfs, NULL);
 	if (rc)
@@ -5268,12 +5263,9 @@ init_myhook(void)
 	 */
 
 	init_fd_dup2_list();
-	discover_daos_mount();
 
-	if (num_dfs > 0) {
-		install_hook();
-		hook_enabled = 1;
-	}
+	install_hook();
+	hook_enabled = 1;
 }
 
 static void
@@ -5345,20 +5337,21 @@ close_all_dirfd(void)
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
-	close_all_duped_fd();
-	close_all_fd();
-	close_all_dirfd();
+	if (num_dfs > 0) {
+		close_all_duped_fd();
+		close_all_fd();
+		close_all_dirfd();
 
-	finalize_dfs();
+		finalize_dfs();
 
-	D_MUTEX_DESTROY(&lock_dfs);
-	D_MUTEX_DESTROY(&lock_dirfd);
-	D_MUTEX_DESTROY(&lock_fd);
-	D_MUTEX_DESTROY(&lock_mmap);
-	D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_MUTEX_DESTROY(&lock_dfs);
+		D_MUTEX_DESTROY(&lock_dirfd);
+		D_MUTEX_DESTROY(&lock_fd);
+		D_MUTEX_DESTROY(&lock_mmap);
+		D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
-	if (num_dfs > 0)
 		uninstall_hook();
+	}
 
 	if (daos_debug_inited)
 		daos_debug_fini();
