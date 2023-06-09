@@ -5,7 +5,7 @@
     <source>.</source>
   </sources>
   <packages>
-    <package name="" line-rate="0.8571428571428571" branch-rate="0.5" complexity="0.0">
+    <package name="NLT Log coverage" line-rate="0.8571428571428571" branch-rate="0.5" complexity="0.0">
       <classes>
         <class name="crt_group.c" filename="src/cart/crt_group.c" line-rate="0.8571428571428571" branch-rate="0.5" complexity="0.0">
           <methods/>

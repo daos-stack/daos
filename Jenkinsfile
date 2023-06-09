@@ -822,7 +822,6 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-                            cobertura coberturaReportFile: 'nlt-coverage.xml'
                             job_status_update()
                         }
                     }
@@ -1083,6 +1082,7 @@ pipeline {
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            cobertura coberturaReportFile: 'nlt-coverage.xml', enableNewApi: true
                             job_status_update()
                         }
                     }
