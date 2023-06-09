@@ -117,9 +117,9 @@ static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
 static int
-discover_daos_mount(void);
+discover_daos_mount_with_env(void);
 static int
-discover_dfuse(void);
+discover_dfuse_mounts(void);
 static int
 retrieve_handles_from_fuse(int idx);
 static int
@@ -575,66 +575,60 @@ query_dfs_mount(const char *path)
 
 /* Discover fuse mount points from /proc/self/mounts and env DAOS_MOUNT_POINT.
  * Return 0 for success. Otherwise return Linux errno. This function interception
- * is still effective as long as num_dfs is not zero even if discover_daos_mount()
+ * is still effective as long as num_dfs is not zero even if discover_daos_mount_with_env()
  * returns a non-zero value.
  */
 static int
-discover_daos_mount(void)
+discover_daos_mount_with_env(void)
 {
 	int   idx, len_fs_root, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
-	/* Find the list of dfuse from /proc/mounts */
-	rc = discover_dfuse();
-	if (rc) {
-		D_DEBUG(DB_ANY, "discover_dfuse() failed: %d (%s)\n", rc, strerror(rc));
-		return rc;
-	}
-
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
-		goto out;
+		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
+		D_GOTO(out, rc = 0);
 
 	if (num_dfs >= MAX_DAOS_MT) {
 		D_FATAL("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
-		abort();
+		D_GOTO(out, rc = EBUSY);
 	}
 
 	if (access(fs_root, R_OK)) {
-		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
-			strerror(errno));
+		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
 		D_GOTO(out, rc = EACCES);
 	}
 
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		goto out;
+		D_GOTO(out, rc = 0);
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
+		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
+		D_FATAL("DAOS_POOL is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
+		D_FATAL("DAOS_CONTAINER is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL) {
+		D_FATAL("D_STRNDUP() failed: %d (%s)\n", ENOMEM, strerror(ENOMEM));
 		D_GOTO(out, rc = ENOMEM);
 	}
 
@@ -644,21 +638,19 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
+	rc = 0;
 
 out:
-	if (num_dfs == 0)
-		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
-
 	return rc;
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
 /* Discover fuse mount points from /proc/self/mounts. Return 0 for success. Otherwise
  * return Linux errno. This function interception is still effective as long as num_dfs
- * is not zero even if discover_dfuse() returns a non-zero value.
+ * is not zero even if discover_dfuse_mounts() returns a non-zero value.
  */
 static int
-discover_dfuse(void)
+discover_dfuse_mounts(void)
 {
 	int            rc = 0;
 	FILE          *fp;
@@ -5205,9 +5197,24 @@ init_myhook(void)
 			report = false;
 	}
 
-	discover_daos_mount();
-	if (num_dfs == 0)
+	/* Find dfuse mounts from /proc/mounts */
+	rc = discover_dfuse_mounts();
+	if (rc) {
+		/* Do not enable interception if discover_dfuse_mounts() failed. */
+		D_DEBUG(DB_ANY, "discover_dfuse_mounts() failed: %d (%s)\n", rc, strerror(rc));
 		return;
+	}
+
+	rc = discover_daos_mount_with_env();
+	if (rc) {
+		D_FATAL("discover_daos_mount_with_env() failed: %d (%s)", rc, strerror(rc));
+		abort();
+	}
+	if (num_dfs == 0) {
+		/* Do not enable interception if no DFS mounts found. */
+		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
+		return;
+	}
 
 	update_cwd();
 	rc = D_MUTEX_INIT(&lock_dfs, NULL);
