@@ -10,6 +10,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
+import getpass
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing, CoreFileException
+from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -604,6 +606,7 @@ class Launch():
         self.tag_filters = []
         self.repeat = 1
         self.local_host = get_local_host()
+        self.user = getpass.getuser()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -1808,8 +1811,11 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure slurm if any tests use partitions
+        return_code |= self.setup_slurm()
+
         # Configure hosts to collect code coverage
-        self.setup_bullseye()
+        return_code |= self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -1861,7 +1867,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        self.finalize_bullseye()
+        return_code |= self.finalize_bullseye()
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -1932,6 +1938,61 @@ class Launch():
                             logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
         return status
+
+    def setup_slurm(self):
+        """Set up slurm on the hosts if any tests are using partitions.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        status = 0
+        logger.info("Setting up slurm partitions if required by tests")
+        if not any(test.yaml_info["client_partition"] for test in self.tests):
+            logger.debug("  No tests using client partitions detected - skipping slurm setup")
+            return status
+
+        if not self.slurm_add_partition:
+            logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
+            return status
+
+        status |= self.setup_slurm_apps()
+
+        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        try:
+            slurm_setup.install()
+            slurm_setup.update_config(self.user, 'daos_client')
+            slurm_setup.start_munge(self.user)
+            slurm_setup.start_slurm(self.user, True)
+        except SlurmSetupException:
+            message = "Error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+
+        return status
+
+    def setup_soak_apps(self):
+        """Set up the soak apps directory.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        apps_dir = os.path.join(os.environ.get("DAOS_APP_DIR"), "soak", "apps")
+        logger.debug("Setting up the soak apps directory: %s", apps_dir)
+        try:
+            os.makedirs(apps_dir)
+        except OSError:
+            message = "Error creating soak apps directory"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            return 128
+
+        apps_src = os.path.join(os.sep, "scratch", "soak", "apps")
+        try:
+            run_local(logger, f"cp -r {apps_src}/* {apps_dir}/", check=True)
+        except RunException:
+            message = "Error copying files to the soak apps directory"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            return 128
+        return 0
 
     @staticmethod
     def display_disk_space(path):

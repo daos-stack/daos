@@ -71,23 +71,27 @@ class SlurmSetup():
         """
         return self.nodes.union(self.control)
 
-    def remove_packages(self):
+    def remove(self):
         """Remove slurm packages from the nodes.
 
-        Returns:
-            bool: were all packages removed from all hosts successfully
+        Raises:
+            SlurmSetupException: if there is a problem removing the packages
         """
         self.log.info("Removing slurm packages")
-        return remove_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root).passed
+        result = remove_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
+        if not result.passed:
+            raise SlurmSetupException("Error removing slurm packages on {result.failed_hosts}")
 
-    def install_packages(self):
+    def install(self):
         """Install slurm packages on the nodes.
 
-        Returns:
-            bool: were all packages installed on all hosts successfully
+        Raises:
+            SlurmSetupException: if there is a problem installing the packages
         """
         self.log.info("Installing slurm packages")
-        return install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root).passed
+        result = install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
+        if not result.passed:
+            raise SlurmSetupException("Error installing slurm packages on {result.failed_hosts}")
 
     def update_config(self, slurm_user, partition):
         """Update the slurm config.
@@ -532,11 +536,19 @@ def main():
 
     # Remove packages if specified with --remove and then exit
     if args.remove:
-        sys.exit(int(not slurm_setup.remove_packages()))
+        try:
+            slurm_setup.remove()
+            sys.exit(0)
+        except SlurmSetupException as error:
+            logger.error(str(error))
+            sys.exit(1)
 
     # Install packages if specified with --install and continue with setup
     if args.install:
-        if not slurm_setup.install_packages():
+        try:
+            slurm_setup.install()
+        except SlurmSetupException as error:
+            logger.error(str(error))
             sys.exit(1)
 
     # Edit the slurm conf files

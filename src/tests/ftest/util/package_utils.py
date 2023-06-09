@@ -7,11 +7,32 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from run_utils import run_remote, command_as_user
 
 
-def install_packages(logger, nodes, packages, user=None, timeout=600):
-    """Install the packages on the nodes.
+def find_packages(log, hosts, pattern, user=None):
+    """Get the installed packages on each specified host.
 
     Args:
-        nodes (NodeSet): nodes on which to install the packages
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to search for installed packages
+        pattern (str): grep pattern to use to search for installed packages
+
+    Returns:
+        dict: a dictionary of host keys with a list of installed RPM values
+    """
+    installed = {}
+    command = command_as_user(f"rpm -qa | grep -E {pattern} | sort -n", user)
+    result = run_remote(log, hosts, command)
+    for data in result.output:
+        if data.passed:
+            installed[str(data.hosts)] = data.stdout or []
+    return installed
+
+
+def install_packages(log, hosts, packages, user=None, timeout=600):
+    """Install the packages on the hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to install the packages
         packages (list): a list of packages to install
         user (str, optional): user to user when installing the packages. Defaults to None.
         timeout (int, optional): timeout for the dnf install command. Defaults to 600.
@@ -19,16 +40,17 @@ def install_packages(logger, nodes, packages, user=None, timeout=600):
     Returns:
         RemoteCommandResult: the 'dnf install' command results
     """
-    logger.info('Installing packages on %s: %s', nodes, ', '.join(packages))
+    log.info('Installing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
-    return run_remote(logger, nodes, command, timeout=timeout)
+    return run_remote(log, hosts, command, timeout=timeout)
 
 
-def remove_packages(logger, nodes, packages, user=None, timeout=600):
-    """Remove the packages on the nodes.
+def remove_packages(log, hosts, packages, user=None, timeout=600):
+    """Remove the packages on the hosts.
 
     Args:
-        nodes (NodeSet): nodes on which to remove the packages
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to remove the packages
         packages (list): a list of packages to remove
         user (str, optional): user to user when removing the packages. Defaults to None.
         timeout (int, optional): timeout for the dnf remove command. Defaults to 600.
@@ -36,6 +58,6 @@ def remove_packages(logger, nodes, packages, user=None, timeout=600):
     Returns:
         RemoteCommandResult: the 'dnf remove' command results
     """
-    logger.info('Removing packages on %s: %s', nodes, ', '.join(packages))
+    log.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)
-    return run_remote(logger, nodes, command, timeout=timeout)
+    return run_remote(log, hosts, command, timeout=timeout)
