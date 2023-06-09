@@ -148,12 +148,13 @@ ktr_rec_msize(int alloc_overhead)
 static void
 ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct ktr_hkey	*kkey = (struct ktr_hkey *)hkey;
+	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
+	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
 
 	hkey_common_gen(key_iov, hkey);
 
 	if (key_iov->iov_len > KH_INLINE_MAX)
-		vos_kh_set(kkey->kh_murmur64);
+		vos_kh_set(kkey->kh_murmur64, umm_pool->up_store.store_standalone);
 }
 
 /** compare the hashed key */

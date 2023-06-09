@@ -137,9 +137,9 @@ vos_kh_clear(bool standalone)
 }
 
 static inline void
-vos_kh_set(uint64_t hash)
+vos_kh_set(uint64_t hash, bool standalone)
 {
-	struct vos_tls	*tls = vos_tls_get(false);
+	struct vos_tls	*tls = vos_tls_get(standalone);
 
 	tls->vtl_hash = hash;
 	tls->vtl_hash_set = true;
