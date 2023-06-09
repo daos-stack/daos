@@ -39,10 +39,6 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        cron(env.BRANCH_NAME.startsWith('provider-testing') ? 'H 2 * * 6' : '')
-    }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
