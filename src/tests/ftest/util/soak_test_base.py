@@ -18,7 +18,7 @@ from apricot import TestWithServers
 
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
-from general_utils import run_command, DaosTestError
+from general_utils import run_command, DaosTestError, journalctl_time
 from host_utils import get_local_host
 import slurm_utils
 from run_utils import run_remote
@@ -402,7 +402,7 @@ class SoakTestBase(TestWithServers):
         harasser_timer = time.time()
         check_time = datetime.now()
         event_check_messages = []
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
@@ -444,7 +444,7 @@ class SoakTestBase(TestWithServers):
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
             # check journalctl for events;
-            until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            until = journalctl_time()
             event_check_messages = run_event_check(self, since, until)
             self.check_errors.extend(event_check_messages)
             run_monitor_check(self)
