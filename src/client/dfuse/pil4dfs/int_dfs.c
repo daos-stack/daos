@@ -588,8 +588,10 @@ discover_daos_mount(void)
 
 	/* Find the list of dfuse from /proc/mounts */
 	rc = discover_dfuse();
-	if (rc)
+	if (rc) {
 		D_DEBUG(DB_ANY, "discover_dfuse() failed: %d (%s)\n", rc, strerror(rc));
+		return rc;
+	}
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
@@ -597,18 +599,18 @@ discover_daos_mount(void)
 		goto out;
 
 	if (num_dfs >= MAX_DAOS_MT) {
-		D_ERROR("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
+		D_FATAL("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
 		abort();
 	}
 
 	if (access(fs_root, R_OK)) {
 		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
 			strerror(errno));
-		if (rc == 0)
-			rc = EACCES;
+		rc = EACCES;
 		goto out;
 	}
 
+	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
 		goto out;
@@ -617,31 +619,27 @@ discover_daos_mount(void)
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
-		if (rc == 0)
-			rc = ENAMETOOLONG;
+		rc = ENAMETOOLONG;
 		goto out;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
-		if (rc == 0)
-			rc = EINVAL;
+		rc = EINVAL;
 		goto out;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
-		if (rc == 0)
-			rc = EINVAL;
+		rc = EINVAL;
 		goto out;
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL) {
-		if (rc == 0)
-			rc = ENOMEM;
+		rc = ENOMEM;
 		goto out;
 	}
 
@@ -654,7 +652,7 @@ discover_daos_mount(void)
 
 out:
 	if (num_dfs == 0)
-		D_DEBUG(DB_ANY, "There is no any DFS mount point found.\n");
+		D_DEBUG(DB_ANY, "There are not any DFS mounts found.\n");
 
 	return rc;
 }
@@ -684,7 +682,7 @@ discover_dfuse(void)
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
 		if (num_dfs >= MAX_DAOS_MT) {
-			D_ERROR("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
+			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
@@ -5272,9 +5270,10 @@ init_myhook(void)
 	init_fd_dup2_list();
 	discover_daos_mount();
 
-	install_hook();
-
-	hook_enabled = 1;
+	if (num_dfs > 0) {
+		install_hook();
+		hook_enabled = 1;
+	}
 }
 
 static void
@@ -5358,7 +5357,8 @@ finalize_myhook(void)
 	D_MUTEX_DESTROY(&lock_mmap);
 	D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
-	uninstall_hook();
+	if (num_dfs > 0)
+		uninstall_hook();
 
 	if (daos_debug_inited)
 		daos_debug_fini();
