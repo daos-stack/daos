@@ -192,7 +192,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
                 } // stage('Functional on EL 8')
@@ -216,7 +215,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Leap 15.4')
@@ -240,7 +238,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -265,7 +262,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -290,7 +286,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Medium Verbs Provider')
@@ -315,7 +310,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Medium UCX Provider')
@@ -340,7 +334,6 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Large')
