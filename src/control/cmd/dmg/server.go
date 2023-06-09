@@ -59,14 +59,15 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, resp.Errors())
 	}
 
-	var outErr strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+	var out, outErr strings.Builder
+	if err := pretty.PrintSetEngineLogMasksResp(resp, &out, &outErr); err != nil {
 		return err
 	}
 	if outErr.Len() > 0 {
 		cmd.Error(outErr.String())
-	} else {
-		cmd.Info("Engine log levels have been updated successfully.")
+	}
+	if out.Len() > 0 {
+		cmd.Info(out.String())
 	}
 
 	return resp.Errors()

@@ -731,11 +731,14 @@ bio_yield(struct umem_instance *umm)
  * \param dev_state	[OUT]	BIO device health state
  * \param dev_uuid	[IN]	uuid of device
  * \param st		[IN]	smd dev type
+ * \param meta_size	[IN]	Metadata blob size
+ * \param rdb_size	[IN]	RDB blob size
  *
  * \return			Zero on success, negative value on error
  */
 int bio_get_dev_state(struct nvme_stats *dev_state, uuid_t dev_uuid,
-		      struct bio_xs_context *xs);
+		      struct bio_xs_context *xs, uint64_t meta_size,
+		      uint64_t rdb_size);
 
 /*
  * Helper function to get the internal blobstore state for a given xstream.
