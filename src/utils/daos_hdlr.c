@@ -2427,11 +2427,53 @@ out:
 	return rc;
 }
 
+/* Dfuse cache evict (and helper).
+ * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
+ * cannot do this so perform the same over all the top-level directory entries instead.
+ */
+
+static int
+dfuse_evict_helper(int fd)
+{
+	struct dirent *ent;
+	DIR           *dir;
+	int            rc = 0;
+
+	dir = fdopendir(fd);
+	if (dir == 0) {
+		rc = errno;
+		return rc;
+	}
+
+	while ((ent = readdir(dir)) != NULL) {
+		int cfd;
+
+		printf("Processing %s\n", ent->d_name);
+
+		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
+		if (cfd < 0) {
+			rc = errno;
+			goto out;
+		}
+
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT);
+		close(cfd);
+		if (rc < 0) {
+			rc = errno;
+			goto out;
+		}
+	}
+
+out:
+	closedir(dir);
+	return rc;
+}
+
 int
 dfuse_evict(struct cmd_args_s *ap)
 {
 	struct stat buf;
-	int         rc;
+	int         rc = -DER_SUCCESS;
 	int         fd;
 
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
@@ -2443,18 +2485,25 @@ dfuse_evict(struct cmd_args_s *ap)
 
 	rc = fstat(fd, &buf);
 	if (rc < 0) {
-		rc = errno;
-		DH_PERROR_SYS(ap, rc, "Failed to stat file");
-		return daos_errno2der(rc);
+		rc = daos_errno2der(errno);
+		DH_PERROR_DER(ap, rc, "Failed to stat file");
+		goto close;
+	}
+
+	if (buf.st_ino == 1) {
+		rc = daos_errno2der(dfuse_evict_helper(fd));
+		DH_PERROR_DER(ap, rc, "Unable to traverse root");
+		goto close;
 	}
 
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT);
 	if (rc < 0) {
-		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		return daos_errno2der(rc);
+		rc = daos_errno2der(errno);
+		DH_PERROR_DER(ap, rc, "ioctl failed");
+		goto close;
 	}
 
+close:
 	close(fd);
-	return -DER_SUCCESS;
+	return rc;
 }

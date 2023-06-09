@@ -2487,6 +2487,11 @@ class PosixTests():
         assert rc.returncode == 0, rc
         time.sleep(5)
 
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', '--path', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
     @needs_dfuse
     def test_list_xattr(self):
         """Perform tests with listing extended attributes.
