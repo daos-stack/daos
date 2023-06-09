@@ -22,6 +22,7 @@
 #include <sys/xattr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <daos.h>
@@ -39,6 +40,8 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
+
+#include "dfuse_ioctl.h"
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -2422,4 +2425,36 @@ out:
 		D_FREE(ca->dst);
 	}
 	return rc;
+}
+
+int
+dfuse_evict(struct cmd_args_s *ap)
+{
+	struct stat buf;
+	int         rc;
+	int         fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = fstat(fd, &buf);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		return daos_errno2der(rc);
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "ioctl failed");
+		return daos_errno2der(rc);
+	}
+
+	close(fd);
+	return -DER_SUCCESS;
 }

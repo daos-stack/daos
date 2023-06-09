@@ -199,6 +199,10 @@ int fs_relink_root_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
 
+/* Dfuse operations */
+int
+dfuse_evict(struct cmd_args_s *ap);
+
 /* TODO implement the following container op functions
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)

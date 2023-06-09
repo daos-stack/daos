@@ -37,6 +37,7 @@ type fsCmd struct {
 	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
+	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 }
 
 type fsCopyCmd struct {
@@ -424,6 +425,30 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 
 	if err := dfsError(C.fs_relink_root_hdlr(ap)); err != nil {
 		return errors.Wrapf(err, "Relink Root failed")
+	}
+
+	return nil
+}
+
+type fsDfuseEvictCmd struct {
+	daosCmd
+
+	Path string `long:"path" description:"Path to evict from dfuse" required:"1"`
+}
+
+func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	rc := C.dfuse_evict(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to evict %s", cmd.Path)
 	}
 
 	return nil

@@ -15,9 +15,7 @@
 
 #define DFUSE_IOCTL_REPLY_CORE   (DFUSE_IOCTL_REPLY_BASE)
 
-/* (DFUSE_IOCTL_REPLY_BASE + 1) is reserved by an older version of
- * IOCTL_REPLY_SIZE
- */
+/* (DFUSE_IOCTL_REPLY_BASE + 1) is reserved by an older version of IOCTL_REPLY_SIZE */
 
 #define DFUSE_IOCTL_REPLY_POH    (DFUSE_IOCTL_REPLY_BASE + 2)
 #define DFUSE_IOCTL_REPLY_COH    (DFUSE_IOCTL_REPLY_BASE + 3)
@@ -26,8 +24,8 @@
 #define DFUSE_IOCTL_REPLY_SIZE   (DFUSE_IOCTL_REPLY_BASE + 6)
 #define DFUSE_IOCTL_REPLY_DSIZE  (DFUSE_IOCTL_REPLY_BASE + 7)
 #define DFUSE_IOCTL_REPLY_PFILE  (DFUSE_IOCTL_REPLY_BASE + 8)
-
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
+#define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 10)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
@@ -75,5 +73,7 @@ struct dfuse_user_reply {
 /* Return the user running dfuse */
 #define DFUSE_IOCTL_DFUSE_USER                                                                     \
 	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_R_DFUSE_USER, struct dfuse_user_reply))
+
+#define DFUSE_IOCTL_DFUSE_EVICT ((int)_IO(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR))
 
 #endif /* __DFUSE_IOCTL_H__ */

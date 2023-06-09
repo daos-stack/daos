@@ -2476,6 +2476,18 @@ class PosixTests():
                 print(f'xattr is {key}:{value}')
 
     @needs_dfuse
+    def test_evict(self):
+        """Evict a file from dfuse"""
+        new_file = join(self.dfuse.dir, 'e_file')
+        with open(new_file, 'w'):
+            pass
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', '--path', new_file])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+    @needs_dfuse
     def test_list_xattr(self):
         """Perform tests with listing extended attributes.
 

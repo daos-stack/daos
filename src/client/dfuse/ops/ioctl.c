@@ -336,6 +336,12 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 
 	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
+	if (cmd == DFUSE_IOCTL_DFUSE_EVICT) {
+		oh->doh_evict_on_close = true;
+		DFUSE_REPLY_IOCTL_SIZE(oh, req, NULL, 0);
+		return;
+	}
+
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
 			D_GOTO(out_err, rc = EIO);
