@@ -16,7 +16,7 @@ def find_packages(log, hosts, pattern, user=None):
         pattern (str): grep pattern to use to search for installed packages
 
     Returns:
-        dict: a dictionary of host keys with a list of installed RPM values 
+        dict: a dictionary of host keys with a list of installed RPM values
     """
     installed = {}
     command = command_as_user(f"rpm -qa | grep -E {pattern} | sort -n", user)
