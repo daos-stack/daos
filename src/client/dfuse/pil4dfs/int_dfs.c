@@ -573,6 +573,11 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
+/* Discover fuse mount points from /proc/self/mounts and env DAOS_MOUNT_POINT.
+ * Return 0 for success. Otherwise return Linux errno. This function interception
+ * is still effective as long as num_dfs is not zero even if discover_daos_mount()
+ * returns a non-zero value.
+ */
 static int
 discover_daos_mount(void)
 {
@@ -592,13 +597,15 @@ discover_daos_mount(void)
 		goto out;
 
 	if (num_dfs >= MAX_DAOS_MT) {
-		D_WARN("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
-		goto out;
+		D_ERROR("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
+		abort();
 	}
 
 	if (access(fs_root, R_OK)) {
 		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
 			strerror(errno));
+		if (rc == 0)
+			rc = EACCES;
 		goto out;
 	}
 
@@ -610,24 +617,30 @@ discover_daos_mount(void)
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
+		if (rc == 0)
+			rc = ENAMETOOLONG;
 		goto out;
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
+		if (rc == 0)
+			rc = EINVAL;
 		goto out;
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
 		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
+		if (rc == 0)
+			rc = EINVAL;
 		goto out;
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL) {
-		if (num_dfs == 0 && rc == 0)
+		if (rc == 0)
 			rc = ENOMEM;
 		goto out;
 	}
