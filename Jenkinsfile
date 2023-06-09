@@ -181,11 +181,13 @@ pipeline {
                         label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -203,11 +205,13 @@ pipeline {
                         label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -225,11 +229,13 @@ pipeline {
                         label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -248,11 +254,13 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -271,11 +279,13 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -294,11 +304,13 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -317,11 +329,13 @@ pipeline {
                         label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
