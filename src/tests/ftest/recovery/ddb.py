@@ -38,7 +38,8 @@ class DdbTest(TestWithServers):
 
         """
         hosts = NodeSet(self.hostlist_servers[0])
-        vos_path = os.path.join("/mnt/daos0", self.pool.uuid.lower())
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        vos_path = os.path.join(scm_mount, self.pool.uuid.lower())
         command = " ".join(["sudo", "ls", vos_path])
         cmd_out = run_pcmd(hosts=hosts, command=command)
 
@@ -49,7 +50,8 @@ class DdbTest(TestWithServers):
                 self.log.info("vos_file: %s", file)
                 return file
 
-        self.fail("vos file wasn't found in /mnt/daos0/{}".format(self.pool.uuid.lower()))
+        self.fail("vos file wasn't found in {}/{}".format(
+            scm_mount, self.pool.uuid.lower()))
 
         return None  # to appease pylint
 
@@ -76,9 +78,10 @@ class DdbTest(TestWithServers):
         self.add_container(pool=self.pool)
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
             server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-            mount_point="/mnt/daos0", pool_uuid=self.pool.uuid,
+            mount_point=scm_mount, pool_uuid=self.pool.uuid,
             vos_file=self.get_vos_file_path())
 
         errors = []
@@ -308,8 +311,9 @@ class DdbTest(TestWithServers):
         # 3. Find the vos file name.
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos0",
+            server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 4. Call ddb rm to remove the akey.
@@ -450,8 +454,9 @@ class DdbTest(TestWithServers):
         # 4. Find the vos file name.
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos0",
+            server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Load new data into [0]/[0]/[0]/[0]
@@ -538,8 +543,9 @@ class DdbTest(TestWithServers):
         # 4. Find the vos file name.
         vos_file = self.get_vos_file_path()
         host = NodeSet(self.hostlist_servers[0])
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos0",
+            server_host=host, path=self.bin, mount_point=scm_mount,
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Dump the two akeys to files.

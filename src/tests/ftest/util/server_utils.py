@@ -909,12 +909,11 @@ class DaosServerManager(SubprocessManager):
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
     @fail_on(CommandFailure)
-    def system_exclude(self, ranks, daos_log, copy=False, rank_hosts=None):
+    def system_exclude(self, ranks, copy=False, rank_hosts=None):
         """Exclude the specific server ranks.
 
         Args:
             ranks (list): a list of daos server ranks (int) to exclude
-            daos_log (DaosLog): object for logging messages
             copy (bool, optional): Copy dmg command. Defaults to False.
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
@@ -927,7 +926,6 @@ class DaosServerManager(SubprocessManager):
         msg = "Excluding DAOS ranks {} from server group {}".format(
             ranks, self.get_config_value("name"))
         self.log.info(msg)
-        daos_log.info(msg)
 
         # Exclude desired ranks using dmg.
         if copy:
@@ -943,12 +941,11 @@ class DaosServerManager(SubprocessManager):
         self.check_rank_state(ranks=ranks, valid_states=["adminexcluded"])
 
     @fail_on(CommandFailure)
-    def system_clear_exclude(self, ranks, daos_log, copy=False, rank_hosts=None):
+    def system_clear_exclude(self, ranks, copy=False, rank_hosts=None):
         """Clear the exclusion of the specific server ranks.
 
         Args:
             ranks (list): a list of daos server ranks (int) to clear the exclusion
-            daos_log (DaosLog): object for logging messages
             copy (bool, optional): Copy dmg command. Defaults to False.
             rank_hosts (str): hostlist representing hosts whose managed ranks are to be
                 operated on.
@@ -961,7 +958,6 @@ class DaosServerManager(SubprocessManager):
         msg = "Clear the exclusion for DAOS ranks {} from server group {}".format(
             ranks, self.get_config_value("name"))
         self.log.info(msg)
-        daos_log.info(msg)
 
         # Clear the exclusion for desired ranks using dmg.
         if copy:

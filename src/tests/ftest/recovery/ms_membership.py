@@ -31,7 +31,7 @@ class MSMembershipTest(TestWithServers):
 
         Jira ID: DAOS-11703
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery,ms_membership
         :avocado: tags=MSMembershipTest,test_checker_on_admin_excluded
@@ -96,7 +96,7 @@ class MSMembershipTest(TestWithServers):
 
         Jira ID: DAOS-11704
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery,ms_membership
         :avocado: tags=MSMembershipTest,test_enable_disable_admin_excluded
@@ -108,7 +108,7 @@ class MSMembershipTest(TestWithServers):
         dmg_command.system_stop(ranks="1")
 
         # 2. Set rank 1 to AdminExcluded and verify the state has been changed.
-        self.server_managers[-1].system_exclude(ranks=[1], daos_log=self.log)
+        self.server_managers[-1].system_exclude(ranks=[1])
 
         # 3. Verify that the checker can be run with AdminExcluded state.
         try:
@@ -123,7 +123,7 @@ class MSMembershipTest(TestWithServers):
             errors.append(msg)
 
         # 4. Disable AdminExcluded of rank 1 and verify the state has been changed.
-        self.server_managers[-1].system_clear_exclude(ranks=[1], daos_log=self.log)
+        self.server_managers[-1].system_clear_exclude(ranks=[1])
 
         # 5. Servers haven't been started, so update the expected state of rank 0 for
         # cleanup.
