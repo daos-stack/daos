@@ -468,7 +468,7 @@ mock_ds_mgmt_pool_evict_setup(void)
  * TODO: Implement mocks when there is a test that uses these
  */
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	return 0;
 }
