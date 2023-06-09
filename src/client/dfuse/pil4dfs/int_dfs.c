@@ -660,10 +660,14 @@ out:
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
+/* Discover fuse mount points from /proc/self/mounts. Return 0 for success. Otherwise
+ * return Linux errno. This function interception is still effective as long as num_dfs
+ * is not zero even if discover_dfuse() returns a non-zero value.
+ */
 static int
 discover_dfuse(void)
 {
-	int            rc;
+	int            rc = 0;
 	FILE          *fp;
 	struct mntent *fs_entry;
 	struct dfs_mt *pt_dfs_mt;
@@ -680,8 +684,8 @@ discover_dfuse(void)
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
 		if (num_dfs >= MAX_DAOS_MT) {
-			D_WARN("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			break;
+			D_ERROR("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
+			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
 		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
@@ -689,6 +693,8 @@ discover_dfuse(void)
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
+				if (rc == 0)
+					rc = ENAMETOOLONG;
 				continue;
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
@@ -700,14 +706,17 @@ discover_dfuse(void)
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL)
+			if (pt_dfs_mt->fs_root == NULL) {
+				if (rc == 0)
+					rc = ENOMEM;
 				continue;
+			}
 			num_dfs++;
 		}
 	}
 
 	endmntent(fp);
-	return 0;
+	return rc;
 }
 
 static int
