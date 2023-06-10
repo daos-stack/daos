@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 6
+  test_servers: 5
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -33,6 +33,4 @@ svc_params_mux: !mux
   svc_params_5:
     svc_params: [5, 5]
   svc_params_6:
-    svc_params: [6, 5]
-  svc_params_7:
-    svc_params: [7, 0]
+    svc_params: [6, 0]
