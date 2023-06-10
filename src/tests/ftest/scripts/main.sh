@@ -13,9 +13,6 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     exit 1
 fi
 
-# shellcheck disable=SC2153
-mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
-
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
     mkdir -p "$PWD"/install/tmp
@@ -201,12 +198,12 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
 fi
 
 # Run launch.py multiple times if a sequence of tags (tags separated by a '+') is specified
-IFS='+' read -ra TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
+TEST_TAG_SPLIT=$(IFS="+"; echo "${TEST_TAG_ARG}")
 index=0
 rc=0
 for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"
     # shellcheck disable=SC2153
-    mapfile -t TAGS <<< "${TEST_TAG_SEQ}"
+    mapfile -t TAGS <<< "$TEST_TAG_SEQ"
     if [ $index -eq 0 ]; then
         # First sequence of tags run with arguments provided by the user
         name=${STAGE_NAME}
