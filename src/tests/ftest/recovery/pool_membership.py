@@ -47,7 +47,7 @@ class PoolMembershipTest(TestWithServers):
         3. Prepare to copy the pool path before stopping servers.
         4. Stop servers.
         5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
-        another engine where we didn’t create.
+        another engine where we didn’t create. Destination engine is in different node.
         6. Enable and start the checker.
         7. Query the checker and verify that the issue was fixed.
         i.e., Current status is COMPLETED.
