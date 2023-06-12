@@ -121,7 +121,7 @@ ior_smoke:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 fio_smoke:
   api:
     - POSIX
@@ -155,7 +155,7 @@ fio_smoke:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 daos_racer:
   runtime: 120
 vpic_smoke:
@@ -174,7 +174,7 @@ vpic_smoke:
     mount_dir: "/tmp/daos_dfuse/vpic/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_smoke:
@@ -193,7 +193,7 @@ lammps_smoke:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 mdtest_smoke:
@@ -226,7 +226,7 @@ mdtest_smoke:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -250,7 +250,7 @@ macsio_smoke:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-3'
+    cores: '0-7'
 datamover_smoke:
   job_timeout: 10
   nodesperjob:
