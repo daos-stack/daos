@@ -340,9 +340,6 @@ type NvmeController struct {
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
 func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
-	if nc == nil {
-		return
-	}
 	for _, exstDev := range nc.SmdDevices {
 		if newDev.UUID == exstDev.UUID {
 			*exstDev = *newDev
@@ -355,9 +352,6 @@ func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
 
 // Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
-	if nc == nil {
-		return 0
-	}
 	for _, n := range nc.Namespaces {
 		tb += n.Size
 	}
@@ -446,17 +440,6 @@ func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
 			*ncs = append(*ncs, &newCtrlr)
 		}
 	}
-}
-
-// Addresses returns a hardware.PCIAddressSet pointer to controller addresses.
-func (ncs NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
-	pas := hardware.MustNewPCIAddressSet()
-	for _, c := range ncs {
-		if err := pas.AddStrings(c.PciAddr); err != nil {
-			return nil, err
-		}
-	}
-	return pas, nil
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
