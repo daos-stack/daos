@@ -93,7 +93,7 @@ Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE, I
 
 For usage of streams ('DD_MASK') and subsystems ('DD_SUBSYS') parameters, logging is described in
 detail in the
-[`Debugging System`](https://docs.daos.io/v2.4/admin/troubleshooting/#debugging-system)
+[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system)
 section.
 
 ## System Monitoring
@@ -272,7 +272,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.4/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file

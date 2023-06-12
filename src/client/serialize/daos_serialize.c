@@ -550,7 +550,7 @@ deserialize_str(hid_t file_id, char **str, const char *prop_str)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	buf_size = H5Tget_size(attr_dtype);
-	if (buf_size <= 0) {
+	if (buf_size == 0) {
 		D_ERROR("failed to get size of datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
@@ -636,36 +636,44 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
 		D_ERROR("failed to get attribute type\n");
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out_attr, rc = -DER_MISC);
 	}
 	attr_dspace = H5Aget_space(cont_attr);
 	if (attr_dspace < 0) {
 		D_ERROR("failed to get attribute dataspace\n");
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out_dtype, rc = -DER_MISC);
 	}
 	ndims = H5Sget_simple_extent_dims(attr_dspace, attr_dims, NULL);
 	if (ndims < 0) {
 		D_ERROR("failed to get dimensions of dataspace\n");
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out_dspace, rc = -DER_MISC);
 	}
 	D_ALLOC_PTR(roots);
 	if (roots == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_dspace, rc = -DER_NOMEM);
 	status = H5Aread(cont_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
 		D_ERROR("failed to read property attribute %s\n", prop_str);
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out_roots, rc = -DER_MISC);
 	}
 	entry->dpe_val_ptr = roots;
-out:
+
+out_roots:
 	if (rc != 0)
 		D_FREE(roots);
-	if (cont_attr >= 0)
-		status = H5Aclose(cont_attr);
-	if (attr_dtype >= 0)
-		status = H5Tclose(attr_dtype);
-	if (attr_dspace >= 0)
-		status = H5Sclose(attr_dspace);
+out_dspace:
+	status = H5Sclose(attr_dspace);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out_dtype:
+	status = H5Tclose(attr_dtype);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out_attr:
+	status = H5Aclose(cont_attr);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out:
 	return rc;
 }
 
