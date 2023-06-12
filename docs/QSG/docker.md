@@ -43,7 +43,7 @@ $ cat /proc/meminfo | grep -e "^Huge"
 The platform was tested and validated with the following dependencies:
 - [Docker CE](https://docs.docker.com/engine/install/centos/) latest
   [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
-- [DAOS 2.3](https://docs.daos.io/v2.3/) local RPMS builds from [DAOS release/2.4
+- [DAOS 2.4](https://docs.daos.io/v2.4/) local RPMS builds from [DAOS release/2.4
   branch](https://github.com/daos-stack/daos/tree/release/2.4)
 - [rockylinux/rockylinux:8.6](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
   images.
@@ -91,7 +91,7 @@ This Docker file accept the following arguments:
   such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-  "https://packages.daos.io/v2.2/EL8/packages/x86\_64/")
+  "https://packages.daos.io/v2.4/EL8/packages/x86\_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
   "https://packages.daos.io/RPM-GPG-KEY")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
@@ -225,7 +225,7 @@ $ docker exec daos-admin dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/v2.3/QSG/tour/).
+section [DAOS Tour](https://docs.daos.io/v2.4/QSG/tour/).
 
 
 ### Via Docker Compose
