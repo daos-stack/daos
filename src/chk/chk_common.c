@@ -902,6 +902,8 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 	int	i;
 
 	prop->cp_leader = leader;
+	if (!(flags & CHK__CHECK_FLAG__CF_DRYRUN))
+		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_DRYRUN;
 	if (flags & CHK__CHECK_FLAG__CF_NO_FAILOUT)
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_FAILOUT;
 	if (flags & CHK__CHECK_FLAG__CF_NO_AUTO)

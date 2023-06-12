@@ -1358,6 +1358,22 @@ class DmgCommand(DmgCommandBase):
 
         return self._get_json_result(("check", "enable"), pool=pool)
 
+    def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
+        """Call dmg check set-policy [options] [policies].
+
+        Args:
+            reset_defaults (bool, optional): Set all policies to default action. Defaults to False.
+            all_interactive (bool, optional): Set all policies to interactive. Defaults to False.
+            policies (str, optional): The policies for DAOS checker. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(
+            ("check", "set-policy"), reset_defaults=reset_defaults,
+            all_interactive=all_interactive, policies=policies)
+
     def check_start(self, pool=None, dry_run=False, reset=False, failout=None, auto=None,
                     find_orphans=False, policies=None):
         """Call dmg check start.

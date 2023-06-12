@@ -810,6 +810,12 @@ void chk_vos_init(void);
 
 void chk_vos_fini(void);
 
+static inline bool
+chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
+{
+	return flags & CHK__CHECK_FLAG__CF_RESET || ins->ci_start_flags & CSF_RESET_ALL;
+}
+
 static inline void
 chk_ins_set_fail(struct chk_instance *ins, uint32_t phase)
 {
