@@ -102,6 +102,6 @@ class DmvrSerialSmall(DataMoverTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_serialize,mfu_deserialize,hdf5
-        :avocado: tags=dm_serial_small,dm_serial_small_dserialize,test_dm_serial_small_dserialize
+        :avocado: tags=DmvrSerialSmall,test_dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")

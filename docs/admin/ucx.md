@@ -1,18 +1,9 @@
-# UCX Fabric Support (DAOS 2.2 Technology Preview)
+# UCX Fabric Support
 
-DAOS 2.2 includes a technology preview of
-[UCX](https://www.openucx.org/) support for clusters using InfiniBand,
+For clusters using InfiniBand, DAOS supports [UCX](https://www.openucx.org/)
 as an alternative to the default
 [libfabric](https://ofiwg.github.io/libfabric/) network stack.
-
-!!! note UCX support has been enabled for the DAOS builds on
-         EL8 and Leap15 only. It is not supported on CentOS7.
-
-The goal of this technology preview is to allow early
-evaluation and testing. DAOS over UCX has not been fully
-validated yet, and it is not recommended to use it in a
-production environment with DAOS 2.2.
-It is a roadmap item to fully support UCX in DAOS 2.4.
+The UCX provider is fully supported since DAOS 2.4.
 
 !!! note The network provider is an immutable property of a DAOS system.
          Changing the network provider to UCX requires that the DAOS storage
