@@ -145,6 +145,25 @@ out:
 	return rc;
 }
 
+bool
+is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
+{
+	struct vos_pool		*vos_pool;
+	struct vos_container	*vos_cont;
+
+	if (type == VOS_ITER_COUUID) {
+		vos_pool = vos_hdl2pool(param->ip_hdl);
+		D_ASSERT(vos_pool != NULL);
+
+		return vos_pool->vp_sysdb;
+	}
+
+	vos_cont = vos_hdl2cont(param->ip_hdl);
+	D_ASSERT(vos_cont != NULL);
+
+	return vos_cont->vc_pool->vp_sysdb;
+}
+
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		 daos_handle_t *ih, struct dtx_handle *dth)
@@ -155,6 +174,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
 	int			 rlevel;
+	bool			 is_sysdb;
 
 	if (ih == NULL) {
 		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
@@ -163,11 +183,11 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	*ih = DAOS_HDL_INVAL;
 
-	if (daos_handle_is_inval(param->ip_hdl) &&
-	    daos_handle_is_inval(param->ip_ih)) {
-		D_ERROR("No valid handle specified in vos_iter_param\n");
+	if (daos_handle_is_inval(param->ip_hdl)) {
+		D_ERROR("No valid pool or cont handle specified in vos_iter_param\n");
 		return -DER_INVAL;
 	}
+	is_sysdb = is_sysdb_pool(type, param);
 
 	for (dict = &vos_iterators[0]; dict->id_ops != NULL; dict++) {
 		if (dict->id_type == type)
@@ -213,18 +233,17 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
 	}
-	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth,
-				 param->ip_flags & VOS_IT_FOR_SYSDB);
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth, is_sysdb);
 	if (rc != 0)
 		goto out;
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 
-	old = vos_dth_get(param->ip_flags & VOS_IT_FOR_SYSDB);
-	vos_dth_set(dth, param->ip_flags & VOS_IT_FOR_SYSDB);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(dth, is_sysdb);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
-	vos_dth_set(old, param->ip_flags & VOS_IT_FOR_SYSDB);
+	vos_dth_set(old, is_sysdb);
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
 				"\n", dict->id_name, DP_RC(rc));

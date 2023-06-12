@@ -212,14 +212,15 @@ void sched_stop(struct dss_xstream *dx);
 static inline bool
 sched_xstream_stopping(void)
 {
-	struct dss_xstream	*dx = dss_current_xstream();
+	struct dss_xstream	*dx;
 	ABT_bool		 state;
 	int			 rc;
 
 	/* ULT creation from main thread which doesn't have dss_xstream */
-	if (dx == NULL)
+	if (dss_tls_get() == NULL)
 		return false;
 
+	dx = dss_current_xstream();
 	rc = ABT_future_test(dx->dx_stopping, &state);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	return state == ABT_TRUE;
@@ -270,9 +271,9 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
-	bool			 tls_set = dss_tls_get() ? true : false;
 #ifdef ULT_MMAP_STACK
-	struct dss_xstream *cur_dx = NULL;
+	bool			 tls_set = dss_tls_get() ? true : false;
+	struct dss_xstream	*cur_dx = NULL;
 
 	if (tls_set)
 		cur_dx = dss_current_xstream();
@@ -282,7 +283,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		cur_dx = dx;
 #endif
 
-	if (tls_set && sched_xstream_stopping())
+	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
 
 	/* Avoid bumping busy ts for internal periodically created ULTs */

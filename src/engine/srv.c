@@ -95,7 +95,6 @@ bool		dss_helper_pool;
 bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
-static bool		dss_shutting_down;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -1377,10 +1376,6 @@ failed:
 bool
 dss_srv_shutting_down(void)
 {
-	/* from main thread */
-	if (dss_tls_get() == NULL)
-		return dss_shutting_down;
-
 	return dss_get_module_info()->dmi_srv_shutting_down;
 }
 
@@ -1413,8 +1408,6 @@ dss_srv_set_shutting_down(void)
 		rc = ABT_task_free(&task);
 		D_ASSERTF(rc == ABT_SUCCESS, "join task: %d\n", rc);
 	}
-
-	dss_shutting_down = true;
 }
 
 void

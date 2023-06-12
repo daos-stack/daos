@@ -360,8 +360,6 @@ enum {
 	VOS_IT_FOR_DISCARD	= (1 << 7),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED	= (1 << 8),
-	/** Iterator is for SYSDB */
-	VOS_IT_FOR_SYSDB	= (1 << 9),
 	/** Mask for all flags */
 	VOS_IT_MASK		= (1 << 10) - 1,
 };
@@ -399,9 +397,7 @@ typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** standalone prepare:	pool connection handle or container open handle
-	 *  nested prepare:	DAOS_HDL_INVAL
-	 */
+	/** pool connection handle or container open handle */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle

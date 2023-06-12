@@ -1621,8 +1621,9 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		  struct vos_ts_set *ts_set)
 {
 	struct vos_obj_iter	*oiter;
-	struct vos_container	*cont;
-	struct dtx_handle	*dth = vos_dth_get(param->ip_flags & VOS_IT_FOR_SYSDB);
+	struct vos_container	*cont = vos_hdl2cont(param->ip_hdl);
+	bool			 is_sysdb = cont->vc_pool->vp_sysdb;
+	struct dtx_handle	*dth = vos_dth_get(is_sysdb);
 	daos_epoch_t		 bound;
 	int			 rc;
 
@@ -1648,7 +1649,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (param->ip_flags & VOS_IT_FOR_SYSDB)
+	if (is_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
@@ -1660,7 +1661,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		goto done;
 	}
 
-	cont = vos_hdl2cont(param->ip_hdl);
 	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
@@ -1668,7 +1668,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont,
+	rc = vos_obj_hold(vos_obj_cache_current(is_sysdb), cont,
 			  param->ip_oid, &oiter->it_epr,
 			  oiter->it_iter.it_bound,
 			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
@@ -1817,7 +1817,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 {
 	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
-	struct dtx_handle	*dth = vos_dth_get(info->ii_flags & VOS_IT_FOR_SYSDB);
+	struct vos_container	*vos_cont;
+	struct dtx_handle	*dth;
 	daos_epoch_t		 bound;
 	struct evt_desc_cbs	 cbs;
 	struct evt_filter	 filter = {0};
@@ -1825,6 +1826,11 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	int			 rc = 0;
 	uint32_t		 options;
 
+	if (type != VOS_ITER_DKEY)
+		vos_cont = obj->obj_cont;
+	else
+		vos_cont = vos_hdl2cont(info->ii_hdl);
+	dth = vos_dth_get(vos_cont->vc_pool->vp_sysdb);
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
@@ -1847,7 +1853,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (info->ii_flags & VOS_IT_FOR_SYSDB)
+	if (vos_cont->vc_pool->vp_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
 
 	switch (type) {
