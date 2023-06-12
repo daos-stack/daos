@@ -33,14 +33,17 @@ d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb)
 	if (unlikely(track_mem)) {
 		d_alloc_track_cb = alloc_cb;
 		d_free_track_cb = free_cb;
-		D_INFO("memory track is enabled.\n");
+		D_INFO("memory track is enabled for the engine.\n");
 	}
 }
 
 void
 d_set_alloc_track_arg(void *arg)
 {
-	track_arg = arg;
+	if (d_alloc_track_cb != NULL) {
+		track_arg = arg;
+		D_INFO("memory track is enabled for the xstream %p.\n", arg);
+	}
 }
 
 void
@@ -61,7 +64,7 @@ d_rand()
 void
 d_free(void *ptr)
 {
-	if (unlikely(d_free_track_cb != NULL && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		size_t size = malloc_usable_size(ptr);
 
 		d_free_track_cb(track_arg, size);
@@ -76,7 +79,7 @@ d_calloc(size_t count, size_t eltsize)
 	void *ptr;
 
 	ptr = calloc(count, eltsize);
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
 			d_alloc_track_cb(track_arg, eltsize);
 	}
@@ -90,7 +93,7 @@ d_malloc(size_t size)
 	void *ptr;
 
 	ptr = malloc(size);
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
 			d_alloc_track_cb(track_arg, size);
 	}
@@ -103,12 +106,14 @@ d_realloc(void *ptr, size_t size)
 {
 	void *new_ptr;
 
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		size_t old_size = malloc_usable_size(ptr);
 
 		new_ptr = realloc(ptr, size);
-		if (new_ptr != NULL)
-			d_alloc_track_cb(track_arg, size - old_size);
+		if (new_ptr != NULL) {
+			d_free_track_cb(track_arg, old_size);
+			d_alloc_track_cb(track_arg, size);
+		}
 	} else {
 		new_ptr = realloc(ptr, size);
 	}
@@ -121,9 +126,9 @@ d_strndup(const char *s, size_t n)
 	char *ptr;
 
 	ptr = strndup(s, n);
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, n);
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
 	}
 
 	return ptr;
@@ -139,7 +144,7 @@ d_asprintf(char **strp, const char *fmt, ...)
 	rc = vasprintf(strp, fmt, ap);
 	va_end(ap);
 
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (rc > 0 && *strp != NULL)
 			d_alloc_track_cb(track_arg, (size_t)rc);
 	}
@@ -153,7 +158,7 @@ d_realpath(const char *path, char *resolved_path)
 	char *ptr;
 
 	ptr = realpath(path, resolved_path);
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
 			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
 	}
@@ -167,7 +172,7 @@ d_aligned_alloc(size_t alignment, size_t size, bool zero)
 	void *buf;
 
 	buf = aligned_alloc(alignment, size);
-	if (unlikely(d_alloc_track_cb && track_arg != NULL)) {
+	if (unlikely(track_arg != NULL)) {
 		if (buf != NULL)
 			d_alloc_track_cb(track_arg, size);
 	}
