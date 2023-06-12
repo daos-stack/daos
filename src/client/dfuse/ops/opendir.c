@@ -10,9 +10,10 @@
 void
 dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh     = NULL;
-	struct fuse_file_info fi_out = {0};
-	int                   rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *oh        = NULL;
+	struct fuse_file_info         fi_out    = {0};
+	int                           rc;
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -20,7 +21,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(oh, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
 	fi_out.fh = (uint64_t)oh;
 

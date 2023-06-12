@@ -83,7 +83,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 
 	rc = dfs_lookup(dfc->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL,
 			&ie->ie_stat);

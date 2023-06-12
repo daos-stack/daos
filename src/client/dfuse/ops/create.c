@@ -156,8 +156,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
-	dfuse_ie_init(ie);
-	dfuse_open_handle_init(oh, ie);
+	dfuse_ie_init(fs_handle, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
 	oh->doh_linear_read = false;
 

@@ -188,7 +188,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = *stbuf;
 

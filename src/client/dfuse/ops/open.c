@@ -30,7 +30,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(oh, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write

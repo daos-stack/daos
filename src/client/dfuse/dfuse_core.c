@@ -264,7 +264,7 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 }
 
 static void
-_ph_free(struct dfuse_pool *dfp)
+_ph_free(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp)
 {
 	int rc;
 
@@ -290,13 +290,15 @@ _ph_free(struct dfuse_pool *dfp)
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
+	atomic_fetch_sub_relaxed(&fs_handle->dpi_pool_count, 1);
+
 	D_FREE(dfp);
 }
 
 static void
 ph_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ph_free(container_of(link, struct dfuse_pool, dfp_entry));
+	_ph_free(htable->ht_priv, container_of(link, struct dfuse_pool, dfp_entry));
 }
 
 static d_hash_table_ops_t pool_hops = {
@@ -374,6 +376,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
+	atomic_fetch_sub_relaxed(&fs_handle->dpi_container_count, 1);
 
 	D_FREE(dfc);
 }
@@ -447,12 +450,14 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
 	}
 
+	atomic_fetch_add_relaxed(&fs_handle->dpi_pool_count, 1);
+
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table, &dfp->dfp_pool,
 				       sizeof(dfp->dfp_pool), &dfp->dfp_entry);
 
 	if (rlink != &dfp->dfp_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
-		_ph_free(dfp);
+		_ph_free(fs_handle, dfp);
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
@@ -880,6 +885,8 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
+	atomic_fetch_add_relaxed(&fs_handle->dpi_container_count, 1);
+
 	/* Finally insert into the hash table.  This may return an existing
 	 * container if there is a race to insert, so if that happens
 	 * just use that one.
@@ -1041,6 +1048,11 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 
 	fs_handle->dpi_info = dfuse_info;
 
+	atomic_init(&fs_handle->dpi_inode_count, 0);
+	atomic_init(&fs_handle->dpi_fh_count, 0);
+	atomic_init(&fs_handle->dpi_pool_count, 0);
+	atomic_init(&fs_handle->dpi_container_count, 0);
+
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &pool_hops,
 					 &fs_handle->dpi_pool_table);
@@ -1112,7 +1124,8 @@ err:
 }
 
 void
-dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
+dfuse_open_handle_init(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh,
+		       struct dfuse_inode_entry *ie)
 {
 	oh->doh_dfs             = ie->ie_dfs->dfs_ns;
 	oh->doh_ie              = ie;
@@ -1121,16 +1134,18 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 	atomic_init(&oh->doh_il_calls, 0);
 	atomic_init(&oh->doh_readdir_number, 0);
 	atomic_init(&oh->doh_write_count, 0);
+	atomic_fetch_add_relaxed(&fs_handle->dpi_fh_count, 1);
 }
 
 void
-dfuse_ie_init(struct dfuse_inode_entry *ie)
+dfuse_ie_init(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	atomic_init(&ie->ie_ref, 1);
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
 	atomic_init(&ie->ie_readdir_number, 0);
+	atomic_fetch_add_relaxed(&fs_handle->dpi_inode_count, 1);
 }
 
 void
@@ -1166,6 +1181,8 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
+
+	atomic_fetch_sub_relaxed(&fs_handle->dpi_inode_count, 1);
 
 	D_FREE(ie);
 }
@@ -1299,7 +1316,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_dfs    = dfs;
 	ie->ie_root   = true;
 	ie->ie_parent = 1;
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);

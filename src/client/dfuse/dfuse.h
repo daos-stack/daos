@@ -60,6 +60,11 @@ struct dfuse_projection_info {
 	struct dfuse_eq    *dpi_eqt;
 	int                 dpi_eqt_count;
 	ATOMIC uint64_t     dpi_eqt_idx;
+
+	ATOMIC uint64_t     dpi_inode_count;
+	ATOMIC uint64_t     dpi_fh_count;
+	ATOMIC uint64_t     dpi_pool_count;
+	ATOMIC uint64_t     dpi_container_count;
 };
 
 struct dfuse_eq {
@@ -278,7 +283,8 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
  * Set required initial state in dfuse_obj_hdl.
  */
 void
-dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie);
+dfuse_open_handle_init(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh,
+		       struct dfuse_inode_entry *ie);
 
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
@@ -856,7 +862,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
 
 void
-dfuse_ie_init(struct dfuse_inode_entry *ie);
+dfuse_ie_init(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
 
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
