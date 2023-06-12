@@ -322,7 +322,7 @@ show_help(char *name)
 	    "dfuse will use pool= and container= keys from this string.\n"
 	    "\n"
 	    "Caching is on by default, with short metadata timeouts and write-back data cache enabled.\n"
-	    "The caching behaviour can be controlled for a dfuse mount by command line options.\n"
+	    "The caching behavior can be controlled for a dfuse mount by command line options.\n"
 	    "Further settings can be set on a per-container basis through container attributes.\n"
 	    "* If the --disable-caching option is used then no caching will be performed, and the\n"
 	    "  container attributes are not used. The default is --enable-caching.\n"
