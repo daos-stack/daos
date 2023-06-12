@@ -517,7 +517,6 @@ class DaosServerManager(SubprocessManager):
         cmd.debug.value = False
         cmd.set_sub_command("nvme")
         cmd.sub_command_class.set_sub_command("reset")
-        cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)

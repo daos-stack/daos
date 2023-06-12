@@ -92,14 +92,11 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	}
 
 	if !skipPrep {
-		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-		//                 controllers (as specified in the server config file) then the
-		//                 backing devices of the unselected VMD controllers will be bound
-		//                 to no driver and therefore inaccessible from both OS and SPDK.
-		//                 Workaround is to run nvme scan --ignore-config to reset driver
-		//                 bindings.
-
-		req := storage.BdevPrepareRequest{Reset_: true}
+		// SPDK-2926: Reset now runs without PCI_ALLOWED list so all NVMe devices will be
+		//            returned to kernel drivers after scan.
+		req := storage.BdevPrepareRequest{
+			Reset_: true,
+		}
 		if err := resetNVMe(log, req, nc, svc.NvmePrepare); err != nil {
 			return nil, errors.Wrap(err, "nvme reset after fetching local storage failed, "+
 				"try cmd again with --skip-prep after performing a manual nvme reset")

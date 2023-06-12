@@ -393,7 +393,6 @@ class DaosServerCommand(YamlCommand):
 
                 # daos_server nvme reset command options:
                 #   --helper-log-file= Log file location for debug from daos_server_helper binary
-                #   --ignore-config    Ignore parameters set in config file when running command
                 #   --pci-block-list=  Comma-separated list of PCI devices (by address) to be
                 #                      ignored when unbinding devices from Kernel driver to be used
                 #                      with SPDK (default is no PCI devices)
@@ -401,7 +400,6 @@ class DaosServerCommand(YamlCommand):
                 #                      groups.
                 #   --disable-vfio     Force SPDK to use the UIO driver for NVMe device access
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.target_user = FormattedParameter("--target-user={}")
                 self.disable_vfio = FormattedParameter("--disable-vfio", False)
