@@ -20,6 +20,21 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
+const (
+	vmdBackingAddr1a = "5d0505:01:00.0"
+	vmdBackingAddr1b = "5d0505:03:00.0"
+	vmdAddr2         = "0000:7d:05.5"
+	vmdBackingAddr2a = "7d0505:01:00.0"
+	vmdBackingAddr2b = "7d0505:03:00.0"
+)
+
+func ctrlrsFromPCIAddrs(addrs ...string) (ncs NvmeControllers) {
+	for _, addr := range addrs {
+		ncs = append(ncs, &NvmeController{PciAddr: addr})
+	}
+	return
+}
+
 func Test_NvmeDevState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		state  NvmeDevState
@@ -185,22 +200,45 @@ func Test_NvmeController_Update(t *testing.T) {
 	test.AssertEqual(t, len(mockCtrlrs), 7, "expected 7")
 }
 
-func Test_filterBdevScanResponse(t *testing.T) {
-	const (
-		vmdAddr1         = "0000:5d:05.5"
-		vmdBackingAddr1a = "5d0505:01:00.0"
-		vmdBackingAddr1b = "5d0505:03:00.0"
-		vmdAddr2         = "0000:7d:05.5"
-		vmdBackingAddr2a = "7d0505:01:00.0"
-		vmdBackingAddr2b = "7d0505:03:00.0"
-	)
-	ctrlrsFromPCIAddrs := func(addrs ...string) (ncs NvmeControllers) {
-		for _, addr := range addrs {
-			ncs = append(ncs, &NvmeController{PciAddr: addr})
-		}
-		return
-	}
+func Test_NvmeController_Addresses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctrlrs   NvmeControllers
+		expAddrs []string
+		expErr   error
+	}{
+		"two vmd endpoints with two backing devices": {
+			ctrlrs: ctrlrsFromPCIAddrs(vmdBackingAddr1a, vmdBackingAddr1b,
+				vmdBackingAddr2a, vmdBackingAddr2b),
+			expAddrs: []string{
+				vmdBackingAddr1a,
+				vmdBackingAddr2a,
+				vmdBackingAddr1b,
+				vmdBackingAddr2b,
+			},
+		},
+		"no addresses": {
+			expAddrs: []string{},
+		},
+		"invalid address": {
+			ctrlrs: ctrlrsFromPCIAddrs("a"),
+			expErr: errors.New("unable to parse"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddrs, gotErr := tc.ctrlrs.Addresses()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
 
+			if diff := cmp.Diff(tc.expAddrs, gotAddrs.Strings()); diff != "" {
+				t.Fatalf("unexpected output address set (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func Test_filterBdevScanResponse(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrs    []string
 		scanResp *BdevScanResponse

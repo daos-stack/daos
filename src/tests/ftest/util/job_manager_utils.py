@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from datetime import datetime
 from distutils.spawn import find_executable  # pylint: disable=deprecated-module
 import os
 import re
@@ -16,7 +15,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command
+from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command, \
+    journalctl_time
 from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
@@ -780,7 +780,7 @@ class Systemctl(JobManager):
 
         """
         self._systemctl.unit_command.value = command
-        self.timestamps[command] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.timestamps[command] = journalctl_time()
         result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
         if 255 in result:
             raise CommandFailure(
