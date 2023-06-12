@@ -361,7 +361,7 @@ enum {
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 10) - 1,
+	VOS_IT_MASK		= (1 << 9) - 1,
 };
 
 typedef struct {
