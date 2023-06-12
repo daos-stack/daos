@@ -64,6 +64,8 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       popd; \
       rm -f bullseye.tar; \
       rm -rf bullseye; \
+      ls -la /opt/BullseyeCoverage; \
+      ls -la /opt/BullseyeCoverage/bin; \
     fi
 
 USER daos_server:daos_server
