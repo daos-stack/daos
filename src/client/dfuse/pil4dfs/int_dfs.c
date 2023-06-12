@@ -117,12 +117,6 @@ static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
 static int
-discover_daos_mount_with_env(void);
-static int
-discover_dfuse_mounts(void);
-static int
-retrieve_handles_from_fuse(int idx);
-static int
 init_dfs(int idx);
 static int
 query_dfs_mount(const char *dfs_mount);
@@ -573,10 +567,9 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
-/* Discover fuse mount points from /proc/self/mounts and env DAOS_MOUNT_POINT.
- * Return 0 for success. Otherwise return Linux errno. This function interception
- * is still effective as long as num_dfs is not zero even if discover_daos_mount_with_env()
- * returns a non-zero value.
+/* Discover fuse mount points from env DAOS_MOUNT_POINT.
+ * Return 0 for success. A non-zero value means something wrong in setting
+ * and the caller will call abort() to terminate current application.
  */
 static int
 discover_daos_mount_with_env(void)
@@ -627,10 +620,8 @@ discover_daos_mount_with_env(void)
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
-	if (dfs_list[num_dfs].fs_root == NULL) {
-		D_FATAL("D_STRNDUP() failed: %d (%s)\n", ENOMEM, strerror(ENOMEM));
+	if (dfs_list[num_dfs].fs_root == NULL)
 		D_GOTO(out, rc = ENOMEM);
-	}
 
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
@@ -646,8 +637,7 @@ out:
 
 #define MNT_TYPE_FUSE	"fuse.daos"
 /* Discover fuse mount points from /proc/self/mounts. Return 0 for success. Otherwise
- * return Linux errno. This function interception is still effective as long as num_dfs
- * is not zero even if discover_dfuse_mounts() returns a non-zero value.
+ * return Linux errno and disable function interception.
  */
 static int
 discover_dfuse_mounts(void)
