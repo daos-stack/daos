@@ -127,6 +127,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.QuerySubCommand()
             elif self.sub_command.value == "repair":
                 self.sub_command_class = self.RepairSubCommand()
+            elif self.sub_command.value == "set-policy":
+                self.sub_command_class = self.SetpolicySubCommand()
             elif self.sub_command.value == "start":
                 self.sub_command_class = self.StartSubCommand()
             elif self.sub_command.value == "stop":
@@ -175,6 +177,16 @@ class DmgCommandBase(YamlCommand):
                 self.seq_num = BasicParameter(None, position=1)
                 self.action = BasicParameter(None, position=2)
                 self.for_all = FormattedParameter("--for-all", False)
+
+        class SetpolicySubCommand(CommandWithParameters):
+            """Defines an object for the dmg check set-policy command."""
+
+            def __init__(self):
+                """Create a dmg check set-policy object."""
+                super().__init__("/run/dmg/check/start/*", "set-policy")
+                self.reset_defaults = FormattedParameter("--reset-defaults", False)
+                self.all_interactive = FormattedParameter("--all-interactive", False)
+                self.policies = FormattedParameter("--policies={}", None)
 
         class StartSubCommand(CommandWithParameters):
             """Defines an object for the dmg check start command."""
