@@ -1955,7 +1955,7 @@ class Launch():
             logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
             return status
 
-        status |= self.setup_slurm_apps()
+        status |= self.setup_soak_apps()
 
         slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
         try:
