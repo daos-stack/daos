@@ -78,6 +78,7 @@ type mgmtSvc struct {
 	clientNetworkHint *mgmtpb.ClientNetHint
 	batchInterval     time.Duration
 	batchReqs         batchReqChan
+	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
 }
@@ -94,6 +95,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
 		batchInterval:     batchLoopInterval,
 		batchReqs:         make(batchReqChan),
+		serialReqs:        make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
 	}
 }
@@ -125,25 +127,31 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 // checkLeaderRequest performs sanity-checking on a request that must
 // be run on the current MS leader.
 func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
-	if err := svc.sysdb.CheckLeader(); err != nil {
+	if err := svc.checkSystemRequest(req); err != nil {
 		return err
 	}
-	return svc.checkSystemRequest(req)
+	return svc.sysdb.CheckLeader()
 }
 
 // checkReplicaRequest performs sanity-checking on a request that must
 // be run on a MS replica.
 func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
-	if err := svc.sysdb.CheckReplica(); err != nil {
+	if err := svc.checkSystemRequest(req); err != nil {
 		return err
 	}
-	return svc.checkSystemRequest(req)
+	return svc.sysdb.CheckReplica()
+}
+
+// startLeaderLoops kicks off the leader-only processing loops
+// that will be canceled on leadership loss.
+func (svc *mgmtSvc) startLeaderLoops(ctx context.Context) {
+	go svc.leaderTaskLoop(ctx)
 }
 
 // startAsyncLoops kicks off the asynchronous processing loops.
 func (svc *mgmtSvc) startAsyncLoops(ctx context.Context) {
-	go svc.leaderTaskLoop(ctx)
 	go svc.batchReqLoop(ctx)
+	go svc.serialReqLoop(ctx)
 }
 
 // submitBatchRequest submits a message for batch processing and waits for a response.
@@ -153,6 +161,23 @@ func (svc *mgmtSvc) submitBatchRequest(ctx context.Context, msg proto.Message) (
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case svc.batchReqs <- &batchRequest{msg: msg, ctx: ctx, respCh: respCh}:
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case resp := <-respCh:
+		return resp.msg, resp.err
+	}
+}
+
+// submitSerialRequest submits a message for serial processing and waits for a response.
+func (svc *mgmtSvc) submitSerialRequest(ctx context.Context, msg proto.Message) (proto.Message, error) {
+	respCh := make(batchRespChan, 1)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case svc.serialReqs <- &batchRequest{msg: msg, ctx: ctx, respCh: respCh}:
 	}
 
 	select {
@@ -261,6 +286,33 @@ func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batch
 	case <-ctx.Done():
 		return
 	case bprChan <- bpr:
+	}
+}
+
+// processSerialRequest processes a single serialized request.
+func (svc *mgmtSvc) processSerialRequest(ctx context.Context, req *batchRequest) {
+	svc.log.Debugf("invoking serial handler for %T", req.msg)
+	switch msg := req.msg.(type) {
+	case *mgmtpb.PoolCreateReq:
+		resp, err := svc.poolCreate(ctx, msg)
+		req.sendResponse(ctx, resp, err)
+	default:
+		svc.log.Errorf("no serial handler for message type %T", req.msg)
+	}
+}
+
+// serialReqLoop is the main loop for processing serial requests.
+func (svc *mgmtSvc) serialReqLoop(parent context.Context) {
+
+	svc.log.Debug("starting serialReqLoop")
+	for {
+		select {
+		case <-parent.Done():
+			svc.log.Debug("stopped serialReqLoop")
+			return
+		case req := <-svc.serialReqs:
+			svc.processSerialRequest(parent, req)
+		}
 	}
 }
 
