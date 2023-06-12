@@ -28,7 +28,7 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('weekly-testing') &&
+    (!env.BRANCH_NAME.startsWith('weekly-') &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
@@ -41,7 +41,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing-2.4' ? 'TZ=UTC\n0 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-2.4-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
     }
 
     environment {
@@ -86,7 +86,7 @@ pipeline {
                             '"ofi+tcp")')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
-               description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+               description: 'The base branch to run against (i.e. master, release/x.y or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
