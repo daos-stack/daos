@@ -51,7 +51,8 @@ server_config:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
-        - FI_LOG_LEVEL=warn
+        - FI_LOG_LEVEL=debug
+        - UCX_LOG_LEVEL=debug
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
     1:
@@ -65,7 +66,8 @@ server_config:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
-        - FI_LOG_LEVEL=warn
+        - FI_LOG_LEVEL=debug
+        - UCX_LOG_LEVEL=debug
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
   transport_config:
