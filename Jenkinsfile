@@ -1082,7 +1082,7 @@ pipeline {
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
-                            cobertura coberturaReportFile: 'nlt-coverage.xml', enableNewApi: true
+                            cobertura coberturaReportFile: 'nlt-coverage.xml', enableNewApi: false
                             job_status_update()
                         }
                     }
