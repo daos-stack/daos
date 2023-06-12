@@ -198,12 +198,11 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
 fi
 
 # Run launch.py multiple times if a sequence of tags (tags separated by a '+') is specified
-TEST_TAG_SPLIT=$(IFS="+"; echo "${TEST_TAG_ARG}")
+readarray -d + -t TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
 index=0
 rc=0
 for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"
-    # shellcheck disable=SC2153
-    mapfile -t TAGS <<< "$TEST_TAG_SEQ"
+    readarray -d " " -t TAGS <<< "${TEST_TAG_SEQ}"
     if [ $index -eq 0 ]; then
         # First sequence of tags run with arguments provided by the user
         name=${STAGE_NAME}
