@@ -63,9 +63,9 @@ nav:
       - 'DAOS in the Cloud': 'cloud/index.md'
       - 'Issue tracker': 'https://jira.daos.io/'
   - Release Information:
-      - 'Release Notes v2.4': 'release/release_notes.md'
-      - 'Support Matrix v2.4': 'release/support_matrix.md'
-      - 'Upgrading to v2.4': 'release/upgrading.md'
+      - 'Release Notes v2.5': 'release/release_notes.md'
+      - 'Support Matrix v2.5': 'release/support_matrix.md'
+      - 'Upgrading to v2.5': 'release/upgrading.md'
       - 'Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
   - Overview:
       - 'Architecture': 'overview/architecture.md'
