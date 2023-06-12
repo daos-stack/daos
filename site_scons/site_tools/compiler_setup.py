@@ -4,7 +4,8 @@ from SCons.Script import GetOption, Exit
 from SCons.Script import Configure
 
 
-DESIRED_FLAGS = ['-Wno-sign-compare',
+DESIRED_FLAGS = ['-fstack-usage',
+                 '-Wno-sign-compare',
                  '-Wno-unused-parameter',
                  '-Wno-missing-field-initializers',
                  '-Wno-implicit-fallthrough',
@@ -15,8 +16,7 @@ DESIRED_FLAGS = ['-Wno-sign-compare',
                  '-Wframe-larger-than=4096']
 
 # Compiler flags to prevent optimizing out security checks
-DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
-                      '-fwrapv'])
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
 
 # Compiler flags for stack hardening
 DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
