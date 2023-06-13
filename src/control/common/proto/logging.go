@@ -23,16 +23,32 @@ import (
 )
 
 // ShouldDebug returns true if the protobuf message should be logged.
-func ShouldDebug(msg proto.Message) bool {
+func ShouldDebug(msg proto.Message, ldrChk func() bool) bool {
 	switch msg.(type) {
 	case *grpcpb.AppendEntriesRequest, *grpcpb.AppendEntriesResponse,
 		*grpcpb.RequestVoteRequest, *grpcpb.RequestVoteResponse,
 		*grpcpb.TimeoutNowRequest, *grpcpb.TimeoutNowResponse,
 		*grpcpb.InstallSnapshotRequest, *grpcpb.InstallSnapshotResponse,
+		*mgmtpb.LeaderQueryReq, *mgmtpb.SystemQueryReq,
 		*ctlpb.StorageScanResp, *ctlpb.NetworkScanResp,
-		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp:
+		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp,
+		*mgmtpb.GetAttachInfoReq:
 		return false
 	default:
+		// Most mgmt messages must be processed by the leader, so if this node
+		// is not the leader, don't log them.
+		if !ldrChk() && strings.HasPrefix(string(proto.MessageName(msg)), "mgmt.") {
+			switch msg.(type) {
+			case *mgmtpb.PoolQueryReq, *mgmtpb.PoolGetPropReq,
+				*mgmtpb.ListPoolsReq, *mgmtpb.GetACLReq,
+				*mgmtpb.PoolQueryTargetReq, *mgmtpb.ListContReq,
+				*mgmtpb.SystemEraseReq, *mgmtpb.SystemGetPropReq,
+				*mgmtpb.SystemGetAttrReq:
+				return true
+			default:
+				return false
+			}
+		}
 		return true
 	}
 }
