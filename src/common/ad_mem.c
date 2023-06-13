@@ -623,7 +623,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 	} else {
 		int	flags = O_RDWR;
 
-		while (!(flags & O_CREAT)) {
+		while (1) {
 			fd = open(path, flags, 0600);
 			if (fd >= 0)
 				break;

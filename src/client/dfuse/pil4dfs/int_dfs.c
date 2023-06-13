@@ -116,12 +116,6 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
-static void
-discover_daos_mount(void);
-static void
-discover_dfuse(void);
-static int
-retrieve_handles_from_fuse(int idx);
 static int
 init_dfs(int idx);
 static int
@@ -573,59 +567,61 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
-static void
-discover_daos_mount(void)
+/* Discover fuse mount points from env DAOS_MOUNT_POINT.
+ * Return 0 for success. A non-zero value means something wrong in setting
+ * and the caller will call abort() to terminate current application.
+ */
+static int
+discover_daos_mount_with_env(void)
 {
-	int   idx, len_fs_root;
+	int   idx, len_fs_root, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
-	/* Find the list of dfuse from /proc/mounts */
-	discover_dfuse();
-
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
-		return;
+		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
+		D_GOTO(out, rc = 0);
 
 	if (num_dfs >= MAX_DAOS_MT) {
-		D_WARN("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
-		return;
+		D_FATAL("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
+		D_GOTO(out, rc = EBUSY);
 	}
 
 	if (access(fs_root, R_OK)) {
-		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
-			strerror(errno));
-		return;
+		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
+		D_GOTO(out, rc = EACCES);
 	}
 
+	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		return;
+		D_GOTO(out, rc = 0);
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
-		return;
+		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
+		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
-		return;
+		D_FATAL("DAOS_POOL is not set.\n");
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
-		return;
+		D_FATAL("DAOS_CONTAINER is not set.\n");
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL)
-		return;
+		D_GOTO(out, rc = ENOMEM);
 
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
@@ -633,12 +629,20 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
+	rc = 0;
+
+out:
+	return rc;
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
-static void
-discover_dfuse(void)
+/* Discover fuse mount points from /proc/self/mounts. Return 0 for success. Otherwise
+ * return Linux errno and disable function interception.
+ */
+static int
+discover_dfuse_mounts(void)
 {
+	int            rc = 0;
 	FILE          *fp;
 	struct mntent *fs_entry;
 	struct dfs_mt *pt_dfs_mt;
@@ -648,14 +652,15 @@ discover_dfuse(void)
 	fp = setmntent("/proc/self/mounts", "r");
 
 	if (fp == NULL) {
+		rc = errno;
 		D_ERROR("failed to open /proc/self/mounts: %d (%s)\n", errno, strerror(errno));
-		return;
+		return rc;
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
 		if (num_dfs >= MAX_DAOS_MT) {
-			D_WARN("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			break;
+			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
+			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
 		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
@@ -663,7 +668,7 @@ discover_dfuse(void)
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
-				continue;
+				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
 				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
@@ -675,12 +680,14 @@ discover_dfuse(void)
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
 			if (pt_dfs_mt->fs_root == NULL)
-				continue;
+				D_GOTO(out, rc = ENOMEM);
 			num_dfs++;
 		}
 	}
 
+out:
 	endmntent(fp);
+	return rc;
 }
 
 #define NAME_LEN 128
@@ -5220,6 +5227,25 @@ init_myhook(void)
 			report = false;
 	}
 
+	/* Find dfuse mounts from /proc/mounts */
+	rc = discover_dfuse_mounts();
+	if (rc) {
+		/* Do not enable interception if discover_dfuse_mounts() failed. */
+		D_DEBUG(DB_ANY, "discover_dfuse_mounts() failed: %d (%s)\n", rc, strerror(rc));
+		return;
+	}
+
+	rc = discover_daos_mount_with_env();
+	if (rc) {
+		D_FATAL("discover_daos_mount_with_env() failed: %d (%s)", rc, strerror(rc));
+		abort();
+	}
+	if (num_dfs == 0) {
+		/* Do not enable interception if no DFS mounts found. */
+		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
+		return;
+	}
+
 	update_cwd();
 	rc = D_MUTEX_INIT(&lock_dfs, NULL);
 	if (rc)
@@ -5274,10 +5300,8 @@ init_myhook(void)
 	 */
 
 	init_fd_dup2_list();
-	discover_daos_mount();
 
 	install_hook();
-
 	hook_enabled = 1;
 }
 
@@ -5350,19 +5374,21 @@ close_all_dirfd(void)
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
-	close_all_duped_fd();
-	close_all_fd();
-	close_all_dirfd();
+	if (num_dfs > 0) {
+		close_all_duped_fd();
+		close_all_fd();
+		close_all_dirfd();
 
-	finalize_dfs();
+		finalize_dfs();
 
-	D_MUTEX_DESTROY(&lock_dfs);
-	D_MUTEX_DESTROY(&lock_dirfd);
-	D_MUTEX_DESTROY(&lock_fd);
-	D_MUTEX_DESTROY(&lock_mmap);
-	D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_MUTEX_DESTROY(&lock_dfs);
+		D_MUTEX_DESTROY(&lock_dirfd);
+		D_MUTEX_DESTROY(&lock_fd);
+		D_MUTEX_DESTROY(&lock_mmap);
+		D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
-	uninstall_hook();
+		uninstall_hook();
+	}
 
 	if (daos_debug_inited)
 		daos_debug_fini();
