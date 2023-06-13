@@ -53,11 +53,12 @@ RUN if $QUICKBUILD; then                                          \
 
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then \
-      dnf install zip && \
-      dnf clean all;     \
+      dnf install zip zx && \
+      dnf clean all &&;     \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
-        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
-      mkdir -p bullseye; \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar && \
+      mkdir -p bullseye && \
+      ls -l && \
       tar -C bullseye --strip-components=1 -xf bullseye.tar; \
       pushd bullseye; \
         ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
