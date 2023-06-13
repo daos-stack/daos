@@ -211,8 +211,8 @@ func Test_NvmeController_Addresses(t *testing.T) {
 				vmdBackingAddr2a, vmdBackingAddr2b),
 			expAddrs: []string{
 				vmdBackingAddr1a,
-				vmdBackingAddr2a,
 				vmdBackingAddr1b,
+				vmdBackingAddr2a,
 				vmdBackingAddr2b,
 			},
 		},
