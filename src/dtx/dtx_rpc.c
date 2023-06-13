@@ -110,6 +110,23 @@ D_CASSERT(sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_rank) +
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_tag) ==
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_key));
 
+static inline void
+dtx_drr_cleanup(struct dtx_req_rec *drr)
+{
+	int	i;
+
+	if (drr->drr_cb_args != NULL) {
+		for (i = 0; i < drr->drr_count; i++) {
+			if (drr->drr_cb_args[i] != NULL)
+				dtx_dsp_free(drr->drr_cb_args[i]);
+		}
+		D_FREE(drr->drr_cb_args);
+	}
+	D_FREE(drr->drr_dti);
+	D_FREE(drr->drr_flags);
+	D_FREE(drr);
+}
+
 static void
 dtx_req_cb(const struct crt_cb_info *cb_info)
 {
@@ -282,9 +299,8 @@ dtx_req_list_cb(void **args)
 				 * then the DTX is committable on all targets.
 				 */
 				D_DEBUG(DB_TRACE,
-					"The DTX "DF_DTI" has been committed "
-					"on %d/%d.\n", DP_DTI(drr->drr_dti),
-					drr->drr_rank, drr->drr_tag);
+					"The DTX "DF_DTI" has been committed on %d/%d.\n",
+					DP_DTI(&drr->drr_dti[0]), drr->drr_rank, drr->drr_tag);
 				return;
 			case -DER_EXCLUDED:
 				/*
@@ -310,9 +326,8 @@ dtx_req_list_cb(void **args)
 				break;
 			}
 
-			D_DEBUG(DB_TRACE, "The DTX "DF_DTI" RPC req result %d, "
-				"status is %d.\n", DP_DTI(drr->drr_dti),
-				drr->drr_result, dra->dra_result);
+			D_DEBUG(DB_TRACE, "The DTX "DF_DTI" RPC req result %d, status is %d.\n",
+				DP_DTI(&drr->drr_dti[0]), drr->drr_result, dra->dra_result);
 		}
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
@@ -325,7 +340,7 @@ dtx_req_list_cb(void **args)
 		D_CDEBUG(dra->dra_result < 0 && dra->dra_result != -DER_NONEXIST &&
 			 dra->dra_result != -DER_INPROGRESS, DLOG_ERR, DB_TRACE,
 			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
-			 dra->dra_opc, DP_DTI(drr->drr_dti),
+			 dra->dra_opc, DP_DTI(&drr->drr_dti[0]),
 			 dra->dra_result < 0 ? "failed" : "succeed",
 			 dra->dra_length, dra->dra_result);
 	}
@@ -452,10 +467,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_del(&drr->drr_link);
-	D_FREE(drr->drr_cb_args);
-	D_FREE(drr->drr_dti);
-	D_FREE(drr->drr_flags);
-	D_FREE(drr);
+	dtx_drr_cleanup(drr);
 
 	return 0;
 }
@@ -503,12 +515,13 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		 struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct dtx_memberships		*mbs = dte->dte_mbs;
+	struct pool_target		*target;
 	struct dtx_cf_rec_bundle	 dcrb;
 	int				 rc = 0;
 	int				 i;
 
 	if (mbs->dm_tgt_cnt == 0)
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 
 	if (daos_handle_is_valid(tree)) {
 		dcrb.dcrb_count = count;
@@ -522,16 +535,14 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		i = 1;
 	else
 		i = 0;
-	for (; i < mbs->dm_tgt_cnt && rc >= 0; i++) {
-		struct pool_target	*target;
-
+	for (; i < mbs->dm_tgt_cnt; i++) {
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
 		if (rc != 1) {
 			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
 			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
 			       mbs->dm_flags);
-			return -DER_UNINIT;
+			D_GOTO(out, rc = -DER_UNINIT);
 		}
 
 		/* Skip the target that (re-)joined the system after the DTX. */
@@ -560,22 +571,31 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 			d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
 			rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov,
 					   &riov, NULL);
+			if (rc != 0)
+				goto out;
 		} else {
 			struct dtx_req_rec	*drr;
 
 			D_ALLOC_PTR(drr);
 			if (drr == NULL)
-				return -DER_NOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			D_ALLOC_PTR(drr->drr_dti);
+			if (drr->drr_dti == NULL) {
+				dtx_drr_cleanup(drr);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
 
 			drr->drr_rank = target->ta_comp.co_rank;
 			drr->drr_tag = target->ta_comp.co_index;
 			drr->drr_count = 1;
-			drr->drr_dti = &dte->dte_xid;
+			drr->drr_dti[0] = dte->dte_xid;
 			d_list_add_tail(&drr->drr_link, head);
 			(*length)++;
 		}
 	}
 
+out:
 	return rc > 0 ? 0 : rc;
 }
 
@@ -700,7 +720,6 @@ dtx_rpc_post(struct dtx_common_args *dca, int ret)
 {
 	struct dtx_req_rec	*drr;
 	int			 rc;
-	bool			 free_dti = true;
 
 	if (dca->dca_helper != ABT_THREAD_NULL)
 		ABT_thread_free(&dca->dca_helper);
@@ -709,16 +728,9 @@ dtx_rpc_post(struct dtx_common_args *dca, int ret)
 
 	if (daos_handle_is_valid(dca->dca_tree_hdl))
 		dbtree_destroy(dca->dca_tree_hdl, NULL);
-	else if (dca->dca_dtis != NULL) /* not for DTX_REFRESH. */
-		free_dti = false;
 
-	while ((drr = d_list_pop_entry(&dca->dca_head, struct dtx_req_rec, drr_link)) != NULL) {
-		D_FREE(drr->drr_cb_args);
-		if (free_dti)
-			D_FREE(drr->drr_dti);
-		D_FREE(drr->drr_flags);
-		D_FREE(drr);
-	}
+	while ((drr = d_list_pop_entry(&dca->dca_head, struct dtx_req_rec, drr_link)) != NULL)
+		dtx_drr_cleanup(drr);
 
 	return ret != 0 ? ret : rc;
 }
@@ -903,7 +915,6 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	int			 rc = 0;
 	int			 rc1;
 	int			 count;
-	int			 i;
 	bool			 drop;
 
 	D_INIT_LIST_HEAD(&head);
@@ -993,23 +1004,11 @@ again:
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		D_ALLOC_ARRAY(drr->drr_dti, *check_count);
-		if (drr->drr_dti == NULL) {
-			D_FREE(drr);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-
 		D_ALLOC_ARRAY(drr->drr_flags, *check_count);
-		if (drr->drr_flags == NULL) {
-			D_FREE(drr->drr_dti);
-			D_FREE(drr);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-
 		D_ALLOC_ARRAY(drr->drr_cb_args, *check_count);
-		if (drr->drr_cb_args == NULL) {
-			D_FREE(drr->drr_dti);
-			D_FREE(drr->drr_flags);
-			D_FREE(drr);
+
+		if (drr->drr_dti == NULL || drr->drr_flags == NULL || drr->drr_cb_args == NULL) {
+			dtx_drr_cleanup(drr);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
@@ -1174,16 +1173,8 @@ next:
 	rc = 0;
 
 out:
-	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
-				       drr_link)) != NULL) {
-		for (i = 0; i < drr->drr_count; i++)
-			dtx_dsp_free(drr->drr_cb_args[i]);
-
-		D_FREE(drr->drr_cb_args);
-		D_FREE(drr->drr_dti);
-		D_FREE(drr->drr_flags);
-		D_FREE(drr);
-	}
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec, drr_link)) != NULL)
+		dtx_drr_cleanup(drr);
 
 	while ((dsp = d_list_pop_entry(&self, struct dtx_share_peer,
 				       dsp_link)) != NULL)
