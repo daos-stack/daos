@@ -13,8 +13,6 @@ if $TEST_RPMS; then
         tar -C install/lib/daos/TESTING/ -xzf -
 fi
 
-echo '========='
-pwd
 if [ -e "install/lib/daos/TESTING/ftest/avocado/job-results/${STAGE_NAME}" ]; then
     mv "install/lib/daos/TESTING/ftest/avocado/job-results/${STAGE_NAME}/"* "${STAGE_NAME}/"
 else

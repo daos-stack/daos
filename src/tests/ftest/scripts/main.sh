@@ -198,9 +198,11 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
 fi
 
 # Run launch.py multiple times if a sequence of tags (tags separated by a '+') is specified
+echo "TEST_TAG_ARG: ${TEST_TAG_ARG}"
 IFS="+" read -r -a TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
 index=0
 rc=0
+echo "TEST_TAG_SPLIT: ${TEST_TAG_SPLIT[*]}"
 for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"; do
     IFS=" " read -r -a TAGS <<< "${TEST_TAG_SEQ}"
     if [ $index -eq 0 ]; then
@@ -217,7 +219,7 @@ for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"; do
 
     # shellcheck disable=SC2086,SC2090
     if ! ./launch.py --mode ci --name ${name} ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
-        rc=$((rc|{PIPESTATUS[0]}))
+        rc=$((rc|${PIPESTATUS[0]}))
     fi
 done
 
