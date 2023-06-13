@@ -111,6 +111,11 @@ var (
 		"md-on-ssd bdev roles have been set in some but not all engine configs",
 		"set bdev roles on all engines or remove all bdev role assignments in config",
 	)
+	FaultConfigSysRsvdZero = serverConfigFault(
+		code.ServerConfigSysRsvdZero,
+		"`system_ram_reserved` is set to zero in server config",
+		"set `system_ram_reserved` to a positive integer value in config",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
