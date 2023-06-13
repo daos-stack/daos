@@ -145,7 +145,7 @@ out:
 	return rc;
 }
 
-bool
+static bool
 is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
 {
 	struct vos_pool		*vos_pool;

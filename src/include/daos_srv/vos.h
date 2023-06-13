@@ -1253,14 +1253,6 @@ enum vos_cont_opc {
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
-/**
- * Profile the VOS operation in standalone vos mode.
- **/
-int
-vos_profile_start(char *path, int avg);
-void
-vos_profile_stop(void);
-
 uint64_t
 vos_get_io_size(daos_handle_t ioh);
 

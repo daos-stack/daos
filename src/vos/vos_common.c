@@ -106,46 +106,13 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 	}
 }
 
-#ifdef VOS_STANDALONE
-int
-vos_profile_start(char *path, int avg)
-{
-	struct vos_tls *tls = vos_tls_get(true);
-	struct daos_profile *dp;
-	int rc;
-
-	if (tls == NULL)
-		return 0;
-
-	rc = daos_profile_init(&dp, path, avg, 0, 0);
-	if (rc)
-		return rc;
-
-	tls->vtl_dp = dp;
-	return 0;
-}
-
-void
-vos_profile_stop()
-{
-	struct vos_tls *tls = vos_tls_get(true);
-
-	if (tls == NULL || tls->vtl_dp == NULL)
-		return;
-
-	daos_profile_dump(tls->vtl_dp);
-	daos_profile_destroy(tls->vtl_dp);
-	tls->vtl_dp = NULL;
-}
-
-#endif
-
 struct bio_xs_context *
 vos_xsctxt_get(void)
 {
 #ifdef VOS_STANDALONE
 	return self_mode.self_xs_ctxt;
 #else
+	/* main thread doesn't have TLS and XS context*/
 	if (dss_tls_get() == NULL)
 		return NULL;
 
