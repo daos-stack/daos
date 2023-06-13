@@ -1986,6 +1986,10 @@ class Launch():
             return 128
 
         apps_src = os.path.join(os.sep, "scratch", "soak", "apps")
+        logger.debug("== DEBUG ===")
+        run_local(logger, 'ls -al {apps_src}')
+        run_local(logger, 'ls -al {apps_src}/*')
+        logger.debug("== DEBUG ===")
         try:
             run_local(logger, f"cp -r {apps_src}/* {apps_dir}/", check=True)
         except RunException:
