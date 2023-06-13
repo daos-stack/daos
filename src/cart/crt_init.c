@@ -309,7 +309,6 @@ static int data_init(int server, crt_init_options_t *opt)
 
         setenv("D_LOG_STDERR_IN_LOG", "1", 1);
         setenv("UCX_SOCKADDR_TLS_PRIORITY", "rdmacm", 1);
-        setenv("UCX_DC_MLX5_NUM_DCI", "16", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
