@@ -870,6 +870,12 @@ dfuse_ie_init(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry 
 		D_FREE(_ie);                                                                       \
 	} while (0)
 
+#define dfuse_oh_free(_fs, _oh)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);                             \
+		D_FREE(_oh);                                                                       \
+	} while (0)
+
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 

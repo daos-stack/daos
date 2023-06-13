@@ -71,5 +71,5 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	DFUSE_REPLY_ZERO(oh, req);
 	dfuse_dre_drop(fs_handle, oh);
-	D_FREE(oh);
+	dfuse_oh_free(fs_handle, oh);
 };

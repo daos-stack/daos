@@ -92,8 +92,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	return;
 err:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);
-	D_FREE(oh);
+	dfuse_oh_free(fs_handle, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
@@ -154,6 +153,5 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);
-	D_FREE(oh);
+	dfuse_oh_free(fs_handle, oh);
 }
