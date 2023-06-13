@@ -1,4 +1,4 @@
-# Welcome to DAOS!
+# Welcome to DAOS Version 2.4!
 
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
 object store designed from the ground up for massively distributed Non
