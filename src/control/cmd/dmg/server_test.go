@@ -14,19 +14,19 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
-func TestServerCommands(t *testing.T) {
+func TestDmg_ServerCommands(t *testing.T) {
 	masks := "ERR,mgmt=DEBUG"
 	streams := "MGMT,IO"
 	subsystems := "mISC"
 	runCmdTests(t, []cmdTest{
 		{
-			"Set log masks with reset", // empty "Masks" string indicates reset
+			"Reset log masks streams and subsystems",
 			"server set-logmasks",
 			printRequest(t, &control.SetEngineLogMasksReq{}),
 			nil,
 		},
 		{
-			"Set log masks", // expects positional argument
+			"Set log masks",
 			"server set-logmasks -m ERR,mgmt=DEBUG",
 			printRequest(t, &control.SetEngineLogMasksReq{Masks: &masks}),
 			nil,
