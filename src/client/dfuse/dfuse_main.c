@@ -251,7 +251,7 @@ static void
 show_help(char *name)
 {
 	printf(
-	    "usage: %s <mountpoint> [pool] [container]\n"
+	    "usage: %s [OPTIONS] [mountpoint [pool container]]\n"
 	    "\n"
 	    "Options:\n"
 	    "\n"
