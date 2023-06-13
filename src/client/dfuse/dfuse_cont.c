@@ -104,7 +104,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 	return;
 close:
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:

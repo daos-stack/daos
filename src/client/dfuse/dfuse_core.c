@@ -1182,9 +1182,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
 
-	atomic_fetch_sub_relaxed(&fs_handle->dpi_inode_count, 1);
-
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 }
 
 static void
@@ -1386,7 +1384,7 @@ err_ie_remove:
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 	return rc;
 }
 

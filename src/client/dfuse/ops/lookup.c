@@ -295,7 +295,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 out_release:
 	dfs_release(ie->ie_obj);
 out_free:
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 out:
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};

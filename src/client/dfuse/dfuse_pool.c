@@ -143,7 +143,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	return;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 	daos_prop_free(prop);
 err:
 	if (rc == ENOENT) {

@@ -92,6 +92,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	return;
 err:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);
 	D_FREE(oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
@@ -99,9 +100,10 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
-	int                   rc;
-	uint32_t              il_calls;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	int                           rc;
+	uint32_t                      il_calls;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -152,5 +154,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);
 	D_FREE(oh);
 }

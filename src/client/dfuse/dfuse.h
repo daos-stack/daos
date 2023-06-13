@@ -864,6 +864,12 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 void
 dfuse_ie_init(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
 
+#define dfuse_ie_free(_fs, _ie)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&fs_handle->dpi_inode_count, 1);                          \
+		D_FREE(_ie);                                                                       \
+	} while (0)
+
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 

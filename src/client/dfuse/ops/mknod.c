@@ -56,5 +56,5 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 }
