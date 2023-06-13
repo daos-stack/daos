@@ -201,7 +201,7 @@ fi
 IFS="+" read -r -a TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
 index=0
 rc=0
-for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"
+for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"; do
     IFS=" " read -r -a TAGS <<< "${TEST_TAG_SEQ}"
     if [ $index -eq 0 ]; then
         # First sequence of tags run with arguments provided by the user
