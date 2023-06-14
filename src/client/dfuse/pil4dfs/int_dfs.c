@@ -338,8 +338,9 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 		return rc;
 
 	if (!S_ISDIR(mode)) {
-		*obj = oh;
-		return 0;
+		/* Not a directory, return ENOENT*/
+		dfs_release(oh);
+		return ENOTDIR;
 	}
 
 	/* Allocate struct and string in a single buffer.  This includes a extra byte so name will
