@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func mockPCIBus(args ...uint8) *PCIBus {
@@ -314,13 +315,16 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
 			addrSet, gotErr := NewPCIAddressSet(tc.inAddrs...)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			gotAddrs, gotErr := addrSet.BackingToVMDAddresses()
+			gotAddrs, gotErr := addrSet.BackingToVMDAddresses(log)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
