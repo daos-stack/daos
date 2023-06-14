@@ -163,8 +163,7 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, namespace=POOL_NAMESPACE):
+    def __init__(self, context, dmg_command, label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -175,8 +174,6 @@ class TestPool(TestDaosApiBase):
                 value can be obtained by calling self.get_dmg_command() from a
                 test. It'll return the object with -l <Access Point host:port>
                 and --insecure.
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
                 There's a link between label_generator and label. If the label
@@ -184,7 +181,7 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__(namespace, cb_handler)
+        super().__init__(namespace)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -767,25 +764,17 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
-    def set_property(self, prop_name=None, prop_value=None):
+    def set_property(self, prop_name, prop_value):
         """Set Property.
 
         It sets property for a given pool uuid using dmg.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to
-                None, which uses the TestPool.prop_name.value
-            prop_value (str, optional): value to be set for the property.
-                Defaults to None, which uses the TestPool.prop_value.value
+            prop_name (str): pool property name
+            prop_value (str): value to be set for the property
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.identifier)
-
-            # If specific values are not provided, use the class values
-            if prop_name is None:
-                prop_name = self.prop_name.value
-            if prop_value is None:
-                prop_value = self.prop_value.value
             properties = ":".join([prop_name, prop_value])
             self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 

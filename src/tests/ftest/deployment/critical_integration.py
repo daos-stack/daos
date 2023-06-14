@@ -4,10 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from datetime import datetime
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import run_command, DaosTestError, get_journalctl
+from general_utils import run_command, DaosTestError, get_journalctl, journalctl_time
 from ior_test_base import IorTestBase
 from exception_utils import CommandFailure
 
@@ -152,7 +151,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         self.log.info("sub_rank_list: %s", sub_rank_list)
 
         # stop ranks, verify they stopped successfully and restart the stopped ranks
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
             self.log.info("Ranks to stop: %s", ranks_to_stop)
@@ -171,7 +170,7 @@ class CriticalIntegrationWithServers(TestWithServers):
             if check_started_ranks:
                 self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
 
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,

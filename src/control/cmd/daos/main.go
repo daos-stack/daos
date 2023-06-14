@@ -213,6 +213,8 @@ or query/manage an object inside a container.`
 		if os.Getenv("DD_STDERR") == "" {
 			os.Setenv("DD_STDERR", "debug")
 		}
+	} else if os.Getenv("DD_STDERR") == "" {
+		os.Setenv("DD_STDERR", "err")
 	}
 
 	// Initialize the daos debug system first so that
