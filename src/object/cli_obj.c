@@ -20,6 +20,7 @@
 #include <daos_obj.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include "cli_csum.h"
 
 /**
  * Open an object shard (shard object), cache the open handle.
@@ -4954,139 +4955,24 @@ obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 }
 
 static int
-obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
-		struct obj_auxi_args *obj_auxi)
+obj_csum_update(struct dc_object *obj, daos_obj_update_t *args, struct obj_auxi_args *obj_auxi)
 {
-	struct daos_csummer	*csummer = obj->cob_co->dc_csummer;
-	struct daos_csummer	*csummer_copy = NULL;
-	struct cont_props	 cont_props = obj->cob_co->dc_props;
-	struct dcs_csum_info	*dkey_csum = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	int			 rc;
-
-	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
-			 "csum_type: %d, csum_enabled: %s\n",
-		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
-		csummer, cont_props.dcp_csum_type,
-		DP_BOOL(cont_props.dcp_csum_enabled));
-
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
+	if (!obj_csum_dedup_candidate(&obj->cob_co->dc_props, args->iods, args->nr))
 		return 0;
 
-	if (!obj_csum_dedup_candidate(&cont_props, args->iods, args->nr))
-		return 0;
-
-	if (obj_auxi->rw_args.dkey_csum != NULL) {
-		/** already calculated - don't need to do it again */
-		return 0;
-	}
-
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
-
-	/** Calc 'd' key checksum */
-	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
-	if (rc != 0) {
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
-				    args->nr, false,
-				    obj_auxi->reasb_req.orr_singv_los,
-				    -1, &iod_csums);
-	if (rc != 0) {
-		daos_csummer_free_ci(csummer_copy, &dkey_csum);
-		daos_csummer_destroy(&csummer_copy);
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-	daos_csummer_destroy(&csummer_copy);
-
-	/** fault injection - corrupt data and/or keys after calculating
-	 * checksum - simulates corruption over network
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_DKEY))
-		((char *)args->dkey->iov_buf)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_AKEY))
-		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE))
-		dcf_corrupt(args->sgls, args->nr);
-
-	obj_auxi->rw_args.iod_csums = iod_csums;
-	obj_auxi->rw_args.dkey_csum = dkey_csum;
-
-	return 0;
+	return dc_obj_csum_update(obj->cob_co->dc_csummer, obj->cob_co->dc_props,
+				  obj->cob_md.omd_id, args->dkey, args->iods, args->sgls, args->nr,
+				  obj_auxi->reasb_req.orr_singv_los, &obj_auxi->rw_args.dkey_csum,
+				  &obj_auxi->rw_args.iod_csums);
 }
 
 static int
 obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
-	struct daos_csummer	*csummer = obj->cob_co->dc_csummer;
-	struct daos_csummer	*csummer_copy;
-	struct dcs_csum_info	*dkey_csum = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	int			 rc;
-
-	if (!daos_csummer_initialized(csummer) ||
-	    csummer->dcs_skip_data_verify)
-		/** csummer might be initialized by dedup, but checksum
-		 * feature is turned off ...
-		 */
-		return 0;
-
-	if (obj_auxi->rw_args.dkey_csum != NULL) {
-		/** already calculated - don't need to do it again */
-		return 0;
-	}
-
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
-
-	/** dkey */
-	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
-	if (rc != 0) {
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
-				    args->nr,
-				    true, obj_auxi->reasb_req.orr_singv_los,
-				    -1, &iod_csums);
-	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
-		daos_csummer_free_ci(csummer_copy, &dkey_csum);
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	daos_csummer_destroy(&csummer_copy);
-
-	/**
-	 * fault injection - corrupt keys after calculating checksum -
-	 * simulates corruption over network
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
-		dkey_csum->cs_csum[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY))
-		iod_csums[0].ic_akey.cs_csum[0]++;
-
-	obj_auxi->rw_args.iod_csums = iod_csums;
-	obj_auxi->rw_args.dkey_csum = dkey_csum;
-
-	return 0;
+	return dc_obj_csum_fetch(obj->cob_co->dc_csummer, args->dkey, args->iods, args->sgls,
+				 args->nr, obj_auxi->reasb_req.orr_singv_los,
+				 &obj_auxi->rw_args.dkey_csum, &obj_auxi->rw_args.iod_csums);
 }
 
 static inline char *
@@ -7184,6 +7070,7 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	uint32_t		nr_grp;
 	struct cont_props	props;
 	int			rc;
+	uint32_t		 rf;
 	struct dc_cont		*dc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -7209,18 +7096,17 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
+	rf = dc->dc_props.dcp_redun_fac;
 
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
-		attr.pa_domain_nr, attr.pa_target_nr);
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d rf:%u\n", attr.pa_domain_nr,
+		attr.pa_target_nr, rf);
 
 	if (cid == OC_UNKNOWN) {
-		uint32_t rf;
-
-		rf = dc->dc_props.dcp_redun_fac;
 		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
+					 rf);
 	}
 	dc_cont_put(dc);
 
@@ -7273,8 +7159,8 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 				   attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	else
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
+					 rf_factor);
 	if (rc)
 		return rc;
 
