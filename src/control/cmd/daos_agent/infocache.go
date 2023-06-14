@@ -282,7 +282,6 @@ func (c *InfoCache) EnableStaticFabricCache(ctx context.Context, nf *NUMAFabric)
 	if c == nil {
 		return
 	}
-
 	item := &cachedFabricInfo{
 		cacheItem: cacheItem{
 			lastCached: time.Now(),

@@ -650,6 +650,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigControlMetadataNoPath
 	}
 
+	if cfg.SystemRamReserved <= 0 {
+		return FaultConfigSysRsvdZero
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {

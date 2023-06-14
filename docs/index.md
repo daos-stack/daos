@@ -1,4 +1,4 @@
-# Welcome to DAOS!
+# Welcome to DAOS Version 2.5!
 
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
 object store designed from the ground up for massively distributed Non
@@ -15,11 +15,11 @@ In addition to on-prem deployments, DAOS can be deployed in cloud
 environments. More information on cloud deployments is available
 in the [DAOS in the Cloud](./cloud/) section.
 
-The included document versions are associated with DAOS v2.3.
+The included document versions are associated with DAOS v2.5.
 They may also describe features that are currently under development
 for a future DAOS release. Those features will be clearly marked as such.
 
 !!! warning
-    DAOS v2.3 is the (unstable) master branch for DAOS v2.4 development.
+    DAOS v2.5 is the (unstable) master branch for DAOS v2.6 development.
     Use at your own risk. Please consider the [latest](../latest/)
     stable DAOS release for production deployments.
