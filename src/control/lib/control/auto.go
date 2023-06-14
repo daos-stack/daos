@@ -891,7 +891,7 @@ func correctSSDCounts(log logging.Logger, sd *storageDetails) error {
 		if ssds.HasVMD() {
 			// If addresses are for VMD backing devices, convert to the logical VMD
 			// endpoint address as this is what is expected in the server config.
-			newAddrSet, err := ssds.BackingToVMDAddresses()
+			newAddrSet, err := ssds.BackingToVMDAddresses(log)
 			if err != nil {
 				return errors.Wrap(err, "converting backing addresses to vmd")
 			}

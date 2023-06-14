@@ -7,9 +7,7 @@
 package storage
 
 import (
-	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -43,7 +41,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 		scanErr    error
 		expResults []BdevTierScanResult
 		expErr     error
-		expNotice  bool
 	}{
 		"nil cfg": {
 			expErr: errors.New("nil storage config"),
@@ -58,7 +55,7 @@ func Test_scanBdevsTiers(t *testing.T) {
 			},
 			expErr: errors.New("no bdevs in config"),
 		},
-		"use cache; nil scan cache": {
+		"nil scan cache": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
@@ -73,7 +70,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 					},
 				},
 			},
-			expNotice: true,
 		},
 		"bypass cache; missing controller": {
 			direct: true,
@@ -97,7 +93,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 					},
 				},
 			},
-			expNotice: true,
 		},
 		"bypass cache": {
 			direct: true,
@@ -160,7 +155,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 					},
 				},
 			},
-			expNotice: true,
 		},
 		"use cache": {
 			cfg: &Config{
@@ -183,7 +177,7 @@ func Test_scanBdevsTiers(t *testing.T) {
 				},
 			},
 		},
-		"bypass cache; multi-tier": {
+		"multi-tier; bypass cache": {
 			direct: true,
 			cfg: &Config{
 				Tiers: TierConfigs{
@@ -214,7 +208,7 @@ func Test_scanBdevsTiers(t *testing.T) {
 				},
 			},
 		},
-		"use cache; multi-tier": {
+		"multi-tier; use cache": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
@@ -244,65 +238,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 				},
 			},
 		},
-		"use cache; vmd domain missing in scan": {
-			cfg: &Config{
-				Tiers: TierConfigs{
-					mockScmTier,
-					NewTierConfig().WithStorageClass(ClassNvme.String()).
-						WithBdevDeviceList("0000:62:00.5", "0000:63:00.5"),
-				},
-			},
-			cache: &BdevScanResponse{
-				Controllers: NvmeControllers{
-					&NvmeController{PciAddr: "620005:83:00.0"},
-					&NvmeController{PciAddr: "620005:85:00.0"},
-					&NvmeController{PciAddr: "620005:87:00.0"},
-					&NvmeController{PciAddr: "620005:81:00.0"},
-				},
-			},
-			expResults: []BdevTierScanResult{
-				{
-					Result: &BdevScanResponse{
-						Controllers: NvmeControllers{
-							&NvmeController{PciAddr: "620005:83:00.0"},
-							&NvmeController{PciAddr: "620005:85:00.0"},
-							&NvmeController{PciAddr: "620005:87:00.0"},
-							&NvmeController{PciAddr: "620005:81:00.0"},
-						},
-					},
-				},
-			},
-			expNotice: true,
-		},
-		"use cache; multiple devices behind vmd domain": {
-			cfg: &Config{
-				Tiers: TierConfigs{
-					mockScmTier,
-					NewTierConfig().WithStorageClass(ClassNvme.String()).
-						WithBdevDeviceList("0000:62:00.5"),
-				},
-			},
-			cache: &BdevScanResponse{
-				Controllers: NvmeControllers{
-					&NvmeController{PciAddr: "620005:83:00.0"},
-					&NvmeController{PciAddr: "620005:85:00.0"},
-					&NvmeController{PciAddr: "620005:87:00.0"},
-					&NvmeController{PciAddr: "620005:81:00.0"},
-				},
-			},
-			expResults: []BdevTierScanResult{
-				{
-					Result: &BdevScanResponse{
-						Controllers: NvmeControllers{
-							&NvmeController{PciAddr: "620005:83:00.0"},
-							&NvmeController{PciAddr: "620005:85:00.0"},
-							&NvmeController{PciAddr: "620005:87:00.0"},
-							&NvmeController{PciAddr: "620005:81:00.0"},
-						},
-					},
-				},
-			},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -321,13 +256,6 @@ func Test_scanBdevsTiers(t *testing.T) {
 			if diff := cmp.Diff(tc.expResults, gotResults, defBdevCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected results (-want, +got):\n%s\n", diff)
 			}
-
-			txtMod := ""
-			if !tc.expNotice {
-				txtMod = "not "
-			}
-			msg := fmt.Sprintf("expected NOTICE level message to %shave been logged", txtMod)
-			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"), msg)
 		})
 	}
 }

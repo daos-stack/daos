@@ -16,6 +16,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -372,7 +374,7 @@ func (pas *PCIAddressSet) HasVMD() bool {
 // e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
 //
 // Many assumptions are made as to the input and output PCI address structure in the conversion.
-func (pas *PCIAddressSet) BackingToVMDAddresses() (*PCIAddressSet, error) {
+func (pas *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddressSet, error) {
 	if pas == nil {
 		return nil, errors.New("PCIAddressSet is nil")
 	}
@@ -392,6 +394,7 @@ func (pas *PCIAddressSet) BackingToVMDAddresses() (*PCIAddressSet, error) {
 			return nil, err
 		}
 
+		log.Debugf("replacing backing device %s with vmd %s", inAddr, vmdAddr)
 		if err := outAddrs.Add(vmdAddr); err != nil {
 			return nil, err
 		}
