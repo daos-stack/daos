@@ -292,7 +292,10 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 		sc_m_track_idle(ctx);
 	} else {
-		D_ASSERTF(false, "Unknown Scrub Mode\n");
+		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
+			DP_UUID(ctx->sc_pool->sp_uuid));
+		/* sleep for 5 minutes to give pool property chance to resolve */
+		sc_sleep(ctx, 1000 * 60 * 5);
 	}
 }
 
