@@ -3842,11 +3842,10 @@ class PosixTests():
         file3 = join(path, 'file3')
         self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
 
-        # cat a filename where a directory in the path is a file, should fail.  For now this does
-        # work but leaks memory.
-        # nop_file = join(file3, 'new_file which will not exist...')
-        # rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
-        # assert rc.returncode == 1, rc
+        # cat a filename where a directory in the path is a file, should fail.
+        nop_file = join(file3, 'new_file which will not exist...')
+        rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
+        assert rc.returncode == 1, rc
 
         # create a dir.
         dir1 = join(path, 'dir1')
