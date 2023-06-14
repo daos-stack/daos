@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -24,6 +25,21 @@ const (
 	defaultLogFile    = "/tmp/daos_agent.log"
 )
 
+type refreshMinutes time.Duration
+
+func (rm *refreshMinutes) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var mins uint
+	if err := unmarshal(&mins); err != nil {
+		return err
+	}
+	*rm = refreshMinutes(time.Duration(mins) * time.Minute)
+	return nil
+}
+
+func (rm refreshMinutes) Duration() time.Duration {
+	return time.Duration(rm)
+}
+
 // Config defines the agent configuration.
 type Config struct {
 	SystemName          string                    `yaml:"name"`
@@ -34,6 +50,7 @@ type Config struct {
 	LogLevel            common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
 	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
 	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
+	CacheExpiration     refreshMinutes            `yaml:"cache_expiration,omitempty"`
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
