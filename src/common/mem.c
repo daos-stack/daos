@@ -14,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos/mem.h>
+#include <hbwmalloc.h>
 #ifdef DAOS_PMEM_BUILD
 #include <libpmemobj.h>
 #include <daos_srv/ad_mem.h>
@@ -269,6 +270,7 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	struct ad_blob_handle	 bh;
 	int			 enabled = 1;
 	int			 rc;
+
 
 	D_ALLOC(umm_pool, sizeof(*umm_pool) + sizeof(umm_pool->up_slabs[0]) * UMM_SLABS_CNT);
 	if (umm_pool == NULL)
@@ -1717,8 +1719,8 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 
 	max_mapped = num_pages;
 
-	D_ALLOC(cache, sizeof(*cache) + sizeof(cache->ca_pages[0]) * num_pages +
-			   sizeof(cache->ca_pages[0].pg_info[0]) * max_mapped);
+	cache = hbw_calloc(1, sizeof(*cache) + sizeof(cache->ca_pages[0]) * num_pages +
+				sizeof(cache->ca_pages[0].pg_info[0]) * max_mapped);
 	if (cache == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
@@ -1758,7 +1760,7 @@ int
 umem_cache_free(struct umem_store *store)
 {
 	/** XXX: check reference counts? */
-	D_FREE(store->cache);
+	hbw_free(store->cache);
 	return 0;
 }
 
