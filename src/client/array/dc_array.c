@@ -2073,12 +2073,14 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);
+	if (iod->iod_recxs == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
 	iod->iod_recxs[0].rx_idx = record_i + 1;
 	iod->iod_recxs[0].rx_nr = num_records;
 
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free_reqs, rc);
 
 	io_arg = daos_task_get_args(io_task);
 	io_arg->oh	= oh;
@@ -2090,7 +2092,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free_reqs, rc);
 
 	rc = tse_task_register_deps(task, 1, &io_task);
 	if (rc)
@@ -2101,8 +2103,11 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	tse_task_list_add(io_task, task_list);
 
 	return rc;
-err:
+free_reqs:
+	D_FREE(iod->iod_recxs);
+free:
 	D_FREE(params);
+err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;

@@ -45,10 +45,10 @@ type configGenCmd struct {
 	SkipPrep        bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
-type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
+type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
-func getLocalFabric(ctx context.Context, log logging.Logger) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), allProviders)
+func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), provider)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
 	}
@@ -143,7 +143,12 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		return nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
 	}
 
-	hf, err := getFabric(ctx, cmd.Logger)
+	prov := cmd.NetProvider
+	if prov == allProviders {
+		prov = ""
+	}
+
+	hf, err := getFabric(ctx, cmd.Logger, prov)
 	if err != nil {
 		return nil, err
 	}

@@ -68,16 +68,13 @@ class TestDaosApiBase(ObjectWithParameters):
     USE_DMG = "dmg"
     USE_DAOS = "daos"
 
-    def __init__(self, namespace, cb_handler=None):
+    def __init__(self, namespace):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
         """
         super().__init__(namespace)
-        self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
         self.silent = BasicParameter(None, False)
 
@@ -106,9 +103,6 @@ class TestDaosApiBase(ObjectWithParameters):
             method (object): method to call
             kwargs (dict): named arguments for the method
         """
-        if self.cb_handler:
-            kwargs["cb_func"] = self.cb_handler.callback
-
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
             "{}.{}".format(
@@ -128,10 +122,6 @@ class TestDaosApiBase(ObjectWithParameters):
                     exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
-
-        if self.cb_handler:
-            # Wait for the call back if one is provided
-            self.cb_handler.wait()
 
     def _check_info(self, check_list):
         """Verify each info attribute value matches an expected value.

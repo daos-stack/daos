@@ -41,9 +41,11 @@ message NvmeControllerResult {
 }
 
 message ScanNvmeReq {
-	bool Health = 1; // Retrieve NVMe device health statistics
-	bool Meta = 2; // Retrieve metadata relating to NVMe device
-	bool Basic = 3; // Strip NVMe device details to only basic
+	bool Health = 1;	// Retrieve NVMe device health statistics
+	bool Meta = 2;		// Retrieve metadata relating to NVMe device
+	bool Basic = 3;		// Strip NVMe device details to only basic
+	uint64 MetaSize = 4;	// Size of the metadata blob
+	uint64 RdbSize = 5;	// Size of the RDB blob
 }
 
 message ScanNvmeResp {

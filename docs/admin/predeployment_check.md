@@ -282,6 +282,9 @@ $ sudo ln -s $daospath/include \
            /usr/share/spdk/include
 ```
 
+For convenience, the `utils/setup_daos_server_helper.sh` script may be used to automate the steps
+described above.
+
 !!! note
     The RPM installation is preferred for production scenarios. Manual
     installation is most appropriate for development and predeployment

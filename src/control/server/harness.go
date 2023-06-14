@@ -36,7 +36,7 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, []storage.NvmeController) ([]storage.NvmeController, error)
+	updateInUseBdevs(context.Context, []storage.NvmeController, uint64, uint64) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
@@ -62,7 +62,7 @@ type Engine interface {
 	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context, bool)
-	SetupRank(context.Context, ranklist.Rank) error
+	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
