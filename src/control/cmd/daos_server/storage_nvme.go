@@ -305,21 +305,33 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
-	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
+
+	// Apply request parameter field values required specifically for reset operation.
 	resetReq.HugepageCount = 0
+	resetReq.HugeNodes = ""
+	resetReq.CleanHugepagesOnly = false
+	resetReq.Reset_ = true
 
 	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
 
-	// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-	//                 controllers (as specified in the server config file) then the backing
-	//                 devices of the unselected VMD controllers will be bound to no driver
-	//                 and therefore inaccessible from both OS and SPDK. Workaround is to run
-	//                 nvme scan --ignore-config to reset driver bindings.
+	resetResp, err := resetBackend(resetReq)
+	if err != nil {
+		return errors.Wrap(err, "nvme reset backend")
+	}
 
-	// Reset NVMe device access.
-	_, err := resetBackend(resetReq)
+	// SPDK-2926: If VMD has been detected, perform an extra SPDK reset (without PCI_ALLOWED)
+	//            to reset dangling NVMe devices left unbound after the DRIVER_OVERRIDE=none
+	//            setup call was used in nvme prepare.
+	if resetResp.VMDPrepared && (resetReq.PCIAllowList != "" || resetReq.PCIBlockList != "") {
+		resetReq.PCIAllowList = ""
+		resetReq.PCIBlockList = ""
 
-	return err
+		if _, err := resetBackend(resetReq); err != nil {
+			return errors.Wrap(err, "nvme reset backend")
+		}
+	}
+
+	return nil
 }
 
 func (cmd *resetNVMeCmd) Execute(_ []string) error {
@@ -336,7 +348,6 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 		PCIAllowList: cmd.Args.PCIAllowList,
 		PCIBlockList: cmd.PCIBlockList,
 		DisableVFIO:  cmd.DisableVFIO,
-		Reset_:       true,
 	}
 
 	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
