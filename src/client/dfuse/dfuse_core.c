@@ -270,6 +270,11 @@ _ph_free(struct dfuse_pool *dfp)
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+		/* Hook for fault injection testing, if the disconnect fails with out of memory
+		 * then simply try it again.
+		 */
+		if (rc == -DER_NOMEM)
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc != -DER_SUCCESS)
 			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
