@@ -102,6 +102,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.TelemetrySubCommand()
         elif self.sub_command.value == "version":
             self.sub_command_class = self.VersionSubCommand()
+        elif self.sub_command.value == "support":
+            self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
 
@@ -515,6 +517,33 @@ class DmgCommandBase(YamlCommand):
                 self.streams = FormattedParameter("-d {}", None)
                 # Subsystems syntax is identical to the 'DD_SUBSYS' environment variable.
                 self.subsystems = FormattedParameter("-s {}", None)
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg support sub command."""
+
+        def __init__(self):
+            """Create a dmg support subcommand object."""
+            super().__init__("/run/dmg/support/*", "support")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg support sub command object."""
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectlogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectlogSubCommand(CommandWithParameters):
+            """Defines an object for the dmg support collect-log command."""
+
+            def __init__(self):
+                """Create a dmg support collect-log command object."""
+                super().__init__("/run/dmg/support/collect-log/*", "collect-log")
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}", None)
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}", None)
+                self.target_host = FormattedParameter("--target-host={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""
