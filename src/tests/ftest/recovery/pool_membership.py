@@ -78,7 +78,7 @@ class PoolMembershipTest(TestWithServers):
 
         # 3-1. Determine source host and destination host. Source host is where rank 0 is.
         # Destination host is the other host.
-        self.log_step("Determine source host and destination host")
+        self.log_step("Determine source host and destination host.")
         src_host = dst_host = NodeSet(self.server_managers[0].get_host(0))
         rank = 1
         while rank < self.server_managers[0].engines and dst_host == src_host:
