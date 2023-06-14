@@ -14,12 +14,13 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value=['pipeline-lib@pahender/DAOS-13648', 'trusted-pipeline-lib@pahender/DAOS-13648']) _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
 String base_branch = 'release/2.4'
 // For master, this is just some wildly high number
-next_version = '1000'
+next_version = '2.5'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -28,9 +29,8 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('provider-testing') &&
-     !env.BRANCH_NAME.startsWith('weekly-testing') &&
-     !env.BRANCH_NAME.startsWith('release/') &&
+    (!(env.BRANCH_NAME =~ branchTypeRE('testing')) &&
+     !(env.BRANCH_NAME =~ branchTypeRE('release')) &&
      env.BRANCH_NAME != 'master')) {
    currentBuild.result = 'SUCCESS'
    return
@@ -41,12 +41,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
-             env.BRANCH_NAME.startsWith('provider-testing') ? 'H 2 * * 6' : '')
+        cron(env.BRANCH_NAME == 'provider-tcp-2.4-testing' ? 'TZ=UTC\n0 2 * * 6\n' : '')
     }
 
     environment {
