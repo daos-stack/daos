@@ -652,10 +652,12 @@ out_daos:
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_inode_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_fh_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_pool_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_container_count) == 0);
+	if (fs_handle) {
+		D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_inode_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_fh_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_pool_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&fs_handle->dpi_container_count) == 0);
+	}
 
 	D_FREE(fs_handle);
 	DFUSE_TRA_DOWN(dfuse_info);
