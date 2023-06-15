@@ -341,9 +341,18 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			get_target(root, layout_ver, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, dom_full, dgu->dgu_used, tgts_used, shard_id,
 				   allow_status, fdom_lvl, &spares_left, &spare_avail);
-			D_ASSERT(spare_tgt != NULL);
-			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
-				DP_TARGET(spare_tgt));
+			if (layout_ver > 0) {
+				/*
+				 * After 2.4 (layout_ver > 0), it will always assign each shard
+				 * to one target, so it might put multiple shards in the same
+				 * target, if there are not enough targets.
+				 * Though before 2.4 (layout_ver == 0), it will set the shard as -1,
+				 * if there are no spare targets.
+				 */
+				D_ASSERT(spare_tgt != NULL);
+				D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
+					DP_TARGET(spare_tgt));
+			}
 		}
 
 		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list,
