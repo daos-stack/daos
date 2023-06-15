@@ -4653,7 +4653,8 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	if (rc)
 		D_GOTO(err_params, rc = daos_der2errno(rc));
 
-	return dc_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
+	return daos_der2errno(rc);
 
 err_params:
 	D_FREE(params);
