@@ -218,7 +218,7 @@ for TEST_TAG_SEQ in "${TEST_TAG_SPLIT[*]}"; do
     fi
 
     # shellcheck disable=SC2086,SC2090
-    if ! ./launch.py --mode ci --name ${name} ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
+    if ! ./launch.py --mode ci --name "${name}" ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
         rc=$((rc|${PIPESTATUS[0]}))
     fi
 done
