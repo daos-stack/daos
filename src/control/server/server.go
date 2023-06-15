@@ -364,7 +364,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig, srv.sysdb.IsLeader)
 	if err != nil {
 		return err
 	}
@@ -403,7 +403,7 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
-			srv.mgmtSvc.startAsyncLoops(ctx)
+			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
 			go func() {
@@ -470,6 +470,7 @@ func (srv *server) start(ctx context.Context) error {
 		}
 	}()
 
+	srv.mgmtSvc.startAsyncLoops(ctx)
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }

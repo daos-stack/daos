@@ -22,7 +22,7 @@ to access DAOS from Hadoop and Spark, as well as steps to run Terasort in
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://docs.daos.io/v2.4/QSG/setup_rhel/).
+[DAOS Installation Guide](https://docs.daos.io/v2.6/QSG/setup_rhel/).
 
 ## <a name="mavendownload"></a>Maven Download
 

@@ -873,7 +873,7 @@ obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
 	return rc;
 }
 
-static struct dcs_iod_csums *
+static inline struct dcs_iod_csums *
 get_iod_csum(struct dcs_iod_csums *iod_csums, int i)
 {
 	if (iod_csums == NULL)
@@ -922,54 +922,8 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		 struct dcs_csum_info *dkey_csum,
 		 struct obj_iod_array *oia, daos_unit_oid_t *uoid)
 {
-	uint32_t	i;
-	int		rc;
-
-	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
-		return 0;
-
-	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
-		/**
-		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose
-		 * for object verification tests. Don't reject the
-		 * update in this case
-		 */
-		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
-		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for dkey: "
-				DF_RC"\n", DP_RC(rc));
-			return rc;
-		}
-	}
-
-	for (i = 0; i < oia->oia_iod_nr; i++) {
-		daos_iod_t		*iod = &oia->oia_iods[i];
-		struct dcs_iod_csums	*csum = &oia->oia_iod_csums[i];
-
-		if (!csum_iod_is_supported(iod))
-			continue;
-
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
-			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
-
-		if (csum->ic_nr > 0)
-			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
-
-		rc = daos_csummer_verify_key(csummer,
-					     &iod->iod_name,
-					     &csum->ic_akey);
-		if (rc != 0) {
-			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
-				"failed for akey: "DF_KEY", csum: "DF_CI", "
-				"error: "DF_RC"\n",
-				DP_C_UOID_DKEY(*uoid, dkey), i,
-				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
-				DP_CI(csum->ic_akey), DP_RC(rc));
-			return rc;
-		}
-	}
-
-	return 0;
+	return ds_csum_verify_keys(csummer, dkey, dkey_csum, oia->oia_iods, oia->oia_iod_csums,
+				   oia->oia_iod_nr, uoid);
 }
 
 /** Add a recov record to the recov_lists (for singv degraded fetch) */
