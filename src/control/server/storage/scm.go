@@ -47,7 +47,7 @@ const (
 
 	// DefaultSysMemRsvd is the default amount of memory reserved for system when calculating
 	// RAM-disk size for DAOS I/O engine.
-	DefaultSysMemRsvd = humanize.GiByte * 6
+	DefaultSysMemRsvd = humanize.GiByte * 8
 	// DefaultEngineMemRsvd is the default amount of memory reserved per-engine when
 	// calculating RAM-disk size for DAOS I/O engine.
 	DefaultEngineMemRsvd = humanize.GiByte * 1
