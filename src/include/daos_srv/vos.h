@@ -1132,6 +1132,15 @@ vos_iterate_(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
 	     void *arg, struct dtx_handle *dth);
 
+/** Retrieve the parent iterator for an iterator handle
+ * \param[in]	ih	Iterator handle
+ * \param[out]	pih	Parent iterator handle
+ *
+ * \return 0 on success, error if no parent exists or other failure
+ */
+int
+vos_iter_parent(daos_handle_t ih, daos_handle_t *pih);
+
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
  * object. If object does not have an array value, 0 is returned in extent. User

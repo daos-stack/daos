@@ -1037,3 +1037,19 @@ vos_iter_validate(daos_handle_t ih)
 
 	return vos_iter_validate_internal(vos_hdl2iter(ih));
 }
+
+int
+vos_iter_parent(daos_handle_t ih, daos_handle_t *pih)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+
+	if (iter == NULL)
+		return -DER_INVAL;
+
+	if (iter->it_parent == NULL)
+		return -DER_NONEXIST;
+
+	*pih = vos_iter2hdl(iter->it_parent);
+
+	return 0;
+}

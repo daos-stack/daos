@@ -2238,7 +2238,8 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t ty
 {
 	struct ec_agg_param *agg_param = (struct ec_agg_param *)cb_arg;
 	struct ec_agg_entry *agg_entry = &agg_param->ap_agg_entry;
-	int                  rc        = 0;
+	daos_handle_t        pih;
+	int                  rc = 0;
 
 	D_ASSERT(agg_param->ap_initialized);
 
@@ -2254,6 +2255,12 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t ty
 		rc = agg_akey(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
+		rc = vos_iter_parent(ih, &pih);
+		D_ASSERTF(rc == 0, "rc=" DF_RC "\n", DP_RC(rc));
+		if (pih.cookie != ih.cookie) {
+			D_WARN("AKey iterator changed since agg_akey was called\n");
+			ih = pih;
+		}
 		rc = agg_data_extent(agg_param, entry, agg_entry, acts);
 		break;
 	default:
