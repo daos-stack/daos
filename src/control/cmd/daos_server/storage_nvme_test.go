@@ -306,6 +306,8 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			resetCmd: newResetCmd(),
 			bmbc: &bdev.MockBackendConfig{
 				ResetRes: &storage.BdevPrepareResponse{
+					// Response flag indicates VMD is active and triggers
+					// second reset call.
 					VMDPrepared: true,
 				},
 			},
@@ -317,10 +319,10 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 					TargetUser:   getCurrentUsername(t),
 					Reset_:       true,
 				},
-				// VMD was prepared in first call so reset called a second time
-				// without allow list.
+				// VMD was acted on in first call so reset called a second time
+				// without allow list. EnableVMD is false to prevent VMD domain
+				// addresses being automatically added to allow list in backend.
 				{
-					EnableVMD:  true,
 					TargetUser: getCurrentUsername(t),
 					Reset_:     true,
 				},

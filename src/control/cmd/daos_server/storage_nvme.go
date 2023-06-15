@@ -322,9 +322,12 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	// SPDK-2926: If VMD has been detected, perform an extra SPDK reset (without PCI_ALLOWED)
 	//            to reset dangling NVMe devices left unbound after the DRIVER_OVERRIDE=none
 	//            setup call was used in nvme prepare.
-	if resetResp.VMDPrepared && (resetReq.PCIAllowList != "" || resetReq.PCIBlockList != "") {
+	if resetResp.VMDPrepared {
 		resetReq.PCIAllowList = ""
 		resetReq.PCIBlockList = ""
+		resetReq.EnableVMD = false // Prevents VMD endpoints being auto populated
+
+		cmd.Debugf("vmd second nvme reset request parameters: %+v", resetReq)
 
 		if _, err := resetBackend(resetReq); err != nil {
 			return errors.Wrap(err, "nvme reset backend")
