@@ -132,8 +132,8 @@ func (cmd *containerBaseCmd) closeContainer() {
 	}
 }
 
-func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
-	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
+func queryContainer(poolUUID, contUUID *uuid.UUID, cPoolHandle, cContHandle C.daos_handle_t) (*containerInfo, error) {
+	ci := newContainerInfo(poolUUID, contUUID)
 	var cType [10]C.char
 
 	props, entries, err := allocProps(3)
@@ -148,7 +148,7 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
-	rc := C.daos_cont_query(cmd.cContHandle, &ci.dci, props, nil)
+	rc := C.daos_cont_query(cContHandle, &ci.dci, props, nil)
 	if err := daosError(rc); err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		var dir_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 		var file_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
-		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
+		rc := C.dfs_mount(cPoolHandle, cContHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
 			return nil, errors.Wrap(err, "failed to mount container")
 		}
@@ -298,7 +298,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	defer cmd.closeContainer()
 
 	var ci *containerInfo
-	ci, err = cmd.queryContainer()
+	ci, err = queryContainer(&cmd.poolUUID, &cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", contID)
@@ -664,6 +664,8 @@ func (cmd *existingContainerCmd) getAttr(name string) (*attribute, error) {
 
 type containerListCmd struct {
 	poolBaseCmd
+
+	Verbose bool `long:"verbose" short:"V" description:"Include container info"`
 }
 
 func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
@@ -713,28 +715,53 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	return out, nil
 }
 
-func printContainers(out io.Writer, contIDs []*ContainerID) {
-	if len(contIDs) == 0 {
+func printContainers(out io.Writer, contsInfo []*containerInfo, verbose bool) {
+	if len(contsInfo) == 0 {
 		fmt.Fprintf(out, "No containers.\n")
 		return
 	}
 
 	uuidTitle := "UUID"
 	labelTitle := "Label"
+	typeTitle := "Type"
+	oclassTitle := "ObjClass"
+	dclassTitle := "DirClass"
+	fclassTitle := "FileClass"
+	rfTitle := "RF"
 	titles := []string{uuidTitle, labelTitle}
+	if verbose {
+		titles = append(titles, typeTitle, oclassTitle, dclassTitle, fclassTitle, rfTitle)
+	}
 
 	table := []txtfmt.TableRow{}
-	for _, id := range contIDs {
-		table = append(table,
-			txtfmt.TableRow{
-				uuidTitle:  id.UUID.String(),
-				labelTitle: id.Label,
-			})
+	for _, info := range contsInfo {
+		row := txtfmt.TableRow{
+			uuidTitle:  info.ContainerUUID.String(),
+			labelTitle: info.ContainerLabel,
+		}
+		if verbose {
+			row[typeTitle] = info.Type
+			row[oclassTitle] = info.ObjectClass
+			row[dclassTitle] = info.DirObjectClass
+			row[fclassTitle] = info.FileObjectClass
+			row[rfTitle] = fmt.Sprintf("%d", info.RedundancyFactor)
+		}
+		table = append(table, row)
 	}
 
 	tf := txtfmt.NewTableFormatter(titles...)
 	tf.InitWriter(out)
 	tf.Format(table)
+}
+
+func (cmd *containerListCmd) containerInfo(contUUID *uuid.UUID) (*containerInfo, error) {
+	q := containerBaseCmd{poolBaseCmd: cmd.poolBaseCmd, contUUID: *contUUID}
+	if err := q.openContainer(C.DAOS_COO_RO); err != nil {
+		return nil, err
+	}
+	defer q.closeContainer()
+
+	return queryContainer(&cmd.poolUUID, contUUID, q.cPoolHandle, q.cContHandle)
 }
 
 func (cmd *containerListCmd) Execute(_ []string) error {
@@ -750,14 +777,33 @@ func (cmd *containerListCmd) Execute(_ []string) error {
 			"unable to list containers for pool %s", cmd.PoolID())
 	}
 
+	contInfo := make([]*containerInfo, 0, len(contIDs))
+	for _, contID := range contIDs {
+		if cmd.Verbose {
+			info, err := cmd.containerInfo(&contID.UUID)
+			if err != nil {
+				return errors.Wrapf(err,
+					"unable to query container info for pool %s, cont %s", cmd.PoolID(), contID)
+			}
+			contInfo = append(contInfo, info)
+		} else {
+			contInfo = append(contInfo, &containerInfo{
+				ContainerUUID:  &contID.UUID,
+				ContainerLabel: contID.Label,
+			})
+		}
+	}
+
 	if cmd.jsonOutputEnabled() {
+		if cmd.Verbose {
+			return cmd.outputJSON(contInfo, nil)
+		}
 		return cmd.outputJSON(contIDs, nil)
 	}
 
 	var bld strings.Builder
-	printContainers(&bld, contIDs)
+	printContainers(&bld, contInfo, cmd.Verbose)
 	cmd.Info(bld.String())
-
 	return nil
 }
 
@@ -1028,7 +1074,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	ci, err := cmd.queryContainer()
+	ci, err := queryContainer(&cmd.contUUID, &cmd.contUUID, cmd.cPoolHandle, cmd.cContHandle)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query container %s",
