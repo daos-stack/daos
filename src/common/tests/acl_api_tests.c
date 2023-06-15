@@ -1036,6 +1036,7 @@ static void
 expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
+	ssize_t		size;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
@@ -1046,10 +1047,11 @@ expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 	orig_acl = daos_acl_dup(acl);
 
 	/* Create an exact duplicate */
-	D_ALLOC(new_ace, daos_ace_get_size(ace[type]));
+	size = daos_ace_get_size(ace[type]);
+	assert_true(size > 0);
+	D_ALLOC(new_ace, size);
 	assert_non_null(new_ace);
-	memcpy(new_ace, ace[type],
-			daos_ace_get_size(ace[type]));
+	memcpy(new_ace, ace[type], size);
 
 	assert_rc_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
