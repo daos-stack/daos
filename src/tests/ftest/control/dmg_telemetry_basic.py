@@ -3,8 +3,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from telemetry_test_base import TestWithTelemetry
 
 
@@ -81,7 +79,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,telemetry
-        :avocado: tags=test_with_telemetry_basic,test_telemetry_list
+        :avocado: tags=TestWithTelemetryBasic,test_telemetry_list
         """
         self.verify_telemetry_list()
 
@@ -94,7 +92,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,telemetry,container
-        :avocado: tags=test_with_telemetry_basic,test_container_telemetry
+        :avocado: tags=TestWithTelemetryBasic,test_container_telemetry
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
@@ -118,7 +116,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.create_container(random.choice([True, False]))  # nosec
+            self.create_container(self.random.choice([True, False]))
             self.log.info("Container %s/%s: After create()", loop, container_qty)
             self.check_metrics()
 

@@ -100,7 +100,7 @@ soak_harassers:
   enable_drain: true
   # continue test if container destroy fails
   ignore_soak_errors: true
-  enable_intercept_lib: false
+  enable_intercept_lib: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -176,7 +176,7 @@ fio_harasser:
       #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: true
+    disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
   job_timeout: 20
