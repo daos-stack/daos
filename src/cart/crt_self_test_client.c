@@ -877,7 +877,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/*
 	 * Set up a bulk descriptor to use later to send the latencies back
-	 * to the self-test requestor
+	 * to the self-test requester
 	 */
 	d_iov_set(&g_data->rep_latencies_iov, g_data->rep_latencies,
 		 g_data->rep_count * sizeof(g_data->rep_latencies[0]));

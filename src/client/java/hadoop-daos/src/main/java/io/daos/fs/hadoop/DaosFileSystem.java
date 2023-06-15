@@ -104,9 +104,6 @@ public class DaosFileSystem extends FileSystem {
     }
     unsPrefix = unsInfo.getPrefix();
     withUnsPrefix = conf.getBoolean(Constants.DAOS_WITH_UNS_PREFIX, Constants.DEFAULT_DAOS_WITH_UNS_PREFIX);
-    if (!withUnsPrefix) {
-      LOG.warn("withUnsPrefix is set to false from Hadoop configuration. You may not be able to connect to DAOS");
-    }
     conf.set(Constants.DAOS_POOL_ID, unsInfo.getPoolId());
     conf.set(Constants.DAOS_CONTAINER_ID, unsInfo.getContId());
     super.initialize(name, conf);
@@ -282,7 +279,8 @@ public class DaosFileSystem extends FileSystem {
   private String removeUnsPrefix(URI puri) {
     String path = puri.getPath();
     if (!path.startsWith(unsPrefix)) {
-      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) : (qualifiedUnsWorkPath + "/" + path);
+      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) :
+              (qualifiedUnsWorkPath + (path.isEmpty() ? "" : ("/" + path)));
     }
     boolean truncated = false;
     if (path.length() > unsPrefix.length()) {
@@ -320,6 +318,12 @@ public class DaosFileSystem extends FileSystem {
       p = workPath + "/" + p;
     }
     return p;
+  }
+
+  @Override
+  public Path makeQualified(Path path) {
+    checkPath(path);
+    return resolvePath(path);
   }
 
   @Override
