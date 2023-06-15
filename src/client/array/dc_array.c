@@ -57,6 +57,7 @@ struct io_params {
 	uint64_t		dkey_val;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
+	d_iov_t			sg_iov; /** for 1 record updates on set_size */
 	daos_iom_t		iom; /** used on fetch only */
 	daos_size_t		cell_size;
 	daos_size_t		chunk_size;
@@ -739,7 +740,7 @@ dc_array_open(tse_task_t *task)
 	/** Create task to open object */
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task), 0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_open task "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to create object_open task "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_ptask, rc);
 	}
 
@@ -2124,6 +2125,7 @@ check_record_cb(tse_task_t *task, void *data)
 	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	char			*val;
+	bool			free_params = true, free_val = true;
 	int			rc = task->dt_result;
 
 	D_ASSERT(params);
@@ -2145,9 +2147,12 @@ check_record_cb(tse_task_t *task, void *data)
 
 	/** set memory location */
 	D_ALLOC(val, params->cell_size);
+	if (val == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 	sgl->sg_nr = 1;
-	D_ALLOC_PTR(sgl->sg_iovs);
+	sgl->sg_iovs = &params->sg_iov;
 	d_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
+	params->user_sgl_used = true;
 
 	D_DEBUG(DB_IO, "update record (%zu, %zu), iod_size %zu.\n",
 		iod->iod_recxs[0].rx_idx, iod->iod_recxs[0].rx_nr,
@@ -2155,7 +2160,7 @@ check_record_cb(tse_task_t *task, void *data)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
 		D_ERROR("Task create failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		D_GOTO(err_free, rc);
 	}
 
 	io_arg = daos_task_get_args(io_task);
@@ -2168,31 +2173,37 @@ check_record_cb(tse_task_t *task, void *data)
 
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
-
+		D_GOTO(err_task, rc);
+	free_params = false;
 	rc = tse_task_register_comp_cb(io_task, free_val_cb, &val, sizeof(val));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_task, rc);
+	free_val = false;
 
-	/* params->task is the original task of dc_array_set_size, should make
-	 * io_task as dep task of params->task rather than the passed in task
-	 * (which is the check_record's OBJ_FETCH task) to make sure the io_task
-	 * complete before original task of dc_array_set_size's completion.
+	/*
+	 * params->task is the original task of dc_array_set_size, should make io_task as dep task
+	 * of params->task rather than the passed in task (which is the check_record's OBJ_FETCH
+	 * task) to make sure the io_task complete before original task of dc_array_set_size's
+	 * completion.
 	 */
 	rc = tse_task_register_deps(params->task, 1, &io_task);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_schedule(io_task, true);
 	if (rc)
-		D_GOTO(err, rc);
-
+		D_GOTO(err_free, rc);
 	return rc;
-err:
+
+err_task:
 	if (io_task)
 		tse_task_complete(io_task, rc);
+err_free:
+	if (free_val)
+		D_FREE(val);
 out:
-	D_FREE(params);
+	if (free_params)
+		D_FREE(params);
 	return rc;
 }
 
@@ -2274,7 +2285,8 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	struct io_params	*params = NULL;
-	tse_task_t		*io_task = NULL;
+	tse_task_t		*io_task;
+	bool			free_iod_recxs = true;
 	int			rc;
 
 	D_ALLOC_PTR(params);
@@ -2287,30 +2299,33 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 
 	params->akey_val = '0';
 	params->next = NULL;
-	params->user_sgl_used = false;
 	params->dkey_val = props->dkey_val;
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
-	/** set memory location */
+	/** set memory location - freed in free_set_size_cb (already registered) */
 	D_ALLOC(props->val, props->cell_size);
+	if (props->val == NULL)
+		D_GOTO(err, rc = -DER_NOMEM);
 	sgl->sg_nr = 1;
-	D_ALLOC_PTR(sgl->sg_iovs);
+	sgl->sg_iovs = &params->sg_iov;
 	d_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
+	params->user_sgl_used = true;
 
 	/* set descriptor for KV object */
 	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = props->cell_size;
 	iod->iod_type = DAOS_IOD_ARRAY;
-	D_ALLOC_PTR(iod->iod_recxs);
+	D_ALLOC_PTR(iod->iod_recxs); /** freed in free_io_params_cb */
+	if (iod->iod_recxs == NULL)
+		D_GOTO(err, rc = -DER_NOMEM);
 	iod->iod_recxs[0].rx_idx = props->record_i;
 	iod->iod_recxs[0].rx_nr = 1;
 
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(props->ptask), 0, NULL, &io_task);
-	if (rc) {
-		D_FREE(sgl->sg_iovs);
+	if (rc)
 		D_GOTO(err, rc);
-	}
+
 	io_arg = daos_task_get_args(io_task);
 	io_arg->oh	= oh;
 	io_arg->th	= th;
@@ -2321,21 +2336,25 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_task, rc);
+	free_iod_recxs = false;
 
 	rc = tse_task_register_deps(props->ptask, 1, &io_task);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_task, rc);
 
 	/* decref in adjust_array_size_task_process() */
 	tse_task_addref(io_task);
 	tse_task_list_add(io_task, task_list);
 	return rc;
 
-err:
-	D_FREE(params);
+err_task:
 	if (io_task)
 		tse_task_complete(io_task, rc);
+err:
+	D_FREE(params);
+	if (free_iod_recxs)
+		D_FREE(iod->iod_recxs);
 	return rc;
 }
 
