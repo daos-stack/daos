@@ -52,6 +52,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch {
+					case n&(drpc.PoolSelfHealingAutoExclude|drpc.PoolSelfHealingAutoRebuild) > 0:
+						return "exclude&rebuild"
 					case n&PoolSelfHealingAutoExclude > 0:
 						return "exclude"
 					case n&PoolSelfHealingAutoRebuild > 0:
