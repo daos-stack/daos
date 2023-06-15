@@ -316,8 +316,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  * error is returned.
  *
  * @param obj		the daos_csummer obj
- * @param iod		The IOD that holds the already calculated checksums
- * @param sgl		Scatter Gather List with the data to be used
+ * @param iod(s)	The IOD that holds the already calculated checksums
+ * @param sgl(s)	Scatter Gather List with the data to be used
  *			for the extents \a recxs. The total data
  *			length of the sgl should be the same as the sum
  *			of the lengths of all recxs
@@ -328,10 +328,15 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  *			in single target.
  * @param singv_idx	single value target index, valid when singv_los
  *			is non-NULL. -1 means verifying csum for all shards.
- * @param iod_csum	checksum of the iod
+ * @param iod_csum(s)	checksum of the iod
  *
  * @return		0 for success, -DER_CSUM if corruption is detected
  */
+int
+daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t *sgls,
+			 struct dcs_iod_csums *iods_csum, uint32_t nr,
+			 struct dcs_layout *singv_lo, int singv_idx, daos_iom_t *map);
+
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
