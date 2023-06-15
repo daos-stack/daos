@@ -71,21 +71,21 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 		return 0;
 	}
 
+	D_ASSERT(pd_nr >= 1);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
+	D_ASSERT(rc == pd_nr);
+	rc = 0;
+
 	doms_per_pd = dom_nr / pd_nr;
 	D_ASSERTF(doms_per_pd >= 1, "bad dom_nr %d, pd_nr %d\n", dom_nr, pd_nr);
 
 	if (jmop->jmop_grp_size == 1) /* non-replica */
-		pd_grp_size = md->omd_pda;
+		pd_grp_size = min(md->omd_pda, pds->do_target_nr);
 	else
 		pd_grp_size = min(md->omd_pda, doms_per_pd);
 	pd_grp_nr = shard_nr / pd_grp_size + (shard_nr % pd_grp_size != 0);
 	jmop->jmop_pd_grp_size = pd_grp_size;
 	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
-
-	D_ASSERT(pd_nr >= 1);
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
-	D_ASSERT(rc == pd_nr);
-	rc = 0;
 
 	if (jmop->jmop_pd_nr <= JMOP_PD_INLINE) {
 		jmop->jmop_pd_ptrs = jmop->jmop_pd_ptrs_inline;
