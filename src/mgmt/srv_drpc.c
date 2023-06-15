@@ -486,13 +486,12 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req->n_properties > 0) {
 		prop = daos_prop_merge(base_props, req_props);
-		daos_prop_free(req_props);
-		daos_prop_free(base_props);
 		if (prop == NULL) {
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		prop = base_props;
+		base_props = NULL;
 	}
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
@@ -521,7 +520,10 @@ out:
 
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
+	daos_prop_free(base_props);
+	daos_prop_free(req_props);
 	daos_prop_free(prop);
+
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
@@ -2149,6 +2151,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (bio_health == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	bio_health->mb_meta_size = req->meta_size;
+	bio_health->mb_rdb_size = req->rdb_size;
 	rc = ds_mgmt_bio_health_query(bio_health, uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to query BIO health data :"DF_RC"\n",
@@ -2184,6 +2188,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 	resp->cluster_size = stats.cluster_size;
+	resp->meta_wal_size = stats.meta_wal_size;
+	resp->rdb_wal_size = stats.rdb_wal_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;

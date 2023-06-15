@@ -306,6 +306,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			carry_is_hole = true;
 
 		d_list_del(&extent->ae_link);
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt > 0);
 		entry->ae_cur_stripe.as_extent_cnt--;
 		D_FREE(extent);
 	}
@@ -2089,11 +2090,13 @@ agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 static void
 agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
 {
+	agg_clear_extents(agg_entry);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 
 	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_has_holes = false;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }

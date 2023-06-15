@@ -74,7 +74,7 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -103,7 +103,7 @@ class MdtestBase(DfuseTestBase):
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
             manager = get_job_manager(
-                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
+                self, "Mpirun", self.mdtest_cmd, self.subprocess)
         else:
             manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
         return manager

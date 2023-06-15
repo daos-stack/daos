@@ -1,6 +1,9 @@
 hosts:
-  test_servers: 1
-timeout: 240
+  test_servers: 5
+  test_clients: 1
+
+timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -11,10 +14,12 @@ server_config:
       storage:
         0:
           class: ram
-          scm_mount: /mnt/daos
-  system_ram_reserved: 1
+          scm_mount: /mnt/daos0
+
 pool:
-  control_method: dmg
-  scm_size: 1G
+  size: 1G
+  svcn: 5
+
 container:
-  control_method: API
+  control_method: daos
+  type: POSIX

@@ -1096,6 +1096,10 @@ func (c *Config) Validate() error {
 	// backend, set to empty when no devices specified
 	if len(bdevCfgs) == 0 {
 		c.ConfigOutputPath = ""
+		if c.ControlMetadata.HasPath() {
+			return FaultBdevConfigControlMetadataNoRoles
+		}
+
 		return nil
 	}
 

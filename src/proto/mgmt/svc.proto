@@ -62,7 +62,7 @@ message LeaderQueryReq {
 }
 
 message LeaderQueryResp {
-	string currentLeader = 1;
+	string current_leader = 1;
 	repeated string replicas = 2;
 	repeated string DownReplicas = 3;
 }

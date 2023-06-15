@@ -621,7 +621,7 @@ type LeaderQueryReq struct {
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader       string   `json:"CurrentLeader"`
+	Leader       string   `json:"current_leader"`
 	Replicas     []string `json:"replicas"`
 	DownReplicas []string `json:"down_replicas"`
 }
