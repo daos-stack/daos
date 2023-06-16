@@ -162,7 +162,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	}
 
 	num_ranks = dc_mgmt_net_get_num_srv_ranks();
-	rproto->ep.ep_rank = rand() % num_ranks;
+	rproto->ep.ep_rank = d_rand() % num_ranks;
 	rproto->ver_array = ver_array;
 	rproto->array_size = count;
 	rproto->ep.ep_grp = sys->sy_group;
