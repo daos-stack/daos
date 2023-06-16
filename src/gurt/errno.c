@@ -27,12 +27,9 @@ struct d_error_reg {
 	static const char *const g_##name##_errstr[] = {D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)};  \
 	static const char *const g_##name##_errstr_desc[] = {                                      \
 	    D_FOREACH_##name##_ERR(D_DEFINE_ERRDESC)};                                             \
-	D_CASSERT((sizeof(g_##name##_errstr) / sizeof(g_##name##_errstr[0])) ==                    \
-		      ((DER_ERR_##name##_LIMIT - DER_ERR_##name##_BASE - 1)),                      \
-		  #name "is not contiguous");                                                      \
 	static struct d_error_reg g_##name##_errreg = {                                            \
 	    .er_base     = DER_ERR_##name##_BASE,                                                  \
-	    .er_limit    = DER_ERR_##name##_LIMIT,                                                 \
+	    .er_limit    = ARRAY_SIZE(g_##name##_errstr),                                          \
 	    .er_strings  = g_##name##_errstr,                                                      \
 	    .er_strerror = g_##name##_errstr_desc,                                                 \
 	};

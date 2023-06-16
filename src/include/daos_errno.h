@@ -221,8 +221,7 @@ extern "C" {
 
 /** Preprocessor machinery to define a consecutive range of error numbers */
 #define D_DEFINE_RANGE_ERRNO(name, base)                                                           \
-	DER_ERR_##name##_BASE = (base),                                                            \
-	D_FOREACH_##name##_ERR(D_DEFINE_ERRNO) DER_ERR_##name##_LIMIT,
+	DER_ERR_##name##_BASE = (base), D_FOREACH_##name##_ERR(D_DEFINE_ERRNO)
 
 /** The actual error codes */
 enum daos_errno {
