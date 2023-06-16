@@ -928,14 +928,14 @@ daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
 
 int
 daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t *sgls,
-			 struct dcs_iod_csums *iods_csum, uint32_t nr,
-			 struct dcs_layout *singv_lo, int singv_idx, daos_iom_t *map)
+			 struct dcs_iod_csums *iods_csum, uint32_t nr, struct dcs_layout *singv_lo,
+			 int singv_idx, daos_iom_t *map)
 {
 	int i, rc = 0;
 
 	for (i = 0; i < nr && rc == 0; i++)
-		rc = daos_csummer_verify_iod(obj, &iods[i], &sgls[i], &iods_csum[i],
-					     singv_lo, singv_idx, map);
+		rc = daos_csummer_verify_iod(obj, &iods[i], &sgls[i], &iods_csum[i], singv_lo,
+					     singv_idx, map);
 	return rc;
 }
 

@@ -391,12 +391,12 @@ const char *daos_target_state_enum_to_str(int state);
 
 /* Used to easily setup data needed for tests */
 struct test_data {
-	d_sg_list_t		*td_sgls;
-	daos_iod_t		*td_iods;
-	daos_iom_t		*td_maps;
-	uint64_t		*td_sizes;
-	uint32_t		 td_iods_nr;
-	daos_key_t		 dkey;
+	d_sg_list_t *td_sgls;
+	daos_iod_t  *td_iods;
+	daos_iom_t  *td_maps;
+	uint64_t    *td_sizes;
+	uint32_t     td_iods_nr;
+	daos_key_t   dkey;
 };
 
 struct td_init_args {
@@ -405,10 +405,14 @@ struct td_init_args {
 	uint32_t        ca_data_size;
 };
 
-void td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args);
-void td_init_single_values(struct test_data *td, uint32_t iod_nr);
-void td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr,
-			  uint32_t data_size, uint32_t chunksize);
-void td_destroy(struct test_data *td);
+void
+td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args);
+void
+td_init_single_values(struct test_data *td, uint32_t iod_nr);
+void
+td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr, uint32_t data_size,
+		     uint32_t chunksize);
+void
+td_destroy(struct test_data *td);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

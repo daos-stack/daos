@@ -123,11 +123,11 @@ rw_args2csum_iov(const struct shard_rw_args *shard_args)
 static int
 rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
-	struct obj_rw_in	*orw = crt_req_get(rw_args->rpc);
-	struct obj_rw_out	*orwo = crt_reply_get(rw_args->rpc);
-	int			 rc;
-	bool			 is_ec_obj;
-	struct dc_object	*obj = rw_args->shard_args->auxi.obj_auxi->obj;
+	struct obj_rw_in          *orw  = crt_req_get(rw_args->rpc);
+	struct obj_rw_out         *orwo = crt_reply_get(rw_args->rpc);
+	int                        rc;
+	bool                       is_ec_obj;
+	struct dc_object          *obj              = rw_args->shard_args->auxi.obj_auxi->obj;
 	struct dc_csum_veriry_args csum_verify_args = {
 	    .csummer    = rw_args->co->dc_csummer,
 	    .sgls       = rw_args->rwaa_sgls,
@@ -150,14 +150,11 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	};
 
 	if (obj_is_ec(obj))
-		csum_verify_args.shard_idx =
-		    obj_ec_shard_off(obj,
-				     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
-				     orw->orw_oid.id_shard);
+		csum_verify_args.shard_idx = obj_ec_shard_off(
+		    obj, rw_args->shard_args->auxi.obj_auxi->dkey_hash, orw->orw_oid.id_shard);
 	else
-		csum_verify_args.shard_idx = orw->orw_oid.id_shard %
-					     daos_oclass_grp_size(&obj->cob_oca);
-
+		csum_verify_args.shard_idx =
+		    orw->orw_oid.id_shard % daos_oclass_grp_size(&obj->cob_oca);
 
 	rc = dc_rw_cb_csum_verify(&csum_verify_args);
 
@@ -168,11 +165,9 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		uint32_t tgt_idx;
 
 		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
-		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
+		rc      = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
-			D_ERROR(DF_OID" fail info insert"
-				DF_RC"\n",
-				DP_OID(orw->orw_oid.id_pub),
+			D_ERROR(DF_OID " fail info insert" DF_RC "\n", DP_OID(orw->orw_oid.id_pub),
 				DP_RC(rc));
 		}
 		rc = -DER_CSUM;
