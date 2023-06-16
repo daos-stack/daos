@@ -1987,11 +1987,12 @@ class Launch():
 
         apps_src = os.path.join(os.sep, "scratch", "soak", "apps")
         logger.debug("== DEBUG ===")
-        run_local(logger, 'ls -al {apps_src}')
-        run_local(logger, 'ls -al {apps_src}/*')
+        run_local(logger, f'ls -al {apps_src}')
+        run_local(logger, f'ls -al {apps_src}/')
+        run_local(logger, f'ls -al {apps_src}/*')
         logger.debug("== DEBUG ===")
         try:
-            run_local(logger, f"cp -r {apps_src}/* {apps_dir}/", check=True)
+            run_local(logger, f"cp -r {apps_src}/ {apps_dir}/", check=True)
         except RunException:
             message = "Error copying files to the soak apps directory"
             self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
