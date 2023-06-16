@@ -20,6 +20,17 @@
 
 #include <stdint.h>
 #include <gurt/types.h>
+
+/**
+ * Protocol info used to query list of protocols and devices.
+*/
+struct crt_protocol_info {
+	struct crt_protocol_info *next;          /**< Pointer to the next info */
+	char                     *class_name;    /**< Name of the Mercury class */
+	char                     *protocol_name; /**< Name of this protocol */
+	char                     *device_name;   /**< Name of associated device */
+};
+
 /**
  * Initialization options passed during crt_init() call.
  *

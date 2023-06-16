@@ -126,6 +126,8 @@ struct crt_hg_context {
 };
 
 /* crt_hg.c */
+int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
+void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
 int crt_hg_fini(void);
 int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary);

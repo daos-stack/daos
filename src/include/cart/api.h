@@ -37,6 +37,27 @@ extern "C" {
  */
 
 /**
+ * Get information on protocols that are supported by underlying mercury plugins. If
+ * \info_string is NULL, a list of all supported protocols by all plugins will
+ * be returned. The returned list must be freed using crt_protocol_info_free().
+ * 
+ * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
+ * \param[out] protocol_info_p linked-list of protocol infos
+ * 
+ * \return                     DER_SUCCESS on success, negative value if error
+*/
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p);
+
+/**
+ * Free protocol_info from crt_protocol_info_get().
+ * 
+ * \param[inout] protocol_info linked-list of protocol infos
+*/
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info);
+
+/**
  * Initialize CRT transport layer. Must be called on both the server side and
  * the client side. This function is reference counted, it can be called
  * multiple times. Each call must be paired with a corresponding crt_finalize().
