@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -376,6 +377,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -487,6 +489,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

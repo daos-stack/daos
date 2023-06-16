@@ -11,7 +11,7 @@ from apricot import TestWithServers
 from general_utils import report_errors, pcmd, check_file_exists
 
 
-class Pass1Test(TestWithServers):
+class PoolListConsolidationTest(TestWithServers):
     """Test Pass 1: Pool List Consolidation
 
     :avocado: recursive
@@ -130,8 +130,8 @@ class Pass1Test(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_1
-        :avocado: tags=Pass1Test,test_dangling_pool
+        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=PoolListConsolidationTest,test_dangling_pool
         """
         # 1. Create a pool.
         self.pool = self.get_pool(connect=False)
@@ -225,8 +225,8 @@ class Pass1Test(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_1
-        :avocado: tags=Pass1Test,test_orphan_pool_trust_ps
+        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ps
         """
         errors = []
         # 1. Run DAOS checker under kinds of mode with trusting PS (by default).
@@ -247,8 +247,8 @@ class Pass1Test(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_1
-        :avocado: tags=Pass1Test,test_orphan_pool_trust_ms
+        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ms
         """
         errors = []
         # 1. Run DAOS checker under kinds of mode with trusting MS.
@@ -285,8 +285,8 @@ class Pass1Test(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_1
-        :avocado: tags=Pass1Test,test_lost_majority_ps_replicas
+        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
         # 1. Create a pool with --nsvc=3.
         self.pool = self.get_pool(svcn=3)
@@ -360,8 +360,8 @@ class Pass1Test(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pass_1
-        :avocado: tags=Pass1Test,test_lost_all_rdb
+        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
         # 1. Create a pool.
         self.pool = self.get_pool()
