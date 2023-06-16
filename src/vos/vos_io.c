@@ -10,7 +10,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <daos/common.h>      
+#include <daos/common.h>
 #include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
