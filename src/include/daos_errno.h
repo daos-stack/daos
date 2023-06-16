@@ -95,7 +95,7 @@ extern "C" {
 	/** denial-of-service */                                                                   \
 	ACTION(DER_DOS, Denial of service)                                                         \
 	/** Incorrect target for the RPC  */                                                       \
-	ACTION(DER_BAD_TARGET,		       Incorrect target for the RPC)                       \
+	ACTION(DER_BAD_TARGET, Incorrect target for the RPC)                                       \
 	/** Group versioning mismatch */                                                           \
 	ACTION(DER_GRPVER, Group versioning mismatch)                                              \
 	/** HLC synchronization error */                                                           \
@@ -107,7 +107,7 @@ extern "C" {
 	/** Duration start/end mismatch */                                                         \
 	ACTION(DER_DURATION_MISMATCH, Duration end not paired with duration start)                 \
 	/** Operation not permitted on metric type*/                                               \
-	ACTION(DER_OP_NOT_PERMITTED,   	       Operation not permitted for metric type provided)   \
+	ACTION(DER_OP_NOT_PERMITTED, Operation not permitted for metric type provided)             \
 	/** Metric path name exceeds permitted length*/                                            \
 	ACTION(DER_EXCEEDS_PATH_LEN, Path name exceeds permitted length)                           \
 	/** Metric was not found.*/                                                                \
