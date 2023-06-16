@@ -14,6 +14,12 @@ import "fmt"
 #cgo LDFLAGS: -lgurt
 
 #include <daos_errno.h>
+
+static enum daos_errno
+int_to_enum(int rc) {
+	return rc;
+}
+
 */
 import "C"
 
@@ -21,8 +27,8 @@ import "C"
 type Status int32
 
 func (ds Status) Error() string {
-	dErrStr := C.GoString(C.d_errstr(C.int(ds)))
-	dErrDesc := C.GoString(C.d_errdesc(C.int(ds)))
+	dErrStr := C.GoString(C.d_errstr(C.int_to_enum(C.int(ds))))
+	dErrDesc := C.GoString(C.d_errdesc(C.int_to_enum(C.int(ds))))
 	return fmt.Sprintf("%s(%d): %s", dErrStr, ds, dErrDesc)
 }
 
