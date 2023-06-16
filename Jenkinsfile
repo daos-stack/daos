@@ -158,12 +158,6 @@ void fixup_rpmlintrc() {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
-    }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
