@@ -1035,8 +1035,8 @@ test_acl_add_ace_everyone_to_existing_list(void **state)
 static void
 expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 {
-	int		 num_aces = NUM_DAOS_ACL_TYPES;
-	ssize_t		 size;
+	int              num_aces = NUM_DAOS_ACL_TYPES;
+	ssize_t          size;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
