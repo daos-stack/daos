@@ -845,8 +845,9 @@ set_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
 
 	D_ASSERT(limit <= tot);
 	if (tot - limit > max_qds[req_type]) {
-		D_CRIT("Too large QD: %u/%u/%u for req:%d\n",
-		       tot, max_qds[req_type], limit, req_type);
+		D_CRIT("Too large QD: %u/%u/%u for req:%d, %d/%d GC ULTs for pool:"DF_UUID"\n",
+		       tot, max_qds[req_type], limit, req_type, spi->spi_gc_ults,
+		       spi->spi_gc_sleeping, DP_UUID(spi->spi_pool_id));
 		limit = tot - max_qds[req_type];
 	}
 	spi->spi_req_array[req_type].sri_req_limit = limit;

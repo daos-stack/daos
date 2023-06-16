@@ -1124,7 +1124,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	/* To accelerate flush on container destroy done */
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
-			rc = vea_flush(pool->vp_vea_info, true, UINT32_MAX, &nr_flushed);
+			rc = vea_flush(pool->vp_vea_info, false, UINT32_MAX, &nr_flushed);
 		return rc < 0 ? rc : nr_flushed;
 	}
 
