@@ -122,7 +122,7 @@ test_d_errstr(void **state)
 	 */
 	value = d_errstr(-DER_HG_FATAL);
 	assert_string_equal(value, "DER_HG_FATAL");
-	value = d_errstr(-1029);
+	value = d_errstr(-1045);
 	assert_string_equal(value, "DER_HG_FATAL");
 	value = d_errstr(-(DER_HG_FATAL + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
