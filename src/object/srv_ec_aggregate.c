@@ -276,8 +276,8 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 		 */
 	}
 
-	D_DEBUG(DB_TRACE, DF_UOID ", recx " DF_RECX " tail_size " DF_U64 "\n",
-		DP_UOID(entry->ae_oid), DP_RECX(agg_extent->ae_recx), tail_size);
+	D_DEBUG(DB_IO, DF_UOID ", recx " DF_RECX " tail_size " DF_U64 "\n", DP_UOID(entry->ae_oid),
+		DP_RECX(agg_extent->ae_recx), tail_size);
 	return tail_size;
 }
 
@@ -938,7 +938,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 		rc         = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_par_extent.ape_epoch,
 					   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 					   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG, &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
 			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
 		if (rc)
@@ -981,14 +981,14 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff, unsigned in
 		hole_end = cell_start + hole_off;
 		if (estart > hole_end) {
 			memset(diff + hole_off * rsize, 0, (estart - hole_end) * rsize);
-			D_DEBUG(DB_TRACE, DF_UOID " zero [off " DF_U64 ", len " DF_U64 "]\n",
+			D_DEBUG(DB_IO, DF_UOID " zero [off " DF_U64 ", len " DF_U64 "]\n",
 				DP_UOID(entry->ae_oid), hole_off, estart - hole_end);
 		}
 		hole_off = eend - cell_start;
 	}
 	if (hole_off > 0 && hole_off < len) {
 		memset(diff + hole_off * rsize, 0, (len - hole_off) * rsize);
-		D_DEBUG(DB_TRACE, DF_UOID " zero [off " DF_U64 ", len" DF_U64 "]\n",
+		D_DEBUG(DB_IO, DF_UOID " zero [off " DF_U64 ", len" DF_U64 "]\n",
 			DP_UOID(entry->ae_oid), hole_off, len - hole_off);
 	}
 }
@@ -1330,7 +1330,7 @@ agg_peer_update_ult(void *arg)
 			crt_bulk_free(bulk_hdl);
 			bulk_hdl = NULL;
 		}
-		D_DEBUG(DB_TRACE, "send DAOS_OBJ_RPC_EC_AGGREGATE to %d:%d, peer %d, rc %d\n",
+		D_DEBUG(DB_IO, "send DAOS_OBJ_RPC_EC_AGGREGATE to %d:%d, peer %d, rc %d\n",
 			tgt_ep.ep_rank, tgt_ep.ep_tag, peer, rc);
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
@@ -1843,7 +1843,7 @@ agg_extent_add(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry, daos_rec
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_DEBUG(DB_TRACE, "adding extent " DF_RECX ", to stripe %lu, shard: %u\n",
+	D_DEBUG(DB_IO, "adding extent " DF_RECX ", to stripe %lu, shard: %u\n",
 		DP_RECX(extent->ae_recx), agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
 out:
@@ -2052,6 +2052,7 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_entry *agg_ent
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
+	D_DEBUG(DB_IO, "Saving the akey " DF_KEY "\n", DP_KEY(&entry->ie_key));
 	agg_entry->ae_akey = entry->ie_key;
 	agg_entry->ae_thdl = ih;
 
@@ -2257,9 +2258,10 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t ty
 	case VOS_ITER_RECX:
 		rc = vos_iter_parent(ih, &pih);
 		D_ASSERTF(rc == 0, "rc=" DF_RC "\n", DP_RC(rc));
-		if (pih.cookie != ih.cookie) {
+		agg_entry->ae_thdl = ih;
+		if (pih.cookie != agg_entry->ae_thdl.cookie) {
 			D_WARN("AKey iterator changed since agg_akey was called\n");
-			ih = pih;
+			agg_entry->ae_thdl = pih;
 		}
 		rc = agg_data_extent(agg_param, entry, agg_entry, acts);
 		break;

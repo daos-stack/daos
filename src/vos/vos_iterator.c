@@ -101,7 +101,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict, vos_iter_param_
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		D_DEBUG(DB_IO, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
@@ -178,7 +178,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param, daos_handle_t *i
 	}
 
 	if (daos_handle_is_valid(param->ip_ih)) {
-		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n", dict->id_name);
+		D_DEBUG(DB_IO, "Preparing nested iterator of type %s\n", dict->id_name);
 		/** Nested operations are only used internally so there
 		 * shouldn't be any active transaction involved.  However,
 		 * the upper layer is still passing in a valid handle in
@@ -214,7 +214,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param, daos_handle_t *i
 	if (rc != 0)
 		goto out;
 
-	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n", dict->id_name);
+	D_DEBUG(DB_IO, "Preparing standalone iterator of type %s\n", dict->id_name);
 
 	old = vos_dth_get();
 	vos_dth_set(dth);
@@ -343,7 +343,7 @@ iter_verify_state(struct vos_iterator *iter)
 		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		D_DEBUG(DB_IO, "The end of iteration\n");
 		return -DER_NONEXIST;
 	} else {
 		return 0;

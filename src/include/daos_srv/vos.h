@@ -1124,8 +1124,12 @@ vos_iter_validate(daos_handle_t ih);
  */
 #define vos_iterate(param, type, recursive, ...)                                                   \
 	({                                                                                         \
-		D_DEBUG(DB_IO, "vos_iterate type=%d recursive=%d\n", type, recursive);             \
-		vos_iterate_(param, type, recursive, __VA_ARGS__);                                 \
+		int __rc;                                                                          \
+		D_INFO("vos_iterate type=%d recursive=%d started\n", type, recursive);             \
+		__rc = vos_iterate_(param, type, recursive, __VA_ARGS__);                          \
+		D_INFO("vos_iterate type=%d recursive=%d finished, rc=" DF_RC "\n", type,          \
+		       recursive, DP_RC(__rc));                                                    \
+		__rc;                                                                              \
 	})
 int
 vos_iterate_(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
