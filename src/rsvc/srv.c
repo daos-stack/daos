@@ -1448,14 +1448,14 @@ rsvc_module_fini(void)
 }
 
 struct dss_module rsvc_module = {
-	.sm_name	= "rsvc",
-	.sm_mod_id	= DAOS_RSVC_MODULE,
-	.sm_ver		= DAOS_RSVC_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= rsvc_module_init,
-	.sm_fini	= rsvc_module_fini,
-	.sm_proto_fmt	= &rsvc_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= rsvc_handlers,
-	.sm_key		= NULL,
+    .sm_name        = "rsvc",
+    .sm_mod_id      = DAOS_RSVC_MODULE,
+    .sm_ver         = DAOS_RSVC_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = rsvc_module_init,
+    .sm_fini        = rsvc_module_fini,
+    .sm_proto_fmt   = {&rsvc_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {rsvc_handlers},
+    .sm_key         = NULL,
 };

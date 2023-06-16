@@ -156,7 +156,7 @@ is 30.
 ## Rebuild status
 
 As described earlier, each target will report its rebuild status to
-the pool leader by IV, then the leader will summurize the status of
+the pool leader by IV, then the leader will summarize the status of
 all targets, and print out the whole rebuild status by every 2 seconds,
 for example these messages.
 
