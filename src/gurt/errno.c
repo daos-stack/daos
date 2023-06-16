@@ -81,6 +81,8 @@ d_errdesc(enum daos_errno errnum)
 	if (errnum == -DER_UNKNOWN)
 		return "Unknown error";
 
+	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
+
 	if ((int)errnum > 0)
 		goto out;
 
@@ -93,6 +95,5 @@ d_errdesc(enum daos_errno errnum)
 	}
 
 out:
-	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
 	return buf;
 }

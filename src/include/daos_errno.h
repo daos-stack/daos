@@ -24,6 +24,8 @@ extern "C" {
  * be defined for each non-contiguous range
  */
 
+/* clang-format off */
+
 /** Preprocessor macro defining GURT errno values and internal definition of d_errstr */
 #define D_FOREACH_GURT_ERR(ACTION)                                                                 \
 	/** no permission */                                                                       \
@@ -73,7 +75,7 @@ extern "C" {
 	/** PMIx layer error */                                                                    \
 	ACTION(DER_PMIX, PMIx layer error)                                                         \
 	/** IV callback - cannot handle locally */                                                 \
-	ACTION(DER_IVCB_FORWARD, Incast variable unavailable locally.Must forward)                 \
+	ACTION(DER_IVCB_FORWARD, Incast variable unavailable locally. Must forward)                \
 	/** miscellaneous error */                                                                 \
 	ACTION(DER_MISC, Miscellaneous error)                                                      \
 	/** Bad path name */                                                                       \
@@ -113,8 +115,7 @@ extern "C" {
 	/** Metric was not found.*/                                                                \
 	ACTION(DER_METRIC_NOT_FOUND, Read failed because metric not found)                         \
 	/** Invalid user/group permissions.*/                                                      \
-	ACTION(DER_SHMEM_PERMS, Unable to access shared memory segment due to incompatible user or \
-				    group permissions)                                             \
+	ACTION(DER_SHMEM_PERMS, Unable to access shared memory segment due to incompatible user or group permissions) \
 	/** Fatal (non-retry-able) transport layer mercury error */                                \
 	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)
 	/** TODO: add more error numbers */
@@ -142,7 +143,7 @@ extern "C" {
 	/** Epoch is read-only */                                                                  \
 	ACTION(DER_EP_RO, Epoch is read only)                                                      \
 	/** Epoch is too old, all data have been recycled */                                       \
-	ACTION(DER_EP_OLD, Epoch is too old.All data have been recycled)                           \
+	ACTION(DER_EP_OLD, Epoch is too old. All data have been recycled)                          \
 	/** Key is too large */                                                                    \
 	ACTION(DER_KEY2BIG, Key is too large)                                                      \
 	/** Record is too large */                                                                 \
@@ -206,6 +207,8 @@ extern "C" {
 	ACTION(DER_BAD_CERT, Invalid x509 certificate)                                             \
 	ACTION(DER_VOS_PARTIAL_UPDATE, VOS partial update error)                                   \
 	ACTION(DER_CHKPT_BUSY, Page is temporarily read only due to checkpointing)
+
+/* clang-format on */
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
