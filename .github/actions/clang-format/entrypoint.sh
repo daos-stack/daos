@@ -2,9 +2,6 @@
 
 git config --global --add safe.directory /github/workspace
 
-echo diff is
-git diff "${INPUT_TARGET}"
-
 # Fix any formatting.
 echo "Applying code formatting"
 git-clang-format "${INPUT_TARGET}"
