@@ -14,7 +14,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value=['pipeline-lib@pahender/DAOS-13648', 'trusted-pipeline-lib@pahender/DAOS-13648']) _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -41,7 +40,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-tcp-2.4-testing' ? 'TZ=UTC\n0 2 * * 6\n' : '')
+        cron(env.BRANCH_NAME == 'provider-tcp-2.4-testing' ? 'TZ=UTC\n0 2 * * 6' : '')
     }
 
     environment {
