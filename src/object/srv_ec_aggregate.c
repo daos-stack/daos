@@ -2258,7 +2258,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t ty
 	case VOS_ITER_RECX:
 		rc = vos_iter_parent(ih, &pih);
 		D_ASSERTF(rc == 0, "rc=" DF_RC "\n", DP_RC(rc));
-		agg_entry->ae_thdl = ih;
 		if (pih.cookie != agg_entry->ae_thdl.cookie) {
 			D_WARN("AKey iterator changed since agg_akey was called\n");
 			agg_entry->ae_thdl = pih;
