@@ -1320,7 +1320,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
-			D_GOTO(err, rc = daos_errno2der(rc));
+			D_GOTO(err_ie, rc = daos_errno2der(rc));
 		}
 	} else {
 		ie->ie_stat.st_uid  = geteuid();
@@ -1381,10 +1381,11 @@ err_threads:
 err_ie_remove:
 	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
+err_ie:
+	dfuse_ie_free(fs_handle, ie);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
-	dfuse_ie_free(fs_handle, ie);
 	return rc;
 }
 
