@@ -29,7 +29,7 @@ struct d_error_reg {
 	    D_FOREACH_##name##_ERR(D_DEFINE_ERRDESC)};                                             \
 	static struct d_error_reg g_##name##_errreg = {                                            \
 	    .er_base     = DER_ERR_##name##_BASE,                                                  \
-	    .er_limit    = ARRAY_SIZE(g_##name##_errstr),                                          \
+	    .er_limit    = ARRAY_SIZE(g_##name##_errstr) + DER_ERR_##name##_BASE - 1,              \
 	    .er_strings  = g_##name##_errstr,                                                      \
 	    .er_strerror = g_##name##_errstr_desc,                                                 \
 	};
