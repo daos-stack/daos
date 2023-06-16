@@ -644,7 +644,6 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 	}
 
 	var bsr BdevScanResponse
-	scanOrCache := "scanned"
 	if direct {
 		req := BdevScanRequest{
 			DeviceList: bdevs,
@@ -659,16 +658,14 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 		if cache == nil {
 			cache = &BdevScanResponse{}
 		}
+		log.Debugf("using controllers from cache %q", cache.Controllers)
 		bsr = *cache
-		scanOrCache = "cached"
 	}
-	log.Debugf("bdevs in cfg: %s, %s: %+v", bdevs, scanOrCache, bsr)
-
-	// Build slice of bdevs-per-tier from the entire scan response.
+	log.Debugf("bdevs in cfg: %s, scanned: %+v (direct=%v)", bdevs, bsr, direct)
 
 	bdevCfgs := cfg.Tiers.BdevConfigs()
 	results := make([]BdevTierScanResult, 0, len(bdevCfgs))
-	resultBdevCount := 0
+	resultBdevs := 0
 	for _, bc := range bdevCfgs {
 		if bc.Bdev.DeviceList.Len() == 0 {
 			continue
@@ -677,25 +674,15 @@ func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cac
 		if err != nil {
 			return nil, errors.Wrapf(err, "filter scan cache for tier-%d", bc.Tier)
 		}
+		resultBdevs += len(fbsr.Controllers)
 		results = append(results, BdevTierScanResult{
 			Tier: bc.Tier, Result: fbsr,
 		})
-
-		// Keep tally of total number of controllers added to results.
-		cpas, err := fbsr.Controllers.Addresses()
-		if err != nil {
-			return nil, errors.Wrap(err, "get controller pci addresses")
-		}
-		cpas, err = cpas.BackingToVMDAddresses()
-		if err != nil {
-			return nil, errors.Wrap(err, "convert backing device to vmd domain addresses")
-		}
-		resultBdevCount += cpas.Len()
 	}
 
-	if resultBdevCount != bdevs.Len() {
-		log.Noticef("Unexpected scan results, wanted %d controllers got %d", bdevs.Len(),
-			resultBdevCount)
+	if resultBdevs != bdevs.Len() {
+		log.Errorf("Unexpected scan results, wanted %d controllers got %d", bdevs.Len(),
+			resultBdevs)
 	}
 
 	return results, nil
