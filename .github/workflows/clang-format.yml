@@ -30,7 +30,7 @@ jobs:
       - name: Run check in docker
         uses: ./.github/actions/clang-format
         with:
-          target: ${{ github.event.pull_request.base.ref }}
+          target: origin/${{ github.event.pull_request.base.ref }}
       - name: Export changes
         uses: actions/upload-artifact@v3
         if: failure()
