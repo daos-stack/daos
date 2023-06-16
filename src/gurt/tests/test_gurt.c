@@ -116,9 +116,23 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_SUCCESS");
 	value = d_errstr(-DER_IVCB_FORWARD);
 	assert_string_equal(value, "DER_IVCB_FORWARD");
+
+	/* Check the boundary at the end of the GURT error numbers, this will need updating if
+	 * additional error numbers are added.
+	 */
 	value = d_errstr(-DER_HG_FATAL);
 	assert_string_equal(value, "DER_HG_FATAL");
+	value = d_errstr(-1029);
+	assert_string_equal(value, "DER_HG_FATAL");
 	value = d_errstr(-(DER_HG_FATAL + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
+
+	/* Check the end of the DAOS error numbers. */
+	value = d_errstr(-DER_CHKPT_BUSY);
+	assert_string_equal(value, "DER_CHKPT_BUSY");
+	value = d_errstr(-2046);
+	assert_string_equal(value, "DER_CHKPT_BUSY");
+	value = d_errstr(-(DER_CHKPT_BUSY + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
