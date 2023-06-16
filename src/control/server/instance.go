@@ -338,14 +338,6 @@ func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
 	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
-// setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
-	ei.Lock()
-	defer ei.Unlock()
-
-	ei.runner.GetConfig().TargetCount = numTargets
-}
-
 // GetTargetCount returns the target count set for this instance.
 func (ei *EngineInstance) GetTargetCount() int {
 	ei.RLock()
