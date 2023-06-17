@@ -75,7 +75,7 @@ func TestControl_httpReq_canRetry(t *testing.T) {
 
 func TestControl_httpReq_onRetry(t *testing.T) {
 	req := &httpReq{}
-	err := req.onRetry(test.Context(t), 0)
+	err := req.onRetry(test.Context(t), nil, 0)
 	if err != nil {
 		t.Fatalf("expected nil, got: %s", err.Error())
 	}
@@ -254,7 +254,7 @@ func (r *mockHTTPGetter) canRetry(err error, cur uint) bool {
 	return r.canRetryCalled <= r.numTimesToRetry
 }
 
-func (r *mockHTTPGetter) onRetry(ctx context.Context, _ uint) error {
+func (r *mockHTTPGetter) onRetry(ctx context.Context, _ error, _ uint) error {
 	return r.onRetryErr
 }
 

@@ -368,10 +368,12 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		Handles: req.Handles,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		rpcClient.Debugf("Evict DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, pbReq)
 	})
+	req.retryTestFn = agentRetryTestFn(nil)
+	req.retryFn = agentRetryFn(&pbReq.Sys)
 
-	rpcClient.Debugf("Evict DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err

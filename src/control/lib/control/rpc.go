@@ -427,7 +427,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		// and run that if so. Otherwise, let the usual retry
 		// logic below handle the error.
 		if req.canRetry(err, try) {
-			err := req.onRetry(tryCtx, try)
+			err := req.onRetry(tryCtx, err, try)
 			if err == nil {
 				return ur, nil
 			}

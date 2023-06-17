@@ -61,7 +61,7 @@ func (r *httpReq) canRetry(err error, cur uint) bool {
 	return false
 }
 
-func (r *httpReq) onRetry(ctx context.Context, _ uint) error {
+func (r *httpReq) onRetry(ctx context.Context, _ error, _ uint) error {
 	return nil
 }
 
@@ -105,7 +105,7 @@ func httpGetBodyRetry(ctx context.Context, req httpGetter) ([]byte, error) {
 		}
 
 		time.Sleep(req.retryAfter(0))
-		if err = req.onRetry(ctx, i); err != nil {
+		if err = req.onRetry(ctx, err, i); err != nil {
 			return nil, err
 		}
 	}
