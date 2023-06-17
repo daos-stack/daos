@@ -139,9 +139,6 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 		return errors.New("cachedAttachInfo is nil")
 	}
 
-	ci.Lock()
-	defer ci.Unlock()
-
 	req := &control.GetAttachInfoReq{System: ci.system, AllRanks: true}
 	resp, err := ci.fetch(ctx, ci.rpcClient, req)
 	if err != nil {
@@ -184,9 +181,6 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
 	}
-
-	cfi.Lock()
-	defer cfi.Unlock()
 
 	results, err := cfi.fetch(ctx)
 	if err != nil {
@@ -328,7 +322,10 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 		return nil, errors.Errorf("unexpected attach info data type %T", item)
 	}
 
-	return cai.lastResponse, nil
+	resp := new(control.GetAttachInfoResp)
+	*resp = *cai.lastResponse
+
+	return resp, nil
 }
 
 func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
