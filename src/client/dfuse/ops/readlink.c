@@ -10,20 +10,17 @@
 void
 dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	struct dfuse_projection_info	*fsh = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	char				*buf = NULL;
-	size_t				size = 0;
-	int				rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *inode;
+	char                     *buf  = NULL;
+	size_t                    size = 0;
+	int                       rc;
 
-	rlink = d_hash_rec_find(&fsh->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fsh, "Failed to find inode %#lx", ino);
+	inode = dfuse_inode_lookup(dfuse_info, ino);
+	if (!inode) {
+		DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", ino);
 		D_GOTO(err, rc = EIO);
 	}
-
-	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	rc = dfs_get_symlink_value(inode->ie_obj, NULL, &size);
 	if (rc)
@@ -39,13 +36,13 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	DFUSE_REPLY_READLINK(inode, req, buf);
 
-	d_hash_rec_decref(&fsh->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, inode);
 
 	D_FREE(buf);
 	return;
 release:
-	d_hash_rec_decref(&fsh->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, inode);
 err:
-	DFUSE_REPLY_ERR_RAW(fsh, req, rc);
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 	D_FREE(buf);
 }

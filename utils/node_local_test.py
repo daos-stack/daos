@@ -1352,6 +1352,9 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
+
+        if self.container:
+            self.run_query(use_json=True)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1430,6 +1433,65 @@ class DFuse():
 
         assert ret.returncode == 0, ret
         return ret
+
+    def run_query(self, use_json=False, quiet=False):
+        """Run filesystem query"""
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
+                          use_json=use_json, log_check=quiet, valgrind=quiet)
+        print(rc)
+        return rc
+
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
+        """Query and verify the dfuse statistics.
+
+        Returns the raw numbers in a dict.
+        """
+        cmd = ['filesystem', 'query', self.dir]
+
+        if ino is not None:
+            cmd.extend(['--inode', str(ino)])
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        if inodes:
+            assert rc.json['response']['inodes'] == inodes, rc
+        if open_files:
+            assert rc.json['response']['open_files'] == open_files, rc
+        if pools:
+            assert rc.json['response']['pools'] == pools, rc
+        if containers:
+            assert rc.json['response']['containers'] == containers, rc
+        return rc.json['response']
+
+    def _evict_path(self, path):
+        """Evict a path from dfuse"""
+        cmd = ['filesystem', 'evict', path]
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        return rc.json['response']
+
+    def evict_and_wait(self, paths):
+        """Evict a number of paths from dfuse"""
+        inodes = []
+        for path in paths:
+            rc = self._evict_path(path)
+            inodes.append(rc['inode'])
+
+        sleeps = 0
+
+        for inode in inodes:
+            found = True
+            while found:
+                rc = self.check_usage(inode)
+                print(rc)
+                found = rc['resident']
+                if not found:
+                    sleeps += 1
+                    assert sleeps < 10, 'Path still present 10 seconds after eviction'
+                    time.sleep(1)
 
 
 def assert_file_size_fd(fd, size):
@@ -1977,8 +2039,12 @@ class PosixTests():
         _check_cmd(child_path_cwd)
         _check_cmd(self.dfuse.dir)
 
-        # Do not destroy the new containers at this point as dfuse will be holding references.
-        # new_cont.destroy()
+        # Now evict the new containers
+
+        self.dfuse.evict_and_wait([child_path, child_path_cwd])
+        # Destroy the new containers at this point as dfuse will have dropped references.
+        new_cont1.destroy()
+        new_cont_cwd.destroy()
 
     @needs_dfuse
     def test_read(self):
@@ -2479,6 +2545,23 @@ class PosixTests():
                 print(f'xattr is {key}:{value}')
 
     @needs_dfuse
+    def test_evict(self):
+        """Evict a file from dfuse"""
+        new_file = join(self.dfuse.dir, 'e_file')
+        with open(new_file, 'w'):
+            pass
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', new_file])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+    @needs_dfuse
     def test_list_xattr(self):
         """Perform tests with listing extended attributes.
 
@@ -2566,6 +2649,10 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        rc = self.dfuse.run_query()
+        assert rc.returncode == 0
+        rc = self.dfuse.run_query(use_json=True)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_uns_link(self):
@@ -2600,8 +2687,11 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        self.dfuse.check_usage(inodes=2, open_files=1, containers=2, pools=1)
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
 
     @needs_dfuse
     def test_rename_clobber(self):
@@ -5383,7 +5473,7 @@ def test_alloc_fail_copy(server, conf, wf):
         os.symlink('broken', join(sub_dir, 'broken_s'))
         os.symlink('file.0', join(sub_dir, 'link'))
 
-        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', src_dir,
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', sub_dir,
                                  '--dst', f'daos://{pool.id()}/aft_base'])
         assert rc.returncode == 0, rc
 

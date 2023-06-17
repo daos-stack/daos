@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -2440,5 +2441,175 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
+	return rc;
+}
+
+int
+dfuse_cont_query(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+	struct dfuse_stat     *stat   = NULL;
+	uint64_t               tstats = 0;
+	int                    i;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	query.ino = ap->dfuse_mem.ino;
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "query ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+	ap->dfuse_mem.found           = query.found;
+	ap->dfuse_mem.stat_count      = query.stat_count;
+
+	D_ALLOC_ARRAY(stat, query.stat_count);
+	if (stat == NULL)
+		D_GOTO(close, rc = -DER_NOMEM);
+
+	rc = ioctl(fd,
+		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
+			     sizeof(struct dfuse_stat) * query.stat_count),
+		   stat);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "stat ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+	for (i = 0; i < query.stat_count; i++)
+		tstats += stat[i].value;
+
+	for (i = 0; i < query.stat_count; i++)
+		if (stat[i].value != 0)
+			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
+				(double)stat[i].value / tstats * 100, stat[i].value);
+
+	ap->dfuse_stat = stat;
+close:
+	close(fd);
+	if (rc != 0)
+		D_FREE(stat);
+	return rc;
+}
+
+/* Dfuse cache evict (and helper).
+ * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
+ * cannot do this so perform the same over all the top-level directory entries instead.
+ */
+
+static int
+dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
+{
+	struct dirent *ent;
+	DIR           *dir;
+	int            rc = 0;
+
+	dir = fdopendir(fd);
+	if (dir == 0) {
+		rc = errno;
+		return rc;
+	}
+
+	while ((ent = readdir(dir)) != NULL) {
+		int cfd;
+
+		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
+		if (cfd < 0) {
+			rc = errno;
+			goto out;
+		}
+
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT, query);
+		close(cfd);
+		if (rc < 0) {
+			rc = errno;
+			goto out;
+		}
+	}
+
+out:
+	closedir(dir);
+	return rc;
+}
+
+int
+dfuse_evict(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	struct stat            buf;
+	int                    rc = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = fstat(fd, &buf);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		rc = daos_errno2der(rc);
+		goto close;
+	}
+
+	if (buf.st_ino == 1) {
+		rc = dfuse_evict_helper(fd, &query);
+		if (rc != 0) {
+			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
+			rc = daos_errno2der(rc);
+			goto close;
+		}
+		goto out;
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.ino = buf.st_ino;
+out:
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+
+close:
+	close(fd);
 	return rc;
 }

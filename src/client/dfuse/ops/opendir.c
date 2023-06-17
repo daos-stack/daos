@@ -10,7 +10,8 @@
 void
 dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh     = NULL;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh;
 	struct fuse_file_info fi_out = {0};
 	int                   rc;
 
@@ -20,7 +21,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(oh, ie);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	fi_out.fh = (uint64_t)oh;
 
@@ -48,8 +49,8 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -69,6 +70,17 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	DFUSE_REPLY_ZERO(oh, req);
-	dfuse_dre_drop(fs_handle, oh);
-	D_FREE(oh);
+	dfuse_dre_drop(dfuse_info, oh);
+	if (oh->doh_evict_on_close) {
+		int rc;
+
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
+						      oh->doh_ie->ie_name,
+						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+
+		if (rc != 0)
+			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
+					strerror(-rc));
+	}
+	dfuse_oh_free(dfuse_info, oh);
 };

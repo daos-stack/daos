@@ -218,8 +218,7 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
-                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
-                'daos filesystem query {}'.format(mount_dir)]
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
