@@ -31,8 +31,7 @@ func ShouldDebug(msg proto.Message, ldrChk func() bool) bool {
 		*grpcpb.InstallSnapshotRequest, *grpcpb.InstallSnapshotResponse,
 		*mgmtpb.LeaderQueryReq, *mgmtpb.SystemQueryReq,
 		*ctlpb.StorageScanResp, *ctlpb.NetworkScanResp,
-		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp,
-		*mgmtpb.GetAttachInfoReq:
+		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp:
 		return false
 	default:
 		// Most mgmt messages must be processed by the leader, so if this node

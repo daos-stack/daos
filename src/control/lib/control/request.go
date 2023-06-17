@@ -43,7 +43,7 @@ type (
 		// onRetry is intended to be called on every retry iteration. It can be
 		// used to limit the number of retries and/or execute some custom retry
 		// logic on each iteration.
-		onRetry(context.Context, uint) error
+		onRetry(context.Context, error, uint) error
 		// retryAfter returns a duration to specify how long the caller should
 		// wait before trying the request again. It accepts a default duration
 		// which is returned if the request does not specify its own retry interval.
@@ -172,7 +172,7 @@ func (r *request) canRetry(_ error, _ uint) bool {
 // an error. Callers should check the result of canRetry() before
 // calling retry, in order to avoid wasting effort on a request
 // that does not implement its own retry logic.
-func (r *request) onRetry(_ context.Context, _ uint) error {
+func (r *request) onRetry(_ context.Context, _ error, _ uint) error {
 	return errNoRetryHandler
 }
 
@@ -212,7 +212,7 @@ type retryableRequest struct {
 	// embeds this type.
 	retryTestFn func(error, uint) bool
 	// retryFun defines a function that will run on every retry iteration.
-	retryFn func(context.Context, uint) error
+	retryFn func(context.Context, error, uint) error
 }
 
 // SetMaxTries sets the maximum number of request attempts.
@@ -247,13 +247,13 @@ func (r *retryableRequest) canRetry(err error, cur uint) bool {
 	return true
 }
 
-func (r *retryableRequest) onRetry(ctx context.Context, cur uint) error {
+func (r *retryableRequest) onRetry(ctx context.Context, err error, cur uint) error {
 	if r.retryMaxTries > 0 && cur > r.retryMaxTries {
 		return errors.Errorf("max retries exceeded (%d > %d)", cur, r.retryMaxTries)
 	}
 
 	if r.retryFn != nil {
-		return r.retryFn(ctx, cur)
+		return r.retryFn(ctx, err, cur)
 	}
 
 	return errNoRetryHandler

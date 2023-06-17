@@ -9,6 +9,7 @@ package control
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -17,9 +18,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -246,20 +250,59 @@ func (gair *GetAttachInfoResp) String() string {
 	)
 }
 
+func agentRetryTestFn(wrappedFn func(error, uint) bool) func(error, uint) bool {
+	return func(err error, retryCount uint) bool {
+		if wrappedFn != nil && wrappedFn(err, retryCount) {
+			return true
+		}
+		return fault.IsFaultCode(err, code.ServerIncompatibleComponents)
+	}
+}
+
+func agentRetryFn(sysStr *string) func(context.Context, error, uint) error {
+	// Hack for broken 2.2.0 version detection: If we receive
+	// an incompatible agent error from a 2.2.0 server, we
+	// can force the agent version to be 2.4.0 and retry the
+	// request. This should only be committed to the 2.4
+	// branch to handle 2.4-pre agents.
+	return func(_ context.Context, err error, retryCount uint) error {
+		if sysStr == nil {
+			return errors.New("nil sysStr")
+		}
+		if retryCount > 0 {
+			return err
+		}
+
+		if !fault.IsFaultCode(err, code.ServerIncompatibleComponents) ||
+			!(strings.Contains(err.Error(), "server:2.2.0") &&
+				strings.Contains(err.Error(), "agent:")) {
+			return errNoRetryHandler
+		}
+		sysComps := strings.Split(*sysStr, "-")
+		sysName := sysComps[0]
+		*sysStr = fmt.Sprintf("%s-%s", sysName, "2.4.0")
+
+		return errNoRetryHandler
+	}
+}
+
 // GetAttachInfo makes a request to the current MS leader in order to learn
 // the PSRs (rank/uri mapping) for the DAOS cluster. This information is used
 // by DAOS clients in order to make connections to DAOS servers over the storage fabric.
 func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
+	pbReq := &mgmtpb.GetAttachInfoReq{
+		Sys:      req.getSystem(rpcClient),
+		AllRanks: req.AllRanks,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
-			Sys:      req.getSystem(rpcClient),
-			AllRanks: req.AllRanks,
-		})
+		rpcClient.Debugf("AttachInfo req: %s", pbUtil.Debug(pbReq))
+		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, pbReq)
 	})
-	req.retryTestFn = func(err error, _ uint) bool {
+	req.retryTestFn = agentRetryTestFn(func(err error, _ uint) bool {
 		// If the MS hasn't added any members yet, retry the request.
 		return system.IsEmptyGroupMap(err)
-	}
+	})
+	req.retryFn = agentRetryFn(&pbReq.Sys)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {

@@ -247,7 +247,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 			(system.IsUnavailable(err) || IsRetryableConnErr(err) ||
 				system.IsNotLeader(err) || system.IsNotReplica(err))
 	}
-	req.retryFn = func(_ context.Context, _ uint) error {
+	req.retryFn = func(_ context.Context, _ error, _ uint) error {
 		if req.FailOnUnavailable {
 			return system.ErrRaftUnavail
 		}
@@ -569,7 +569,7 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	req.retryTestFn = func(err error, _ uint) bool {
 		return system.IsUnavailable(err)
 	}
-	req.retryFn = func(_ context.Context, _ uint) error {
+	req.retryFn = func(_ context.Context, _ error, _ uint) error {
 		return system.ErrRaftUnavail
 	}
 
