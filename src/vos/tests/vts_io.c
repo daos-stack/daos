@@ -974,7 +974,7 @@ io_obj_cache_test(void **state)
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0, 0, &l_poh);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_256M, 0, 0, &l_poh);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
@@ -1858,7 +1858,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0, 0, &poh);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_256M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -2938,6 +2938,8 @@ io_allocbuf_failure(void **state)
 	daos_size_t		 buf_len = (40UL << 20); /* 40MB, larger than DMA chunk size */
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
 	set_iov(&dkey_iov, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
@@ -3083,6 +3085,7 @@ int
 run_io_test(int *types, int num_types, int keys, const char *cfg)
 {
 	int rc = 0;
+	int i;
 
 	init_num_keys = VTS_IO_KEYS;
 	if (keys)
@@ -3093,7 +3096,7 @@ run_io_test(int *types, int num_types, int keys, const char *cfg)
 
 	rc = run_single_class_tests(cfg);
 
-	for (int i = 0; i < num_types; i++) {
+	for (i = 0; i < num_types; i++) {
 		init_type = types[i];
 		rc += run_oclass_tests(cfg);
 	}

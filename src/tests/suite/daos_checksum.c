@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1327,9 +1327,6 @@ dtx_with_csum(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	/* Skipping test because of DAOS-6381 */
-	skip();
-
 	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
 		skip();
 
@@ -2624,6 +2621,86 @@ scrubbing_with_large_sleep(void **state)
 	basic_scrubbing_test(state, "100000");
 }
 
+static void
+multiple_ec_singv_csum(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	daos_handle_t		 oh;
+	d_iov_t			 dkey;
+	d_sg_list_t		 sgl[3];
+	d_iov_t			 sg_iov[3];
+	daos_iod_t		 iod[3];
+	char			*buf[3];
+	size_t			 len[3];
+	int			 i, rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
+		skip();
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
+
+	for (i = 0; i < 3; i++) {
+		buf[i] = NULL;
+		len[i] = 0;
+	}
+
+	len[0] = 195;
+	len[1] = 5822;
+	len[2] = 6162;
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(buf[i], len[i]);
+		assert_non_null(buf[i]);
+		dts_buf_render(buf[i], len[i]);
+	}
+
+	oh = ctx.oh;
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], buf[i], len[i]);
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs = &sg_iov[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+		iod[i].iod_size = len[i];
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	iod[0].iod_size = 0;
+	daos_fail_loc_set(DAOS_CSUM_CORRUPT_FETCH | DAOS_FAIL_ALWAYS);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_CSUM);
+	assert_rc_equal(iod[0].iod_size, 195);
+
+	daos_fail_loc_set(0);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		D_FREE(buf[i]);
+	client_clear_fault();
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+
+}
+
 static int
 setup(void **state)
 {
@@ -2723,6 +2800,7 @@ static const struct CMUnitTest csum_tests[] = {
 		  "EC chunk", ec_chunk_plus_one),
 	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
 		  "2 EC chunks", ec_two_chunk_plus_one),
+	EC_CSUM_TEST("DAOS_EC_CSUM05: multiple EC single value csum", multiple_ec_singv_csum),
 	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
 		  "running very frequently",
 		  scrubbing_a_lot),

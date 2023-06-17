@@ -3,7 +3,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import socket
 import time
 
@@ -35,7 +34,7 @@ class ManagementServiceFailover(TestWithServers):
             str: hostname of the MS leader, or None
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         if not l_addr:
             return None
@@ -84,7 +83,7 @@ class ManagementServiceFailover(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", replica_count)
-        replicas = NodeSet.fromlist(random.sample(list(self.hostlist_servers), replica_count))
+        replicas = NodeSet.fromlist(self.random.sample(list(self.hostlist_servers), replica_count))
         server_groups = {
             self.server_group:
                 {

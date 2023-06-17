@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,12 +14,18 @@
 #include "srv_internal.h"
 
 
+struct bs_state_query_arg {
+	int			bs_arg_state;
+	uuid_t			bs_arg_uuid;
+};
+
 static void
 bs_state_query(void *arg)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
-	int			*bs_state = arg;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	struct bs_state_query_arg	*bs_arg = arg;
+	int				 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO blobstore state query on xs:%d, tgt:%d\n",
@@ -32,7 +38,22 @@ bs_state_query(void *arg)
 		return;
 	}
 
-	bio_get_bs_state(bs_state, bxc);
+	rc = bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
+	if (rc)
+		D_ERROR("Blobstore query on dev:"DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(bs_arg->bs_arg_uuid), DP_RC(rc));
+}
+
+static inline enum dss_xs_type
+init_xs_type()
+{
+	return bio_nvme_configured(SMD_DEV_TYPE_META) ?  DSS_XS_SYS : DSS_XS_VOS;
+}
+
+static inline int
+tgt2xs_type(int tgt_id)
+{
+	return tgt_id == BIO_SYS_TGT_ID ? DSS_XS_SYS : DSS_XS_VOS;
 }
 
 /*
@@ -46,6 +67,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	ABT_thread			 thread;
 	int				 tgt_id;
 	int				 rc;
+	struct bs_state_query_arg	 bs_arg;
 
 	/*
 	 * Query per-server metadata (SMD) to get target ID(s) for given device.
@@ -71,7 +93,9 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_XS_VOS,
+	uuid_copy(bs_arg.bs_arg_uuid, bs_uuid);
+	*bs_state = -1;
+	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, tgt2xs_type(tgt_id),
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -80,7 +104,8 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
-
+	/* Set 'bs_state' after state query ULT executed */
+	*bs_state = bs_arg.bs_arg_state;
 out:
 	smd_dev_free_info(dev_info);
 	return rc;
@@ -133,7 +158,8 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	rc = bio_get_dev_state(&mbh->mb_dev_state, bxc);
+	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid,
+			       bxc, mbh->mb_meta_size, mbh->mb_rdb_size);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
@@ -177,7 +203,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, tgt2xs_type(tgt_id), tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -282,7 +308,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
-	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL, DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -340,14 +367,16 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		else
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
+		resp->devices[i]->role_bits = dev_info->bdi_dev_roles;
+
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
 		led_info.duration = 0;
-
-		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
+		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+				     init_xs_type(),
 				     0, 0);
 		if (rc != 0) {
 			if (rc == -DER_NOSYS) {
@@ -444,25 +473,25 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 		}
 		uuid_unparse_lower(pool_info->spi_id, resp->pools[i]->uuid);
 
-		resp->pools[i]->n_tgt_ids = pool_info->spi_tgt_cnt;
+		resp->pools[i]->n_tgt_ids = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA];
 		D_ALLOC(resp->pools[i]->tgt_ids,
-			sizeof(int) * pool_info->spi_tgt_cnt);
+			sizeof(int) * pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]);
 		if (resp->pools[i]->tgt_ids == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
-			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[j];
+		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
+			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[SMD_DEV_TYPE_DATA][j];
 
-		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt;
+		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA];
 		D_ALLOC(resp->pools[i]->blobs,
-			sizeof(uint64_t) * pool_info->spi_tgt_cnt);
+			sizeof(uint64_t) * pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]);
 		if (resp->pools[i]->blobs == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
-			resp->pools[i]->blobs[j] = pool_info->spi_blobs[j];
+		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
+			resp->pools[i]->blobs[j] = pool_info->spi_blobs[SMD_DEV_TYPE_DATA][j];
 
 
 		d_list_del(&pool_info->spi_link);
@@ -501,12 +530,17 @@ out:
 	return rc;
 }
 
+struct bio_faulty_dev_info {
+	uuid_t	bf_dev_uuid;
+};
+
 static void
 bio_faulty_state_set(void *arg)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
-	int			 rc;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	struct bio_faulty_dev_info	*bfdi = arg;
+	int				 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
@@ -519,7 +553,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_dev_set_faulty(bxc);
+	rc = bio_dev_set_faulty(bxc, bfdi->bf_dev_uuid);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -530,9 +564,10 @@ int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 {
 	struct bio_led_manage_info	 led_info = { 0 };
+	struct bio_faulty_dev_info	 faulty_info = { 0 };
 	struct smd_dev_info		*dev_info;
 	ABT_thread			 thread;
-	Ctl__LedState		 led_state;
+	Ctl__LedState			 led_state;
 	int				 tgt_id;
 	int				 rc = 0;
 
@@ -559,9 +594,11 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	/* Default tgt_id is the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
 
+	uuid_copy(faulty_info.bf_dev_uuid, dev_uuid);
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS, tgt_id, 0, &thread);
+	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info,
+			    tgt2xs_type(tgt_id), tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
@@ -578,7 +615,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
-
 	resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
@@ -595,7 +631,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	led_info.duration = 0;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
 		if (rc == -DER_NOSYS) {
@@ -650,7 +687,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	/* Manage the VMD LED state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		if (rc == -DER_NOSYS) {
 			resp->device->led_state = CTL__LED_STATE__NA;
@@ -719,8 +757,8 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
-	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL, DSS_XS_VOS, 0,
-			     0);
+	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL,
+			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;

@@ -721,7 +721,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 
 	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(err_close, rc);
 	}
 
@@ -1119,6 +1119,7 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 	oh->doh_linear_read     = true;
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
+	atomic_init(&oh->doh_readdir_number, 0);
 	atomic_init(&oh->doh_write_count, 0);
 }
 
@@ -1126,6 +1127,10 @@ void
 dfuse_ie_init(struct dfuse_inode_entry *ie)
 {
 	atomic_init(&ie->ie_ref, 1);
+	atomic_init(&ie->ie_open_count, 0);
+	atomic_init(&ie->ie_open_write_count, 0);
+	atomic_init(&ie->ie_il_count, 0);
+	atomic_init(&ie->ie_readdir_number, 0);
 }
 
 void
@@ -1148,7 +1153,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry
 		if (rc == ENOMEM)
 			rc = dfs_release(ie->ie_obj);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)", strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		}
 	}
 

@@ -38,11 +38,6 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_PROV_OFI_PSM2,
-		.nad_str	= "ofi+psm2",
-		.nad_contig_eps	= false,
-		.nad_port_bind  = false,
-	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
@@ -532,7 +527,8 @@ crt_provider_ip_str_get(bool primary, int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_PROV_OFI_PSM2 || provider == CRT_PROV_OFI_OPX)
+	/* return false for providers that should busy poll */
+	if (provider == CRT_PROV_OFI_OPX)
 		return false;
 
 	return true;

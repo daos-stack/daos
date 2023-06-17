@@ -16,9 +16,10 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 	tse_task_t	*task = cb_info->cci_arg;
 	int		rc = cb_info->cci_rc;
 
-	if (cb_info->cci_rc == -DER_TIMEDOUT)
+	if (cb_info->cci_rc == -DER_TIMEDOUT) {
 		/** TODO */
 		;
+	}
 
 	tse_task_complete(task, rc);
 }
@@ -167,6 +168,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rproto->array_size = count;
 	rproto->ep.ep_grp = sys->sy_group;
 	rproto->ep.ep_tag = 0;
+	rproto->base_opc = base_opc;
 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc,
 				      ver_array, count, query_cb, rproto, ctx);

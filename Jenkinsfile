@@ -161,6 +161,7 @@ pipeline {
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
         cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
+             /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
@@ -190,6 +191,11 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestNvme',
+               defaultValue: '',
+               description: 'The launch.py --nvme argument to use for the Functional test ' +
+                            'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
+                            '0000:81:00.0, etc.)')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -283,6 +289,9 @@ pipeline {
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
+        string(name: 'CI_UNIT_VM1_NVME_LABEL',
+               defaultValue: 'bwx_vm1',
+               description: 'Label to use for 1 VM node unit tests that need NVMe')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -759,6 +768,28 @@ pipeline {
                         }
                     }
                 }
+                stage('Unit Test bdev on EL 8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('NLT on EL 8') {
                     when {
                         beforeAgent true
@@ -818,8 +849,7 @@ pipeline {
                             // test results, and while code coverage is being
                             // added.
                             unitTestPost ignore_failure: true,
-                                         artifacts: ['covc_test_logs/',
-                                                     'covc_vm_test/**']
+                                         artifacts: ['covc_test_logs/', 'covc_vm_test/**']
                             job_status_update()
                         }
                     }
@@ -849,6 +879,31 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with memcheck on EL 8')
+                stage('Unit Test bdev with memcheck on EL 8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
+                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test bdev with memcheck on EL 8')
             }
         }
         stage('Test') {
@@ -982,43 +1037,6 @@ pipeline {
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15.4 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'ci/docker/Dockerfile.maldet.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                                " -t ${sanitized_JOB_NAME}-leap15 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            runTest(script: 'export DAOS_PKG_VERSION=' +
-                                            daosPackagesVersion(next_version) + '\n' +
-                                            'utils/scripts/helpers/scan_daos_maldet.sh',
-                                junit_files: 'maldetect_leap15.xml',
-                                failure_artifacts: env.STAGE_NAME,
-                                ignore_failure: true,
-                                description: env.STAGE_NAME,
-                                context: 'test/' + env.STAGE_NAME))
-                    }
-                    post {
-                        always {
-                            junit 'maldetect_leap15.xml'
-                            archiveArtifacts artifacts: 'maldetect_leap15.xml'
-                            job_status_update()
-                            // Force a job failure if anything was found
-                            sh label: 'Check if anything was found.',
-                               script: '! grep "<error " maldetect_leap15.xml'
-                        }
-                    }
-                } // stage('Scan Leap 15.4 RPMs')
                 stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true

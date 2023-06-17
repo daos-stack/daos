@@ -1,14 +1,14 @@
 # Project Information
-site_name: DAOS v2.3 - master
+site_name: DAOS v2.5 - master
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
-# edit_uri: blob/release/2.4/docs/
+# edit_uri: blob/release/2.6/docs/
 edit_uri: blob/master/docs/
-copyright: Copyright 2016-2022 Intel Corporation
+copyright: Copyright 2016-2023 Intel Corporation
 
 # Theme
 theme:
@@ -63,9 +63,9 @@ nav:
       - 'DAOS in the Cloud': 'cloud/index.md'
       - 'Issue tracker': 'https://jira.daos.io/'
   - Release Information:
-      - 'Release Notes v2.4': 'release/release_notes.md'
-      - 'Support Matrix v2.4': 'release/support_matrix.md'
-      - 'Upgrading to v2.4': 'release/upgrading.md'
+      - 'Release Notes v2.5': 'release/release_notes.md'
+      - 'Support Matrix v2.5': 'release/support_matrix.md'
+      - 'Upgrading to v2.5': 'release/upgrading.md'
       - 'Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
   - Overview:
       - 'Architecture': 'overview/architecture.md'
@@ -115,5 +115,5 @@ nav:
       - 'Dev Environment': 'dev/development.md'
       - 'Contributing': 'dev/contributing.md'
       - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-      - 'DAOS API Documentation': 'https://docs.daos.io/v2.3/doxygen/html/index.html'
+      - 'DAOS API Documentation': 'https://docs.daos.io/v2.5/doxygen/html/index.html'
       # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...

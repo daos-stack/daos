@@ -10,6 +10,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/dustin/go-humanize"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -108,4 +109,18 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-123456789abc", SvcReps: []uint32{1, 2}},
 	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
+}
+
+// MockPBMemInfo returns a mock MemInfo result.
+func MockPBMemInfo() *ctlpb.MemInfo {
+	return &ctlpb.MemInfo{
+		HugepagesTotal:    1024,
+		HugepagesFree:     512,
+		HugepagesReserved: 64,
+		HugepagesSurplus:  32,
+		HugepageSizeKb:    2048,
+		MemTotalKb:        (humanize.GiByte * 4) / humanize.KiByte,
+		MemFreeKb:         (humanize.GiByte * 1) / humanize.KiByte,
+		MemAvailableKb:    (humanize.GiByte * 2) / humanize.KiByte,
+	}
 }
