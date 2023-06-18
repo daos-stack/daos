@@ -374,14 +374,14 @@ dss_srv_handler(void *arg)
 	if (rc)
 		goto signal;
 
+	d_set_alloc_track_arg(&dx->dx_mem_stats);
+
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(dx->dx_tag, dx->dx_xs_id, dx->dx_tgt_id);
 	if (dtc == NULL) {
 		D_ERROR("failed to initialize TLS\n");
 		goto signal;
 	}
-
-	d_set_alloc_track_arg(&dx->dx_mem_stats);
 
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
@@ -656,6 +656,12 @@ dss_mem_stats_init(struct mem_stats *stats, int xs_id)
 			     "Total memory usage", "byte", "mem/total_mem/xs_%u", xs_id);
 	if (rc)
 		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
+			     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+	stats->ms_current = 0;
 }
 
 void
@@ -666,6 +672,9 @@ dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
 	D_ASSERT(arg != NULL);
 
 	d_tm_inc_gauge(stats->ms_total_usage, bytes);
+	/* Only retrieve mallocinfo every 10 allocation */
+	if ((stats->ms_current++ % 10) == 0)
+		d_tm_record_meminfo(stats->ms_mallinfo);
 }
 
 void

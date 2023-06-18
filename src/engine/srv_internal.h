@@ -56,6 +56,8 @@ struct sched_info {
 
 struct mem_stats {
 	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
+	struct d_tm_node_t	*ms_mallinfo;		/* memory allocate information */
+	uint64_t		ms_current;
 };
 
 /** Per-xstream configuration data */
@@ -100,6 +102,7 @@ struct engine_metrics {
 	struct d_tm_node_t	*rank_id;
 	struct d_tm_node_t	*dead_rank_events;
 	struct d_tm_node_t	*last_event_time;
+	struct d_tm_node_t	*meminfo;
 };
 
 extern struct engine_metrics dss_engine_metrics;

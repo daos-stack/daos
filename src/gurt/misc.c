@@ -81,7 +81,7 @@ d_calloc(size_t count, size_t eltsize)
 	ptr = calloc(count, eltsize);
 	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, eltsize);
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
 	}
 
 	return ptr;
