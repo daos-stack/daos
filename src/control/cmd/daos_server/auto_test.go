@@ -153,7 +153,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	}
 	// SCM tmpfs 5GiB size calculated after subtracting reservations from MemTotalKiB.
 	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, 5,
+		control.MockEngineCfgTmpfs(0, 4,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -161,7 +161,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
 			).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, 5,
+		control.MockEngineCfgTmpfs(1, 4,
 			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
 			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
 			WithStorageControlMetadataPath(metadataMountPath).
