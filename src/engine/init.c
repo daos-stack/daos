@@ -790,18 +790,18 @@ server_init(int argc, char *argv[])
 		goto exit_srv_init;
 	}
 
+	rc = drpc_notify_ready();
+	if (rc != 0) {
+		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
+		goto exit_init_state;
+	}
+
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
 		goto exit_init_state;
 	D_INFO("Modules successfully set up\n");
-
-	rc = drpc_notify_ready();
-	if (rc != 0) {
-		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
-		goto exit_init_state;
-	}
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
