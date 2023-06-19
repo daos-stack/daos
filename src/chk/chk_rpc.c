@@ -148,6 +148,7 @@ chk_start_post_reply(crt_rpc_t *rpc, void *arg)
 
 	if (cso != NULL) {
 		D_FREE(cso->cso_cmp_ranks.ca_arrays);
+
 		clues.pcs_len = cso->cso_clues.ca_count;
 		clues.pcs_array = cso->cso_clues.ca_arrays;
 		ds_pool_clues_fini(&clues);
@@ -1097,6 +1098,9 @@ crt_proc_struct_chk_query_pool_shard(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_uint32_t(proc, proc_op, &shard->cqps_target_nr);
 	if (unlikely(rc != 0))
 		return rc;
+
+	if (shard->cqps_target_nr == 0)
+		return 0;
 
 	if (FREEING(proc_op)) {
 		D_FREE(shard->cqps_targets);

@@ -301,10 +301,12 @@ ds_pool_clues_fini(struct ds_pool_clues *clues)
 {
 	int i;
 
-	for (i = 0; i < clues->pcs_len; i++)
-		ds_pool_clue_fini(&clues->pcs_array[i]);
-	if (clues->pcs_array != NULL)
+	if (clues != NULL && clues->pcs_array != NULL) {
+		for (i = 0; i < clues->pcs_len; i++)
+			ds_pool_clue_fini(&clues->pcs_array[i]);
+
 		D_FREE(clues->pcs_array);
+	}
 }
 
 /**

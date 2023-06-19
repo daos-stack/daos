@@ -53,8 +53,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
-	if (cso->cso_status < 0)
-		ds_pool_clues_fini(&clues);
+	/* @clues will be freed via chk_start_post_reply. Do not free it here. */
 }
 
 static void
@@ -118,8 +117,7 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
-	if (cqo->cqo_status < 0)
-		chk_query_free(shards, shard_nr);
+	/* @shards will be freed via chk_query_post_reply. Do not free it here. */
 }
 
 static void
@@ -172,8 +170,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
 
-	if (cclo->cclo_status < 0)
-		D_FREE(conts);
+	/* @conts will be freed via chk_cont_list_post_reply. Do not free it here. */
 }
 
 static void
