@@ -188,6 +188,7 @@ const (
 	ServerConfigRamdiskOverMaxMem
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
+	ServerConfigSysRsvdZero
 )
 
 // SPDK library bindings codes
