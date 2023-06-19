@@ -649,10 +649,10 @@ out_daos:
 		rc = rc2;
 out_fini:
 	if (dfuse_info) {
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->dpi_inode_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->dpi_fh_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->dpi_pool_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->dpi_container_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
 	}
 
 	DFUSE_TRA_DOWN(dfuse_info);

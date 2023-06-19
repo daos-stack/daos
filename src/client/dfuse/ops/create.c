@@ -220,7 +220,6 @@ release:
 	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	atomic_fetch_sub_relaxed(&fs_handle->dpi_fh_count, 1);
-	D_FREE(oh);
+	dfuse_oh_free(fs_handle, oh);
 	dfuse_ie_free(fs_handle, ie);
 }

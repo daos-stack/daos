@@ -55,13 +55,12 @@ struct dfuse_info {
 
 	/* Array of dfuse_eq */
 	struct dfuse_eq     *di_eqt;
-	int                  di_eqt_count;
 	ATOMIC uint64_t      di_eqt_idx;
 
-	ATOMIC uint64_t      dpi_inode_count;
-	ATOMIC uint64_t      dpi_fh_count;
-	ATOMIC uint64_t      dpi_pool_count;
-	ATOMIC uint64_t      dpi_container_count;
+	ATOMIC uint64_t      di_inode_count;
+	ATOMIC uint64_t      di_fh_count;
+	ATOMIC uint64_t      di_pool_count;
+	ATOMIC uint64_t      di_container_count;
 };
 
 /* legacy, allow the old name for easier migration */
@@ -860,13 +859,13 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 #define dfuse_ie_free(_di, _ie)                                                                    \
 	do {                                                                                       \
-		atomic_fetch_sub_relaxed(&(_di)->dpi_inode_count, 1);                              \
+		atomic_fetch_sub_relaxed(&(_di)->di_inode_count, 1);                               \
 		D_FREE(_ie);                                                                       \
 	} while (0)
 
 #define dfuse_oh_free(_di, _oh)                                                                    \
 	do {                                                                                       \
-		atomic_fetch_sub_relaxed(&(_di)->dpi_fh_count, 1);                                 \
+		atomic_fetch_sub_relaxed(&(_di)->di_fh_count, 1);                                  \
 		D_FREE(_oh);                                                                       \
 	} while (0)
 
