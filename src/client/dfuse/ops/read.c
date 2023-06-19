@@ -111,18 +111,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_event           *ev;
 	uint64_t                      eqt_idx;
 
-	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
-
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 		oh->doh_linear_read     = false;
 
 		if (oh->doh_readahead) {
+			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
 			ev = oh->doh_readahead->dra_ev;
 
-			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
-			ev                        = oh->doh_readahead->dra_ev;
 			oh->doh_readahead->dra_ev = NULL;
 			D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 
@@ -147,7 +144,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		}
 	}
 
-	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
+	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->di_eqt_idx, 1);
+	eqt = &fs_handle->di_eqt[eqt_idx % fs_handle->di_eq_count];
 
 	ev = d_slab_acquire(eqt->de_read_slab);
 	if (ev == NULL)
@@ -235,7 +233,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 }
 
 void
-dfuse_pre_read(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_eq    *eqt;
 	int                 rc;
@@ -243,9 +241,8 @@ dfuse_pre_read(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	uint64_t            eqt_idx;
 	size_t              len = oh->doh_ie->ie_stat.st_size;
 
-	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
-
-	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
+	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
 	ev = d_slab_acquire(eqt->de_read_slab);
 	if (ev == NULL)

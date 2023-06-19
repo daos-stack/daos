@@ -29,7 +29,7 @@ struct dfuse_info {
 	char                *di_group;
 	char                *di_mountpoint;
 	uint32_t             di_thread_count;
-	uint32_t             di_equeue_count;
+	uint32_t             di_eq_count;
 	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
@@ -42,38 +42,37 @@ struct dfuse_info {
 	 * is only needed for minimal list management so isn't locked often or for long.
 	 */
 	pthread_spinlock_t   di_lock;
-};
 
-struct dfuse_projection_info {
-	struct dfuse_info  *dpi_info;
 	/** Hash table of open inodes, this matches kernel ref counts */
-	struct d_hash_table dpi_iet;
+	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
-	struct d_hash_table dpi_pool_table;
+	struct d_hash_table  di_pool_table;
 	/** Next available inode number */
-	ATOMIC uint64_t     dpi_ino_next;
-	bool                dpi_shutdown;
+	ATOMIC uint64_t      di_ino_next;
+	bool                 di_shutdown;
 
-	struct d_slab       dpi_slab;
+	struct d_slab        di_slab;
 
 	/* Array of dfuse_eq */
-	struct dfuse_eq    *dpi_eqt;
-	int                 dpi_eqt_count;
-	ATOMIC uint64_t     dpi_eqt_idx;
+	struct dfuse_eq     *di_eqt;
+	ATOMIC uint64_t      di_eqt_idx;
 };
 
+/* legacy, allow the old name for easier migration */
+#define dfuse_projection_info dfuse_info
+
 struct dfuse_eq {
-	struct dfuse_projection_info *de_handle;
+	struct dfuse_info  *de_handle;
 
 	/* Event queue for async events */
-	daos_handle_t                 de_eq;
+	daos_handle_t       de_eq;
 	/* Semaphore to signal event waiting for async thread */
-	sem_t                         de_sem;
+	sem_t               de_sem;
 
-	pthread_t                     de_thread;
+	pthread_t           de_thread;
 
-	struct d_slab_type           *de_read_slab;
-	struct d_slab_type           *de_write_slab;
+	struct d_slab_type *de_read_slab;
+	struct d_slab_type *de_write_slab;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
@@ -81,7 +80,7 @@ struct dfuse_eq {
 
 /* Launch fuse, and do not return until complete */
 int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args);
+dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args);
 
 struct dfuse_inode_entry;
 
@@ -438,14 +437,11 @@ void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 int
-dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
-			 struct dfuse_pool *dfp,
-			 const char *label,
+dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
 			 struct dfuse_cont **_dfs);
 
 int
-dfuse_cont_open(struct dfuse_projection_info *fs_handle,
-		struct dfuse_pool *dfp, uuid_t *cont,
+dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfs);
 
 /* Connect to a pool via either a label or uuid.
@@ -457,8 +453,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle,
  * Returns a system error code.
  */
 int
-dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
-		   struct dfuse_pool **_dfp);
+dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfuse_pool **_dfp);
 
 /* Return a connection for a pool uuid.
  *
@@ -469,8 +464,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
  * Returns a system error code.
  */
 int
-dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
-		      struct dfuse_pool **_dfp);
+dfuse_pool_get_handle(struct dfuse_info *dfuse_info, uuid_t pool, struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.
  *
@@ -483,19 +477,18 @@ dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
 
 /* Setup internal structures */
 int
-dfuse_fs_init(struct dfuse_info *dfuse_info,
-	      struct dfuse_projection_info **fsh);
+dfuse_fs_init(struct dfuse_info *dfuse_info);
 
 /* Start a dfuse projection */
 int
-dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs);
 
 int
-dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
+dfuse_fs_stop(struct dfuse_info *dfuse_info);
 
 /* Drain and free resources used by a projection */
 int
-dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
+dfuse_fs_fini(struct dfuse_info *dfuse_info);
 
 /* dfuse_thread.c */
 
@@ -855,7 +848,7 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
  * unlink or rename
  */
 void
-dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
+dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* Metadata caching functions. */
 
@@ -890,17 +883,17 @@ bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 void
-dfuse_pre_read(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 int
-check_for_uns_ep(struct dfuse_projection_info *fs_handle,
-		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
+check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,
+		 daos_size_t len);
 
 void
 dfuse_ie_init(struct dfuse_inode_entry *ie);
 
 void
-dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
+dfuse_ie_close(struct dfuse_inode_entry *ie);
 
 /* ops/...c */
 
@@ -999,18 +992,15 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
  * Adds inode to the hash table and calls fuse_reply_entry()
  */
 void
-dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
-		  struct dfuse_inode_entry *inode,
-		  struct fuse_file_info *fi_out,
-		  bool is_new,
-		  fuse_req_t req);
+dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
+		  struct fuse_file_info *fi_out, bool is_new, fuse_req_t req);
 
 int
 _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mode);
 
 /* Mark object as removed and invalidate any kernel data for it */
 void
-dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
+dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
 		   struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */

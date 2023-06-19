@@ -528,6 +528,12 @@ func TestServerConfig_Validation(t *testing.T) {
 			expErr: storage.FaultConfigRamdiskUnderMinMem(humanize.GiByte*3,
 				storage.MinRamdiskMem),
 		},
+		"zero system ram reserved": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithSystemRamReserved(0)
+			},
+			expErr: FaultConfigSysRsvdZero,
+		},
 		"control metadata multi-engine": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithControlMetadata(storage.ControlMetadata{
@@ -1732,7 +1738,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	}{
 		"successful write": {
 			cfgPath:   testDir,
-			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, ConfigOut),
 		},
 		"missing directory": {
 			cfgPath:   filepath.Join(testDir, "non-existent/"),

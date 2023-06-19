@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.4/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -951,7 +951,7 @@ pool header correct
 
 ## Syslog
 
-[`RAS events`](https://docs.daos.io/v2.4/admin/administration/#ras-events) are printed to the Syslog
+[`RAS events`](https://docs.daos.io/v2.6/admin/administration/#ras-events) are printed to the Syslog
 by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 
