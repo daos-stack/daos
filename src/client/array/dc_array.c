@@ -2134,7 +2134,6 @@ check_record_cb(tse_task_t *task, void *data)
 	/** Last record is there, no need to add it */
 	if (rc || params->iod.iod_size != 0) {
 		D_FREE(iod->iod_recxs);
-		D_FREE(params);
 		D_GOTO(out, rc);
 	}
 
