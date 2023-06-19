@@ -30,7 +30,7 @@ type EnvOptions struct {
 	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
-func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
+func (eo *EnvOptions) sanitizeAllowList() error {
 	if eo == nil {
 		return errors.New("nil EnvOptions")
 	}
@@ -39,7 +39,7 @@ func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	}
 
 	// DPDK will not accept VMD backing device addresses so convert to VMD addresses
-	newSet, err := eo.PCIAllowList.BackingToVMDAddresses(log)
+	newSet, err := eo.PCIAllowList.BackingToVMDAddresses()
 	if err != nil {
 		return err
 	}
