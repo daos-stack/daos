@@ -154,8 +154,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (wipe_parent == 0)
 		return;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
-					      wipe_name, strnlen(wipe_name, NAME_MAX));
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, wipe_parent, wipe_name,
+					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 
@@ -203,7 +203,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_dfp, rc);
 
 	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
@@ -231,7 +231,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 out_err:
 	duns_destroy_attr(&dattr);
 

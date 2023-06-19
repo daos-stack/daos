@@ -38,12 +38,12 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 	if (ie->ie_rd_hdl) {
 		DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
 		ie->ie_rd_hdl->drh_valid = false;
 	}
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 
 	dfuse_cache_evict(ie);
 }
@@ -143,7 +143,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	oh->doh_rd_nextc = NULL;
 
 	/* Lock is to protect oh->doh_ie->ie_rd_hdl between readdir/closedir calls */
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
@@ -168,7 +168,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	}
 	D_FREE(hdl);
 unlock:
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 }
 
 static int
@@ -295,7 +295,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	if (oh->doh_rd != NULL)
 		return 0;
 
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 
 	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
@@ -304,7 +304,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
-			D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+			D_SPIN_UNLOCK(&fs_handle->di_lock);
 			return ENOMEM;
 		}
 
@@ -315,7 +315,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 			oh->doh_ie->ie_rd_hdl   = oh->doh_rd;
 		}
 	}
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 	return 0;
 }
 
