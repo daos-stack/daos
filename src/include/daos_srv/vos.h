@@ -1122,10 +1122,28 @@ vos_iter_validate(daos_handle_t ih);
  * \retval		> 0	callback return value
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
+#define vos_iterate(param, type, recursive, ...)                                                   \
+	({                                                                                         \
+		int __rc;                                                                          \
+		D_INFO("vos_iterate type=%d recursive=%d started\n", type, recursive);             \
+		__rc = vos_iterate_(param, type, recursive, __VA_ARGS__);                          \
+		D_INFO("vos_iterate type=%d recursive=%d finished, rc=" DF_RC "\n", type,          \
+		       recursive, DP_RC(__rc));                                                    \
+		__rc;                                                                              \
+	})
 int
-vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	     void *arg, struct dtx_handle *dth);
+
+/** Retrieve the parent iterator for an iterator handle
+ * \param[in]	ih	Iterator handle
+ * \param[out]	pih	Parent iterator handle
+ *
+ * \return 0 on success, error if no parent exists or other failure
+ */
+int
+vos_iter_parent(daos_handle_t ih, daos_handle_t *pih);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

@@ -1022,6 +1022,7 @@ struct vos_iterator {
 	struct dtx_handle	*it_dth;
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
+	vos_iter_param_t        *it_param;
 	struct vos_ts_set	*it_ts_set;
 	vos_iter_filter_cb_t	 it_filter_cb;
 	void			*it_filter_arg;
