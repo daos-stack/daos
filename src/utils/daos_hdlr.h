@@ -207,4 +207,8 @@ int cont_clone_hdlr(struct cmd_args_s *ap);
  * int cont_rollback_hdlr()
  */
 
+/* Dfuse operations, mostly handled through ioctls */
+int
+dfuse_count_query(struct cmd_args_s *ap);
+
 #endif /* __DAOS_HDLR_H__ */

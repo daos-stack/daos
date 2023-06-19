@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -39,6 +40,8 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
+
+#include "dfuse_ioctl.h"
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -2421,5 +2424,39 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
+	return rc;
+}
+
+int
+dfuse_count_query(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = daos_errno2der(errno);
+		DH_PERROR_DER(ap, rc, "ioctl failed");
+		goto close;
+	}
+
+	fprintf(ap->outstream,
+		"Dfuse memory usage\n"
+		"inodes: %" PRIu64 "\n"
+		"file handles: %" PRIu64 "\n"
+		"pools: %" PRIu64 "\n"
+		"containers: %" PRIu64 "\n",
+		query.inode_count, query.fh_count, query.pool_count, query.container_count);
+
+close:
+	close(fd);
 	return rc;
 }

@@ -2563,6 +2563,9 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery', '--path', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_uns_link(self):
