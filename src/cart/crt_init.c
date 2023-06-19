@@ -9,7 +9,6 @@
  */
 #include <malloc.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <sys/resource.h>
 #include "crt_internal.h"
 
@@ -74,6 +73,7 @@ crt_lib_init(void)
 {
 	int		rc;
 	uint64_t	start_rpcid;
+	struct timespec	now;
 
 	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
 	D_ASSERT(rc == 0);
@@ -88,7 +88,9 @@ crt_lib_init(void)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
 
-	d_srand(d_timeus_secdiff(0) + getpid());
+	rc = d_gettime(&now);
+	D_ASSERTF(rc == 0, "d_gettime: " DF_RC "\n", DP_RC(rc));
+	d_srand(now.tv_sec * 1000 * 1000 * 1000 + now.tv_nsec + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
@@ -611,12 +613,14 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
-	char          *provider, *provider_env;
-	char          *interface, *interface_env;
-	char          *domain, *domain_env;
-	char          *auth_key, *auth_key_env;
-	struct timeval now;
-	unsigned int   seed;
+	char          *provider;
+	char          *provider_env = NULL;
+	char          *interface;
+	char          *interface_env = NULL;
+	char          *domain;
+	char          *domain_env = NULL;
+	char          *auth_key;
+	char          *auth_key_env = NULL;
 	char          *path;
 	bool           server;
 	int            rc            = 0;
@@ -684,11 +688,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
-		/* feed a seed for pseudo-random number generator */
-		gettimeofday(&now, NULL);
-		seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
-		d_srand(seed);
-
 		crt_gdata.cg_server = server;
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
