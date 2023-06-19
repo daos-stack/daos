@@ -10,10 +10,10 @@
 void
 dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *oh        = NULL;
-	struct fuse_file_info         fi_out    = {0};
-	int                           rc;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh;
+	struct fuse_file_info fi_out = {0};
+	int                   rc;
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -21,7 +21,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(fs_handle, oh, ie);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	fi_out.fh = (uint64_t)oh;
 
@@ -49,8 +49,8 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -70,6 +70,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	DFUSE_REPLY_ZERO(oh, req);
-	dfuse_dre_drop(fs_handle, oh);
-	dfuse_oh_free(fs_handle, oh);
+	dfuse_dre_drop(dfuse_info, oh);
+	dfuse_oh_free(dfuse_info, oh);
 };

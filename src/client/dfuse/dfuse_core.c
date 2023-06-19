@@ -263,7 +263,7 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 }
 
 static void
-_ph_free(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp)
+_ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 {
 	int rc;
 
@@ -289,7 +289,7 @@ _ph_free(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp)
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
-	atomic_fetch_sub_relaxed(&fs_handle->dpi_pool_count, 1);
+	atomic_fetch_sub_relaxed(&dfuse_info->dpi_pool_count, 1);
 
 	D_FREE(dfp);
 }
