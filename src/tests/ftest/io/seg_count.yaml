@@ -21,7 +21,7 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  size: 60gb
+  size: 95%
   control_method: dmg
 ior:
   client_processes: !mux
