@@ -116,10 +116,7 @@ class DdbTest(TestWithServers):
         uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
         match = re.search(uuid_regex, ls_out)
         if match is None:
-            self.log.info("##### Errors #####")
-            report_errors(test=self, errors=["Unexpected output from command, unable to parse."])
-            self.log.info("##################")
-            return  # don't continue
+            self.fail("Unexpected output from ddb command, unable to parse.")
         self.log.info("Container UUID from ddb ls = %s", match.group(1))
 
         actual_uuid = match.group(1).lower()
@@ -137,7 +134,7 @@ class DdbTest(TestWithServers):
         #   OBJ: (/[0]/[1]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643009.1.0.1
         #   OBJ: (/[0]/[2]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643016.1.0.1
         ls_out = "\n".join(cmd_result[0]["stdout"])
-        # Matches an object id. (4 digits seperated by a period '.')
+        # Matches an object id. (4 digits separated by a period '.')
         object_id_regex = r"\d+\.\d+\.\d+\.\d+"
         match = re.findall(object_id_regex, ls_out)
         self.log.info("List objects match = %s", match)
@@ -165,8 +162,8 @@ class DdbTest(TestWithServers):
             actual_dkey_count += len(match)
 
             # Verify dkey string.
-            for i in range(self.dkey_count):
-                actual_dkey = match[i][1]
+            for idx in range(self.dkey_count):
+                actual_dkey = match[idx][1]
                 if self.random_dkey not in actual_dkey:
                     msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
                            "Actual = {}").format(obj_index, self.random_dkey, actual_dkey)
