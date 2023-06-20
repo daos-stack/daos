@@ -1004,7 +1004,7 @@ Stability issues: Many APIs are involved in libpil4dfs. There may be bugs, uncov
 
 Current code was developed and tested on x86_64. We do have ongoing work to port the library to Arm64, but we have not tested on Arm64 yet.
 
-Large overhead for small tasks due to slow daos_init() (200~300 ms)
+Large overhead for small tasks due to slow daos_init() (order of hundreds of milliseconds)
 
 Not working for statically linked executable
 
