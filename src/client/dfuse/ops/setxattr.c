@@ -56,12 +56,10 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * will be skipped.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			struct dfuse_projection_info *fs_handle;
+			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 
-			fs_handle = fuse_req_userdata(req);
-			rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-							      inode->ie_parent,
-							      inode->ie_name,
+			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
+							      inode->ie_parent, inode->ie_name,
 							      strnlen(inode->ie_name, NAME_MAX));
 			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
 		}

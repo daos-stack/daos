@@ -19,6 +19,7 @@ from command_utils import SubprocessManager
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
+from general_utils import get_default_config_file
 from host_utils import get_local_host
 from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -398,6 +399,26 @@ class DaosServerManager(SubprocessManager):
         cmd.set_command(("nvme", "prepare"), **kwargs)
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+
+    def support_collect_log(self, **kwargs):
+        """Run daos_server support collect-log on the server hosts.
+
+        Args:
+            kwargs (dict, optional): named arguments and their values to use with the
+                DaosServerCommand.SupportSubCommand.CollectLogSubCommand object
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the same
+                return status
+
+        """
+        cmd = DaosServerCommand(self.manager.job.command_path)
+        cmd.sudo = False
+        cmd.debug.value = False
+        cmd.config.value = get_default_config_file("server")
+        self.log.info("Support collect-log on servers: %s", str(cmd))
+        cmd.set_command(("support", "collect-log"), **kwargs)
+        return run_remote(self.log, self._hosts, cmd.with_exports)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
