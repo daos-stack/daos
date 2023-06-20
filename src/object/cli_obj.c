@@ -6726,6 +6726,10 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
 
+	/** for EC need to zero out user recx if passed */
+	if (api_args->recx)
+		memset(api_args->recx, 0, sizeof(*api_args->recx));
+
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch, &map_ver, &obj);
 	if (rc)
 		D_GOTO(out_task, rc);

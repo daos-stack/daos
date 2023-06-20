@@ -1,8 +1,14 @@
-daos (2.5.100-3) unstable; urgency=medium
+daos (2.5.100-4) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Add pipeline lib
 
  -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 14 Jun 2023 4:24:00 -0600
+
+daos (2.5.100-3) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Remove lmdb-devel for MD on SSD
+
+ -- Wang Shilong <shilong.wang@intel.com> Wed, 14 Jun 2023 07:58:00 -0600
 
 daos (2.5.100-2) unstable; urgency=medium
   [ Ryon Jensen ]
