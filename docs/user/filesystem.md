@@ -740,7 +740,7 @@ When this is done, the local DFuse daemon should shut down the mount point,
 disconnect from the DAOS servers, and exit.  You can also verify that the
 mount point is no longer listed in `/proc/mounts`.
 
-## Interception Library
+## Interception Library `libioil`
 
 An interception library called `libioil` is available to work with DFuse. This
 library works in conjunction with DFuse and allows the interception of POSIX I/O
@@ -894,3 +894,126 @@ $
 
 While this mode is not expected to be used directly by users, it is useful for
 the unified namespace integration.
+
+## Interception Library `libpil4dfs`
+
+A new interception library called `libpil4dfs` is introduced. It is similar to libioil,
+but it intercepts more APIs, including read/write as well as metadata related functions.
+This provides kernel-bypass for I/O data, leading to improved performance. This is a preview
+version. Some features are not implemented yet.
+
+### Using libpil4dfs with dfuse
+
+Start dfuse daemon,
+```
+dfuse -m /scratch_fs/dfuse tank mycont
+```
+
+To use the interception library, set `LD_PRELOAD` to point to the shared library
+in the DAOS install directory:
+
+```
+LD_PRELOAD=/path/to/daos/install/lib/libpil4dfs.so
+or
+LD_PRELOAD=/usr/lib64/libpil4dfs.so # when installed from RPMs
+```
+
+Example:
+
+```
+$ LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse/ -w 4096
+```
+### Print an interception summary
+
+If the `D_IL_REPORT` environment variable is set then the interception library will
+print a short summary of intercepted functions accessing DAOS filesystem through
+POSIX as a program exits. Both "D_IL_REPORT=1" and "D_IL_REPORT=true" enable printing
+the summary.
+
+```
+$ D_IL_REPORT=1 LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse -w 4096
+mdtest-3.4.0+dev was launched with 1 total task(s) on 1 node(s)
+Command line used: mdtest '-a' 'POSIX' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/scratch_fs/dfuse/' '-w' '4096'
+Path                : /scratch_fs/dfuse
+FS                  : 59.6 GiB   Used FS: 27.4%   Inodes: -0.0 Mi   Used Inodes: 0.0%
+Nodemap: 1
+1 tasks, 1667 files
+
+SUMMARY rate: (of 1 iterations)
+   Operation                     Max            Min           Mean        Std Dev
+   ---------                     ---            ---           ----        -------
+   File creation                2442.835       2442.835       2442.835          0.000
+   File stat                       0.000          0.000          0.000          0.000
+   File read                       0.000          0.000          0.000          0.000
+   File removal                    0.000          0.000          0.000          0.000
+   Tree creation                2957.901       2957.901       2957.901          0.000
+   Tree removal                    0.000          0.000          0.000          0.000
+-- finished at 06/20/2023 18:57:55 --
+
+libpil4dfs intercepting summary for ops on DFS:
+[read   ]  0
+[write  ]  1667
+
+[open   ]  1667
+[stat   ]  0
+[opendir]  0
+[readdir]  0
+[unlink ]  0
+[seek   ]  1667
+[mkdir  ]  2
+[rmdir  ]  0
+[rename ]  0
+[mmap   ]  0
+
+[op_sum ]  5003
+```
+
+### Using libpil4dfs with env
+
+dfuse does not have to be started to test most features of libpil4dfs. DFS mount point
+can be set with env for debugging.
+
+```
+$ fusermount3 -u /scratch_fs/dfuse  # umount fuse mount
+$ export DAOS_POOL="tank"
+$ export DAOS_CONTAINER="mycont"
+$ export DAOS_MOUNT_POINT="/scratch_fs/dfuse"
+$ LD_PRELOAD=/usr/lib64/libpil4dfs.so mkdir /scratch_fs/dfuse/dir
+$ D_IL_REPORT=1 LD_PRELOAD=/usr/lib64/libpil4dfs.so ls /scratch_fs/dfuse/
+dir
+libpil4dfs intercepting summary for ops on DFS:
+[read   ]  0
+[write  ]  0
+
+[open   ]  0
+[stat   ]  2
+[opendir]  1
+[readdir]  2
+[unlink ]  0
+[seek   ]  0
+[mkdir  ]  0
+[rmdir  ]  0
+[rename ]  0
+[mmap   ]  0
+
+[op_sum ]  5
+```
+
+### Limitations of using libpil4dfs
+Stability issues: Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
+
+Current code was developed and tested on x86_64. We do have ongoing work to port the library to Arm64, but we have not tested on Arm64 yet.
+
+Large overhead for small tasks due to slow daos_init() (200~300 ms)
+
+Not working for statically linked executable
+
+dfuse is still required to handle some operations that libpil4dfs does not supported yet.
+
+Support for multiple pool and containers within a singled dfuse mountpoint is not there yet (each container accessed should be mounted separately), i.e. no UNS support (concerns about the overhead of getfattr())
+
+No support of creating a process with the executable and shared object files stored on DAOS yet
+
+No support for applications using fork yet
+
+Those unsupported features are still available through dfuse.
