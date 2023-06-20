@@ -259,6 +259,14 @@ def define_components(reqs):
                           ['make'],
                           ['make', 'install']],
                 libs=['isal_crypto'])
+    reqs.define('memkind',
+                retriever=GitRepoRetriever('https://github.com/memkind/memkind.git'),
+                commands=[['./autogen.sh'],
+                          ['./configure', '--prefix=$MEMKIND_PREFIX',
+                           '--libdir=$MEMKIND_PREFIX/lib'],
+                          ['make'],
+                          ['make', 'install']],
+                libs=['memkind'])
 
     reqs.define('pmdk',
                 retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),

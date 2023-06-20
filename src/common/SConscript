@@ -20,7 +20,7 @@ def build_daos_common(denv, client):
     dav_src = []
     sys_lmdb_files = []
 
-    common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
+    common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread', 'memkind']
     if client:
         libname = 'daos_common'
     else:
@@ -45,6 +45,7 @@ def build_daos_common(denv, client):
         benv.require('argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
+    benv.require('memkind')
     common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files
                             + sys_lmdb_files, LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)

@@ -18,6 +18,7 @@
 #include "palloc.h"
 #include "mo_wal.h"
 #include "obj.h"
+#include <hbwmalloc.h>
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
@@ -72,9 +73,17 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	int        persist_hdr = 0;
 	int        err         = 0;
 	int        rc;
+	void	  *ptr = NULL;
 
-	base = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	rc = hbw_posix_memalign(&ptr, 4096,  sz);
+	if (rc) {
+		D_ERROR("failed to allocate hbw memory\n");
+		return NULL;
+	}
+
+	base = mmap(ptr, sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
 	if (base == MAP_FAILED) {
+		hbw_free(ptr);
 		return NULL;
 	}
 
@@ -225,6 +234,7 @@ out1:
 	D_FREE(hdl);
 out0:
 	munmap(base, sz);
+	hbw_free(ptr);
 	errno = err;
 	return NULL;
 
@@ -329,6 +339,7 @@ dav_obj_close(dav_obj_t *hdl)
 	stats_delete(hdl, hdl->do_stats);
 
 	munmap(hdl->do_base, hdl->do_size);
+	hbw_free(hdl->do_base);
 	close(hdl->do_fd);
 	if (hdl->do_utx) {
 		dav_umem_wtx_cleanup(hdl->do_utx);
