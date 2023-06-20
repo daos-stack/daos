@@ -64,7 +64,8 @@ install_mofed() {
     rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
-    time dnf -y debug-info-install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
+    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
+    time dnf -y debuginfo-install ucx
 
     # now, upgrade firmware
     time dnf -y install mlnx-fw-updater
