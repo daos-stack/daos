@@ -451,28 +451,23 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to query %s", cmd.Path)
 	}
 
-	if cmd.shouldEmitJSON {
-		type CopyStats struct {
+	if cmd.jsonOutputEnabled() {
+
+		jsonAttrs := &struct {
 			NumInodes      uint64 `json:"inodes"`
-			NumFileHandles uint64 `json:"files"`
+			NumFileHandles uint64 `json:"open_files"`
 			NumPools       uint64 `json:"pools"`
 			NumContainers  uint64 `json:"containers"`
-		}
-
-		return cmd.outputJSON(struct {
-			CopyStats CopyStats `json:"copy_stats"`
 		}{
-			CopyStats{
-				uint64(ap.dfuse_mem.inode_count),
-				uint64(ap.dfuse_mem.fh_count),
-				uint64(ap.dfuse_mem.pool_count),
-				uint64(ap.dfuse_mem.container_count),
-			},
-		}, nil)
-
+			NumInodes:      uint64(ap.dfuse_mem.inode_count),
+			NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+			NumPools:       uint64(ap.dfuse_mem.pool_count),
+			NumContainers:  uint64(ap.dfuse_mem.container_count),
+		}
+		return cmd.outputJSON(jsonAttrs, nil)
 	}
 
-	cmd.Infof("DFuse descriptor usage")
+	cmd.Infof("DFuse descriptor usage.")
 	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
 	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
 	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
