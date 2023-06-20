@@ -11,6 +11,8 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include "bio_ut.h"
+#include "../vos_tls.h"
+#include <daos_srv/vos.h>
 
 static char		db_path[100];
 struct bio_ut_args	ut_args;
@@ -18,11 +20,7 @@ struct bio_ut_args	ut_args;
 void
 ut_fini(struct bio_ut_args *args)
 {
-	bio_xsctxt_free(args->bua_xs_ctxt);
-	smd_fini();
-	lmm_db_fini();
-	bio_nvme_fini();
-	ABT_finalize();
+	vos_self_fini();
 	daos_debug_fini();
 }
 
@@ -34,61 +32,14 @@ ut_fini(struct bio_ut_args *args)
 int
 ut_init(struct bio_ut_args *args)
 {
-	struct sys_db	*db;
-	char		 nvme_conf[200] = { 0 };
-	int		 fd, rc;
+	int rc;
 
-	snprintf(nvme_conf, sizeof(nvme_conf), "%s/daos_nvme.conf", db_path);
+	rc = vos_self_init(db_path, false, BIO_STANDALONE_TGT_ID);
+	if (rc)
+		daos_debug_fini();
+	else
+		args->bua_xs_ctxt = vos_xsctxt_get();
 
-	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
-
-	rc = ABT_init(0, NULL);
-	if (rc != 0)
-		goto out_debug;
-
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
-		D_ERROR("Failed to open %s. %s\n", nvme_conf, strerror(errno));
-		rc = daos_errno2der(errno);
-		goto out_abt;
-	}
-	close(fd);
-
-	rc = bio_nvme_init(nvme_conf, BIO_UT_NUMA_NODE, BIO_UT_MEM_SIZE, BIO_UT_HUGEPAGE_SZ,
-			   BIO_UT_TARGET_NR, true);
-	if (rc) {
-		D_ERROR("NVMe init failed. "DF_RC"\n", DP_RC(rc));
-		goto out_abt;
-	}
-
-	rc = lmm_db_init_ex(db_path, "self_db", true, true);
-	if (rc) {
-		D_ERROR("lmm DB init failed. "DF_RC"\n", DP_RC(rc));
-		goto out_nvme;
-	}
-	db = lmm_db_get();
-
-	rc = smd_init(db);
-	D_ASSERT(rc == 0);
-
-	rc = bio_xsctxt_alloc(&args->bua_xs_ctxt, BIO_STANDALONE_TGT_ID, true);
-	if (rc) {
-		D_ERROR("Allocate Per-xstream NVMe context failed. "DF_RC"\n", DP_RC(rc));
-		goto out_smd;
-	}
-
-	return 0;
-out_smd:
-	smd_fini();
-	lmm_db_fini();
-out_nvme:
-	bio_nvme_fini();
-out_abt:
-	ABT_finalize();
-out_debug:
-	daos_debug_fini();
 	return rc;
 }
 

@@ -20,7 +20,7 @@ def build_shim_module():
     new_env.AppendUnique(LIBPATH=[Dir('../api')])
 
     new_env['CC'] = 'gcc'
-    new_env.AppendUnique(CCFLAGS='-pthread')
+    new_env.AppendUnique(CCFLAGS=['-pthread', '-Wno-missing-field-initializers'])
 
     new_env.compiler_setup()
 

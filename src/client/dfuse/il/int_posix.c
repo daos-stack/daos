@@ -675,6 +675,65 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	return true;
 }
 
+/* Wrapper function for daos_init()
+ * Within ioil there are some use-cases where the caller opens files in sequence and expects back
+ * specific file descriptors, specifically some configure scripts which hard-code fd numbers.  To
+ * avoid problems here then if the fd being intercepted is low then pre-open a number of fds before
+ * calling daos_init() and close them afterwards so that daos itself does not use and of the low
+ * number file descriptors.
+ * The DAOS logging uses fnctl calls to force it's FDs to higher numbers to avoid the same problems.
+ * See DAOS-13381 for more details. Returns true on success
+ */
+
+#define IOIL_MIN_FD 10
+
+static bool
+call_daos_init(int fd)
+{
+	int  fds[IOIL_MIN_FD] = {};
+	int  i                = 0;
+	int  rc;
+	bool rcb = false;
+
+	if (fd < IOIL_MIN_FD) {
+		fds[0] = __real_open("/", O_RDONLY);
+
+		while (fds[i] < IOIL_MIN_FD) {
+			fds[i + 1] = __real_dup(fds[i]);
+			if (fds[i + 1] == -1) {
+				DFUSE_LOG_DEBUG("Pre-opening files failed: %d (%s)", errno,
+						strerror(errno));
+				goto out;
+			}
+			i++;
+			D_ASSERT(i < IOIL_MIN_FD);
+		}
+	}
+
+	rc = daos_init();
+	if (rc) {
+		DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
+		goto out;
+	}
+	rcb = true;
+
+out:
+	i = 0;
+	while (fds[i] > 0) {
+		__real_close(fds[i]);
+		i++;
+		D_ASSERT(i < IOIL_MIN_FD);
+	}
+
+	if (rcb)
+		ioil_iog.iog_daos_init = true;
+	else
+		ioil_iog.iog_no_daos = true;
+
+	return rcb;
+}
+
+/* Returns true on success */
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 {
@@ -709,15 +768,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
 
-	if (!ioil_iog.iog_daos_init) {
-		rc = daos_init();
-		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
-			ioil_iog.iog_no_daos = true;
-			D_GOTO(err, 0);
-		}
-		ioil_iog.iog_daos_init = true;
-	}
+	if (!ioil_iog.iog_daos_init)
+		if (!call_daos_init(fd))
+			goto err;
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
