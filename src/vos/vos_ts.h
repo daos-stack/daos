@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -234,7 +234,7 @@ static inline bool
 vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
 		       struct vos_ts_entry **entryp)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(false);
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	void			*entry;
 	struct vos_ts_set_entry	 set_entry = {0};
@@ -317,7 +317,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -378,7 +378,7 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	if (reset)
 		ts_set->ts_init_count--;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -490,7 +490,7 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 		return -DER_BUSY; /** No more room in the set */
 
 	if (vos_ts_lookup(ts_set, idx, false, &entry)) {
-		vos_kh_clear();
+		vos_kh_clear(false);
 		expected_type = entry->te_info->ti_type;
 		D_ASSERT(expected_type == ts_set->ts_etype);
 		goto set_params;
@@ -498,8 +498,9 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 
 calc_hash:
 	if (ts_set->ts_etype > VOS_TS_TYPE_CONT) {
+		/* sysdb pool should not come here */
 		if (ts_set->ts_etype != VOS_TS_TYPE_OBJ) {
-			hash = vos_hash_get(rec, rec_size);
+			hash = vos_hash_get(rec, rec_size, false);
 		} else {
 			daos_unit_oid_t *oid = (daos_unit_oid_t *)rec;
 
@@ -591,9 +592,9 @@ vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
  * \param[in]	type	Type of the object
  */
 static inline void
-vos_ts_evict(uint32_t *idx, uint32_t type)
+vos_ts_evict(uint32_t *idx, uint32_t type, bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
 
 	if (ts_table == NULL)
 		return;
@@ -602,9 +603,10 @@ vos_ts_evict(uint32_t *idx, uint32_t type)
 }
 
 static inline bool
-vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
+vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp,
+		  bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
 	struct vos_ts_info      *info;
 
 	if (ts_table == NULL)
@@ -640,13 +642,14 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  * \param[in]		cflags	Check/update flags
  * \param[in]		akey_nr	Number of akeys in operation
  * \param[in]		dth	Optional transaction handle
+ * \param[in]		standalone use standalone tls
  *
  * \return	0 on success, error otherwise.
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_handle *dth);
+		    const struct dtx_handle *dth, bool standalone);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed

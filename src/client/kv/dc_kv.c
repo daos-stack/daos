@@ -196,10 +196,9 @@ dc_kv_open(tse_task_t *task)
 	}
 
 	/** Create task to open object */
-	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
-			      0, NULL, &open_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task), 0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_open task\n");
+		D_ERROR("Failed to create object_open task "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_ptask, rc);
 	}
 
@@ -215,15 +214,14 @@ dc_kv_open(tse_task_t *task)
 		D_ERROR("Failed to register dependency\n");
 		D_GOTO(err_put1, rc);
 	}
-
-	rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
-				       sizeof(args));
+	rc = tse_task_register_comp_cb(task, open_handle_cb, &args, sizeof(args));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put1, rc);
 	}
-
-	tse_task_schedule(open_task, true);
+	rc = tse_task_schedule(open_task, true);
+	if (rc)
+		D_GOTO(err_ptask, rc);
 	return rc;
 
 err_put1:
@@ -248,8 +246,7 @@ dc_kv_close(tse_task_t *task)
 		D_GOTO(err_ptask, rc = -DER_NO_HDL);
 
 	/** Create task to close object */
-	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-			      0, NULL, &close_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task), 0, NULL, &close_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_close task\n");
 		D_GOTO(err_put1, rc);
@@ -272,7 +269,9 @@ dc_kv_close(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(close_task, true);
+	rc = tse_task_schedule(close_task, true);
+	if (rc)
+		D_GOTO(err_put1, rc);
 	return rc;
 err_put2:
 	tse_task_complete(close_task, rc);
@@ -297,8 +296,7 @@ dc_kv_destroy(tse_task_t *task)
 		D_GOTO(err_ptask, rc = -DER_NO_HDL);
 
 	/** Create task to punch object */
-	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH, tse_task2sched(task),
-			      0, NULL, &punch_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH, tse_task2sched(task), 0, NULL, &punch_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_punch task\n");
 		D_GOTO(err_put1, rc);
@@ -317,9 +315,12 @@ dc_kv_destroy(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	tse_task_schedule(punch_task, true);
+	rc = tse_task_schedule(punch_task, true);
+	if (rc)
+		D_GOTO(err_put1, rc);
 	kv_decref(kv);
 	return rc;
+
 err_put2:
 	tse_task_complete(punch_task, rc);
 err_put1:
@@ -355,7 +356,7 @@ dc_kv_put(tse_task_t *task)
 	daos_kv_put_t		*args = daos_task_get_args(task);
 	struct dc_kv		*kv = NULL;
 	daos_obj_update_t	*update_args;
-	tse_task_t		*update_task = NULL;
+	tse_task_t		*update_task;
 	struct io_params	*params = NULL;
 	int			rc;
 
@@ -386,8 +387,7 @@ dc_kv_put(tse_task_t *task)
 	params->sgl.sg_iovs = &params->iov;
 	d_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf, args->buf_size);
 
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
-			      0, NULL, &update_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &update_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -400,25 +400,25 @@ dc_kv_put(tse_task_t *task)
 	update_args->iods	= &params->iod;
 	update_args->sgls	= &params->sgl;
 
-	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_utask, rc);
 
 	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_utask, rc);
 
 	rc = tse_task_schedule(update_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 	kv_decref(kv);
 	return 0;
+
+err_utask:
+	tse_task_complete(update_task, rc);
 err_task:
-	D_FREE(params);
-	if (update_task)
-		tse_task_complete(update_task, rc);
 	tse_task_complete(task, rc);
+	D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;
@@ -430,7 +430,7 @@ dc_kv_get(tse_task_t *task)
 	daos_kv_get_t		*args = daos_task_get_args(task);
 	struct dc_kv		*kv = NULL;
 	daos_obj_fetch_t	*fetch_args;
-	tse_task_t		*fetch_task = NULL;
+	tse_task_t		*fetch_task;
 	struct io_params	*params = NULL;
 	void			*buf;
 	daos_size_t		*buf_size;
@@ -472,8 +472,7 @@ dc_kv_get(tse_task_t *task)
 		params->sgl.sg_nr = 1;
 	}
 
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
-			      0, NULL, &fetch_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL, &fetch_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -487,30 +486,29 @@ dc_kv_get(tse_task_t *task)
 	if (buf && *buf_size)
 		fetch_args->sgls = &params->sgl;
 
-	rc = tse_task_register_comp_cb(fetch_task, set_size_cb, &buf_size,
-					sizeof(buf_size));
+	rc = tse_task_register_comp_cb(fetch_task, set_size_cb, &buf_size, sizeof(buf_size));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ftask, rc);
 
-	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ftask, rc);
 
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ftask, rc);
 
 	rc = tse_task_schedule(fetch_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 	kv_decref(kv);
 	return 0;
+
+err_ftask:
+	tse_task_complete(fetch_task, rc);
 err_task:
-	D_FREE(params);
-	if (fetch_task)
-		tse_task_complete(fetch_task, rc);
 	tse_task_complete(task, rc);
+	D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;
@@ -522,7 +520,7 @@ dc_kv_remove(tse_task_t *task)
 	daos_kv_remove_t	*args = daos_task_get_args(task);
 	struct dc_kv		*kv = NULL;
 	daos_obj_punch_t	*punch_args;
-	tse_task_t		*punch_task = NULL;
+	tse_task_t		*punch_task;
 	struct io_params	*params = NULL;
 	int			rc;
 
@@ -540,8 +538,7 @@ dc_kv_remove(tse_task_t *task)
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
-	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, tse_task2sched(task),
-			      0, NULL, &punch_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, tse_task2sched(task), 0, NULL, &punch_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -553,25 +550,25 @@ dc_kv_remove(tse_task_t *task)
 	punch_args->akeys	= NULL;
 	punch_args->akey_nr	= 0;
 
-	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
-				       sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ptask, rc);
 
 	rc = tse_task_register_deps(task, 1, &punch_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ptask, rc);
 
 	rc = tse_task_schedule(punch_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 	kv_decref(kv);
 	return 0;
+
+err_ptask:
+	tse_task_complete(punch_task, rc);
 err_task:
-	D_FREE(params);
-	if (punch_task)
-		tse_task_complete(punch_task, rc);
 	tse_task_complete(task, rc);
+	D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;
@@ -583,15 +580,14 @@ dc_kv_list(tse_task_t *task)
 	daos_kv_list_t		*args = daos_task_get_args(task);
 	struct dc_kv		*kv = NULL;
 	daos_obj_list_dkey_t	*list_args;
-	tse_task_t		*list_task = NULL;
+	tse_task_t		*list_task;
 	int			rc;
 
 	kv = kv_hdl2ptr(args->oh);
 	if (kv == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
-			      0, NULL, &list_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task), 0, NULL, &list_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -605,16 +601,17 @@ dc_kv_list(tse_task_t *task)
 
 	rc = tse_task_register_deps(task, 1, &list_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D_GOTO(err_ltask, rc);
 
 	rc = tse_task_schedule(list_task, true);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 	kv_decref(kv);
 	return 0;
+
+err_ltask:
+	tse_task_complete(list_task, rc);
 err_task:
-	if (list_task)
-		tse_task_complete(list_task, rc);
 	tse_task_complete(task, rc);
 	if (kv)
 		kv_decref(kv);

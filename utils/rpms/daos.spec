@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,6 @@ BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
-BuildRequires: lmdb-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
@@ -553,7 +552,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-1
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
 - Removed unnecessary test files
 
 * Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
