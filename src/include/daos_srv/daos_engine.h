@@ -192,11 +192,8 @@ dss_current_xstream(void)
  * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
  * won't return).
  */
-static inline bool
-dss_srv_shutting_down(void)
-{
-	return dss_get_module_info()->dmi_srv_shutting_down;
-}
+bool
+dss_srv_shutting_down(void);
 
 /**
  * Module facility feature bits
