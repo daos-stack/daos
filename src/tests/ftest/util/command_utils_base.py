@@ -840,7 +840,7 @@ class EnvironmentVariables(dict):
             list: a list of environment variable assignment (key=value) strings
         """
         return [
-            key if value is None else "{}={}".format(key, value)
+            key if value is None else "{}=\"{}\"".format(key, value)
             for key, value in list(self.items())
         ]
 
