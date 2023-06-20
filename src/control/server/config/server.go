@@ -31,7 +31,7 @@ import (
 const (
 	defaultRuntimeDir   = "/var/run/daos_server"
 	defaultConfigPath   = "../etc/daos_server.yml"
-	configOut           = ".daos_server.active.yml"
+	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
@@ -399,7 +399,7 @@ func (cfg *Server) SetPath(inPath string) error {
 
 // SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
 func (cfg *Server) SaveActiveConfig(log logging.Logger) {
-	activeConfig := filepath.Join(cfg.SocketDir, configOut)
+	activeConfig := filepath.Join(cfg.SocketDir, ConfigOut)
 
 	if err := cfg.SaveToFile(activeConfig); err != nil {
 		log.Debugf("active config could not be saved: %s", err.Error())
@@ -638,6 +638,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
 		return FaultConfigControlMetadataNoPath
+	}
+
+	if cfg.SystemRamReserved <= 0 {
+		return FaultConfigSysRsvdZero
 	}
 
 	// A config without engines is valid when initially discovering hardware prior to adding

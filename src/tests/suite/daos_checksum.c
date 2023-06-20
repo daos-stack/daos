@@ -1327,9 +1327,6 @@ dtx_with_csum(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	/* Skipping test because of DAOS-6381 */
-	skip();
-
 	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
 		skip();
 

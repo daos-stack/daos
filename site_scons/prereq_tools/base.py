@@ -43,8 +43,6 @@ from SCons.Script import WhereIs
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
 
-OPTIONAL_COMPS = ['psm2']
-
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -443,7 +441,6 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
-        opts.Add(ListVariable('INCLUDE', "Optional components to build", 'none', OPTIONAL_COMPS))
         opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
                               PathVariable.PathIsDirCreate))
         opts.Add('ALT_PREFIX', f'Specifies {os.pathsep} separated list of alternative paths to add',
@@ -531,7 +528,7 @@ class PreReqComponent():
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c', 'capstone']
-        server_reqs = ['pmdk', 'spdk', 'lmdb']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -813,8 +810,6 @@ class PreReqComponent():
     def included(self, *comps):
         """Returns true if the components are included in the build"""
         for comp in comps:
-            if comp not in OPTIONAL_COMPS:
-                continue
             if not set([comp, 'all']).intersection(set(self.include)):
                 return False
         return True

@@ -71,7 +71,8 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST",
+		"D_POLL_TIMEOUT"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -525,8 +526,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		return;
 
 	/* rxm and verbs providers only works with regular EP */
-	if (prov != CRT_PROV_OFI_PSM2 &&
-	    prov != CRT_PROV_OFI_SOCKETS &&
+	if (prov != CRT_PROV_OFI_SOCKETS &&
 	    crt_provider_is_sep(primary, prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
@@ -542,13 +542,6 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
 			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
 
-	}
-
-	/* Print notice that "ofi+psm2" will be deprecated*/
-	if (prov == CRT_PROV_OFI_PSM2) {
-		D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
-		setenv("FI_PSM2_NAME_SERVER", "1", true);
-		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 	}
 
 	if (prov == CRT_PROV_OFI_CXI)
@@ -1004,19 +997,6 @@ crt_get_port_opx(int *port)
 	return rc;
 }
 
-static inline int
-crt_get_port_psm2(int *port)
-{
-	int		rc = 0;
-	uint16_t	pid;
-
-	pid = getpid();
-	*port = (pid << 8);
-	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
-
-	return rc;
-}
-
 #define PORT_RANGE_STR_SIZE 32
 
 static void
@@ -1173,9 +1153,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			    provider == CRT_PROV_OFI_TCP_RXM)
 				crt_port_range_verify(port);
 
-			if (provider == CRT_PROV_OFI_PSM2)
-				port = (uint16_t)port << 8;
-
 			if (provider == CRT_PROV_OFI_CXI && port_auto_adjust) {
 				if (port > 511) {
 					D_WARN("Port=%d outside of valid range 0-511, "
@@ -1186,12 +1163,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			}
 
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
-		}
-	} else if (provider == CRT_PROV_OFI_PSM2) {
-		rc = crt_get_port_psm2(&port);
-		if (rc != 0) {
-			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
 		}
 	} else if (provider == CRT_PROV_OFI_OPX) {
 		rc = crt_get_port_opx(&port);

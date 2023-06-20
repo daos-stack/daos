@@ -41,7 +41,7 @@
 
     <property>
         <name>fs.contract.supports-append</name>
-        <value>false</value>
+        <value>true</value>
     </property>
 
     <property>

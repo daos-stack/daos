@@ -408,7 +408,7 @@ struct obj_auxi_args {
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
-	uint64_t			dkey_hash;
+	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */

@@ -480,7 +480,7 @@ wal_kv_large(void **state)
 
 	/* Update small EV/SV, large EV/SV (located on data blob) */
 	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get());
+	rc = umem_tx_begin(umm, vos_txd_get(true));
 	assert_rc_equal(rc, 0);
 
 	epoch = epc_lo;
@@ -500,7 +500,7 @@ wal_kv_large(void **state)
 
 	/* Verify all values */
 	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get());
+	rc = umem_tx_begin(umm, vos_txd_get(true));
 	assert_rc_equal(rc, 0);
 
 	epoch = epc_lo;
