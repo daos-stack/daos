@@ -34,9 +34,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	oh->doh_linear_read = false;
 
-	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
+	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->di_eqt_idx, 1);
 
-	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
+	eqt = &fs_handle->di_eqt[eqt_idx % fs_handle->di_eq_count];
 
 	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
