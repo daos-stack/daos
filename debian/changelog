@@ -1,3 +1,9 @@
+daos (2.3.108-2) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Remove lmdb-devel for MD on SSD
+
+ -- Wang Shilong <shilong.wang@intel.com> Wed, 14 Jun 2023 07:58:00 -0600
+
 daos (2.3.108-1) unstable; urgency=medium
     [ Jeff Olivier ]
     * Bump version to 2.3.108
