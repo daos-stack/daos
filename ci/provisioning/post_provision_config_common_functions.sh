@@ -266,6 +266,25 @@ post_provision_config_nodes() {
 
     lsb_release -a
 
+    if [ -n "$INST_REPOS" ]; then
+        local repo
+        for repo in $INST_REPOS; do
+            branch="master"
+            build_number="lastSuccessfulBuild"
+            if [[ $repo = *@* ]]; then
+                branch="${repo#*@}"
+                repo="${repo%@*}"
+                if [[ $branch = *:* ]]; then
+                    build_number="${branch#*:}"
+                    branch="${branch%:*}"
+                fi
+            fi
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            dnf -y config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
+        done
+    fi
+
     # start with everything fully up-to-date
     # all subsequent package installs beyond this will install the newest packages
     # but we need some hacks for images with MOFED already installed
@@ -285,24 +304,6 @@ post_provision_config_nodes() {
         install_mofed
     fi
 
-    if [ -n "$INST_REPOS" ]; then
-        local repo
-        for repo in $INST_REPOS; do
-            branch="master"
-            build_number="lastSuccessfulBuild"
-            if [[ $repo = *@* ]]; then
-                branch="${repo#*@}"
-                repo="${repo%@*}"
-                if [[ $branch = *:* ]]; then
-                    build_number="${branch#*:}"
-                    branch="${branch%:*}"
-                fi
-            fi
-            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf -y config-manager --add-repo="${repo_url}"
-            disable_gpg_check "$repo_url"
-        done
-    fi
     inst_rpms=()
     if [ -n "$INST_RPMS" ]; then
         eval "inst_rpms=($INST_RPMS)"
