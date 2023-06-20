@@ -152,18 +152,25 @@ class RemoteCommandResult():
 
         """
         for data in self.output:
-            if data.timeout and len(data.stdout) == 1:
-                log.debug(
-                    "  %s (rc=%s) timed out: %s", str(data.hosts), data.returncode, data.stdout[0])
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            elif data.timeout:
-                log.debug("  %s (rc=%s) timed out:", str(data.hosts), data.returncode)
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-            if len(data.stdout) > 1:
-                for line in data.stdout:
-                    log.debug("    %s", line)
+            log_result_data(log, data)
+
+
+def log_result_data(log, data):
+    """Log a single command result data entry.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        data (ResultData): command result common to a set of hosts
+    """
+    info = " timed out" if data.timeout else ""
+    if not data.stdout:
+        log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
+    elif len(data.stdout) == 1:
+        log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
+    else:
+        log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
+        for line in data.stdout:
+            log.debug("    %s", line)
 
 
 def get_switch_user(user="root"):

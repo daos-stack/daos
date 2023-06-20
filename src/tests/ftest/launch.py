@@ -887,9 +887,8 @@ class Launch():
             try:
                 logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.xml file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.xml file: %s", str(error))
             else:
                 if not os.path.exists(results_xml_path):
                     logger.error("results.xml does not exist: %s", results_xml_path)
@@ -899,9 +898,8 @@ class Launch():
             try:
                 logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.html file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.html file: %s", str(error))
             else:
                 if not os.path.exists(results_html_path):
                     logger.error("results.html does not exist: %s", results_html_path)
