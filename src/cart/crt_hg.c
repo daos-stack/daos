@@ -655,7 +655,7 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	strcpy(domain_name, domain);
+	strncpy(domain_name, domain, 9);
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
 	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
