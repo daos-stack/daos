@@ -451,5 +451,32 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to query %s", cmd.Path)
 	}
 
+	if cmd.shouldEmitJSON {
+		type CopyStats struct {
+			NumInodes      uint64 `json:"inodes"`
+			NumFileHandles uint64 `json:"files"`
+			NumPools       uint64 `json:"pools"`
+			NumContainers  uint64 `json:"containers"`
+		}
+
+		return cmd.outputJSON(struct {
+			CopyStats CopyStats `json:"copy_stats"`
+		}{
+			CopyStats{
+				uint64(ap.dfuse_mem.inode_count),
+				uint64(ap.dfuse_mem.fh_count),
+				uint64(ap.dfuse_mem.pool_count),
+				uint64(ap.dfuse_mem.container_count),
+			},
+		}, nil)
+
+	}
+
+	cmd.Infof("DFuse descriptor usage")
+	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
+
 	return nil
 }

@@ -41,8 +41,6 @@
 
 #include "daos_hdlr.h"
 
-#include "dfuse_ioctl.h"
-
 struct file_dfs {
 	enum {POSIX, DAOS} type;
 	int fd;
@@ -2448,13 +2446,10 @@ dfuse_count_query(struct cmd_args_s *ap)
 		goto close;
 	}
 
-	fprintf(ap->outstream,
-		"Dfuse memory usage\n"
-		"inodes: %" PRIu64 "\n"
-		"file handles: %" PRIu64 "\n"
-		"pools: %" PRIu64 "\n"
-		"containers: %" PRIu64 "\n",
-		query.inode_count, query.fh_count, query.pool_count, query.container_count);
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
 
 close:
 	close(fd);

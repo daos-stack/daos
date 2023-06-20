@@ -2566,6 +2566,10 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, ['filesystem', 'memquery', '--path', self.dfuse.dir])
         print(rc)
         assert rc.returncode == 0
+        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery',
+                          '--path', self.dfuse.dir], use_json=True)
+        print(rc)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_uns_link(self):
