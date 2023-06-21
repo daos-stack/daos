@@ -16,10 +16,10 @@ Download DAOS source code using the following command:
 
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To checkout the 2.4 development branch, simply run:
+To checkout the 2.4 branch, simply run:
 
 ```
-$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules --branch release/2.4 https://github.com/daos-stack/daos.git
 $ cd daos
 ```
 

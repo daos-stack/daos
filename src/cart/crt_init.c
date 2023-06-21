@@ -7,16 +7,16 @@
  * This file is part of CaRT. It implements CaRT init and finalize related
  * APIs/handling.
  */
-
 #include <malloc.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "crt_internal.h"
 
-struct crt_gdata crt_gdata;
-static volatile int   gdata_init_flag;
+struct crt_gdata	crt_gdata;
+static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
+static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -71,7 +71,7 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -98,7 +98,7 @@ dump_opt(crt_init_options_t *opt)
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
 		   char *interface, char *domain, char *port,
-		   char *auth_key);
+		   char *auth_key, bool port_auto_adjust);
 
 /* Workaround for CART-890 */
 static void
@@ -168,7 +168,10 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	/* Set max number of contexts. Defaults to the number of cores */
 	ctx_num = 0;
 	d_getenv_int("CRT_CTX_NUM", &ctx_num);
-	max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	if (opt)
+		max_num_ctx = ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
+	else
+		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
@@ -237,7 +240,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
-	uint32_t	mrc_enable = 0;
 	uint32_t	is_secondary;
 	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
@@ -310,12 +312,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (fi_univ_size == 0) {
 		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
-	}
-
-	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
-	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	if (credits == 0) {
@@ -506,15 +502,30 @@ out:
 	return rc;
 }
 
-static int
+static void
+apply_if_not_set(const char *env_name, const char *new_value)
+{
+	char *old_val;
+
+	old_val = getenv(env_name);
+
+	if (old_val == NULL) {
+		D_INFO("%s not set, setting to %s\n", env_name, new_value);
+		setenv(env_name, new_value, true);
+	}
+}
+
+static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
-	char	*srx_env;
-	int	rc = 0;
+	uint32_t mrc_enable = 0;
+
+	/* Avoid applying same settings multiple times */
+	if (g_prov_settings_applied[prov] == true)
+		return;
 
 	/* rxm and verbs providers only works with regular EP */
-	if (prov != CRT_PROV_OFI_PSM2 &&
-	    prov != CRT_PROV_OFI_SOCKETS &&
+	if (prov != CRT_PROV_OFI_SOCKETS &&
 	    crt_provider_is_sep(primary, prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
@@ -523,23 +534,29 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
+		/* Use shared receive queues to avoid large mem consumption */
+		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
 
-		srx_env = getenv("FI_OFI_RXM_USE_SRX");
-		if (srx_env == NULL) {
-			D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
-			setenv("FI_OFI_RXM_USE_SRX", "1", true);
-		}
+		/* Only apply on the server side */
+		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
+			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
+
 	}
 
-	/* Print notice that "ofi+psm2" will be deprecated*/
-	if (prov == CRT_PROV_OFI_PSM2) {
-		D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
-		setenv("FI_PSM2_NAME_SERVER", "1", true);
-		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
+	if (prov == CRT_PROV_OFI_CXI)
+		mrc_enable = 1;
+	else {
+		/* Use tagged messages for other providers, disable multi-recv */
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
 	}
 
+	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	if (mrc_enable == 0) {
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+	}
 
-	return rc;
+	g_prov_settings_applied[prov] = true;
 }
 
 int
@@ -564,6 +581,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char		*iface0, *iface1, *domain0, *domain1;
 	char		*auth_key0, *auth_key1;
 	int		num_secondaries = 0;
+	bool		port_auto_adjust = false;
 	int		i;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
@@ -669,12 +687,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				domain_env = tmp;
 		}
 
-		if (domain_env == NULL) {
-			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface_env);
-			domain_env = interface_env;
-		}
-
-
 		if (opt && opt->cio_port)
 			port_str = opt->cio_port;
 		else {
@@ -684,6 +696,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			if (tmp)
 				port_str = tmp;
 		}
+
+		d_getenv_bool("D_PORT_AUTO_ADJUST", &port_auto_adjust);
 
 		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
 		if (rc != 0)
@@ -724,7 +738,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_primary_prov = primary_provider;
 
 		rc = crt_na_config_init(true, primary_provider, iface0, domain0,
-					port0, auth_key0);
+					port0, auth_key0, port_auto_adjust);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(unlock, rc);
@@ -760,7 +774,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			prov_settings_apply(false, tmp_prov, opt);
 
 			rc = crt_na_config_init(false, tmp_prov, iface1, domain1,
-						port1, auth_key1);
+						port1, auth_key1, port_auto_adjust);
 			if (rc != 0) {
 				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 				D_GOTO(cleanup, rc);
@@ -970,13 +984,13 @@ static inline bool is_integer_str(char *str)
 }
 
 static inline int
-crt_get_port_psm2(int *port)
+crt_get_port_opx(int *port)
 {
-	int		rc = 0;
-	uint16_t	pid;
+	int     rc = 0;
+	uint16_t    pid;
 
 	pid = getpid();
-	*port = (pid << 8);
+	*port = pid;
 	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
 
 	return rc;
@@ -1100,7 +1114,7 @@ out:
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
 		   char *interface, char *domain, char *port_str,
-		   char *auth_key)
+		   char *auth_key, bool port_auto_adjust)
 {
 	struct crt_na_config		*na_cfg;
 	int				rc = 0;
@@ -1138,17 +1152,25 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			    provider == CRT_PROV_OFI_TCP_RXM)
 				crt_port_range_verify(port);
 
-			if (provider == CRT_PROV_OFI_PSM2)
-				port = (uint16_t)port << 8;
+			if (provider == CRT_PROV_OFI_CXI && port_auto_adjust) {
+				if (port > 511) {
+					D_WARN("Port=%d outside of valid range 0-511, "
+					       "converting it to %d\n",
+					       port, port % 512);
+					port = port % 512;
+				}
+			}
+
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
 		}
-	} else if (provider == CRT_PROV_OFI_PSM2) {
-		rc = crt_get_port_psm2(&port);
+	} else if (provider == CRT_PROV_OFI_OPX) {
+		rc = crt_get_port_opx(&port);
 		if (rc != 0) {
 			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
 	}
+
 	na_cfg->noc_port = port;
 
 out:

@@ -31,6 +31,7 @@ struct migrate_pool_tls {
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
 	unsigned int		mpt_version;
+	unsigned int		mpt_generation;
 
 	/* Link to the migrate_pool_tls list */
 	d_list_t		mpt_list;
@@ -285,7 +286,35 @@ ds_obj_cpd_get_head_type(crt_rpc_t *rpc, int dtx_idx)
 
 	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
 
-	return dcs->dcs_type;
+	return dcs->dcs_type_base;
+}
+
+static inline uint32_t
+ds_obj_cpd_get_reqs_type(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
+		return DCST_UNKNOWN;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+
+	return dcs->dcs_type_base;
+}
+
+static inline uint32_t
+ds_obj_cpd_get_ents_type(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_ents.ca_count <= dtx_idx)
+		return DCST_UNKNOWN;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+
+	return dcs->dcs_type_base;
 }
 
 static inline struct daos_cpd_bulk *
@@ -298,14 +327,30 @@ ds_obj_cpd_get_head_bulk(crt_rpc_t *rpc, int dtx_idx)
 		return NULL;
 
 	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
-	if (dcs->dcs_type != DCST_BULK_HEAD)
+	if (dcs->dcs_type_base != DCST_BULK_HEAD)
 		return NULL;
 
 	return dcs->dcs_buf;
 }
 
 static inline struct daos_cpd_bulk *
-ds_obj_cpd_get_disp_bulk(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_reqs_bulk(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+	if (dcs->dcs_type_base != DCST_BULK_REQ)
+		return NULL;
+
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_bulk *
+ds_obj_cpd_get_ents_bulk(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;
@@ -314,7 +359,7 @@ ds_obj_cpd_get_disp_bulk(crt_rpc_t *rpc, int dtx_idx)
 		return NULL;
 
 	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
-	if (dcs->dcs_type != DCST_BULK_DISP)
+	if (dcs->dcs_type_base != DCST_BULK_ENT)
 		return NULL;
 
 	return dcs->dcs_buf;
@@ -330,14 +375,14 @@ ds_obj_cpd_get_tgts_bulk(crt_rpc_t *rpc, int dtx_idx)
 		return NULL;
 
 	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
-	if (dcs->dcs_type != DCST_BULK_TGT)
+	if (dcs->dcs_type_base != DCST_BULK_TGT)
 		return NULL;
 
 	return dcs->dcs_buf;
 }
 
 static inline struct daos_cpd_sub_head *
-ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_head(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;
@@ -347,7 +392,7 @@ ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
 
 	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
 
-	if (dcs->dcs_type == DCST_BULK_HEAD)
+	if (dcs->dcs_type_base == DCST_BULK_HEAD)
 		return &((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_head;
 
 	/* daos_cpd_sub_head is unique for a DTX. */
@@ -355,7 +400,7 @@ ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline struct daos_cpd_sub_req *
-ds_obj_cpd_get_dcsr(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_reqs(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;
@@ -365,8 +410,36 @@ ds_obj_cpd_get_dcsr(crt_rpc_t *rpc, int dtx_idx)
 
 	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
 
+	if (dcs->dcs_type_base == DCST_BULK_REQ)
+		return ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_reqs;
+
 	/* daos_cpd_sub_req array is shared by all tgts for a DTX. */
 	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_disp_ent *
+ds_obj_cpd_get_ents(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
+{
+	struct obj_cpd_in		*oci = crt_req_get(rpc);
+	struct daos_cpd_sg		*dcs;
+	struct daos_cpd_disp_ent	*dcde;
+
+	if (oci->oci_disp_ents.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+
+	if (dcs->dcs_type_base == DCST_BULK_ENT) {
+		if (ent_idx < 0)
+			ent_idx = dcs->dcs_dcde_idx;
+		dcde = ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_iov.iov_buf;
+	} else {
+		if (ent_idx < 0)
+			ent_idx = 0;
+		dcde = dcs->dcs_buf;
+	}
+
+	return dcde + ent_idx;
 }
 
 static inline struct daos_shard_tgt *
@@ -380,50 +453,14 @@ ds_obj_cpd_get_tgts(crt_rpc_t *rpc, int dtx_idx)
 
 	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
 
-	if (dcs->dcs_type == DCST_BULK_TGT)
+	if (dcs->dcs_type_base == DCST_BULK_TGT)
 		return ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_iov.iov_buf;
 
 	return dcs->dcs_buf;
 }
 
-static inline struct daos_cpd_disp_ent *
-ds_obj_cpd_get_dcde(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
-{
-	struct obj_cpd_in		*oci = crt_req_get(rpc);
-	struct daos_cpd_sg		*dcs;
-	struct daos_cpd_disp_ent	*dcde;
-
-	if (oci->oci_disp_ents.ca_count <= dtx_idx)
-		return NULL;
-
-	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
-
-	if (ent_idx >= dcs->dcs_nr)
-		return NULL;
-
-	if (dcs->dcs_type == DCST_BULK_DISP)
-		dcde = ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_iov.iov_buf;
-	else
-		dcde = dcs->dcs_buf;
-
-	return dcde + ent_idx;
-}
-
 static inline int
-ds_obj_cpd_get_dcsr_cnt(crt_rpc_t *rpc, int dtx_idx)
-{
-	struct obj_cpd_in	*oci = crt_req_get(rpc);
-	struct daos_cpd_sg	*dcs;
-
-	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
-		return -DER_INVAL;
-
-	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
-	return dcs->dcs_nr;
-}
-
-static inline int
-ds_obj_cpd_get_dcsh_cnt(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_head_cnt(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;
@@ -436,7 +473,20 @@ ds_obj_cpd_get_dcsh_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline int
-ds_obj_cpd_get_dcde_cnt(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_reqs_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
+		return -DER_INVAL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
+
+static inline int
+ds_obj_cpd_get_ents_cnt(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;
@@ -449,7 +499,7 @@ ds_obj_cpd_get_dcde_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline int
-ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
+ds_obj_cpd_get_tgts_cnt(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
 	struct daos_cpd_sg	*dcs;

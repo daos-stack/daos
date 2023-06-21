@@ -7,7 +7,6 @@ from ior_test_base import IorTestBase
 
 
 class PoolTargetQueryTest(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To verify object is writing on expected pool targets based on
                             it's type.

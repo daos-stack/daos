@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,6 +25,21 @@
 #define		FORCE_CSUM 0x1001
 #define		FORCE_NO_ZERO_COPY 0x1002
 
+#define FOREACH_OTYPE(ACTION)                                                                      \
+	ACTION(DAOS_OT_MULTI_HASHED)                                                               \
+	ACTION(DAOS_OT_DKEY_UINT64)                                                                \
+	ACTION(DAOS_OT_AKEY_UINT64)                                                                \
+	ACTION(DAOS_OT_MULTI_UINT64)                                                               \
+	ACTION(DAOS_OT_DKEY_LEXICAL)                                                               \
+	ACTION(DAOS_OT_AKEY_LEXICAL)                                                               \
+	ACTION(DAOS_OT_MULTI_LEXICAL)
+
+#define OT_ENUM_VALUE(otype) otype,
+
+static int type_list[] = {FOREACH_OTYPE(OT_ENUM_VALUE)};
+
+#define OT_HELP_MESSAGE(otype) print_message("        %d: " #otype "\n", (otype));
+
 static void
 print_usage()
 {
@@ -32,8 +47,8 @@ print_usage()
 	print_message("vos_tests -p|--pool\n");
 	print_message("vos_tests -c|--container\n");
 	print_message("vos_tests -i|--io <otype>\n");
-	print_message("otypes = DAOS_OT_DKEY_UINT64, DAOS_OT_DKEY_LEXICAL\n");
-	print_message("%8s DAOS_OT_AKEY_UINT64, DAOS_OT_AKEY_LEXICAL\n", " ");
+	print_message("    otype:\n");
+	FOREACH_OTYPE(OT_HELP_MESSAGE);
 	print_message("vos_tests -d |--discard\n");
 	print_message("vos_tests -a |--aggregate\n");
 	print_message("vos_tests -X|--dtx\n");
@@ -42,6 +57,7 @@ print_usage()
 	print_message("vos_tests -A|--all <size>\n");
 	print_message("vos_tests -m|--punch_model\n");
 	print_message("vos_tests -C|--mvcc\n");
+	print_message("vos_tests -w|--wal\n");
 	print_message("vos_tests -r|--run_vos_cmd <command>\n");
 	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
@@ -53,52 +69,28 @@ print_usage()
 	print_message("  --force_no_zero_copy\n");
 }
 
-static int type_list[] = {
-	0,
-	DAOS_OT_AKEY_UINT64,
-	DAOS_OT_AKEY_LEXICAL,
-	DAOS_OT_DKEY_UINT64,
-	DAOS_OT_DKEY_LEXICAL,
-	DAOS_OT_MULTI_UINT64,
-	DAOS_OT_MULTI_LEXICAL
-};
-
 static inline int
-run_all_tests(int keys, bool nest_iterators)
+run_all_tests(int keys)
 {
-	const char	*it;
 	char		 cfg_desc_io[DTS_CFG_MAX];
-	int		 failed = 0;
-	int		 i;
-
-	if (!nest_iterators) {
-		dts_create_config(cfg_desc_io, "keys=%d", keys);
-		failed += run_ts_tests(cfg_desc_io);
-		failed += run_mvcc_tests(cfg_desc_io);
-	}
+	int              failed = 0;
 
 	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
-	if (nest_iterators == false) {
-		failed += run_pm_tests(cfg_desc_io);
-		failed += run_pool_test(cfg_desc_io);
-		failed += run_co_test(cfg_desc_io);
-		failed += run_discard_tests(cfg_desc_io);
-		failed += run_aggregate_tests(false, cfg_desc_io);
-		failed += run_gc_tests(cfg_desc_io);
-		failed += run_dtx_tests(cfg_desc_io);
-		failed += run_ilog_tests(cfg_desc_io);
-		failed += run_csum_extent_tests(cfg_desc_io);
+	failed += run_ts_tests(cfg_desc_io);
+	failed += run_mvcc_tests(cfg_desc_io);
+	failed += run_pm_tests(cfg_desc_io);
+	failed += run_pool_test(cfg_desc_io);
+	failed += run_co_test(cfg_desc_io);
+	failed += run_discard_tests(cfg_desc_io);
+	failed += run_aggregate_tests(false, cfg_desc_io);
+	failed += run_gc_tests(cfg_desc_io);
+	failed += run_dtx_tests(cfg_desc_io);
+	failed += run_ilog_tests(cfg_desc_io);
+	failed += run_csum_extent_tests(cfg_desc_io);
+	failed += run_wal_tests(cfg_desc_io);
 
-		it = "standalone";
-	} else {
-		it = "nested";
-	}
-	dts_create_config(cfg_desc_io, "keys=%d iterator=%s", keys, it);
-
-	for (i = 0; i < (sizeof(type_list) / sizeof(int)); i++) {
-		failed += run_io_test(type_list[i], keys, nest_iterators, cfg_desc_io);
-	}
+	failed += run_io_test(&type_list[0], ARRAY_SIZE(type_list), keys, cfg_desc_io);
 
 	return failed;
 }
@@ -110,18 +102,16 @@ main(int argc, char **argv)
 	int	nr_failed = 0;
 	int	opt = 0;
 	int	index = 0;
-	int	otypes;
-	int	keys;
-	bool	nest_iterators = false;
+	int                  otype;
+	int                  keys;
 	const char          *vos_command    = NULL;
-	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCr:";
+	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwr:";
 	static struct option long_options[] = {
 	    {"all", required_argument, 0, 'A'},
 	    {"pool", no_argument, 0, 'p'},
 	    {"container", no_argument, 0, 'c'},
 	    {"io", required_argument, 0, 'i'},
 	    {"discard", no_argument, 0, 'd'},
-	    {"nest_iterators", no_argument, 0, 'n'},
 	    {"aggregate", no_argument, 0, 'a'},
 	    {"dtx", no_argument, 0, 'X'},
 	    {"punch_model", no_argument, 0, 'm'},
@@ -129,6 +119,7 @@ main(int argc, char **argv)
 	    {"ilog", no_argument, 0, 'l'},
 	    {"epoch_cache", no_argument, 0, 't'},
 	    {"mvcc", no_argument, 0, 'C'},
+	    {"wal", no_argument, 0, 'w'},
 	    {"csum", no_argument, 0, 'z'},
 	    {"run_vos_cmd", required_argument, 0, 'r'},
 	    {"help", no_argument, 0, 'h'},
@@ -202,7 +193,7 @@ main(int argc, char **argv)
 		strcpy(vos_path, "/mnt/daos");
 	}
 
-	rc = vos_self_init(vos_path, false, -1);
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc) {
 		print_error("Error initializing VOS instance\n");
 		goto exit_0;
@@ -228,14 +219,15 @@ main(int argc, char **argv)
 			vos_command = optarg;
 			test_run = true;
 			break;
-		case 'n':
-			nest_iterators = true;
-			break;
 		case 'i':
-			otypes = strtol(optarg, NULL, 16);
-			nr_failed += run_io_test(otypes, 0,
-						 nest_iterators,
-						 "");
+			otype = strtol(optarg, NULL, 10);
+			if (otype >= ARRAY_SIZE(type_list)) {
+				print_error("otype %d must be in range [0, %ld)\n\n", otype,
+					    ARRAY_SIZE(type_list));
+				print_usage();
+				goto exit_0;
+			}
+			nr_failed += run_io_test(&type_list[otype], 1, 0, "");
 			test_run = true;
 			break;
 		case 'a':
@@ -260,7 +252,7 @@ main(int argc, char **argv)
 			break;
 		case 'A':
 			keys = atoi(optarg);
-			nr_failed = run_all_tests(keys, nest_iterators);
+			nr_failed = run_all_tests(keys);
 			test_run = true;
 			break;
 		case 'l':
@@ -279,6 +271,10 @@ main(int argc, char **argv)
 			nr_failed += run_mvcc_tests("");
 			test_run = true;
 			break;
+		case 'w':
+			nr_failed += run_wal_tests("");
+			test_run = true;
+			break;
 		case 'S':
 		case 'f':
 		case 'e':
@@ -295,7 +291,7 @@ main(int argc, char **argv)
 
 	/** options didn't include specific tests, just run them all */
 	if (!test_run)
-		nr_failed = run_all_tests(0, false);
+		nr_failed = run_all_tests(0);
 
 	if (vos_command != NULL)
 		nr_failed += run_vos_command(argv[0], vos_command);

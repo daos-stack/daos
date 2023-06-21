@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,6 +27,10 @@ func dfsError(rc C.int) error {
 }
 
 type fsCmd struct {
+	Check          fsCheckCmd          `command:"check" description:"Run the DFS Checker on the container"`
+	FixSB          fsFixSBCmd          `command:"fix-sb" description:"Recreate / Fix the SB on the container"`
+	FixRoot        fsFixRootCmd        `command:"fix-root" description:"Relink root object in the container"`
+	FixEntry       fsFixEntryCmd       `command:"fix-entry" description:"Fix Entries in case the type or chunk size were corrupted"`
 	Copy           fsCopyCmd           `command:"copy" description:"copy to and from a POSIX filesystem"`
 	SetAttr        fsSetAttrCmd        `command:"set-attr" description:"set fs attributes"`
 	GetAttr        fsGetAttrCmd        `command:"get-attr" description:"get fs attributes"`
@@ -108,7 +112,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 type fsAttrCmd struct {
 	existingContainerCmd
 
-	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container, when using pool and container instead of --path and the UNS"`
+	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container (required when using pool and container instead of --path)"`
 	DfsPrefix string `long:"dfs-prefix" short:"I" description:"Optional prefix path to the root of the DFS container when using pool and container"`
 }
 
@@ -118,12 +122,21 @@ func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
 		return nil, nil, err
 	}
 
+	if cmd.DfsPath == "" && cmd.Path == "" {
+		deallocCmdArgs()
+		return nil, nil, errors.New("If not using --path, --dfs-path must be specified along with pool/container IDs")
+	}
 	if cmd.DfsPath != "" {
 		if cmd.Path != "" {
 			deallocCmdArgs()
 			return nil, nil, errors.New("Cannot use both --dfs-path and --path")
 		}
 		ap.dfs_path = C.CString(cmd.DfsPath)
+	} else {
+		if cmd.Path == "" {
+			deallocCmdArgs()
+			return nil, nil, errors.New("--dfs-path is required if not using --path")
+		}
 	}
 	if cmd.DfsPrefix != "" {
 		if cmd.Path != "" {
@@ -262,6 +275,156 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
+
+	return nil
+}
+
+type fsCheckCmd struct {
+	existingContainerCmd
+
+	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, verify, evict"`
+	DirName   string      `long:"dir-name" short:"n" description:"directory name under lost+found to store leaked oids (a timestamp dir would be created if this is not specified)"`
+	Evict     bool        `long:"evict" short:"e" description:"evict all open handles on the container"`
+}
+
+func (cmd *fsCheckCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	if err := cmd.resolveContainer(ap); err != nil {
+		return err
+	}
+
+	cleanupPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanupPool()
+
+	var dirName *C.char
+	if cmd.DirName != "" {
+		dirName = C.CString(cmd.DirName)
+		defer freeString(dirName)
+	}
+
+	rc := C.dfs_cont_check(cmd.cPoolHandle, &ap.cont_str[0], cmd.FsckFlags.Flags, dirName)
+	if err := dfsError(rc); err != nil {
+		return errors.Wrapf(err, "failed fs check")
+	}
+	return nil
+}
+
+type fsFixEntryCmd struct {
+	fsAttrCmd
+
+	ChunkSize ChunkSizeFlag `long:"chunk-size" short:"z" description:"actual file chunk size used when creating the file"`
+	Type      bool          `long:"type" short:"t" description:"check the object of the entry and fix the entry type accordingly"`
+}
+
+func (cmd *fsFixEntryCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	flags := C.uint(C.DAOS_COO_EX)
+
+	ap.fs_op = C.FS_CHECK
+	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed fs fix-entry")
+	}
+	defer cleanup()
+
+	ap.chunk_size = 0
+	if cmd.ChunkSize.Set {
+		ap.chunk_size = cmd.ChunkSize.Size
+	}
+
+	if err := dfsError(C.fs_fix_entry_hdlr(ap, C.bool(cmd.Type))); err != nil {
+		return errors.Wrapf(err, "failed filesystem fix-entry")
+	}
+
+	return nil
+}
+
+type fsFixSBCmd struct {
+	existingContainerCmd
+
+	Mode            ConsModeFlag  `long:"mode" short:"M" description:"DFS consistency mode"`
+	ChunkSize       ChunkSizeFlag `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass     ObjClassFlag  `long:"oclass" short:"o" description:"default object class"`
+	DirObjectClass  ObjClassFlag  `long:"dir-oclass" short:"D" description:"default directory object class"`
+	FileObjectClass ObjClassFlag  `long:"file-oclass" short:"F" description:"default file object class"`
+	CHints          string        `long:"hints" short:"H" description:"container hints"`
+}
+
+func (cmd *fsFixSBCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.fs_op = C.FS_CHECK
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if cmd.ChunkSize.Set {
+		ap.chunk_size = cmd.ChunkSize.Size
+	}
+	if cmd.ObjectClass.Set {
+		ap.oclass = cmd.ObjectClass.Class
+	}
+	if cmd.DirObjectClass.Set {
+		ap.dir_oclass = cmd.DirObjectClass.Class
+	}
+	if cmd.FileObjectClass.Set {
+		ap.file_oclass = cmd.FileObjectClass.Class
+	}
+	if cmd.Mode.Set {
+		ap.mode = cmd.Mode.Mode
+	}
+	if cmd.CHints != "" {
+		ap.hints = C.CString(cmd.CHints)
+		defer freeString(ap.hints)
+	}
+
+	if err := dfsError(C.fs_recreate_sb_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "Recreate SB failed")
+	}
+
+	return nil
+}
+
+type fsFixRootCmd struct {
+	existingContainerCmd
+}
+
+func (cmd *fsFixRootCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.fs_op = C.FS_CHECK
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_relink_root_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "Relink Root failed")
+	}
 
 	return nil
 }

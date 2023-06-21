@@ -1,4 +1,3 @@
-#!/bin/env python
 """Build DAOS SPDK Go bindings"""
 from os.path import join
 
@@ -10,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    senv.require('pmdk', 'spdk', 'ofi')
     if senv["CC"] == 'icx':
         # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"

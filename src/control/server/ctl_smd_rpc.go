@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	uuid "github.com/google/uuid"
@@ -78,27 +77,6 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 					rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
 					found = true
 					break
-				}
-			}
-			if !found {
-				rResp.Devices = nil
-			}
-		}
-
-		if req.Target != "" {
-			reqTgtID, err := strconv.ParseInt(req.Target, 10, 32)
-			if err != nil {
-				return errors.Errorf("invalid target idx %q", req.Target)
-			}
-
-			found := false
-			for _, dev := range rResp.Devices {
-				for _, tgtID := range dev.Details.TgtIds {
-					if int32(reqTgtID) == tgtID {
-						rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
-						found = true
-						break
-					}
 				}
 			}
 			if !found {
@@ -200,9 +178,6 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 
 	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {
 		return nil, errors.New("UUID is ambiguous when querying both pools and devices")
-	}
-	if req.Target != "" && req.Rank == uint32(ranklist.NilRank) {
-		return nil, errors.New("Target is invalid without Rank")
 	}
 
 	resp := new(ctlpb.SmdQueryResp)

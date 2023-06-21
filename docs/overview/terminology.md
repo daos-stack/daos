@@ -50,4 +50,4 @@
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|
 |UUID|Universal Unique Identifier|
-|[VOS](https://github.com/daos-stack/daos/blob/master/src/vos/README.md)|Versioning Object Store|
+|[VOS](https://github.com/daos-stack/daos/blob/release/2.4/src/vos/README.md)|Versioning Object Store|

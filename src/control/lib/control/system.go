@@ -46,6 +46,14 @@ var (
 	errMSConnectionFailure = errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 )
 
+// IsMSConnectionFailure checks whether the error is an MS connection failure.
+func IsMSConnectionFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Cause(err).Error() == errMSConnectionFailure.Error()
+}
+
 type sysRequest struct {
 	Ranks ranklist.RankSet
 	Hosts hostlist.HostSet
@@ -129,9 +137,10 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank      ranklist.Rank
-	State     system.MemberState
-	LocalJoin bool
+	Rank       ranklist.Rank
+	State      system.MemberState
+	LocalJoin  bool
+	MapVersion uint32 `json:"map_version"`
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.

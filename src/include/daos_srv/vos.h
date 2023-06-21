@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -194,15 +194,13 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  * Establish the indexed committed DTX table in DRAM.
  *
  * \param coh	[IN]		Container open handle.
- * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
- *				contains committed DTX entries to be handled.
  *
  * \return	Zero on success, need further re-index.
  *		Positive, re-index is completed.
  *		Negative value if error.
  */
 int
-vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+vos_dtx_cmt_reindex(daos_handle_t coh);
 
 /**
  * Cleanup local DTX when local modification failed.
@@ -261,6 +259,24 @@ vos_self_fini(void);
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
+ *
+ * \return              Zero on success, negative value if error
+ */
+int
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		   daos_size_t blob_sz, daos_size_t wal_sz,
+		   unsigned int flags, daos_handle_t *poh);
+/**
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
+ *
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param scm_sz [IN]	Size of SCM for the pool
+ * \param blob_sz[IN]	Size of blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
@@ -275,11 +291,24 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
  * \param uuid		[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid);
+vos_pool_kill(uuid_t uuid, unsigned int flags);
+
+/**
+ * Destroy a Versioned Object Storage Pool (VOSP)
+ *
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -682,6 +711,18 @@ int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
+ * Delete an object in OI table, this object is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data migration protocol.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	ID of the object being deleted
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid);
+
+/**
  * Delete a dkey or akey, the key is unaccessible at any epoch after deletion.
  * This function is not part of DAOS data model API, it is only used by data
  * migration protocol and system database.
@@ -801,6 +842,15 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth);
+
+/**
+ * Renew the epoch for the update handle.
+ *
+ * \param ioh	[IN]	The I/O handle for update.
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.
@@ -1035,6 +1085,21 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * When the callback executes code that may yield, in some cases, it needs to
+ * verify the value or key it is operating on still exists before continuing.
+ * This function will revalidate from the object layer down.   This is only
+ * supported in conjunction with recursive vos_iterate from VOS_ITER_OBJ.
+ *
+ * \param[in]	ih	The iterator handle
+ *
+ * \return		0 if iterator value is valid
+ *			VOS_ITER_* level that needs probe
+ *			<0 on error
+ */
+int
+vos_iter_validate(daos_handle_t ih);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
@@ -1157,6 +1222,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_RESET_GC,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
+	/** Set space reserve ratio for rebuild */
+	VOS_PO_CTL_SET_SPACE_RB,
 };
 
 /**
@@ -1217,6 +1284,47 @@ int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
+typedef void (*vos_chkpt_update_cb_t)(void *arg, uint64_t commit_id, uint32_t used_blocks,
+				      uint32_t total_blocks);
+typedef void (*vos_chkpt_wait_cb_t)(void *arg, uint64_t chkpt_id, uint64_t *committed_id);
+/**
+ * Initialize checkpointing callbacks, retrieve the store.  Function will invoke commit_cb and
+ * reserve_cb to initialize values.
+ *
+ * \param[in]	poh		Open pool handle
+ * \param[in]	update_cb	Callback to invoke after wal changes
+ * \param[in]	arg		Callback argument
+ * \param[out]	store		Return the umem_store associated with the pool
+ */
+void
+vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
+			 vos_chkpt_wait_cb_t wait_cb, void *arg, struct umem_store **store);
+
+/**
+ * Clears saved checkpoint callbacks to avoid any race on shutdown
+ *
+ * \param[in]	poh	Open pool handle
+ */
+void
+vos_pool_checkpoint_fini(daos_handle_t poh);
+
+/**
+ * Returns true if checkpointing is needed for the pool
+ *
+ * \param[in]	poh	Pool open handle
+ */
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh);
+
+/** Checkpoint the VOS pool
+ *
+ * \param[in] poh		Open vos pool handle
+ * \param[in] chkpt_wait	Callback to wait for tx_id to commit
+ * \param[in] arg		Argument to callback
+ */
+int
+vos_pool_checkpoint(daos_handle_t poh);
+
 /**
  * The following declarations are for checksum scrubbing functions. The function
  * types provide an interface for injecting dependencies into the
@@ -1230,6 +1338,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
 };
 
 /*
@@ -1253,19 +1362,22 @@ enum scrub_status {
 };
 
 struct scrub_ctx_metrics {
-	struct d_tm_node_t *scm_pool_ult_wait_time;
-	struct d_tm_node_t *scm_start;
-	struct d_tm_node_t *scm_end;
-	struct d_tm_node_t *scm_last_duration;
-	struct d_tm_node_t *scm_csum_calcs;
-	struct d_tm_node_t *scm_csum_calcs_last;
-	struct d_tm_node_t *scm_csum_calcs_total;
-	struct d_tm_node_t *scm_bytes_scrubbed;
-	struct d_tm_node_t *scm_bytes_scrubbed_last;
-	struct d_tm_node_t *scm_bytes_scrubbed_total;
-	struct d_tm_node_t *scm_corruption;
-	struct d_tm_node_t *scm_corruption_total;
-	struct d_tm_node_t *scm_scrub_count;
+	struct d_tm_node_t	*scm_next_csum_scrub;
+	struct d_tm_node_t	*scm_next_tree_scrub;
+	struct d_tm_node_t	*scm_busy_time;
+	struct d_tm_node_t	*scm_start;
+	struct d_tm_node_t	*scm_last_duration;
+	struct d_tm_node_t	*scm_csum_calcs;
+	struct d_tm_node_t	*scm_csum_calcs_last;
+	struct d_tm_node_t	*scm_csum_calcs_total;
+	struct d_tm_node_t	*scm_bytes_scrubbed;
+	struct d_tm_node_t	*scm_bytes_scrubbed_last;
+	struct d_tm_node_t	*scm_bytes_scrubbed_total;
+	struct d_tm_node_t	*scm_corruption;
+	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_scrub_count;
+	struct timespec		 scm_busy_start;
+
 };
 
 /* Scrub the pool */
@@ -1321,8 +1433,9 @@ struct scrub_ctx {
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
 
-	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	enum scrub_status        sc_status;
+	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
+	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
 };
 
 /*
@@ -1362,5 +1475,17 @@ get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 int
 vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
 		   daos_anchor_t *anchor);
+
+/**
+ * Upgrade object layout version for the object
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	Object ID
+ * \param[in]	layout_ver	the new layout version of the object.
+ *
+ * \return 0 on success, error otherwise.
+ *
+ */
+int
+vos_obj_layout_upgrade(daos_handle_t hdl, daos_unit_oid_t oid, uint32_t layout_ver);
 
 #endif /* __VOS_API_H */

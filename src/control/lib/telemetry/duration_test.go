@@ -39,7 +39,7 @@ func TestTelemetry_GetDuration(t *testing.T) {
 		expErr     error
 	}{
 		"non-handle ctx": {
-			ctx:        context.TODO(),
+			ctx:        test.Context(t),
 			metricName: durName,
 			expErr:     errors.New("no handle"),
 		},

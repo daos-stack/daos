@@ -9,8 +9,7 @@ server_config:
     0:
       storage: auto
 pool:
-  scm_size: 20%
-  nvme_size: 50%
+  size: 50%
   svcn: 1
   control_method: dmg
 container:

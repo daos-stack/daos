@@ -8,7 +8,7 @@ import json
 from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.16.0'
+MIN_GO_VERSION = '1.17.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
@@ -93,6 +93,15 @@ def generate(env):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         env['ENV']['GOCACHE'] = os.environ['GOCACHE']
+
+    # Multiple go jobs can be running at once in scons via the -j option, there is no way to reserve
+    # a number of scons job slots for a single command so if jobs is 1 then use that else use a
+    # small number to allow progress without overloading the system.
+    jobs = GetOption('num_jobs')
+    if jobs == 1:
+        env["ENV"]["GOMAXPROCS"] = '1'
+    else:
+        env["ENV"]["GOMAXPROCS"] = '5'
 
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 

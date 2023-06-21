@@ -121,14 +121,14 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 	singv_los = reasb_req->orr_singv_los;
 	for (i = 0; i < iod_nr; i++) {
 		singv_lo = &singv_los[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0)
+		iod = &iods[i];
+		sgl = &sgls[i];
+		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
+		    iod->iod_size == DAOS_REC_ANY)
 			continue;
 		/* the case of fetch singv with unknown rec size, now after the
 		 * fetch need to re-calculate the singv_lo again
 		 */
-		iod = &iods[i];
-		sgl = &sgls[i];
-		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
 		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
 					 reasb_req->orr_oca)) {
 			singv_lo->cs_even_dist = 0;
@@ -292,9 +292,19 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH)) {
+		struct dcs_iod_csums	*tmp_iod_csum;
+
 		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
+		for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+			tmp_iod_csum = &iods_csums[i];
+			if (tmp_iod_csum->ic_data != NULL &&
+			    tmp_iod_csum->ic_data->cs_csum != NULL) {
+				tmp_iod_csum->ic_data->cs_csum[0]++;
+				break;
+			}
+		}
+	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
@@ -352,9 +362,18 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 		}
 
-		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		if (singv_lo != NULL)
-			singv_lo->cs_cell_align = 1;
+		singv_lo = (singv_los == NULL || iod->iod_type == DAOS_IOD_ARRAY) ?
+			   NULL : &singv_los[i];
+		if (singv_lo != NULL) {
+			/* Single-value csum layout not needed for short single value that only
+			 * stored on one data shard.
+			 */
+			if (obj_ec_singv_one_tgt(iod->iod_size, NULL,
+						 &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca))
+				singv_lo = NULL;
+			else
+				singv_lo->cs_cell_align = 1;
+		}
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
@@ -680,6 +699,9 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	csum_orw->orw_sgls.ca_arrays = NULL;
 	csum_orw->orw_bulks.ca_count = 0;
 	csum_orw->orw_bulks.ca_arrays = NULL;
+	csum_orw->orw_dkey_csum = NULL;
+	csum_orw->orw_iod_array.oia_iod_nr = 0;
+	csum_orw->orw_nr = 0;
 	crt_req_addref(csum_rpc);
 	crt_req_addref(rpc);
 	return crt_req_send(csum_rpc, csum_report_cb, rpc);
@@ -776,7 +798,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 						    orw->orw_dkey_hash, iod) ||
 		    is_ec_parity_shard(rw_args->shard_args->auxi.obj_auxi->obj, orw->orw_dkey_hash,
 				       orw->orw_oid.id_shard)) {
-			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
+			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i]) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
 				D_ERROR(DF_UOID" original iod_size "DF_U64", real size "DF_U64
@@ -804,15 +826,19 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				conflict = dc_shard_singv_size_conflict(oca,
 						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 			}
-			rc = fetch_rc;
+			if (rc == 0)
+				rc = fetch_rc;
 			/* one case needs to ignore the DER_REC2BIG failure - long singv
 			 * overwritten by short singv and the short singv only store on one
 			 * data target (and parity targets), other cases should return
 			 * DER_REC2BIG.
 			 */
 			if (rc == 0 && fetch_stat->sfs_rc_other == -DER_REC2BIG &&
-			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca))
+			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
+				D_ERROR("other shard got -DER_REC2BIG, sfs_size "DF_U64
+					" on all shards\n", fetch_stat->sfs_size);
+			}
 		} else if (sizes[i] != 0) {
 			if (iod->iod_size == 0)
 				iod->iod_size = sizes[i];
@@ -830,8 +856,11 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				}
 			}
 			if (fetch_rc == -DER_REC2BIG && fetch_stat->sfs_size != 0 &&
-			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca))
+			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
+				D_ERROR("this non-parity shard got -DER_REC2BIG, sfs_size "DF_U64
+					" on all shards\n", fetch_stat->sfs_size);
+			}
 
 			if (fetch_rc == 0 && fetch_stat->sfs_size != 0)
 				conflict = dc_shard_singv_size_conflict(oca,
@@ -896,6 +925,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
+	reasb_req = rw_args->shard_args->reasb_req;
+	is_ec_obj = reasb_req != NULL && daos_oclass_is_ec(reasb_req->orr_oca);
+
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	D_ASSERT(orw != NULL && orwo != NULL);
@@ -904,7 +936,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d, task %p failed, "DF_RC"\n", opc, task, DP_RC(ret));
+		D_ERROR(DF_UOID" (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s: "DF_RC"\n",
+			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
+			rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
+			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
+			orw->orw_bulks.ca_arrays != NULL ||
+			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+
 		D_GOTO(out, ret);
 	}
 
@@ -929,9 +967,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		}
 	}
 
-	reasb_req = rw_args->shard_args->reasb_req;
-	is_ec_obj = reasb_req != NULL &&
-		     daos_oclass_is_ec(reasb_req->orr_oca);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
@@ -1014,9 +1049,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID" obj_ec_recov_add failed, "
-					DF_RC".\n", DP_UOID(orw->orw_oid),
-					DP_RC(rc));
+				D_ERROR(DF_UOID " obj_ec_recov_add failed, " DF_RC "\n",
+					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
 		} else if (is_ec_obj && reasb_req->orr_recov &&
@@ -1025,7 +1059,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						 orwo->orw_rels.ca_arrays,
 						 orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID" obj_ec_parity_check failed, "DF_RC".\n",
+				D_ERROR(DF_UOID " obj_ec_parity_check failed, " DF_RC "\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
@@ -1033,7 +1067,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		rc = dc_shard_update_size(rw_args, 0);
 		if (rc) {
-			D_ERROR(DF_UOID" dc_shard_update_size failed, "DF_RC".\n",
+			D_ERROR(DF_UOID " dc_shard_update_size failed, " DF_RC "\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
@@ -2005,12 +2039,9 @@ struct obj_query_key_cb_args {
 };
 
 static void
-obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
-			  struct obj_query_key_1_out *okqo, bool get_max,
-			  bool changed)
+obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard, daos_key_t *dkey,
+			  daos_recx_t *reply_recx, bool get_max, bool changed)
 {
-	daos_recx_t		*reply_recx = &okqo->okqo_recx;
-	d_iov_t			*dkey = &okqo->okqo_dkey;
 	daos_recx_t		*result_recx = cb_args->recx;
 	daos_recx_t		 tmp_recx = {0};
 	uint64_t		 tmp_end;
@@ -2185,10 +2216,15 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 
 	if (check && flags & DAOS_GET_RECX) {
-		bool get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
+		bool		 get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
+		daos_key_t	*dkey;
 
+		if (okqi->okqi_api_flags & DAOS_GET_DKEY)
+			dkey = &okqo->okqo_dkey;
+		else
+			dkey = &okqi->okqi_dkey;
 		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
-					  okqo, get_max, changed);
+					  dkey, &okqo->okqo_recx, get_max, changed);
 	}
 
 set_max_epoch:

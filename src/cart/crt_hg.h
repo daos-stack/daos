@@ -104,7 +104,7 @@ int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
-int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
+void crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
@@ -133,8 +133,10 @@ int crt_provider_get_ctx_idx(bool primary, int provider);
 void crt_provider_put_ctx_idx(bool primary, int provider, int idx);
 int crt_provider_get_max_ctx_num(bool primary, int provider);
 d_list_t *crt_provider_get_ctx_list(bool primary, int provider);
+void crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, int provider);
+
 
 static inline int
 crt_hgret_2_der(int hg_ret)
@@ -155,8 +157,9 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_CANCELED;
 	case HG_BUSY:
 		return -DER_BUSY;
+	case HG_FAULT:
 	case HG_PROTOCOL_ERROR:
-		return -DER_PROTO;
+		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;

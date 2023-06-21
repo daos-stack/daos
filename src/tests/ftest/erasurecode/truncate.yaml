@@ -32,8 +32,7 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  scm_size: 10%
-  nvme_size: 50%
+  size: 50%
   control_method: dmg
 container:
   type: POSIX

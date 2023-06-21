@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -38,7 +37,7 @@ type smdQueryCmd struct {
 }
 
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -63,7 +62,6 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	TargetHealth tgtHealthQueryCmd   `command:"target-health" description:"Query the target health"`
 	DeviceHealth devHealthQueryCmd   `command:"device-health" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
@@ -82,23 +80,6 @@ func (cmd *devHealthQueryCmd) Execute(_ []string) error {
 		IncludeBioHealth: true,
 		Rank:             ranklist.NilRank,
 		UUID:             cmd.UUID,
-	}
-	return cmd.makeRequest(ctx, req)
-}
-
-type tgtHealthQueryCmd struct {
-	smdQueryCmd
-	Rank  uint32 `short:"r" long:"rank" required:"1" description:"Server rank hosting target"`
-	TgtId uint32 `short:"t" long:"tgtid" required:"1" description:"VOS target ID to query"`
-}
-
-func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
-	req := &control.SmdQueryReq{
-		OmitPools:        true,
-		IncludeBioHealth: true,
-		Rank:             ranklist.Rank(cmd.Rank),
-		Target:           strconv.Itoa(int(cmd.TgtId)),
 	}
 	return cmd.makeRequest(ctx, req)
 }
@@ -155,7 +136,7 @@ type usageQueryCmd struct {
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{Usage: true}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -188,7 +169,7 @@ type smdManageCmd struct {
 }
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
@@ -287,7 +268,7 @@ type ledManageCmd struct {
 
 type ledIdentifyCmd struct {
 	ledCmd
-	Timeout uint32 `long:"timeout" description:"Length of time to blink the status LED for"`
+	Timeout uint32 `long:"timeout" description:"Number of minutes to blink the status LED for"`
 	Reset   bool   `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
 }
 

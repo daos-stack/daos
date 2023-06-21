@@ -468,7 +468,7 @@ mock_ds_mgmt_pool_evict_setup(void)
  * TODO: Implement mocks when there is a test that uses these
  */
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	return 0;
 }
@@ -519,8 +519,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 }
 
 int
-ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
-			 char *tgt_id)
+ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
 	return 0;
 }

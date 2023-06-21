@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -94,7 +93,14 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			// resetNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
 			rdc.setIOMMUChecker(cmd.isIOMMUEnabled)
-			errNVMe = rdc.resetNVMe(scs.NvmePrepare)
+			req := storage.BdevPrepareRequest{
+				TargetUser:   rdc.TargetUser,
+				PCIAllowList: rdc.Args.PCIAllowList,
+				PCIBlockList: rdc.PCIBlockList,
+				DisableVFIO:  rdc.DisableVFIO,
+				Reset_:       true,
+			}
+			errNVMe = resetNVMe(req, &rdc.nvmeCmd, scs.NvmePrepare)
 		}
 	} else {
 		if doSCM {
@@ -114,7 +120,14 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			// prepareNVMeCmd expects positional argument, so set it
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
 			pdc.setIOMMUChecker(cmd.isIOMMUEnabled)
-			errNVMe = pdc.prepareNVMe(scs.NvmePrepare)
+			req := storage.BdevPrepareRequest{
+				HugepageCount: pdc.NrHugepages,
+				TargetUser:    pdc.TargetUser,
+				PCIAllowList:  pdc.Args.PCIAllowList,
+				PCIBlockList:  pdc.PCIBlockList,
+				DisableVFIO:   pdc.DisableVFIO,
+			}
+			errNVMe = prepareNVMe(req, &pdc.nvmeCmd, scs.NvmePrepare)
 		}
 	}
 
@@ -130,16 +143,16 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 }
 
 func (cmd *legacyPrepCmd) Execute(args []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
+	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
 	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
-	// This is a little ugly, but allows for easier unit testing.
-	// FIXME: With the benefit of hindsight, it seems apparent
-	// that we should have made these Execute() methods thin
-	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	}
@@ -150,18 +163,17 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 
 type legacyScanCmd struct {
 	cmdutil.LogCmd
-
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_server_helper binary."`
-	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
+	helperLogCmd
+	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
 	cmd.Notice("storage scan subcommand is deprecated, use nvme or scm subcommands instead")
-
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
 	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)

@@ -8,27 +8,28 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
+    denv.require('protobufc', 'argobots')
 
     sec_obj = denv.SharedObject('cli_security.c')
     auth_obj = denv.SharedObject('auth.pb-c.c')
-    acl_obj = denv.SharedObject('srv_acl.c')
+    srv_acl_obj = denv.SharedObject('srv_acl.c')
+    acl_obj = denv.SharedObject('acl.c')
 
     # dc_security: Security Client
-    dc_security_tgts = [sec_obj, auth_obj]
+    dc_security_tgts = [sec_obj, auth_obj, acl_obj]
     libdaos_tgts.extend(dc_security_tgts)
 
     # pylint: disable-next=unused-variable
-    acl_tgts = [auth_obj, acl_obj]
+    acl_tgts = [auth_obj, srv_acl_obj, acl_obj]
 
     if not prereqs.server_requested():
         return
 
     denv.AppendUnique(LIBS=['gurt'])
-    ds_sec = denv.d_library('security', ['srv.c', acl_obj], install_off="../..")
+    ds_sec = denv.d_library('security', ['srv.c', srv_acl_obj, acl_obj], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
-    dc_sectest_tgts = [acl_obj, sec_obj, auth_obj]
+    dc_sectest_tgts = [srv_acl_obj, acl_obj, sec_obj, auth_obj]
     Export('dc_sectest_tgts')
 
     if prereqs.test_requested():

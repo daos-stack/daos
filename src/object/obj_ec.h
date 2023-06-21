@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -230,6 +230,7 @@ struct obj_ec_recov_task {
 	 * degraded fetch, set the iod_size.
 	 */
 	daos_iod_t		*ert_oiod;
+	daos_iod_t		*ert_uiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th;		/* read-only tx handle */
@@ -263,7 +264,7 @@ struct obj_ec_fail_info {
 };
 
 int
-obj_ec_grp_start(uint32_t layout_ver, uint64_t hash, uint32_t grp_size);
+obj_ec_grp_start(uint16_t layout_ver, uint64_t hash, uint32_t grp_size);
 
 struct obj_reasb_req;
 
@@ -358,8 +359,11 @@ struct obj_ec_singv_local {
 	uint32_t	esl_bytes_pad;
 };
 
+/* logical shard index to store short single value */
+#define OBJ_EC_SHORT_SINGV_IDX	(0)
 /** Query the target index for small sing-value record */
-#define obj_ec_singv_small_idx(obj, dkey_hash, iod)	obj_ec_shard_idx(obj, dkey_hash, 0)
+#define obj_ec_singv_small_idx(obj, dkey_hash, iod)	\
+	obj_ec_shard_idx(obj, dkey_hash, OBJ_EC_SHORT_SINGV_IDX)
 
 /* check EC data shard by its logical offset */
 static inline bool
@@ -370,7 +374,7 @@ is_ec_data_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_data_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+is_ec_data_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
 			       struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
@@ -387,7 +391,7 @@ is_ec_parity_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 }
 
 static inline bool
-is_ec_parity_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+is_ec_parity_shard_by_layout_ver(uint16_t layout_ver, uint64_t dkey_hash,
 				 struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
@@ -730,6 +734,37 @@ obj_id2ec_codec(daos_obj_id_t id)
 	return obj_ec_codec_get(daos_obj_id2class(id));
 }
 
+/* check if list_1 is fully covered by list_2 */
+static inline bool
+obj_ec_parity_list_covered(struct daos_recx_ep_list *list_1, struct daos_recx_ep_list *list_2)
+{
+	struct daos_recx_ep	*rep_1;
+	struct daos_recx_ep	*rep_2;
+	unsigned int		 i, j;
+
+	if (list_1->re_nr == 0 || list_2->re_nr == 0)
+		return false;
+
+	for (i = 0; i < list_1->re_nr; i++) {
+		rep_1 = &list_1->re_items[i];
+		for (j = 0; j < list_2->re_nr; j++) {
+			rep_2 = &list_2->re_items[j];
+			if (rep_1->re_rec_size != rep_2->re_rec_size) {
+				D_ERROR("mismatch rec_size %d:%d\n",
+					rep_1->re_rec_size, rep_2->re_rec_size);
+				return false;
+			}
+			if (DAOS_RECX_COVERED(rep_1->re_recx, rep_2->re_recx))
+				break;
+			if (j == list_2->re_nr - 1) {
+				D_ERROR("not fully covered recx list\n");
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static inline int
 obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			  struct daos_recx_ep_list *lists_2,
@@ -741,10 +776,18 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 	for (i = 0; i < nr; i++) {
 		list_1 = &lists_1[i];
 		list_2 = &lists_2[i];
-		if (list_1->re_nr != list_2->re_nr ||
-		    list_1->re_ep_valid != list_2->re_ep_valid) {
-			D_ERROR("got different parity recx in EC data recovery\n");
+		if (list_1->re_ep_valid != list_2->re_ep_valid) {
+			D_ERROR("got different ep_valid in EC data recovery\n");
 			return -DER_IO;
+		}
+		if (list_1->re_nr != list_2->re_nr) {
+			if (obj_ec_parity_list_covered(list_1, list_2) ||
+			    obj_ec_parity_list_covered(list_2, list_1)) {
+				D_DEBUG(DB_IO, "parity list mismatch but fully covered\n");
+				return -DER_FETCH_AGAIN;
+			}
+			D_ERROR("got different parity recx in EC data recovery\n");
+			return -DER_DATA_LOSS;
 		}
 		if (list_1->re_nr == 0)
 			continue;
@@ -754,7 +797,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			    (list_1->re_items[j].re_recx.rx_nr !=
 			     list_2->re_items[j].re_recx.rx_nr)) {
 				D_ERROR("got different parity recx in EC data recovery\n");
-				return -DER_IO;
+				return -DER_DATA_LOSS;
 			}
 			if (list_1->re_items[j].re_ep != list_2->re_items[j].re_ep)
 				return -DER_FETCH_AGAIN;

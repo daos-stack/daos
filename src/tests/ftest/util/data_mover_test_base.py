@@ -376,7 +376,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         container.container.uuid = str_to_c_uuid(cont_uuid)
         container.container.poh = pool.pool.handle
         container.uuid = container.container.get_uuid_str()
-        container.label.value = cont_label
+        container.update_params(label=cont_label, type=query_response['container_type'])
+        container.control_method.update(
+            self.params.get('control_method', container.namespace, container.control_method.value))
 
         return container
 
@@ -735,11 +737,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Get an intermediate path for HDF5 file(s)
         tmp_path = self.new_posix_test_path(create=False, parent=self.serial_tmp_dir)
 
-        # Set the source params for dserialize
+        # Set the source params for serialize
         if src is not None:
             self.dserialize_cmd.set_params(src=src, output_path=tmp_path)
 
-        # Set the destination params for ddeserialize
+        # Set the destination params for deserialize
         if dst_pool is not None:
             self.ddeserialize_cmd.set_params(src=tmp_path, pool=uuid_from_obj(dst_pool))
 
@@ -831,7 +833,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Reset params
         self.mdtest_cmd.api.update(None)
         self.mdtest_cmd.test_dir.update(None)
-        self.mdtest_cmd.dfs_pool_uuid.update(None)
+        self.mdtest_cmd.dfs_pool.update(None)
         self.mdtest_cmd.dfs_cont.update(None)
         self.mdtest_cmd.dfs_group.update(None)
 
@@ -954,20 +956,21 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             env["D_LOG_FILE"] = get_log_file("{}.log".format(self.tool.lower()))
 
         ppn = None
+        result = None
         try:
             if self.tool == "DCP":
                 if not processes:
                     processes = self.dcp_np
                     ppn = self.dcp_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dcp_cmd.exit_status_exception = (expected_rc == 0)
+                self.dcp_cmd.exit_status_exception = expected_rc == 0
                 result = self.dcp_cmd.run(processes, self.job_manager, ppn, env)
             elif self.tool == "DSYNC":
                 if not processes:
                     processes = self.dsync_np
                     ppn = self.dsync_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dsync_cmd.exit_status_exception = (expected_rc == 0)
+                self.dsync_cmd.exit_status_exception = expected_rc == 0
                 result = self.dsync_cmd.run(processes, self.job_manager, ppn, env)
             elif self.tool == "DSERIAL":
                 if processes:
@@ -992,6 +995,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 test_desc))
 
         # Check the return code
+        assert result is not None
         actual_rc = result.exit_status
         if actual_rc != expected_rc:
             self.fail("Expected (rc={}) but got (rc={}): {}\n".format(

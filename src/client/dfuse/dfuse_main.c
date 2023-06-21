@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,9 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
+#include <sys/types.h>
+#include <hwloc.h>
+
 #define D_LOGFAC DD_FAC(dfuse)
 
 #include "dfuse.h"
@@ -19,7 +22,6 @@
 #include "daos_uns.h"
 
 #include <gurt/common.h>
-
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
  * is used to detect abnormal exit.
@@ -260,13 +262,16 @@ show_help(char *name)
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
 	    "	-S --singlethread	Single threaded\n"
-	    "	-t --thread-count=count	Number of fuse threads to use\n"
+	    "	-t --thread-count=count	Number of threads to use\n"
+	    "   -e --eq-count=count     Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
 	    "	   --disable-caching	Disable all caching\n"
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
-	    "	-o options		mount style options string"
+	    "	-o options		mount style options string\n"
+	    "\n"
+	    "      --multi-user		Run dfuse in multi user mode\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -280,11 +285,18 @@ show_help(char *name)
 	    "checked.  Only one way of setting pool and container data should be used.\n"
 	    "\n"
 	    "The default thread count is one per available core to allow maximum throughput,\n"
-	    "this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
-	    "One thread will be started for asynchronous I/O handling so at least two threads\n"
-	    "must be specified in all cases.\n"
-	    "Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
-	    "threading logic in dfuse."
+	    "this can be modified by running dfuse in a cpuset via numactl or similar tools or\n"
+	    "by using the --thread-count option.\n"
+	    "dfuse has two types of threads: fuse threads which accept requests from the kernel\n"
+	    "and process them, and progress threads which complete asynchronous read/write\n"
+	    "operations.  Each asynchronous thread will have one daos event queue so consume\n"
+	    "additional network resources.  The --thread-count option will control the total\n"
+	    "number of threads, increasing the --eq-count option will reduce the number of\n"
+	    "fuse threads accordingly.  The default value for eq-count is 1.\n"
+	    "As all metadata operations are blocking the level of concurrency is limited by the\n"
+	    "number of fuse threads."
+	    "Singlethreaded mode will use one thread for handling fuse requests and a second\n"
+	    "thread for a single event queue for a total of two threads\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
@@ -332,6 +344,7 @@ main(int argc, char **argv)
 							{"sys-name", required_argument, 0, 'G'},
 							{"singlethread", no_argument, 0, 'S'},
 							{"thread-count", required_argument, 0, 't'},
+							{"eq-count", required_argument, 0, 'e'},
 							{"foreground", no_argument, 0, 'f'},
 							{"enable-caching", no_argument, 0, 'E'},
 							{"enable-wb-cache", no_argument, 0, 'F'},
@@ -353,6 +366,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 	dfuse_info->di_caching = true;
 	dfuse_info->di_wb_cache = true;
+	dfuse_info->di_equeue_count = 1;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
@@ -399,6 +413,9 @@ main(int argc, char **argv)
 			 */
 			dfuse_info->di_threaded     = false;
 			dfuse_info->di_thread_count = 2;
+			break;
+		case 'e':
+			dfuse_info->di_equeue_count = atoi(optarg);
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
@@ -456,25 +473,49 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
+	/* If the number of threads has been specified on the command line then use that, otherwise
+	 * check CPU binding.  If bound to a number of cores then launch that number of threads,
+	 * if not bound them limit to 16.
+	 */
 	if (dfuse_info->di_threaded && !have_thread_count) {
-		cpu_set_t cpuset;
+		struct hwloc_topology *hwt;
+		hwloc_const_cpuset_t   hw;
+		int                    total;
+		int                    allowed;
 
-		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
-		if (rc != 0) {
-			printf("Failed to get cpuset information\n");
-			D_GOTO(out_debug, rc = -DER_INVAL);
-		}
+		rc = hwloc_topology_init(&hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
 
-		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
+		rc = hwloc_topology_load(hwt);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		hw = hwloc_topology_get_complete_cpuset(hwt);
+
+		total = hwloc_bitmap_weight(hw);
+
+		rc = hwloc_get_cpubind(hwt, (struct hwloc_bitmap_s *)hw, HWLOC_CPUBIND_PROCESS);
+		if (rc != 0)
+			D_GOTO(out_debug, rc = daos_errno2der(errno));
+
+		allowed = hwloc_bitmap_weight(hw);
+
+		hwloc_topology_destroy(hwt);
+
+		if (total == allowed)
+			dfuse_info->di_thread_count = min(allowed, 16);
+		else
+			dfuse_info->di_thread_count = allowed;
 	}
 
-	if (dfuse_info->di_thread_count < 2) {
-		printf("Dfuse needs at least two threads.\n");
+	/* Reserve one thread for each daos event queue */
+	dfuse_info->di_thread_count -= dfuse_info->di_equeue_count;
+
+	if (dfuse_info->di_thread_count < 1) {
+		printf("Dfuse needs at least one fuse thread.\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
-
-	/* Reserve one CPU thread for the daos event queue */
-	dfuse_info->di_thread_count -= 1;
 
 	if (!dfuse_info->di_foreground) {
 		rc = dfuse_bg(dfuse_info);
@@ -513,8 +554,8 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
-			       rc, strerror(rc));
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
+			       strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -523,7 +564,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path (%d) %s\n", rc, strerror(rc));
+			printf("Error reading attr from path: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
@@ -539,8 +580,8 @@ main(int argc, char **argv)
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
-		       rc, strerror(rc));
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned: %d (%s)", rc,
+		       strerror(rc));
 	if (rc == 0) {
 		if (pool_name[0]) {
 			printf("Pool specified multiple ways\n");
@@ -565,14 +606,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* DUNS may have logged this already but won't have printed anything */
-		printf("Error resolving mount point (%d) %s\n", rc, strerror(rc));
+		printf("Error resolving mount point: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	/* Connect to a pool. */
 	rc = dfuse_pool_connect(fs_handle, pool_name, &dfp);
 	if (rc != 0) {
-		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
@@ -581,7 +622,7 @@ main(int argc, char **argv)
 	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
-		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
+		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 

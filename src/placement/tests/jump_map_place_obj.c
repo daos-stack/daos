@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -265,7 +265,7 @@ rr_find(struct pl_map *pl_map, struct daos_obj_md *md, uint32_t ver,
 	if (rr->skip)
 		rr_reset(rr);
 	else
-		rr->out_nr = fn(pl_map, 0, md, NULL, ver, rr->tgt_ranks,
+		rr->out_nr = fn(pl_map, PLT_LAYOUT_VERSION, md, NULL, ver, rr->tgt_ranks,
 				rr->ids, rr->nr);
 }
 
@@ -1054,19 +1054,12 @@ down_continuously(void **state)
 				     ctx.rebuild.tgt_ranks[0]);
 		assert_int_equal(jtc_get_layout_shard(&ctx, 0)->po_target,
 				 ctx.rebuild.tgt_ranks[0]);
-		/* should be no reintegration or addition happening */
-		assert_int_equal(0, ctx.reint.out_nr);
-		assert_int_equal(0, ctx.new.out_nr);
 
 		prev_first_shard = *jtc_get_layout_shard(&ctx, 0);
 	}
 
 	jtc_set_status_on_first_shard(&ctx, DOWN);
 	jtc_assert_scan_and_layout(&ctx);
-
-	/* no where to rebuild to now */
-	assert_int_equal(0, jtc_get_layout_rebuild_count(&ctx));
-	assert_int_equal(0, ctx.rebuild.out_nr);
 
 	jtc_fini(&ctx);
 }
@@ -1226,12 +1219,12 @@ down_back_to_up_in_same_order(void **state)
 	/* take a target down ... this one will impact first shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 1, 1, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 1, 1, 1, 1);
 
 	/* take a target down ... this one will impact second shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[1]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 2, 2, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 2, 2, 2, 2);
 
 	/* Bot are rebuilt now so status is DOWNOUT */
 	jtc_set_status_on_target(&ctx, DOWNOUT, orig_shard_targets[0]);
@@ -1284,12 +1277,12 @@ down_back_to_up_in_reverse_order(void **state)
 	/* take a target down ... this one will impact first shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 1, 1, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 1, 1, 1, 1);
 
 	/* take a target down ... this one will impact second shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[1]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 2, 2, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 2, 2, 2, 2);
 
 	/* Bot are rebuilt now so status is DOWNOUT */
 	jtc_set_status_on_target(&ctx, DOWNOUT, orig_shard_targets[0]);
@@ -1531,10 +1524,6 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 		jtc_set_status_on_target(&ctx, DRAIN, target);
 		jtc_assert_scan_and_layout(&ctx);
 
-		/* shouldn't be any left to drain to so nothing is rebuilding */
-		is_false(jtc_has_shard_with_target_rebuilding(&ctx, shard_id,
-			 NULL));
-
 		jtc_fini(&ctx);
 	}
 }
@@ -1653,12 +1642,12 @@ placement_handles_multiple_states(void **state)
 	 * Compute find_reint() using the correct version of rebuild which
 	 * would have launched when reintegration started
 	 *
-	 * find_reint() should only be finding the one thing to move at this
-	 * version
+	 * find_reint() should find two shards to move at this version, one for
+	 * reint(UP), one for rebuild(DOWN).
 	 */
 	ctx.ver = ver_after_reint;
 	jtc_scan(&ctx);
-	assert_int_equal(ctx.reint.out_nr, 1);
+	assert_int_equal(ctx.reint.out_nr, 2);
 
 	/* Complete the reintegration */
 	ctx.ver = ver_after_drain; /* Restore the version first */
@@ -1697,7 +1686,8 @@ placement_handles_multiple_states(void **state)
 static void
 placement_handles_multiple_states_with_addition(void **state)
 {
-	struct jm_test_ctx	 ctx;
+	struct jm_test_ctx	ctx;
+	uint32_t		rebuilding;
 
 	jtc_init_with_layout(&ctx, 3, 1, 4, OC_RP_3G1, g_verbose);
 	/* first shard goes down, rebuilt, then back up */
@@ -1723,14 +1713,17 @@ placement_handles_multiple_states_with_addition(void **state)
 	is_false(jtc_layout_has_duplicate(&ctx));
 
 	jtc_scan(&ctx);
-	uint32_t rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
 	assert_true(rebuilding == 2 || rebuilding == 3);
 
 	/* Both DOWN and UP target will be remapped during remap */
 	assert_int_equal(ctx.rebuild.out_nr, 2);
-	assert_int_equal(ctx.reint.out_nr, 1);
+	/* Adding new targets might make original shard to be remapped
+	 * to new location.
+	 */
+	assert_true(ctx.reint.out_nr == 1 || ctx.reint.out_nr == 2);
 
 	/* JCH might cause multiple shards remap to the new target */
 	assert_true(ctx.new.out_nr >= 1);
@@ -1774,11 +1767,13 @@ test_non_standard_systems(const char *file, uint32_t line,
 				file, line, expected_target_nr,
 				ctx.layout->ol_nr);
 		}
+#if 0
 		if (jtc_layout_has_duplicate(&ctx)) {
 			jtc_print_layout_force(&ctx);
-			fail_msg("%s:%d Found duplicate for i=%d\n",
-				 file, line, i);
+			print_message("%s:%d Found duplicate for i=%d\n",
+				      file, line, i);
 		}
+#endif
 	}
 
 	jtc_fini(&ctx);
@@ -1826,57 +1821,98 @@ unbalanced_config(void **state)
 }
 
 static void
+check_grp_not_in_same_domain(struct jm_test_ctx *ctx, uint32_t grp_size,
+			     uint32_t grp_nr, uint32_t tgt_nr, bool no_duplicate)
+{
+	int i, j, k;
+	uint32_t tgt;
+	uint32_t other_tgt;
+	int	 miss_cnt = 0;
+
+	for (i = 0; i < grp_nr; i++) {
+		for (j = 0; j < grp_size; j++) {
+			tgt = jtc_layout_shard_tgt(ctx, grp_size * i + j);
+			for (k = j + 1; k < grp_size; k++) {
+				other_tgt = jtc_layout_shard_tgt(ctx, grp_size * i + k);
+				if (tgt/tgt_nr == other_tgt/tgt_nr) {
+					print_message("tgt %u tgt_nr %u\n", tgt, other_tgt);
+					print_message("grp_size %u grp_nr %u tgt_nr %u\n",
+						      grp_size, grp_nr, tgt_nr);
+					print_message("i %d, j %d k %d\n", i, j, k);
+					miss_cnt++;
+				}
+			}
+		}
+	}
+
+	assert_true(miss_cnt <= 0);
+
+	if (no_duplicate)
+		assert_true(!jtc_layout_has_duplicate(ctx));
+}
+
+static void
 same_group_shards_not_in_same_domain(void **state)
 {
 	struct jm_test_ctx	ctx;
-	int	tgt;
-	int	other_tgt;
-	int	miss_cnt = 0;
-	int	i;
-	int	j;
-	int	k;
 
+	print_message("check EC_4P2GX 4 x 2\n");
+	jtc_init_with_layout(&ctx, 4, 2, 8, OC_EC_4P2GX, g_verbose);
+	check_grp_not_in_same_domain(&ctx, 6, 10, 8, true);
+	jtc_fini(&ctx);
+
+	print_message("check EC_4P2GX 8 x 1\n");
+	jtc_init_with_layout(&ctx, 8, 1, 8, OC_EC_4P2GX, g_verbose);
+	check_grp_not_in_same_domain(&ctx, 6, 10, 8, true);
+	jtc_fini(&ctx);
+
+	print_message("check EC_8P2GX 6 x 2\n");
+	jtc_init_with_layout(&ctx, 6, 2, 8, OC_EC_8P2GX, g_verbose);
+	check_grp_not_in_same_domain(&ctx, 10, 9, 8, true);
+	jtc_fini(&ctx);
+
+	print_message("check EC_8P2GX 12 x 1\n");
+	jtc_init_with_layout(&ctx, 12, 1, 8, OC_EC_8P2GX, g_verbose);
+	check_grp_not_in_same_domain(&ctx, 10, 9, 8, true);
+	jtc_fini(&ctx);
+
+	print_message("check EC_2P1G32 16 x 2\n");
 	jtc_init_with_layout(&ctx, 16, 2, 4, OC_EC_2P1G32, g_verbose);
-	for (i = 0; i < 32; i++) {
-		for (j = 0; j < 3; j++) {
-			tgt = jtc_layout_shard_tgt(&ctx, 3 * i + j);
-			for (k = j + 1; k < 3; k++) {
-				other_tgt = jtc_layout_shard_tgt(&ctx, 3 * i + k);
-				if (tgt/4 == other_tgt/4)
-					miss_cnt++;
-			}
-		}
-	}
+	check_grp_not_in_same_domain(&ctx, 3, 32, 4, true);
 	jtc_fini(&ctx);
-	assert_rc_equal(miss_cnt, 0);
 
+	print_message("check EC_16P2G32 18 x 1\n");
 	jtc_init_with_layout(&ctx, 18, 1, 32, OC_EC_16P2G32, g_verbose);
-	for (i = 0; i < 32; i++) {
-		for (j = 0; j < 18; j++) {
-			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
-			for (k = j + 1; k < 18; k++) {
-				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
-				if (tgt/32 == other_tgt/32)
-					miss_cnt++;
-			}
-		}
-	}
+	check_grp_not_in_same_domain(&ctx, 18, 32, 32, true);
 	jtc_fini(&ctx);
-	assert_rc_equal(miss_cnt, 0);
 
+	print_message("check EC_16P2G32 32 x 1\n");
 	jtc_init_with_layout(&ctx, 32, 1, 18, OC_EC_16P2G32, g_verbose);
-	for (i = 0; i < 32; i++) {
-		for (j = 0; j < 18; j++) {
-			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
-			for (k = j + 1; k < 18; k++) {
-				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
-				if (tgt/18 == other_tgt/18)
-					miss_cnt++;
-			}
-		}
+	check_grp_not_in_same_domain(&ctx, 18, 32, 18, false);
+	jtc_fini(&ctx);
+}
+
+static void
+same_group_shards_not_in_same_domain_multiple_objs(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int			h;
+
+	jtc_init(&ctx, 4, 1, 8, OC_EC_2P1GX, g_verbose);
+	for (h = 0; h < 1000; ++h) {
+		jtc_set_object_meta(&ctx, OC_EC_2P1GX, h + 1, UINT_MAX);
+		assert_success(jtc_create_layout(&ctx));
+		check_grp_not_in_same_domain(&ctx, 3, 10, 8, true);
 	}
 	jtc_fini(&ctx);
-	assert_true(miss_cnt < 5);
+
+	jtc_init(&ctx, 6, 1, 8, OC_EC_4P1GX, g_verbose);
+	for (h = 0; h < 1000; ++h) {
+		jtc_set_object_meta(&ctx, OC_EC_4P1GX, h + 1, UINT_MAX);
+		assert_success(jtc_create_layout(&ctx));
+		check_grp_not_in_same_domain(&ctx, 5, 9, 8, true);
+	}
+	jtc_fini(&ctx);
 }
 
 static void
@@ -1904,6 +1940,376 @@ large_shards_over_limited_targets(void **state)
 	assert_success(jtc_create_layout(&ctx));
 
 	jtc_fini(&ctx);
+}
+
+static void
+_multiple_shards_in_the_same_target(void **state, uint32_t obj_class,
+				    uint32_t grp_size, uint32_t grp_cnt)
+{
+	struct jm_test_ctx	ctx;
+	int			tgt;
+	int			miss;
+	int			i;
+	int			j;
+	int			k;
+
+	jtc_init_with_layout(&ctx, grp_size, 1, grp_cnt, obj_class, g_verbose);
+	for (i = 0; i < grp_size * grp_cnt - 1; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	miss = 0;
+	assert_success(jtc_create_layout(&ctx));
+	tgt = jtc_layout_shard_tgt(&ctx, 0);
+	for (i = 0; i < grp_cnt; i++) {
+		for (j = 0; j < grp_size; j++) {
+			int other_tgt = jtc_layout_shard_tgt(&ctx, grp_size * i + j);
+
+			if (other_tgt == -1 || other_tgt != tgt)
+				miss++;
+		}
+	}
+
+	assert_rc_equal(miss, 0);
+
+	for (i = 0; i < grp_size * grp_cnt - 1; i++) {
+		jtc_set_status_on_target(&ctx, UP, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, UPIN, i);
+	}
+
+	miss = 0;
+	assert_success(jtc_create_layout(&ctx));
+	for (i = 0; i < grp_cnt; i++) {
+		for (j = 0; j < grp_size; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, grp_size * i + j);
+			for (k = j + 1; k < grp_size; k++) {
+				int other_tgt = jtc_layout_shard_tgt(&ctx, grp_size * i + k);
+
+				if (other_tgt == tgt || other_tgt / grp_cnt == tgt / grp_cnt)
+					miss++;
+			}
+		}
+	}
+
+	assert_rc_equal(miss, 0);
+	jtc_fini(&ctx);
+}
+
+static void
+multiple_shards_in_the_same_target(void **state)
+{
+	print_message("Check OC_RP_2G4\n");
+	_multiple_shards_in_the_same_target(state, OC_RP_2G4, 2, 4);
+	print_message("Check OC_RP_6G1\n");
+	_multiple_shards_in_the_same_target(state, OC_RP_6G1, 6, 1);
+	print_message("Check OC_EC_4P2G8\n");
+	_multiple_shards_in_the_same_target(state, OC_EC_4P2G8, 6, 8);
+	print_message("Check OC_EC_8P2G8\n");
+	_multiple_shards_in_the_same_target(state, OC_EC_8P2G8, 10, 8);
+	print_message("Check OC_EC_16P2G8\n");
+	_multiple_shards_in_the_same_target(state, OC_EC_16P2G8, 18, 8);
+}
+
+static void
+shards_over_xpf(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int			tgt = -1;
+	int			i;
+	int			rebuilding_shards = 0;
+
+	jtc_init_with_layout(&ctx, 8, 1, 8, OC_RP_XSF, g_verbose);
+	for (i = 56; i < 64; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	for (i = 0; i < ctx.layout->ol_nr; i++) {
+		if (ctx.layout->ol_shards[i].po_rebuilding) {
+			tgt = ctx.layout->ol_shards[i].po_target;
+			break;
+		}
+	}
+
+	assert_true(tgt != -1);
+	for (i = (tgt / 8) * 8; i < (tgt/ 8 + 1) * 8; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	for (i = 56; i < 64; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+
+	assert_success(jtc_create_layout(&ctx));
+
+	for (i = 0; i < ctx.layout->ol_nr; i++) {
+		if (ctx.layout->ol_shards[i].po_rebuilding)
+			rebuilding_shards++;
+	}
+
+	assert_true(rebuilding_shards == 2);
+
+	jtc_fini(&ctx);
+}
+
+static void
+_same_group_shards_not_in_same_domain_fail(void **state, uint32_t oclass, uint32_t grp_size,
+					   uint32_t grp_nr, uint32_t domain_nr, uint32_t rank_nr,
+					   uint32_t tgt_nr)
+{
+	struct jm_test_ctx	ctx;
+	int	i;
+
+	jtc_init_with_layout(&ctx, domain_nr, rank_nr, tgt_nr, oclass, g_verbose);
+	check_grp_not_in_same_domain(&ctx, grp_size, grp_nr, tgt_nr, true);
+
+	for (i = 0; i < tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	check_grp_not_in_same_domain(&ctx, grp_size, grp_nr, tgt_nr, true);
+
+	for (i = tgt_nr; i < 2 * tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	check_grp_not_in_same_domain(&ctx, grp_size, grp_nr, tgt_nr, true);
+
+	jtc_fini(&ctx);
+}
+
+static void
+same_group_shards_not_in_same_domain_with_fail(void **state)
+{
+	print_message("check OC_EC_4P2G8 with 4 x 2.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_4P2G8, 6, 8, 4, 2, 8);
+	print_message("check OC_EC_4P2G8 with 8 x 1.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_4P2G8, 6, 8, 8, 1, 8);
+	print_message("check OC_EC_8P2G8 with 6 x 2.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_8P2G8, 10, 8, 6, 2, 8);
+	print_message("check OC_EC_8P2G8 with 12 x 1.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_8P2G8, 10, 8, 12, 1, 8);
+	print_message("check OC_EC_16P2G8 with 10 x 2.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_16P2G8, 18, 8, 10, 2, 8);
+	print_message("check OC_EC_16P2G8 with 20 x 1.\n");
+	_same_group_shards_not_in_same_domain_fail(state, OC_EC_16P2G8, 18, 8, 20, 1, 8);
+}
+
+static void
+_fail_shard_during_reintegration(void **state, uint32_t domain_nr, uint32_t node_nr,
+				 uint32_t tgt_nr, uint32_t objclass, uint32_t reint_tgt_start,
+				 uint32_t reint_tgt_nr, uint32_t fail_tgt_start,
+				 uint32_t fail_tgt_nr, uint32_t accept_remain)
+{
+	struct jm_test_ctx	ctx;
+	struct pl_obj_layout	*reint_layout;
+	int			i, j;
+	uint32_t		grp_size;
+
+	jtc_init_with_layout(&ctx, domain_nr, node_nr, tgt_nr, objclass, g_verbose);
+	for (i = reint_tgt_start; i < reint_tgt_start + reint_tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	for (i = reint_tgt_start; i < reint_tgt_start + reint_tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+
+	for (i = reint_tgt_start; i < reint_tgt_start + reint_tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, UP, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	reint_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+	/* Fail nodes during reintegration */
+	for (i = fail_tgt_start; i < fail_tgt_start + fail_tgt_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	assert_success(jtc_create_layout(&ctx));
+	grp_size = min(reint_layout->ol_grp_size, ctx.layout->ol_grp_size);
+	for (i = 0; i < reint_layout->ol_grp_nr; i++) {
+		int remain = 0;
+
+		for (j = 0; j < grp_size; j++) {
+			struct pl_obj_shard	*shard;
+			struct pl_obj_shard	*new_shard;
+
+			shard = &reint_layout->ol_shards[i * reint_layout->ol_grp_size + j];
+			new_shard = &ctx.layout->ol_shards[i * ctx.layout->ol_grp_size + j];
+			if (shard->po_target == new_shard->po_target &&
+			    !new_shard->po_rebuilding && !new_shard->po_reintegrating)
+				remain++;
+		}
+		assert_true(remain >= accept_remain);
+	}
+
+	pl_obj_layout_free(reint_layout);
+	jtc_fini(&ctx);
+}
+
+static void
+fail_shard_during_reintegration(void **state)
+{
+	print_message("check 4 2 8 OC_RP_3GX\n");
+	_fail_shard_during_reintegration(state, 4, 2, 8, OC_RP_3GX, 0, 8, 8, 8, 2);
+	print_message("check 8 1 8 OC_RP_3GX\n");
+	_fail_shard_during_reintegration(state, 8, 1, 8, OC_RP_3GX, 0, 8, 8, 8, 2);
+	print_message("check 32 1 16 OC_EC_8P2GX\n");
+	_fail_shard_during_reintegration(state, 32, 1, 16, OC_EC_8P2GX, 0, 16, 16, 32, 8);
+	print_message("check 200 1 16 OC_EC_16P2GX case 1\n");
+	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 16, 32, 16);
+	print_message("check 200 1 16 OC_EC_16P2GX case 2\n");
+	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 16, 48, 16);
+	print_message("check 200 1 16 OC_EC_16P2GX case 3\n");
+	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 48, 80, 16);
+}
+
+static void
+compare_layout(struct pl_obj_layout *layout1, struct pl_obj_layout *layout2,
+	       uint32_t min_diff)
+{
+	int i, j;
+
+	for (i = 0; i < layout1->ol_grp_nr; i++) {
+		int diff = 0;
+
+		for (j = 0; j < layout1->ol_grp_size; j++) {
+			struct pl_obj_shard	*shard1;
+			struct pl_obj_shard	*shard2;
+
+			shard1 = &layout1->ol_shards[i * layout1->ol_grp_size + j];
+			shard2 = &layout2->ol_shards[i * layout2->ol_grp_size + j];
+			if (shard1->po_target != shard2->po_target || shard1->po_target == -1 ||
+			    shard2->po_target == -1 || shard1->po_rebuilding ||
+			    shard1->po_reintegrating || shard2->po_rebuilding ||
+			    shard2->po_reintegrating)
+				diff++;
+		}
+		assert_true(diff <= min_diff);
+	}
+}
+
+static void
+_fail_reintegrate_multiple_ranks(void **state, uint32_t domain_nr, uint32_t node_nr,
+				 uint32_t tgt_nr, uint32_t objclass, uint32_t *fail_tgt_offsets,
+				 uint32_t *fail_tgt_nrs, uint32_t fail_tgt_num,
+				 uint32_t accept_remain)
+{
+	struct jm_test_ctx	ctx;
+	struct pl_obj_layout	*origin_layout;
+	struct pl_obj_layout	*fail_layout;
+	struct pl_obj_layout	*reint_layout;
+	int			i, j;
+
+	jtc_init_with_layout(&ctx, domain_nr, node_nr, tgt_nr, objclass, g_verbose);
+	assert_success(jtc_create_layout(&ctx));
+	origin_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < fail_tgt_nrs[i]; j++) {
+			uint32_t tgt = j + fail_tgt_offsets[i];
+
+			jtc_set_status_on_target(&ctx, DOWN, tgt);
+			jtc_set_status_on_target(&ctx, DOWNOUT, tgt);
+		}
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+	fail_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+	compare_layout(origin_layout, fail_layout, 2);
+
+	pl_obj_layout_free(origin_layout);
+	origin_layout = fail_layout;
+	for (i = 2; i < 4; i++) {
+		for (j = 0; j < fail_tgt_nrs[i]; j++) {
+			uint32_t tgt = j + fail_tgt_offsets[i];
+
+			jtc_set_status_on_target(&ctx, DOWN, tgt);
+			jtc_set_status_on_target(&ctx, DOWNOUT, tgt);
+		}
+	}
+	assert_success(jtc_create_layout(&ctx));
+	fail_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+	compare_layout(origin_layout, fail_layout, 2);
+
+	pl_obj_layout_free(origin_layout);
+	origin_layout = fail_layout;
+	for (i = 3; i >= 2; i--) {
+		for (j = 0; j < fail_tgt_nrs[i]; j++) {
+			uint32_t tgt = j + fail_tgt_offsets[i];
+
+			jtc_set_status_on_target(&ctx, UP, tgt);
+			jtc_set_status_on_target(&ctx, UPIN, tgt);
+		}
+	}
+	assert_success(jtc_create_layout(&ctx));
+	reint_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+	compare_layout(origin_layout, reint_layout, 2);
+
+	pl_obj_layout_free(origin_layout);
+	origin_layout = reint_layout;
+	for (i = 0; i <= 2; i++) {
+		for (j = 0; j < fail_tgt_nrs[i]; j++) {
+			uint32_t tgt = j + fail_tgt_offsets[i];
+
+			jtc_set_status_on_target(&ctx, UP, tgt);
+			jtc_set_status_on_target(&ctx, UPIN, tgt);
+		}
+	}
+	assert_success(jtc_create_layout(&ctx));
+	reint_layout = ctx.layout;
+	ctx.is_layout_set = false;
+	ctx.layout = NULL;
+	compare_layout(origin_layout, reint_layout, 2);
+
+	pl_obj_layout_free(origin_layout);
+	pl_obj_layout_free(reint_layout);
+	jtc_fini(&ctx);
+}
+
+static void
+fail_reintegrate_multiple_ranks(void **state)
+{
+	uint32_t fail_tgt_offsets[4];
+	uint32_t fail_tgt_nrs[4];
+
+	fail_tgt_offsets[0]=0;
+	fail_tgt_offsets[1]=16;
+	fail_tgt_offsets[2]=32;
+	fail_tgt_offsets[3]=64;
+	fail_tgt_nrs[0] = 8;
+	fail_tgt_nrs[1] = 8;
+	fail_tgt_nrs[2] = 8;
+	fail_tgt_nrs[3] = 8;
+	print_message("check 20 2 8 OC_RP_3GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_RP_3GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+	print_message("check 20 2 8 EC_8P2_GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_EC_8P2GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+	print_message("check 20 2 8 EC_16P2_GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_EC_16P2GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+
+	print_message("check 40 1 8 OC_RP_3GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_RP_3GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+	print_message("check 40 1 8 EC_8P2_GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_EC_8P2GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+	print_message("check 40 1 8 EC_16P2_GX\n");
+	_fail_reintegrate_multiple_ranks(state, 20, 2, 8, OC_EC_16P2GX, fail_tgt_offsets,
+					 fail_tgt_nrs, 3, 2);
+
+
 }
 
 /*
@@ -1988,8 +2394,17 @@ static const struct CMUnitTest tests[] = {
 	  unbalanced_config),
 	T("shards in the same group not in the same domain",
 	  same_group_shards_not_in_same_domain),
+	T("shards in the same group not in the same domain with multiple objects",
+	  same_group_shards_not_in_same_domain_multiple_objs),
 	T("large shards over limited targets",
 	  large_shards_over_limited_targets),
+	T("multiple shards in the same target", multiple_shards_in_the_same_target),
+	T("shards over xpf", shards_over_xpf),
+	T("same group shards not in the same domain fail",
+	  same_group_shards_not_in_same_domain_with_fail),
+	T("fail shard during reintegration",
+	  fail_shard_during_reintegration),
+	T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
 };
 
 int

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,14 +16,13 @@ from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
 from general_utils import check_pool_files, DaosTestError
-from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
     Args:
@@ -32,14 +31,17 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
             POOL_NAMESPACE.
         create (bool, optional): should the pool be created. Defaults to True.
         connect (bool, optional): should the pool be connected. Defaults to True.
-        index (int, optional): Server index for dmg command. Defaults to 0.
+        dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
+            calls test.get_dmg_command().
 
     Returns:
         TestPool: the new pool object
 
     """
+    if not dmg:
+        dmg = test.get_dmg_command()
     pool = TestPool(
-        namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
+        namespace=namespace, context=test.context, dmg_command=dmg,
         label_generator=test.label_generator)
     pool.get_params(test)
     if params:
@@ -91,12 +93,77 @@ def remove_pool(test, pool):
     return error_list
 
 
+def get_size_params(pool):
+    """Get the TestPool params that can be used to create a pool of the same size.
+
+    Useful for creating multiple pools of equal --size=X% as each subsequent 'dmg pool create
+    --size=X%' results in a smaller pool each time due to using a percentage of the available free
+    space.
+
+    Args:
+        pool (TestPool): pool whose size is being replicated.
+
+    Returns:
+        dict: size params argument for an add_pool() method
+
+    """
+    return {"size": None,
+            "tier_ratio": None,
+            "scm_size": pool.scm_per_rank,
+            "nvme_size": pool.nvme_per_rank}
+
+
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+    """Check the duration of each pool creation meets the requirement.
+
+    Args:
+        test (Test): the test to fail if the pool creation exceeds the max duration
+        pools (list): list of TestPool objects to create
+        max_duration (int): max pool creation duration allowed in seconds
+        offset (int, optional): pool index offset. Defaults to 1.
+        durations (list, optional): list of other pool create durations to include in the check.
+            Defaults to None.
+    """
+    if durations is None:
+        durations = []
+    for index, pool in enumerate(pools):
+        durations.append(time_pool_create(test.log, index + offset, pool))
+
+    exceeding_duration = 0
+    for index, duration in enumerate(durations):
+        if duration > max_duration:
+            exceeding_duration += 1
+
+    if exceeding_duration:
+        test.fail(
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))
+
+
+def time_pool_create(log, number, pool):
+    """Time how long it takes to create a pool.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        number (int): pool number in the list
+        pool (TestPool): pool to create
+
+    Returns:
+        float: number of seconds elapsed during pool create
+
+    """
+    start = time()
+    pool.create()
+    duration = time() - start
+    log.info("Pool %s creation: %s seconds", number, duration)
+    return duration
+
+
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, namespace=POOL_NAMESPACE):
+    def __init__(self, context, dmg_command, label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -107,8 +174,6 @@ class TestPool(TestDaosApiBase):
                 value can be obtained by calling self.get_dmg_command() from a
                 test. It'll return the object with -l <Access Point host:port>
                 and --insecure.
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
                 There's a link between label_generator and label. If the label
@@ -116,7 +181,7 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__(namespace, cb_handler)
+        super().__init__(namespace)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -135,8 +200,9 @@ class TestPool(TestDaosApiBase):
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.pool_query_delay = BasicParameter(None)
         self.acl_file = BasicParameter(None)
-        self.label = BasicParameter(None, "TestLabel")
+        self.label = BasicParameter(None, "TestPool")
         self.label_generator = label_generator
 
         # Optional TestPool parameters used to autosize the dmg pool create
@@ -192,37 +258,6 @@ class TestPool(TestDaosApiBase):
             test (Test): avocado Test object
         """
         super().get_params(test)
-
-        # Autosize any size/scm_size/nvme_size parameters
-        # pylint: disable=too-many-boolean-expressions
-        if ((self.scm_size.value is not None
-             and str(self.scm_size.value).endswith("%"))
-                or (self.nvme_size.value is not None
-                    and str(self.nvme_size.value).endswith("%"))):
-            index = self.server_index.value
-            try:
-                params = test.server_managers[index].autosize_pool_params(
-                    size=None,
-                    tier_ratio=None,
-                    scm_size=self.scm_size.value,
-                    nvme_size=self.nvme_size.value,
-                    min_targets=self.min_targets.value,
-                    quantity=self.quantity.value)
-            except ServerFailed as error:
-                test.fail(
-                    "Failure autosizing pool parameters: {}".format(error))
-            except AutosizeCancel as error:
-                test.cancel(error)
-
-            # Update the pool parameters with any autosized values
-            for name in params:
-                test_pool_param = getattr(self, name)
-                test_pool_param.update(params[name], name)
-
-                # Cache the autosized value so we do not calculate it again
-                # pylint: disable=protected-access
-                cache_id = (name, self.namespace, test_pool_param._default)
-                test.params._cache[cache_id] = params[name]
 
         # Use a unique pool label if using pool labels
         if self.label.value is not None:
@@ -355,13 +390,13 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        if self.set_logmasks is True:
+        if self.set_logmasks.value is True:
             self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            if self.set_logmasks is True:
+            if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
@@ -460,7 +495,7 @@ class TestPool(TestDaosApiBase):
 
                 # Destroy the pool with the dmg command.
                 # Elevate log_mask to DEBUG, then restore after pool destroy
-                if self.set_logmasks is True:
+                if self.set_logmasks.value is True:
                     self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                     self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
                     self.dmg.server_set_logmasks(raise_exception=False)
@@ -507,6 +542,18 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
+    def disable_aggregation(self):
+        """ Disable pool aggregation."""
+        self.log.info("Disable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "disabled")
+
+    @fail_on(CommandFailure)
+    def enable_aggregation(self):
+        """ Enable pool aggregation."""
+        self.log.info("Enable pool aggregation for %s", str(self))
+        self.set_property("reclaim", "time")
+
+    @fail_on(CommandFailure)
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
@@ -535,7 +582,7 @@ class TestPool(TestDaosApiBase):
         """Extend the pool to additional ranks.
 
         Args:
-            ranks (list): a list daos server ranks (int) to exclude
+            ranks (str): comma separate list of daos server ranks (int) to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -554,6 +601,63 @@ class TestPool(TestDaosApiBase):
 
         """
         return self.dmg.pool_get_acl(pool=self.identifier)
+
+    @fail_on(CommandFailure)
+    def set_prop(self, *args, **kwargs):
+        """Get pool properties by calling dmg pool set-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_set_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_set_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool set-prop
+
+        Returns:
+            dict: json output of dmg pool set-prop command
+
+        """
+        return self.dmg.pool_set_prop(pool=self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def get_prop(self, *args, **kwargs):
+        """Get pool properties by calling dmg pool get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool get-prop
+
+        Returns:
+            dict: json output of dmg pool get-prop command
+
+        """
+        return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
+
+    def get_prop_values(self, *args, **kwargs):
+        """Get pool property values from the dmg pool get-prop json output.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
+            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
+
+        Raises:
+            TestFailure: if there is an error running dmg pool get-prop
+
+        Returns:
+            list: a list of values matching the or specified property names.
+
+        """
+        values = []
+        self.log.info("Getting property values for %s", self)
+        data = self.get_prop(*args, **kwargs)
+        if data['status'] != 0:
+            return values
+        for entry in data['response']:
+            values.append(entry['value'])
+        return values
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
@@ -625,6 +729,26 @@ class TestPool(TestDaosApiBase):
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
 
+                if self.pool_query_delay:
+                    self.log.info(
+                        "Waiting %s seconds before issuing next dmg pool query",
+                        self.pool_query_delay)
+                    sleep(self.pool_query_delay.value)
+
+    @fail_on(CommandFailure)
+    def query_targets(self, *args, **kwargs):
+        """Call dmg pool query-targets.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_query_targets
+            kwargs (dict, optional): named arguments to DmgCommand.pool_query_targets
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
+
     @fail_on(CommandFailure)
     def reintegrate(self, rank, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
@@ -640,25 +764,17 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
-    def set_property(self, prop_name=None, prop_value=None):
+    def set_property(self, prop_name, prop_value):
         """Set Property.
 
         It sets property for a given pool uuid using dmg.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to
-                None, which uses the TestPool.prop_name.value
-            prop_value (str, optional): value to be set for the property.
-                Defaults to None, which uses the TestPool.prop_value.value
+            prop_name (str): pool property name
+            prop_value (str): value to be set for the property
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.identifier)
-
-            # If specific values are not provided, use the class values
-            if prop_name is None:
-                prop_name = self.prop_name.value
-            if prop_value is None:
-                prop_value = self.prop_value.value
             properties = ":".join([prop_name, prop_value])
             self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 
@@ -734,52 +850,6 @@ class TestPool(TestDaosApiBase):
              val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self._check_info(checks)
-
-    def check_pool_space(self, ps_free_min=None, ps_free_max=None,
-                         ps_free_mean=None, ps_ntargets=None, ps_padding=None):
-        # pylint: disable=unused-argument
-        """Check the pool info space attributes.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Args:
-            ps_free_min (list, optional): minimum free space per device.
-                Defaults to None.
-            ps_free_max (list, optional): maximum free space per device.
-                Defaults to None.
-            ps_free_mean (list, optional): mean free space per device.
-                Defaults to None.
-            ps_ntargets (int, optional): number of targets. Defaults to None.
-            ps_padding (int, optional): space padding. Defaults to None.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Returns:
-            bool: True if at least one expected value is specified and all the
-                specified values match; False otherwise
-
-        """
-        self.get_info()
-        checks = []
-        for key in ("ps_free_min", "ps_free_max", "ps_free_mean"):
-            val = locals()[key]
-            if isinstance(val, list):
-                for index, item in val:
-                    checks.append((
-                        "{}[{}]".format(key, index),
-                        getattr(self.info.pi_space, key)[index],
-                        item))
-        for key in ("ps_ntargets", "ps_padding"):
-            val = locals()[key]
-            if val is not None:
-                checks.append((key, getattr(self.info.pi_space, key), val))
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -935,18 +1005,30 @@ class TestPool(TestDaosApiBase):
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
 
-    def get_pool_rebuild_status(self):
-        """Get the pool info rebuild status attributes as a dictionary.
+    def get_space_per_target(self, ranks, target_idx):
+        """Get space usage per rank, per target using dmg pool query-targets.
+
+        Args:
+            ranks (list): List of ranks to be queried
+            target_idx (str): Comma-separated list of target idx(s) to be queried
 
         Returns:
-            dict: a dictionary of lists of the rebuild status attributes
+            dict: space per rank, per target
+                E.g. {<rank>: {<target>: {scm: {total: X, free: Y, used: Z}, nvme: {...}}}}
 
         """
-        self.get_info()
-        keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_state",
-            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
-        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
+        rank_target_tier_space = {}
+        for rank in ranks:
+            rank_target_tier_space[rank] = {}
+            rank_result = self.query_targets(rank=rank, target_idx=target_idx)
+            for target, target_info in enumerate(rank_result['response']['Infos']):
+                rank_target_tier_space[rank][target] = {}
+                for tier in target_info['Space']:
+                    rank_target_tier_space[rank][target][tier['media_type']] = {
+                        'total': tier['total'],
+                        'free': tier['free'],
+                        'used': tier['total'] - tier['free']}
+        return rank_target_tier_space
 
     def get_pool_free_space(self, device="scm"):
         """Get SCM or NVME free space.
@@ -997,13 +1079,6 @@ class TestPool(TestDaosApiBase):
         self.log.info(
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
-
-    def display_pool_rebuild_status(self):
-        """Display the pool info rebuild status attributes."""
-        status = self.get_pool_rebuild_status()
-        self.log.info(
-            "Pool rebuild status: %s",
-            ", ".join(["{}={}".format(key, status[key]) for key in sorted(status)]))
 
     def pool_percentage_used(self):
         """Get the pool storage used % for SCM and NVMe.
@@ -1061,6 +1136,51 @@ class TestPool(TestDaosApiBase):
             keys_str = ".".join(map(str, keys))
             raise CommandFailure(
                 "The dmg pool query key does not exist: {}".format(keys_str)) from error
+
+    def get_tier_stats(self, refresh=False):
+        """Get the pool tier stats from pool query output.
+
+        Args:
+             refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+             dict: A dictionary for pool stats, scm and nvme:
+
+        """
+        tier_stats = {}
+        for tier_stat in self._get_query_data_keys("response", "tier_stats", refresh=refresh):
+            tier_type = tier_stat.pop("media_type")
+            tier_stats[tier_type] = tier_stat.copy()
+        return tier_stats
+
+    def get_total_free_space(self, refresh=False):
+        """Get the pool total free space.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Return:
+            total_free_space (int): pool total free space.
+
+        """
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["free"] for stat in tier_stats.values())
+
+    def get_total_space(self, refresh=False):
+        """Get the pool total space.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Return:
+            total_space (int): pool total space.
+
+        """
+        tier_stats = self.get_tier_stats(refresh)
+        return sum(stat["total"] for stat in tier_stats.values())
 
     def get_version(self, refresh=False):
         """Get the pool version from the dmg pool query output.
@@ -1277,8 +1397,8 @@ class TestPool(TestDaosApiBase):
             interval (int): Interval (sec) to call pool query to check the rebuild status.
                 Defaults to 1.
         """
-        start = float(time())
+        start = time()
         self.wait_for_rebuild_to_start(interval=interval)
         self.wait_for_rebuild_to_end(interval=interval)
-        duration = float(time()) - start
+        duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)

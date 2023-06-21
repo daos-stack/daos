@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -44,7 +46,8 @@ type Server struct {
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
 	DisableVMD          *bool                     `yaml:"disable_vmd"`
 	EnableHotplug       bool                      `yaml:"enable_hotplug"`
-	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
+	NrHugepages         int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved   int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages    bool                      `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
@@ -64,6 +67,8 @@ type Server struct {
 	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
+
+	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -155,6 +160,12 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
+	return cfg
+}
+
+// WithControlMetadata sets the control plane metadata.
+func (cfg *Server) WithControlMetadata(md storage.ControlMetadata) *Server {
+	cfg.Metadata = md
 	return cfg
 }
 
@@ -252,15 +263,22 @@ func (cfg *Server) WithHyperthreads(enabled bool) *Server {
 	return cfg
 }
 
-// WithNrHugePages sets the number of huge pages to be used (total for all engines).
-func (cfg *Server) WithNrHugePages(nr int) *Server {
+// WithNrHugepages sets the number of huge pages to be used (total for all engines).
+func (cfg *Server) WithNrHugepages(nr int) *Server {
 	cfg.NrHugepages = nr
 	return cfg
 }
 
-// WithDisableHugePages disables the use of huge pages.
-func (cfg *Server) WithDisableHugePages(disabled bool) *Server {
+// WithDisableHugepages disables the use of huge pages.
+func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	cfg.DisableHugepages = disabled
+	return cfg
+}
+
+// WithSystemRamReserved sets the amount of system memory to reserve for system (non-DAOS)
+// use. In units of GiB.
+func (cfg *Server) WithSystemRamReserved(nr int) *Server {
+	cfg.SystemRamReserved = nr
 	return cfg
 }
 
@@ -304,15 +322,16 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // populated with defaults.
 func DefaultServer() *Server {
 	return &Server{
-		SystemName:      build.DefaultSystemName,
-		SocketDir:       defaultRuntimeDir,
-		AccessPoints:    []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
-		ControlPort:     build.DefaultControlPort,
-		TransportConfig: security.DefaultServerTransportConfig(),
-		Hyperthreads:    false,
-		Path:            defaultConfigPath,
-		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableHotplug:   false, // disabled by default
+		SystemName:        build.DefaultSystemName,
+		SocketDir:         defaultRuntimeDir,
+		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:       build.DefaultControlPort,
+		TransportConfig:   security.DefaultServerTransportConfig(),
+		Hyperthreads:      false,
+		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
+		Path:              defaultConfigPath,
+		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
+		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
@@ -424,8 +443,155 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 	return addr, nil
 }
 
+// SetNrHugepages calculates minimum based on total target count if using nvme.
+func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
+	var cfgTargetCount int
+	var sysXSCount int
+	for idx, ec := range cfg.Engines {
+		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
+			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+
+		// Calculate overall target count if NVMe is enabled.
+		if ec.Storage.Tiers.HaveBdevs() {
+			cfgTargetCount += ec.TargetCount
+			if ec.Storage.Tiers.HasBdevRoleMeta() {
+				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
+				// MD-on-SSD has extra sys-xstream for rdb.
+				sysXSCount++
+			}
+		}
+		log.Debug(msg)
+	}
+
+	if cfgTargetCount <= 0 {
+		return nil // no nvme, no hugepages required
+	}
+
+	if cfg.DisableHugepages {
+		return FaultConfigHugepagesDisabled
+	}
+
+	// Calculate minimum number of hugepages for all configured engines.
+	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
+	if err != nil {
+		return err
+	}
+
+	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
+	// that the configured amount is sufficient.
+	if cfg.NrHugepages == 0 {
+		var msgSysXS string
+		if sysXSCount > 0 {
+			msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+		}
+		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
+			cfgTargetCount, msgSysXS)
+		cfg.NrHugepages = minHugepages
+	}
+
+	if cfg.NrHugepages < minHugepages {
+		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
+			"if this is not intentional update the 'nr_hugepages' config "+
+			"parameter or remove and it will be automatically calculated",
+			cfg.NrHugepages, minHugepages)
+	}
+
+	return nil
+}
+
+// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
+func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
+	// Convert memory from kib to bytes.
+	memTotal := uint64(memKiB * humanize.KiByte)
+
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
+		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+}
+
+// CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
+func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
+		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+}
+
+// SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
+// Then either validate configured engine storage values or assign if not already set.
+func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
+	if len(cfg.Engines) == 0 {
+		return nil // no engines
+	}
+
+	// Create the same size scm for each engine.
+	scmCfgs := cfg.Engines[0].Storage.Tiers.ScmConfigs()
+
+	if len(scmCfgs) == 0 || scmCfgs[0].Class != storage.ClassRam {
+		return nil // no ramdisk to size
+	}
+
+	maxRamdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
+	if err != nil {
+		return errors.Wrapf(err, "calculate ramdisk size")
+	}
+
+	memTotBytes := uint64(mi.MemTotalKiB) * humanize.KiByte
+
+	msg := fmt.Sprintf("calculated max ram-disk size (%s) using MemTotal (%s)",
+		humanize.IBytes(maxRamdiskSize), humanize.IBytes(memTotBytes))
+
+	if maxRamdiskSize < storage.MinRamdiskMem {
+		// Total RAM is insufficient to meet minimum size.
+		log.Errorf("%s: insufficient total memory", msg)
+
+		minMem, err := cfg.CalcMemForRamdiskSize(log, mi.HugepageSizeKiB,
+			storage.MinRamdiskMem)
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		return storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem, minMem,
+			memTotBytes)
+	}
+
+	for idx, ec := range cfg.Engines {
+		scs := ec.Storage.Tiers.ScmConfigs()
+		if len(scs) != 1 {
+			return errors.Errorf("unexpected number of scm tiers, want 1 got %d",
+				len(scs))
+		}
+
+		// Validate or set configured scm sizes based on calculated value.
+		confSize := uint64(scs[0].Scm.RamdiskSize) * humanize.GiByte
+		if confSize == 0 {
+			// Apply calculated size in config as not already set.
+			log.Debugf("%s: auto-sized ram-disk in engine-%d config", msg, idx)
+			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
+		} else if confSize > maxRamdiskSize {
+			// Total RAM is not enough to meet tmpfs size requested in config.
+			log.Errorf("%s: engine-%d config size too large for total memory", msg,
+				idx)
+
+			return FaultConfigRamdiskOverMaxMem(confSize, maxRamdiskSize,
+				storage.MinRamdiskMem)
+		}
+	}
+
+	return nil
+}
+
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
+func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -470,6 +636,14 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 	cfg.AccessPoints = newAPs
 
+	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
+		return FaultConfigControlMetadataNoPath
+	}
+
+	if cfg.SystemRamReserved <= 0 {
+		return FaultConfigSysRsvdZero
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -498,72 +672,34 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigBadTelemetryPort
 	}
 
-	cfgHasBdevs := false
-	cfgTargetCount := 0
 	for idx, ec := range cfg.Engines {
-		cfgTargetCount += ec.TargetCount
-
+		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.EngineIdx = uint(idx)
 		ec.ConvertLegacyStorage(log, idx)
-
-		if ec.Storage.Tiers.HaveBdevs() {
-			cfgHasBdevs = true
-			if ec.TargetCount == 0 {
-				return errors.Errorf("engine %d: Target count cannot be zero if "+
-					"bdevs have been assigned in config", idx)
-			}
-		}
-
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
+	}
 
-		log.Debugf("engine %d fabric numa %d, storage numa %d", idx,
-			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+	if len(cfg.Engines) > 1 {
+		if err := cfg.validateMultiEngineConfig(log); err != nil {
+			return err
+		}
 	}
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
-	if cfgHasBdevs {
-		if cfg.DisableHugepages {
-			return FaultConfigHugepagesDisabled
-		}
-
-		// Calculate minimum number of hugepages for all configured engines.
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
-		if err != nil {
-			return err
-		}
-
-		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
-		// that the configured amount is sufficient.
-		if cfg.NrHugepages == 0 {
-			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
-				cfgTargetCount)
-			cfg.NrHugepages = minHugePages
-		}
-
-		if cfg.NrHugepages < minHugePages {
-			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
-		}
-	}
-
-	if len(cfg.Engines) > 1 {
-		if err := cfg.validateMultiServerConfig(log); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
-// validateMultiServerConfig performs an extra level of validation for multi-server configs. The
+// validateMultiEngineConfig performs an extra level of validation for multi-server configs. The
 // goal is to ensure that each instance has unique values for resources which cannot be shared
 // (e.g. log files, fabric configurations, PCI devices, etc.)
-func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
+func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	if len(cfg.Engines) < 2 {
 		return nil
 	}
@@ -575,6 +711,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
+	seenScmCls := storage.ClassNone
+	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -598,15 +736,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 		}
 
 		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+
 			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
 			if seenIn, exists := seenValues[mountConfig]; exists {
 				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
 				return FaultConfigDuplicateScmMount(idx, seenIn)
 			}
 			seenValues[mountConfig] = idx
-		}
 
-		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
 			for _, dev := range scmConf.Scm.DeviceList {
 				if seenIn, exists := seenScmSet[dev]; exists {
 					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
@@ -614,6 +751,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				}
 				seenScmSet[dev] = idx
 			}
+
+			if seenScmClsIdx != -1 && scmConf.Class != seenScmCls {
+				log.Debugf("scm_class entry %s in %d doesn't match %d",
+					scmConf.Class, idx, seenScmClsIdx)
+				return FaultConfigScmDiffClass(idx, seenScmClsIdx)
+			}
+			seenScmCls = scmConf.Class
+			seenScmClsIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()
@@ -679,11 +824,27 @@ func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSourc
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
 	if len(affSources) == 0 {
-		return errors.New("SetEngineAffinities() requires at least one affinity source")
+		return errors.New("requires at least one affinity source")
 	}
 	defaultAffinity := uint(0)
 
+	// Detect legacy mode by checking if first_core is being used.
+	legacyMode := false
+	for _, engineCfg := range cfg.Engines {
+		if engineCfg.ServiceThreadCore != 0 {
+			legacyMode = true
+			break
+		}
+	}
+
+	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
+		if legacyMode {
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
+			engineCfg.PinnedNumaNode = nil
+			continue
+		}
+
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
 		if err != nil {
 			if err != ErrNoAffinityDetected {
@@ -700,7 +861,7 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 		// detected NUMA node is zero, don't pin the engine to any NUMA node in order to
 		// enable the engine's legacy core allocation algorithm.
 		if len(cfg.Engines) == 1 && engineCfg.PinnedNumaNode == nil && numaAffinity == 0 {
-			log.Debug("enabling single-engine legacy core allocation algorithm")
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
 			continue
 		}
 
@@ -711,13 +872,6 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 				continue
 			}
 			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
-		}
-
-		// TODO: Remove this special case when we have removed first_core as an exposed config
-		// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
-		// so that the engine uses its legacy core allocation algorithm.
-		if engineCfg.ServiceThreadCore != 0 {
-			engineCfg.PinnedNumaNode = nil
 		}
 	}
 

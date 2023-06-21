@@ -43,8 +43,8 @@ $ cat /proc/meminfo | grep -e "^Huge"
 The platform was tested and validated with the following dependencies:
 - [Docker CE](https://docs.docker.com/engine/install/centos/) latest
   [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
-- [DAOS 2.3](https://docs.daos.io/v2.3/) local RPMS builds from [DAOS master
-  branch](https://github.com/daos-stack/daos/tree/master)
+- [DAOS 2.4](https://docs.daos.io/v2.4/) local RPMS builds from [DAOS release/2.4
+  branch](https://github.com/daos-stack/daos/tree/release/2.4)
 - [rockylinux/rockylinux:8.6](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
   images.
 
@@ -80,7 +80,7 @@ from GitHub with the following command:
 
 ```bash
 $ docker build --tag daos-base:rocky8.6 \
-	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
+	https://github.com/daos-stack/daos.git#release/2.4:utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
@@ -91,7 +91,7 @@ This Docker file accept the following arguments:
   such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-  "https://packages.daos.io/v2.2/EL8/packages/x86\_64/")
+  "https://packages.daos.io/v2.4/EL8/packages/x86\_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
   "https://packages.daos.io/RPM-GPG-KEY")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
@@ -102,7 +102,7 @@ following command:
 
 ```bash
 $ docker build --tag daos-base:rocky8.6 --build-arg DAOS_AUTH=no \
-	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
+	https://github.com/daos-stack/daos.git#release/2.4:utils/docker/vcluster/daos-base/el8
 ```
 
 It is also possible to build the `daos-base` image from a local tree with the following command:
@@ -130,7 +130,7 @@ to build directly the three images from GitHub:
 ```bash
 $ for image in daos-server daos-admin daos-client ; do \
 	docker build --tag "$image:rocky8.6" \
-		"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/$image/el8"; \
+		"https://github.com/daos-stack/daos.git#release/2.4:utils/docker/vcluster/$image/el8"; \
   done
 ```
 
@@ -225,7 +225,7 @@ $ docker exec daos-admin dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/v2.3/QSG/tour/).
+section [DAOS Tour](https://docs.daos.io/v2.4/QSG/tour/).
 
 
 ### Via Docker Compose

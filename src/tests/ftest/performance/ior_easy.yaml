@@ -30,7 +30,6 @@ server_config:
       storage: auto
 pool:
   size: 95%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
@@ -89,10 +88,10 @@ ior_mpiio_sx:
   dfs_chunk: 1MiB
   transfer_size: 1MiB
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   disable_caching: True
 client:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: socket
+  bind_to: hwthread
+  map_by: socket

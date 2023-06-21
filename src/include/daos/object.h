@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,6 +52,8 @@ enum {
 
 /* Temporarily keep it to minimize change, remove it in the future */
 #define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
+
+#define DAOS_OIT_BUCKET_MAX	1024
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -124,8 +126,12 @@ typedef struct {
 	/** Private section, object shard identifier */
 	uint32_t		id_shard;
 	/** object layout version */
-	uint32_t		id_layout_ver;
+	uint16_t		id_layout_ver;
+	uint16_t		id_padding;
 } daos_unit_oid_t;
+
+/* Leave a few extra bits for now */
+#define MAX_OBJ_LAYOUT_VERSION		0xFFF0
 
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
@@ -175,7 +181,9 @@ struct daos_obj_layout {
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
 	DTF_DELAY_FORWARD	= (1 << 0),
-	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	/* When leader forward IO RPC to non-leaders, reassemble related sub requests,
+	 * for 2.2 or older release.
+	 */
 	DTF_REASSEMBLE_REQ	= (1 << 1),
 };
 
@@ -337,7 +345,8 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 static inline bool
 daos_oid_is_oit(daos_obj_id_t oid)
 {
-	return daos_obj_id2type(oid) == DAOS_OT_OIT;
+	return daos_obj_id2type(oid) == DAOS_OT_OIT ||
+	       daos_obj_id2type(oid) == DAOS_OT_OIT_V2;
 }
 
 static inline int
@@ -373,16 +382,10 @@ is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 	return is_type_set;
 }
 
-/*
- * generate ID for Object ID Table which is just an object, caller should
- * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
- * or it possibly assert it internally
- */
-static inline daos_obj_id_t
-daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+static inline int
+daos_cont_rf2oit_ord(uint32_t cont_rf)
 {
 	enum daos_obj_redun	ord;
-	daos_obj_id_t		oid = {0};
 
 	switch (cont_rf) {
 	case DAOS_PROP_CO_REDUN_RF0:
@@ -401,9 +404,26 @@ daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
 		ord = OR_RP_5;
 		break;
 	default:
-		D_ASSERTF(0, "bad cont_rf %d\n", cont_rf);
-		break;
+		D_ERROR("bad cont_rf %d\n", cont_rf);
+		return -DER_INVAL;
 	};
+
+	return ord;
+}
+
+/*
+ * generate ID for Object ID Table which is just an object, caller should
+ * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
+ * or it possibly assert it internally
+ */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+{
+	daos_obj_id_t		oid = {0};
+	int			ord;
+
+	ord = daos_cont_rf2oit_ord(cont_rf);
+	D_ASSERT(ord >= 0);
 
 	/** use 1 group for simplicity, it should be more scalable */
 	daos_obj_set_oid(&oid, DAOS_OT_OIT, ord, 1, 0);
@@ -477,6 +497,7 @@ int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
+int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);

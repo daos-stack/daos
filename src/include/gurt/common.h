@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,9 +30,14 @@
 #include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
 #define D_ON_VALGRIND 0
+#define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>
@@ -77,7 +82,8 @@ void *d_malloc(size_t);
 void *d_realloc(void *, size_t);
 char *d_strndup(const char *s, size_t n);
 int d_asprintf(char **strp, const char *fmt, ...);
-void *d_aligned_alloc(size_t alignment, size_t size);
+void       *
+d_aligned_alloc(size_t alignment, size_t size, bool zero);
 char *d_realpath(const char *path, char *resolved_path);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
@@ -174,12 +180,16 @@ char *d_realpath(const char *path, char *resolved_path);
 		}							\
 	} while (0)
 
-#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
-							 size);		\
-		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
-			      size, 0, #ptr, 0);			\
+#define D_ALIGNED_ALLOC(ptr, alignment, size)                                                      \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, true);                   \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
+	} while (0)
+
+#define D_ALIGNED_ALLOC_NZ(ptr, alignment, size)                                                   \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, false);                  \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise
@@ -311,6 +321,15 @@ char *d_realpath(const char *path, char *resolved_path);
 		d_errno2der(_rc);					\
 	})
 
+#define __D_PTHREAD_TRYLOCK(fn, x)					\
+	({								\
+		int _rc;						\
+		_rc = fn(x);						\
+		D_ASSERTF(_rc == 0 || _rc == EBUSY, "%s rc=%d %s\n",	\
+			  #fn, _rc, strerror(_rc));			\
+		d_errno2der(_rc);					\
+	})
+
 #define __D_PTHREAD_INIT(fn, x, y)					\
 	({								\
 		int _rc;						\
@@ -328,6 +347,7 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
 #define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
 #define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
 #define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
 #define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
 #define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
@@ -519,6 +539,7 @@ d_errno2der(int err)
 	case EEXIST:	return -DER_EXIST;
 	case ENOENT:	return -DER_NONEXIST;
 	case ECANCELED:	return -DER_CANCELED;
+	case EBUSY:	return -DER_BUSY;
 	default:	return -DER_MISC;
 	}
 	return 0;
@@ -870,6 +891,17 @@ d_hlc_epsilon_get_bound(uint64_t hlc);
 
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);
+
+/** Vector of pointers */
+struct d_vec_pointers {
+	void		**p_buf;
+	uint32_t	  p_cap;
+	uint32_t	  p_len;
+};
+
+int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
+void d_vec_pointers_fini(struct d_vec_pointers *pointers);
+int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
 
 #if defined(__cplusplus)
 }

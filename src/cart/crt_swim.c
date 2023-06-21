@@ -428,8 +428,30 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count, rcv_delay,
 		  self_id, to_id, from_id);
 
-	if (self_id == SWIM_ID_INVALID)
-		D_GOTO(out_reply, rc = -DER_UNINIT);
+	if (self_id == SWIM_ID_INVALID) {
+		uint64_t incarnation;
+
+		if (ctx == NULL)
+			D_GOTO(out_reply, rc = -DER_UNINIT);
+
+		crt_swim_csm_lock(csm);
+		incarnation = csm->csm_incarnation;
+		crt_swim_csm_unlock(csm);
+
+		/*
+		 * Infer my rank from rpc->cr_ep.ep_rank, and simulate a reply,
+		 * shorting the local swim state. If there is a suspicion on me
+		 * in rpc_in->upds, this call will clarify it and bump my
+		 * incarnation.
+		 */
+		rc = swim_updates_short(ctx, rpc->cr_ep.ep_rank, incarnation, from_id, to_id,
+					rpc_in->upds.ca_arrays, rpc_in->upds.ca_count,
+					&rpc_out->upds.ca_arrays, &rpc_out->upds.ca_count);
+		if (rc != 0)
+			RPC_ERROR(rpc_priv, "updates short: %lu: %lu <= %lu failed: "DF_RC"\n",
+				  self_id, to_id, from_id, DP_RC(rc));
+		D_GOTO(out_reply, rc);
+	}
 
 	snd_delay = crt_swim_update_delays(csm, hlc, from_id, rcv_delay,
 					   rpc_in->upds.ca_arrays,
@@ -637,16 +659,13 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 out:
 	if (rpc_out->excl_grp_ver > 0) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (grp_priv->gp_membs_ver > 0 && rpc_out->excl_grp_ver > grp_priv->gp_membs_ver) {
+		if (grp_priv->gp_membs_ver_min > 0 &&
+		    rpc_out->excl_grp_ver > grp_priv->gp_membs_ver_min) {
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 			struct crt_swim_target	*cst;
 			uint64_t		 incarnation = 0;
 
-			/*
-			 * I'm excluded. TODO: Strictly speaking, we should
-			 * compare rpc_out->excl_grp_ver with the group version
-			 * at which we joined the system.
-			 */
+			/* I'm excluded. */
 			D_WARN("excluded in group version %u (self %u)\n", rpc_out->excl_grp_ver,
 			       grp_priv->gp_membs_ver);
 			crt_swim_csm_lock(csm);
@@ -957,11 +976,11 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	swim_id_t		 self_id = swim_self_get(ctx);
 	uint64_t		 incarnation = d_hlc_get();
 
 	D_ASSERT(state != NULL);
-	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
-		  id, swim_self_get(ctx));
+	D_ASSERTF(self_id == SWIM_ID_INVALID || id == self_id, DF_U64" == "DF_U64"\n", id, self_id);
 	crt_swim_csm_lock(csm);
 	csm->csm_incarnation = incarnation;
 	crt_swim_csm_unlock(csm);

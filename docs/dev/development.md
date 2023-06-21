@@ -122,44 +122,6 @@ scons reduces the clutter from compiler setup.
 Additionally, the tool supports options to filter by directory and file names and specify a lower
 bound value to report.
 
-### Building Optional Components
-
-There are a few optional components that can be included into the DAOS build.
-For instance, to include the `psm2` provider. Run the following `scons`
-command:
-
-```bash
-$ scons PREFIX=${daos_prefix_path}
-      INCLUDE=psm2
-      install
-      --build-deps=yes
-      --config=force
-```
-
-Refer to the built-in `scons` help command to get a full list of all the
-optional components under the `INCLUDE` optional parameter.
-
-```bash
-$ scons -h
-scons: Reading SConscript files ...
-
-INCLUDE: Optional components to build
-    (all|none|comma-separated list of names)
-    allowed names: psm2
-    default: none
-    actual:
-```
-
-The version of the components can be changed by editing the
-[utils/build.config](https://github.com/daos-stack/daos/blob/master/utils/build.config)
-file.
-
-
->**_NOTE_**
->
->The support of the optional components is not guarantee and can be removed
->without further notification.
-
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
@@ -253,7 +215,7 @@ you may try relocating the repo to `/var/tmp/` in order to build and install fro
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
 - [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
-- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) is the version specified in [go.mod](https://github.com/daos-stack/daos/blob/master/src/control/go.mod). This plugin is automatically installed by the Makefile in $DAOSREPO/src/proto.
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) is the version specified in [go.mod](https://github.com/daos-stack/daos/blob/release/2.4/src/control/go.mod). This plugin is automatically installed by the Makefile in $DAOSREPO/src/proto.
 
 ### Compiling Protobuf Files
 
@@ -295,7 +257,7 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master \
+$ docker build https://github.com/daos-stack/daos.git#release/2.4 \
         -f utils/docker/Dockerfile.el.8 -t daos
 ```
 

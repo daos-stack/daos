@@ -27,9 +27,9 @@ message MemInfo {
 	uint64 hugepages_reserved = 3;
 	uint64 hugepages_surplus = 4;
 	uint32 hugepage_size_kb = 5;
-	uint64 mem_total = 6;
-	uint64 mem_free = 7;
-	uint64 mem_available = 8;
+	uint64 mem_total_kb = 6;
+	uint64 mem_free_kb = 7;
+	uint64 mem_available_kb = 8;
 }
 
 message StorageScanResp {

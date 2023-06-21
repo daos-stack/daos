@@ -1,6 +1,6 @@
 # PyDAOS
 
-A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/master/src/client/pydaos)
+A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/release/2.4/src/client/pydaos)
 provides the DAOS API to python users. It aims at providing a pythonic interface
 to the DAOS objects by exposing them via native python data structures.
 This section focuses on the main PyDAOS interface that comes with its own
@@ -72,6 +72,21 @@ python container.
 stadium
 >>> print(len(dd))
 2
+```
+
+User can pass the predefined object class id during dict() method call.
+This is optional and it can be RP or EC or S and has to satisfy the rf property of container.
+By default, it will be OC_UNKNOWN (0) object class to `daos_obj_generate_oid()`
+It will allow DAOS to automatically select an object class based on the container properties.
+
+
+```
+>>> dd_oid = dcont.dict("stadium_2024", {"France" : "Stade de France"}, "OC_RP_2G1")
+>>> print(dd_oid)
+stadium_2024
+>>> print(len(dd_oid))
+1
+>>>
 ```
 
 This creates a new persistent object named "stadium" and initializes it with two

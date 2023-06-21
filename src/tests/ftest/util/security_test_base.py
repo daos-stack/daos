@@ -96,9 +96,8 @@ def create_acl_file(file_name, permissions):
         permissions (str): daos acl permission list.
 
     """
-    acl_file = open(file_name, "w+")
-    acl_file.write("\n".join(permissions))
-    acl_file.close()
+    with open(file_name, "w+") as acl_file:
+        acl_file.write("\n".join(permissions))
 
 
 def read_acl_file(filename):
@@ -111,9 +110,8 @@ def read_acl_file(filename):
         list: list containing ACL entries
 
     """
-    f = open(filename, 'r')
-    content = f.readlines()
-    f.close()
+    with open(filename, 'r') as file:
+        content = file.readlines()
 
     # Parse
     acl = []

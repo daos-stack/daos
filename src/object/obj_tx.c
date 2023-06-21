@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,7 +42,7 @@ enum dc_tx_status {
 
 /*
  * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
- *	classified and stored separatedly (but adjacent each other). The Read
+ *	classified and stored separately (but adjacent each other). The Read
  *	ones are in front of the write ones. Such layout will simplify server
  *	side CPD RPC processing.
  *
@@ -80,6 +80,7 @@ struct dc_tx {
 				 tx_set_resend:1, /** Set 'resend' flag. */
 				 tx_for_convert:1,
 				 tx_has_cond:1,
+				 tx_renew:1,
 				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -108,10 +109,12 @@ struct dc_tx {
 	struct daos_cpd_sg	 tx_tgts;
 
 	struct daos_cpd_bulk	 tx_head_bulk;
+	struct daos_cpd_bulk	 tx_reqs_bulk;
 	struct daos_cpd_bulk	 tx_disp_bulk;
 	struct daos_cpd_bulk	 tx_tgts_bulk;
 
 	struct d_backoff_seq	 tx_backoff_seq;
+	crt_proc_t		 tx_crt_proc;
 };
 
 static int
@@ -509,6 +512,23 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	/* Keep 'tx_set_resend'. */
 
+	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
+		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
+			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
+			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
+		}
+
+		D_FREE(tx->tx_reqs_bulk.dcb_iov.iov_buf);
+	}
+
+	tx->tx_reqs.dcs_buf = NULL;
+
+	if (tx->tx_crt_proc != NULL) {
+		crt_proc_destroy(tx->tx_crt_proc);
+		tx->tx_crt_proc = NULL;
+	}
+
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
 		if (tx->tx_head_bulk.dcb_bulk != NULL) {
 			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
@@ -526,7 +546,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 	tx->tx_head.dcs_buf = NULL;
 
-	if (tx->tx_disp.dcs_type == DCST_BULK_DISP) {
+	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
 		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
 			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
 				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
@@ -985,17 +1005,23 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
-	if (unlikely(rc == -DER_TX_ID_REUSED)) {
-		if (tx->tx_retry)
+	if (unlikely(rc == -DER_TX_ID_REUSED ||
+		     (task->dt_result == -DER_EP_OLD && !tx->tx_has_cond))) {
+		struct dtx_id	old_dti;
+
+		if (rc == -DER_TX_ID_REUSED && tx->tx_retry)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
 			D_ASSERTF(0,
 				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
 				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
 
-		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
-		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_copy(&old_dti, &tx->tx_id);
 		daos_dti_gen(&tx->tx_id, false);
 		tx->tx_status = TX_FAILED;
+		tx->tx_renew = 1;
+		D_DEBUG(DB_IO, "refresh CPD DTX ID (err %d) from "DF_DTI" to "DF_DTI"\n",
+			rc, DP_DTI(&old_dti), DP_DTI(&tx->tx_id));
+
 		D_GOTO(out, rc = -DER_TX_RESTART);
 	}
 
@@ -1298,8 +1324,12 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			continue;
 		}
 
-		if (rc != 0)
+		if (rc != 0) {
+			if (rc == -DER_STALE)
+				D_WARN("Used stale pool map %u/%u for "DF_DTI"\n",
+				       obj->cob_version, tx->tx_pm_ver, DP_DTI(&tx->tx_id));
 			goto out;
+		}
 
 		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
 		    isclr(reasb_req->tgt_bitmap, shard->do_shard % daos_oclass_grp_size(oca))) {
@@ -1580,7 +1610,7 @@ dc_tx_dump(struct dc_tx *tx)
 		"read_cnt: %u\n"
 		"write_cnt: %u\n"
 		"head: %p/%u/%u/%u/%p\n"
-		"reqs: %p/%u/%u\n"
+		"reqs: %p/%u/%u/%u/%p\n"
 		"disp: %p/%u/%u/%u/%p\n"
 		"tgts: %p/%u/%u/%u/%p\n",
 		tx, DP_DTI(&tx->tx_id), tx->tx_epoch.oe_value, tx->tx_flags,
@@ -1589,27 +1619,26 @@ dc_tx_dump(struct dc_tx *tx)
 		tx->tx_head.dcs_buf, tx->tx_head.dcs_nr, tx->tx_head.dcs_type,
 		tx->tx_head_bulk.dcb_size, tx->tx_head_bulk.dcb_bulk,
 		tx->tx_reqs.dcs_buf, tx->tx_reqs.dcs_nr, tx->tx_reqs.dcs_type,
+		tx->tx_reqs_bulk.dcb_size, tx->tx_reqs_bulk.dcb_bulk,
 		tx->tx_disp.dcs_buf, tx->tx_disp.dcs_nr, tx->tx_disp.dcs_type,
 		tx->tx_disp_bulk.dcb_size, tx->tx_disp_bulk.dcb_bulk,
 		tx->tx_tgts.dcs_buf, tx->tx_tgts.dcs_nr, tx->tx_tgts.dcs_type,
 		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
 }
 
-/* The calculted CPD RPC body size may be some larger than the real case, no matter. */
+/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
-dc_tx_cpd_body_size(struct daos_cpd_sub_req *dcsr, int count)
+dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
 	struct daos_cpd_update	*dcu;
 	daos_iod_t		*iod;
 	struct obj_iod_array	*oia;
 	struct dcs_iod_csums	*csum;
 	struct obj_io_desc	*desc;
-	size_t			 size;
+	size_t			 size = 0;
 	int			 i;
 	int			 j;
 	int			 k;
-
-	size = sizeof(struct obj_cpd_in) + sizeof(struct daos_cpd_sg) * 4;
 
 	for (i = 0; i < count; i++, dcsr++) {
 		size += offsetof(struct daos_cpd_sub_req, dcsr_update);
@@ -1690,6 +1719,17 @@ dc_tx_cpd_body_need_bulk(size_t size)
 	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
 }
 
+static inline size_t
+dc_tx_cpd_adjust_size(size_t size)
+{
+	/* Lower layer (mercury) need some additional space to pack related payload into
+	 * RPC body (or specified buffer) via related proc interfaces, usually that will
+	 * not exceed 1/10 of the payload. We can make some relative large estimation if
+	 * we do not exactly know the real size now.
+	 */
+	return size * 11 / 10;
+}
+
 static int
 dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 		    tse_task_t *task, void *buf, size_t size, uint32_t nr, uint32_t type)
@@ -1715,6 +1755,47 @@ dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 		dcb->dcb_iov.iov_buf = NULL;
 	}
 
+	return rc;
+}
+
+int
+dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
+{
+	struct daos_cpd_sub_req	*dcsr;
+	unsigned char		*buf;
+	uint32_t		 req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+	uint32_t		 start;
+	size_t			 used;
+	int			 rc;
+	int			 i;
+
+	D_ALLOC(buf, size);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = crt_proc_create(daos_task2ctx(task), buf, size, CRT_PROC_ENCODE, &tx->tx_crt_proc);
+	if (rc != 0) {
+		D_FREE(buf);
+		goto out;
+	}
+
+	start = dc_tx_leftmost_req(tx, false);
+	for (i = 0; i < req_cnt; i++) {
+		dcsr = &tx->tx_req_cache[i + start];
+		rc = crt_proc_struct_daos_cpd_sub_req(tx->tx_crt_proc, CRT_PROC_ENCODE,
+						      dcsr, false);
+		if (rc != 0)
+			goto out;
+	}
+
+	used = crp_proc_get_size_used(tx->tx_crt_proc);
+	D_ASSERTF(used <= size, "Input buffer size %ld is too small for real case %ld\n",
+		  size, used);
+
+	rc = dc_tx_cpd_body_bulk(&tx->tx_reqs, &tx->tx_reqs_bulk, task, buf, used, req_cnt,
+				 DCST_BULK_REQ);
+
+out:
 	return rc;
 }
 
@@ -1778,7 +1859,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (dcsr->dcsr_sgls != NULL && rc > (DAOS_BULK_LIMIT >> 2)) {
+			if (dcsr->dcsr_sgls != NULL &&
+			    (rc > (DAOS_BULK_LIMIT >> 2) ||
+			     (obj_is_ec(obj) && !dcsr->dcsr_reasb->orr_single_tgt))) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1861,7 +1944,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			D_GOTO(out, rc = grp_idx);
 
 		if (obj_is_ec(obj) && dcsr->dcsr_reasb != NULL)
-			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
+			bit_map = dcsr->dcsr_reasb->tgt_bitmap;
 		else
 			bit_map = NIL_BITMAP;
 
@@ -1969,19 +2052,28 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_leader_rank = shard_tgts[0].st_rank;
 	tx->tx_leader_tag = shard_tgts[0].st_tgt_idx;
 
-	/*
-	 * There is limitation for the sub requests count because of server side minor epoch
-	 * restriction. So we always directly pack the sub requests into CPD RPC body without
-	 * bulk transfer. That avoids complex sub request parse and unparse as CaRT proc does.
-	 */
-	tx->tx_reqs.dcs_type = DCST_REQ_CLI;
-	tx->tx_reqs.dcs_nr = req_cnt;
-	tx->tx_reqs.dcs_buf = tx->tx_req_cache + start;
+	body_size = sizeof(struct obj_cpd_in) + sizeof(struct daos_cpd_sg) * 4;
 
-	body_size = dc_tx_cpd_body_size(tx->tx_req_cache + start, req_cnt);
-	if (unlikely(body_size >= DAOS_BULK_LIMIT))
-		D_WARN("The TX "DF_DTI" is too large (1): %u/%u\n",
-		       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	/* The overhead of transferring sub-reuqests via bulk is relative expensive.
+	 * Let's try to pack them inline the CPD RPC body firstly.
+	 */
+	size = dc_tx_cpd_sub_reqs_size(tx->tx_req_cache + start, req_cnt);
+	size = dc_tx_cpd_adjust_size(size);
+
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		rc = dc_tx_cpd_pack_sub_reqs(tx, task, size);
+		if (rc != 0)
+			goto out;
+	} else {
+		tx->tx_reqs.dcs_type = DCST_REQ_CLI;
+		tx->tx_reqs.dcs_nr = req_cnt;
+		tx->tx_reqs.dcs_buf = tx->tx_req_cache + start;
+
+		body_size += size;
+		if (unlikely(body_size >= DAOS_BULK_LIMIT))
+			D_WARN("The TX "DF_DTI" is too large (1): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
 
 	size = sizeof(*dcsh) + sizeof(*mbs) + mbs->dm_data_size;
 
@@ -2008,7 +2100,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		/* Reset dcsh, its buffer will be freed via tx->tx_head.dcs_buf in dc_tx_cleanup. */
 		dcsh = NULL;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (2): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
@@ -2038,15 +2130,15 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		}
 
 		rc = dc_tx_cpd_body_bulk(&tx->tx_disp, &tx->tx_disp_bulk, task, dcdes,
-					 size, act_tgt_cnt, DCST_BULK_DISP);
+					 size, act_tgt_cnt, DCST_BULK_ENT);
 		if (rc != 0)
 			goto out;
 	} else {
-		tx->tx_disp.dcs_type = DCST_DISP;
+		tx->tx_disp.dcs_type = DCST_ENT;
 		tx->tx_disp.dcs_nr = act_tgt_cnt;
 		tx->tx_disp.dcs_buf = dcdes;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (3): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
@@ -2070,7 +2162,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		tx->tx_tgts.dcs_nr = act_tgt_cnt;
 		tx->tx_tgts.dcs_buf = shard_tgts;
 
-		body_size += size;
+		body_size += dc_tx_cpd_adjust_size(size);
 		if (body_size >= DAOS_BULK_LIMIT)
 			D_WARN("The TX "DF_DTI" is too large (4): %u/%u\n",
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
@@ -2118,11 +2210,14 @@ out:
 static int
 dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 {
+	tse_task_t			*pool_task = NULL;
 	crt_rpc_t			*req = NULL;
 	struct obj_cpd_in		*oci;
+	struct daos_cpd_sub_req		*dcsr;
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
 	int				 rc = 0;
+	bool				 locked = true;
 
 	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
 	    (tx->tx_retry || tx->tx_read_cnt > 0))
@@ -2130,12 +2225,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);
-		if (rc != 0) {
-			if (rc == -DER_STALE)
-				rc = -DER_TX_RESTART;
-
+		if (rc != 0)
 			goto out;
-		}
 	}
 
 	tgt_ep.ep_grp = tx->tx_pool->dp_sys->sy_group;
@@ -2168,7 +2259,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER;
+	if (tx->tx_set_resend && !tx->tx_renew)
+		oci->oci_flags |= ORF_RESEND;
+	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
 
@@ -2190,13 +2284,34 @@ out_req:
 	crt_req_decref(req);
 	crt_req_decref(req);
 out:
-	if (rc == -DER_TX_RESTART)
-		tx->tx_status = TX_FAILED;
-	else if (rc != 0)
-		tx->tx_status = TX_ABORTED;
+	if (rc == -DER_STALE) {
+		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
+		rc = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj, 0, &pool_task);
+		if (rc != 0) {
+			/* It is unnecessary to restart the TX if failed to
+			 * refresh pool map to avoid falling into deap loop.
+			 */
+			D_ERROR("Failed to refresh pool map for "DF_DTI": "DF_RC"\n",
+				DP_DTI(&tx->tx_id), DP_RC(rc));
+		} else {
+			rc = -DER_TX_RESTART;
+			tx->tx_status = TX_FAILED;
+			/* Unlock for dc_tx_commit held. */
+			D_MUTEX_UNLOCK(&tx->tx_lock);
+			locked = false;
+			tse_task_schedule(pool_task, true);
+		}
+	}
 
-	/* Unlock for dc_tx_commit held. */
-	D_MUTEX_UNLOCK(&tx->tx_lock);
+	if (locked) {
+		if (rc == -DER_TX_RESTART)
+			tx->tx_status = TX_FAILED;
+		else if (rc != 0)
+			tx->tx_status = TX_ABORTED;
+		/* Unlock for dc_tx_commit held. */
+		D_MUTEX_UNLOCK(&tx->tx_lock);
+	}
+
 	/* -1 for dc_tx_commit() held */
 	dc_tx_decref(tx);
 
@@ -2900,23 +3015,40 @@ struct dc_tx_check_existence_cb_args {
 	daos_iod_t		*tmp_iods;
 };
 
-static int
-dc_tx_check_update(uint64_t flags, int result)
+static inline int
+dc_tx_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int result)
 {
+	if (tx->tx_for_convert)
+		result = dc_tx_convert_post(tx, task, opc, result);
+	else
+		tse_task_complete(task, result);
+
+	return result;
+}
+
+static int
+dc_tx_check_update(tse_task_t *task, uint64_t flags)
+{
+	int result = task->dt_result;
+
 	if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_DKEY_INSERT)) {
 		if (result == 0)
-			return -DER_EXIST;
+			D_GOTO(out, result = -DER_EXIST);
 
 		if (result != -DER_NONEXIST)
-			return result;
+			D_GOTO(out, result);
 
-		return 0;
+		D_GOTO(out, result = 0);
 	}
 
 	if (flags & (DAOS_COND_AKEY_UPDATE | DAOS_COND_DKEY_UPDATE) && result != 0)
-		return result;
+		D_GOTO(out, result);
 
-	return 0;
+	result = 0;
+
+out:
+	task->dt_result = result;
+	return result;
 }
 
 static int
@@ -2929,7 +3061,7 @@ dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
 	D_ASSERT(args->tmp_iods != NULL);
 	D_ASSERT(args->tmp_iod_nr == 1);
 
-	task->dt_result = dc_tx_check_update(args->tmp_iods->iod_flags, task->dt_result);
+	dc_tx_check_update(task, args->tmp_iods->iod_flags);
 
 	daos_iov_free(&args->tmp_iods->iod_name);
 	D_FREE(args->tmp_iods);
@@ -2957,13 +3089,12 @@ dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
 		obj_decref(obj);
 	}
 
-	if (tx->tx_for_convert)
-		rc = dc_tx_convert_post(tx, args->task, args->opc, rc);
+	dc_tx_post(tx, args->task, args->opc, rc);
 
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
 
-	return rc;
+	return 0;
 }
 
 static int
@@ -2980,7 +3111,7 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 
 	switch (args->opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		rc = dc_tx_check_update(args->flags, task->dt_result);
+		rc = dc_tx_check_update(task, args->flags);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -3013,6 +3144,7 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 
 out:
 	D_MUTEX_UNLOCK(&tx->tx_lock);
+	obj_decref(obj);
 
 	if (args->tmp_iods != NULL) {
 		for (i = 0; i < args->nr; i++)
@@ -3021,15 +3153,10 @@ out:
 		D_FREE(args->tmp_iods);
 	}
 
-	if (tx->tx_for_convert)
-		rc = dc_tx_convert_post(tx, args->task, args->opc, rc);
-
-	/* The errno will be auto propagated to the dependent task. */
-	task->dt_result = rc;
+	dc_tx_post(tx, args->task, args->opc, rc);
 
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
-	obj_decref(obj);
 
 	return 0;
 }
@@ -3121,8 +3248,7 @@ out:
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 			obj_decref(obj);
 
-			if (tx->tx_for_convert)
-				rc = dc_tx_convert_post(tx, parent, opc, rc);
+			rc = dc_tx_post(tx, parent, opc, rc);
 
 			/* Drop the reference that is held via dc_tx_attach(). */
 			dc_tx_decref(tx);
@@ -3133,12 +3259,6 @@ out:
 				goto fail;
 
 			tse_task_list_sched(&task_list, true);
-
-			/*
-			 * Return positive value to notify the sponsor to not call
-			 * complete() the task until the checking existence callback.
-			 */
-			rc = 1;
 		}
 	} else {
 		if (task != NULL)
@@ -3151,8 +3271,8 @@ out:
 
 fail:
 		tse_task_list_traverse(&task_list, shard_task_abort, &rc);
-		if (tx->tx_for_convert)
-			rc = dc_tx_convert_post(tx, parent, opc, rc);
+
+		rc = dc_tx_post(tx, parent, opc, rc);
 
 		/* Drop the reference that is held via dc_tx_attach(). */
 		dc_tx_decref(tx);
@@ -3243,12 +3363,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 		goto out;
 	}
 
-	rc = dc_task_schedule(task, true);
-
-	/* Return positive value to notify the sponsor to not call
-	 * complete() the task until the checking existence callback.
-	 */
-	return rc == 0 ? 1 : rc;
+	return tse_task_schedule(task, true);
 
 out:
 	if (task != NULL)
@@ -3261,8 +3376,7 @@ out:
 		D_FREE(iods);
 	}
 
-	if (tx->tx_for_convert)
-		rc = dc_tx_convert_post(tx, parent, opc, rc);
+	rc = dc_tx_post(tx, parent, opc, rc);
 
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
@@ -3272,7 +3386,7 @@ out:
 
 int
 dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
-	     tse_task_t *task)
+	     tse_task_t *task, bool comp)
 {
 	struct dc_tx	*tx;
 	int		 rc;
@@ -3410,6 +3524,9 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 out_obj:
 	obj_decref(obj);
 
+	if (comp)
+		tse_task_complete(task, rc);
+
 	return rc;
 }
 
@@ -3520,6 +3637,7 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	daos_tx_commit_t		*cmt_args;
 	tse_task_t			*cmt_task = NULL;
 	int				 rc = 0;
+	bool				 tx_need_close = true;
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
@@ -3544,17 +3662,22 @@ dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int
 	rc = dc_task_depend(task, 1, &cmt_task);
 	if (rc != 0) {
 		D_ERROR("Fail to add dep for TX convert task on commit: "DF_RC"\n", DP_RC(rc));
+		/* dc_tx_convert will close tx */
+		tx_need_close = false;
 		goto out;
 	}
 
-	return dc_task_schedule(cmt_task, true);
+	/* 'task' (the parent one) will be completed after 'cmt_task' completed. */
+	return tse_task_schedule(cmt_task, true);
 
 out:
 	if (cmt_task != NULL)
 		tse_task_complete(cmt_task, rc);
 
+	/* Explicitly complete the original task. */
 	tse_task_complete(task, rc);
-	dc_tx_close_internal(tx);
+	if (tx_need_close)
+		dc_tx_close_internal(tx);
 
 	return rc;
 }
@@ -3583,17 +3706,23 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	/* Hold another reference on TX to avoid being freed duing dc_tx_attach(). */
 	dc_tx_addref(tx);
 	tx->tx_for_convert = 1;
-	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task);
+	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task, false);
 
+	/* The 'task' will be completed via dc_tx_convert_post(). For condition case,
+	 * dc_tx_convert_post() will be triggered via condition callback; otherwise,
+	 * call dc_tx_convert_post() directly.
+	 */
 	if (!tx->tx_has_cond)
 		rc = dc_tx_convert_post(tx, task, opc, rc);
 
 out:
-	if (tx != NULL)
+	if (tx != NULL) {
 		/* -1 for above dc_tx_addref(). */
 		dc_tx_decref(tx);
-	else
+	} else {
 		tse_task_complete(task, rc);
+		obj_decref(obj);
+	}
 
 	return rc;
 }

@@ -54,7 +54,7 @@ errors are documented in the table below.
 
 When an operation fails, DAOS returns a negative DER error.
 For a full list of errors, please check
-<https://github.com/daos-stack/daos/blob/master/src/include/daos_errno.h>
+<https://github.com/daos-stack/daos/blob/release/2.4/src/include/daos_errno.h>
 (`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
@@ -106,7 +106,7 @@ DEBUG-level logging will be sent to the specified file.
 ## Debugging System
 
 DAOS uses the debug system defined in
-[CaRT](https://github.com/daos-stack/daos/tree/master/src/cart),
+[CaRT](https://github.com/daos-stack/daos/tree/release/2.4/src/cart),
 specifically the GURT library.
 Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
@@ -122,15 +122,14 @@ CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
 logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 -   DAOS Facilities:
-    array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container,
-    object, placement, rebuild, tier, mgmt, bio, tests, dfs, duns, drpc,
-    security, dtx, dfuse, il, csum
+    daos, array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container, object,
+    placement, rebuild, mgmt, bio, tests, dfs, duns, drpc, security, dtx, dfuse, il, csum, stack
 
 -   Common Facilities (GURT):
-    MISC, MEM, SWIM, TELEM
+    misc, mem, swim, fi, telem
 
 -   CaRT Facilities:
-    RPC, BULK, CORPC, GRP, HG, ST, IV, CTL
+    crt, rpc, bulk, corpc, grp, lm, hg, external, st, iv, ctl
 
 ### Priority Logging
 
@@ -144,6 +143,11 @@ with D_LOG_MASK, which by default is set to INFO
 messages being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
 ("D_LOG_MASK=DEBUG,MEM=ERR").
+
+-   Log Levels:
+    debug, dbug, info, note, warn, error, err, crit, alrt, fatal, emrg, emit
+
+Note: debug == dbug, error == err and fatal == emrg.
 
 ### Debug Masks/Streams:
 
@@ -171,11 +175,15 @@ composition of multiple individual bits.
 
     -   rebuild = rebuild process
 
+    -   sec = security
+
+    -   csum = checksum
+
     -   group_default = (group mask) io, md, pl, and rebuild operations
 
-    -   group_metadata_only = (group mask) mgmt, md operations
-
     -   group_metadata = (group mask) group_default plus mgmt operations
+
+    -   group_metadata_only = (group mask) mgmt, md operations
 
 -   Common Debug Masks (GURT):
 
@@ -187,7 +195,9 @@ composition of multiple individual bits.
 
     -   net = network operations
 
-    -   io = object I/Otest = test programs
+    -   io = object I/O
+
+    -   test = test programs
 
 ### Common Use Cases
 
@@ -427,10 +437,18 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 ```
 ### dmg pool destroy force
 ```
-# dmg pool destroy Timeout or failed due to pool has active container(s)
-# Workaround pool destroy --force option
+# dmg pool destroy Timeout or failed due to pool having active connections
+# Workaround using pool destroy --force option
 
-	$ dmg pool destroy --pool=$DAOS_POOL --force
+	$ dmg pool destroy mypool --force
+	Pool-destroy command succeeded
+```
+### dmg pool destroy recursive
+```
+# dmg pool destroy Timeout or failed due to pool having associated container(s)
+# Workaround using pool destroy --recursive option
+
+	$ dmg pool destroy mypool --recursive
 	Pool-destroy command succeeded
 ```
 ### daos_engine fails to start with error "Address already in use"

@@ -81,6 +81,8 @@ class ProcessCSV(ProcessBase):
             afs.set_dfs_inode(inode_akey)
             afs.set_io_size(self._io_size)
             afs.set_chunk_size(self._chunk_size)
+            afs.set_ec_cell_size(self._ec_cell_size)
+            afs.set_assume_aggregation(self._assume_aggregation)
             afs.set_total_symlinks(count_symlink)
             afs.set_avg_symlink_size(symlink_size)
             afs.set_total_directories(count_dir)

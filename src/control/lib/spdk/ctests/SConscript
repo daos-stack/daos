@@ -7,7 +7,7 @@ def scons():
     Import('senv', 'prereqs', 'control_tgts', 'nc_obj', 'ncc_obj')
 
     unit_env = senv.Clone()
-    prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
+    unit_env.require('pmdk', 'spdk', 'isal')
 
     unit_env.AppendUnique(OBJPREFIX='c_')
 

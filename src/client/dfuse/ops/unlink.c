@@ -24,8 +24,6 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
-	DFUSE_TRA_DEBUG(fs_handle, "Unlinked file was %#lx", ino);
-
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_REPLY_ZERO(parent, req);
@@ -47,7 +45,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	 */
 	rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session, ino, 0, 0);
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_inode returned %d: %s", rc, strerror(-rc));
+		DFUSE_TRA_ERROR(ie, "inval_inode() returned: %d (%s)", rc, strerror(-rc));
 
 	/* If the kernel was aware of this inode at an old location then remove that which should
 	 * trigger a forget call.  Checking the test logs shows that we do see the forget anyway
@@ -62,7 +60,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 						 ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "notify_delete returned %d: %s", rc, strerror(-rc));
+			DFUSE_TRA_ERROR(ie, "notify_delete() returned: %d (%s)", rc, strerror(-rc));
 	}
 
 	/* Drop the ref again */

@@ -24,7 +24,6 @@ server_config:
       storage: auto
 pool:
   size: 60G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -49,5 +48,4 @@ ddeserialize:
   client_processes:
     np: 16
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true

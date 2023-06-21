@@ -8,7 +8,6 @@ from ior_intercept_test_base import IorInterceptTestBase
 
 
 class IorInterceptMultiClient(IorInterceptTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify IOR performance with DFUSE + IL is similar to DFS
                                for a single server and multiple client nodes.
 
@@ -31,4 +30,4 @@ class IorInterceptMultiClient(IorInterceptTestBase):
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
         :avocado: tags=IorInterceptMultiClient,test_ior_intercept_multi_client
         """
-        self.run_il_perf_check()
+        self.run_il_perf_check('libioil.so')

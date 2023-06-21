@@ -1,7 +1,7 @@
 """Build blob I/O"""
 
 FILES = ['bio_buffer.c', 'bio_bulk.c', 'bio_config.c', 'bio_context.c', 'bio_device.c',
-         'bio_monitor.c', 'bio_recovery.c', 'bio_xstream.c', 'smd.pb-c.c']
+         'bio_monitor.c', 'bio_recovery.c', 'bio_xstream.c', 'bio_wal.c', 'smd.pb-c.c']
 
 
 def scons():
@@ -17,7 +17,7 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
+    denv.require('pmdk', 'spdk', 'argobots', 'protobufc')
 
     SConscript('smd/SConscript')
     denv.AppendUnique(OBJPREFIX='b_')
@@ -37,6 +37,9 @@ def scons():
     tgts = FILES + control_tgts
     bio = denv.d_library("bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
+
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 
 if __name__ == "SCons.Script":

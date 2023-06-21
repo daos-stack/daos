@@ -242,8 +242,8 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 
 	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks);
 	if (rc != 0) {
-		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR("Destroying pool " DF_UUID " failed, " DF_RC "\n", DP_UUID(pool_uuid),
+			DP_RC(rc));
 		goto out;
 	}
 

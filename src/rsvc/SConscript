@@ -11,7 +11,7 @@ def scons():
     # rsvc-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     # ds_rsvc
     ds_rsvc = denv.d_library('rsvc', ['srv.c', 'srv_common.c', 'rpc.c'], install_off="../..")

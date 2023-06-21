@@ -41,7 +41,7 @@ the client. The client will verify the keys received.
 !!! note Checksums for keys are not stored on the server. A hash of the key is
 calculated and used to index the key in the server tree of the keys
 (
-see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores))
+see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/2.4/src/vos/README.md#key-array-stores))
 . It is also expected that keys are stored only in Storage Class Memory which
 has reliable data integrity protection.
 
@@ -53,7 +53,7 @@ received from the client to verify the integrity of the value. If the checksums
 don't match, then data corruption has occurred and an error is returned to the
 client indicating that the client should try the update again. Whether "server
 verify" is enabled or not, the server will store the checksum.
-See [VOS](https://github.com/daos-stack/daos/blob/master/src/vos/README.md)
+See [VOS](https://github.com/daos-stack/daos/blob/release/2.4/src/vos/README.md)
 for more info about checksum management and storage in VOS.
 
 On a fetch, the server will return the stored checksum to the client with the
@@ -85,7 +85,7 @@ Unlike Single Values, Array Values can be updated and fetched at any part of
 an array. In addition, updates to an array are versioned, so a fetch can include
 parts from multiple versions of the array. Each of these versioned parts of an
 array are called extents. The following diagrams illustrate a couple examples
-(also see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores) for
+(also see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/2.4/src/vos/README.md#key-array-stores) for
 more information):
 
 
@@ -113,7 +113,7 @@ The gray boxes around the extents represent the chunks.
 ![](../graph/data_integrity/array_with_chunks.png)
 
 (
-See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md)
+See [Object Layer](https://github.com/daos-stack/daos/blob/release/2.4/src/object/README.md)
 for more details about the checksum process on object update and fetch)
 
 ## Checksum calculations
@@ -122,7 +122,7 @@ The actual checksum calculations are done by the
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
-[common checksum library](https://github.com/daos-stack/daos/blob/master/src/common/README.md#checksum)
+[common checksum library](https://github.com/daos-stack/daos/blob/release/2.4/src/common/README.md#checksum)
 
 ## Performance Impact
 
@@ -145,10 +145,11 @@ Unit and functional testing is performed at many layers.
 **With daos_server not running**
 
 ```
-./commont_test
-./vos_tests -z
-./srv_checksum_tests
-./pool_scrubbing_tests
+commont_test
+vos_tests -z
+srv_checksum_tests
+pool_scrubbing_tests
+rpc_tests
 ```
 
 **With daos_server running**
@@ -222,15 +223,48 @@ dmg pool set-prop ${POOL} --properties=scrub:timed
 The following telemetry metrics are gathered and can be reported for better
 understanding of how the scrubber is running.
 
-- Scrubber ULT Start - datetime the scrubber service started
-- Scrubber Current Start - datetime the current scrubbing job started
-- Last Duration - how long the last scrubber took to run to completion.
-- Checksum Counts - Total, last and current number of checksums calculated over
-  the life of the scrubber.
-- Data scrubbed - The total, last, and current number of bytes the scrubber has
-  scanned.
-- Silent Data Corruption Counts - Total and current number of silent data
-  corruption found while scrubbing object values.
+- Number of times the VOS tree has been scanned and scrubbed (since the scrubber
+  started)
+- Time stamp when the current tree scrub started
+- The duration of the previous tree scrub took
+- Number of checksums scrubbed during current tree scrub
+- Number of checksums calculated in last tree scrub
+- Total number of checksums scrubbed (since the scrubber process started)
+- Number of silent data corruption detected during the current tree scrub
+- Total number of silent data corruption detected (since the pool was created)
+- Amount of data that has been scrubbed since the scrubber began
+
+Three additional "metrics" are reported by the telemetry system. They aren't
+telemetry metrics per say, but helpful in understanding the status of the
+scrubber.
+
+- If currently in a tree scrub, the number of milliseconds until the next
+  checksum is scrubbed. This is especially informative if in 'timed' mode.
+- If not in a tree scrub, the number of seconds until the next tree scrub
+  will start. If in 'lazy' mode then the scrubber might finish scrubbing the
+  tree before the frequency window expires.
+- If in lazy mode and the system is not in idle, the number of seconds 'busy'
+
+Example output from daos_metrics:
+```
+scrubs_completed: 10, desc: Number of times the VOS tree has been scanned and scrubbed (since the scrubber started)
+scrubber_started: Wed Jan 25 20:57:27 2023, desc: Time stamp when the current tree scrub started
+next_csum_scrub: 0 msec, desc: milliseconds until next csum scrub, units: msec
+next_tree_scrub: 5 sec, desc: seconds until next tree scrub, units: sec
+busy_time: 0 sec, desc: seconds scrubber isn't able to proceed because of active IO, units: sec
+prev_duration: 19023 us [min: 13, max: 19831, avg: 11169, stddev: 8589, samples: 10], desc: The duration the previous tree scrub took, units: us
+csums
+    current: 4639, desc: Number of checksums calculated during  current tree scrub
+    prev: 4639, desc: Number of checksums calculated in last tree scrub
+    total: 25495, desc: Total number of checksums scrubbed (since the scrubber process started)
+bytes_scrubbed
+    current: 1059448 bytes, desc: Number of bytes scrubbed during the current tree scrub, units: bytes
+    prev: 1059448 bytes, desc: Number of bytes scrubbed in last tree scrub, units: bytes
+    total: 9535032 bytes, desc: Total number of bytes scrubbed bytes (since the scrubber process started), units: bytes
+corruption
+    current: 0, desc: Number of silent data corruption detected during current tree scrub
+    total: 0, desc: Total number of silent data corruption detected (since the pool was created)
+```
 
 ## Design Details
 

@@ -32,14 +32,14 @@ class SConscript():
     """Fake SConscript"""
 
     def __init__(self, *_args, **_kw):
-        """init function"""
+        """Init function"""
 
 
 class DefaultEnvironment():
     """Default environment"""
 
     def __init__(self, *_args, **_kwargs):
-        """constructor"""
+        """Constructor"""
 
     def RunTests(self, *_args, **_kw):
         """Fake tests builder (defined by prereq_tools)"""
@@ -282,6 +282,10 @@ class DefaultEnvironment():
         """Fake PrependENVPath"""
         return
 
+    def Configure(self):
+        """Fake Configure"""
+        return Configure()
+
     def d_add_build_rpath(self, pathin='.'):
         """Fake d_add_build_rpath"""
         return
@@ -330,12 +334,16 @@ class DefaultEnvironment():
         """Fake Preprocess"""
         return
 
+    def require(self, env, *kw, headers_only=False):
+        """Fake require"""
+        return
+
 
 class Variables():
     """Fake variables"""
 
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
     def Add(self, *_args, **_kw):
         """Fake Add function"""
@@ -358,7 +366,7 @@ class Configure():
 
     def __init__(self, *_args, **_kw):
         self.env = DefaultEnvironment()
-        """constructor"""
+        """Constructor"""
 
     def CheckHeader(self, *_args, **_kw):
         """Fake CheckHeader"""
@@ -408,7 +416,7 @@ class Literal():
     """Fake Literal"""
 
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
 
 class Dir():
@@ -454,7 +462,7 @@ class Help():
     """Fake Help"""
 
     def __init__(self, *_args, **_kw):
-        """constructor"""
+        """Constructor"""
 
 
 def Glob(*_args):

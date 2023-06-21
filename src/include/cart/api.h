@@ -1599,6 +1599,54 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
+/**
+ * Create the processor object.
+ *
+ * \param[in] crt_ctx		Associated cart context
+ * \param[in] buf		Pointer to buffer used by the processor
+ * \param[in] buf_sie		The buffer size
+ * \param[in] proc_op		Proc operation type
+ * \param[out] proc		Abstract processor object
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_create(crt_context_t crt_ctx, void *buf, size_t buf_size,
+		crt_proc_op_t proc_op, crt_proc_t *proc);
+
+/**
+ * Destroy the processor object.
+ *
+ * \param[in] proc		Abstract processor object
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_destroy(crt_proc_t proc);
+
+/**
+ * Reset the processor object with specified operation type.
+ *
+ * \param[in] proc		Abstract processor object
+ * \param[in] buf		Pointer to buffer used by the processor
+ * \param[in] buf_sie		The buffer size
+ * \param[in] proc_op		Proc operation type
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_op);
+
+/**
+ * Get amount of buffer space that has actually been consumed by the processor object.
+ *
+ * \param[in] proc		Abstract processor object
+ *
+ * \return			Non-negative size value
+ */
+size_t
+crp_proc_get_size_used(crt_proc_t proc);
+
 typedef int64_t
 (*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
@@ -1824,12 +1872,14 @@ crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t
  * Set self rank.
  *
  * \param[in] rank              Rank to set on self.
+ * \param[in] group_version_min Minimum group version, that is, the version in
+ *                              which we join the system.
  *
  * \return                      DER_SUCCESS on success, negative value on
  *                              failure.
  */
 int
-crt_rank_self_set(d_rank_t rank);
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min);
 
 /**
  * Retrieve URI of the requested rank:tag pair.
