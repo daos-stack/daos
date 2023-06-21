@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import site
 import sys
 import time
@@ -49,7 +50,6 @@ from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
-DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
@@ -1065,8 +1065,6 @@ class Launch():
 
             # Set the default location for daos log files written during testing
             # if not already defined.
-            if "DAOS_APP_DIR" not in os.environ:
-                os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
             if "DAOS_TEST_USER_DIR" not in os.environ:
@@ -1076,6 +1074,9 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
                 else:
                     os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
+            if "DAOS_TEST_APP_DIR" not in os.environ:
+                os.environ["DAOS_TEST_APP_DIR"] = os.path.join(
+                    os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
@@ -1955,7 +1956,7 @@ class Launch():
             logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
             return status
 
-        status |= self.setup_soak_apps()
+        status |= self.setup_application_directory()
 
         slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
         try:
@@ -1970,33 +1971,44 @@ class Launch():
 
         return status
 
-    def setup_soak_apps(self):
-        """Set up the soak apps directory.
+    def setup_application_directory(self):
+        """Set up the application directory.
 
         Returns:
             int: status code: 0 = success, 128 = failure
         """
-        apps_dir = os.path.join(os.environ.get("DAOS_APP_DIR"), "soak", "apps")
-        logger.debug("Setting up the soak apps directory: %s", apps_dir)
-        try:
-            os.makedirs(apps_dir)
-        except OSError:
-            message = "Error creating soak apps directory"
-            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
-            return 128
+        app_dir = os.environ.get('DAOS_TEST_APP_DIR')
+        app_src = os.environ.get('DAOS_TEST_APP_SRC')
 
-        logger.debug("Source soak apps directories:")
-        apps_src = os.path.join(os.sep, "scratch", "soak", "apps")
-        run_local(logger, f'ls -al {apps_src}')
-        try:
-            run_local(logger, f"cp -r {apps_src} {apps_dir}", check=True)
-        except RunException:
-            message = "Error copying files to the soak apps directory"
-            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
-            return 128
-        finally:
-            logger.debug("Copied soak apps directories:")
-            run_local(logger, f'ls -al {apps_dir}')
+        logger.debug('Setting up the \'%s\' application directory', app_dir)
+        if not os.path.exists(app_dir):
+            # Create the apps directory if it does not already exist
+            try:
+                logger.debug('  Creating the application directory')
+                os.makedirs(app_dir)
+            except OSError:
+                message = 'Error creating the application directory'
+                self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                return 128
+        else:
+            logger.debug('  Using the existing application directory')
+
+        if app_src and os.path.exists(app_src):
+            logger.debug('  Copying applications from the \'%s\' directory', app_src)
+            run_local(logger, f'ls -al {app_src}')
+            for app in os.listdir(app_src):
+                try:
+                    if os.path.isdir(app):
+                        shutil.copytree(app, app_dir, dirs_exist_ok=True)
+                    elif os.path.isfile(app):
+                        shutil.copyfile(app, app_dir)
+                except Exception:       # pylint: disable=broad-except
+                    message = 'Error copying files to the application directory'
+                    self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                    return 128
+
+        logger.debug('  Applications in \'%s\':', app_dir)
+        run_local(logger, f'ls -al {app_dir}')
         return 0
 
     @staticmethod
