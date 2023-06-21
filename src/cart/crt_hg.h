@@ -31,27 +31,6 @@ struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
-
-crt_provider_t
-crt_prov_str_to_prov(const char *prov_str);
-
-int
-crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
-
-static inline bool
-crt_provider_is_ucx(crt_provider_t prov)
-{
-	return (prov >= CRT_PROV_UCX_RC) &&
-	       (prov <= CRT_PROV_UCX_LAST);
-}
-
-static inline bool
-crt_provider_is_ofi(crt_provider_t prov)
-{
-	return (prov >= CRT_PROV_OFI_SOCKETS) &&
-	       (prov <= CRT_PROV_OFI_LAST);
-}
-
 /**
  * Enumeration specifying providers supported by the library
  */
@@ -81,6 +60,26 @@ typedef enum {
 	CRT_PROV_COUNT,
 	CRT_PROV_UNKNOWN = -1,
 } crt_provider_t;
+
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str);
+
+int
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
+
+static inline bool
+crt_provider_is_ucx(crt_provider_t prov)
+{
+	return (prov >= CRT_PROV_UCX_RC) &&
+	       (prov <= CRT_PROV_UCX_LAST);
+}
+
+static inline bool
+crt_provider_is_ofi(crt_provider_t prov)
+{
+	return (prov >= CRT_PROV_OFI_SOCKETS) &&
+	       (prov <= CRT_PROV_OFI_LAST);
+}
 
 struct crt_na_dict {
 	/** String identifying the provider */
