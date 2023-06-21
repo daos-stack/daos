@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,23 @@ fini_ranks:
 	return rc;
 }
 
+static uint32_t
+pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
+{
+	uint32_t	timeout;
+	uint32_t	extra_timeout = 0;
+	int		rc;
+
+	rc = crt_req_get_timeout(tc_req, &timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		extra_timeout = scm_size / ((size_t)1024 * 1024 * 1024 * 5);
+		extra_timeout = min(60, extra_timeout);
+	}
+
+	return timeout + extra_timeout;
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
 			      size_t scm_size, size_t nvme_size)
@@ -69,6 +86,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	int				topo;
 	int				rc;
 	int				rc_cleanup;
+	uint32_t			timeout;
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -83,6 +101,10 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 		return rc;
 	}
 
+	timeout = pool_create_rpc_timeout(tc_req, scm_size);
+	crt_req_set_timeout(tc_req, timeout);
+	D_DEBUG(DB_MGMT, DF_UUID": pool create RPC timeout: %u\n",
+		DP_UUID(pool_uuid), timeout);
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pool_uuid);
