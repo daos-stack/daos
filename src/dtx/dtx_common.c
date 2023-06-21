@@ -17,6 +17,8 @@
 #include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
+/* Only for test. */
+
 struct dtx_batched_cont_args;
 uint32_t dtx_agg_thd_cnt_up;
 uint32_t dtx_agg_thd_cnt_lo;
