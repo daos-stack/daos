@@ -1814,7 +1814,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	}{
 		"successful write": {
 			cfgPath:   testDir,
-			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, ConfigOut),
 		},
 		"missing directory": {
 			cfgPath:   filepath.Join(testDir, "non-existent/"),

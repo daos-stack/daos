@@ -92,7 +92,7 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         return get_hostname(l_addr)
 

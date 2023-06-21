@@ -1180,12 +1180,12 @@ const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor =
 static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors[2] =
 {
   {
-    "currentLeader",
+    "current_leader",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__LeaderQueryResp, currentleader),
+    offsetof(Mgmt__LeaderQueryResp, current_leader),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -1205,7 +1205,7 @@ static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors
   },
 };
 static const unsigned mgmt__leader_query_resp__field_indices_by_name[] = {
-  0,   /* field[0] = currentLeader */
+  0,   /* field[0] = current_leader */
   1,   /* field[1] = replicas */
 };
 static const ProtobufCIntRange mgmt__leader_query_resp__number_ranges[1 + 1] =

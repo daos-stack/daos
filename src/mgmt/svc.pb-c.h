@@ -206,7 +206,7 @@ struct  _Mgmt__LeaderQueryReq
 struct  _Mgmt__LeaderQueryResp
 {
   ProtobufCMessage base;
-  char *currentleader;
+  char *current_leader;
   size_t n_replicas;
   char **replicas;
 };
