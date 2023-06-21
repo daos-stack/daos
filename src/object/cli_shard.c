@@ -1851,8 +1851,8 @@ static int
 obj_shard_query_key_cb(tse_task_t *task, void *data)
 {
 	struct obj_query_key_cb_args	*cb_args;
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	uint32_t			flags;
 	int				opc;
 	int				ret = task->dt_result;
@@ -2001,7 +2001,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
-	struct obj_query_key_1_in	*okqi;
+	struct obj_query_key_in		*okqi;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -2050,6 +2050,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_epoch_first		= epoch->oe_first;
 	okqi->okqi_api_flags		= flags;
 	okqi->okqi_oid			= oid;
+	d_iov_set(&okqi->okqi_dkey, NULL, 0);
+	d_iov_set(&okqi->okqi_akey, NULL, 0);
 	if (dkey != NULL)
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)

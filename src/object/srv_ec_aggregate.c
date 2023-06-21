@@ -1797,7 +1797,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_hdl		= agg_param->ap_cont_handle;
 	/* set epr_lo as zero to pass-through possibly existed snapshot
 	 * between agg_param->ap_epr.epr_lo and .epr_hi.
 	 */
