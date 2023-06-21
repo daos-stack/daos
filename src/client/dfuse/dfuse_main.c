@@ -301,7 +301,7 @@ show_help(char *name)
 	    "  pool and container UUIDs (not labels) of *all* pools and POSIX containers to\n"
 	    "  which the user running dfuse has access as pathname components.\n"
 	    "  - A path to a POSIX container that is mounted this way can be traversed to\n"
-	    "    access the root of that container, for example by changing directory to\n".
+	    "    access the root of that container, for example by changing directory to\n"
 	    "    /mountpoint/pool_uuid/cont_uuid/.\n"
 	    "  - However, listing the /mountpoint/ directory is not supported and will not\n"
 	    "    show the pool UUIDs that are mounted there.\n"
