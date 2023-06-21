@@ -269,8 +269,6 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 {
 	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
-	void const *const values[] = {info->encoded};
-	size_t const sizes[]       = {info->encoded_length};
 	daos_handle_t     coh;
 
 	if (ds3b == NULL || info == NULL)
@@ -280,7 +278,8 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	if (rc != 0)
 		return -rc;
 
-	rc = daos_cont_set_attr(coh, 1, names, values, sizes, ev);
+	rc = daos_cont_set_attr(coh, 1, names, (void *const)(&info->encoded),
+				&info->encoded_length, ev);
 	rc = daos_der2errno(rc);
 	dfs_cont_put(ds3b->dfs, coh);
 	return -rc;

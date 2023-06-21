@@ -1,8 +1,14 @@
-daos (2.5.100-3) unstable; urgency=medium
+daos (2.5.100-4) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to 0.10.1-1408.g9524cdb
 
- -- Li Wei <wei.g.li@intel.com>  Wed, 14 Jun 2023 10:11:00 +0900
+ -- Li Wei <wei.g.li@intel.com>  Wed, 21 Jun 2023 10:10:00 +0900
+
+daos (2.5.100-3) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Remove lmdb-devel for MD on SSD
+
+ -- Wang Shilong <shilong.wang@intel.com> Wed, 14 Jun 2023 07:58:00 -0600
 
 daos (2.5.100-2) unstable; urgency=medium
   [ Ryon Jensen ]
