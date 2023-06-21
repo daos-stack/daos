@@ -733,7 +733,33 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 
 	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
+	switch (type) {
+	case VOS_ITER_COUUID:
+		D_INFO("Invoking %p " DF_UUID "\n", iter_cb, DP_UUID(iter_ent->ie_couuid));
+		break;
+	case VOS_ITER_OBJ:
+		D_INFO("Invoking %p " DF_UOID "@" DF_X64 "\n", iter_cb, DP_UOID(iter_ent->ie_oid),
+		       iter_ent->ie_epoch);
+		break;
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+		D_INFO("Invoking %p " DF_KEY "@" DF_X64 " (type=%d)\n", iter_cb,
+		       DP_KEY(&iter_ent->ie_key), iter_ent->ie_epoch, type);
+		break;
+	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
+		D_INFO("Invoking %p (type=%d)\n", iter_cb, type);
+		break;
+	case VOS_ITER_DTX:
+		D_INFO("Invoking %p (type=%d) dtx=" DF_UUID "," DF_X64 "\n", iter_cb, type,
+		       DP_UUID(iter_ent->ie_dtx_xid.dti_uuid), iter_ent->ie_dtx_xid.dti_hlc);
+		break;
+	default:
+		D_ASSERT(0);
+		break;
+	};
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	D_INFO("%p returned rc=" DF_RC "\n", iter_cb, DP_RC(rc));
 	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
 		if (iter->it_parent == NULL || rc != 0 || iter->it_type <= VOS_ITER_OBJ ||

@@ -904,9 +904,11 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		dth = vos_dth_get();
 		if (dth != NULL)
 			vos_dth_set(NULL);
+		D_INFO("Invoking %p\n", oiter->it_iter.it_filter_cb);
 		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
 						 oiter->it_iter.it_filter_arg,
 						 &acts);
+		D_INFO("%p returned rc=" DF_RC "\n", oiter->it_iter.it_filter_cb, DP_RC(rc));
 		if (dth != NULL)
 			vos_dth_set(dth);
 		if (rc != 0)

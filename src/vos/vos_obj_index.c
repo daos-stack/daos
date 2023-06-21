@@ -614,8 +614,10 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			dth = vos_dth_get();
 			if (dth != NULL)
 				vos_dth_set(NULL);
+			D_INFO("Invoking %p\n", iter->it_filter_cb);
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
 						&acts);
+			D_INFO("%p returned rc=" DF_RC "\n", iter->it_filter_cb, DP_RC(rc));
 			if (dth != NULL)
 				vos_dth_set(dth);
 			if (rc != 0)
