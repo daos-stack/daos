@@ -2351,9 +2351,9 @@ err_task:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 err:
-	D_FREE(params);
 	if (free_iod_recxs)
 		D_FREE(iod->iod_recxs);
+	D_FREE(params);
 	return rc;
 }
 
