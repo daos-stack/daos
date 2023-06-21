@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func mockPCIBus(args ...uint8) *PCIBus {
@@ -179,6 +178,21 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 				"0000:80:00.0", "0000:81:00.0", "5d0505:01:00.0",
 			},
 		},
+		"multiple vmd backing device addresses": {
+			addrStrs: []string{
+				"d70505:03:00.0",
+				"d70505:01:00.0",
+				"5d0505:03:00.0",
+				"5d0505:01:00.0",
+			},
+			expAddrStr: "5d0505:01:00.0 5d0505:03:00.0 d70505:01:00.0 d70505:03:00.0",
+			expAddrStrs: []string{
+				"5d0505:01:00.0",
+				"5d0505:03:00.0",
+				"d70505:01:00.0",
+				"d70505:03:00.0",
+			},
+		},
 		"vmd backing device": {
 			addrStrs: []string{
 				"050505:03:00.0", "050505:01:00.0",
@@ -204,6 +218,41 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 				t.Fatalf("unexpected string (-want, +got):\n%s\n", diff)
 			}
 			if diff := cmp.Diff(tc.expAddrStrs, addrSet.Strings()); diff != "" {
+				t.Fatalf("unexpected list (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestHardware_PCIAddressSet_Addresses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		addrStrs []string
+		expAddrs []*PCIAddress
+		expErr   error
+	}{
+		"multiple vmd backing device addresses": {
+			addrStrs: []string{
+				"d70505:03:00.0",
+				"d70505:01:00.0",
+				"5d0505:03:00.0",
+				"5d0505:01:00.0",
+			},
+			expAddrs: []*PCIAddress{
+				MustNewPCIAddress("5d0505:01:00.0"),
+				MustNewPCIAddress("5d0505:03:00.0"),
+				MustNewPCIAddress("d70505:01:00.0"),
+				MustNewPCIAddress("d70505:03:00.0"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAddrs, addrSet.Addresses()); diff != "" {
 				t.Fatalf("unexpected list (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -305,9 +354,17 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 			inAddrs:     []string{"5d0505:01:00.0"},
 			expOutAddrs: []string{"0000:5d:05.5"},
 		},
-		"multiple vmd address": {
-			inAddrs:     []string{"5d0505:01:00.0", "5d0505:03:00.0"},
-			expOutAddrs: []string{"0000:5d:05.5"},
+		"multiple vmd backing device addresses": {
+			inAddrs: []string{
+				"d70505:01:00.0",
+				"d70505:03:00.0",
+				"5d0505:01:00.0",
+				"5d0505:03:00.0",
+			},
+			expOutAddrs: []string{
+				"0000:5d:05.5",
+				"0000:d7:05.5",
+			},
 		},
 		"short vmd domain in address": {
 			inAddrs:     []string{"5d055:01:00.0"},
@@ -315,16 +372,13 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			addrSet, gotErr := NewPCIAddressSet(tc.inAddrs...)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			gotAddrs, gotErr := addrSet.BackingToVMDAddresses(log)
+			gotAddrs, gotErr := addrSet.BackingToVMDAddresses()
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

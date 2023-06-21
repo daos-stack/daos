@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.107
-Release:       1%{?relval}%{?dist}
+Version:       2.5.100
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -58,9 +58,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -139,14 +141,15 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
 Requires: numactl
 %{?systemd_requires}
 
@@ -165,12 +168,8 @@ Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -219,8 +218,10 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
+Requires: libcapstone-devel
 %else
 Requires: Lmod
+Requires: capstone-devel
 %endif
 
 %description client-tests
@@ -454,6 +455,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -477,7 +479,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -514,9 +515,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/rdbt
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/rpc_tests
+%{_bindir}/bio_ut
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -553,6 +552,34 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
+- Removed unnecessary test files
+
+* Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
+- Switch version to 2.5.100 for 2.6 test builds
+
+* Mon Jun  5 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-7
+- Remove libfabric pinning and allow for 1.18 builds
+
+* Fri May 26 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.107-6
+- Add lmdb-devel and bio_ut for MD on SSD
+
+* Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
+- Add libcapstone-devel to deps of client-tests package
+
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
+- Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
+
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
 * Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
 - Bump version to 2.3.107
 

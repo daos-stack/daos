@@ -56,10 +56,10 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],
                                        namespace="/run/container_{}/".format(cont_idx))
-                daos.container_set_owner(self.pool[-1].uuid, self.container[-1].uuid,
+                daos.container_set_owner(self.pool[-1].identifier, self.container[-1].identifier,
                                          new_test_user, new_test_group)
 
-            daos.container_list(self.pool[-1].uuid)
+            daos.container_list(self.pool[-1].identifier)
             self.destroy_containers(self.container)
             self.container = None
             self.destroy_pools(self.pool)

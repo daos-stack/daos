@@ -238,19 +238,17 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None, daos_command=None, label_generator=None):
+    def __init__(self, pool, daos_command=None, label_generator=None):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             daos_command (DaosCommand, optional): daos command object. Defaults to None
             label_generator (LabelGenerator, optional): used to generate container label by adding
                 a number to self.label. Defaults to None
 
         """
-        super().__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*")
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -346,9 +344,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             con_in (optional): to be defined. Defaults to None.
             acl_file (str, optional): path of the ACL file. Defaults to None.
 
-        Raises:
-            DaosTestError: if params are invalid
-
         Returns:
             dict: the daos json command output converted to a python dictionary
             None: if control_method is API
@@ -388,9 +383,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self._call_method(self.container.create, kwargs)
 
         else:
-            if not self.daos:
-                raise DaosTestError("Undefined daos command")
-
             # Disconnect the pool if connected
             self.pool.disconnect()
 
@@ -430,70 +422,51 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         return result
 
-    @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create_snap(self, snap_name=None, epoch=None):
-        """Create Snapshot using daos utility.
+    def create_snap(self, *args, **kwargs):
+        """Create container snapshot by calling daos container create-snap.
+
+        Sets self.epoch to the created epoch.
 
         Args:
-            snap_name (str, optional): Snapshot name. Defaults to None.
-            epoch (str, optional): Epoch ID. Defaults to None.
-
-        Raises:
-            DaosTestError: if params are invalid
+            args (tuple, optional): positional arguments to DaosCommand.container_create_snap
+            kwargs (dict, optional): named arguments to DaosCommand.container_create_snap
 
         Returns:
-            dict: Dictionary that stores the created epoch in the key "epoch".
-
-        """
-        self.log.info("Creating Snapshot for Container: %s", str(self))
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
-
-        # create snapshot using daos utility
-        kwargs = {
-            "pool": self.pool.identifier,
-            "cont": self.identifier,
-            "snap_name": snap_name,
-            "epoch": epoch,
-            "sys_name": self.pool.name.value
-        }
-        self._log_method("daos.container_create_snap", kwargs)
-        data = self.daos.container_create_snap(**kwargs)
-        self.epoch = data["epoch"]
-        return data
-
-    @fail_on(DaosApiError)
-    @fail_on(CommandFailure)
-    def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
-        """Destroy Snapshot using daos utility.
-
-        Args:
-            snap_name (str, optional): Snapshot name
-            epc (str, optional): Epoch ID that indicates the snapshot to be
-                destroyed. Defaults to None.
-            epcrange (str, optional): Epoch range in the format "<start>-<end>".
+            str: JSON output of daos container create-snap
 
         Raises:
-            DaosTestError: if params are invalid
+            CommandFailure: Raised from the daos command call
 
         """
-        self.log.info("Destroying Snapshot for Container: %s", str(self))
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
+        result = self.daos.container_create_snap(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        if result["status"] == 0:
+            self.epoch = result["response"]["epoch"]
+        return result
 
-        # destroy snapshot using daos utility
-        kwargs = {
-            "pool": self.pool.identifier,
-            "cont": self.identifier,
-            "snap_name": snap_name,
-            "epc": epc,
-            "epcrange": epcrange,
-            "sys_name": self.pool.name.value,
-        }
-        self._log_method("daos.container_destroy_snap", kwargs)
-        self.daos.container_destroy_snap(**kwargs)
-        self.epoch = None
+    @fail_on(CommandFailure)
+    def destroy_snap(self, *args, **kwargs):
+        """Destroy container snapshot by calling daos container destroy-snap.
+
+        Sets self.epoch to the created epoch.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_destroy_snap
+            kwargs (dict, optional): named arguments to DaosCommand.container_destroy_snap
+
+        Returns:
+            str: JSON output of daos container destroy-snap
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        result = self.daos.container_destroy_snap(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        if result["status"] == 0:
+            self.epoch = None
+        return result
 
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
@@ -550,9 +523,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         Args:
             force (int, optional): force flag. Defaults to 1.
 
-        Raises:
-            DaosTestError: if params are invalid
-
         Returns:
             bool: True if the container has been destroyed; False if the
                 container does not exist.
@@ -572,9 +542,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                     status = True
 
                 else:
-                    if not self.daos:
-                        raise DaosTestError("Undefined daos command")
-
                     # Disconnect the pool if connected
                     self.pool.disconnect()
 
@@ -921,6 +888,24 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return count
 
     @fail_on(CommandFailure)
+    def check(self, *args, **kwargs):
+        """Check object consistency by calling daos container check.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_check
+            kwargs (dict, optional): named arguments to DaosCommand.container_check
+
+        Returns:
+            str: JSON output of daos container check.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_check(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
     def set_prop(self, *args, **kwargs):
         """Set container properties by calling daos container set-prop.
 
@@ -932,12 +917,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             str: JSON output of daos container set-prop.
 
         Raises:
-            DaosTestError: if params are invalid
             CommandFailure: Raised from the daos command call.
 
         """
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
         return self.daos.container_set_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
@@ -953,14 +935,31 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             str: JSON output of daos container get-prop
 
         Raises:
-            DaosTestError: if params are invalid
             CommandFailure: Raised from the daos command call
 
         """
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def get_prop_values(self, *args, **kwargs):
+        """Get container property values by calling daos container get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
+
+        Returns:
+            list: a list of values matching the or specified property names.
+
+        """
+        values = []
+        self.log.info("Getting property values for container %s", self)
+        data = self.get_prop(*args, **kwargs)
+        if data['status'] != 0:
+            return values
+        for entry in data['response']:
+            values.append(entry['value'])
+        return values
 
     def verify_prop(self, expected_props):
         """Verify daos container get-prop returns expected values.
@@ -979,7 +978,19 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return True
 
     @fail_on(CommandFailure)
-    @fail_on(DaosTestError)
+    def list_snaps(self):
+        """Get container properties by calling daos container list-snaps.
+
+        Returns:
+            str: JSON output of daos container list-snaps
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
+
+    @fail_on(CommandFailure)
     def query(self, *args, **kwargs):
         """Call daos container query.
 
@@ -991,17 +1002,13 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             str: JSON output of daos container query.
 
         Raises:
-            DaosTestError: if params are invalid
             CommandFailure: Raised from the daos command call.
 
         """
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
         return self.daos.container_query(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
-    @fail_on(DaosTestError)
     def update_acl(self, entry=None, acl_file=None):
         """Update container acl by calling daos container update-acl.
 
@@ -1014,13 +1021,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         Raises:
             CommandFailure: Raised from the daos command call.
-            DaosTestError: if params are undefined
 
         """
-        if self.control_method.value != self.USE_DAOS:
-            raise DaosTestError("Undefined control_method: {}".format(self.control_method.value))
-        if not self.daos:
-            raise DaosTestError("Undefined daos command")
         return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, entry=entry, acl_file=acl_file)
 

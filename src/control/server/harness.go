@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,7 +36,7 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, []storage.NvmeController) ([]storage.NvmeController, error)
+	updateInUseBdevs(context.Context, []storage.NvmeController, uint64, uint64) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
@@ -62,7 +62,7 @@ type Engine interface {
 	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context, bool)
-	SetupRank(context.Context, ranklist.Rank) error
+	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
@@ -240,12 +240,12 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
-	h.OnDrpcFailure(func(_ context.Context, err error) {
+	h.OnDrpcFailure(func(_ context.Context, errIn error) {
 		if !db.IsLeader() {
 			return
 		}
 
-		switch errors.Cause(err) {
+		switch errors.Cause(errIn) {
 		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			break
 		default:
@@ -257,7 +257,7 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		// If we cannot service a dRPC request on this node,
 		// we should resign as leader in order to force a new
 		// leader election.
-		if err := db.ResignLeadership(err); err != nil {
+		if err := db.ResignLeadership(errIn); err != nil {
 			h.log.Errorf("failed to resign leadership after dRPC failure: %s", err)
 		}
 	})

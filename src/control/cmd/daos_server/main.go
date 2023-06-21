@@ -47,6 +47,7 @@ type mainOpts struct {
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`
 	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 	Config        configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
@@ -95,7 +96,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			common.ScrubProxyVariables()
 		}
 		if opts.Debug {
-			log.SetLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 		}
 		if opts.JSONLog {
 			log.WithJSONOutput()
@@ -103,6 +104,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if opts.Syslog {
 			// Don't log debug stuff to syslog.
 			log.WithInfoLogger((&logging.DefaultInfoLogger{}).WithSyslogOutput())
+			log.WithNoticeLogger((&logging.DefaultNoticeLogger{}).WithSyslogOutput())
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 

@@ -9,7 +9,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
 timeout: 900
 pool:
   control_method: dmg

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,9 +54,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	tly1 := newTally(2)
@@ -86,9 +84,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	tly1 := newTally(2)
 	tly2 := newTally(2)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 
 	ps.Subscribe(RASTypeStateChange, tly1)
 
@@ -128,10 +124,10 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 
 	tly1 := newTally(2)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 	defer cancel()
 
-	ps := NewPubSub(context.Background(), log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	ps.Subscribe(RASTypeStateChange, tly1)
@@ -160,9 +156,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := context.Background()
-
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
 	defer ps.Close()
 
 	tly1 := newTally(3)
@@ -208,9 +202,8 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ps := NewPubSub(ctx, log)
+	ps := NewPubSub(test.Context(t), log)
+	defer ps.Close()
 
 	evt1 := mockSwimRankDeadEvt(1, 1)
 	debounceType := evt1.ID
@@ -242,34 +235,64 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 }
 
 func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+	test := func(t *testing.T, iter int) bool {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ps := NewPubSub(ctx, log)
+		ps := NewPubSub(test.Context(t), log)
+		defer ps.Close()
 
-	evt1 := mockSwimRankDeadEvt(1, 1)
-	debounceType := evt1.ID
-	debounceCooldown := 10 * time.Millisecond
-	tally := newTally(3)
+		debounceType := RASSwimRankDead
+		debounceCooldown := 25 * time.Millisecond
+		tally := newTally(3)
 
-	ps.Subscribe(RASTypeStateChange, tally)
-	ps.Debounce(debounceType, debounceCooldown, func(ev *RASEvent) string {
-		return fmt.Sprintf("%d:%x", ev.Rank, ev.Incarnation)
-	})
+		ps.Subscribe(RASTypeStateChange, tally)
+		ps.Debounce(debounceType, debounceCooldown, func(ev *RASEvent) string {
+			// Debounce should match all events sent in test.
+			return fmt.Sprintf("%d", ev.Rank)
+		})
 
-	// We should only see this event three times, after the cooldown
-	// timer expires on each loop.
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 16; j++ {
-			ps.Publish(evt1)
+		// Send 16 (var j) events per incarnation (var i). We should only see this event
+		// three times as a new event will only be registered after the cooldown timer
+		// expires at the end of each incarnation loop iteration.
+		for i := 0; i < 3; i++ {
+			log.Debugf("start loop %d", i+1)
+
+			e := mockSwimRankDeadEvt(1, uint32(i+1))
+			t := time.Now()
+			for j := 0; j < 16; j++ {
+				l := time.Since(t)
+				if l >= debounceCooldown {
+					// Test loop was stalled, print warning
+					log.Noticef("test loop stalled for %s, restart iteration", l)
+					return true
+				}
+				t = time.Now()
+				ps.Publish(e)
+			}
+
+			log.Debugf("sleep for cooldown")
+			time.Sleep(debounceCooldown)
 		}
-		time.Sleep(debounceCooldown)
+
+		<-tally.finished
+
+		log.Debugf("test iteration %d", iter)
+
+		// Expect one message from each incarnation loop, other repeated messages for the
+		// same incarnation should get ignored by debounce Logic.
+		test.AssertStringsEqual(t, []string{
+			mockSwimRankDeadEvt(1, 1).String(),
+			mockSwimRankDeadEvt(1, 2).String(),
+			mockSwimRankDeadEvt(1, 3).String(),
+		}, tally.getRx(), "unexpected slice of received events")
+
+		return false
 	}
 
-	<-tally.finished
-
-	test.AssertStringsEqual(t, []string{evt1.String(), evt1.String(), evt1.String()},
-		tally.getRx(), "unexpected slice of received events")
+	for tn := 0; tn < 1; tn++ {
+		if restart := test(t, tn); restart {
+			tn--
+		}
+	}
 }

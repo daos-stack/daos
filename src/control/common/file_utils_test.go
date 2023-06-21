@@ -101,3 +101,80 @@ func TestUtils_FindBinaryAdjacent(t *testing.T) {
 		t.Fatalf("expected %q; got %q", testFile.Name(), binPath)
 	}
 }
+
+func TestUtils_NormizePath(t *testing.T) {
+	testDir, clean := CreateTestDir(t)
+	defer clean()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	defer os.Chdir(wd)
+	if err = os.Chdir("/tmp"); err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+
+	testPath := path.Join(testDir, "foo")
+	if _, err = NormalizePath(testPath); err == nil {
+		t.Fatalf("Expected error: no such file or directory")
+	}
+
+	var normPath string
+	testPath = filepath.Base(testDir)
+	if normPath, err = NormalizePath(testPath); err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if normPath != testDir {
+		t.Fatalf("Expected %q; got %q", testDir, normPath)
+	}
+
+	testPath = path.Join(testDir, "foo")
+	if err = os.Symlink(testDir, testPath); err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if normPath, err = NormalizePath(testPath); err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if normPath != testDir {
+		t.Fatalf("Expected %q; got %q", testDir, normPath)
+	}
+}
+
+func TestUtils_HasPrefixPath(t *testing.T) {
+	testDir, clean := CreateTestDir(t)
+	defer clean()
+
+	testPath := path.Join(testDir, "foo")
+	testFile, err := os.Create(testPath)
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	defer testFile.Close()
+
+	var hp bool
+	hp, err = HasPrefixPath(testDir, testPath)
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if !hp {
+		t.Fatalf("%q is a prefix of %q", testDir, testPath)
+	}
+
+	hp, err = HasPrefixPath(testPath, testPath)
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if !hp {
+		t.Fatalf("%q is a prefix of %q", testDir, testPath)
+	}
+
+	hp, err = HasPrefixPath("/opt", testPath)
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+	if hp {
+		t.Fatalf("%q is not a prefix of %q", testDir, testPath)
+	}
+
+}
