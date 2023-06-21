@@ -141,10 +141,10 @@ func TestAuto_confGen(t *testing.T) {
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
 	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
-	// Total mem to meet requirements 34GiB hugeMem, 1GiB per engine rsvd, 8GiB sys rsvd,
+	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 8GiB sys rsvd,
 	// 5GiB per engine for tmpfs.
 	mockRamdiskSize := 5
-	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 2 + 8 + 10)) / humanize.KiByte
+	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 8 + 10)) / humanize.KiByte
 	storHostRespHighMem := &control.HostResponse{
 		Addr:    "host1",
 		Message: storRespHighMem,
@@ -259,7 +259,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm; no control_metadata path": {
+		"successful fetch of host storage and febric; tmpfs scm; no control_metadata path": {
 			tmpfsSCM: true,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},

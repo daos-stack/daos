@@ -151,7 +151,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
-	// SCM tmpfs 5GiB size calculated after subtracting reservations from MemTotalKiB.
+	// SCM tmpfs 4GiB size calculated after subtracting reservations from MemTotalKiB.
 	tmpfsEngineCfgs := []*engine.Config{
 		control.MockEngineCfgTmpfs(0, 4,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
@@ -428,9 +428,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
-					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.
-					MemTotalKiB: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
+					// Total mem to meet requirements 39GiB hugeMem, 2GiB per
+					// engine rsvd, 8GiB sys rsvd, 4GiB per engine for tmpfs.
+					MemTotalKiB: (humanize.GiByte * (39 + 4 + 8 + 8)) / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),

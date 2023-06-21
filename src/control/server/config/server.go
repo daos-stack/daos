@@ -510,8 +510,12 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
-	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys, cfg.Engines[0].TargetCount,
+		len(cfg.Engines))
 }
 
 // CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
@@ -522,8 +526,13 @@ func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramd
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	//len(cfg.Engines))
 	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+		cfg.Engines[0].TargetCount, len(cfg.Engines))
 }
 
 // SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
