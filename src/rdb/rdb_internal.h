@@ -208,7 +208,7 @@ int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx)
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 3
+#define DAOS_RDB_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
