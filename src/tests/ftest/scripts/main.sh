@@ -206,10 +206,10 @@ rc=0
 for TEST_TAG_SEQ in ${TEST_TAG_SPLIT[*]}; do
     echo "Running launch.py with tags: ${TEST_TAG_SEQ}"
     IFS=" " read -r -a TAGS <<< "${TEST_TAG_SEQ}"
-    if [ $index -eq 0 ]; then
+    if [ "$index" -eq 0 ]; then
         # First sequence of tags run with arguments provided by the user
         name=${STAGE_NAME}
-    elif [ $index -eq 1 ]; then
+    elif [ "$index" -eq 1 ]; then
         # Additional sequences of tags are ALWAYS run with servers using MD on SSD mode
         LAUNCH_OPT_ARGS="${LAUNCH_OPT_ARGS} --nvme=auto_md_on_ssd"
         name="${STAGE_NAME} MD on SSD"
@@ -222,6 +222,7 @@ for TEST_TAG_SEQ in ${TEST_TAG_SPLIT[*]}; do
     if ! ./launch.py --mode ci --name "${name}" ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
         rc=$((rc|${PIPESTATUS[0]}))
     fi
+    (( index++ )) || true
 done
 
 exit $rc

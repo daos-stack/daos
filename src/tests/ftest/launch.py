@@ -2967,6 +2967,9 @@ class Launch():
             bool: True if successful; False if an error was detected
         """
         logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
+        logger.debug("************************DEBUG************************")
+        run_local(logger, f'cat {xml_file}')
+        logger.debug("************************DEBUG************************")
         try:
             with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                 xml_buffer.write(re.sub(pattern, replacement, xml_data))
