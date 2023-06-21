@@ -322,10 +322,28 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 		return nil, errors.Errorf("unexpected attach info data type %T", item)
 	}
 
-	resp := new(control.GetAttachInfoResp)
-	*resp = *cai.lastResponse
+	return copyGetAttachInfoResp(cai.lastResponse), nil
+}
 
-	return resp, nil
+func copyGetAttachInfoResp(orig *control.GetAttachInfoResp) *control.GetAttachInfoResp {
+	if orig == nil {
+		return nil
+	}
+
+	cp := new(control.GetAttachInfoResp)
+	*cp = *orig
+
+	// Copy slices instead of using original pointers
+	cp.MSRanks = make([]uint32, len(orig.MSRanks))
+	_ = copy(cp.MSRanks, orig.MSRanks)
+	cp.ServiceRanks = make([]*control.PrimaryServiceRank, len(orig.ServiceRanks))
+	_ = copy(cp.ServiceRanks, orig.ServiceRanks)
+
+	if orig.ClientNetHint.EnvVars != nil {
+		cp.ClientNetHint.EnvVars = make([]string, len(orig.ClientNetHint.EnvVars))
+		_ = copy(cp.ClientNetHint.EnvVars, orig.ClientNetHint.EnvVars)
+	}
+	return cp
 }
 
 func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
