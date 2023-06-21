@@ -730,7 +730,6 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 			 */
 			DFUSE_TRA_INFO(dfc, "Using default caching values");
 			dfuse_set_default_cont_cache_values(dfc);
-			rc = 0;
 		} else if (rc != 0) {
 			D_GOTO(err_close, rc);
 		}
