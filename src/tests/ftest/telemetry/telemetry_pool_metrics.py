@@ -160,10 +160,10 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 timeout=200, create_pool=False, create_cont=False)
         except TestFail as error:
             # NOTE DAOS-12946:  it is not possible to properly test the metrics as we do not know
-            # how much data have been transferred.  Thus we cancel the test, as the purpose of this
-            # test is not to check the ior command.
-            self.log.error(">>>>>> IOR command failed: %s", str(error))
-            self.log.info("------ Test canceled ------")
+            # how much data have been transferred.  However, the reason of the ior failure should be
+            # investigated and thus we fail the test.
+            self.log.error(">>>>>> Failure of IOR is unexpected and should be investigated: %s",
+                str(error))
             self.cancel("IOR command failed: {}".format(error))
 
         # collect second set of pool metric data after read/write
