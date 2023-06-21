@@ -165,7 +165,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             self.log.error(
                 ">>>>>> Failure of IOR is unexpected and should be investigated: %s",
                 str(error))
-            self.cancel("IOR command failed: {}".format(error))
+            self.fail("IOR command failed: {}".format(error))
 
         # collect second set of pool metric data after read/write
         metrics_end = self.get_metrics(metric_names)
