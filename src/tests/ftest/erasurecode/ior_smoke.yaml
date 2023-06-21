@@ -26,6 +26,7 @@ server_config:
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
+  system_ram_reserved: 16
 pool:
   control_method: dmg
   size: 93%
