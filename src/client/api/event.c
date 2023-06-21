@@ -168,7 +168,6 @@ daos_eq_free(struct d_hlink *hlink)
 crt_context_t
 daos_get_crt_ctx()
 {
-	D_ASSERT(eq_ref > 0);
 	return daos_eq_ctx;
 }
 

@@ -190,12 +190,12 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 }
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
 struct daos_lru_cache *
-vos_obj_cache_current(void)
+vos_obj_cache_current(bool standalone)
 {
-	return vos_obj_cache_get();
+	return vos_obj_cache_get(standalone);
 }
 
 static __thread struct vos_object	 obj_local = {0};
@@ -467,7 +467,7 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    vos_dth_get() != NULL &&
+	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL &&
 	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the

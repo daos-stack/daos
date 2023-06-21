@@ -573,6 +573,13 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB) {
+		store.store_type = DAOS_MD_PMEM;
+		store.store_standalone = true;
+	}
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
@@ -648,6 +655,13 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB) {
+		store.store_type = DAOS_MD_PMEM;
+		store.store_standalone = true;
+	}
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_open;
@@ -812,7 +826,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 {
 	int	rc;
 
-	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey, NULL,
+	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
 		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
@@ -828,8 +842,10 @@ static int
 pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 {
 	struct d_ulink *hlink;
+	bool		is_sysdb = uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0 ?
+					true : false;
 
-	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey, NULL);
+	hlink = d_uhash_link_lookup(vos_pool_hhash_get(is_sysdb), ukey, NULL);
 	if (hlink == NULL) {
 		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
@@ -949,7 +965,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
-	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_id = umempobj_backend_type2class_id(ph->up_store.store_type);
 	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
@@ -1008,8 +1024,8 @@ end:
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
 	/* Format SPDK blob*/
-	rc = vea_format(&umem, vos_txd_get(), &pool_df->pd_vea_df, VOS_BLK_SZ,
-			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
+	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_vea_df,
+			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
@@ -1063,6 +1079,7 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 			rc = 0;
 			break;
 		}
+		D_ASSERT(pool->vp_sysdb == false);
 
 		D_ASSERT(pool != NULL);
 		if (gc_have_pool(pool)) {
@@ -1207,8 +1224,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = UMEM_CLASS_PMEM;
 	uma->uma_pool = ph;
+	uma->uma_id = umempobj_backend_type2class_id(uma->uma_pool->up_store.store_type);
 
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
@@ -1244,8 +1261,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = vos_data_ioctxt(pool);
 		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
-		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
-			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
+		rc = vea_load(&pool->vp_umm, vos_txd_get(flags & VOS_POF_SYSDB),
+			      &pool_df->pd_vea_df, &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
@@ -1259,6 +1276,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, pool_df->pd_id);
+	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
@@ -1496,6 +1514,7 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	}
 
 	D_ASSERT(pool != NULL);
+	D_ASSERT(pool->vp_sysdb == false);
 	rc = vos_space_query(pool, vps, false);
 	vos_pool_decref(pool);
 	return rc;
