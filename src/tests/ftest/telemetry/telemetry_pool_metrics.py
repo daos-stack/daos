@@ -152,20 +152,12 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         metrics_init = self.get_metrics(metric_names)
 
         # Run ior command.
-        try:
-            self.update_ior_cmd_with_pool(False)
-            self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
-            self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
-            self.run_ior_with_pool(
-                timeout=200, create_pool=False, create_cont=False)
-        except TestFail as error:
-            # NOTE DAOS-12946:  it is not possible to properly test the metrics as we do not know
-            # how much data have been transferred.  However, the reason of the ior failure should be
-            # investigated and thus we fail the test.
-            self.log.error(
-                ">>>>>> Failure of IOR is unexpected and should be investigated: %s",
-                str(error))
-            self.fail("IOR command failed: {}".format(error))
+        self.update_ior_cmd_with_pool(False)
+        self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
+        self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
+        # NOTE DAOS-12946: Not catching ior failures is intended.  Indeed, to properly test the
+        # metrics we have to exactly know how much data have been transferred.
+        self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
 
         # collect second set of pool metric data after read/write
         metrics_end = self.get_metrics(metric_names)
