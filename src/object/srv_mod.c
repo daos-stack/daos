@@ -67,12 +67,8 @@ obj_mod_fini(void)
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler obj_handlers_0[] = {
-	OBJ_PROTO_CLI_RPC_LIST(0)
-};
-
-static struct daos_rpc_handler obj_handlers_1[] = {
-	OBJ_PROTO_CLI_RPC_LIST(1)
+static struct daos_rpc_handler obj_handlers[] = {
+	OBJ_PROTO_CLI_RPC_LIST
 };
 
 #undef X
@@ -348,10 +344,10 @@ struct dss_module obj_module = {
 	.sm_ver		= DAOS_OBJ_VERSION,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_proto_count	= 2,
-	.sm_proto_fmt	= {&obj_proto_fmt_0, &obj_proto_fmt_1},
-	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
-	.sm_handlers	= {obj_handlers_0, obj_handlers_1},
+	.sm_proto_count	= 1,
+	.sm_proto_fmt	= {&obj_proto_fmt},
+	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT},
+	.sm_handlers	= {obj_handlers},
 	.sm_key		= &obj_module_key,
 	.sm_mod_ops	= &ds_obj_mod_ops,
 	.sm_metrics	= &obj_metrics,
