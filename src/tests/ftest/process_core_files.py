@@ -231,7 +231,7 @@ class CoreFileProcessing():
                     'libabt0' if "suse" in self.distro_info.name.lower() else "argobots",
                     'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
                     'hdf5-vol-daos-mpich-tests', 'hdf5-vol-daos-openmpi',
-                    'hdf5-vol-daos-openmpi-tests', 'ior']:
+                    'hdf5-vol-daos-openmpi-tests', 'ior', 'ucx']:
             debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
                 install_pkgs.append(debug_pkg)
