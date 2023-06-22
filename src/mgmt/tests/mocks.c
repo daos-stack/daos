@@ -609,3 +609,8 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
 
+int
+ds_mgmt_tgt_init(void)
+{
+	return 0;
+}
