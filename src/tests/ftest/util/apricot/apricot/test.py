@@ -130,7 +130,7 @@ class Test(avocadoTest):
         self.basepath = None
         self.prefix = None
         self.ofi_prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-release-2.4")
 
         # List of methods to call during tearDown to cleanup after the steps
         # Use the register_cleanup() method to add methods with optional arguments
