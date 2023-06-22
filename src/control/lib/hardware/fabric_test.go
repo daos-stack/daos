@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1344,6 +1344,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 				),
 				test.CmpOptIgnoreFieldAnyType("log"),
 				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
+				cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1444,9 +1445,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
 			builders: []FabricInterfaceSetBuilder{
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
 			},
 			expErr: errors.New("no fabric interfaces found"),
 		},
@@ -1542,9 +1543,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			},
 			providers: []string{"ofi+tcp"},
 			builders: []FabricInterfaceSetBuilder{
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
 			},
 			expBuildersChanged: true,
 			expResult: NewFabricInterfaceSet(
@@ -1697,7 +1698,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				}
 			}
 
-			result, err := scanner.Scan(context.Background(), tc.providers...)
+			result, err := scanner.Scan(test.Context(t), tc.providers...)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
@@ -1706,11 +1707,11 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 			if !tc.expBuildersChanged {
 				for _, b := range tc.builders {
-					mock, ok := b.(*mockFabricInterfaceSetBuilder)
+					mock, ok := b.(*MockFabricInterfaceSetBuilder)
 					if !ok {
 						t.Fatalf("bad test setup: test builders aren't mocks")
 					}
-					test.AssertEqual(t, 1, mock.buildPartCalled, "")
+					test.AssertEqual(t, 1, mock.BuildPartCalled, "")
 				}
 			}
 		})
@@ -1804,6 +1805,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
 		test.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -1934,7 +1936,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -2195,7 +2197,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2347,7 +2349,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2494,7 +2496,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
@@ -2635,10 +2637,10 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			var ctx context.Context
 
 			if tc.timeout == 0 {
-				ctx = context.Background()
+				ctx = test.Context(t)
 			} else {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				ctx, cancel = context.WithTimeout(test.Context(t), tc.timeout)
 				defer cancel()
 			}
 

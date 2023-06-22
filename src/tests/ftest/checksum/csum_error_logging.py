@@ -46,7 +46,7 @@ class CsumErrorLog(DaosCoreBase):
 
     @fail_on(CommandFailure)
     def test_csum_error_logging(self):
-        """Jira ID: DAOS-3927
+        """Jira ID: DAOS-3927.
 
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
@@ -56,27 +56,44 @@ class CsumErrorLog(DaosCoreBase):
         :avocado: tags=checksum,faults,daos_test
         :avocado: tags=CsumErrorLog,test_csum_error_logging
         """
+        self.log_step('Detecting server devices (dmg storage query list-devices)')
+        test_run = False
         dmg = self.get_dmg_command()
         dmg.hostlist = self.hostlist_servers[0]
         host_devices = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices')
         for host, devices in host_devices.items():
             for device in devices:
-                if 'tgt_ids' not in device or 'uuid' not in device:
-                    self.fail(
-                        'Missing uuid and/or tgt_ids info from dmg storage query list devices')
+                for entry in ('uuid', 'tgt_ids', 'role_bits', 'roles'):
+                    if entry not in device:
+                        self.fail(
+                            'Missing {} info from dmg storage query list devices'.format(entry))
                 self.log.info(
-                    "Host %s device: uuid=%s, targets=%s", host, device['uuid'], device['tgt_ids'])
+                    'Host %s device: uuid=%s, targets=%s, role=%s, role_bits=%s',
+                    host, device['uuid'], device['tgt_ids'], device['roles'], device['role_bits'])
                 if not device['tgt_ids']:
-                    self.log.info('Skipping device without targets on %s', device['uuid'])
+                    self.log_step('Skipping device without targets on {}'.format(device['uuid']))
+                    continue
+                if device['roles'] and not int(device['role_bits']) & 1:
+                    self.log_step(
+                        'Skipping {} device without data on {}'.format(
+                            device['role_bits'], device['uuid']))
                     continue
                 if not device['uuid']:
-                    self.fail("Device uuid undefined")
+                    self.fail('Device uuid undefined')
+                self.log_step(
+                    'Get checksum errors before running the test (dmg storage query device-health)')
                 check_sum = self.get_checksum_error_value(dmg, device['uuid'])
                 dmg.copy_certificates(get_log_file("daosCA/certs"), self.hostlist_clients)
                 dmg.copy_configuration(self.hostlist_clients)
                 self.log.info("Checksum Errors before: %d", check_sum)
+                self.log_step('Run the test (daos_test -z)')
                 self.run_subtest()
+                test_run = True
+                self.log_step(
+                    'Get checksum errors after running the test (dmg storage query device-health)')
                 check_sum_latest = self.get_checksum_error_value(dmg, device['uuid'])
-                self.log.info("Checksum Errors after:  %d", check_sum_latest)
-                self.assertTrue(check_sum_latest > check_sum, "Checksum Error Log not incremented")
-        self.log.info("Checksum Error Logging Test Passed")
+                self.log.info('Checksum Errors after:  %d', check_sum_latest)
+                self.assertTrue(check_sum_latest > check_sum, 'Checksum Error Log not incremented')
+        if not test_run:
+            self.fail('No tests run for the devices found')
+        self.log_step('Test Passed')

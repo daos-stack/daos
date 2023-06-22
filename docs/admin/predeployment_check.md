@@ -155,6 +155,16 @@ with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
+### Firewall
+
+Some distributions install a firewall as part of the base OS installation. DAOS uses port 10001
+(or whatever is configured as the `port:` in the configuration files in /etc/daos)
+for its management service. If this port is blocked by firewall rules, neither `dmg` nor the
+`daos_agent` on a remote node will be able to contact the DAOS server(s).
+
+Either configure the firewall to allow traffic for this port, or disable the firewall
+(for example, by running `systemctl stop firewalld; systemctl disable firewalld`).
+
 ## Install from Source
 
 When DAOS is installed from source (and not from pre-built packages), extra manual
@@ -271,6 +281,9 @@ $ sudo ln -sf $daospath/share/spdk/scripts/common.sh \
 $ sudo ln -s $daospath/include \
            /usr/share/spdk/include
 ```
+
+For convenience, the `utils/setup_daos_server_helper.sh` script may be used to automate the steps
+described above.
 
 !!! note
     The RPM installation is preferred for production scenarios. Manual

@@ -85,6 +85,7 @@ smoke:
     - datamover_smoke
   # num of bytes to write to reserved container
   resv_bytes: 500
+  enable_intercept_lib: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -100,6 +101,8 @@ ior_smoke:
     - DFS
     - MPIIO
     - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
     - HDF5
     - HDF5-VOL
   test_file: daos:/testFile
@@ -120,6 +123,10 @@ ior_smoke:
     thread_count: 8
     cores: '0-7'
 fio_smoke:
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   job_timeout: 10
   names:
     - global
@@ -146,7 +153,7 @@ fio_smoke:
       - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: true
+    disable_caching: true
     thread_count: 8
     cores: '0-7'
 daos_racer:
@@ -158,7 +165,10 @@ vpic_smoke:
   taskspernode:
     - 1
   cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
-  posix: true
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
@@ -174,7 +184,10 @@ lammps_smoke:
   taskspernode:
     - 1
   cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj.smoke"
-  posix: true
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
@@ -192,8 +205,10 @@ mdtest_smoke:
     - 1
   test_dir: "/"
   api:
-    - 'DFS'
-    - 'POSIX'
+    - DFS
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   iteration: 1
   num_of_files_dirs: 100
   pre_iter: 10

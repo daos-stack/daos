@@ -53,7 +53,7 @@ def scons():
 
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
+    Import('env', 'swim_targets', 'CART_VERSION')
 
     env.d_add_build_rpath()
 
@@ -62,12 +62,12 @@ def scons():
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(env, 'mercury', headers_only=True)
+    env.require('mercury', headers_only=True)
 
     denv = env.Clone(LIBS=[])
 
     denv.AppendUnique(LIBS=['gurt'])
-    prereqs.require(denv, 'mercury')
+    denv.require('mercury')
 
     cart_targets = denv.SharedObject(SRC)
 

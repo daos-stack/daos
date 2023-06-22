@@ -27,7 +27,6 @@ class NvmeFaultReintegrate(TestWithServers):
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.daos_command = self.get_daos_command()
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
@@ -213,15 +212,12 @@ class NvmeFaultReintegrate(TestWithServers):
             run_ior(**ior_kwargs)
         except CommandFailure as error:
             self.fail("Error in ior read {}.".format(error))
-        kwargs = {"pool": self.pool.identifier,
-                  "cont": self.container.identifier}
-        output = self.daos_command.container_check(**kwargs)
-        self.log.info(output)
+        self.container.check()
 
         # 9.
         self.log_step("Replace the same drive back.")
         result = get_dmg_response(
-            self, self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
+            self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete

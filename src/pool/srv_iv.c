@@ -193,6 +193,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			iv_prop->pip_perf_domain = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_SCRUB_MODE:
 			iv_prop->pip_scrub_mode = prop_entry->dpe_val;
 			break;
@@ -204,6 +207,15 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			iv_prop->pip_svc_redun_fac = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			iv_prop->pip_checkpoint_mode = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			iv_prop->pip_checkpoint_freq = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			iv_prop->pip_checkpoint_thresh = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -336,8 +348,20 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			prop_entry->dpe_val = iv_prop->pip_perf_domain;
+			break;
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->pip_svc_redun_fac;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_mode;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_freq;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_thresh;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

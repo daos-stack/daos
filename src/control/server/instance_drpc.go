@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -145,10 +145,13 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 
 	resChan := make(chan *system.MemberResult)
-	go func() {
+	go func(ctx context.Context) {
 		dresp, err := ei.CallDrpc(ctx, method, nil)
-		resChan <- drespToMemberResult(rank, dresp, err, targetState)
-	}()
+		select {
+		case <-ctx.Done():
+		case resChan <- drespToMemberResult(rank, dresp, err, targetState):
+		}
+	}(ctx)
 
 	select {
 	case <-ctx.Done():
@@ -219,7 +222,7 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevic
 //
 // Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
 // data in ctrlrMap using PCI address key.
-func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController) ([]storage.NvmeController, error) {
+func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController, ms uint64, rs uint64) ([]storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController)
 	for idx, ctrlr := range ctrlrs {
 		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
@@ -254,8 +257,10 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 		if err != nil {
 			return nil, errors.Wrapf(err, "%s: collect smd info", msg)
 		}
+		smdDev.MetaSize = ms
+		smdDev.RdbSize = rs
 
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
+		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID, MetaSize: ms, RdbSize: rs})
 		if err != nil {
 			// Log the error if it indicates non-existent health and the SMD entity has
 			// an abnormal state. Otherwise it is expected that health may be missing.
@@ -271,9 +276,11 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 		}
 
 		// Populate space usage for each SMD device from health stats.
-		smdDev.ClusterSize = pbStats.ClusterSize
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
+		smdDev.ClusterSize = pbStats.ClusterSize
+		smdDev.MetaWalSize = pbStats.MetaWalSize
+		smdDev.RdbWalSize = pbStats.RdbWalSize
 		msg = fmt.Sprintf("%s: smd usage = %s/%s", msg, humanize.Bytes(smdDev.AvailBytes),
 			humanize.Bytes(smdDev.TotalBytes))
 		ctrlr.UpdateSmd(smdDev)

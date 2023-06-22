@@ -7,7 +7,6 @@
 package events
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -97,9 +96,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.Background()
-
-			ps := NewPubSub(ctx, log)
+			ps := NewPubSub(test.Context(t), log)
 			defer ps.Close()
 
 			tly1 := newTally(len(tc.expEvts))

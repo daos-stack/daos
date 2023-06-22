@@ -3,17 +3,22 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv')
 
     unit_env = denv.Clone()
 
-    prereqs.require(unit_env, 'pmdk', headers_only=True)
+    unit_env.require('pmdk', headers_only=True)
 
     unit_env.Append(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     unit_env.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    test = unit_env.d_test_program(['srv_checksum_tests.c', '../srv_csum.c'],
-                                   LIBS=['daos_common_pmem', 'gurt', 'cmocka', 'vos', 'bio', 'abt'])
-    unit_env.Install('$PREFIX/bin/', test)
+    unit_env.d_test_program(['srv_checksum_tests.c', '../srv_csum.c'],
+                            LIBS=['daos_common_pmem', 'gurt', 'cmocka',
+                                  'vos', 'bio', 'abt'])
+
+    unit_env.d_test_program(['cli_checksum_tests.c',
+                             '../cli_csum.c',
+                             '../../common/tests_lib.c'],
+                            LIBS=['daos_common', 'cmocka', 'gurt', ])
 
 
 if __name__ == "SCons.Script":

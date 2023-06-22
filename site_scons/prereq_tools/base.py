@@ -43,8 +43,6 @@ from SCons.Script import WhereIs
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
 
-OPTIONAL_COMPS = ['psm2']
-
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -443,7 +441,6 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
-        opts.Add(ListVariable('INCLUDE', "Optional components to build", 'none', OPTIONAL_COMPS))
         opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
                               PathVariable.PathIsDirCreate))
         opts.Add('ALT_PREFIX', f'Specifies {os.pathsep} separated list of alternative paths to add',
@@ -530,7 +527,7 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c']
+        client_reqs = ['fuse', 'json-c', 'capstone']
         server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
@@ -813,8 +810,6 @@ class PreReqComponent():
     def included(self, *comps):
         """Returns true if the components are included in the build"""
         for comp in comps:
-            if comp not in OPTIONAL_COMPS:
-                continue
             if not set([comp, 'all']).intersection(set(self.include)):
                 return False
         return True
@@ -998,6 +993,11 @@ class _Component():
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
 
+    @staticmethod
+    def _sanitize_patch_path(path):
+        """Remove / and https:// from path"""
+        return "".join(path.split("://")[-1].split("/")[1:])
+
     def _resolve_patches(self):
         """Parse the patches variable"""
         patchnum = 1
@@ -1013,7 +1013,7 @@ class _Component():
             if "https://" not in raw:
                 patches[raw] = patch_subdir
                 continue
-            patch_name = f'{self.name}_patch_{patchnum:d}'
+            patch_name = f'{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
@@ -1023,6 +1023,20 @@ class _Component():
                         '-o', patch_path, raw]]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
+        # Remove old patches
+        for fname in os.listdir(self.patch_path):
+            if not fname.startswith(f"{self.name}_"):
+                continue
+            found = False
+            for key in patches:
+                if fname in key:
+                    found = True
+                    break
+            if not found:
+                old_patch = os.path.join(self.patch_path, fname)
+                print(f"Removing old, unused patch file {old_patch}")
+                os.unlink(old_patch)
+
         return patches
 
     def get(self):
@@ -1343,7 +1357,8 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
-                if not lib.endswith(".so"):
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]

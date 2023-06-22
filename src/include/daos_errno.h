@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,136 +165,96 @@ extern "C" {
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
-#define D_FOREACH_DAOS_ERR(ACTION)					\
-	/** Generic I/O error */					\
-	ACTION(DER_IO,			(DER_ERR_DAOS_BASE + 1),	\
-	       I/O error)						\
-	/** Memory free error */					\
-	ACTION(DER_FREE_MEM,		(DER_ERR_DAOS_BASE + 2),	\
-	       Memory free error)					\
-	/** Entry not found */						\
-	ACTION(DER_ENOENT,		(DER_ERR_DAOS_BASE + 3),	\
-	       Entity not found)					\
-	/** Unknown object type */					\
-	ACTION(DER_NOTYPE,		(DER_ERR_DAOS_BASE + 4),	\
-	       Unknown object type)					\
-	/** Unknown object schema */					\
-	ACTION(DER_NOSCHEMA,		(DER_ERR_DAOS_BASE + 5),	\
-	       Unknown object schema)					\
-	/** Object is not local */					\
-	ACTION(DER_NOLOCAL,		(DER_ERR_DAOS_BASE + 6),	\
-	       Object is not local)					\
-	/** stale pool map version */					\
-	ACTION(DER_STALE,		(DER_ERR_DAOS_BASE + 7),	\
-	       Stale pool map version)					\
-	/** Not service leader */					\
-	ACTION(DER_NOTLEADER,		(DER_ERR_DAOS_BASE + 8),	\
-	       Not service leader)					\
-	/** * Target create error */					\
-	ACTION(DER_TGT_CREATE,		(DER_ERR_DAOS_BASE + 9),	\
-	       Target create error)					\
-	/** Epoch is read-only */					\
-	ACTION(DER_EP_RO,		(DER_ERR_DAOS_BASE + 10),	\
-	       Epoch is read only)					\
-	/** Epoch is too old, all data have been recycled */		\
-	ACTION(DER_EP_OLD,		(DER_ERR_DAOS_BASE + 11),	\
-	       Epoch is too old. All data have been recycled)		\
-	/** Key is too large */						\
-	ACTION(DER_KEY2BIG,		(DER_ERR_DAOS_BASE + 12),	\
-	       Key is too large)					\
-	/** Record is too large */					\
-	ACTION(DER_REC2BIG,		(DER_ERR_DAOS_BASE + 13),	\
-	       Record is too large)					\
-	/** IO buffers can't match object extents */			\
-	ACTION(DER_IO_INVAL,		(DER_ERR_DAOS_BASE + 14),	\
-	       I/O buffers do not match object extents)			\
-	/** Event queue is busy */					\
-	ACTION(DER_EQ_BUSY,		(DER_ERR_DAOS_BASE + 15),	\
-	       Event queue is busy)					\
-	/** Domain of cluster component can't match */			\
-	ACTION(DER_DOMAIN,		(DER_ERR_DAOS_BASE + 16),	\
-	       Domain of cluster component do not match)		\
-	/** Service should shut down */					\
-	ACTION(DER_SHUTDOWN,		(DER_ERR_DAOS_BASE + 17),	\
-	       Service should shut down)				\
-	/** Operation now in progress */				\
-	ACTION(DER_INPROGRESS,		(DER_ERR_DAOS_BASE + 18),	\
-	       Operation now in progress)				\
-	/** Not applicable. */						\
-	ACTION(DER_NOTAPPLICABLE,	(DER_ERR_DAOS_BASE + 19),	\
-	       Not applicable)						\
-	/** Not a service replica */					\
-	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20),	\
-	       Not a service replica)					\
-	/** Checksum error */						\
-	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21),	\
-	       Checksum error)						\
-	/** Unsupported durable format */				\
-	ACTION(DER_DF_INVAL,		(DER_ERR_DAOS_BASE + 22),	\
-	       Unsupported durable format)				\
-	/** Incompatible durable format version */			\
-	ACTION(DER_DF_INCOMPT,		(DER_ERR_DAOS_BASE + 23),	\
-	       Incompatible durable format version)			\
-	/** Record size error */					\
-	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24),	\
-	       Record size error)					\
-	/** Used to indicate a transaction should restart */		\
-	ACTION(DER_TX_RESTART,		(DER_ERR_DAOS_BASE + 25),	\
-	       Transaction should restart)				\
-	/** Data lost or not recoverable */				\
-	ACTION(DER_DATA_LOSS,		(DER_ERR_DAOS_BASE + 26),	\
-	       Data lost or not recoverable)				\
-	/** Operation canceled (non-crt) */				\
-	ACTION(DER_OP_CANCELED,		(DER_ERR_DAOS_BASE + 27),	\
-	       Operation canceled)					\
-	/** TX is not committed, not sure whether committable or not */	\
-	ACTION(DER_TX_BUSY,		(DER_ERR_DAOS_BASE + 28),	\
-	       TX is not committed)					\
-	/** Agent is incompatible with libdaos */			\
-	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
-	       Agent is incompatible with libdaos)			\
-	/** Needs to be handled via distributed transaction. */		\
-	ACTION(DER_NEED_TX,		(DER_ERR_DAOS_BASE + 30),	\
-	       To be handled via distributed transaction)		\
-	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
-	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
-	       Failures exceed RF)					\
-	/** Re-fetch again, an internal error code used in EC deg-fetch */ \
-	ACTION(DER_FETCH_AGAIN,		(DER_ERR_DAOS_BASE + 32),	\
-	       Fetch again)						\
-	/** Hit uncertain DTX, may need to try with other replica. */	\
-	ACTION(DER_TX_UNCERTAIN,	(DER_ERR_DAOS_BASE + 33),	\
-	       TX status is uncertain)					\
-	/** Communicatin issue with agent. */				\
-	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
-	       Agent communication error)				\
-	/** ID mismatch */						\
-	ACTION(DER_ID_MISMATCH,		(DER_ERR_DAOS_BASE + 35),	\
-	       ID mismatch)						\
-	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
-	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
-		Retry with other target)				\
-	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
-	       Operation not supported)					\
-	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
-	       One or more control plane components are incompatible)	\
-	/** No service available */					\
-	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)					\
-	/** The TX ID may be reused. */				\
-	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
-	       TX ID may be reused)					\
-	/** Re-update again */						\
-	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
-	       update again)						\
-	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
-	       NVMe I/O error)						\
-	ACTION(DER_NO_CERT,		(DER_ERR_DAOS_BASE + 43),	\
-	       Unable to access one or more certificates)		\
-	ACTION(DER_BAD_CERT,		(DER_ERR_DAOS_BASE + 44),	\
-	       Invalid x509 certificate)				\
-	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45),	\
-	       VOS partial update error)
+#define D_FOREACH_DAOS_ERR(ACTION)                                                                 \
+	/** Generic I/O error */                                                                   \
+	ACTION(DER_IO, (DER_ERR_DAOS_BASE + 1), I / O error)                                       \
+	/** Memory free error */                                                                   \
+	ACTION(DER_FREE_MEM, (DER_ERR_DAOS_BASE + 2), Memory free error)                           \
+	/** Entry not found */                                                                     \
+	ACTION(DER_ENOENT, (DER_ERR_DAOS_BASE + 3), Entity not found)                              \
+	/** Unknown object type */                                                                 \
+	ACTION(DER_NOTYPE, (DER_ERR_DAOS_BASE + 4), Unknown object type)                           \
+	/** Unknown object schema */                                                               \
+	ACTION(DER_NOSCHEMA, (DER_ERR_DAOS_BASE + 5), Unknown object schema)                       \
+	/** Object is not local */                                                                 \
+	ACTION(DER_NOLOCAL, (DER_ERR_DAOS_BASE + 6), Object is not local)                          \
+	/** stale pool map version */                                                              \
+	ACTION(DER_STALE, (DER_ERR_DAOS_BASE + 7), Stale pool map version)                         \
+	/** Not service leader */                                                                  \
+	ACTION(DER_NOTLEADER, (DER_ERR_DAOS_BASE + 8), Not service leader)                         \
+	/** * Target create error */                                                               \
+	ACTION(DER_TGT_CREATE, (DER_ERR_DAOS_BASE + 9), Target create error)                       \
+	/** Epoch is read-only */                                                                  \
+	ACTION(DER_EP_RO, (DER_ERR_DAOS_BASE + 10), Epoch is read only)                            \
+	/** Epoch is too old, all data have been recycled */                                       \
+	ACTION(DER_EP_OLD, (DER_ERR_DAOS_BASE + 11), Epoch is too old.All data have been recycled) \
+	/** Key is too large */                                                                    \
+	ACTION(DER_KEY2BIG, (DER_ERR_DAOS_BASE + 12), Key is too large)                            \
+	/** Record is too large */                                                                 \
+	ACTION(DER_REC2BIG, (DER_ERR_DAOS_BASE + 13), Record is too large)                         \
+	/** IO buffers can't match object extents */                                               \
+	ACTION(DER_IO_INVAL, (DER_ERR_DAOS_BASE + 14), I / O buffers do not match object extents)  \
+	/** Event queue is busy */                                                                 \
+	ACTION(DER_EQ_BUSY, (DER_ERR_DAOS_BASE + 15), Event queue is busy)                         \
+	/** Domain of cluster component can't match */                                             \
+	ACTION(DER_DOMAIN, (DER_ERR_DAOS_BASE + 16), Domain of cluster component do not match)     \
+	/** Service should shut down */                                                            \
+	ACTION(DER_SHUTDOWN, (DER_ERR_DAOS_BASE + 17), Service should shut down)                   \
+	/** Operation now in progress */                                                           \
+	ACTION(DER_INPROGRESS, (DER_ERR_DAOS_BASE + 18), Operation now in progress)                \
+	/** Not applicable. */                                                                     \
+	ACTION(DER_NOTAPPLICABLE, (DER_ERR_DAOS_BASE + 19), Not applicable)                        \
+	/** Not a service replica */                                                               \
+	ACTION(DER_NOTREPLICA, (DER_ERR_DAOS_BASE + 20), Not a service replica)                    \
+	/** Checksum error */                                                                      \
+	ACTION(DER_CSUM, (DER_ERR_DAOS_BASE + 21), Checksum error)                                 \
+	/** Unsupported durable format */                                                          \
+	ACTION(DER_DF_INVAL, (DER_ERR_DAOS_BASE + 22), Unsupported durable format)                 \
+	/** Incompatible durable format version */                                                 \
+	ACTION(DER_DF_INCOMPT, (DER_ERR_DAOS_BASE + 23), Incompatible durable format version)      \
+	/** Record size error */                                                                   \
+	ACTION(DER_REC_SIZE, (DER_ERR_DAOS_BASE + 24), Record size error)                          \
+	/** Used to indicate a transaction should restart */                                       \
+	ACTION(DER_TX_RESTART, (DER_ERR_DAOS_BASE + 25), Transaction should restart)               \
+	/** Data lost or not recoverable */                                                        \
+	ACTION(DER_DATA_LOSS, (DER_ERR_DAOS_BASE + 26), Data lost or not recoverable)              \
+	/** Operation canceled (non-crt) */                                                        \
+	ACTION(DER_OP_CANCELED, (DER_ERR_DAOS_BASE + 27), Operation canceled)                      \
+	/** TX is not committed, not sure whether committable or not */                            \
+	ACTION(DER_TX_BUSY, (DER_ERR_DAOS_BASE + 28), TX is not committed)                         \
+	/** Agent is incompatible with libdaos */                                                  \
+	ACTION(DER_AGENT_INCOMPAT, (DER_ERR_DAOS_BASE + 29), Agent is incompatible with libdaos)   \
+	/** Needs to be handled via distributed transaction. */                                    \
+	ACTION(DER_NEED_TX, (DER_ERR_DAOS_BASE + 30), To be handled via distributed transaction)   \
+	/** #failures exceed RF(Redundancy Factor), data possibly lost */                          \
+	ACTION(DER_RF, (DER_ERR_DAOS_BASE + 31), Failures exceed RF)                               \
+	/** Re-fetch again, an internal error code used in EC deg-fetch */                         \
+	ACTION(DER_FETCH_AGAIN, (DER_ERR_DAOS_BASE + 32), Fetch again)                             \
+	/** Hit uncertain DTX, may need to try with other replica. */                              \
+	ACTION(DER_TX_UNCERTAIN, (DER_ERR_DAOS_BASE + 33), TX status is uncertain)                 \
+	/** Communicatin issue with agent. */                                                      \
+	ACTION(DER_AGENT_COMM, (DER_ERR_DAOS_BASE + 34), Agent communication error)                \
+	/** ID mismatch */                                                                         \
+	ACTION(DER_ID_MISMATCH, (DER_ERR_DAOS_BASE + 35), ID mismatch)                             \
+	/** Retry with other target, an internal error code used in EC deg-fetch. */               \
+	ACTION(DER_TGT_RETRY, (DER_ERR_DAOS_BASE + 36), Retry with other target)                   \
+	ACTION(DER_NOTSUPPORTED, (DER_ERR_DAOS_BASE + 37), Operation not supported)                \
+	ACTION(DER_CONTROL_INCOMPAT, (DER_ERR_DAOS_BASE + 38),                                     \
+	       One or more control plane components are incompatible)                              \
+	/** No service available */                                                                \
+	ACTION(DER_NO_SERVICE, (DER_ERR_DAOS_BASE + 39), No service available)                     \
+	/** The TX ID may be reused. */                                                            \
+	ACTION(DER_TX_ID_REUSED, (DER_ERR_DAOS_BASE + 40), TX ID may be reused)                    \
+	/** Re-update again */                                                                     \
+	ACTION(DER_UPDATE_AGAIN, (DER_ERR_DAOS_BASE + 41), update again)                           \
+	ACTION(DER_NVME_IO, (DER_ERR_DAOS_BASE + 42), NVMe I / O error)                            \
+	ACTION(DER_NO_CERT, (DER_ERR_DAOS_BASE + 43), Unable to access one or more certificates)   \
+	ACTION(DER_BAD_CERT, (DER_ERR_DAOS_BASE + 44), Invalid x509 certificate)                   \
+	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45), VOS partial update error)        \
+	ACTION(DER_CHKPT_BUSY, (DER_ERR_DAOS_BASE + 46),                                           \
+	       Page is temporarily read only due to checkpointing)                                 \
+	/** Division by zero. */                                                                   \
+	ACTION(DER_DIV_BY_ZERO,	(DER_ERR_DAOS_BASE + 47), Division by zero)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
@@ -309,79 +269,37 @@ extern "C" {
 #define D_DEFINE_ERRDESC(name, value, desc) #desc,
 
 /** Preprocessor machinery to define a consecutive range of error numbers */
-#define D_DEFINE_RANGE_ERRNO(name, base)			\
-	enum {							\
-		DER_ERR_##name##_BASE		=	(base),	\
-		D_FOREACH_##name##_ERR(D_DEFINE_ERRNO)		\
-		DER_ERR_##name##_LIMIT,				\
-	};
+#define D_DEFINE_RANGE_ERRNO(name, base)                                                           \
+	DER_ERR_##name##_BASE = (base),                                                            \
+	D_FOREACH_##name##_ERR(D_DEFINE_ERRNO) DER_ERR_##name##_LIMIT,
 
-/** Preprocessor machinery to define error strings for a consecutive range of error numbers */
-#define D_DEFINE_RANGE_ERRSTR(name)				\
-	static const char * const g_##name##_error_strings[] = {\
-		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)		\
-	}; \
-	static const char * const g_##name##_strerror[] = {	\
-		D_FOREACH_##name##_ERR(D_DEFINE_ERRDESC)	\
-	};
-
-D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
-
-/** Macro to register a range defined using D_DEFINE_RANGE macros */
-#define D_REGISTER_RANGE(name)				\
-	d_errno_register_range(DER_ERR_##name##_BASE,	\
-			       DER_ERR_##name##_LIMIT,	\
-			       g_##name##_error_strings,\
-			       g_##name##_strerror)
-
-/** Macro to deregister a range defined using D_DEFINE_RANGE macros */
-#define D_DEREGISTER_RANGE(name)			\
-	d_errno_deregister_range(DER_ERR_##name##_BASE)
-
-/** Return value representing success */
-#define DER_SUCCESS	0
-/** Unknown error */
-#define DER_UNKNOWN	(DER_ERR_GURT_BASE + 500000)
+/** The actual error codes */
+enum daos_error_number {
+	/** Return value representing success */
+	DER_SUCCESS = 0,
+	D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
+	/** Unknown error value */
+	DER_UNKNOWN = (DER_ERR_GURT_BASE + 500000),
+};
 
 /** Return a string associated with a registered gurt errno
  *
- * \param[in]	rc	The error code
+ * \param[in]	errnum	The error code
  *
  * \return	String value for error code or DER_UNKNOWN
  */
-const char *d_errstr(int rc);
-
-/** Register error codes with gurt.  Use D_REGISTER_RANGE.
- *
- * \param[in]	start		Start of error range. Actual errors start at
- *				\p start + 1
- * \param[in]	end		End of range. All error codes should be less
- *				than \p end
- * \param[in]	error_strings	Array of strings. Must be one per
- *				code in the range
- * \param[in]	strerror	Array of strings. Must be one per
- *				code in the range
- *
- * \return	0 on success, otherwise error code
- */
-int d_errno_register_range(int start, int end,
-			   const char * const *error_strings,
-			   const char * const *strerror);
-
-/** De-register error codes with gurt.  Use D_DEREGISTER_RANGE.
- *
- * \param[in]	start	Start of error range
- */
-void d_errno_deregister_range(int start);
+const char *
+d_errstr(int errnum);
 
 /** Return an error description string associated with a registered gurt errno.
  *
  * \param[in]	errnum	The error code
  *
- * \return		The error description string, or an "Unknown
- *			error nnn" message if the error number is unknown.
+ * \return		The error description string, or an "Unknown error nnn" message if the error
+ * 			number is unknown.
  */
-const char *d_errdesc(int errnum);
+const char *
+d_errdesc(int errnum);
 
 /** @}
  */

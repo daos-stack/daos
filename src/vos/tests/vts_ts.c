@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -145,7 +145,7 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 
 	/** Now evict the extra records to reset the array for child tests */
 	for (idx = 0; idx < NUM_EXTRA; idx++)
-		vos_ts_evict(&ts_arg->ta_extra_records[idx], type);
+		vos_ts_evict(&ts_arg->ta_extra_records[idx], type, true);
 
 	/** evicting an entry should move it to lru */
 	vos_ts_set_reset(ts_arg->ta_ts_set, type, 0);
@@ -153,7 +153,7 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 			      false, &same);
 	assert_true(found);
 	assert_int_equal(same->te_info->ti_type, type);
-	vos_ts_evict(&ts_arg->ta_records[type][20], type);
+	vos_ts_evict(&ts_arg->ta_records[type][20], type, true);
 	found = vos_ts_lookup(ts_arg->ta_ts_set, &ts_arg->ta_records[type][20],
 			      true, &entry);
 	assert_false(found);
@@ -195,7 +195,7 @@ ilog_test_ts_get(void **state)
 
 	for (type = VOS_TS_TYPE_AKEY;; type--) {
 		for (idx = 0; idx < ts_arg->ta_counts[type]; idx++) {
-			vos_ts_evict(&ts_arg->ta_records[type][idx], type);
+			vos_ts_evict(&ts_arg->ta_records[type][idx], type, true);
 			found = vos_ts_lookup(ts_arg->ta_ts_set,
 					      &ts_arg->ta_records[type][idx],
 					      true, &entry);
@@ -231,7 +231,7 @@ alloc_ts_cache(void **state)
 	int			 rc;
 
 	/** Free already allocated table */
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(true);
 	if (ts_table != NULL)
 		ts_arg->old_table = ts_table;
 
@@ -474,6 +474,7 @@ lru_array_stress_test(void **state)
 		assert_int_equal(evicted, LRU_ARRAY_SIZE);
 	}
 
+	srand(1); /* The below test suite may fail for random seed value*/
 	for (i = 0; i < BIG_TEST; i++) {
 		stress_entries[i].value = MAGIC1;
 		op = rand() % 10;
@@ -733,13 +734,13 @@ ts_test_init(void **state)
 
 	alloc_ts_cache(state);
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(true);
 
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		ts_arg->ta_counts[i] = ts_table->tt_type_info[i].ti_count;
 
 	daos_dti_gen_unique(&dth.dth_xid);
-	rc = vos_ts_set_allocate(&ts_arg->ta_ts_set, 0, 0, 1, &dth);
+	rc = vos_ts_set_allocate(&ts_arg->ta_ts_set, 0, 0, 1, &dth, true);
 	if (rc != 0) {
 		D_FREE(ts_arg);
 		return rc;
@@ -755,7 +756,7 @@ ts_test_fini(void **state)
 	struct vos_ts_table	*ts_table;
 
 	vos_ts_set_free(ts_arg->ta_ts_set);
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(true);
 	vos_ts_table_free(&ts_table);
 	vos_ts_table_set(ts_arg->old_table);
 	D_FREE(ts_arg);

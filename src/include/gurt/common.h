@@ -30,9 +30,14 @@
 #include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
 #define D_ON_VALGRIND 0
+#define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>
@@ -77,7 +82,8 @@ void *d_malloc(size_t);
 void *d_realloc(void *, size_t);
 char *d_strndup(const char *s, size_t n);
 int d_asprintf(char **strp, const char *fmt, ...);
-void *d_aligned_alloc(size_t alignment, size_t size);
+void       *
+d_aligned_alloc(size_t alignment, size_t size, bool zero);
 char *d_realpath(const char *path, char *resolved_path);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
@@ -174,12 +180,16 @@ char *d_realpath(const char *path, char *resolved_path);
 		}							\
 	} while (0)
 
-#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
-							 size);		\
-		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
-			      size, 0, #ptr, 0);			\
+#define D_ALIGNED_ALLOC(ptr, alignment, size)                                                      \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, true);                   \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
+	} while (0)
+
+#define D_ALIGNED_ALLOC_NZ(ptr, alignment, size)                                                   \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, false);                  \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise

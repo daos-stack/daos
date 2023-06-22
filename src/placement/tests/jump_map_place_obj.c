@@ -1054,9 +1054,6 @@ down_continuously(void **state)
 				     ctx.rebuild.tgt_ranks[0]);
 		assert_int_equal(jtc_get_layout_shard(&ctx, 0)->po_target,
 				 ctx.rebuild.tgt_ranks[0]);
-		/* should be no reintegration or addition happening */
-		assert_int_equal(0, ctx.reint.out_nr);
-		assert_int_equal(0, ctx.new.out_nr);
 
 		prev_first_shard = *jtc_get_layout_shard(&ctx, 0);
 	}
@@ -1222,12 +1219,12 @@ down_back_to_up_in_same_order(void **state)
 	/* take a target down ... this one will impact first shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 1, 1, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 1, 1, 1, 1);
 
 	/* take a target down ... this one will impact second shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[1]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 2, 2, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 2, 2, 2, 2);
 
 	/* Bot are rebuilt now so status is DOWNOUT */
 	jtc_set_status_on_target(&ctx, DOWNOUT, orig_shard_targets[0]);
@@ -1280,12 +1277,12 @@ down_back_to_up_in_reverse_order(void **state)
 	/* take a target down ... this one will impact first shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 1, 1, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 1, 1, 1, 1);
 
 	/* take a target down ... this one will impact second shard  */
 	jtc_set_status_on_target(&ctx, DOWN, orig_shard_targets[1]);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_assert_rebuild_reint_new(ctx, 2, 2, 0, 0);
+	jtc_assert_rebuild_reint_new(ctx, 2, 2, 2, 2);
 
 	/* Bot are rebuilt now so status is DOWNOUT */
 	jtc_set_status_on_target(&ctx, DOWNOUT, orig_shard_targets[0]);

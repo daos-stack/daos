@@ -89,6 +89,7 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "123", "POSIX", "/123");
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(any(URI.class))).thenReturn(info);
+    cfg.setBoolean(io.daos.fs.hadoop.Constants.DAOS_WITH_UNS_PREFIX, true);
     fs.initialize(URI.create("daos://123/123/abc"), cfg);
     Assert.assertEquals("daos://123/123/user/" + System.getProperty("user.name"),
         fs.getWorkingDirectory().toString());
