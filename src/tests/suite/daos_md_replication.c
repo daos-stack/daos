@@ -76,7 +76,9 @@ mdr_stop_pool_svc(void **argv)
 	} else {
 		int n = 10000 / arg->rank_size;
 		int i;
+		uint64_t t_start, t_end, duration = 0;
 
+		t_start = daos_get_ntime();
 		/* Generate some concurrent requests. */
 		print_message("repeating %d queries: begin\n", n);
 		for (i = 0; i < n; i++) {
@@ -85,8 +87,19 @@ mdr_stop_pool_svc(void **argv)
 					     NULL /* properties */,
 					     NULL /* ev */);
 			assert_rc_equal(rc, 0);
+			if (i % 10 == 0) {
+				t_end = daos_get_ntime();
+				duration = (t_end - t_start) / NSEC_PER_SEC;
+				if (duration >= 15)
+					break;
+			}
 		}
-		print_message("repeating %d queries: end\n", n);
+		if (duration == 0) {
+			t_end = daos_get_ntime();
+			duration = (t_end - t_start) / NSEC_PER_SEC;
+		}
+		print_message("repeating %d queries, duration: %lu seconds end\n",
+			      i, duration);
 	}
 
 	par_barrier(PAR_COMM_WORLD);
