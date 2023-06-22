@@ -713,6 +713,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 static void
 validate_internal(struct vos_iterator *iter)
 {
+#if 0
 	int validate_rc = vos_iter_validate_internal(iter->it_parent);
 	if (validate_rc != 0) {
 		/** In theory, this should never happen with our use cases but let's
@@ -721,6 +722,8 @@ validate_internal(struct vos_iterator *iter)
 		D_WARN("Iterator tree disappeared above iterator level %d at %d\n", iter->it_type,
 		       validate_rc);
 	}
+#endif
+	D_INFO("Detected a yield\n");
 }
 
 static inline int
