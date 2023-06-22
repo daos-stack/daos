@@ -22,9 +22,9 @@ creation of tasks in an engine without any DAOS specific functionality. The DAOS
 library does provide a task API that is built on top of the TSE. For more
 information on that see [here](/src/client/api/README.md). Furthermore, DAOS
 uses the TSE internally to track and progress all API tasks that are associated
-with the API event and, in some cases, to schedule several inflight "child"
+with the API event and, in some cases, to schedule several in-flight "child"
 tasks corresponding to a single API task and add a dependency on that task to
-track all those inflight "child" tasks. An example of that would be the Array
+track all those in-flight "child" tasks. An example of that would be the Array
 API in the DAOS library and the object update with multiple replicas.
 
 ### Scheduler API
