@@ -167,7 +167,7 @@ eq_test_2(void **state)
 		rc = daos_eq_query(my_eqh, DAOS_EQR_WAITING, 0, NULL);
 		if (rc != i + 1) {
 			print_error("Expect to see %d in-flight event, "
-				 "but got %d\n", i + 1, rc);
+				    "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
@@ -188,7 +188,7 @@ eq_test_2(void **state)
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
 			print_error("Expect to see %d in-flight event, "
-				 "but got %d\n", i + 1, rc);
+				    "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
