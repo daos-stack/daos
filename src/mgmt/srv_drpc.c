@@ -2415,14 +2415,6 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to setup engine\n");
 
-	rc = dss_module_setup_all();
-	if (rc != 0) {
-		D_ERROR("Module setup failed: %d\n", rc);
-		goto err;
-	}
-
-	D_INFO("Modules successfully set up\n");
-
 	rc = ds_mgmt_tgt_init();
 	if (rc != 0) {
 		D_ERROR("Target init failed: %d\n", rc);
@@ -2430,6 +2422,14 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_DEBUG(DB_MGMT, "ds_mgmt_tgt_init() ran successfully");
+
+	rc = dss_module_setup_all();
+	if (rc != 0) {
+		D_ERROR("Module setup failed: %d\n", rc);
+		goto err;
+	}
+
+	D_INFO("Modules successfully set up\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 err:
