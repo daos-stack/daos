@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -420,6 +420,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -552,8 +553,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Jun 21 2023 Li Wei <wei.g.li@intel.com> 2.5.100-4
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
 - Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
 
 * Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
 - Remove lmdb-devel for MD on SSD
