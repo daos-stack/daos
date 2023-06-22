@@ -30,9 +30,6 @@ class OSAOnlineDrain(OSAUtils):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
-        # Get the engine count
-        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
-                                            default=1)
         self.dmg_command.exit_status_exception = True
         self.pool = None
 
@@ -50,16 +47,14 @@ class OSAOnlineDrain(OSAUtils):
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
-        drain_servers = (len(self.hostlist_servers) * self.engine_count) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
+        targets = self.server_managers[0].get_config_value("targets")
+        target_list = random.sample(list(range(0, targets)), 2)  # nosec
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Drain one of the ranks (or server)
-        rank = random.randint(1, drain_servers)  # nosec
+        rank = random.choice(list(self.server_managers[0].ranks.keys())[1:])
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)

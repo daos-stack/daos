@@ -85,9 +85,8 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
-        exc = random.randint(0, (self.hostlist_servers * self.engine_count))  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
+        targets = self.server_managers[0].get_config_value("targets")
+        target_list = random.sample(list(range(0, targets)), 2)  # nosec
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.
