@@ -13,7 +13,6 @@ import (
 
 	"github.com/dustin/go-humanize/english"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -71,7 +70,9 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 
 	statusMsg := fmt.Sprintf("Current status: %s", resp.Status)
 	if resp.Status > control.SystemCheckStatusInit && resp.Status < control.SystemCheckStatusCompleted {
-		statusMsg += fmt.Sprintf(" (started at: %s)", common.FormatTime(resp.StartTime))
+		statusMsg += fmt.Sprintf(" (%s)", resp.Time.String())
+	} else if resp.Status == control.SystemCheckStatusCompleted && !resp.Time.StopTime.IsZero() {
+		statusMsg += fmt.Sprintf(" (%s)", resp.Time.StopString())
 	}
 	fmt.Fprintf(out, "  %s\n", statusMsg)
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())

@@ -40,26 +40,26 @@ DAOS System Checker Info
 			resp: &control.SystemCheckQueryResp{
 				Status:    control.SystemCheckStatusRunning,
 				ScanPhase: control.SystemCheckScanPhaseContainerList,
-				StartTime: checkTime,
+				Time:      control.CheckTime{StartTime: checkTime},
 				Pools: map[string]*control.SystemCheckPoolInfo{
 					"pool-1": {
-						UUID:      "pool-1",
-						Status:    chkpb.CheckPoolStatus_CPS_CHECKING.String(),
-						Phase:     chkpb.CheckScanPhase_CSP_PREPARE.String(),
-						StartTime: checkTime,
+						UUID:   "pool-1",
+						Status: chkpb.CheckPoolStatus_CPS_CHECKING.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
+						Time:   control.CheckTime{StartTime: checkTime},
 					},
 					"pool-2": {
-						UUID:      "pool-2",
-						Status:    chkpb.CheckPoolStatus_CPS_CHECKING.String(),
-						Phase:     chkpb.CheckScanPhase_CSP_PREPARE.String(),
-						StartTime: checkTime,
+						UUID:   "pool-2",
+						Status: chkpb.CheckPoolStatus_CPS_CHECKING.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
+						Time:   control.CheckTime{StartTime: checkTime},
 					},
 				},
 			},
 			verbose: true,
 			expOut: `
 DAOS System Checker Info
-  Current status: RUNNING (started at: 2023-03-20T10:07:00.000-05:00)
+  Current status: RUNNING (started: 2023-03-20T10:07:00.000-05:00)
   Current phase: CONT_LIST (Comparing container list on PS and storage nodes)
   Checking 2 pools
 
@@ -74,24 +74,25 @@ No reports to display.
 			resp: &control.SystemCheckQueryResp{
 				Status:    control.SystemCheckStatusCompleted,
 				ScanPhase: control.SystemCheckScanPhaseDone,
+				Time:      control.CheckTime{StartTime: checkTime, StopTime: checkTime.Add(1 * time.Minute)},
 				Pools: map[string]*control.SystemCheckPoolInfo{
 					"pool-1": {
-						UUID:      "pool-1",
-						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
-						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
-						StartTime: checkTime,
+						UUID:   "pool-1",
+						Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+						Time:   control.CheckTime{StartTime: checkTime},
 					},
 					"pool-2": {
-						UUID:      "pool-2",
-						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
-						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
-						StartTime: checkTime,
+						UUID:   "pool-2",
+						Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+						Time:   control.CheckTime{StartTime: checkTime},
 					},
 					"pool-3": {
-						UUID:      "pool-3",
-						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
-						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
-						StartTime: checkTime,
+						UUID:   "pool-3",
+						Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+						Time:   control.CheckTime{StartTime: checkTime},
 					},
 					"pool-5": {
 						UUID:   "pool-5",
@@ -141,7 +142,7 @@ No reports to display.
 			verbose: true,
 			expOut: `
 DAOS System Checker Info
-  Current status: COMPLETED
+  Current status: COMPLETED (stopped: 2023-03-20T10:08:00.000-05:00 (1m0s))
   Current phase: DSP_DONE (Check completed)
   Checked 4 pools
 
