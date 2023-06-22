@@ -1269,6 +1269,7 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
 			}
 
 			if smdDevice.NvmeState != storage.NvmeStateNormal {
