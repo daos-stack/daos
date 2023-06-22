@@ -38,7 +38,7 @@ def scons():
 
     denv = senv
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports=['denv', 'pb_objs'])
+        SConscript('tests/SConscript', exports=['denv', 'pb_objs', 'common'])
 
 
 if __name__ == "SCons.Script":

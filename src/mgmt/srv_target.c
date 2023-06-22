@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -494,10 +494,10 @@ out:
 }
 
 int
-ds_mgmt_tgt_setup(void)
+ds_mgmt_tgt_init(void)
 {
-	mode_t	stored_mode;
-	int	rc;
+	mode_t		stored_mode;
+	int		rc;
 
 	/** create the path string */
 	D_ASPRINTF(newborns_path, "%s/NEWBORNS", dss_storage_path);
@@ -536,10 +536,26 @@ ds_mgmt_tgt_setup(void)
 		}
 	}
 
+	return 0;
+
+err_zombies:
+	D_FREE(zombies_path);
+err_newborns:
+	D_FREE(newborns_path);
+err:
+	return rc;
+}
+
+int
+ds_mgmt_tgt_setup(void)
+{
+	int	rc;
+
 	/* create lock/cv and hash table to track outstanding pool creates */
 	D_ALLOC_PTR(pooltgts);
 	if (pooltgts == NULL) {
-		D_GOTO(err_zombies, rc = -DER_NOMEM);
+		rc = -DER_NOMEM;
+		goto err;
 	}
 
 	rc = ABT_mutex_create(&pooltgts->dpt_mutex);
@@ -574,6 +590,7 @@ ds_mgmt_tgt_setup(void)
 		/** only log error, will try again next time */
 		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
 			rc);
+
 	return 0;
 
 err_cv:
@@ -582,10 +599,6 @@ err_mutex:
 	ABT_mutex_free(&pooltgts->dpt_mutex);
 err_pooltgts:
 	D_FREE(pooltgts);
-err_zombies:
-	D_FREE(zombies_path);
-err_newborns:
-	D_FREE(newborns_path);
 err:
 	return rc;
 }

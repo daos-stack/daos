@@ -2414,7 +2414,11 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to setup engine\n");
 
-	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	resp.status = ds_mgmt_tgt_init();
+	if (resp.status == 0)
+		dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	else
+		D_ERROR("Target init failed: %d\n", resp.status);
 
 	pack_daos_response(&resp, drpc_resp);
 }

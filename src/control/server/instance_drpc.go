@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	errDRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
-	errInstanceNotReady = errors.New("instance not ready yet")
+	errDRPCNotReady   = errors.New("no dRPC client set (data plane not started?)")
+	errEngineNotReady = errors.New("engine not ready yet")
 )
 
 func (ei *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -69,6 +69,10 @@ func (ei *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
 func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	if !ei.IsReady() {
+		return nil, errEngineNotReady
+	}
+
 	dc, err := ei.getDrpcClient()
 	if err != nil {
 		return nil, err
