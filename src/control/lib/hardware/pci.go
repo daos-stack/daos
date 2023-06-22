@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -139,8 +139,15 @@ func (pa *PCIAddress) LessThan(other *PCIAddress) bool {
 		return false
 	}
 
-	return pa.VMDAddr.LessThan(other.VMDAddr) ||
-		pa.Domain < other.Domain ||
+	// If VMD backing device address, return early on domain comparison if VMD domains are not
+	// equal. If equal, proceed to sort on backing device address BDF.
+	if pa.VMDAddr != nil && other.VMDAddr != nil {
+		if !pa.VMDAddr.Equals(other.VMDAddr) {
+			return pa.VMDAddr.LessThan(other.VMDAddr)
+		}
+	}
+
+	return pa.Domain < other.Domain ||
 		pa.Domain == other.Domain && pa.Bus < other.Bus ||
 		pa.Domain == other.Domain && pa.Bus == other.Bus && pa.Device < other.Device ||
 		pa.Domain == other.Domain && pa.Bus == other.Bus && pa.Device == other.Device &&
