@@ -91,19 +91,6 @@ RUN if $QUICKBUILD; then                                          \
         dnf clean all;                                            \
     fi
 
-ARG BULLSEYE
-RUN if [ "x$BULLSEYE" != "x" ]; then \
-      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
-        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
-      mkdir -p bullseye; \
-      tar -C bullseye --strip-components=1 -xf bullseye.tar; \
-      pushd bullseye; \
-        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
-      popd; \
-      rm -f bullseye.tar; \
-      rm -rf bullseye; \
-    fi
-
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.

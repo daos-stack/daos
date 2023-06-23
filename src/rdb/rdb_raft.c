@@ -256,7 +256,6 @@ rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replica
 	rc = rdb_lc_lookup(lc, index, RDB_LC_ATTRS, &rdb_lc_nreplicas, &value);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_MD, "no replicas in "DF_U64"\n", index);
-		rc = 0;
 		nreplicas = 0;
 	} else if (rc != 0) {
 		return rc;

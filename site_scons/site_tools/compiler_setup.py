@@ -4,9 +4,11 @@ from SCons.Script import GetOption, Exit
 from SCons.Script import Configure
 
 
-DESIRED_FLAGS = ['-Wno-gnu-designator',
-                 '-Wno-missing-braces',
-                 '-fstack-usage',
+DESIRED_FLAGS = ['-fstack-usage',
+                 '-Wno-sign-compare',
+                 '-Wno-unused-parameter',
+                 '-Wno-missing-field-initializers',
+                 '-Wno-implicit-fallthrough',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
@@ -14,8 +16,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wframe-larger-than=4096']
 
 # Compiler flags to prevent optimizing out security checks
-DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
-                      '-fwrapv'])
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
 
 # Compiler flags for stack hardening
 DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
@@ -48,10 +49,7 @@ def _base_setup(env):
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.
-    env.Append(CCFLAGS=['-g',
-                        '-Wshadow',
-                        '-Wall',
-                        '-fpic'])
+    env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
@@ -69,6 +67,7 @@ def _base_setup(env):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
+        env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 

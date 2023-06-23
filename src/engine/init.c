@@ -30,8 +30,12 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
+#if BUILD_PIPELINE
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
+#else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
-#define MODS_LIST_CHK	"vos,rdb,rsvc,chk,security,mgmt,dtx,pool,cont,obj,rebuild"
+#endif
+#define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];

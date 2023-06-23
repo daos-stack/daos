@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,24 +21,17 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// getVMD returns VMD endpoint address when provided string is a VMD backing device PCI address.
-// If the input string is not a VMD backing device PCI address, hardware.ErrNotVMDBackingAddress
-// is returned.
-func getVMD(inAddr string) (*hardware.PCIAddress, error) {
-	addr, err := hardware.NewPCIAddress(inAddr)
-	if err != nil {
-		return nil, errors.Wrap(err, "controller pci address invalid")
-	}
-
-	return addr.BackingToVMDAddress()
-}
-
 // mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
 func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storage.NvmeControllers, error) {
 	vmds := make(map[string]storage.NvmeControllers)
 
 	for _, ctrlr := range foundCtrlrs {
-		vmdAddr, err := getVMD(ctrlr.PciAddr)
+		addr, err := hardware.NewPCIAddress(ctrlr.PciAddr)
+		if err != nil {
+			return nil, errors.Wrap(err, "controller pci address invalid")
+		}
+
+		vmdAddr, err := addr.BackingToVMDAddress()
 		if err != nil {
 			if err == hardware.ErrNotVMDBackingAddress {
 				continue
@@ -61,8 +54,13 @@ func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storag
 func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hardware.PCIAddressSet, error) {
 	vmds := make(map[string]*hardware.PCIAddressSet)
 
-	for _, ctrlr := range foundCtrlrs {
-		vmdAddr, err := getVMD(ctrlr.PciAddr)
+	ctrlrAddrs, err := foundCtrlrs.Addresses()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range ctrlrAddrs.Addresses() {
+		vmdAddr, err := addr.BackingToVMDAddress()
 		if err != nil {
 			if err == hardware.ErrNotVMDBackingAddress {
 				continue
@@ -75,7 +73,7 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 		}
 
 		// add backing device address to vmd address key in map
-		if err := vmds[vmdAddr.String()].AddStrings(ctrlr.PciAddr); err != nil {
+		if err := vmds[vmdAddr.String()].Add(addr); err != nil {
 			return nil, err
 		}
 	}
@@ -218,14 +216,13 @@ func vmdFilterAddresses(log logging.Logger, inReq *storage.BdevPrepareRequest, v
 	}
 
 	// Convert any VMD backing device addresses to endpoint addresses as the input vmdPCIAddrs
-	// are what we are using for filters and these are VMD endpoint addresses.
-	// FIXME: This imposes a limitation in that individual backing devices cannot be allowed or
-	//        blocked independently, see if this can be mitigated against.
-	inAllowList, err = inAllowList.BackingToVMDAddresses(log)
+	// are what we are using for filters and these are VMD endpoint addresses. This imposes a
+	// limitation in that individual backing devices cannot be allowed or blocked independently.
+	inAllowList, err = inAllowList.BackingToVMDAddresses()
 	if err != nil {
 		return
 	}
-	inBlockList, err = inBlockList.BackingToVMDAddresses(log)
+	inBlockList, err = inBlockList.BackingToVMDAddresses()
 	if err != nil {
 		return
 	}

@@ -1256,14 +1256,6 @@ enum vos_cont_opc {
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
-/**
- * Profile the VOS operation in standalone vos mode.
- **/
-int
-vos_profile_start(char *path, int avg);
-void
-vos_profile_stop(void);
-
 uint64_t
 vos_get_io_size(daos_handle_t ioh);
 
@@ -1277,6 +1269,11 @@ int
 vos_dedup_verify(daos_handle_t ioh);
 
 struct sys_db *vos_db_get(void);
+
+/* return sysdb pool uuid */
+uuid_t *
+vos_db_pool_uuid(void);
+
 /**
  * Create the system DB in VOS
  * System DB is KV store that can support insert/delete/traverse
@@ -1490,5 +1487,18 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
  */
 int
 vos_obj_layout_upgrade(daos_handle_t hdl, daos_unit_oid_t oid, uint32_t layout_ver);
+
+/**
+ * Init standalone VOS TLS.
+ * \param[in]	tags
+ */
+int
+vos_standalone_tls_init(int tags);
+
+/**
+ * Finish standalone VOS TLS.
+ */
+void
+vos_standalone_tls_fini(void);
 
 #endif /* __VOS_API_H */

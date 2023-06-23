@@ -2560,15 +2560,15 @@ rebuild_cleanup(void)
 }
 
 struct dss_module rebuild_module = {
-	.sm_name	= "rebuild",
-	.sm_mod_id	= DAOS_REBUILD_MODULE,
-	.sm_ver		= DAOS_REBUILD_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_cleanup	= rebuild_cleanup,
-	.sm_proto_fmt	= &rebuild_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= rebuild_handlers,
-	.sm_key		= &rebuild_module_key,
+    .sm_name        = "rebuild",
+    .sm_mod_id      = DAOS_REBUILD_MODULE,
+    .sm_ver         = DAOS_REBUILD_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_cleanup     = rebuild_cleanup,
+    .sm_proto_fmt   = {&rebuild_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {rebuild_handlers},
+    .sm_key         = &rebuild_module_key,
 };

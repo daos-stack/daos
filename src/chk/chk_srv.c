@@ -370,7 +370,7 @@ struct dss_module chk_module = {
 	.sm_setup		= ds_chk_setup,
 	.sm_cleanup		= ds_chk_cleanup,
 	.sm_proto_count		= 1,
-	.sm_proto_fmt		= &chk_proto_fmt,
-	.sm_cli_count		= 0,
-	.sm_handlers		= chk_handlers,
+	.sm_proto_fmt		= {&chk_proto_fmt},
+	.sm_cli_count		= {0},
+	.sm_handlers		= {chk_handlers},
 };
