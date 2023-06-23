@@ -6,6 +6,8 @@
 from apricot import TestWithoutServers
 from data_utils import list_unique, list_flatten, list_stats, \
     dict_extract_values, dict_subtract
+from host_utils import get_local_host
+from run_utils import run_remote
 
 
 class HarnessUnitTest(TestWithoutServers):
@@ -18,6 +20,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_unique().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_unique
         """
@@ -41,6 +44,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_flatten().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_flatten
         """
@@ -70,6 +74,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_stats().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_stats
         """
@@ -92,6 +97,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify dict_extract_values().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_dict_extract_values
         """
@@ -152,6 +158,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify dict_subtract().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_dict_subtract
         """
@@ -181,3 +188,37 @@ class HarnessUnitTest(TestWithoutServers):
                     }
                 }
             })
+
+    def test_harness_unit_run_remote(self):
+        """Verify run_remote().
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,run_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote
+        """
+        host = get_local_host()
+        command = 'echo stdout; echo stderr 1>&2'
+
+        self.log_step('Running command w/ combined stdout and stderr')
+        result = run_remote(self.log, host, command, stderr=False)
+        self.assertTrue(result.passed, 'Command failed; expected to pass')
+        self.assertEqual(1, len(result.output), 'Incorrect number of unique command outputs')
+        self.assertEqual(command, result.output[0].command, 'Incorrect ResultData.command')
+        self.assertEqual(0, result.output[0].returncode, 'Incorrect ResultData.returncode')
+        self.assertEqual(host, result.output[0].hosts, 'Incorrect ResultData.hosts')
+        self.assertEqual(
+            ['stdout', 'stderr'], result.output[0].stdout, 'Incorrect ResultData.stdout')
+        self.assertEqual('', result.output[0].stderr, 'Incorrect ResultData.stderr')
+        self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')
+
+        self.log_step('Running command w/ separated stdout and stderr')
+        result = run_remote(self.log, get_local_host(), command, stderr=True)
+        self.assertTrue(result.passed, 'Command failed; expected to pass')
+        self.assertEqual(1, len(result.output), 'Incorrect number of unique command outputs')
+        self.assertEqual(command, result.output[0].command, 'Incorrect ResultData.command')
+        self.assertEqual(0, result.output[0].returncode, 'Incorrect ResultData.returncode')
+        self.assertEqual(host, result.output[0].hosts, 'Incorrect ResultData.hosts')
+        self.assertEqual(['stdout'], result.output[0].stdout, 'Incorrect ResultData.stdout')
+        self.assertEqual('stderr', result.output[0].stderr, 'Incorrect ResultData.stderr')
+        self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')

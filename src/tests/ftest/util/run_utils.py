@@ -22,7 +22,7 @@ class RemoteCommandResult():
         # pylint: disable=too-few-public-methods
         """Command result data for the set of hosts."""
 
-        def __init__(self, command, returncode, hosts, stdout, timeout):
+        def __init__(self, command, returncode, hosts, stdout, stderr, timeout):
             """Initialize a ResultData object.
 
             Args:
@@ -36,6 +36,7 @@ class RemoteCommandResult():
             self.returncode = returncode
             self.hosts = hosts
             self.stdout = stdout
+            self.stderr = stderr
             self.timeout = timeout
 
         @property
@@ -122,6 +123,19 @@ class RemoteCommandResult():
             stdout[str(data.hosts)] = '\n'.join(data.stdout)
         return stdout
 
+    @property
+    def all_stderr(self):
+        """Get all of the stderr from the issued command from each host.
+
+        Returns:
+            dict: the stderr (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stderr = {}
+        for data in self.output:
+            stderr[str(data.hosts)] = data.stderr
+        return stderr
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 
@@ -137,23 +151,56 @@ class RemoteCommandResult():
 
         # Populate the a list of unique output for each NodeSet
         for code in sorted(results):
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-            for output, output_hosts in output_data:
+            stdout_data = self._sanitize_iter_data(
+                results[code], list(task.iter_buffers(results[code])), "<NONE>")
+
+            for stdout_raw, stdout_hosts in stdout_data:
                 # In run_remote(), task.run() is executed with the stderr=False default.
                 # As a result task.iter_buffers() will return combined stdout and stderr.
                 stdout = []
-                for line in output.splitlines():
+                for line in stdout_raw.splitlines():
                     if isinstance(line, bytes):
                         stdout.append(line.decode("utf-8"))
                     else:
                         stdout.append(line)
-                self.output.append(
-                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
+
+                stderr_data = self._sanitize_iter_data(
+                    stdout_hosts, list(task.iter_errors(stdout_hosts)), "")
+                for stderr, stderr_hosts in stderr_data:
+                    if isinstance(stderr, bytes):
+                        stderr = stderr.decode("utf-8")
+
+                    self.output.append(
+                        self.ResultData(
+                            command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr, False))
         if timed_out:
             self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, None, True))
+
+    @staticmethod
+    def _sanitize_iter_data(hosts, data, default_entry):
+        """Ensure the data generated from an iter function has entries for each host.
+
+        Args:
+            hosts (list): lists of host which generated data
+            data (list): data from an iter function as a list
+            default_entry (object): entry to add to data for missing hosts in data
+
+        Returns:
+            list: a list of tuples of entries and list of hosts
+        """
+        if not data:
+            return [(default_entry, hosts)]
+
+        source_keys = NodeSet.fromlist(hosts)
+        data_keys = NodeSet()
+        for _, keys in data:
+            data_keys.add(NodeSet.fromlist(keys))
+
+        missing_keys = source_keys - data_keys
+        if missing_keys:
+            data.append((default_entry, list(missing_keys)))
+        return data
 
     def log_output(self, log):
         """Log the command result.
@@ -289,7 +336,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
     return result
 
 
-def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False):
+def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False):
     """Run the command on the remote hosts.
 
     Args:
@@ -300,6 +347,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to 120 seconds.
         task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
 
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
@@ -307,8 +355,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
 
     """
     task = task_self()
-    if task_debug:
-        task.set_info('debug', True)
+    task.set_info('debug', task_debug)
+    task.set_default("stderr", stderr)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
