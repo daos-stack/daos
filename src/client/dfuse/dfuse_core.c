@@ -271,17 +271,10 @@ _ph_free(struct dfuse_pool *dfp)
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		/* Hook for fault injection testing, if the disconnect fails with out of memory
-		 * then simply try it again, only what might have happened is that the first
-		 * call might have disconnected, but then failed to notify about the disconnect,
-		 * in which case the subsequent call will return -DER_NO_HDL, if that's the case
-		 * then this is expected, if odd, behavior so silence that case and just return
-		 * success.
+		 * then simply try it again.
 		 */
-		if (rc == -DER_NOMEM) {
+		if (rc == -DER_NOMEM)
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-			if (rc == -DER_NO_HDL)
-				rc = -DER_SUCCESS;
-		}
 		if (rc != -DER_SUCCESS)
 			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
