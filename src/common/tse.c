@@ -24,6 +24,19 @@
 D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
 D_CASSERT(sizeof(struct tse_task_private) <= TSE_PRIV_SIZE);
 
+#define TASK_MAGIC 0xf0f0
+
+static inline struct tse_task_private *
+tse_task2priv(tse_task_t *task)
+{
+	struct tse_task_private *dtp;
+
+	dtp = (struct tse_task_private *)&task->dt_private;
+	D_ASSERT(dtp->dtp_magic != TASK_MAGIC - 1);
+	D_ASSERT(dtp->dtp_magic = TASK_MAGIC);
+	return dtp;
+}
+
 struct tse_task_link {
 	d_list_t		 tl_link;
 	tse_task_t		*tl_task;
@@ -248,6 +261,8 @@ tse_task_decref(tse_task_t *task)
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
+
+	dtp->dtp_magic = TASK_MAGIC - 1;
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
@@ -975,6 +990,8 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	dtp->dtp_func	  = task_func;
 	dtp->dtp_priv	  = priv;
 	dtp->dtp_sched	  = dsp;
+
+	dtp->dtp_magic = TASK_MAGIC;
 
 	*taskp = task;
 	return 0;
