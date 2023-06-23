@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from ClusterShell.NodeSet import NodeSet
+
 from apricot import TestWithoutServers
 from data_utils import list_unique, list_flatten, list_stats, \
     dict_extract_values, dict_subtract
@@ -211,9 +213,19 @@ class HarnessUnitTest(TestWithoutServers):
             ['stdout', 'stderr'], result.output[0].stdout, 'Incorrect ResultData.stdout')
         self.assertEqual('', result.output[0].stderr, 'Incorrect ResultData.stderr')
         self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')
+        self.assertEqual(True, result.output[0].homogeneous, 'Incorrect ResultData.homogeneous')
+        self.assertEqual(True, result.output[0].passed, 'Incorrect ResultData.passed')
+        self.assertEqual(host, result.output[0].passed_hosts, 'Incorrect ResultData.passed_hosts')
+        self.assertEqual(
+            NodeSet(), result.output[0].failed_hosts, 'Incorrect ResultData.failed_hosts')
+        self.assertEqual(
+            {str(host): 'stdout\nstderr'}, result.output[0].all_stdout,
+            'Incorrect ResultData.all_stdout')
+        self.assertEqual(
+            {str(host): ''}, result.output[0].all_stderr, 'Incorrect ResultData.all_stderr')
 
         self.log_step('Running command w/ separated stdout and stderr')
-        result = run_remote(self.log, get_local_host(), command, stderr=True)
+        result = run_remote(self.log, host, command, stderr=True)
         self.assertTrue(result.passed, 'Command failed; expected to pass')
         self.assertEqual(1, len(result.output), 'Incorrect number of unique command outputs')
         self.assertEqual(command, result.output[0].command, 'Incorrect ResultData.command')
@@ -222,3 +234,12 @@ class HarnessUnitTest(TestWithoutServers):
         self.assertEqual(['stdout'], result.output[0].stdout, 'Incorrect ResultData.stdout')
         self.assertEqual('stderr', result.output[0].stderr, 'Incorrect ResultData.stderr')
         self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')
+        self.assertEqual(True, result.output[0].homogeneous, 'Incorrect ResultData.homogeneous')
+        self.assertEqual(True, result.output[0].passed, 'Incorrect ResultData.passed')
+        self.assertEqual(host, result.output[0].passed_hosts, 'Incorrect ResultData.passed_hosts')
+        self.assertEqual(
+            NodeSet(), result.output[0].failed_hosts, 'Incorrect ResultData.failed_hosts')
+        self.assertEqual(
+            {str(host): 'stdout'}, result.output[0].all_stdout, 'Incorrect ResultData.all_stdout')
+        self.assertEqual(
+            {str(host): 'stderr'}, result.output[0].all_stderr, 'Incorrect ResultData.all_stderr')

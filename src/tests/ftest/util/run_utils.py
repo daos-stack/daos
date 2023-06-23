@@ -133,7 +133,7 @@ class RemoteCommandResult():
         """
         stderr = {}
         for data in self.output:
-            stderr[str(data.hosts)] = data.stderr
+            stderr[str(data.hosts)] = '\n'.join(data.stderr)
         return stderr
 
     def _process_task(self, task, command):
@@ -157,19 +157,11 @@ class RemoteCommandResult():
             for stdout_raw, stdout_hosts in stdout_data:
                 # In run_remote(), task.run() is executed with the stderr=False default.
                 # As a result task.iter_buffers() will return combined stdout and stderr.
-                stdout = []
-                for line in stdout_raw.splitlines():
-                    if isinstance(line, bytes):
-                        stdout.append(line.decode("utf-8"))
-                    else:
-                        stdout.append(line)
-
+                stdout = self._msg_tree_elem_to_list(stdout_raw)
                 stderr_data = self._sanitize_iter_data(
                     stdout_hosts, list(task.iter_errors(stdout_hosts)), "")
-                for stderr, stderr_hosts in stderr_data:
-                    if isinstance(stderr, bytes):
-                        stderr = stderr.decode("utf-8")
-
+                for stderr_raw, stderr_hosts in stderr_data:
+                    stderr = self._msg_tree_elem_to_list(stderr_raw)
                     self.output.append(
                         self.ResultData(
                             command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr, False))
@@ -201,6 +193,24 @@ class RemoteCommandResult():
         if missing_keys:
             data.append((default_entry, list(missing_keys)))
         return data
+
+    @staticmethod
+    def _msg_tree_elem_to_list(msg_tree_elem):
+        """Convert a ClusterShell.MsgTree.MsgTreeElem to a list of strings.
+
+        Args:
+            msg_tree_elem (MsgTreeElem): output from Task.iter_* method.
+
+        Returns:
+            list: list of strings
+        """
+        msg_tree_elem_list = []
+        for line in msg_tree_elem.splitlines():
+            if isinstance(line, bytes):
+                msg_tree_elem_list.append(line.decode("utf-8"))
+            else:
+                msg_tree_elem_list.append(line)
+        return msg_tree_elem_list
 
     def log_output(self, log):
         """Log the command result.
