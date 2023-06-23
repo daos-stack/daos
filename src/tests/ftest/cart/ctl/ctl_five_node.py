@@ -13,12 +13,13 @@ class CartCtlFiveNodeTest(CartTest):
     :avocado: recursive
     """
 
-    def test_cart_ctl(self):
+    def test_cart_ctl_five_node(self):
         """Test CaRT ctl.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,ctl,five_node,memcheck
-        :avocado: tags=test_cart_ctl
+        :avocado: tags=CartCtlFiveNodeTest,test_cart_ctl_five_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
