@@ -142,13 +142,13 @@ No reports to display.
 			expOut: `
 DAOS System Checker Info
   Current status: COMPLETED
-  Current phase: DSP_DONE (Check completed)
+  Current phase: DONE (Check completed)
   Checked 4 pools
 
 Per-Pool Checker Info:
-  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: DSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
   Pool pool-5: 0 ranks, status: CPS_UNCHECKED, phase: CSP_PREPARE
 
 Inconsistency Reports:
