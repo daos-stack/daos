@@ -273,16 +273,22 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 	return ei.SetupRank(ctx, r, mapVersion)
 }
 
-func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
-	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) (err error) {
+	ei.ready.SetTrue()
+	defer func() {
+		if err != nil {
+			ei.ready.SetFalse()
+		}
+	}()
+
+	if err = ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
 
-	if err := ei.callSetUp(ctx); err != nil {
+	if err = ei.callSetUp(ctx); err != nil {
 		return errors.Wrap(err, "SetUp failed")
 	}
 
-	ei.ready.SetTrue()
 	return nil
 }
 
