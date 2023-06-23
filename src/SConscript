@@ -6,7 +6,7 @@ HEADERS = ['daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
            'daos_task.h', 'daos_fs.h', 'daos_uns.h', 'daos_security.h',
            'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h', 'daos_pool.h',
-           'daos_cont.h', 'daos_version.h', 'daos_fs_sys.h', 'daos_s3.h']
+           'daos_cont.h', 'daos_version.h', 'daos_fs_sys.h', 'daos_s3.h', 'daos_pipeline.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
@@ -126,6 +126,7 @@ def scons():
     SConscript('object/SConscript')
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
+    SConscript('pipeline/SConscript')
 
     # Build DAOS client libraries
     SConscript('client/SConscript')
