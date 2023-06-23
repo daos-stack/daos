@@ -73,6 +73,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 		smbc        *scm.MockBackendConfig
 		tierCfgs    storage.TierConfigs
 		expResp     *ctlpb.StorageScanResp
+		expErr      error
 	}{
 		"successful scan; scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
@@ -403,6 +404,17 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
+		"scan usage": {
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{
+					Usage: true,
+				},
+				Nvme: &ctlpb.ScanNvmeReq{
+					Meta: true,
+				},
+			},
+			expErr: FaultDataPlaneNotStarted,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -434,8 +446,9 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			}
 
 			resp, err := cs.StorageScan(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
-				t.Fatal(err)
+				return
 			}
 
 			if tc.req.Nvme.Health || tc.req.Nvme.Meta {
@@ -680,6 +693,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		smsc              *system.MockSysConfig
 		storageCfgs       []storage.TierConfigs
 		engineTargetCount []int
+		enginesNotReady   bool
 		scanTwice         bool
 		junkResp          bool
 		drpcResps         map[int][]*mockDrpcResponse
@@ -1389,6 +1403,45 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
+		"multi-engine; multi-tier; with usage; engines not ready": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  &ctlpb.ScanScmReq{Usage: true},
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount1.Path).
+						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
+			engineTargetCount: []int{4, 4},
+			enginesNotReady:   true,
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: newSmdDevResp(1)},
+					{Message: newBioHealthResp(1)},
+				},
+				1: {
+					{Message: newSmdDevResp(2)},
+					{Message: newBioHealthResp(2)},
+				},
+			},
+			expErr: errInstanceNotReady,
+		},
 		// Sometimes when more than a few ssds are assigned to engine without many targets,
 		// some of the smd entries for the latter ssds are in state "NEW" rather than
 		// "NORMAL", when in this state, health is unavailable and DER_NONEXIST is returned.
@@ -1555,7 +1608,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 						Controllers: *tc.eCtrlrs[idx],
 					})
 				}
-				ne := newTestEngine(log, false, sp, ec)
+				te := newTestEngine(log, false, sp, ec)
+
+				if tc.enginesNotReady {
+					te.ready.SetFalse()
+				}
 
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
@@ -1569,16 +1626,16 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				} else {
 					t.Fatal("drpc response mocks unpopulated")
 				}
-				ne.setDrpcClient(newMockDrpcClient(dcc))
-				ne._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
-				for _, tc := range ne.storage.GetBdevConfigs() {
+				te.setDrpcClient(newMockDrpcClient(dcc))
+				te._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
+				for _, tc := range te.storage.GetBdevConfigs() {
 					tc.Bdev.DeviceRoles.OptionBits = storage.OptionBits(storage.BdevRoleAll)
 				}
-				md := ne.storage.GetControlMetadata()
+				md := te.storage.GetControlMetadata()
 				md.Path = "/foo"
 				md.DevicePath = md.Path
 
-				cs.harness.instances[idx] = ne
+				cs.harness.instances[idx] = te
 			}
 			cs.harness.started.SetTrue()
 

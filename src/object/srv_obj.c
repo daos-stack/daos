@@ -3827,11 +3827,11 @@ cleanup:
 	obj_ioc_end(&ioc, rc);
 }
 
-static void
-ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
+void
+ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	struct dtx_handle		*dth = NULL;
@@ -3889,7 +3889,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       return_epoch ? &okqo->okqo_max_epoch : NULL,
+			       &okqo->okqo_max_epoch,
 			       cell_size, stripe_size, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc.ioc_coc);
@@ -3908,18 +3908,6 @@ failed:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
-}
-
-void
-ds_obj_query_key_handler_0(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, false);
-}
-
-void
-ds_obj_query_key_handler_1(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, true);
 }
 
 void
@@ -4070,39 +4058,38 @@ cleanup:
  */
 #define LOCAL_STACK_NUM		2
 static int
-ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
-		  struct daos_cpd_disp_ent *dcde,
-		  struct daos_cpd_sub_req *dcsrs,
-		  struct obj_io_context *ioc, struct dtx_handle *dth)
+ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cpd_disp_ent *dcde,
+		  struct daos_cpd_sub_req *dcsrs, struct obj_io_context *ioc,
+		  struct dtx_handle *dth)
 {
-	struct daos_cpd_req_idx		 *dcri = dcde->dcde_reqs;
-	struct daos_cpd_sub_req		 *dcsr;
-	struct daos_cpd_update		 *dcu;
-	daos_handle_t			 *iohs = NULL;
-	struct bio_desc			**biods = NULL;
-	struct obj_bulk_args		 *bulks = NULL;
-	daos_iod_t			local_iods[LOCAL_STACK_NUM] = { {0} };
-	uint32_t			local_iod_nrs[LOCAL_STACK_NUM] = { 0 };
-	struct dcs_iod_csums		local_csums[LOCAL_STACK_NUM] = { {0} };
-	struct dcs_csum_info		local_csum_info[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			local_offs[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			local_skips[LOCAL_STACK_NUM] = { 0 };
-	daos_iod_t			*local_p_iods[LOCAL_STACK_NUM] = { 0 };
-	struct dcs_iod_csums		*local_p_csums[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			*local_p_offs[LOCAL_STACK_NUM] = { 0 };
-	uint8_t				*local_p_skips[LOCAL_STACK_NUM] = { 0 };
-	uint8_t				**pskips = NULL;
-	daos_iod_t			**piods = NULL;
-	uint32_t			*piod_nrs = NULL;
-	struct dcs_iod_csums		**pcsums = NULL;
-	uint64_t			**poffs = NULL;
-	struct dcs_csum_info		*pcsum_info = NULL;
-	int				  rma = 0;
-	int				  rma_idx = 0;
-	int				  rc = 0;
-	int				  i;
-	uint64_t			  update_flags;
-	uint64_t			  sched_seq = sched_cur_seq();
+	struct daos_cpd_req_idx *dcri = dcde->dcde_reqs;
+	struct daos_cpd_sub_req *dcsr;
+	struct daos_cpd_update  *dcu;
+	daos_handle_t           *iohs                             = NULL;
+	struct bio_desc        **biods                            = NULL;
+	struct obj_bulk_args    *bulks                            = NULL;
+	daos_iod_t               local_iods[LOCAL_STACK_NUM]      = {0};
+	uint32_t                 local_iod_nrs[LOCAL_STACK_NUM]   = {0};
+	struct dcs_iod_csums     local_csums[LOCAL_STACK_NUM]     = {0};
+	struct dcs_csum_info     local_csum_info[LOCAL_STACK_NUM] = {0};
+	uint64_t                 local_offs[LOCAL_STACK_NUM]      = {0};
+	uint64_t                 local_skips[LOCAL_STACK_NUM]     = {0};
+	daos_iod_t              *local_p_iods[LOCAL_STACK_NUM]    = {0};
+	struct dcs_iod_csums    *local_p_csums[LOCAL_STACK_NUM]   = {0};
+	uint64_t                *local_p_offs[LOCAL_STACK_NUM]    = {0};
+	uint8_t                 *local_p_skips[LOCAL_STACK_NUM]   = {0};
+	uint8_t                **pskips                           = NULL;
+	daos_iod_t             **piods                            = NULL;
+	uint32_t                *piod_nrs                         = NULL;
+	struct dcs_iod_csums   **pcsums                           = NULL;
+	uint64_t               **poffs                            = NULL;
+	struct dcs_csum_info    *pcsum_info                       = NULL;
+	int                      rma                              = 0;
+	int                      rma_idx                          = 0;
+	int                      rc                               = 0;
+	int                      i;
+	uint64_t                 update_flags;
+	uint64_t                 sched_seq = sched_cur_seq();
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))

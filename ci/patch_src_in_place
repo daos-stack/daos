@@ -2,29 +2,6 @@
 
 set -x
 
-def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
-def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
-def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO"
-def_ignore+=",CONCATENATED_STRING,SPACING"
-
-CP=../code_review/checkpatch.pl
-if [ ! -x $CP ]
-then
-	CP=./code_review/checkpatch.pl
-fi
-
-if [ -x $CP ]
-then
-    for FILE in $(git diff --name-only origin/"$CHANGE_TARGET"... | grep "^src" | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h)
-    do
-	ignore="$def_ignore"
-	if grep -lq CRT_RPC_DECLARE "$FILE"; then
-	    ignore+=",SPACING_CAST"
-	fi
-        $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
-    done
-fi
-
 # Correct any formatting of go code.
 find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
 

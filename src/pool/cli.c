@@ -770,6 +770,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		 */
 		D_ERROR("failed to notify agent of pool disconnect: "DF_RC"\n",
 			DP_RC(rc));
+		rc = 0;
 	}
 
 	/* remove pool from hhash */
