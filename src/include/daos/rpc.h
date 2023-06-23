@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,8 +51,8 @@ enum daos_module_id {
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_DTX_MODULE		= 10, /** DTX */
-
-	DAOS_NR_MODULE		= 11, /** number of defined modules */
+	DAOS_PIPELINE_MODULE	= 11,
+	DAOS_NR_MODULE		= 12, /** number of defined modules */
 	DAOS_MAX_MODULE		= 64  /** Size of uint64_t see dmg profile */
 };
 

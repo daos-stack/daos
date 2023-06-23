@@ -35,7 +35,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 
-	buf = malloc(ENUM_DESC_BUF);
+	D_ALLOC(buf, ENUM_DESC_BUF);
 	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
@@ -67,6 +67,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 #endif
 		key_nr += nr;
 	}
+	D_FREE(buf);
 	*num_keys = key_nr;
 }
 

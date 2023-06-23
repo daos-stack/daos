@@ -255,7 +255,9 @@ extern "C" {
 	ACTION(DER_BAD_CERT, (DER_ERR_DAOS_BASE + 44), Invalid x509 certificate)                   \
 	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45), VOS partial update error)        \
 	ACTION(DER_CHKPT_BUSY, (DER_ERR_DAOS_BASE + 46),                                           \
-	       Page is temporarily read only due to checkpointing)
+	       Page is temporarily read only due to checkpointing)                                 \
+	/** Division by zero. */                                                                   \
+	ACTION(DER_DIV_BY_ZERO,	(DER_ERR_DAOS_BASE + 47), Division by zero)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

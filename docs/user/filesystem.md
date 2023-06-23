@@ -740,7 +740,7 @@ When this is done, the local DFuse daemon should shut down the mount point,
 disconnect from the DAOS servers, and exit.  You can also verify that the
 mount point is no longer listed in `/proc/mounts`.
 
-## Interception Library
+## Interception Library `libioil`
 
 An interception library called `libioil` is available to work with DFuse. This
 library works in conjunction with DFuse and allows the interception of POSIX I/O
@@ -894,3 +894,77 @@ $
 
 While this mode is not expected to be used directly by users, it is useful for
 the unified namespace integration.
+
+## Interception Library `libpil4dfs`
+
+libpil4dfs is similar to libioil, but it intercepts not only read/write, but also
+metadata related functions. This provides similar performance as using native DFS
+with POSIX interface.
+
+### Using libpil4dfs with dfuse
+
+Start dfuse daemon,
+```
+dfuse -m /scratch_fs/dfuse tank mycont
+```
+
+To use the interception library, set `LD_PRELOAD` to point to the shared library
+in the DAOS install directory:
+
+```
+LD_PRELOAD=/path/to/daos/install/lib/libpil4dfs.so
+or
+LD_PRELOAD=/usr/lib64/libpil4dfs.so # when installed from RPMs
+```
+
+Example:
+
+```
+$ LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse/ -w 4096
+```
+### Print an interception summary
+
+If the `D_IL_REPORT` environment variable is set then the interception library will
+print a short summary of intercepted functions accessing DAOS filesystem through
+POSIX as a program exits. Both "D_IL_REPORT=1" and "D_IL_REPORT=true" enable printing
+the summary.
+
+```
+$ D_IL_REPORT=1 LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse -w 4096
+...
+libpil4dfs intercepting summary for ops on DFS:
+[read   ]  0
+[write  ]  1667
+
+[open   ]  1667
+[stat   ]  0
+[opendir]  0
+[readdir]  0
+[unlink ]  0
+[seek   ]  1667
+[mkdir  ]  2
+[rmdir  ]  0
+[rename ]  0
+[mmap   ]  0
+
+[op_sum ]  5003
+```
+
+### Limitations of using libpil4dfs
+Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
+
+Current code was developed and tested on x86_64. We do have ongoing work to port the library to Arm64, but we have not tested on Arm64 yet.
+
+Large overhead for small tasks due to slow daos_init() (order of hundreds of milliseconds)
+
+Not working for statically linked executable
+
+dfuse is still required to handle some operations that libpil4dfs does not supported yet.
+
+Support for multiple pool and containers within a singled dfuse mountpoint is not there yet (each container accessed should be mounted separately), i.e. no UNS support (concerns about the overhead of getfattr())
+
+No support of creating a process with the executable and shared object files stored on DAOS yet
+
+No support for applications using fork yet
+
+Those unsupported features are still available through dfuse.
