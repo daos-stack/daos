@@ -318,9 +318,8 @@ func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPo
 	return nil
 }
 
-
 // UpdateListPoolsResponse will update the pool which has been rebuild and not in idle state
-func UpdateListPoolsResponse(final_resp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error{
+func UpdateListPoolsResponse(final_resp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
 	// Update the pool state to Degraded if any pool target is disabled.
 	for _, pool := range resp.Pools {
 		if pool.TargetsDisabled > 0 {

@@ -356,8 +356,8 @@ type PoolListCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	Verbose     bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery     bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
