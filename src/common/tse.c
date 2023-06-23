@@ -25,6 +25,7 @@ D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
 D_CASSERT(sizeof(struct tse_task_private) <= TSE_PRIV_SIZE);
 
 #define TASK_MAGIC 0xf0f0
+#define TASK_BAD_MAGIC (TASK_MAGIC + 1)
 
 static inline struct tse_task_private *
 tse_task2priv(tse_task_t *task)
@@ -32,7 +33,7 @@ tse_task2priv(tse_task_t *task)
 	struct tse_task_private *dtp;
 
 	dtp = (struct tse_task_private *)&task->dt_private;
-	D_ASSERTF(dtp->dtp_magic != TASK_MAGIC - 1, "tse %p used after free\n", task);
+	D_ASSERTF(dtp->dtp_magic != TASK_BAD_MAGIC, "tse %p used after free\n", task);
 	D_ASSERTF(dtp->dtp_magic == TASK_MAGIC, "Bad tse magic %p\n", task);
 	return dtp;
 }
@@ -262,7 +263,7 @@ tse_task_decref(tse_task_t *task)
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 
-	dtp->dtp_magic = TASK_MAGIC - 1;
+	dtp->dtp_magic = TASK_BAD_MAGIC;
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
