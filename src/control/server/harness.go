@@ -189,7 +189,7 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
+		case errEngineNotReady, errDRPCNotReady:
 			continue
 		default:
 			return
