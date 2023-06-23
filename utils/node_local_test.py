@@ -1493,7 +1493,7 @@ def run_daos_cmd(conf,
                  show_stdout=False,
                  valgrind=True,
                  log_check=True,
-                 allow_busy=False,
+                 ignore_busy=False,
                  use_json=False,
                  cwd=None):
     """Run a DAOS command
@@ -1553,7 +1553,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, allow_busy=allow_busy)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, ignore_busy=ignore_busy)
     valgrind_hdl.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -3527,7 +3527,7 @@ class PosixTests():
         # run the checker while dfuse is still mounted (should fail - EX open)
         cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
                'lf1']
-        rc = run_daos_cmd(self.conf, cmd, allow_busy=True)
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -3721,7 +3721,7 @@ class PosixTests():
         # fix corrupted entries while dfuse is running - should fail
         cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
                '--type', '--chunk-size', '1048576']
-        rc = run_daos_cmd(self.conf, cmd, allow_busy=True)
+        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -4191,7 +4191,7 @@ def log_test(conf,
              skip_fi=False,
              leak_wf=None,
              ignore_einval=False,
-             allow_busy=False,
+             ignore_busy=False,
              check_read=False,
              check_write=False,
              check_fstat=False):
@@ -4233,7 +4233,7 @@ def log_test(conf,
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
 
-    if not allow_busy:
+    if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
     try:
@@ -4858,7 +4858,7 @@ class AllocFailTestRun():
         self.dir_handle = None
         self.stdout = None
         self.returncode = None
-        self.allow_busy = False
+        self.ignore_busy = False
 
         # The subprocess handle and other private data.
         self._sp = None
@@ -4989,7 +4989,7 @@ class AllocFailTestRun():
             show_memleaks = False
             fi_signal = -rc
 
-        if self._aft.allow_busy and self._aft.check_daos_stderr:
+        if self._aft.ignore_busy and self._aft.check_daos_stderr:
             stderr = self._stderr.decode('utf-8').rstrip()
             for line in stderr.splitlines():
                 if line.endswith(': Device or resource busy (-1012)'):
@@ -5004,7 +5004,7 @@ class AllocFailTestRun():
             self._fi_loc = log_test(self._aft.conf,
                                     self.log_file,
                                     show_memleaks=show_memleaks,
-                                    allow_busy=self._aft.allow_busy,
+                                    ignore_busy=self._aft.ignore_busy,
                                     quiet=True,
                                     skip_fi=True,
                                     leak_wf=wf)
@@ -5065,7 +5065,7 @@ class AllocFailTestRun():
                 if line.endswith(': Cannot allocate memory (12)'):
                     continue
 
-                if self._aft.allow_busy and line.endswith(': Device or resource busy (-1012)'):
+                if self._aft.ignore_busy and line.endswith(': Device or resource busy (-1012)'):
                     continue
 
                 if 'DER_UNKNOWN' in line:
@@ -5122,7 +5122,7 @@ class AllocFailTest():
         self.check_daos_stderr = False
         self.check_stderr = True
         self.expected_stdout = None
-        self.allow_busy = False
+        self.ignore_busy = False
         self.use_il = False
         self._use_pil4dfs = None
         self.wf = conf.wf
@@ -5348,8 +5348,8 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
-    # Set the allow_busy flag so that memory leaks on shutdown are ignored in some cases.
-    test_cmd.allow_busy = True
+    # Set the ignore_busy flag so that memory leaks on shutdown are ignored in some cases.
+    test_cmd.ignore_busy = True
 
     return test_cmd.launch()
 
