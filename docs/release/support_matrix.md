@@ -84,7 +84,7 @@ a write-ahead log (WAL) and asynchronous metadata checkpointing.
 More details on the Metadata-on-SSD functionality can be found in the 
 article [DAOS beyond Persistent Memory]()
 in the _ISC High Performance 2023 International Workshops proceedings_
-and in the DAOS Adminstration Guide.
+and in the DAOS Administration Guide.
 
 For maximum performance, it is strongly recommended that all memory channels
 of a DAOS server are populated.
@@ -338,7 +338,7 @@ Links to MLNX\_OFED Release Notes:
 * [MLNX\_OFED 5.8-1.1.2.1](https://docs.nvidia.com/networking/display/MLNXOFEDv581121LTS/Release+Notes) (December 1, 2022)
 * [MLNX\_OFED 5.8-2.0.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv582030LTS) (February 28, 2023)
 * [MLNX\_OFED 5.9-0.5.6.0](https://docs.nvidia.com/networking/display/MLNXOFEDv590560/Release+Notes) (February 2, 2023);
-  this level no longer supportes ConnectX-3 and Connect-IB adapters
+  this level no longer supports ConnectX-3 and Connect-IB adapters
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
