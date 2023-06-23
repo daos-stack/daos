@@ -5165,7 +5165,7 @@ class AllocFailTest():
         if num_cores < 20:
             max_child = 1
         else:
-            max_child = int(num_cores / 4 * 3)
+            max_child = int(num_cores / 2)
 
         print(f'Maximum number of spawned tests will be {max_child}')
 
