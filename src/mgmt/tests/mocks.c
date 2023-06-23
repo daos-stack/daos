@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -478,6 +478,12 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
+int
+dss_module_setup_all()
+{
+	return 0;
+}
+
 size_t
 ds_rsvc_get_md_cap(void)
 {
@@ -609,3 +615,8 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
 
+int
+ds_mgmt_tgt_init(void)
+{
+	return 0;
+}
