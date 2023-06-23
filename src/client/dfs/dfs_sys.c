@@ -472,7 +472,7 @@ fini_sys(dfs_sys_t *dfs_sys, bool disconnect)
 		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
-			return rc;
+			return daos_der2errno(rc);
 		}
 		dfs_sys->hash = NULL;
 	}

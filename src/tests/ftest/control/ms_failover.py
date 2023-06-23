@@ -34,7 +34,7 @@ class ManagementServiceFailover(TestWithServers):
             str: hostname of the MS leader, or None
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         if not l_addr:
             return None

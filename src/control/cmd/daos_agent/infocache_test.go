@@ -27,6 +27,9 @@ import (
 type testInfoCacheParams struct {
 	mockGetAttachInfo      getAttachInfoFn
 	mockScanFabric         fabricScanFn
+	mockNetIfaces          func() ([]net.Interface, error)
+	mockNetDevClassGetter  hardware.NetDevClassProvider
+	mockNetDevStateGetter  hardware.NetDevStateProvider
 	disableFabricCache     bool
 	disableAttachInfoCache bool
 	ctlInvoker             control.Invoker
@@ -40,12 +43,45 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 	}
 
 	ic := &InfoCache{
-		log:           log,
-		getAttachInfo: params.mockGetAttachInfo,
-		fabricScan:    params.mockScanFabric,
-		client:        params.ctlInvoker,
-		cache:         c,
+		log:            log,
+		getAttachInfo:  params.mockGetAttachInfo,
+		fabricScan:     params.mockScanFabric,
+		devClassGetter: params.mockNetDevClassGetter,
+		devStateGetter: params.mockNetDevStateGetter,
+		netIfaces:      params.mockNetIfaces,
+		client:         params.ctlInvoker,
+		cache:          c,
 	}
+
+	if ic.netIfaces == nil {
+		ic.netIfaces = func() ([]net.Interface, error) {
+			return []net.Interface{
+				{Name: "test0"},
+				{Name: "test1"},
+			}, nil
+		}
+	}
+
+	if ic.devClassGetter == nil {
+		ic.devClassGetter = &hardware.MockNetDevClassProvider{
+			GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+				{
+					NDC: hardware.Ether,
+				},
+			},
+		}
+	}
+
+	if ic.devStateGetter == nil {
+		ic.devStateGetter = &hardware.MockNetDevStateProvider{
+			GetStateReturn: []hardware.MockNetDevStateResult{
+				{
+					State: hardware.NetDevStateReady,
+				},
+			},
+		}
+	}
+
 	if params.disableAttachInfoCache {
 		ic.DisableAttachInfoCache()
 	} else {
@@ -879,6 +915,20 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				NetDevClass: hardware.Ether,
 			},
 		},
+		"disabled fails fabric ready check": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableFabricCache: true,
+					mockNetIfaces: func() ([]net.Interface, error) {
+						return nil, errors.New("mock net ifaces")
+					},
+				})
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("shouldn't call scan"),
+			expErr:    errors.New("mock net ifaces"),
+		},
 		"disabled fails fetch": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{
@@ -905,6 +955,19 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				NetDevClass: hardware.Ether,
 			},
 			expCachedFabric: testSet,
+		},
+		"enabled but empty fails ready wait": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockNetIfaces: func() ([]net.Interface, error) {
+						return nil, errors.New("mock net ifaces")
+					},
+				})
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("shouldn't call scan"),
+			expErr:    errors.New("mock net ifaces"),
 		},
 		"enabled but empty fails fetch": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
@@ -1165,6 +1228,117 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 				if diff := cmp.Diff(tc.expCachedAttachInfo, cached.lastResponse); diff != "" {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestAgent_InfoCache_waitFabricReady(t *testing.T) {
+	defaultNetIfaceFn := func() ([]net.Interface, error) {
+		return []net.Interface{
+			{Name: "t0"},
+			{Name: "t1"},
+			{Name: "t2"},
+		}, nil
+	}
+
+	defaultDevClassProv := &hardware.MockNetDevClassProvider{
+		GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+			{
+				ExpInput: "t0",
+				NDC:      hardware.Infiniband,
+			},
+			{
+				ExpInput: "t1",
+				NDC:      hardware.Infiniband,
+			},
+			{
+				ExpInput: "t2",
+				NDC:      hardware.Ether,
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		netIfacesFn  func() ([]net.Interface, error)
+		devClassProv *hardware.MockNetDevClassProvider
+		devStateProv *hardware.MockNetDevStateProvider
+		netDevClass  hardware.NetDevClass
+		expErr       error
+		expChecked   []string
+	}{
+		"netIfaces fails": {
+			netIfacesFn: func() ([]net.Interface, error) {
+				return nil, errors.New("mock netIfaces")
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock netIfaces"),
+		},
+		"GetNetDevClass fails": {
+			devClassProv: &hardware.MockNetDevClassProvider{
+				GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+					{
+						ExpInput: "t0",
+						Err:      errors.New("mock GetNetDevClass"),
+					},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock GetNetDevClass"),
+		},
+		"GetNetDevState fails": {
+			devStateProv: &hardware.MockNetDevStateProvider{
+				GetStateReturn: []hardware.MockNetDevStateResult{
+					{Err: errors.New("mock NetDevStateProvider")},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock NetDevStateProvider"),
+			expChecked:  []string{"t0"},
+		},
+		"down devices are ignored": {
+			devStateProv: &hardware.MockNetDevStateProvider{
+				GetStateReturn: []hardware.MockNetDevStateResult{
+					{State: hardware.NetDevStateDown},
+					{State: hardware.NetDevStateReady},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expChecked:  []string{"t0", "t1"},
+		},
+		"success": {
+			netDevClass: hardware.Infiniband,
+			expChecked:  []string{"t0", "t1"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.netIfacesFn == nil {
+				tc.netIfacesFn = defaultNetIfaceFn
+			}
+
+			if tc.devClassProv == nil {
+				tc.devClassProv = defaultDevClassProv
+			}
+
+			if tc.devStateProv == nil {
+				tc.devStateProv = &hardware.MockNetDevStateProvider{}
+			}
+
+			ic := &InfoCache{
+				log:            log,
+				netIfaces:      tc.netIfacesFn,
+				devClassGetter: tc.devClassProv,
+				devStateGetter: tc.devStateProv,
+			}
+
+			err := ic.waitFabricReady(test.Context(t), tc.netDevClass)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
 			}
 		})
 	}
