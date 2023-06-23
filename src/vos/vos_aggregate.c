@@ -2426,7 +2426,33 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		inc_agg_counter(agg_param, type, AGG_OP_DEL);
 		rc = 0;
 	} else if (rc != 0) {
-		D_ERROR("VOS aggregation failed: %d\n", rc);
+		switch (type) {
+			const char *op = "aggregate";
+			if (agg_param->ap_discard_obj)
+				op = "discard_obj";
+			else if (agg_param->ap_discard)
+				op = "discard";
+		case VOS_ITER_OBJ:
+			D_ERROR("VOS %s failed for object " DF_UOID " at epoch " DF_X64
+				": rc=" DF_RC " range=" DF_X64 "-" DF_X64 "\n",
+				op, DP_UOID(entry->ie_oid), entry->ie_epoch, DP_RC(rc),
+				param->ip_epr.epr_lo, param->ip_epr.epr_hi);
+			break;
+		case VOS_ITER_DKEY:
+			D_ERROR("VOS %s failed for dkey " DF_KEY " at epoch " DF_X64 ": rc=" DF_RC
+				" range=" DF_X64 "-" DF_X64 "\n",
+				op, DP_KEY(&entry->ie_key), entry->ie_epoch, DP_RC(rc),
+				param->ip_epr.epr_lo, param->ip_epr.epr_hi);
+			break;
+		case VOS_ITER_AKEY:
+			D_ERROR("VOS %s failed for akey " DF_KEY " at epoch " DF_X64 ": rc=" DF_RC
+				" range=" DF_X64 "-" DF_X64 "\n",
+				op, DP_KEY(&entry->ie_key), entry->ie_epoch, DP_RC(rc),
+				param->ip_epr.epr_lo, param->ip_epr.epr_hi);
+			break;
+		default:
+			break;
+		};
 
 		/*
 		 * -DER_TX_BUSY error indicates current ilog aggregation
