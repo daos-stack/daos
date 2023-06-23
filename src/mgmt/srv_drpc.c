@@ -2423,14 +2423,6 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Modules successfully set up\n");
 
-	rc = ds_mgmt_tgt_init();
-	if (rc != 0) {
-		D_ERROR("Target init failed: %d\n", rc);
-		goto err;
-	}
-
-	D_DEBUG(DB_MGMT, "ds_mgmt_tgt_init() ran successfully");
-
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 err:
 	resp.status = rc;

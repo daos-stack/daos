@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,7 +127,6 @@ void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevManageResp *resp);
 
 /** srv_target.c */
-int ds_mgmt_tgt_init(void);
 int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
