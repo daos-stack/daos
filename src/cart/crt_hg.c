@@ -38,11 +38,6 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_PROV_OFI_PSM2,
-		.nad_str	= "ofi+psm2",
-		.nad_contig_eps	= false,
-		.nad_port_bind  = false,
-	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
@@ -53,6 +48,11 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_str	= "ofi+cxi",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
+	}, {
+		.nad_type	= CRT_PROV_OFI_OPX,
+		.nad_str	= "ofi+opx",
+		.nad_contig_eps	= false,
+		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_PROV_UCX_RC,
 		.nad_str	= "ucx+rc_v",
@@ -527,7 +527,8 @@ crt_provider_ip_str_get(bool primary, int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_PROV_OFI_PSM2)
+	/* return false for providers that should busy poll */
+	if (provider == CRT_PROV_OFI_OPX)
 		return false;
 
 	return true;
@@ -635,12 +636,53 @@ crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, i
 }
 
 static int
+crt_get_opx_info_string(char *provider, char *domain, char *ip,
+			char **string, int start_port, int ctx_idx)
+{
+	int	rc = 0;
+	int	hfi = -1;
+	int	delimiter;
+	char	*hfi_str = NULL;
+	char	domain_name[10];
+
+	/* Current support for the following domains: ib<hfi> or opx<hfi> */
+	if (strncmp(domain, "ib", 2) == 0)
+		delimiter = 1;
+	else if (strncmp(domain, "opx", 3) == 0)
+		delimiter = 2;
+	else {
+		D_ERROR("Invalid OPX domain name.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	strncpy(domain_name, domain, sizeof(domain_name) - 1);
+	strtok_r(domain_name, &domain[delimiter], &hfi_str);
+	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
+
+	if (ip == NULL)
+		D_ASPRINTF(*string, "%s://%s:%d:%d",
+			   provider, domain, hfi,
+			   start_port + ctx_idx);
+	else
+		D_ASPRINTF(*string, "%s://%s/%s:%d:%d",
+			   provider, domain, ip, hfi,
+			   start_port + ctx_idx);
+
+out:
+	if (!rc && *string == NULL)
+		return -DER_NOMEM;
+
+	return rc;
+}
+
+static int
 crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 {
 	char	*provider_str;
 	int	 start_port;
 	char	*domain_str;
 	char	*ip_str;
+	int	rc = 0;
 
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(primary, provider);
@@ -649,7 +691,14 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 
 	if (provider == CRT_PROV_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
+	}
+
+	/* Special case OPX for now */
+	if (provider == CRT_PROV_OFI_OPX) {
+		rc = crt_get_opx_info_string(provider_str, domain_str, ip_str,
+					     string, start_port, ctx_idx);
+		D_GOTO(out, rc);
 	}
 
 	/* TODO: for now pass same info for all providers including CXI */
@@ -688,10 +737,10 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 	}
 
 out:
-	if (*string == NULL)
+	if (rc == DER_SUCCESS && *string == NULL)
 		return -DER_NOMEM;
 
-	return 0;
+	return rc;
 }
 
 static int

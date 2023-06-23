@@ -460,6 +460,10 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
+		/*
+		 * For the pool with dangling map entry, if not repair, then the subsequent
+		 * check (based on pool map) may fail, then have to skip to avoid confusing.
+		 */
 		cpr->cpr_skip = 1;
 		break;
 	default:
@@ -1972,8 +1976,8 @@ reset:
 
 init:
 	if (!chk_is_on_leader(gen, leader, true)) {
-		rc = chk_prop_prepare(leader, api_flags | prop->cp_flags, phase,
-				      policy_nr, policies, rank_list, prop);
+		rc = chk_prop_prepare(leader, api_flags, phase, policy_nr, policies, rank_list,
+				      prop);
 		if (rc != 0)
 			goto out;
 
@@ -2209,9 +2213,10 @@ out_tree:
 	chk_destroy_pool_tree(ins);
 out_log:
 	if (rc >= 0) {
-		D_INFO(DF_ENGINE" started on rank %u with api_flags %x, phase %d, leader %u, "
-		       "flags %x: rc %d\n",
-		       DP_ENGINE(ins), myrank, api_flags, phase, leader, flags, rc);
+		D_INFO(DF_ENGINE " %s on rank %u with api_flags %x, phase %d, leader %u, "
+				 "flags %x: rc %d\n",
+		       DP_ENGINE(ins), chk_is_ins_reset(ins, api_flags) ? "start" : "resume",
+		       myrank, api_flags, phase, leader, flags, rc);
 
 		chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
 		chk_pools_dump(&ins->ci_pool_list, pool_nr, pools);

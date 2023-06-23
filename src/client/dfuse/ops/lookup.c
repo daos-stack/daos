@@ -118,7 +118,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		dfuse_ie_close(fs_handle, ie);
+		dfuse_ie_close(ie);
 		ie = inode;
 	}
 
@@ -154,10 +154,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (wipe_parent == 0)
 		return;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
-					      wipe_name, strnlen(wipe_name, NAME_MAX));
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, wipe_parent, wipe_name,
+					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+		DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 
 	return;
 out_err:
@@ -203,17 +203,17 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_dfp, rc);
 
 	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
@@ -231,7 +231,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 out_err:
 	duns_destroy_attr(&dattr);
 
@@ -267,8 +267,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
 			 1, &duns_xattr_name, (void **)&outp, &attr_len);
 	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_DEBUG(parent, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
 
 		D_GOTO(out_free, rc);
 	}
@@ -285,8 +284,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
-		DFUSE_TRA_DEBUG(ie,
-				"check_for_uns_ep() returned %d", rc);
+		DFUSE_TRA_DEBUG(ie, "check_for_uns_ep() returned %d", rc);
 		if (rc != 0)
 			D_GOTO(out_release, rc);
 	}

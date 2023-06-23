@@ -39,6 +39,7 @@ void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
+void dss_bind_to_xstream_cpuset(int tgt_id);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
@@ -123,8 +124,10 @@ bool ds_mgmt_check_enabled(void);
 
 /* Device health stats from nvme_stats */
 struct mgmt_bio_health {
-	struct nvme_stats		mb_dev_state;
-	uuid_t				mb_devid;
+	struct nvme_stats	mb_dev_state;
+	uuid_t			mb_devid;
+	uint64_t		mb_meta_size;
+	uint64_t		mb_rdb_size;
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);

@@ -64,33 +64,37 @@ severity, message, description, and cause.
 ## System Logging
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
-parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://docs.daos.io/v2.4/admin/troubleshooting/#debugging-system)
-section.
+parameters in the server config file.
+The 'DD_MASK' and 'DD_SUBSYS' environment variables can also be defined within the "env\_vars"
+list parameter of the engine section of the server config file to tune log output.
 
-Engine log levels can be changed dynamically (at runtime) by setting log masks
-for a set of facilities to a given level.
-Settings will be applied to all running DAOS I/O Engines present in the configured
-dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
-The command accepts 0-1 positional arguments.
-If no args are passed, then the log masks for each running engine will be reset
-to the value of engine "log\_mask" parameter in the server config file (as set
-at the time of daos\_server startup).
+Engine log levels can be changed dynamically (at runtime) by setting log masks for a set of
+facilities to a given level.
+Settings will be applied to all running DAOS I/O Engines present in the configured dmg hostlist
+using the command `dmg server set-logmasks [-m <masks>]`.
+The command accepts named arguments for masks ('D_LOG_MASK'), streams ('DD_MASK') and subsystems
+('DD_SUBSYS).
+If no args are passed, then the log masks for each running engine will be reset to the values of
+engine "log\_mask" parameter and "env\_vars" 'DD_MASK' and 'DD_SUBSYS' assignments in the server
+config file (as set at the time of daos\_server startup).
 If a single arg is passed, then this will be used as the log masks setting.
 
 Example usage:
 ```
-dmg server set-logmasks ERR,mgmt=DEBUG
+dmg server set-logmasks -m ERR,mgmt=DEBUG
 ```
 
-The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the
-syntax is identical to what is expected by the 'D_LOG_MASK' environment variable.
-If the 'PREFIX=' part is omitted, then the level applies to all defined
-facilities (e.g., a value of 'WARN' sets everything to WARN).
+The masks input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
+identical to what is expected by the 'D_LOG_MASK' environment variable.
+If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g., a value
+of 'WARN' sets everything to WARN).
 
-Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE,
-INFO, DEBUG.
+Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG.
 
+For usage of streams ('DD_MASK') and subsystems ('DD_SUBSYS') parameters, logging is described in
+detail in the
+[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system)
+section.
 
 ## System Monitoring
 
@@ -268,7 +272,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.4/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file

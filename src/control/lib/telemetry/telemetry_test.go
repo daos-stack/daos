@@ -36,10 +36,7 @@ func TestTelemetry_Init(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
-
-			newCtx, err := Init(ctx, uint32(tc.id))
+			newCtx, err := Init(test.Context(t), uint32(tc.id))
 			if newCtx != nil {
 				defer Detach(newCtx)
 			}
@@ -69,13 +66,10 @@ func TestTelemetry_Detach(t *testing.T) {
 	defer CleanupTestMetricsProducer(t)
 
 	// Invalid context
-	Detach(context.Background())
+	Detach(test.Context(t))
 
 	// success
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	newCtx, err := Init(ctx, uint32(producerID))
+	newCtx, err := Init(test.Context(t), uint32(producerID))
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -106,7 +100,7 @@ func TestTelemetry_GetAPIVersion(t *testing.T) {
 func initCtxReal(t *testing.T, id uint32) context.Context {
 	t.Helper()
 
-	ctx, err := Init(context.Background(), id)
+	ctx, err := Init(test.Context(t), id)
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -133,14 +127,14 @@ func TestTelemetry_GetRank(t *testing.T) {
 	}{
 		"nil handle": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.WithValue(context.Background(), handleKey, nil)
+				return context.WithValue(test.Context(t), handleKey, nil)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expErr:      errors.New("no handle"),
 		},
 		"handle has rank": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.WithValue(context.Background(), handleKey, rankHdl)
+				return context.WithValue(test.Context(t), handleKey, rankHdl)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expResult:   *rankHdl.rank,
@@ -222,7 +216,7 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 	}{
 		"no handle": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.Background()
+				return test.Context(t)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expErr:      errors.New("no handle"),
@@ -318,7 +312,7 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 	validCtx, _ := setupTestMetrics(t)
 	defer cleanupTestMetrics(validCtx, t)
 
-	invalidCtx := context.WithValue(context.Background(), handleKey, &handle{})
+	invalidCtx := context.WithValue(test.Context(t), handleKey, &handle{})
 	testTimeout := 5 * time.Second
 	loopInterval := time.Millisecond
 
@@ -327,7 +321,7 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 		cancelAfter time.Duration
 	}{
 		"no handle": {
-			ctx: context.Background(),
+			ctx: test.Context(t),
 		},
 		"handle invalid": {
 			ctx: invalidCtx,

@@ -718,7 +718,7 @@ void   ctl__smd_manage_resp__free_unpacked
   assert(message->base.descriptor == &ctl__smd_manage_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor ctl__bio_health_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor ctl__bio_health_req__field_descriptors[3] =
 {
   {
     "dev_uuid",
@@ -732,14 +732,40 @@ static const ProtobufCFieldDescriptor ctl__bio_health_req__field_descriptors[1] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "meta_size",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthReq, meta_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rdb_size",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthReq, rdb_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__bio_health_req__field_indices_by_name[] = {
   0,   /* field[0] = dev_uuid */
+  1,   /* field[1] = meta_size */
+  2,   /* field[2] = rdb_size */
 };
 static const ProtobufCIntRange ctl__bio_health_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
 {
@@ -749,14 +775,14 @@ const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
   "Ctl__BioHealthReq",
   "ctl",
   sizeof(Ctl__BioHealthReq),
-  1,
+  3,
   ctl__bio_health_req__field_descriptors,
   ctl__bio_health_req__field_indices_by_name,
   1,  ctl__bio_health_req__number_ranges,
   (ProtobufCMessageInit) ctl__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[43] =
+static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[45] =
 {
   {
     "timestamp",
@@ -1274,6 +1300,30 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[43
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "meta_wal_size",
+    47,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthResp, meta_wal_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rdb_wal_size",
+    48,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthResp, rdb_wal_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
   22,   /* field[22] = avail_bytes */
@@ -1296,12 +1346,14 @@ static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
   34,   /* field[34] = host_reads_raw */
   7,   /* field[7] = media_errs */
   33,   /* field[33] = media_wear_raw */
+  43,   /* field[43] = meta_wal_size */
   40,   /* field[40] = nand_bytes_written */
   39,   /* field[39] = pll_lock_loss_cnt */
   4,   /* field[4] = power_cycles */
   5,   /* field[5] = power_on_hours */
   23,   /* field[23] = program_fail_cnt_norm */
   24,   /* field[24] = program_fail_cnt_raw */
+  44,   /* field[44] = rdb_wal_size */
   17,   /* field[17] = read_only_warn */
   38,   /* field[38] = retry_buffer_overflow_cnt */
   19,   /* field[19] = status */
@@ -1324,7 +1376,7 @@ static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] =
 {
   { 3, 0 },
   { 5, 1 },
-  { 0, 43 }
+  { 0, 45 }
 };
 const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
 {
@@ -1334,14 +1386,14 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
   "Ctl__BioHealthResp",
   "ctl",
   sizeof(Ctl__BioHealthResp),
-  43,
+  45,
   ctl__bio_health_resp__field_descriptors,
   ctl__bio_health_resp__field_indices_by_name,
   2,  ctl__bio_health_resp__number_ranges,
   (ProtobufCMessageInit) ctl__bio_health_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[9] =
+static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[15] =
 {
   {
     "uuid",
@@ -1451,22 +1503,100 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[9] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "role_bits",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, role_bits),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "meta_size",
+    11,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, meta_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "meta_wal_size",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, meta_wal_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rdb_size",
+    13,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, rdb_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rdb_wal_size",
+    14,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, rdb_wal_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "usable_bytes",
+    15,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, usable_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__smd_device__field_indices_by_name[] = {
   6,   /* field[6] = avail_bytes */
   7,   /* field[7] = cluster_size */
   3,   /* field[3] = dev_state */
   4,   /* field[4] = led_state */
+  10,   /* field[10] = meta_size */
+  11,   /* field[11] = meta_wal_size */
   8,   /* field[8] = rank */
+  12,   /* field[12] = rdb_size */
+  13,   /* field[13] = rdb_wal_size */
+  9,   /* field[9] = role_bits */
   1,   /* field[1] = tgt_ids */
   5,   /* field[5] = total_bytes */
   2,   /* field[2] = tr_addr */
+  14,   /* field[14] = usable_bytes */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange ctl__smd_device__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 0, 15 }
 };
 const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
 {
@@ -1476,7 +1606,7 @@ const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
   "Ctl__SmdDevice",
   "ctl",
   sizeof(Ctl__SmdDevice),
-  9,
+  15,
   ctl__smd_device__field_descriptors,
   ctl__smd_device__field_indices_by_name,
   1,  ctl__smd_device__number_ranges,

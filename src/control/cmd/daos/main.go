@@ -152,7 +152,7 @@ or query/manage an object inside a container.`
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 			if os.Getenv("D_LOG_MASK") == "" {
 				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
 			}
@@ -214,6 +214,8 @@ or query/manage an object inside a container.`
 		if os.Getenv("DD_STDERR") == "" {
 			os.Setenv("DD_STDERR", "debug")
 		}
+	} else if os.Getenv("DD_STDERR") == "" {
+		os.Setenv("DD_STDERR", "err")
 	}
 
 	// Initialize the daos debug system first so that

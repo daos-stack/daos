@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -22,6 +21,16 @@ import (
 )
 
 var fiCmpOpt = cmpopts.IgnoreUnexported(FabricInterface{})
+
+func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	providers := []*hardware.FabricProvider{}
+	for _, p := range prov {
+		providers = append(providers, &hardware.FabricProvider{
+			Name: p,
+		})
+	}
+	return hardware.NewFabricProviderSet(providers...)
+}
 
 func TestAgent_NewNUMAFabric(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -932,7 +941,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
+			result := NUMAFabricFromScan(test.Context(t), log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)

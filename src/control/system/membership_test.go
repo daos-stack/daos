@@ -900,7 +900,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 			ms := populateMembership(t, log, tc.members...)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)

@@ -44,7 +44,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session,
 						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
 		if (rc == 0) {
@@ -120,8 +120,12 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(err, rc = ENOMEM);
 
 	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_TRUNC)
+			DFUSE_TRA_INFO(oh, "handle size changed or application should call "
+					   "DFUSE_IOCTL_REPLY_PFILE");
 		D_GOTO(free, rc = daos_der2errno(rc));
+	}
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);

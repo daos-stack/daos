@@ -566,8 +566,10 @@ static const ProtobufCIntRange chk__check_scan_phase__value_ranges[] = {
 };
 static const ProtobufCEnumValueIndex chk__check_scan_phase__enum_values_by_name[11] =
 {
+  { "CSP_AGGREGATION", 9 },
   { "CSP_CONT_CLEANUP", 5 },
   { "CSP_CONT_LIST", 4 },
+  { "CSP_DONE", 10 },
   { "CSP_DTX_RESYNC", 6 },
   { "CSP_OBJ_SCRUB", 7 },
   { "CSP_POOL_CLEANUP", 3 },
@@ -575,8 +577,6 @@ static const ProtobufCEnumValueIndex chk__check_scan_phase__enum_values_by_name[
   { "CSP_POOL_MBS", 2 },
   { "CSP_PREPARE", 0 },
   { "CSP_REBUILD", 8 },
-  { "CSP_DONE", 10 },
-  { "CSP_AGGREGATION", 9 },
 };
 const ProtobufCEnumDescriptor chk__check_scan_phase__descriptor =
 {

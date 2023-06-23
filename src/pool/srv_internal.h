@@ -73,11 +73,15 @@ struct pool_iv_prop {
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
 	uint64_t	pip_svc_redun_fac;
+	uint32_t         pip_checkpoint_mode;
+	uint32_t         pip_checkpoint_freq;
+	uint32_t	pip_checkpoint_thresh;
 	uint32_t	pip_obj_version;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
 	uint32_t	pip_svc_list_offset;
+	uint32_t	pip_perf_domain;
 	char		pip_iv_buf[0];
 };
 

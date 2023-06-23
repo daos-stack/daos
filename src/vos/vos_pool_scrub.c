@@ -373,7 +373,7 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	rc = sc_mark_corrupt(ctx);
 
 	if (sc_is_nvme(ctx))
-		bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
+		bio_log_data_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
 	if (rc != 0) {
 		/* Log error but don't let it stop the scrubbing process */
 		D_ERROR("Error trying to mark corrupt: "DF_RC"\n", DP_RC(rc));
@@ -508,6 +508,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	daos_iod_t		*iod = &ctx->sc_iod;
 	uint64_t		 data_len;
 	struct bio_io_context	*bio_ctx;
+	struct umem_instance	*umem;
 	struct vos_iterator	*iter;
 	struct vos_obj_iter	*oiter;
 	int			 rc;
@@ -532,8 +533,9 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	/* Fetch data */
 	iter = vos_hdl2iter(ih);
 	oiter = vos_iter2oiter(iter);
-	bio_ctx = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
-	rc = bio_read(bio_ctx, biov->bi_addr, &data);
+	bio_ctx = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
+	rc = vos_media_read(bio_ctx, umem, biov->bi_addr, &data);
 
 	if (BIO_ADDR_IS_CORRUPTED(&biov->bi_addr)) {
 		/* Already know this is corrupt so just return */

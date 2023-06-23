@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -164,6 +165,7 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
@@ -205,6 +207,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -359,6 +362,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor
@@ -372,6 +377,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -483,6 +489,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

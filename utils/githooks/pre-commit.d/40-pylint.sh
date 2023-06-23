@@ -12,8 +12,8 @@ echo "Pylint:"
 
 if [ "$TARGET" = "HEAD" ]; then
     echo "  Checking against HEAD"
-    git diff HEAD -U10 | ./utils/cq/daos_pylint.py --diff
+    git diff HEAD --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
 else
     echo "  Checking against branch ${TARGET}"
-    git diff "$TARGET"... -U10 | ./utils/cq/daos_pylint.py --diff
+    git diff "$TARGET"... --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
 fi

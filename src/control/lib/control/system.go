@@ -138,9 +138,10 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank      ranklist.Rank
-	State     system.MemberState
-	LocalJoin bool
+	Rank       ranklist.Rank
+	State      system.MemberState
+	LocalJoin  bool
+	MapVersion uint32 `json:"map_version"`
 }
 
 func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {
@@ -644,8 +645,8 @@ type LeaderQueryReq struct {
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader   string `json:"CurrentLeader"`
-	Replicas []string
+	Leader   string   `json:"current_leader"`
+	Replicas []string `json:"replicas"`
 }
 
 // LeaderQuery requests the current Management Service leader and the set of

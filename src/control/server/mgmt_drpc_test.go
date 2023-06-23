@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -425,8 +424,7 @@ func TestSrvModule_handleGetPoolServiceRanks(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.Context(t)
 
 			db := raft.MockDatabase(t, log)
 			mod := &srvModule{
@@ -510,8 +508,7 @@ func TestSrvModule_handlePoolFindByLabel(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.Context(t)
 
 			db := raft.MockDatabase(t, log)
 			mod := &srvModule{

@@ -16,6 +16,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/object.h>
+#include <daos/sys_db.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/pool.h>
@@ -808,6 +809,12 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+
+static inline bool
+chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
+{
+	return flags & CHK__CHECK_FLAG__CF_RESET || ins->ci_start_flags & CSF_RESET_ALL;
+}
 
 static inline void
 chk_ins_set_fail(struct chk_instance *ins, uint32_t phase)

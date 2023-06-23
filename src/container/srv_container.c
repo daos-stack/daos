@@ -4253,7 +4253,7 @@ cont_filter_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_t 
 	int		rc = 0;
 
 	/* logical OR combining: start with false result, transition to true on first match */
-	if ((filt->pcf_parts > 0) && (combine_op == PCF_COMBINE_LOGICAL_OR))
+	if ((filt->pcf_parts != NULL) && (combine_op == PCF_COMBINE_LOGICAL_OR))
 		whole_match = false;
 
 	for (i = 0; i < filt->pcf_nparts; i++) {

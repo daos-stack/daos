@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,6 +38,7 @@ type cliOptions struct {
 	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
 	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
+	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -114,6 +115,25 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
+type (
+	supportAgentConfig interface {
+		setSupportConf(string)
+		getSupportConf() string
+	}
+
+	supportAgentConfigCmd struct {
+		supportCfgPath string
+	}
+)
+
+func (cmd *supportAgentConfigCmd) setSupportConf(cfgPath string) {
+	cmd.supportCfgPath = cfgPath
+}
+
+func (cmd *supportAgentConfigCmd) getSupportConf() string {
+	return cmd.supportCfgPath
+}
+
 func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
@@ -137,7 +157,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 		}
 
 		if opts.JSONLogs {
@@ -176,6 +196,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			log.Debugf("agent config loaded from %s", cfgPath)
 		}
 
+		if suppCmd, ok := cmd.(supportAgentConfig); ok {
+			suppCmd.setSupportConf(cfgPath)
+		}
+
 		if opts.RuntimeDir != "" {
 			log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
 			cfg.RuntimeDir = opts.RuntimeDir
@@ -202,8 +226,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			// Create an additional set of loggers which append everything
 			// to the specified file.
 			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
+				WithNoticeLogger(logging.NewNoticeLogger("agent", f)).
 				WithInfoLogger(logging.NewInfoLogger("agent", f)).
-				WithDebugLogger(logging.NewDebugLogger(f))
+				WithDebugLogger(logging.NewDebugLogger(f)).
+				WithTraceLogger(logging.NewTraceLogger(f))
 		}
 
 		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,6 +50,7 @@ func inList(c Component, compList []Component) bool {
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
+		"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 		"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},

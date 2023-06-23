@@ -16,6 +16,7 @@ import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
+from datetime import datetime
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
@@ -777,6 +778,19 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
+def join(joiner, *args):
+    """Join one or more objects together with a specified string.
+
+    Args:
+        joiner (str): string to use to join the other objects
+        *args: the objects to join. Any non-None object will be passed to str().
+
+    Returns:
+        str: a string containing all the objects joined by the joiner string
+    """
+    return joiner.join(filter(None, map(str, args)))
+
+
 def list_to_str(value, joiner=","):
     """Convert a list to a string by joining its items.
 
@@ -788,7 +802,7 @@ def list_to_str(value, joiner=","):
         str: a string of each list entry joined by the joiner string
 
     """
-    return joiner.join(map(str, value))
+    return join(joiner, *value)
 
 
 def dict_to_list(value, joiner="="):
@@ -1390,6 +1404,19 @@ def get_journalctl(hosts, since, until, journalctl_type):
     command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+
+def journalctl_time(when=None):
+    # pylint: disable=wrong-spelling-in-docstring
+    """Get time formatted for journalctl.
+
+    Args:
+        when (datetime, optional): time to format. Defaults to datetime.now()
+
+    Returns:
+        str: the time in journalctl format
+    """
+    return (when or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_avocado_config_value(section, key):

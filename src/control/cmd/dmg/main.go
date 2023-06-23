@@ -120,7 +120,6 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		} else {
 			status = int(daos.MiscError)
 		}
-		in = nil // response should be null if err isn't
 	}
 
 	data, err := json.MarshalIndent(struct {
@@ -197,6 +196,7 @@ type cliOptions struct {
 	Config         configCmd      `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
 	System         SystemCmd      `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
 	Network        NetCmd         `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
+	Support        supportCmd     `command:"support" alias:"supp" description:"Perform debug tasks to help support team"`
 	Pool           PoolCmd        `command:"pool" description:"Perform tasks related to DAOS pools"`
 	Cont           ContCmd        `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd     `command:"version" description:"Print dmg version"`
@@ -264,12 +264,14 @@ and access control settings, along with system wide operations.`
 			// to the specified file.
 			log = log.
 				WithErrorLogger(logging.NewErrorLogger("dmg", f)).
+				WithNoticeLogger(logging.NewNoticeLogger("dmg", f)).
 				WithInfoLogger(logging.NewInfoLogger("dmg", f)).
-				WithDebugLogger(logging.NewDebugLogger(f))
+				WithDebugLogger(logging.NewDebugLogger(f)).
+				WithTraceLogger(logging.NewTraceLogger(f))
 		}
 
 		if opts.Debug {
-			log.WithLogLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 			log.Debug("debug output enabled")
 		}
 
