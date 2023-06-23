@@ -2968,7 +2968,7 @@ class Launch():
         """
         logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
         logger.debug("************************DEBUG************************")
-        run_local(logger, f'cat {xml_file}')
+        run_local(logger, f'cat \'{xml_file}\'')
         logger.debug("************************DEBUG************************")
         try:
             with open(xml_file, "w", encoding="utf-8") as xml_buffer:

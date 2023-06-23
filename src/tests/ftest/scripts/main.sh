@@ -203,9 +203,9 @@ IFS="+" read -r -a TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
 index=0
 rc=0
 # shellcheck disable=SC2086
-for TEST_TAG_SEQ in ${TEST_TAG_SPLIT[*]}; do
-    echo "Running launch.py with tags: ${TEST_TAG_SEQ}"
-    IFS=" " read -r -a TAGS <<< "${TEST_TAG_SEQ}"
+while [ "$index" -lt  "${#TEST_TAG_SPLIT[*]}" ]; do
+    echo "Running launch.py with tags: ${TEST_TAG_SPLIT[index]}"
+    IFS=" " read -r -a TAGS <<< "${TEST_TAG_SPLIT[index]}"
     if [ "$index" -eq 0 ]; then
         # First sequence of tags run with arguments provided by the user
         name=${STAGE_NAME}
