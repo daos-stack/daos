@@ -23,6 +23,9 @@ server_config:
 pool:
   size: 95%
   control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
 ior:
   client_processes: !mux
     slots_16:
