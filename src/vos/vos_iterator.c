@@ -705,6 +705,13 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	if (vos_iter_sched_check(iter))
 		*acts |= VOS_ITER_CB_YIELD;
 
+	if (rc != 0 && param->ip_error_cb != NULL) {
+		/** Filter the error, if necessary */
+		rc = param->ip_error_cb(ih, iter_ent, type, arg, rc);
+		if (rc == 0)
+			*acts |= VOS_ITER_CB_SKIP;
+	}
+
 	return rc;
 }
 

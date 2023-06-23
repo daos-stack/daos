@@ -162,20 +162,15 @@ struct vos_agg_param {
 	/* Boundary for aggregatable write filter */
 	daos_epoch_t		ap_filter_epoch;
 	uint32_t		ap_flags;
-	unsigned int		ap_discard:1,
-				ap_csum_err:1,
-				ap_nospc_err:1,
-				ap_discard_obj:1;
+	unsigned int            ap_discard : 1, ap_csum_err : 1, ap_nospc_err : 1, ap_busy_err : 1,
+	    ap_discard_obj : 1;
 	struct umem_instance	*ap_umm;
 	int			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
 	/* EV tree: Merge window for evtree aggregation */
-	struct agg_merge_window	 ap_window;
-	bool			 ap_skip_akey;
-	bool			 ap_skip_dkey;
-	bool			 ap_skip_obj;
+	struct agg_merge_window  ap_window;
 };
 
 static inline void
@@ -2318,7 +2313,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_SINGLE:
 		if (type == VOS_ITER_SINGLE)
 			rc = vos_agg_sv(ih, entry, agg_param, acts);
-		if (rc == -DER_CSUM || rc == -DER_TX_BUSY || rc == -DER_NOSPACE) {
+		if (rc == -DER_CSUM || rc == -DER_NOSPACE) {
 			struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 
 			D_DEBUG(DB_EPC, "Abort value aggregation "DF_RC"\n",
@@ -2331,17 +2326,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 					d_tm_inc_counter(vam->vam_csum_errs, 1);
 			} else if (rc == -DER_NOSPACE) {
 				agg_param->ap_nospc_err = true;
-			} else if (rc == -DER_TX_BUSY) {
-				/** Must not aggregate anything above
-				 *  this entry to avoid orphaned tree
-				 *  assertion
-				 */
-				agg_param->ap_skip_akey = true;
-				agg_param->ap_skip_dkey = true;
-				agg_param->ap_skip_obj = true;
-
-				if (vam && vam->vam_uncommitted)
-					d_tm_inc_counter(vam->vam_uncommitted, 1);
 			}
 			rc = 0;
 		}
@@ -2386,22 +2370,10 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_OBJ:
-		if (agg_param->ap_skip_obj) {
-			agg_param->ap_skip_obj = false;
-			break;
-		}
 		rc = oi_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_DKEY:
-		if (agg_param->ap_skip_dkey) {
-			agg_param->ap_skip_dkey = false;
-			break;
-		}
 	case VOS_ITER_AKEY:
-		if (agg_param->ap_skip_akey) {
-			agg_param->ap_skip_akey = false;
-			break;
-		}
 		agg_param->ap_trace_start = 0;
 		agg_param->ap_trace_count = 0;
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_obj);
@@ -2425,40 +2397,36 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 */
 		inc_agg_counter(agg_param, type, AGG_OP_DEL);
 		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR("VOS aggregation failed: %d\n", rc);
-
-		/*
-		 * -DER_TX_BUSY error indicates current ilog aggregation
-		 * aborted on hitting uncommitted entry, this should be a very
-		 * rare case, we'd suppress the error here to keep aggregation
-		 * moving forward.   We do, however, need to ensure we do not
-		 * aggregate anything in the parent path.  Otherwise, we could
-		 * orphan the current entry due to incarnation log semantics.
-		 */
-		if (rc == -DER_TX_BUSY) {
-			struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
-
-			rc = 0;
-			switch (type) {
-			default:
-				D_ASSERTF(type == VOS_ITER_OBJ,
-					  "Invalid iter type\n");
-				break;
-			case VOS_ITER_AKEY:
-				agg_param->ap_skip_dkey = true;
-				/* fall through */
-			case VOS_ITER_DKEY:
-				agg_param->ap_skip_obj = true;
-				/* fall through */
-			}
-
-			if (vam && vam->vam_uncommitted)
-				d_tm_inc_counter(vam->vam_uncommitted, 1);
-		}
 	}
 
 	return rc;
+}
+
+static int
+vos_aggregate_error_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		       void *cb_arg, int rc)
+{
+	struct vos_agg_metrics *vam;
+	struct vos_agg_param   *ap   = cb_arg;
+	struct vos_container   *cont = vos_hdl2cont(ap->ap_coh);
+
+	/** Let lower levels abort.   Returning 0 will cause iterator to skip to next object */
+	if (type != VOS_ITER_OBJ || rc != -DER_TX_BUSY) {
+		return rc;
+	}
+
+	ap->ap_busy_err = 1;
+
+	/*
+	 * -DER_TX_BUSY error indicates we hit an uncommitted entry.
+	 * This should be a very rare case, so we skip to next object and keep aggregation moving
+	 * forward
+	 */
+	vam = agg_cont2metrics(cont);
+	if (vam && vam->vam_uncommitted)
+		d_tm_inc_counter(vam->vam_uncommitted, 1);
+
+	return 0;
 }
 
 enum {
@@ -2668,6 +2636,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
 	ad->ad_iter_param.ip_filter_cb = vos_agg_filter;
 	ad->ad_iter_param.ip_filter_arg = &ad->ad_agg_param;
+	ad->ad_iter_param.ip_error_cb   = vos_aggregate_error_cb;
 
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
@@ -2686,6 +2655,9 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 			 &ad->ad_agg_param, NULL);
 	if (rc != 0 || ad->ad_agg_param.ap_nospc_err) {
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+		goto exit;
+	} else if (ad->ad_agg_param.ap_busy_err) {
+		/** Since there were some errors, we need to rescan at same epoch later */
 		goto exit;
 	} else if (ad->ad_agg_param.ap_csum_err) {
 		rc = -DER_CSUM;	/* Inform caller the csum error */

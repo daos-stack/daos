@@ -387,11 +387,20 @@ enum {
 	VOS_ITER_PROBE_AGAIN	= (1 << 1),
 };
 
+typedef struct vos_iter_entry vos_iter_entry_t;
+
 /**
  * Iteration object/key filter callback
  */
 typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
 				    void *cb_arg, unsigned int *acts);
+
+/**
+ * Gives user control as to whether to ignore an error.  User can handle it and return 0
+ * or can simply pass the error along.
+ */
+typedef int (*vos_iter_error_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+				   void *cb_arg, int rc);
 
 /**
  * Parameters for initializing VOS iterator
@@ -419,6 +428,8 @@ typedef struct {
 	vos_iter_filter_cb_t	ip_filter_cb;
 	/** filter callback argument (vos_iterate only) */
 	void			*ip_filter_arg;
+	/** error handling callback (vos_iterate only) */
+	vos_iter_error_cb_t      ip_error_cb;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;
@@ -441,7 +452,7 @@ enum {
 /**
  * Returned entry of a VOS iterator
  */
-typedef struct {
+struct vos_iter_entry {
 	/** Returned epoch. It is ignored for container iteration. */
 	daos_epoch_t				ie_epoch;
 	union {
@@ -513,7 +524,7 @@ typedef struct {
 	uint32_t		ie_vis_flags;
 	/** Child iterator type */
 	vos_iter_type_t		ie_child_type;
-} vos_iter_entry_t;
+};
 
 /**
  * Iteration callback function
