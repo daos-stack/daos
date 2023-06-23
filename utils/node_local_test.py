@@ -1493,7 +1493,7 @@ def run_daos_cmd(conf,
                  show_stdout=False,
                  valgrind=True,
                  log_check=True,
-                 ignore_busy=False,
+                 allow_busy=False,
                  use_json=False,
                  cwd=None):
     """Run a DAOS command
@@ -1553,7 +1553,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, ignore_busy=ignore_busy)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks, allow_busy=allow_busy)
     valgrind_hdl.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -3527,7 +3527,7 @@ class PosixTests():
         # run the checker while dfuse is still mounted (should fail - EX open)
         cmd = ['fs', 'check', self.pool.id(), self.container.id(), '--flags', 'print', '--dir-name',
                'lf1']
-        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
+        rc = run_daos_cmd(self.conf, cmd, allow_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -3721,7 +3721,7 @@ class PosixTests():
         # fix corrupted entries while dfuse is running - should fail
         cmd = ['fs', 'fix-entry', self.pool.id(), self.container.id(), '--dfs-path', '/test_dir/f1',
                '--type', '--chunk-size', '1048576']
-        rc = run_daos_cmd(self.conf, cmd, ignore_busy=True)
+        rc = run_daos_cmd(self.conf, cmd, allow_busy=True)
         print(rc)
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
@@ -4191,7 +4191,7 @@ def log_test(conf,
              skip_fi=False,
              leak_wf=None,
              ignore_einval=False,
-             ignore_busy=False,
+             allow_busy=False,
              check_read=False,
              check_write=False,
              check_fstat=False):
@@ -4233,7 +4233,7 @@ def log_test(conf,
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
 
-    if ignore_busy:
+    if not allow_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
     try:
@@ -4888,9 +4888,9 @@ class AllocFailTestRun():
         if self.valgrind_hdl:
             res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
-            res += f'Returncode was {self.returncode}'
-        else:
             res += 'Process not completed'
+        else:
+            res += f'Returncode was {self.returncode}'
 
         if self.stdout:
             res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
@@ -4975,8 +4975,6 @@ class AllocFailTestRun():
 
             self._aft.wf.explain(self._fi_loc, short_log_file, fi_signal)
             self._aft.conf.wf.explain(self._fi_loc, short_log_file, fi_signal)
-        # Put in a new-line.
-        print()
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
         self._stderr = self._sp.stderr.read()
@@ -5002,9 +5000,11 @@ class AllocFailTestRun():
                 wf = self._aft.wf
             else:
                 wf = None
+
             self._fi_loc = log_test(self._aft.conf,
                                     self.log_file,
                                     show_memleaks=show_memleaks,
+                                    allow_busy=self._aft.allow_busy,
                                     quiet=True,
                                     skip_fi=True,
                                     leak_wf=wf)
@@ -5198,6 +5198,7 @@ class AllocFailTest():
                 if not ret.has_finished():
                     continue
                 active.remove(ret)
+                print()
                 print(ret)
                 if ret.returncode < 0:
                     fatal_errors = True

@@ -32,8 +32,8 @@ tse_task2priv(tse_task_t *task)
 	struct tse_task_private *dtp;
 
 	dtp = (struct tse_task_private *)&task->dt_private;
-	D_ASSERT(dtp->dtp_magic != TASK_MAGIC - 1);
-	D_ASSERT(dtp->dtp_magic = TASK_MAGIC);
+	D_ASSERTF(dtp->dtp_magic != TASK_MAGIC - 1, "tse %p used after free\n", task);
+	D_ASSERTF(dtp->dtp_magic == TASK_MAGIC, "Bad tse magic %p\n", task);
 	return dtp;
 }
 
@@ -977,7 +977,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	if (task == NULL)
 		return -DER_NOMEM;
 
-	dtp = tse_task2priv(task);
+	dtp = (struct tse_task_private *)&task->dt_private;
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
