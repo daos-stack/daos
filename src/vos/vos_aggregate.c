@@ -2426,12 +2426,13 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		inc_agg_counter(agg_param, type, AGG_OP_DEL);
 		rc = 0;
 	} else if (rc != 0) {
+		const char *op = "aggregate";
+		if (agg_param->ap_discard_obj)
+			op = "discard_obj";
+		else if (agg_param->ap_discard)
+			op = "discard";
+
 		switch (type) {
-			const char *op = "aggregate";
-			if (agg_param->ap_discard_obj)
-				op = "discard_obj";
-			else if (agg_param->ap_discard)
-				op = "discard";
 		case VOS_ITER_OBJ:
 			D_ERROR("VOS %s failed for object " DF_UOID " at epoch " DF_X64
 				": rc=" DF_RC " range=" DF_X64 "-" DF_X64 "\n",
