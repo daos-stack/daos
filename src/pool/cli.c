@@ -87,10 +87,14 @@ pool_free(struct d_hlink *hlink)
 
 	pool = container_of(hlink, struct dc_pool, dp_hlink);
 	D_ASSERT(daos_hhash_link_empty(&pool->dp_hlink));
+
+	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
+	D_ASSERT(d_list_empty(&pool->dp_co_list));
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
 	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
-	D_ASSERT(d_list_empty(&pool->dp_co_list));
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
