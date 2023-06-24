@@ -58,7 +58,7 @@ class PoolMembershipTest(TestWithServers):
         Jira ID: DAOS-11734
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
@@ -227,7 +227,7 @@ class PoolMembershipTest(TestWithServers):
         Jira ID: DAOS-11736
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
