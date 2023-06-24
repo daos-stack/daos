@@ -228,7 +228,7 @@ class PoolMembershipTest(TestWithServers):
 
         :avocado: tags=all,pr
         :avocado: tags=hw,small
-        :avocado: tags=recovery,dangling_pool_map
+        :avocado: tags=recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
         # 1. Create a pool.
