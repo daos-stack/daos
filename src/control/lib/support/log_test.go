@@ -24,38 +24,33 @@ import (
 const mockSocketDir = "/tmp/mock_socket_dir/"
 
 // Run fake daos_engine process.
-func startFakeEngine(t *testing.T) bool {
+func startFakeEngine(t *testing.T) {
+	t.Helper()
 	runCmd := strings.Join([]string{"exec -a daos_engine sleep 60 | echo -d", mockSocketDir}, " ")
 	cmd := exec.Command("bash", "-c", runCmd)
 	err := cmd.Start()
 	if err != nil {
-		t.Logf("FakeEngine Failed to start with err = %s", err.Error())
-		return false
+		t.Fatal(err)
 	}
 
 	_, err = exec.Command("bash", "-c", "pidof daos_engine").Output()
 	if err != nil {
-		t.Log("Can not find running daos_engine")
-		return false
+		t.Fatal(err)
 	}
 	t.Log("FakeEngine started")
-
-	return true
 }
 
 // Kill fake daos_engine process.
-func killFakeEngine(t *testing.T) bool {
+func killFakeEngine(t *testing.T) {
+	t.Helper()
 	cmd := exec.Command("bash", "-c", "pkill -f daos_engine")
 	err := cmd.Start()
 	// Sleep for second to clean the process stat.
 	time.Sleep(1 * time.Second)
 	if err != nil {
-		t.Logf("FakeEngine Failed to kill with err = %s", err.Error())
-		return false
+		t.Fatal(err)
 	}
 	t.Log("FakeEngine killed")
-
-	return true
 }
 
 func TestSupport_Display(t *testing.T) {
