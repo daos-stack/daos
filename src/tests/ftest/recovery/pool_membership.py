@@ -211,3 +211,72 @@ class PoolMembershipTest(TestWithServers):
             errors.append(msg)
 
         report_errors(test=self, errors=errors)
+
+    def test_dangling_pool_map(self):
+        """Test dangling pool map.
+
+        1. Create a pool.
+        2. Stop servers.
+        3. Manually remove /mnt/daos0/<pool_uuid>/vos-0 from rank 0 node.
+        4. Enable and start the checker.
+        5. Query the checker and verify that the issue was fixed. i.e., Current status is
+        COMPLETED.
+        6. Disable the checker.
+        7. Verify that the pool has one less target.
+
+        Jira ID: DAOS-11736
+
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,dangling_pool_map
+        :avocado: tags=PoolMembershipTest,test_dangling_pool_map
+        """
+        # 1. Create a pool.
+        self.log_step("Creating a pool (dmg pool create)")
+        pool = self.get_pool(connect=False)
+
+        # 2. Stop servers.
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        # 3. Manually remove /mnt/daos0/<pool_uuid>/vos-0 from rank 0 node.
+        rank_0_host = NodeSet(self.server_managers[0].get_host(0))
+        rm_cmd = (f"sudo rm /mnt/daos0/{pool.uuid.lower()}/vos-0")
+        if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
+            self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
+
+        # 4. Enable and start the checker.
+        self.log_step("Enable and start the checker.")
+        dmg_command.check_enable(stop=False)
+        dmg_command.check_start()
+
+        # 5. Query the checker and verify that the issue was fixed.
+        errors = []
+        query_msg = ""
+        for _ in range(10):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                query_msg = check_query_out["response"]["reports"][0]["msg"]
+                break
+            time.sleep(5)
+        if "dangling target" not in query_msg:
+            errors.append(
+                "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
+
+        # 6. Disable the checker.
+        self.log_step("Disable and start the checker.")
+        dmg_command.check_disable()
+
+        # 7. Verify that the pool has one less target.
+        query_out = pool.query()
+        self.log.debug("## query_out = %s", query_out)
+        total_targets = query_out["response"]["total_targets"]
+        active_targets = query_out["response"]["active_targets"]
+        diff = total_targets - active_targets
+        if diff != 1:
+            expected_targets = total_targets - 1
+            msg = (f"Unexpected number of active targets! Expected = {expected_targets}; "
+                   f"Actual = {active_targets}")
+            errors.append(msg)
+
+        report_errors(test=self, errors=errors)
