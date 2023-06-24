@@ -241,7 +241,7 @@ class PoolMembershipTest(TestWithServers):
 
         # 3. Manually remove /mnt/daos0/<pool_uuid>/vos-0 from rank 0 node.
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        rm_cmd = (f"sudo rm /mnt/daos0/{pool.uuid.lower()}/vos-0")
+        rm_cmd = f"sudo rm /mnt/daos0/{pool.uuid.lower()}/vos-0"
         if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
 
