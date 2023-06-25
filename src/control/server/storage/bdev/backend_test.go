@@ -961,6 +961,9 @@ func TestBackend_Prepare(t *testing.T) {
 					Args: []string{"reset"},
 				},
 			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
+			},
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
@@ -1298,14 +1301,14 @@ func TestBackend_Prepare(t *testing.T) {
 			}
 
 			var gotErr error
+			var gotResp *storage.BdevPrepareResponse
 			if tc.reset {
-				gotErr = b.reset(tc.req, mockVmdDetect)
+				gotResp, gotErr = b.reset(tc.req, mockVmdDetect)
 			} else {
-				var gotResp *storage.BdevPrepareResponse
 				gotResp, gotErr = b.prepare(tc.req, mockVmdDetect, mockHpClean)
-				if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-					t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
-				}
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
 			}
 			test.CmpErr(t, tc.expErr, gotErr)
 
