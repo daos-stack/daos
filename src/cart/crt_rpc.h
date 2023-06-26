@@ -137,7 +137,7 @@ struct crt_rpc_priv {
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
-	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
 
 	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */

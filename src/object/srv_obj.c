@@ -587,7 +587,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 		remote_off += length;
 
-		/* Give cart progress a chance to complete some inflight bulk transfers */
+		/* Give cart progress a chance to complete some in-flight bulk transfers */
 		if (bulk_iovs >= MAX_BULK_IOVS) {
 			bulk_iovs = 0;
 			ABT_thread_yield();
@@ -2376,7 +2376,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 		return 0;
 
 	/* If the incoming I/O is during integration, then it needs to wait the
-	 * vos discard to finish, which otherwise might discard these new inflight
+	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
 	if ((flags & ORF_REINTEGRATING_IO) &&
@@ -3928,11 +3928,11 @@ cleanup:
 	obj_ioc_end(&ioc, rc);
 }
 
-static void
-ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
+void
+ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	struct dtx_handle		*dth = NULL;
@@ -3990,7 +3990,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       return_epoch ? &okqo->okqo_max_epoch : NULL,
+			       &okqo->okqo_max_epoch,
 			       cell_size, stripe_size, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc.ioc_coc);
@@ -4009,18 +4009,6 @@ failed:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
-}
-
-void
-ds_obj_query_key_handler_0(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, false);
-}
-
-void
-ds_obj_query_key_handler_1(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, true);
 }
 
 void

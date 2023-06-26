@@ -372,7 +372,7 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 		return;
 
 	/*
-	 * if completing a task that never started, we need to bump inflight tasks in scheduler
+	 * if completing a task that never started, we need to bump in-flight tasks in scheduler
 	 * before adding it to tail of completed list.
 	 */
 	if (!dtp->dtp_running) {
