@@ -249,6 +249,8 @@ tse_task_decref(tse_task_t *task)
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 
+	dtp->dtp_magic = TASK_BAD_MAGIC;
+
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
 	 * user also free it. This now requires task to be on the heap all the
@@ -962,7 +964,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	if (task == NULL)
 		return -DER_NOMEM;
 
-	dtp = tse_task2priv(task);
+	dtp = (struct tse_task_private *)&task->dt_private;
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
@@ -975,6 +977,8 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	dtp->dtp_func	  = task_func;
 	dtp->dtp_priv	  = priv;
 	dtp->dtp_sched	  = dsp;
+
+	dtp->dtp_magic = TASK_MAGIC;
 
 	*taskp = task;
 	return 0;

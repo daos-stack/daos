@@ -53,7 +53,9 @@ struct tse_task_private {
 					 dtp_no_propagate:1,
 					 dtp_dep_cnt:28;
 	/* refcount of the task */
-	uint32_t			 dtp_refcnt;
+	uint16_t                         dtp_refcnt;
+
+	uint16_t                         dtp_magic;
 	/**
 	 * task parameter pointer, it can be assigned while creating task,
 	 * or explicitly call API tse_task_priv_set. User can just use
@@ -80,6 +82,9 @@ struct tse_task_private {
 	ATOMIC uint32_t			 dtp_generation;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
+
+#define TASK_MAGIC     0xf0f0
+#define TASK_BAD_MAGIC (TASK_MAGIC + 1)
 
 struct tse_task_cb {
 	d_list_t		dtc_list;
@@ -129,11 +134,15 @@ struct tse_sched_comp {
 	void			*dsc_arg;
 };
 
-
 static inline struct tse_task_private *
 tse_task2priv(tse_task_t *task)
 {
-	return (struct tse_task_private *)&task->dt_private;
+	struct tse_task_private *dtp;
+
+	dtp = (struct tse_task_private *)&task->dt_private;
+	D_ASSERTF(dtp->dtp_magic != TASK_BAD_MAGIC, "tse %p used after free\n", task);
+	D_ASSERTF(dtp->dtp_magic == TASK_MAGIC, "Bad tse magic %p\n", task);
+	return dtp;
 }
 
 static inline tse_task_t *
