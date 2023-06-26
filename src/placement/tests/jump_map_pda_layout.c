@@ -57,6 +57,8 @@ plt_obj_place_with_pd(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **la
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
 	md.omd_pda = pda;
+	md.omd_pdom_lvl = PO_COMP_TP_GRP;
+	md.omd_fdom_lvl = PO_COMP_TP_RANK;
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
@@ -108,17 +110,17 @@ pda_layout_show(void **state)
 	gen_maps_adv(grp_nr, srvs_per_grp, engs_per_srv, tgts_per_eng, PO_COMP_TP_NODE,
 		     &po_map, &pl_map);
 
-	print_message("press enter to show layout of OC_S32 object, PDA 32 ...\n");
+	print_message("press enter to show layout of OC_S32 object, PDA -1 ...\n");
 	getchar();
-	assert_placement_success_pda(pl_map, OC_S32, 32, tgts_per_grp);
+	assert_placement_success_pda(pl_map, OC_S32, -1, tgts_per_grp);
 
 	print_message("press enter to show layout of OC_S32 object, PDA 1 ...\n");
 	getchar();
 	assert_placement_success_pda(pl_map, OC_S32, 1, tgts_per_grp);
 
-	print_message("press enter to show layout of OC_RP_3G32 object, PDA 3 ...\n");
+	print_message("press enter to show layout of OC_RP_3G32 object, PDA -1 ...\n");
 	getchar();
-	assert_placement_success_pda(pl_map, OC_RP_3G32, 3, tgts_per_grp);
+	assert_placement_success_pda(pl_map, OC_RP_3G32, -1, tgts_per_grp);
 
 	print_message("press enter to show layout of OC_RP_3G32 object, PDA 1 ...\n");
 	getchar();

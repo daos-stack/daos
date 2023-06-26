@@ -333,6 +333,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_rp_pda = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_RP_PDA;
 			break;
+		case DAOS_PROP_CO_PERF_DOMAIN:
+			iv_prop->cip_perf_domain = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_PERF_DOMAIN;
+			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
 			iv_prop->cip_global_version = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
@@ -1261,6 +1265,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = iv_prop->cip_rp_pda;
 		prop_entry->dpe_type = DAOS_PROP_CO_RP_PDA;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_PERF_DOMAIN) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_perf_domain;
+		prop_entry->dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_global_version;
@@ -1369,6 +1378,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) != NULL);
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) != NULL);
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_PERF_DOMAIN) != NULL);
 
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);

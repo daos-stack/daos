@@ -659,6 +659,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_PERF_DOMAIN:
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
@@ -735,6 +736,14 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		/* No specified ec pda from container, inherit from pool */
 		D_ASSERT(pool_hdl->sph_pool->sp_rp_pda != 0);
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_rp_pda;
+	}
+
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_PERF_DOMAIN);
+	if (pool_hdl->sph_global_ver > 0)
+		D_ASSERT(entry_def != NULL);
+	if (entry_def && entry_def->dpe_val == 0) {
+		/* No specified perf_domain from container, inherit from pool */
+		entry_def->dpe_val = pool_hdl->sph_pool->sp_perf_domain;
 	}
 
 	/* inherit global version from pool*/
@@ -887,6 +896,12 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_rp_pda,
+					   &value);
+			break;
+		case DAOS_PROP_CO_PERF_DOMAIN:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_perf_domain,
 					   &value);
 			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
@@ -3006,6 +3021,23 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		}
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_PERF_DOMAIN) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_perf_domain, &value);
+		if (rc == -DER_NONEXIST)
+			val = DAOS_PROP_CO_PERF_DOMAIN_DEFAULT;
+		else if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_RP_PDA) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_rp_pda,
@@ -3360,6 +3392,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_ALLOCED_OID:
 			case DAOS_PROP_CO_EC_PDA:
 			case DAOS_PROP_CO_RP_PDA:
+			case DAOS_PROP_CO_PERF_DOMAIN:
 			case DAOS_PROP_CO_GLOBAL_VERSION:
 			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			case DAOS_PROP_CO_OBJ_VERSION:
@@ -4453,6 +4486,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	struct cont			*cont;
 	d_iov_t				 value;
 	uint64_t			 pda;
+	uint64_t			 perf_domain;
 	int				 rc;
 	bool				 upgraded = false;
 	uint32_t			 global_ver = 0;
@@ -4616,6 +4650,26 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ASSERT(daos_prop_is_set(entry) == false);
 		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 		entry->dpe_val = pda;
+	}
+
+	d_iov_set(&value, &perf_domain, sizeof(perf_domain));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_perf_domain, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		perf_domain = DAOS_PROP_CO_PERF_DOMAIN_DEFAULT;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_perf_domain, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container perf_domain pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_PERF_DOMAIN);
+		D_ASSERT(entry != NULL);
+		D_ASSERT(daos_prop_is_set(entry) == false);
+		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+		entry->dpe_val = perf_domain;
 	}
 
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
