@@ -68,6 +68,7 @@ Environment variables in this section only apply to the client side.
 |Variable                 |Description|
 |-------------------------|-----------|
 |FI\_MR\_CACHE\_MAX\_COUNT|Enable MR (Memory Registration) caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+|D\_POLL\_TIMEOUT|Polling timeout passed to network progress for synchronous operations. Default to 0 (busy polling), value in micro-seconds otherwise.|
 
 
 ## Debug System (Client & Server)

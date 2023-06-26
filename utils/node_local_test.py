@@ -5241,6 +5241,11 @@ class AllocFailTest():
         else:
             cmd = self.cmd
 
+        # Disable logging to stderr from the daos tool, the two streams are both checked already
+        # but have different formats.
+        if os.path.basename(cmd[0]) == 'daos':
+            cmd_env['DD_STDERR'] = 'CRIT'
+
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
             aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
