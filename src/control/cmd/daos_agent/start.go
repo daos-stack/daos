@@ -26,6 +26,11 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 )
 
+/*
+#include "util.h"
+*/
+import "C"
+
 type ctxKey string
 
 const (
@@ -140,6 +145,15 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 
+	if cmd.cfg.ClientCacheSize != 0 {
+		cmd.Debugf("Creating shared memory segment for client cache of size: %d",
+			cmd.cfg.ClientCacheSize)
+		rc := C.setup_client_cache(C.size_t(cmd.cfg.ClientCacheSize))
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to allocate shared memory segment for client cache")
+		}
+	}
+
 	cmd.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
 	if err := systemd.Ready(); err != nil && err != systemd.ErrSdNotifyNoSocket {
@@ -177,6 +191,15 @@ func (cmd *startCmd) Execute(_ []string) error {
 				if !cmd.cfg.DisableAutoEvict {
 					procmon.FlushAllHandles(ctx)
 				}
+
+				if cmd.cfg.ClientCacheSize != 0 {
+					cmd.Debugf("Destroying shared memory segment for the client cache")
+					rc := C.destroy_client_cache(C.size_t(cmd.cfg.ClientCacheSize))
+					if err := daosError(rc); err != nil {
+						cmd.Errorf("Failed to destroy shared memory segment for client cache: %v", err)
+					}
+				}
+
 				close(finish)
 				return
 			}

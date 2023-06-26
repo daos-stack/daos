@@ -1152,4 +1152,13 @@ explicit_bzero(void *s, size_t count) {
 }
 #endif /* NEED_EXPLICIT_BZERO */
 
+/* Client shared memory caching segment name */
+#define DAOS_SHM_NAME	"/daos_agent_shm"
+#define DAOS_SHM_MAGIC	0xda05533C
+
+typedef struct {
+	uint32_t		dss_magic;
+	pthread_mutex_t		dss_mutex;
+} daos_shm_sb;
+
 #endif /* __DAOS_COMMON_H__ */

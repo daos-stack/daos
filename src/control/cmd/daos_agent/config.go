@@ -60,6 +60,7 @@ type Config struct {
 	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
 	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
 	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`
+	ClientCacheSize     uint64                     `yaml:"client_cache_size,omitempty"`
 }
 
 // TelemetryExportEnabled returns true if client telemetry export is enabled.
@@ -121,5 +122,6 @@ func DefaultConfig() *Config {
 		LogLevel:         common.DefaultControlLogLevel,
 		TransportConfig:  security.DefaultAgentTransportConfig(),
 		CredentialConfig: &security.CredentialConfig{},
+		ClientCacheSize:  0,
 	}
 }
