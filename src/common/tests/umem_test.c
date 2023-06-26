@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -417,6 +417,7 @@ test_page_cache(void **state)
 
 	arg->ta_store.stor_size = 46 * 1024 * 1024;
 	arg->ta_store.stor_ops  = &stor_ops;
+	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, 0);
 	assert_rc_equal(rc, 0);
