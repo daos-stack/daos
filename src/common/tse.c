@@ -33,7 +33,7 @@ tse_task2priv(tse_task_t *task)
 	struct tse_task_private *dtp;
 
 	dtp = (struct tse_task_private *)&task->dt_private;
-#if 0
+#if 1
 	D_ASSERTF(dtp->dtp_magic != TASK_BAD_MAGIC, "tse %p used after free\n", task);
 	D_ASSERTF(dtp->dtp_magic == TASK_MAGIC, "Bad tse magic %p\n", task);
 #endif

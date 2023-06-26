@@ -5068,10 +5068,6 @@ class AllocFailTestRun():
                 if self._aft.ignore_busy and line.endswith(': Device or resource busy (-1012)'):
                     continue
 
-                # TODO: Remove this.
-                if self._aft.ignore_busy and line.endswith('exists: File exists (17)'):
-                    continue
-
                 if 'DER_UNKNOWN' in line:
                     self._aft.wf.add(self._fi_loc,
                                      'HIGH',
@@ -5313,14 +5309,7 @@ def test_alloc_fail_copy(server, conf, wf):
 
     Create an initial container to copy from so this is testing reading as well as writing
 
-    Note this test will run without the destination containers existing but afterwards they
-    might with various stages of completion, running just this test in a loop without wiping
-    the containers between runs will exercise different code-paths and probably fail at some
-    point due to the destination container existing but being invalid.  A longer term aim
-    would be to run this test with the destination containers existing but valid (which tests
-    punch) or to have it check that if a test failed then new container was removed as part
-    of the command.  Checking for existing but invalid containers is not covered but this test
-    is probably not the best place for that.
+    see also test_alloc_fail_copy_trunc() which is similar but truncates existing files.
     """
 
     def get_cmd(cont_id):
@@ -5356,6 +5345,53 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.ignore_busy = True
 
     return test_cmd.launch()
+
+
+aftc_idx = 0  # pylint: disable=invalid-name
+
+
+def test_alloc_fail_copy_trunc(server, conf, wf):
+    """Run container (filesystem) copy under fault injection.
+
+    Use filesystem copy to truncate a file.
+
+    Create an initial container to modify, pre-populate it with a number of files of known length
+    then have each iteration of the test truncate one file.
+    """
+    files_needed = 2000
+
+    def get_cmd(_):
+        global aftc_idx
+        cmd = [join(conf['PREFIX'], 'bin', 'daos'), 'filesystem', 'copy', '--src', src_file.name,
+               '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{aftc_idx}']
+        aftc_idx += 1
+        print(f'Values are {aftc_idx}, {files_needed}')
+        assert aftc_idx <= files_needed
+        return cmd
+
+    pool = server.get_test_pool_obj()
+    with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(files_needed):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', sub_dir,
+                                 '--dst', f'daos://{pool.id()}/aftc'])
+        assert rc.returncode == 0, rc
+
+    with tempfile.NamedTemporaryFile() as src_file:
+
+        test_cmd = AllocFailTest(conf, 'filesystem-copy-trunc', get_cmd)
+        test_cmd.wf = wf
+        test_cmd.check_daos_stderr = True
+        test_cmd.check_post_stdout = False
+        # Set the ignore_busy flag so that memory leaks on shutdown are ignored in some cases.
+        test_cmd.ignore_busy = True
+
+        return test_cmd.launch()
 
 
 def test_alloc_pil4dfs_ls(server, conf, wf):
@@ -5743,8 +5779,10 @@ def run(wf, args):
 
                 # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
-                # filesystem copy test.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                # filesystem copy tests.
+                # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
+
 
                 # container create with properties test.
                 # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
