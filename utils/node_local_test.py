@@ -5165,7 +5165,7 @@ class AllocFailTest():
         if num_cores < 20:
             max_child = 1
         else:
-            max_child = int(num_cores / 2)
+            max_child = int(num_cores / 4 * 3)
 
         print(f'Maximum number of spawned tests will be {max_child}')
 
@@ -5365,7 +5365,6 @@ def test_alloc_fail_copy_trunc(server, conf, wf):
         cmd = [join(conf['PREFIX'], 'bin', 'daos'), 'filesystem', 'copy', '--src', src_file.name,
                '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{aftc_idx}']
         aftc_idx += 1
-        print(f'Values are {aftc_idx}, {files_needed}')
         assert aftc_idx <= files_needed
         return cmd
 
@@ -5780,7 +5779,7 @@ def run(wf, args):
                 # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy tests.
-                # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
                 fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
                 # container create with properties test.
