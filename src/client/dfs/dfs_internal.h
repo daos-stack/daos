@@ -43,7 +43,7 @@ dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
 	       struct dfs_mnt_hdls **_hdl);
 int
 dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force);
-int
+bool
 dfs_is_init();
 
 /*

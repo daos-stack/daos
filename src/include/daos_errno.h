@@ -206,9 +206,11 @@ extern "C" {
 	ACTION(DER_NO_CERT, Unable to access one or more certificates)                             \
 	ACTION(DER_BAD_CERT, Invalid x509 certificate)                                             \
 	ACTION(DER_VOS_PARTIAL_UPDATE, VOS partial update error)                                   \
-	ACTION(DER_CHKPT_BUSY, Page is temporarily read only due to checkpointing)
+	ACTION(DER_CHKPT_BUSY, Page is temporarily read only due to checkpointing)                 \
+	ACTION(DER_DIV_BY_ZERO,	Division by zero)
 
 /* clang-format on */
+
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
@@ -242,7 +244,7 @@ enum daos_errno {
  * \return	String value for error code or DER_UNKNOWN
  */
 const char *
-d_errstr(enum daos_errno errnum);
+d_errstr(int errnum);
 
 /** Return an error description string associated with a registered gurt errno.
  *
@@ -252,7 +254,7 @@ d_errstr(enum daos_errno errnum);
  * 			number is unknown.
  */
 const char *
-d_errdesc(enum daos_errno errnum);
+d_errdesc(int errnum);
 
 /** @}
  */

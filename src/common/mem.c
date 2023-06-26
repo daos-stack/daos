@@ -1700,7 +1700,7 @@ struct umem_page_info {
 	d_list_t pi_link;
 	/** page memory address */
 	uint8_t *pi_addr;
-	/** Information about inflight checkpoint */
+	/** Information about in-flight checkpoint */
 	void    *pi_chkpt_data;
 	/** bitmap for each dirty 16K unit */
 	uint64_t pi_bmap[UMEM_CACHE_BMAP_SZ];
@@ -1954,7 +1954,7 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 #define MAX_IOD_PER_SET   (2 * MAX_IOD_PER_PAGE)
 
 struct umem_checkpoint_data {
-	/** List link for inflight sets */
+	/** List link for in-flight sets */
 	d_list_t                 cd_link;
 	/* List of storage ranges being checkpointed */
 	struct umem_store_iod    cd_store_iod;
@@ -2097,7 +2097,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	if (chkpt_data_all == NULL)
 		return -DER_NOMEM;
 
-	/** Setup the inflight IODs */
+	/** Setup the in-flight IODs */
 	for (i = 0; i < MAX_INFLIGHT_SETS; i++) {
 		chkpt_data = &chkpt_data_all[i];
 		d_list_add_tail(&chkpt_data->cd_link, &free_list);
@@ -2177,7 +2177,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 
 		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
 
-		/* Wait for inflight transactions committed, or yield to make progress */
+		/* Wait for in-flight transactions committed, or yield to make progress */
 		wait_cb(arg, chkpt_data ? chkpt_data->cd_max_tx : 0, &committed_tx);
 
 		/* The so_flush_prep() could fail when the DMA buffer is under pressure */

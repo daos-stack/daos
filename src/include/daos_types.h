@@ -166,9 +166,9 @@ typedef struct daos_event {
 typedef enum {
 	/** Query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
-	/** Query # inflight event */
+	/** Query # in-flight event */
 	DAOS_EQR_WAITING	= (1 << 1),
-	/** Query # inflight + completed events in EQ */
+	/** Query # in-flight + completed events in EQ */
 	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
 } daos_eq_query_t;
 
