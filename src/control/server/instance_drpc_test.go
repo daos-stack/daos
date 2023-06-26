@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,11 +62,16 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 
 func TestEngineInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		notReady bool
-		noClient bool
-		resp     *drpc.Response
-		expErr   error
+		notStarted bool
+		notReady   bool
+		noClient   bool
+		resp       *drpc.Response
+		expErr     error
 	}{
+		"not started": {
+			notStarted: true,
+			expErr:     FaultDataPlaneNotStarted,
+		},
 		"not ready": {
 			notReady: true,
 			expErr:   errEngineNotReady,
@@ -84,7 +89,7 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			trc := engine.TestRunnerConfig{}
-			trc.Running.Store(!tc.notReady)
+			trc.Running.Store(!tc.notStarted)
 			runner := engine.NewTestRunner(&trc, engine.MockConfig())
 			instance := NewEngineInstance(log, nil, nil, runner)
 			instance.ready.Store(!tc.notReady)

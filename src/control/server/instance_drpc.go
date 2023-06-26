@@ -88,6 +88,9 @@ func (ei *EngineInstance) callDrpc(ctx context.Context, method drpc.Method, body
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
 func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	if !ei.IsStarted() {
+		return nil, FaultDataPlaneNotStarted
+	}
 	if !ei.IsReady() {
 		return nil, errEngineNotReady
 	}

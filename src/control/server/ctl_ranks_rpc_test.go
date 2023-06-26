@@ -991,8 +991,8 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &ctlpb.SetLogMasksResp{
 				Errors: []string{
-					errEngineNotReady.Error(),
-					errEngineNotReady.Error(),
+					FaultDataPlaneNotStarted.Error(),
+					FaultDataPlaneNotStarted.Error(),
 				},
 			},
 		},
