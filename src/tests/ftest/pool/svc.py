@@ -147,21 +147,30 @@ class PoolSvc(TestWithServers):
                     "After excluded new leader + management_service_ranks, non_leader_ranks= %s",
                     non_leader_ranks)
 
-                if svc_params[1] == 5 and non_leader_ranks:
-                    # Stop a pool non-leader
-                    non_leader = non_leader_ranks[-1]
-                    self.log.info(
-                        "Stopping a pool non-leader (%s): %s", non_leader_ranks, non_leader)
+                if svc_params[1] == 5:
+                    if non_leader_ranks:
+                        # Stop a pool non-leader if non_leader_ranks is not empty
+                        rank_to_kill = non_leader_ranks[-1]
+                        self.log.info(
+                            "Stopping a pool non-leader (%s): %s", non_leader_ranks, rank_to_kill)
+                    else:
+                        # Stop the pool new_leader if non_leader_ranks is empty
+                        rank_to_kill = pool_leader
+                        self.log.info(
+                            "Pool non_leader_ranks is empty, Stopping the new pool leader: %s",
+                            rank_to_kill)
                     try:
-                        self.server_managers[-1].stop_ranks([non_leader], self.test_log)
+                        self.server_managers[-1].stop_ranks([rank_to_kill], self.test_log)
                     except TestFail as error:
                         self.log.info(error)
                         self.fail(
-                            "Error stopping a pool non-leader - "
-                            "DaosServerManager.stop_ranks([{}])".format(non_leader))
+                            "Error stopping a pool rank - "
+                            "DaosServerManager.stop_ranks([{}])".format(rank_to_kill))
                     self.pool.wait_for_rebuild_to_start(interval=1)
                     self.pool.wait_for_rebuild_to_end(interval=1)
-                    # Verify the pool leader has not changed
-                    self.check_leader(pool_leader, False)
+
+                    if non_leader_ranks:
+                        # Verify the pool leader has not changed
+                        self.check_leader(pool_leader, False)
 
         self.log.info("Test passed!")
