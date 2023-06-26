@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       1%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,6 @@ BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
-BuildRequires: lmdb-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
@@ -421,6 +420,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -480,7 +480,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -518,9 +517,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
 %{_bindir}/bio_ut
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/rpc_tests
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -557,6 +553,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
+- Removed unnecessary test files
+
 * Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
 - Switch version to 2.5.100 for 2.6 test builds
 

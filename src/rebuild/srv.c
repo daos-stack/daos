@@ -1357,7 +1357,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		if (rgt->rgt_init_scan) {
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
-			 * (reclaim - 1 see obj_reclaim()), but keep the inflight I/O data.
+			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
 			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
 						 rgt->rgt_stable_epoch,
@@ -2557,15 +2557,15 @@ rebuild_cleanup(void)
 }
 
 struct dss_module rebuild_module = {
-	.sm_name	= "rebuild",
-	.sm_mod_id	= DAOS_REBUILD_MODULE,
-	.sm_ver		= DAOS_REBUILD_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_cleanup	= rebuild_cleanup,
-	.sm_proto_fmt	= &rebuild_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= rebuild_handlers,
-	.sm_key		= &rebuild_module_key,
+    .sm_name        = "rebuild",
+    .sm_mod_id      = DAOS_REBUILD_MODULE,
+    .sm_ver         = DAOS_REBUILD_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_cleanup     = rebuild_cleanup,
+    .sm_proto_fmt   = {&rebuild_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {rebuild_handlers},
+    .sm_key         = &rebuild_module_key,
 };
