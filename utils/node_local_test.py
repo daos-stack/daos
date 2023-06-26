@@ -3858,6 +3858,10 @@ class PosixTests():
         dir1 = join(path, 'dir1')
         self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
 
+        # create multiple levels dirs
+        dirabcd = join(path, 'dira/dirb/dirc/dird')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', '-p', dirabcd])
+
         # find to list all files/dirs.
         self.server.run_daos_client_cmd_pil4dfs(['find', path])
 

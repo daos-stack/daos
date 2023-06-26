@@ -1924,13 +1924,13 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
 	{"REBUILD23: object corrupt rebuild",
 	 rebuild_object_with_csum_error, rebuild_small_sub_rf1_setup, test_teardown},
-	{"REBUILD24: rebuild with dfs inflight append",
+	{"REBUILD24: rebuild with dfs in-flight append",
 	 rebuild_with_dfs_inflight_append, rebuild_small_sub_rf1_setup, test_teardown},
-	{"REBUILD25: rebuild with dfs inflight punch",
+	{"REBUILD25: rebuild with dfs in-flight punch",
 	 rebuild_with_dfs_inflight_punch, rebuild_small_sub_rf1_setup, test_teardown},
-	{"REBUILD26: rebuild with dfs inflight append punch",
+	{"REBUILD26: rebuild with dfs in-flight append punch",
 	 rebuild_with_dfs_inflight_append_punch, rebuild_small_sub_rf1_setup, test_teardown},
-	{"REBUILD27: rebuild with dfs inflight punch create",
+	{"REBUILD27: rebuild with dfs in-flight punch create",
 	 rebuild_with_dfs_inflight_punch_create, rebuild_small_sub_rf1_setup, test_teardown},
 };
 
