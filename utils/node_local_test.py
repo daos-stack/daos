@@ -5783,7 +5783,6 @@ def run(wf, args):
                 # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
                 fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
-
                 # container create with properties test.
                 # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 

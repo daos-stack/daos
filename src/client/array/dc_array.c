@@ -2558,11 +2558,9 @@ dc_array_set_size(tse_task_t *task)
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
-#if 1
 	D_FREE(set_size_props);
 	if (array)
 		array_decref(array);
-#endif
 	tse_task_complete(task, rc);
 	return rc;
 } /* end daos_array_set_size */
