@@ -47,14 +47,14 @@ d_err_init(void)
 }
 
 const char *
-d_errstr(enum daos_errno errnum)
+d_errstr(int errnum)
 {
 	struct d_error_reg *entry;
 
 	if (errnum == 0)
 		return "DER_SUCCESS";
 
-	if ((int)errnum > 0)
+	if (errnum > 0)
 		goto out;
 
 	errnum = -errnum;
@@ -70,7 +70,7 @@ out:
 }
 
 const char *
-d_errdesc(enum daos_errno errnum)
+d_errdesc(int errnum)
 {
 	struct d_error_reg *entry;
 	static char         buf[D_ERR_BUF_SIZE];
@@ -83,7 +83,7 @@ d_errdesc(enum daos_errno errnum)
 
 	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
 
-	if ((int)errnum > 0)
+	if (errnum > 0)
 		goto out;
 
 	errnum = -errnum;
