@@ -2554,7 +2554,7 @@ dc_array_set_size(tse_task_t *task)
 
 	rc = tse_task_schedule(enum_task, true);
 	if (rc)
-		D_GOTO(err_enum_task, rc);
+		D_GOTO(err_task, rc);
 
 	return 0;
 err_enum_task:
