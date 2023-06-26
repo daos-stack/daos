@@ -2411,9 +2411,8 @@ vos_aggregate_error_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 	struct vos_container   *cont = vos_hdl2cont(ap->ap_coh);
 
 	/** Let lower levels abort.   Returning 0 will cause iterator to skip to next object */
-	if (type != VOS_ITER_OBJ || rc != -DER_TX_BUSY) {
+	if (type != VOS_ITER_OBJ || rc != -DER_TX_BUSY)
 		return rc;
-	}
 
 	ap->ap_busy_err = 1;
 
