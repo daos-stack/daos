@@ -68,6 +68,8 @@ struct d_log_state {
 	int		 log_old_fd;
 	/** current size of log file */
 	uint64_t	 log_size;
+	/** log size of last time check */
+	uint64_t	 log_last_check_size;
 	/** max size of log file */
 	uint64_t	 log_size_max;
 	/** Callback to get thread id and ULT id */
@@ -358,6 +360,33 @@ static __thread uint64_t pre_err_time;
 
 #define LOG_BUF_SIZE	(16 << 10)
 
+static bool
+log_exceed_threshold(void)
+{
+	struct stat	st;
+	int		rc;
+
+	if (!merge_stderr)
+		goto out;
+
+	/**
+	 * if we merge stderr to log file which is not
+	 * calculated by log_size, to avoid exceeding threshold
+	 * too much, log_size will be updated with fstat if log
+	 * size increased by 2% of max size every time.
+	 */
+	if ((mst.log_size - mst.log_last_check_size) < (mst.log_size_max / 50))
+		goto out;
+
+	rc = fstat(mst.log_fd, &st);
+	if (!rc)
+		mst.log_size = st.st_size;
+
+	mst.log_last_check_size = mst.log_size;
+out:
+	return mst.log_size + mst.log_buf_nob >= mst.log_size_max;
+}
+
 /**
  * This function can do a few things:
  * - copy log message @msg to log buffer
@@ -405,7 +434,7 @@ d_log_write(char *msg, int len, bool flush)
 	if (mst.log_buf_nob == 0)
 		return 0; /* nothing to write */
 
-	if (mst.log_size + mst.log_buf_nob >= mst.log_size_max) {
+	if (log_exceed_threshold()) {
 		/* exceeds the size threshold, rename the current log file
 		 * as backup, create a new log file.
 		 */
@@ -464,6 +493,7 @@ d_log_write(char *msg, int len, bool flush)
 		}
 
 		mst.log_size = 0;
+		mst.log_last_check_size = 0;
 	}
 
 	/* flush the cached log messages */
@@ -490,7 +520,7 @@ d_log_sync(void)
 	int rc = 0;
 
 	clog_lock();
-	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
+	if (mst.log_buf_nob > 0) /* write back the in-flight buffer */
 		rc = d_log_write(NULL, 0, true);
 
 	/* Skip flush if there was a problem on write */

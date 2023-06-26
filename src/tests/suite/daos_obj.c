@@ -3088,7 +3088,7 @@ tgt_idx_change_retry(void **state)
 	/* create a 3 replica small object, to test the case that:
 	 * update:
 	 * 1) shard 0 IO finished, then the target x of shard 0 dead/excluded
-	 * 2) shard 1 and shard 2 IO still inflight (not scheduled)
+	 * 2) shard 1 and shard 2 IO still in-flight (not scheduled)
 	 * 3) obj IO retry, shard 0 goes to new target y
 	 *
 	 * Then fetch and verify the data.
