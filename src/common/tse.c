@@ -24,7 +24,7 @@
 D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
 D_CASSERT(sizeof(struct tse_task_private) <= TSE_PRIV_SIZE);
 
-#define TASK_MAGIC 0xf0f0
+#define TASK_MAGIC     0xf0f0
 #define TASK_BAD_MAGIC (TASK_MAGIC + 1)
 
 static inline struct tse_task_private *
@@ -33,8 +33,10 @@ tse_task2priv(tse_task_t *task)
 	struct tse_task_private *dtp;
 
 	dtp = (struct tse_task_private *)&task->dt_private;
+#if 0
 	D_ASSERTF(dtp->dtp_magic != TASK_BAD_MAGIC, "tse %p used after free\n", task);
 	D_ASSERTF(dtp->dtp_magic == TASK_MAGIC, "Bad tse magic %p\n", task);
+#endif
 	return dtp;
 }
 

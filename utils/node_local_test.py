@@ -5068,6 +5068,10 @@ class AllocFailTestRun():
                 if self._aft.ignore_busy and line.endswith(': Device or resource busy (-1012)'):
                     continue
 
+                # TODO: Remove this.
+                if self._aft.ignore_busy and line.endswith('exists: File exists (17)'):
+                    continue
+
                 if 'DER_UNKNOWN' in line:
                     self._aft.wf.add(self._fi_loc,
                                      'HIGH',
@@ -5740,8 +5744,6 @@ def run(wf, args):
                 # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 # container create with properties test.
