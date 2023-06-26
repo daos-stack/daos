@@ -3795,6 +3795,7 @@ chdir(const char *path)
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path  = NULL;
+	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -3817,10 +3818,13 @@ chdir(const char *path)
 		return rc;
 	}
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0))
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		is_root = true;
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
-	else
+	} else {
+		is_root = false;
 		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
+	}
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!S_ISDIR(stat_buf.st_mode)) {
@@ -3828,7 +3832,10 @@ chdir(const char *path)
 			strerror(ENOTDIR));
 		D_GOTO(out_err, rc = ENOTDIR);
 	}
-	rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
+	if (is_root)
+		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
+	else
+		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
 	if (rc)
 		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);

@@ -18,6 +18,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_unique().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_unique
         """
@@ -41,6 +42,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_flatten().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_flatten
         """
@@ -70,6 +72,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify list_stats().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_list_stats
         """
@@ -92,6 +95,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify dict_extract_values().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_dict_extract_values
         """
@@ -152,6 +156,7 @@ class HarnessUnitTest(TestWithoutServers):
         """Verify dict_subtract().
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,dict_utils
         :avocado: tags=HarnessUnitTest,test_harness_unit_dict_subtract
         """
