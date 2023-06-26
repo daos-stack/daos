@@ -1240,7 +1240,7 @@ static inline bool
 iod_should_retry(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 {
 	/*
-	 * When there isn't any inflight IODs, it means the whole DMA buffer
+	 * When there isn't any in-flight IODs, it means the whole DMA buffer
 	 * isn't large enough to satisfy current huge IOD, don't retry.
 	 *
 	 * When current IOD is for copy target, take the source IOD into account.
