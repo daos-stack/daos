@@ -84,7 +84,7 @@ struct credit_context {
 	daos_handle_t		 tsc_eqh;	/**< EQ handle */
 	/** # available I/O credits */
 	int			 tsc_cred_avail;
-	/** # inflight I/O credits */
+	/** # in-flight I/O credits */
 	int			 tsc_cred_inuse;
 	/** all pre-allocated I/O credits */
 	struct io_credit	 tsc_cred_buf[DTS_CRED_MAX];
@@ -116,7 +116,7 @@ void credits_fini(struct credit_context *tsc);
 struct io_credit *credit_take(struct credit_context *tsc); /* OK */
 
 /**
- * Drain all the inflight I/O credits of @tsc.
+ * Drain all the in-flight I/O credits of @tsc.
  */
 int credit_drain(struct credit_context *tsc);
 
