@@ -15,7 +15,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import site
 import sys
 import time
@@ -1998,11 +1997,8 @@ class Launch():
             run_local(logger, f'ls -al {app_src}')
             for app in os.listdir(app_src):
                 try:
-                    if os.path.isdir(app):
-                        shutil.copytree(app, app_dir, dirs_exist_ok=True)
-                    elif os.path.isfile(app):
-                        shutil.copyfile(app, app_dir)
-                except Exception:       # pylint: disable=broad-except
+                    run_local(logger, f'cp -r {os.path.join(app_src, app)} {app_dir}', check=True)
+                except RunException:
                     message = 'Error copying files to the application directory'
                     self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
                     return 128
