@@ -189,10 +189,11 @@ class RemoteCommandResult():
         for _, keys in data:
             data_keys.add(NodeSet.fromlist(keys))
 
+        sanitized_data = data.copy()
         missing_keys = source_keys - data_keys
         if missing_keys:
-            data.append((default_entry, list(missing_keys)))
-        return data
+            sanitized_data.append((default_entry, list(missing_keys)))
+        return sanitized_data
 
     @staticmethod
     def _msg_tree_elem_to_list(msg_tree_elem):

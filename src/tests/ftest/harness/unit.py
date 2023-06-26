@@ -211,7 +211,7 @@ class HarnessUnitTest(TestWithoutServers):
         self.assertEqual(host, result.output[0].hosts, 'Incorrect ResultData.hosts')
         self.assertEqual(
             ['stdout', 'stderr'], result.output[0].stdout, 'Incorrect ResultData.stdout')
-        self.assertEqual('', result.output[0].stderr, 'Incorrect ResultData.stderr')
+        self.assertEqual([], result.output[0].stderr, 'Incorrect ResultData.stderr')
         self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')
         self.assertEqual(True, result.output[0].homogeneous, 'Incorrect ResultData.homogeneous')
         self.assertEqual(True, result.output[0].passed, 'Incorrect ResultData.passed')
@@ -232,7 +232,7 @@ class HarnessUnitTest(TestWithoutServers):
         self.assertEqual(0, result.output[0].returncode, 'Incorrect ResultData.returncode')
         self.assertEqual(host, result.output[0].hosts, 'Incorrect ResultData.hosts')
         self.assertEqual(['stdout'], result.output[0].stdout, 'Incorrect ResultData.stdout')
-        self.assertEqual('stderr', result.output[0].stderr, 'Incorrect ResultData.stderr')
+        self.assertEqual(['stderr'], result.output[0].stderr, 'Incorrect ResultData.stderr')
         self.assertEqual(False, result.output[0].timeout, 'Incorrect ResultData.timeout')
         self.assertEqual(True, result.output[0].homogeneous, 'Incorrect ResultData.homogeneous')
         self.assertEqual(True, result.output[0].passed, 'Incorrect ResultData.passed')
