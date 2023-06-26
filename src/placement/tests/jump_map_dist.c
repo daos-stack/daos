@@ -32,7 +32,6 @@ layout_count_tgt(struct pl_obj_layout *layout, uint32_t *tgt_counters, uint32_t 
 
 			index = (grp * layout->ol_grp_size) + sz;
 			shard = layout->ol_shards[index];
-			D_ASSERT(shard.po_target >= 0);
 			D_ASSERT(shard.po_target < size);
 			tgt_counters[shard.po_target]++;
 		}

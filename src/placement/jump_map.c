@@ -56,7 +56,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	uint64_t		 key;
 	uint32_t		 selected_pd, pd_id;
 	uint32_t		 pd_nr = jmap->jmp_pd_nr;
-	uint32_t		 dom_nr = jmap->jmp_domain_nr;
+	uint32_t		 dom_nr = jmop->jmop_dom_nr;
 	uint32_t		 shard_nr = jmop->jmop_grp_size * jmop->jmop_grp_nr;
 	uint32_t		 doms_per_pd;
 	uint32_t		 pd_grp_size, pd_grp_nr;
@@ -431,7 +431,8 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			curr_pd = jm_obj_shard_pd(jmop, shard_id);
 			get_target(root, curr_pd, layout_ver, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, dom_full, dgu->dgu_used, tgts_used, shard_id,
-				   allow_status, fdom_lvl, &spares_left, &spare_avail);
+				   allow_status, fdom_lvl, jmop->jmop_grp_size, &spares_left,
+				   &spare_avail);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
 				DP_TARGET(spare_tgt));
@@ -654,7 +655,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				curr_pd = jm_obj_shard_pd(jmop, k);
 				get_target(root, curr_pd, layout_ver, &target, key, dom_used,
 					   dom_full, dom_cur_grp_used, tgts_used, k,
-					   allow_status, fdom_lvl, NULL, NULL);
+					   allow_status, fdom_lvl, jmop->jmop_grp_size, NULL, NULL);
 			}
 
 			if (target == NULL) {

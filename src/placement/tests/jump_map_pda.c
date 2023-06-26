@@ -74,6 +74,7 @@ test_set_tgt(struct pool_map *po_map, uint32_t id, uint32_t status)
 
 	tgt->ta_comp.co_status = status;
 	tgt->ta_comp.co_fseq = fseq++;
+	pool_map_set_version(po_map, fseq);
 	print_message("set target id %d status as %d\n", id, status);
 }
 
