@@ -150,9 +150,4 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 bool
 need_remap_comp(struct pool_component *comp, uint32_t allow_status);
 
-void
-get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **target,
-	   uint64_t key, uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used,
-	   uint8_t *tgts_used, int shard_num, uint32_t allow_status, pool_comp_type_t fdom_lvl,
-	   uint32_t *spare_left, bool *spare_avail);
 #endif /* __PL_MAP_H__ */
