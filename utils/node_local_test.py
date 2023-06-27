@@ -5766,31 +5766,31 @@ def run(wf, args):
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
                 # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                # fatal_errors.add_result(test_alloc_fail(server, conf))
+                fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy tests.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-                # fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
                 # container create with properties test.
-                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 # Disabled for now because of errors
-                # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
 
                 wf_client.close()
 
