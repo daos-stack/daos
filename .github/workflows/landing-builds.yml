@@ -45,7 +45,7 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
-            base: el.8
+            base: el.9
             with: fedora:38
           - distro: leap.15
             base: leap.15
@@ -155,7 +155,7 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
-            base: el.8
+            base: el.9
             with: fedora:38
           - distro: leap.15
             base: leap.15
